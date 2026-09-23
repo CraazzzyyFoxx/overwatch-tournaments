@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { getSocialProviderConfig } from "@/lib/social-providers";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 import { notify } from "@/lib/notify";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 

@@ -8,7 +8,7 @@ import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, getApiErrorMessage } from "@/lib/api-error";
+import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";

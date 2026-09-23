@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type {
   AnnouncementCreateBody,
   NotificationAdminPage,
@@ -6,7 +6,11 @@ import type {
   NotificationInbox,
   NotificationItem,
   NotificationMarkReadResult,
-  NotificationRetireResult
+  NotificationPreferences,
+  NotificationPreferencesUpdate,
+  NotificationRetireResult,
+  NotificationWorkspaceConfig,
+  NotificationWorkspaceConfigUpdate
 } from "@/types/notification.types";
 
 export default class notificationService {
@@ -154,6 +158,48 @@ export default class notificationService {
         ...(params.kind ? { kind: params.kind } : {})
       },
       skipWorkspace: true
+    }).then((response) => response.json());
+  }
+
+  /**
+   * The caller's own DM opt-outs. `skipWorkspace` like the inbox reads: the row
+   * is per account and spans every workspace, and the recipient is the token.
+   */
+  static async preferences(): Promise<NotificationPreferences> {
+    return apiFetch("/api/v1/notifications/preferences", { skipWorkspace: true }).then(
+      (response) => response.json()
+    );
+  }
+
+  /** Partial: a group left out of the body keeps whatever is stored. */
+  static async updatePreferences(
+    body: NotificationPreferencesUpdate
+  ): Promise<NotificationPreferences> {
+    return apiFetch("/api/v1/notifications/preferences", {
+      method: "PUT",
+      body,
+      skipWorkspace: true
+    }).then((response) => response.json());
+  }
+
+  /**
+   * Where one workspace posts its broadcasts, and which of them it posts.
+   * Scoped by the id in the path, not the switcher — the same rule the operator
+   * reads above follow.
+   */
+  static async workspaceConfig(workspaceId: number): Promise<NotificationWorkspaceConfig> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/notification-config`).then((response) =>
+      response.json()
+    );
+  }
+
+  static async updateWorkspaceConfig(
+    workspaceId: number,
+    body: NotificationWorkspaceConfigUpdate
+  ): Promise<NotificationWorkspaceConfig> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/notification-config`, {
+      method: "PUT",
+      body
     }).then((response) => response.json());
   }
 }

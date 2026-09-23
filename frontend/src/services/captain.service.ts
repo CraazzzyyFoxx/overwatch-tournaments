@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { CaptainReport, CaptainReportsResponse } from "@/types/encounter.types";
 interface CaptainMapCodeInput {
   map_index: number;

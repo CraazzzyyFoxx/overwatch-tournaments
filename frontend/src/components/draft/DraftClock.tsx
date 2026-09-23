@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useTranslations } from "next-intl";
-import { isUrgent, remainingMs } from "@/lib/draft-logic";
+import { isUrgent, remainingMs } from "@/lib/draft/logic";
 
 interface DraftClockProps {
   expiresAt: string | null;

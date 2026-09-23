@@ -21,6 +21,8 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 from shared.core.enums import (  # noqa: E402
+    EncounterGameState,
+    EncounterStatus,
     MapPickSide,
     MapPoolEntryStatus,
     MapVetoSessionStatus,
@@ -79,36 +81,78 @@ def pick_ban_session(**overrides) -> SimpleNamespace:
 
 
 class _FakeSession:
-    """Serves the four statements ``perform_undo`` issues, and records the
-    ledger deletes so a revert's cross-round cleanup is observable."""
+    """Serves the statements ``perform_undo`` issues, and records the ledger
+    deletes so a revert's cross-round cleanup is observable.
 
-    def __init__(self, pool: list[SimpleNamespace], *, hero_committed: int = 0) -> None:
+    A MAP undo additionally reads the series' positions (``EncounterGame``) and
+    their claims (``EncounterMapReport``) -- an undo that would strand a played
+    map is refused -- and, once applied, re-syncs the games against what is left
+    picked.
+    """
+
+    def __init__(
+        self,
+        pool: list[SimpleNamespace],
+        *,
+        hero_committed: int = 0,
+        games: list[SimpleNamespace] | None = None,
+        reports: list[SimpleNamespace] | None = None,
+        encounter: SimpleNamespace | None = None,
+    ) -> None:
         self.pool = pool
         self.hero_committed = hero_committed
+        self.games = games or []
+        self.reports = reports or []
+        self.encounter = encounter
         self.commits = 0
         self.deletes: list[object] = []
         self.info: dict = {}
+
+    def _rows_for(self, statement: object) -> list:
+        name = getattr(statement.column_descriptions[0]["entity"], "__name__", "")
+        if name == "EncounterGame":
+            return [game for game in self.games if game.state != EncounterGameState.CANCELLED]
+        if name == "EncounterMapReport":
+            return list(self.reports)
+        if name == "Encounter":
+            return [self.encounter] if self.encounter is not None else []
+        return list(self.pool)
 
     async def execute(self, statement: object) -> object:
         if statement.__class__.__name__ == "Delete":
             self.deletes.append(statement)
             return SimpleNamespace()
-        pool = self.pool
+        rows = self._rows_for(statement)
 
         class _Result:
             def unique(self_inner) -> object:
                 return self_inner
 
             def scalars(self_inner) -> object:
-                return SimpleNamespace(all=lambda: list(pool), first=lambda: pool[0] if pool else None)
+                return SimpleNamespace(all=lambda: list(rows), first=lambda: rows[0] if rows else None)
 
         return _Result()
 
     async def scalar(self, statement: object) -> int:
         return self.hero_committed
 
+    async def flush(self) -> None:
+        return None
+
     async def commit(self) -> None:
         self.commits += 1
+
+
+def _game(position: int, *, state: EncounterGameState = EncounterGameState.AWAITING_RESULT) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=700 + position,
+        encounter_id=500,
+        position=position,
+        map_id=20 + position,
+        state=state,
+        accepted_home_score=None,
+        accepted_away_score=None,
+    )
 
 
 async def _run_undo(
@@ -120,10 +164,18 @@ async def _run_undo(
     kind: PickBanKind = PickBanKind.HERO,
     hero_session: SimpleNamespace | None = None,
     hero_committed: int = 0,
+    games: list[SimpleNamespace] | None = None,
+    reports: list[SimpleNamespace] | None = None,
 ) -> tuple[_FakeSession, dict]:
     """`perform_undo` against a fake session, with the session lookup stubbed
     per kind (a map undo also asks for the hero session)."""
-    session = _FakeSession(pool, hero_committed=hero_committed)
+    session = _FakeSession(
+        pool,
+        hero_committed=hero_committed,
+        games=games,
+        reports=reports,
+        encounter=SimpleNamespace(id=500, best_of=3, status=EncounterStatus.OPEN, home_score=0, away_score=0),
+    )
 
     async def get_pick_ban_session(_session, _encounter_id, wanted_kind, *, for_update: bool = False):
         if wanted_kind == kind:
@@ -340,6 +392,71 @@ class PerformUndoTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, pool[0].status)
+
+    async def test_map_undo_is_refused_once_the_game_has_a_claim(self) -> None:
+        """A pick opens a series position. Taking it back cancels that position,
+        so a captain's claim already standing on it would be dropped on a click
+        -- two captains agreeing to change a MAP must never move a result."""
+        pool = [
+            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
+            entry(22),
+        ]
+
+        with self.assertRaises(HTTPException) as ctx:
+            await _run_undo(
+                pool,
+                pick_ban_session(undo_requested_by="away", undo_target_index=0),
+                "home",
+                kind=PickBanKind.MAP,
+                hero_session=None,
+                games=[_game(1)],
+                reports=[SimpleNamespace(id=1, game_id=701, side="home", home_score=2, away_score=1)],
+            )
+
+        self.assertEqual(400, ctx.exception.status_code)
+        self.assertIn("already has a result claim", ctx.exception.detail)
+        self.assertEqual(MapPoolEntryStatus.PICKED.value, pool[0].status, "the pick stands")
+
+    async def test_map_undo_is_refused_once_the_game_is_confirmed(self) -> None:
+        pool = [
+            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
+            entry(22),
+        ]
+
+        with self.assertRaises(HTTPException) as ctx:
+            await _run_undo(
+                pool,
+                pick_ban_session(undo_requested_by="away", undo_target_index=0),
+                "home",
+                kind=PickBanKind.MAP,
+                hero_session=None,
+                games=[_game(1, state=EncounterGameState.CONFIRMED)],
+            )
+
+        self.assertEqual(400, ctx.exception.status_code)
+
+    async def test_map_undo_cancels_the_unclaimed_game(self) -> None:
+        """Nothing was claimed, so the position the pick opened is retired with
+        it -- leaving it would let captains report a map that is no longer in
+        the series."""
+        pool = [
+            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
+            entry(22),
+        ]
+        game = _game(1)
+
+        session, _state = await _run_undo(
+            pool,
+            pick_ban_session(undo_requested_by="away", undo_target_index=0),
+            "home",
+            kind=PickBanKind.MAP,
+            hero_session=None,
+            games=[game],
+        )
+
+        self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, pool[0].status)
+        self.assertEqual(EncounterGameState.CANCELLED, game.state)
+        self.assertEqual(1, session.commits)
 
 
 class ConsentLifetimeTests(TestCase):

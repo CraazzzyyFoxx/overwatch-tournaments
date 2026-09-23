@@ -5,8 +5,8 @@ import { Check, ExternalLink, Minus } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
-import { ROLE_LABELS, ROLES } from "@/lib/roles";
+import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { ROLE_LABELS, ROLES } from "@/lib/roster/roles";
 import type { FieldKind } from "@/types/forms.types";
 
 /**

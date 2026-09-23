@@ -137,10 +137,13 @@ def test_undoable_entries_is_empty_when_only_deciders_were_committed():
     assert engine.undoable_entries([decided]) == []
 
 
-def test_undoable_entries_is_empty_once_the_round_has_been_played():
-    played = entry(1, round=1, status="played", picked_by="home", action_index=0)
+def test_undoable_entries_no_longer_knows_about_played_maps():
+    # "this map already has a result" is the undo service's call now (it reads
+    # the game's state/claims), not the pool's business: a picked entry with a
+    # trailing action in the same round is undoable while no later round exists.
+    picked = entry(1, round=1, status="picked", picked_by="home", action_index=0)
     ban = entry(2, round=1, status="banned", picked_by="away", action_index=1)
-    assert engine.undoable_entries([played, ban]) == []
+    assert engine.undoable_entries([picked, ban]) == [ban]
 
 
 def test_undoable_entries_is_empty_when_a_later_round_is_open():
@@ -154,7 +157,6 @@ def test_undoable_entries_is_empty_when_a_later_round_is_open():
 def test_undoable_entries_works_on_a_flat_pool():
     ban = entry(1, status="banned", picked_by="home", action_index=0)
     assert engine.undoable_entries([ban, entry(2)]) == [ban]
-    assert engine.undoable_entries([ban, entry(2, status="played", action_index=1)]) == []
 
 
 # ── excluded_item_ids (ledger no-repeat) ─────────────────────────────────────
@@ -316,7 +318,7 @@ def test_round_one_always_uses_session_first_side_regardless_of_rotation():
             rotation=rotation,
             round_number=1,
             session_first_side="away",
-            previous_round_winner=None,
+            previous_round_outcome=None,
             previous_round_loser_choice=None,
         )
         assert side == "away"
@@ -327,7 +329,7 @@ def test_fixed_rotation_keeps_the_same_opener_every_round():
         rotation=enums.FirstBanRotation.FIXED,
         round_number=3,
         session_first_side="home",
-        previous_round_winner="away",
+        previous_round_outcome="away",
         previous_round_loser_choice=None,
     )
     assert side == "home"
@@ -338,14 +340,14 @@ def test_alternate_rotation_flips_each_round():
         rotation=enums.FirstBanRotation.ALTERNATE,
         round_number=2,
         session_first_side="home",
-        previous_round_winner=None,
+        previous_round_outcome=None,
         previous_round_loser_choice=None,
     )
     opener_r3 = engine.resolve_round_opener(
         rotation=enums.FirstBanRotation.ALTERNATE,
         round_number=3,
         session_first_side="home",
-        previous_round_winner=None,
+        previous_round_outcome=None,
         previous_round_loser_choice=None,
     )
     assert opener_r2 == "away"
@@ -357,7 +359,7 @@ def test_result_winner_first_uses_previous_winner():
         rotation=enums.FirstBanRotation.RESULT_WINNER_FIRST,
         round_number=2,
         session_first_side="home",
-        previous_round_winner="away",
+        previous_round_outcome="away",
         previous_round_loser_choice=None,
     )
     assert side == "away"
@@ -368,19 +370,48 @@ def test_result_loser_first_uses_opposite_of_previous_winner():
         rotation=enums.FirstBanRotation.RESULT_LOSER_FIRST,
         round_number=2,
         session_first_side="home",
-        previous_round_winner="away",
+        previous_round_outcome="away",
         previous_round_loser_choice=None,
     )
     assert side == "home"
 
 
-def test_result_dependent_rotation_requires_previous_winner():
-    with pytest.raises(ValueError, match="previous_round_winner is required"):
+def test_result_dependent_rotation_requires_a_previous_outcome():
+    with pytest.raises(ValueError, match="previous_round_outcome is required"):
         engine.resolve_round_opener(
             rotation=enums.FirstBanRotation.RESULT_WINNER_FIRST,
             round_number=2,
             session_first_side="home",
-            previous_round_winner=None,
+            previous_round_outcome=None,
+            previous_round_loser_choice=None,
+        )
+
+
+def test_result_rotations_fall_back_to_the_snapshot_side_on_a_draw() -> None:
+    for rotation in (
+        enums.FirstBanRotation.RESULT_WINNER_FIRST,
+        enums.FirstBanRotation.RESULT_LOSER_FIRST,
+        enums.FirstBanRotation.RESULT_LOSER_CHOICE,
+    ):
+        assert (
+            engine.resolve_round_opener(
+                rotation=rotation,
+                round_number=2,
+                session_first_side="away",
+                previous_round_outcome="draw",
+                previous_round_loser_choice=None,
+            )
+            == "away"
+        )
+
+
+def test_result_rotations_refuse_a_pending_outcome() -> None:
+    with pytest.raises(ValueError):
+        engine.resolve_round_opener(
+            rotation=enums.FirstBanRotation.RESULT_LOSER_FIRST,
+            round_number=2,
+            session_first_side="home",
+            previous_round_outcome=None,
             previous_round_loser_choice=None,
         )
 
@@ -391,7 +422,7 @@ def test_result_loser_choice_raises_needs_choice_when_unresolved():
             rotation=enums.FirstBanRotation.RESULT_LOSER_CHOICE,
             round_number=2,
             session_first_side="home",
-            previous_round_winner="away",
+            previous_round_outcome="away",
             previous_round_loser_choice=None,
         )
 
@@ -401,13 +432,13 @@ def test_result_loser_choice_returns_the_elected_side_once_chosen():
         rotation=enums.FirstBanRotation.RESULT_LOSER_CHOICE,
         round_number=2,
         session_first_side="home",
-        previous_round_winner="away",
+        previous_round_outcome="away",
         previous_round_loser_choice="home",
     )
     assert side == "home"
 
 
-# ── reconcile_map_reports / winner_side ──────────────────────────────────────
+# ── reconcile_map_reports / map_outcome ──────────────────────────────────────
 
 
 def test_reconcile_map_reports_waits_when_one_side_missing():
@@ -428,34 +459,29 @@ def test_reconcile_map_reports_disputes_on_mismatch():
     assert result.disputed is True
 
 
-def test_winner_side_home():
-    assert engine.winner_side(2, 1) == "home"
+def test_map_outcome_home():
+    assert engine.map_outcome(2, 1) == "home"
 
 
-def test_winner_side_away():
-    assert engine.winner_side(0, 1) == "away"
+def test_map_outcome_away():
+    assert engine.map_outcome(0, 1) == "away"
 
 
-def test_winner_side_none_on_draw():
-    assert engine.winner_side(0, 0) is None
+def test_map_outcome_draw_on_a_level_score():
+    assert engine.map_outcome(0, 0) == "draw"
 
 
-# ── series_decided ───────────────────────────────────────────────────────────
+# ── series_score / series_complete ───────────────────────────────────────────
 
 
-def test_series_decided_is_false_mid_series():
-    assert engine.series_decided(1, 0, 3) is False
+def test_series_score_counts_wins_and_played_positions_separately() -> None:
+    score = engine.series_score([(3, 1), (2, 2), (0, 2)])
+    assert (score.home_wins, score.away_wins, score.played) == (1, 1, 3)
 
 
-def test_series_decided_when_one_side_is_past_half():
-    # Bo3 at 2-0: the third map is never played, so no round opens for it.
-    assert engine.series_decided(2, 0, 3) is True
-
-
-def test_series_decided_when_every_map_has_been_played():
-    # Bo2 at 1-1: nobody is past half, but there is no third map either.
-    assert engine.series_decided(1, 1, 2) is True
-
-
-def test_series_decided_keeps_a_bo2_open_at_one_nil():
-    assert engine.series_decided(1, 0, 2) is False
+def test_series_complete_by_positions_and_by_majority() -> None:
+    assert engine.series_complete(engine.SeriesScore(1, 1, 2), best_of=2)  # Bo2 1:1 ends
+    assert engine.series_complete(engine.SeriesScore(2, 0, 2), best_of=3)  # majority
+    assert not engine.series_complete(engine.SeriesScore(1, 1, 2), best_of=3)
+    assert not engine.series_complete(engine.SeriesScore(1, 0, 1), best_of=2)  # Bo2 1:0 has a map left
+    assert engine.series_complete(engine.SeriesScore(1, 1, 3), best_of=3)  # a draw used the last position

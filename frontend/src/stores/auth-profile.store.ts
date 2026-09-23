@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth-tokens";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth/tokens";
 
 type WorkspaceRbac = {
   workspace_id: number;

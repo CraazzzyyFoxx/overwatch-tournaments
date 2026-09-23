@@ -36,14 +36,17 @@ named RabbitMQ queues (`discord_commands`, `discord_member_roles`, `discord_guil
 
 ## Interface
 
-No RPC namespace. The gateway's route table contains no entry pointing here, and `/api/docs` does not
-describe this service. Everything below is broker or gateway-event traffic.
+No RPC namespace of its own. The gateway's route table contains no entry pointing here, and
+`/api/docs` does not describe this service. Everything below is broker or gateway-event traffic;
+the only outbound RPCs are the ones a card button makes (see *User-facing surface*).
 
 ### RabbitMQ
 
 | Queue / exchange | Direction | Purpose |
 | --- | --- | --- |
-| `discord_commands` | consumes | `DiscordCommandEvent` — `process_all` (rescan every channel of a tournament) and `process_message` (re-ingest one message). Published by parser-service's `rpc.discord_channel.backfill`. |
+| `discord_commands` | consumes | `DiscordCommandEvent` — `process_all` (rescan every channel of a tournament), `process_message` (re-ingest one message), `post_message` (send content/embed/PNG, or one Components V2 `card`, to a channel) and `send_dm` (send content/embed or a `card` to one user). `allow_mentions=false` makes the bot send with `AllowedMentions.none()`, so user-written names never ping; `send_dm` always suppresses mentions. A Discord refusal other than a missing channel/user or a closed DM (a 400 on the payload, an outage outlasting discord.py's own retries) is rejected to the DLQ with status `discord_error`, never requeued. Published by parser-service's `rpc.discord_channel.backfill`, balancer-service's mix posts, and app-service's notification delivery. |
+| `rpc.identity.discord_identity` | requests | The linked account's identity payload for a clicking Discord user (`not_found` = not linked). |
+| action subjects | requests | `rpc.tournament.regteam_accept` / `regteam_decline` / `reg_pub_check_in` / `reg_pub_get_me`, `rpc.app.notification_preferences_update` — each called with that identity, exactly as the gateway would for the same person on the site. |
 | `discord_member_roles` | consumes, replies | Role ids held by a set of users in a guild. Called by the shared Discord-role subscription strategy (`shared/services/subscriptions/strategies.py`, 5 s timeout). |
 | `discord_guild_roles` | consumes, replies | The guild's role list. |
 | `discord_guild_channels` | consumes, replies | The guild's text channels. |
@@ -82,11 +85,39 @@ and `on_message_edit` in monitored channels. `MembershipEventsCog` — `on_guild
 
 ### User-facing surface
 
-**No slash commands and no prefix commands are registered.** `LogCollectorBot` subclasses
-`commands.Bot` rather than `discord.Client` purely for the cog machinery. The entire user interface is
-passive: post a `.txt`, `.log`, or `.json` file in a monitored channel and the bot reacts ✅ / ⚠️ / ❌
-and, where the outcome needs words, replies with the parse error. Reactions are reconciled, not just
-added, so a re-processed message ends with only the reaction matching its current state.
+**Card buttons.** Notification cards (built by app-service, laid out by `src/interactions/cards.py`)
+carry link buttons and action buttons. An action button's `custom_id` is `owt:<action>:<target>` —
+what and on which object, never on whose behalf. `InteractionsCog.on_interaction` answers every such
+click by `custom_id` (no per-message views, so cards keep working across restarts), and
+`ActionDispatcher` runs it:
+
+1. acknowledge within Discord's 3 s (a deferred message update — nothing flashes in the channel);
+2. `rpc.identity.discord_identity` for `interaction.user.id` — not linked → the clicker is told how to
+   link, and **no platform call is made**; deactivated → refused;
+3. the action's own RPC with that identity (`src/interactions/actions.py` is the whole, fixed list:
+   accept/decline a team invite, self check-in, view my registration, switch every Discord DM off);
+4. an ephemeral reply in the clicker's Discord language, with refusals worded by the service's
+   machine code (`invite_expired`, `check_in_closed`, …);
+5. in a DM only, the spent buttons come off the card and a status line takes their place. A channel
+   post is everyone's and is never edited. A button on an ephemeral reply is answered by replacing
+   that reply rather than stacking another under it.
+
+The DM card carries only a small `🔕` (`notifications.menu`, answered by the bot alone): it opens,
+for the reader alone, a prompt with «turn all off» (`notifications.mute:all` — every DM group false;
+in-app notifications stay) and a notification-settings link. Discord allows ephemeral messages only
+as an answer to a click, hence the trigger rather than a separate DM.
+
+No identity is cached, so an unlink or a deactivation bites on the next click. Every click logs one
+line with `action`, `target`, `status` and `code`.
+
+**Match logs.** Passive: post a `.txt`, `.log`, or `.json` file in a monitored channel and the bot
+reacts ✅ / ⚠️ / ❌ and, where the outcome needs words, replies with the parse error. Reactions are
+reconciled, not just added, so a re-processed message ends with only the reaction matching its
+current state.
+
+No slash or prefix commands are registered yet. `LogCollectorBot` subclasses `commands.Bot` for the
+cog machinery; a slash command would be another entry into `ActionDispatcher.perform`, which knows
+nothing about how it was reached.
 
 ### Scheduled work
 
@@ -138,7 +169,9 @@ owner.
   service.
 - **Redis** — the `subscription.updated` realtime signal and the subscription-resolver caches.
 - **parser-service** — over the broker only. It is never called over HTTP.
-- **identity-service** — over the gateway, for the machine-to-machine service token (below).
+- **identity-service** — over the gateway, for the machine-to-machine service token (below), and over
+  the broker for `rpc.identity.discord_identity` when a card button is pressed.
+- **tournament-service, app-service** — over the broker only, for the card actions.
 
 ## Configuration
 
@@ -155,6 +188,8 @@ actually changes behaviour:
   service authentication, below.
 - `PARSER_URL` — base URL for the parser HTTP client. Retained by `ParserClientFactory`; see the
   operational note on the unexercised internal path.
+- `PUBLIC_SITE_URL` — from `common.env`; where button replies link back to (link Discord, notification
+  settings). The same value app-service renders the cards' own links from.
 - `WORKER_METRICS_PORT`, `LOG_LEVEL`, `JSON_LOGGING`, `TRACING_ENABLED`, `OTLP_ENDPOINT` — observability.
 
 ### Service authentication
@@ -162,15 +197,16 @@ actually changes behaviour:
 `ServiceTokenClient` exchanges `SERVICE_CLIENT_ID` / `SERVICE_CLIENT_SECRET` for a service access token
 by POSTing `{AUTH_SERVICE_URL}/service/token`. In production `AUTH_SERVICE_URL` is
 `http://gateway:8080/api/auth`, so the call lands on the Go gateway, which forwards it as an RPC to
-`rpc.identity.service_token` on identity-service — this service never talks to identity directly.
+`rpc.identity.service_token` on identity-service — the token path never talks to identity directly.
 
 The token identifies the *process*, not a user: its claims are `sub=discord-service`, `type=service`,
 `iss=auth-service`, `aud=internal`, and whatever scope list identity has configured for this client id
 in `SERVICE_SCOPES`. It carries no user id, no workspace, and no RBAC role, so it authorises nothing a
-user could do — it only proves to another internal service that the caller is this bot. Lifetime is
-short (5 minutes by default on the identity side); the client caches it and refreshes
-`SERVICE_TOKEN_SKEW_SECONDS` early, under a lock so concurrent callers share one round trip instead of
-each minting a token.
+user could do — it only proves to another internal service that the caller is this bot. Acting *for* a
+user is a separate, narrower path: the card actions above, for linked accounts only, with that user's
+own identity payload. Lifetime is short (5 minutes by default on the identity side); the client caches
+it and refreshes `SERVICE_TOKEN_SKEW_SECONDS` early, under a lock so concurrent callers share one round
+trip instead of each minting a token.
 
 ## Running
 
@@ -200,7 +236,9 @@ port, so that check proves only that the interpreter runs, not that the gateway 
   for that reason.
 - **Failure handling on `discord_commands`.** A malformed payload, a missing channel, a deleted
   message, or a permissions error is `reject`ed straight to `discord_commands.dlq`; an unexpected
-  exception is `nack`ed and requeued. Retries are RabbitMQ's, there is no application-level backoff.
+  exception is `nack`ed and requeued. A `send_dm` the recipient cannot receive (DMs closed, no mutual
+  guild, unknown user) is `ack`ed instead — the notification already exists in the in-app inbox, and
+  no retry changes the outcome. Retries are RabbitMQ's, there is no application-level backoff.
 - **Upload timeout.** A parse result that does not arrive within 120 s leaves the message marked as
   timed out even if the parse later succeeds. The upload itself is not retried.
 - **Idempotency is by `(tournament_id, filename)`**, checked against `log_processing.record` before

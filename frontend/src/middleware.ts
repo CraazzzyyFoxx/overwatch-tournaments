@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveHost } from "@/lib/host";
-import { internalApiOrigin } from "@/lib/api-routes";
+import { resolveHost } from "@/lib/site/host";
+import { internalApiOrigin } from "@/lib/api/routes";
 
 // Small bounded TTL cache: the host->workspace map is tiny and rarely changes.
 const CACHE_TTL_MS = 60_000;

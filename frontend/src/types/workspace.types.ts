@@ -231,7 +231,7 @@ export interface Workspace {
   is_hidden: boolean;
   /** IANA zone tournament schedule forms display and parse times in. */
   timezone: string;
-  /** Per-workspace main-site branding (see lib/workspace-theme). */
+  /** Per-workspace main-site branding (see lib/workspace/theme). */
   branding_enabled: boolean;
   brand_primary: string | null;
   brand_secondary: string | null;

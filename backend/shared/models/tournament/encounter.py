@@ -11,6 +11,7 @@ from shared.models.tournament.tournament import Tournament
 
 if typing.TYPE_CHECKING:
     from shared.models.matches.match import Match
+    from shared.models.tournament.encounter_game import EncounterGame
     from shared.models.tournament.encounter_report import EncounterCaptainReport
     from shared.models.tournament.encounter_result_audit import EncounterResultAudit
 
@@ -135,4 +136,10 @@ class Encounter(db.TimeStampIntegerMixin):
         back_populates="encounter",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    games: Mapped[list[EncounterGame]] = relationship(
+        back_populates="encounter",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="EncounterGame.position",
     )

@@ -445,7 +445,8 @@ describe("notification bell", () => {
     list.mockResolvedValue(inbox([ANNOUNCEMENT]));
     await mount();
     await openPanel();
-    const link = document.body.querySelector("a")!;
+    // Scoped to the row: the panel header also carries a link, to the settings tab.
+    const link = document.body.querySelector("li a")!;
     expect(link.getAttribute("href")).toBe("/changelog");
     await click(link);
     await flush();
@@ -461,13 +462,66 @@ describe("notification bell", () => {
     expect(document.body.textContent).not.toContain("notifications.kinds");
   });
 
+  it("renders the lifecycle kinds with a formatted date, and drops the window when a phase has no end", async () => {
+    const closesAt = "2026-09-25T18:00:00Z";
+    const scheduledAt = "2026-09-26T19:30:00Z";
+    list.mockResolvedValue(
+      inbox([
+        item({
+          id: 21,
+          kind: "registration.opened",
+          audience: "workspace",
+          payload: { tournament_id: 5, tournament_name: "Autumn Cup", closes_at: closesAt }
+        }),
+        // A phase with no end carries no `closes_at` at all.
+        item({
+          id: 22,
+          kind: "check_in.opened",
+          payload: { tournament_id: 5, tournament_name: "Autumn Cup" }
+        }),
+        item({
+          id: 23,
+          kind: "encounter.scheduled",
+          payload: {
+            encounter_id: 9,
+            tournament_id: 5,
+            tournament_name: "Autumn Cup",
+            home_team_name: "Alpha",
+            away_team_name: "Beta",
+            scheduled_at: scheduledAt
+          }
+        })
+      ])
+    );
+    await mount();
+    await openPanel();
+    const text = document.body.textContent ?? "";
+    const stamp = (iso: string) =>
+      new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(
+        new Date(iso)
+      );
+
+    expect(text).toContain(`Registration for Autumn Cup is open until ${stamp(closesAt)}`);
+    expect(text).toContain(`Alpha vs Beta in Autumn Cup is scheduled for ${stamp(scheduledAt)}`);
+    // The wire stamp itself never reaches the reader, and neither does the
+    // sentinel the optional window branches on.
+    expect(text).not.toContain(closesAt);
+    expect(text).not.toContain(scheduledAt);
+    expect(text).toContain("Check-in for Autumn Cup is open — confirm you are playing");
+
+    const rows = [...document.body.querySelectorAll("li a")].map((node) =>
+      node.getAttribute("href")
+    );
+    expect(rows).toEqual(["/tournaments/5", "/tournaments/5", "/tournaments/5/pregame/9"]);
+  });
+
   it("links an announcement row to its href", async () => {
     list.mockResolvedValue(inbox([ANNOUNCEMENT]));
     await mount();
     await openPanel();
     await flush();
 
-    const link = document.body.querySelector("a");
+    const link = document.body.querySelector("li a");
     expect(link?.getAttribute("href")).toBe("/changelog");
     expect(link?.textContent).toContain("Maintenance window");
   });
@@ -484,7 +538,7 @@ describe("notification bell", () => {
     await openPanel();
     await flush();
 
-    expect(document.body.querySelector("a")).toBeNull();
+    expect(document.body.querySelector("li a")).toBeNull();
     expect(document.body.textContent).toContain("Maintenance window");
   });
 

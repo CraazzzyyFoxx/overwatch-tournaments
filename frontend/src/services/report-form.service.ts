@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { MatchReportForm } from "@/types/encounter.types";
 
 type MatchReportFormUpsert = Omit<MatchReportForm, "tournament_id">;

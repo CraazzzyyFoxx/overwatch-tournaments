@@ -18,7 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ROLE_LABELS, ROLES, type RoleCode } from "@/lib/roles";
+import { ROLE_LABELS, ROLES, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { RosterMember } from "@/services/workspace-player.service";
 

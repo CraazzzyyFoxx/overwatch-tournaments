@@ -957,6 +957,7 @@ def _db_encounter(
         status=enums.EncounterStatus.OPEN,
         result_status=enums.EncounterResultStatus.NONE,
         confirmed_at=None,
+        scheduled_at=None,
         captain_reports=[],
     )
 

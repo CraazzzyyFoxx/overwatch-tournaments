@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { PLATFORM_ZONE } from "@/lib/host";
+import { PLATFORM_ZONE } from "@/lib/site/host";
 
 import { TwitchEmbed, twitchParentFromHostname } from "./TwitchEmbed";
 

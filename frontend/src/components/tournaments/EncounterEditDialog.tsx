@@ -25,7 +25,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
-import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import { useTranslations } from "next-intl";
 import adminService from "@/services/admin.service";
 import captainService from "@/services/captain.service";

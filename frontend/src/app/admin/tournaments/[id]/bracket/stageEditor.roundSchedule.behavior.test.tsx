@@ -23,7 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import type { EncounterUpdateInput } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
 import type { Stage } from "@/types/tournament.types";
@@ -87,7 +87,7 @@ vi.mock("next/link", () => ({
 }));
 
 // Partial: the section's query reads the real key factory from this module.
-vi.mock("@/lib/tournament-workspace-query-keys", async (importOriginal) => ({
+vi.mock("@/lib/tournament/workspace-query-keys", async (importOriginal) => ({
   ...((await importOriginal()) as object),
   invalidateTournamentWorkspace: (...args: unknown[]) => invalidateWorkspace(...args)
 }));

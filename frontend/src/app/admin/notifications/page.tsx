@@ -17,7 +17,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { notificationQueryKeys } from "@/lib/notification-query-keys";
+import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import { notify } from "@/lib/notify";
 import notificationService from "@/services/notification.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -46,7 +46,10 @@ const KINDS = [
   "team_invite.answered",
   "registration.approved",
   "registration.rejected",
+  "registration.opened",
+  "check_in.opened",
   "encounter.report_disputed",
+  "encounter.scheduled",
   "team.kicked",
   "team.rejected",
   "team.disbanded"

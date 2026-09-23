@@ -22,7 +22,7 @@ import { PaginatedResponse, SearchPaginationParams } from "@/types/pagination.ty
 import { HeroWithUserStats } from "@/types/hero.types";
 import { AchievementRarity } from "@/types/achievement.types";
 import { LogStatsName } from "@/types/stats.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 
 // Public, workspace-scoped profile reads are cached in the Next Data Cache for
 // this long (seconds) when fetched server-side. Tagged for on-demand

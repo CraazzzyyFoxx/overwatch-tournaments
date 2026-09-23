@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { PROVIDER_LABELS } from "@/lib/subscription-requirement";
+import { PROVIDER_LABELS } from "@/lib/registration/subscription-requirement";
 import type {
   SubscriptionProviderRequirement,
   SubscriptionRequirement

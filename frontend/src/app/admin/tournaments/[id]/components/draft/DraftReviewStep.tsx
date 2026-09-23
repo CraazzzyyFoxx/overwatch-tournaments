@@ -106,6 +106,11 @@ export function DraftReviewStep({
         <StatTile label={t("teamCount")} value={config.teamCount} />
         <StatTile label={t("poolPlayers")} value={readiness.actualPlayers} />
         <StatTile label={t("totalPicks")} value={config.teamCount * rounds} />
+        <StatTile label={t("pickTime")} value={`${config.pickTimeSeconds}s`} />
+        <StatTile
+          label={t("overtime")}
+          value={config.overtimeSeconds > 0 ? `${config.overtimeSeconds}s` : t("overtimeOff")}
+        />
       </StatTileGrid>
 
       {isReseed && preview && (

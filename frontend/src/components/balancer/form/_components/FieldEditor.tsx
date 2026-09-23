@@ -194,10 +194,9 @@ function ConditionValueInput({
  *
  * The panel is built so the server's schema invariants are UNREACHABLE rather
  * than merely reported: a builtin whose visibility the catalog fixes gets a
- * disabled selector with the reason, `show_in_draft` is forced off the moment
- * visibility leaves `public`, the `visible_when` picker lists only fields that
- * come EARLIER in flattened order, and a custom field's key is derived from its
- * label exactly once. What is left — an empty label, an empty option list, a
+ * disabled selector with the reason, the `visible_when` picker lists only fields
+ * that come EARLIER in flattened order, and a custom field's key is derived from
+ * its label exactly once. What is left — an empty label, an empty option list, a
  * pattern that will not compile — is shown inline and blocks the save.
  */
 export function FieldEditor({
@@ -234,15 +233,7 @@ export function FieldEditor({
     ? earlierFields.find((candidate) => candidate.key === condition.field)
     : undefined;
 
-  const setVisibility = (visibility: Visibility) =>
-    onChange({
-      ...field,
-      visibility,
-      // The server refuses a drafted answer that the public roster never sees;
-      // flipping visibility silently turns the opt-in back off rather than
-      // leaving a checked box that would be rejected on save.
-      show_in_draft: visibility === "public" ? field.show_in_draft : false
-    });
+  const setVisibility = (visibility: Visibility) => onChange({ ...field, visibility });
 
   const setCondition = (next: Condition | null) => onChange({ ...field, visible_when: next });
 
@@ -439,19 +430,6 @@ export function FieldEditor({
               : t("visibilityHint")}
           </p>
         </div>
-
-        {isBuiltin ? null : (
-          <SwitchRow
-            id={`${ids}-draft`}
-            label={t("showInDraft")}
-            hint={
-              field.visibility === "organizers" ? t("showInDraftBlocked") : t("showInDraftHint")
-            }
-            checked={field.show_in_draft}
-            disabled={field.visibility === "organizers"}
-            onCheckedChange={(show_in_draft) => onChange({ ...field, show_in_draft })}
-          />
-        )}
 
         <SwitchRow
           id={`${ids}-editable`}

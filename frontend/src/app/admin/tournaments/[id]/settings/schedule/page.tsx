@@ -8,12 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { getUtcOffsetLabel } from "@/lib/timezone";
+import { getUtcOffsetLabel } from "@/lib/workspace/timezone";
 import {
   SCHEDULABLE_PHASES,
   TOURNAMENT_STATUS_LABELS,
   type SchedulablePhase
-} from "@/lib/tournament-lifecycle";
+} from "@/lib/tournament/lifecycle";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";

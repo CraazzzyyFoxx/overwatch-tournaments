@@ -61,10 +61,10 @@ import {
 } from "@/components/ui/select";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions } from "@/hooks/usePermissions";
-import { mergeStatusOptions } from "@/lib/balancer-statuses";
+import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
 import { notify } from "@/lib/notify";
-import { formatAdmissionReason, type AdmissionTranslator } from "@/lib/admission";
-import { ROLE_LABELS, getSubroleLabel } from "@/lib/roles";
+import { formatAdmissionReason, type AdmissionTranslator } from "@/lib/registration/admission";
+import { ROLE_LABELS, getSubroleLabel } from "@/lib/roster/roles";
 import balancerAdminService from "@/services/balancer-admin.service";
 import registrationService from "@/services/registration.service";
 import type {

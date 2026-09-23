@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Hero, HeroStat } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
-import { normalizeRole, type AqtRoleKey } from "@/lib/player-role";
+import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import HeroImage from "@/components/hero/HeroImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Progress } from "@/components/ui/progress";

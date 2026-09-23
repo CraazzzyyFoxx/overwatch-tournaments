@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftSession } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
@@ -52,6 +52,7 @@ const SHAPE: RosterShape = {
 const CONFIG: DraftSetupConfig = {
   teamCount: 2,
   pickTimeSeconds: 45,
+  overtimeSeconds: 0,
   format: "snake",
   autopickStrategy: "best_fit",
   allowAdminOverride: true,
@@ -98,17 +99,29 @@ describe("draft config step", () => {
   );
 
   test("renders the pick-time presets as one segmented control, not four loose buttons", () => {
-    // Only the pick-time group is a `role=group` here (round rules are custom-only,
-    // the format picker is a radiogroup), so one match means one widget.
-    expect(html.match(/<div[^>]*role="group"[^>]*aria-labelledby[^>]*>/g) ?? []).toHaveLength(1);
+    // Pick time and overtime are the two `role=group` widgets here (round rules
+    // are custom-only, the format picker is a radiogroup).
+    expect(html.match(/<div[^>]*role="group"[^>]*aria-labelledby[^>]*>/g) ?? []).toHaveLength(2);
     for (const seconds of [30, 45, 60, 90]) {
       expect(html).toContain(`>${seconds}s</button>`);
     }
-    // The selected preset is the only pressed option, and the free-form field is
-    // labelled as the custom override rather than looking like a fifth preset.
-    expect(html.match(/aria-pressed="true"/g) ?? []).toHaveLength(1);
+    // One pressed preset per group (45s pick time, overtime off), and the
+    // free-form fields are labelled as custom overrides, not extra presets.
+    expect(html.match(/aria-pressed="true"/g) ?? []).toHaveLength(2);
     expect(html).toContain('for="draft-pick-time"');
     expect(html).toContain("customPickTime");
+  });
+
+  test("offers overtime presets with an off option and a custom field", () => {
+    expect(html).toContain("overtime");
+    expect(html).toContain(">overtimeOff</button>");
+    for (const seconds of [15, 30, 60]) {
+      expect(html).toContain(`>${seconds}s</button>`);
+    }
+    expect(html).toContain('for="draft-overtime"');
+    expect(html).toContain('id="draft-overtime"');
+    // The main clock → overtime → autopick sequence is explained, not implied.
+    expect(html).toContain("overtimeHint");
   });
 
   test("shows the roster slots as icons instead of role words", () => {
@@ -155,17 +168,24 @@ describe("draft captains step", () => {
     />
   );
 
-  test("filters roles through icon toggles instead of a single-value dropdown", () => {
-    expect(html.match(/<button[^>]*aria-pressed="false"[^>]*>/g) ?? []).toHaveLength(3);
-    expect(html).toContain('aria-label="roleFilter"');
-    // The removed dropdown's "all roles" option must be gone: an empty selection
-    // now means every role.
+  test("filters roles through counted chips instead of a single-value dropdown", () => {
+    // All + three roles + Selected, every one a real pressed-state button.
+    expect(html.match(/<button[^>]*aria-pressed="(true|false)"[^>]*>/g) ?? []).toHaveLength(5);
+    expect(html).toContain('aria-label="captainPoolFilters"');
+    expect(html).toContain("captainFilters.all");
+    expect(html).toContain("captainFilters.selected");
+    // Nothing is selected yet, so the Selected chip counts 0 of 2 teams.
+    expect(html).toContain("0/2");
+    // The removed dropdown's "all roles" option must be gone: an empty role
+    // selection now means every role.
     expect(html).not.toContain("allRoles");
   });
 
-  test("offers a rank sort", () => {
+  test("offers a rank sort and a labelled search field", () => {
     // Radix renders its options in a portal, so SSR only exposes the trigger.
     expect(html).toContain('aria-label="captainSort"');
+    expect(html).toContain('type="search"');
+    expect(html).toContain("searchCaptains");
   });
 
   test("renders each candidate's roles as glyphs and the rank as a division icon", () => {

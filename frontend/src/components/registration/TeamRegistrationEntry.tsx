@@ -8,9 +8,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { ROLES } from "@/lib/roles";
-import { isRegistrationOpen } from "@/lib/tournament-status";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { ROLES } from "@/lib/roster/roles";
+import { isRegistrationOpen } from "@/lib/tournament/status";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationService from "@/services/registration.service";
 import type { Tournament } from "@/types/tournament.types";
 

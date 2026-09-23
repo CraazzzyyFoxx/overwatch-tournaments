@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { ROLE_ACCENTS } from "@/lib/roles";
+import { ROLE_ACCENTS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 

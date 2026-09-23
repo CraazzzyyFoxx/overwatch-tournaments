@@ -34,11 +34,11 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { getApiErrorMessage } from "@/lib/api-error";
-import { BEST_OF_OPTIONS, DEFAULT_BEST_OF } from "@/lib/best-of";
+import { getApiErrorMessage } from "@/lib/api/error";
+import { BEST_OF_OPTIONS, DEFAULT_BEST_OF } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
-import { withReturnTo } from "@/lib/return-to";
-import { stageRoundShape } from "@/lib/bracket-view";
+import { withReturnTo } from "@/lib/auth/return-to";
+import { stageRoundShape } from "@/lib/bracket/view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import encounterService from "@/services/encounter.service";
 import scrimService from "@/services/scrim.service";
@@ -52,7 +52,7 @@ import {
   encodeScope,
   pickBanDraftToInput,
   stageRoundOptions
-} from "@/lib/pick-ban-config";
+} from "@/lib/tournament/pick-ban-config";
 
 import {
   ScrimPoolEditor,

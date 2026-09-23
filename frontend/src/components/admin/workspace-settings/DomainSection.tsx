@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { PhaseStrip, type PhaseState } from "@/components/kit/PhaseStrip";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
-import { PLATFORM_ZONE } from "@/lib/host";
+import { PLATFORM_ZONE } from "@/lib/site/host";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import type { Workspace } from "@/types/workspace.types";

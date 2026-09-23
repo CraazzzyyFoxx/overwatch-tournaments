@@ -3,7 +3,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useInvalidation } from "@/hooks/useInvalidation";
-import { notificationQueryKeys } from "@/lib/notification-query-keys";
+import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import notificationService from "@/services/notification.service";
 import type { NotificationItem } from "@/types/notification.types";
 

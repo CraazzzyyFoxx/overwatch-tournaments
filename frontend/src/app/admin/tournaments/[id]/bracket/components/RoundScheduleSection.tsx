@@ -22,9 +22,9 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { stageBestOfRoundSections } from "@/lib/best-of";
+import { stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
-import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import adminService from "@/services/admin.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Stage } from "@/types/tournament.types";

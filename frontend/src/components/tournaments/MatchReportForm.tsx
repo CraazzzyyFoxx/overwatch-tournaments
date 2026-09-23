@@ -6,7 +6,7 @@ import { Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { EncounterScoreControls } from "@/components/tournaments/EncounterScoreControls";
-import { getApiErrorMessage, isResultLockedError } from "@/lib/api-error";
+import { getApiErrorMessage, isResultLockedError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";

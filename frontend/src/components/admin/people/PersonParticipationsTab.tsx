@@ -27,7 +27,7 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
-import { normalizePlayerRole } from "@/lib/player-role";
+import { normalizePlayerRole } from "@/lib/roster/player-role";
 import adminService from "@/services/admin.service";
 import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";

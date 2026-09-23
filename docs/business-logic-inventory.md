@@ -399,7 +399,7 @@ Duplicates only what the UI needs instantly; comments cite the server symbol:
 
 | Module | Rule |
 | --- | --- |
-| `frontend/src/lib/draft-logic.ts` | Event reducer; confirm only from server `safe` options + `pick_version` |
+| `frontend/src/lib/draft/logic.ts` | Event reducer; confirm only from server `safe` options + `pick_version` |
 | `…/pickBanConfig.helpers.ts` | Cascade / template / `SLOT_CANDIDATE_FLOOR=2`; does **not** guess elimination round numbers |
 | `…/roster-shape-editor.model.ts` | Only 2–12 to preempt a 422; `inherit` sends `null` |
 | `frontend/src/hooks/usePermissions.ts` | RBAC mirror including deny and host ≠ admin panel |

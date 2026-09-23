@@ -2,14 +2,17 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Scale } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import { PageStateCard } from "@/components/ui/page-state-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { RosterShapeEditor } from "@/components/roster-shape/RosterShapeEditor";
-import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
+import { ROSTER_SLOT_CODES } from "@/lib/roster/shape";
 import { notify } from "@/lib/notify";
 import {
   mixPreferencesKeys,
@@ -93,25 +96,44 @@ export default function MixBalancerSection() {
 
   if (preferencesQuery.isLoading) {
     return (
-      <Loader2
-        className="h-4 w-4 animate-spin text-[color:var(--aqt-fg-muted)]"
-        aria-label={t("mixBalancer.title")}
-      />
+      <div className="space-y-4" aria-hidden>
+        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
     );
   }
 
   if (preferencesQuery.isError) {
-    return <p className="text-sm text-[color:var(--aqt-fg-dim)]">{t("mixBalancer.loadError")}</p>;
+    return (
+      <PageStateCard
+        state="error"
+        title={t("mixBalancer.loadError")}
+        onAction={() => void preferencesQuery.refetch()}
+      />
+    );
   }
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h4 className="text-sm font-medium text-[color:var(--aqt-fg-muted)]">
-            {t("mixBalancer.title")}
-          </h4>
-          {/* One line, three states, no button: saving, saved, or nothing. */}
+    <div className="space-y-4">
+      <RosterShapeEditor
+        entity="account"
+        value={draft.roleMask}
+        effective={stored?.roster_shape ?? null}
+        onChange={(roleMask) => setDraft((current) => ({ ...current, roleMask }))}
+      />
+
+      {/* Same card as the roster editor above, so the two halves of one
+          autosaving form read as siblings rather than two different widgets. */}
+      <Card className="border-border/40 bg-card/50">
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-4">
+          <div className="flex items-center gap-2">
+            <Scale className="size-4 text-primary" aria-hidden />
+            <CardTitle asChild className="text-sm font-semibold">
+              <h4>{t("mixBalancer.balancingTitle")}</h4>
+            </CardTitle>
+          </div>
+          {/* One line, three states, no button: saving, saved, or nothing.
+              It covers the roster shape too — both halves share one draft. */}
           <span
             role="status"
             aria-live="polite"
@@ -129,17 +151,9 @@ export default function MixBalancerSection() {
               </>
             ) : null}
           </span>
-        </div>
-        <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("mixBalancer.desc")}</p>
+        </CardHeader>
 
-        <RosterShapeEditor
-          entity="account"
-          value={draft.roleMask}
-          effective={stored?.roster_shape ?? null}
-          onChange={(roleMask) => setDraft((current) => ({ ...current, roleMask }))}
-        />
-
-        <div className="space-y-6 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-3 py-3.5">
+        <CardContent className="space-y-6">
           <div className="space-y-1.5">
             <Label asChild>
               <span>{t("mixBalancer.tilt.label")}</span>
@@ -232,8 +246,8 @@ export default function MixBalancerSection() {
             />
             <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("mixBalancer.points.hint")}</p>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }

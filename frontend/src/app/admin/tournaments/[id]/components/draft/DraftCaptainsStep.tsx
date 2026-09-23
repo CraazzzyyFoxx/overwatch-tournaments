@@ -1,32 +1,24 @@
 "use client";
 
-import { ArrowDownWideNarrow, Search, ShieldCheck, UserRoundCheck, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ShieldCheck, UserRoundCheck, X } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { TONE_CLASS } from "@/components/kit/tone";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type { DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
-import { filterCaptainRows, type DraftCaptainSort } from "./setup-model";
+import { CaptainPoolPicker } from "./CaptainPoolPicker";
+import type { DraftCaptainRow } from "./setup-model";
 import type { DraftCaptainSetup } from "./setup-types";
-import { poolRegistrationSummary, registrationLabel } from "./setup-types";
+import { captainRankSummary, poolRegistrationSummary, registrationLabel } from "./setup-types";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface DraftCaptainsStepProps {
@@ -39,9 +31,6 @@ interface DraftCaptainsStepProps {
   divisionGrid: DivisionGrid;
 }
 
-const FILTER_ROLES: DraftRole[] = ["tank", "damage", "support"];
-const SORTS: DraftCaptainSort[] = ["rank_desc", "rank_asc", "name"];
-
 export function DraftCaptainsStep({
   pool,
   teamCount,
@@ -50,26 +39,20 @@ export function DraftCaptainsStep({
   divisionGrid
 }: Readonly<DraftCaptainsStepProps>) {
   const t = useTranslations("draftAdmin");
-  const [search, setSearch] = useState("");
-  const [roles, setRoles] = useState<DraftRole[]>([]);
-  const [sort, setSort] = useState<DraftCaptainSort>("rank_desc");
 
-  const rows = useMemo(
+  const rows: DraftCaptainRow[] = useMemo(
     () =>
       pool.map((registration) => {
-        const summary = poolRegistrationSummary(registration);
+        const best = captainRankSummary(registration);
         return {
           id: registration.id,
           label: registrationLabel(registration),
-          roles: summary.roles,
-          rank: summary.rank
+          roles: poolRegistrationSummary(registration).roles,
+          rank: best.rank,
+          rankRole: best.role
         };
       }),
     [pool]
-  );
-  const visible = useMemo(
-    () => filterCaptainRows(rows, { query: search, roles, sort }),
-    [roles, rows, search, sort]
   );
   const rowsById = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
 
@@ -118,120 +101,13 @@ export function DraftCaptainsStep({
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-52 flex-1">
-              <Search
-                className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t("searchCaptains")}
-                aria-label={t("searchCaptains")}
-                className="pl-9"
-              />
-            </div>
-            {/* Multi-select toggles rather than a single-value dropdown: a captain
-                pool is usually filtered to "tank or support", which a select
-                cannot express. No role checked means every role. */}
-            <div
-              className="inline-flex h-9 items-center gap-0.5 rounded-md border border-border/70 bg-card p-0.5"
-              role="group"
-              aria-label={t("roleFilter")}
-            >
-              {FILTER_ROLES.map((role) => {
-                const active = roles.includes(role);
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    aria-pressed={active}
-                    title={t(`roles.${role}`)}
-                    onClick={() =>
-                      setRoles((current) =>
-                        current.includes(role)
-                          ? current.filter((entry) => entry !== role)
-                          : [...current, role]
-                      )
-                    }
-                    className={cn(
-                      "inline-flex h-8 w-9 items-center justify-center rounded-[5px] transition-colors",
-                      active ? "bg-primary/15 ring-1 ring-primary/40" : "hover:bg-muted/60"
-                    )}
-                  >
-                    <PlayerRoleIcon
-                      role={getRoleIconName(role)}
-                      size={18}
-                      color={active ? ROLE_ACCENT[role] : "var(--aqt-fg-muted)"}
-                      decorative
-                    />
-                    <span className="sr-only">{t(`roles.${role}`)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <Select value={sort} onValueChange={(next) => setSort(next as DraftCaptainSort)}>
-              <SelectTrigger className="w-44" aria-label={t("captainSort")}>
-                <ArrowDownWideNarrow
-                  className="h-4 w-4 shrink-0 text-muted-foreground"
-                  aria-hidden
-                />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORTS.map((entry) => (
-                  <SelectItem key={entry} value={entry}>
-                    {t(`captainSorts.${entry}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="max-h-96 divide-y divide-border/60 overflow-auto rounded-xl border border-border/70">
-            {visible.map((row) => {
-              const selected = value.ids.includes(row.id);
-              const disabled = !selected && value.ids.length >= teamCount;
-              return (
-                <label
-                  key={row.id}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors",
-                    selected ? "bg-primary/8" : "hover:bg-muted/50",
-                    disabled && "cursor-not-allowed opacity-50"
-                  )}
-                >
-                  <Checkbox
-                    checked={selected}
-                    disabled={disabled}
-                    onCheckedChange={() => toggle(row.id)}
-                    aria-label={t("selectCaptain", { name: row.label })}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{row.label}</span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    {row.roles.map((role) => (
-                      <PlayerRoleIcon
-                        key={role}
-                        role={getRoleIconName(role)}
-                        size={16}
-                        color={ROLE_ACCENT[role]}
-                        label={t(`roles.${role}`)}
-                      />
-                    ))}
-                  </span>
-                  {renderRank(row.rank, 22)}
-                </label>
-              );
-            })}
-            {visible.length === 0 && (
-              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-                {t("noCaptainsFound")}
-              </p>
-            )}
-          </div>
-        </div>
+        <CaptainPoolPicker
+          rows={rows}
+          selectedIds={value.ids}
+          teamCount={teamCount}
+          onToggle={toggle}
+          divisionGrid={divisionGrid}
+        />
 
         <div className="space-y-3">
           <div className="flex items-center gap-2">

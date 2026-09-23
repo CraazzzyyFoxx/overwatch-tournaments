@@ -110,9 +110,7 @@ function PregameSection({
 }>) {
   const t = useTranslations();
   const session = state.session;
-  const decided = state.pool.filter(
-    (entry) => entry.status === "picked" || entry.status === "played"
-  ).length;
+  const decided = state.pool.filter((entry) => entry.status === "picked").length;
   const banned = state.pool.filter((entry) => entry.status === "banned").length;
   const sideName = (side: "home" | "away" | null) =>
     side === "home" ? homeName : side === "away" ? awayName : null;

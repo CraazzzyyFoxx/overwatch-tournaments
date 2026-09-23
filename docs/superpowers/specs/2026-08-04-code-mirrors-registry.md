@@ -89,12 +89,12 @@ Pydantic-модели 6 сервисов
 | 8 | `frontend/src/types/balancer.types.ts:5-43` | Нет `team_max_pain_weight`, `time_limit_ms`; мёртвые `intra_team_variance_weight`, `role_spread_weight`; UI крутит `algorithm`, который бэкенд безусловно выбрасывает (`public_contract.py:78-82`) | D |
 | 9 | `draft/selection.py:438`, `rpc/draft.py:441` | `FitConfig()` без аргументов → **override `tank_impact_weight` игнорируется драфтом** | D |
 | 10 | `draft/feasibility.py:139` vs `selection.py:286` | Два источника playable-роли внутри драфта → драфт предлагает пик, который сам же отклоняет (**тупик на часах**) | D |
-| 11 | `frontend/src/lib/roles.ts:47` | Лишний `dps: "dps"` против Python `_CANONICAL_TO_REGISTRATION` | A |
+| 11 | `frontend/src/lib/roster/roles.ts:47` | Лишний `dps: "dps"` против Python `_CANONICAL_TO_REGISTRATION` | A |
 | 12 | `frontend/src/hooks/usePermissions.ts:37` | Нет `account.avatar`, `account.social`, `registration.self_register` из `PERMISSION_CATALOG:100-102` | A |
-| 13 | `frontend/src/lib/tiebreakers.ts:8` | Нет `map_differential`, `wins_as_higher_stage_specific_metric`, которые бэкенд принимает (`standings/service.py:290,292`) | A |
+| 13 | `frontend/src/lib/tournament/tiebreakers.ts:8` | Нет `map_differential`, `wins_as_higher_stage_specific_metric`, которые бэкенд принимает (`standings/service.py:290,292`) | A |
 | 14 | `frontend/src/types/registration.types.ts` | `RegistrationForm:145` без `auto_approve`; `StatusMeta` объявлен **дважды** (`:161`, `:263`) | A |
-| 15 | `frontend/src/lib/subscription-requirement.ts:41,54` | Нет `deferred`, нет дедупликации провайдеров — при заявленной в комментарии `:21-23` страховке параллельными тестами | D |
-| 16 | `frontend/src/lib/balancer-statuses.ts:65,105,119,133` | 4 описания статусов ≠ бэкенду, **хотя бэкенд уже отдаёт каталог** по `rpc.tournament.regstatus_catalog` | D |
+| 15 | `frontend/src/lib/registration/subscription-requirement.ts:41,54` | Нет `deferred`, нет дедупликации провайдеров — при заявленной в комментарии `:21-23` страховке параллельными тестами | D |
+| 16 | `frontend/src/lib/registration/balancer-statuses.ts:65,105,119,133` | 4 описания статусов ≠ бэкенду, **хотя бэкенд уже отдаёт каталог** по `rpc.tournament.regstatus_catalog` | D |
 
 ---
 
@@ -212,21 +212,21 @@ Pydantic-модели 6 сервисов
 | **`can_play` / playable роли** | 7 | `entities.py:60`; `context.rs:100`; `feasibility_analyzer.py:79,133`; `draft/selection.py:279-289` (два варианта); `draft/feasibility.py:137-140`; `rpc/draft.py:419-422` (инлайн-дубль) | **ДА**, двумя независимыми способами (баг 10) |
 | **Ключи конфига балансера** | 10 | `defaults.py:15-149`; `public_contract.py:10-46`; `provider.py:16-52`, `:55-89`, `:97+`; `schemas/balancer.py:6-105`; `presets.py`; `moo_backend.py:49-84`; `tournament_balancer/src/lib.rs:88-160`; `frontend/.../balancer.types.ts:5-43,107-149`; `balancer-config-helpers.ts:20-29` | **ДА** (баги 7, 8) |
 | **Веса влияния роли** | 4 | `draft/suggestions.py:19-22`; `tournament_balancer/src/lib.rs:16-24`; `config/defaults.py:93-95`; bench/test-фикстуры | Числа совпадают (1.4/1.0/1.1), но драфт игнорирует override (баг 9) |
-| **Division grid** | 2 | `shared/division_grid.py:120` (`_build_default_grid`); `frontend/src/lib/division-grid.ts:12` (построчный порт: тот же `bases`, та же формула `offset=(5-tier)*100`, тот же URL иконок, та же сортировка) | Нет |
-| **OW2 rank mapping** | 2 | `parser-service/.../overwatch_rank/mapping.py:24,50`; `frontend/src/lib/ow-rank-mapping.ts:20,30` | Нет |
+| **Division grid** | 2 | `shared/division_grid.py:120` (`_build_default_grid`); `frontend/src/lib/divisions/grid.ts:12` (построчный порт: тот же `bases`, та же формула `offset=(5-tier)*100`, тот же URL иконок, та же сортировка) | Нет |
+| **OW2 rank mapping** | 2 | `parser-service/.../overwatch_rank/mapping.py:24,50`; `frontend/src/lib/divisions/ow-rank-mapping.ts:20,30` | Нет |
 | **Регекс BattleTag** | 4 | `app-service/src/core/config.py:9`; `parser-service/src/core/config.py:10`; `frontend/.../registration/validation.ts:39`; `frontend/.../form/_components/formConfig.ts:28` | Нет, но `buildRegex:63` использует `^(?:p)$` против Python `fullmatch` |
-| **Правило подписок** | 2 | `shared/subscriptions/requirement.py`; `frontend/src/lib/subscription-requirement.ts` («TypeScript port of…») | **ДА** (баг 15) |
-| **Статусы регистрации** | 2 | `shared/balancer_registration_statuses.py:31`; `frontend/src/lib/balancer-statuses.ts:4` | **ДА** (баг 16) |
+| **Правило подписок** | 2 | `shared/subscriptions/requirement.py`; `frontend/src/lib/registration/subscription-requirement.ts` («TypeScript port of…») | **ДА** (баг 15) |
+| **Статусы регистрации** | 2 | `shared/balancer_registration_statuses.py:31`; `frontend/src/lib/registration/balancer-statuses.ts:4` | **ДА** (баг 16) |
 | **Каталог прав RBAC** | 2 | `shared/rbac/catalog.py:33`; `frontend/src/hooks/usePermissions.ts:8,37` | **ДА** (баг 12) |
-| **Метрики тайбрейкеров** | 2 | `standings/service.py:34,283`; `frontend/src/lib/tiebreakers.ts:8,20,30` | **ДА** (баг 13) |
-| **Окна регистрации/чек-ина** | 2 | `registration/windows.py:17,32`; `frontend/src/lib/tournament-status.ts:139,157` | Есть риск: TS использует `Date.now()` вместо UTC и жёстко хардкодит `completed`/`archived` |
-| **Роли и их коды** | 2 | `shared/domain/player_sub_roles.py:22-32`; `frontend/src/lib/roles.ts:38-47` | **ДА** (баг 11) |
-| **`MAX_AVATAR_SIZE`** | 2 | `shared/clients/s3/upload.py:12` («keep in sync with frontend MAX_AVATAR_BYTES»); `frontend/src/lib/avatar.ts:8` | Нет |
+| **Метрики тайбрейкеров** | 2 | `standings/service.py:34,283`; `frontend/src/lib/tournament/tiebreakers.ts:8,20,30` | **ДА** (баг 13) |
+| **Окна регистрации/чек-ина** | 2 | `registration/windows.py:17,32`; `frontend/src/lib/tournament/status.ts:139,157` | Есть риск: TS использует `Date.now()` вместо UTC и жёстко хардкодит `completed`/`archived` |
+| **Роли и их коды** | 2 | `shared/domain/player_sub_roles.py:22-32`; `frontend/src/lib/roster/roles.ts:38-47` | **ДА** (баг 11) |
+| **`MAX_AVATAR_SIZE`** | 2 | `shared/clients/s3/upload.py:12` («keep in sync with frontend MAX_AVATAR_BYTES»); `frontend/src/lib/uploads.ts:8` | Нет |
 | **`DEFAULT_MAX_TOP_HEROES`** | 2 | `shared/hero_catalog.py:20`; `frontend/.../UnifiedRegistrationForm.tsx:179` (литерал `5`) | Нет |
 | **`VetoUnavailableReason`** | 2 | `encounter/veto_session.py:41-42` — бэкенд объявляет зеркалом **себя**: «mirrors the frontend's VetoUnavailableReason union»; `frontend/src/types/tournament.types.ts:167` | Нет |
 | **Предикат пула балансера** | 3 | `draft/lifecycle.py:501-527` (`load_pool`); `registration/export.py:63-81` («Mirror the panel's in balancer rule»); `frontend/.../workspace-helpers.ts:432` | Условия дословно совпадают; расходятся только `nullslast` и eager-load |
 | **Командные агрегаты** | 3 | `entities.py:126-197`; `tournament_balancer/src/objectives.rs:47-137`; `result_serializer.py:75-86` (третий независимый пересчёт `sub_role_collision_count`) | Формулы совпадают; `low_rank_pairs` есть только в Rust |
-| **Перечисления** | ~15 | `shared/core/enums.py:206-286` ↔ `frontend/src/types/draft.types.ts:3-10` (файл признаётся: «mirror the balancer-service DTOs»), `tournament.types.ts`, `tournament-status.ts:20,116` | `DraftRoundRule` вообще без TS-аналога |
+| **Перечисления** | ~15 | `shared/core/enums.py:206-286` ↔ `frontend/src/types/draft.types.ts:3-10` (файл признаётся: «mirror the balancer-service DTOs»), `tournament.types.ts`, `lib/tournament/status.ts:20,116` | `DraftRoundRule` вообще без TS-аналога |
 
 ---
 

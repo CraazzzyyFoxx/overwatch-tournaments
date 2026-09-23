@@ -45,7 +45,7 @@ export interface StreamEntry {
    * and reports the current state. `null` — there IS no live detection for the
    * platform (YouTube/other), so liveness is UNKNOWN. `null` is NOT `false`:
    * an unknown channel must not render an "offline" badge, it renders no badge
-   * at all (see `STREAM_STATUS_META` in `@/lib/stream-platform`).
+   * at all (see `STREAM_STATUS_META` in `@/lib/social/stream-platform`).
    */
   live: boolean | null;
   title: string | null;

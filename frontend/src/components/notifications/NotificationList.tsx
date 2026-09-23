@@ -3,22 +3,28 @@
 import {
   AlertTriangle,
   Bell,
+  CalendarClock,
+  CalendarPlus,
   Check,
   CheckCheck,
   CheckCircle2,
+  ClipboardCheck,
   Megaphone,
+  Settings2,
   Trash2,
   UserPlus,
   XCircle
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { PopoverClose } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { announcementText } from "@/lib/announcement-text";
-import { notificationHref } from "@/lib/notification-href";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { announcementText } from "@/lib/notifications/announcement-text";
+import { notificationHref } from "@/lib/notifications/href";
 import { cn } from "@/lib/utils";
 import type { NotificationItem } from "@/types/notification.types";
 
@@ -27,11 +33,21 @@ type KindMessageKey = `notifications.kinds.${
   | "team_invite.answered"
   | "registration.approved"
   | "registration.rejected"
+  | "registration.opened"
+  | "check_in.opened"
   | "encounter.report_disputed"
+  | "encounter.scheduled"
   | "announcement.published"
   | "team.kicked"
   | "team.rejected"
   | "team.disbanded"}`;
+
+/**
+ * Payload fields holding an ISO stamp. ICU has no argument type that formats
+ * one, so they are rendered before interpolation — otherwise the message would
+ * read `2026-09-25T18:00:00Z` in both locales.
+ */
+const DATE_FIELDS = ["scheduled_at", "closes_at"] as const;
 
 interface NotificationListProps {
   headingId: string;
@@ -98,6 +114,23 @@ function getKindConfig(kind: string) {
         icon: AlertTriangle,
         className: "bg-amber-500/10 text-amber-400 border-amber-500/20"
       };
+    case "registration.opened":
+      return {
+        icon: CalendarPlus,
+        className: "bg-primary/10 text-primary border-primary/20"
+      };
+    // Time-boxed and the reader has to act, so it wears the same alert tone as
+    // a disputed report rather than the neutral one of "registration is open".
+    case "check_in.opened":
+      return {
+        icon: ClipboardCheck,
+        className: "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      };
+    case "encounter.scheduled":
+      return {
+        icon: CalendarClock,
+        className: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+      };
     case "announcement.published":
       return {
         icon: Megaphone,
@@ -140,6 +173,9 @@ const NotificationList = ({
   const t = useTranslations<never>();
   const locale = useLocale();
   const format = useFormatter();
+  // The settings deep link stays on the page the reader is on, the way the
+  // OAuth return link does (`MyAccountSection`), rather than bouncing home.
+  const pathname = usePathname();
 
   const notificationText = (item: NotificationItem): string => {
     if (item.kind === "announcement.published") {
@@ -148,7 +184,23 @@ const NotificationList = ({
     }
     const key = `notifications.kinds.${item.kind}` as KindMessageKey;
     if (!t.has(key)) return t("notifications.unknownKind");
-    return t(key, messageValues(item.payload));
+    const values = messageValues(item.payload);
+    for (const field of DATE_FIELDS) {
+      const raw = values[field];
+      if (typeof raw === "string") {
+        values[field] = format.dateTime(new Date(raw), {
+          dateStyle: "medium",
+          timeStyle: "short"
+        });
+      }
+    }
+    // A phase with no end carries no `closes_at` at all, and an ICU `select`
+    // needs its argument in every case: the message branches on this sentinel
+    // rather than the key existing.
+    if (item.kind === "registration.opened" || item.kind === "check_in.opened") {
+      values.closes_at ??= "none";
+    }
+    return t(key, values);
   };
   // One mutation at a time: read-marking and deleting both rewrite the same
   // rows, and the list is refetched rather than patched, so overlapping them
@@ -175,6 +227,10 @@ const NotificationList = ({
   // The delete message wins a tie: it is the newer verb whenever both have run,
   // and two live regions announcing at once is worse than one stale line.
   const statusMessage = deleteStatusText || readStatus;
+  // Success and progress are visible in the list itself (dots, badge and rows
+  // update), so only failures — which carry a retry — earn a visible line; the
+  // rest stays a screen-reader announcement.
+  const statusIsError = deleteStatusText ? deleteStatus === "error" : markReadStatus === "error";
 
   return (
     <div className="flex min-h-0 max-h-[min(70dvh,var(--radix-popover-content-available-height))] flex-col">
@@ -189,50 +245,72 @@ const NotificationList = ({
             </span>
           )}
         </div>
-        <div className="ml-auto flex min-w-0 items-center gap-0.5">
-          <Button
-            static={false}
-            variant="ghost"
-            size="sm"
-            className="h-auto min-h-8 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50"
-            onClick={() => {
-              if (!markAllUnavailable) markAllRead();
-            }}
-            aria-label={t("notifications.markAllRead")}
-            aria-disabled={markAllUnavailable}
-            aria-busy={isMarkingRead && markingId == null}
-          >
-            <CheckCheck className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {t(
-                isMarkingRead && markingId == null
-                  ? "notifications.markingAllRead"
-                  : "notifications.markAllRead"
-              )}
-            </span>
-          </Button>
-          <Button
-            static={false}
-            variant="ghost"
-            size="sm"
-            className="h-auto min-h-8 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive aria-disabled:pointer-events-none aria-disabled:opacity-50"
-            onClick={() => {
-              if (!clearReadUnavailable) clearRead();
-            }}
-            aria-label={t("notifications.clearRead")}
-            aria-disabled={clearReadUnavailable}
-            aria-busy={isDeleting && deletingId == null}
-          >
-            <Trash2 className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {t(
-                isDeleting && deletingId == null
-                  ? "notifications.clearingRead"
-                  : "notifications.clearRead"
-              )}
-            </span>
-          </Button>
-        </div>
+        {/* Icon-only so the actions share the title's row. Disabled buttons drop
+            pointer events, so each tooltip hangs off a wrapper that still
+            receives hover (and the button's bubbling focus). */}
+        <TooltipProvider delayDuration={200}>
+          <div className="ml-auto flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    static={false}
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:bg-accent/60 hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                    onClick={() => {
+                      if (!markAllUnavailable) markAllRead();
+                    }}
+                    aria-disabled={markAllUnavailable}
+                    aria-busy={isMarkingRead && markingId == null}
+                  >
+                    <CheckCheck aria-hidden />
+                    <span className="sr-only">{t("notifications.markAllRead")}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t("notifications.markAllRead")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    static={false}
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                    onClick={() => {
+                      if (!clearReadUnavailable) clearRead();
+                    }}
+                    aria-disabled={clearReadUnavailable}
+                    aria-busy={isDeleting && deletingId == null}
+                  >
+                    <Trash2 aria-hidden />
+                    <span className="sr-only">{t("notifications.clearRead")}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t("notifications.clearRead")}</TooltipContent>
+            </Tooltip>
+            {/* The one place a reader can turn Discord copies off. The modal owns
+                `?settings=`, so this is a plain link on the current page rather
+                than a second way to open it. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverClose asChild>
+                  <Link
+                    href={`${pathname ?? "/"}?settings=notifications`}
+                    className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <Settings2 className="size-4" aria-hidden />
+                    <span className="sr-only">{t("notifications.configure")}</span>
+                  </Link>
+                </PopoverClose>
+              </TooltipTrigger>
+              <TooltipContent>{t("notifications.configure")}</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
       <div
@@ -403,7 +481,7 @@ const NotificationList = ({
         <p
           role="status"
           aria-atomic="true"
-          className={cn("text-sm", statusMessage ? "border-t px-3 py-2" : "sr-only")}
+          className={cn("text-sm", statusIsError ? "border-t px-3 py-2" : "sr-only")}
         >
           {statusMessage}
         </p>

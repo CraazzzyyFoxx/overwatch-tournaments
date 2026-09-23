@@ -11,7 +11,7 @@ import {
   accessPermissionsPermissions,
   accessRolesPermissions,
   accessUsersPermissions
-} from "@/lib/admin-permissions";
+} from "@/lib/auth/admin-permissions";
 import { type AppPermission, usePermissions } from "@/hooks/usePermissions";
 
 /**

@@ -1,6 +1,6 @@
 import { toast as sonnerToast, type ExternalToast } from "sonner";
 
-import { describeApiError } from "@/lib/api-error";
+import { describeApiError } from "@/lib/api/error";
 
 /**
  * Unified, callable notification API on top of Sonner.

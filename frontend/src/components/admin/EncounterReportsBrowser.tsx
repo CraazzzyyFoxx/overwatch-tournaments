@@ -30,7 +30,7 @@ import type {
   EncounterReportsRow
 } from "@/types/admin.types";
 import type { ReportCustomFieldDefinition } from "@/types/encounter.types";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 25;

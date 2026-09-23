@@ -44,13 +44,13 @@ import { TOURNAMENT_QUERY_PARAM, parseTournamentQueryParam } from "@/components/
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { TournamentLogUploadDialog } from "@/app/admin/tournaments/[id]/components/TournamentLogUploadDialog";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import {
   bracketRoundLabelEn,
   UNKNOWN_ROUND_SHAPE
-} from "@/lib/bracket-round-name";
+} from "@/lib/bracket/round-name";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import {
   getTournamentStatusMeta,
   isTournamentStatusActive,
-} from "@/lib/tournament-status";
+} from "@/lib/tournament/status";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import tournamentService from "@/services/tournament.service";

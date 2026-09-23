@@ -200,6 +200,10 @@ DOCS: dict[str, dict] = {
         "summary": "Autopick draft pick",
         "description": "Permission: workspace `team.create`. Auto-selects the best-fit available player for a pick using the session's autopick strategy and broadcasts the result.",
     },
+    "rpc.balancer.draft.pick_extend": {
+        "summary": "Extend draft pick clock",
+        "description": "Permission: workspace `team.create`. Adds seconds to the current on-clock pick — to its deadline while the draft is live, to the frozen remainder while it is paused — and broadcasts the new deadline.",
+    },
     "rpc.balancer.draft.pick_override": {
         "summary": "Override draft pick",
         "description": "Permission: workspace `team.create`. Overrides a pick to an arbitrary player, bypassing captain/clock constraints, and broadcasts a pick-made event.",

@@ -40,8 +40,8 @@ import {
 } from "@/components/ui/context-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/lib/notify";
-import { getDefaultDivisionGrid, resolveDivisionFromRank } from "@/lib/division-grid";
-import { ROLE_LABELS, ROLES, type RoleCode } from "@/lib/roles";
+import { getDefaultDivisionGrid, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { ROLE_LABELS, ROLES, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import {
   workspacePlayerKeys,

@@ -282,6 +282,11 @@ class StageSettingsSchemaTests(TestCase):
         with self.assertRaises(pydantic.ValidationError):
             schemas.StageUpdate(settings_json={"de_grand_final_type": "best_of_three"})
 
+    def test_every_grand_final_type_the_editor_sends_is_accepted(self) -> None:
+        for value in ("no_reset", "with_reset"):
+            payload = {"de_grand_final_type": value}
+            self.assertEqual(payload, schemas.StageUpdate(settings_json=payload).settings_json)
+
     def test_unknown_keys_pass_through_verbatim(self) -> None:
         payload = {"best_of": {"default": 3}, "scoring": {"win": 3, "draw": 1, "loss": 0}}
         self.assertEqual(payload, schemas.StageUpdate(settings_json=payload).settings_json)

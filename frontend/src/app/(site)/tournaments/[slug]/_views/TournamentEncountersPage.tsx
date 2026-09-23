@@ -10,7 +10,7 @@ import {
   buildRoundGroups,
   orderEliminationRounds,
   type RoundGroup
-} from "@/lib/bracket-view";
+} from "@/lib/bracket/view";
 import { FilterChip } from "@/components/ui/filter-chip";
 import {
   Select,
@@ -22,14 +22,15 @@ import {
 import { useBracketRoundLabel, type BracketRoundLabelFormatter } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { areStreamsVisible } from "@/lib/tournament-status";
+import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { areStreamsVisible } from "@/lib/tournament/status";
 import encounterService from "@/services/encounter.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { StageType, Tournament } from "@/types/tournament.types";
 
 import styles from "../TournamentDetail.module.css";
-import { isEncounterCompleted, isEncounterLive, MatchCard } from "../_components/MatchCard";
+import { MatchCard } from "../_components/MatchCard";
 import { MatchRow } from "../_components/MatchRow";
 import { SectionToolbar } from "../_components/SectionToolbar";
 import { TournamentPageState } from "../_components/TournamentPageState";

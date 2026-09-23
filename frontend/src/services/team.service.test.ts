@@ -10,14 +10,14 @@ type Call = {
 
 const calls: Call[] = [];
 
-mock.module("@/lib/api-fetch", () => ({
+mock.module("@/lib/api/fetch", () => ({
   apiFetch: (path: string, options?: Call["options"]) => {
     calls.push({ path, options });
     return Promise.resolve({ json: async () => ({ results: [], total: 0 }) });
   },
 }));
 
-mock.module("@/lib/normalize-paginated-response", () => ({
+mock.module("@/lib/api/normalize-paginated-response", () => ({
   normalizePaginatedResponse: (response: unknown) => response,
 }));
 

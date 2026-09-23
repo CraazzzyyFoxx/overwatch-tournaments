@@ -2,7 +2,7 @@
 
 import { useRequirementDescription } from "@/components/admin/subscriptions/useRequirementDescription";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
-import { SCHEDULABLE_PHASES, TOURNAMENT_STATUS_LABELS } from "@/lib/tournament-lifecycle";
+import { SCHEDULABLE_PHASES, TOURNAMENT_STATUS_LABELS } from "@/lib/tournament/lifecycle";
 import type { SubscriptionRequirement } from "@/types/registration.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 

@@ -1,6 +1,6 @@
 import { LogStatsName } from "@/types/stats.types";
 import { UserRoleType } from "@/types/user.types";
-export { getDivisionOptions } from "@/lib/division-grid";
+export { getDivisionOptions } from "@/lib/divisions/grid";
 
 export type RoleFilterLabelKey =
   | "users.compare.allRoles"

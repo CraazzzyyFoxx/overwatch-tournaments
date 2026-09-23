@@ -10,7 +10,7 @@ import {
   embeddableTwitchChannel,
   getStreamStatus,
   streamPlatformLabel
-} from "@/lib/stream-platform";
+} from "@/lib/social/stream-platform";
 import type { TournamentStreams } from "@/types/stream.types";
 
 type TournamentBroadcastDockProps = {

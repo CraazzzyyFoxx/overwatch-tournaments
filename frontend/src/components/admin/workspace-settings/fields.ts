@@ -1,4 +1,4 @@
-import { DEFAULT_WORKSPACE_TIMEZONE } from "@/lib/timezone";
+import { DEFAULT_WORKSPACE_TIMEZONE } from "@/lib/workspace/timezone";
 import type { Workspace } from "@/types/workspace.types";
 import type { WorkspaceRecordSectionKey } from "./sections";
 

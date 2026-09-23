@@ -7,7 +7,7 @@ import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
-import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAMES } from "@/lib/sidebar-cookies"
+import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"

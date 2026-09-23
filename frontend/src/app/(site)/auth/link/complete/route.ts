@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { revalidateTag } from "next/cache";
 import { authService, OAuthLinkFailedError } from "@/services/auth.service";
-import { getAccessToken } from "@/lib/auth-cookies";
-import { GUARD_COOKIE, clearGuardCookie, guardTicketErrorRedirect, safeRedirectTarget } from "@/lib/oauth-callback";
-import { publicOrigin } from "@/lib/request-origin";
+import { getAccessToken } from "@/lib/auth/cookies";
+import { GUARD_COOKIE } from "@/lib/auth/cookie-names";
+import { clearGuardCookie, guardTicketErrorRedirect, safeRedirectTarget } from "@/lib/auth/oauth-callback";
+import { publicOrigin } from "@/lib/site/request-origin";
 
 // Far side of the custom-domain account-linking end-ticket (Task 10R). This
 // route runs ON the workspace's custom domain itself -- never the platform
@@ -27,7 +28,7 @@ import { publicOrigin } from "@/lib/request-origin";
 // never changes the caller's session here -- it only calls an authenticated
 // RPC with the session that already exists. It DOES clear the single-use
 // GUARD_COOKIE on every outcome (via guardTicketErrorRedirect/
-// clearGuardCookie) -- see lib/oauth-callback.ts for the shared definition
+// clearGuardCookie) -- see lib/auth/oauth-callback.ts for the shared definition
 // and clear helper, which /auth/sso/route.ts also uses.
 
 function loginRedirect(origin: string, next: string): NextResponse {

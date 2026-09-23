@@ -17,7 +17,7 @@ import { UserX } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import workspaceService from "@/services/workspace.service";
-import { memberDisplayName } from "@/lib/workspace-member";
+import { memberDisplayName } from "@/lib/workspace/member";
 import type { DivisionGrid, WorkspaceMember } from "@/types/workspace.types";
 import type {
   BalancerRosterKey,

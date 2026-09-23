@@ -6,25 +6,25 @@ import { useTranslations } from "next-intl";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
-import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
-import type { DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
+import type { DraftPick, DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
-import { teamCrest } from "@/lib/draft-crest";
+import { teamCrest } from "@/lib/draft/crest";
 import {
   buildRosterByTeam,
   slotRankForPlayer,
   rosterRoleForPlayer
-} from "@/lib/draft-workspace-model";
+} from "@/lib/draft/workspace-model";
 import {
   isRoleSlotCode,
   orderSlotCodes,
   ROSTER_SLOT_CODES,
   type RosterRoleSlotCode,
   type RosterShape
-} from "@/lib/roster-shape";
+} from "@/lib/roster/shape";
 
 interface TeamRostersProps {
   teams: DraftTeam[];
@@ -38,7 +38,14 @@ interface TeamRostersProps {
   /** Vertical compact card list (mockup `.teams-col`) vs the default grid of full team cards. */
   variant?: "grid" | "column";
   /** Auth user ids of captains currently connected, for the column card's captain dot. */
-  onlineCaptainIds?: Set<number>;
+  onlineCaptainIds?: ReadonlySet<number>;
+  /**
+   * Captain only: clicking one of MY team's open role slots filters the pool to
+   * that role. Omitted (or an all-flex shape) leaves every open slot inert.
+   */
+  onSlotFilter?: (role: DraftRole | null) => void;
+  /** The pool's current role filter, so the pressed slot reads as pressed. */
+  activeSlotRole?: DraftRole | null;
 }
 
 /**
@@ -56,6 +63,12 @@ interface TeamRosterView {
   avgRank: number | null;
   avgDivision: number | null;
   openSlots: number;
+  /**
+   * One entry per open slot, naming the role the SHAPE still wants there
+   * (`null` once the role deficits are exhausted — a flex slot, or a slot held
+   * by a player the shape assigned no role).
+   */
+  openSlotCodes: (RosterRoleSlotCode | null)[];
 }
 
 function computeTeamRosterView(
@@ -89,7 +102,16 @@ function computeTeamRosterView(
     rankValues.length > 0 ? rankValues.reduce((sum, value) => sum + value, 0) / rankValues.length : null;
   const avgDivision = avgRank == null ? null : resolveDivisionFromRank(divisionGrid, avgRank);
   const openSlots = Math.max(0, shape.team_size - roster.length);
-  return { roster, counters, avgRank, avgDivision, openSlots };
+  const openSlotCodes: (RosterRoleSlotCode | null)[] = [];
+  for (const counter of counters) {
+    if (counter.code === "flex") continue;
+    for (let index = counter.filled; index < counter.target; index += 1) {
+      openSlotCodes.push(counter.code);
+    }
+  }
+  while (openSlotCodes.length < openSlots) openSlotCodes.push(null);
+  openSlotCodes.length = openSlots;
+  return { roster, counters, avgRank, avgDivision, openSlots, openSlotCodes };
 }
 
 /**
@@ -152,6 +174,48 @@ function RosterRowIcon({
   return <PlayerRoleIcon role={getRoleIconName(role)} size={16} />;
 }
 
+/**
+ * The text of one open slot. On MY team it is a real button: an empty support
+ * slot is the shortest possible way to say "show me the supports", so pressing
+ * it filters the pool instead of making the captain find the role chip.
+ */
+function OpenSlotLabel({
+  ordinal,
+  code,
+  filterable,
+  active,
+  onSlotFilter
+}: Readonly<{
+  ordinal: number;
+  code: RosterRoleSlotCode | null;
+  filterable: boolean;
+  active: boolean;
+  onSlotFilter?: (role: DraftRole | null) => void;
+}>) {
+  const t = useTranslations("draftRedesign");
+  const text = `${t("openSlot")} ${ordinal}`;
+  if (!filterable || code == null || !onSlotFilter) {
+    return <>{text}</>;
+  }
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={t("filterBySlot", { role: t(`roles.${code}`) })}
+      onClick={() => onSlotFilter(active ? null : code)}
+      className={cn(
+        "inline-flex min-h-8 items-center gap-1.5 rounded-md border px-1.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+        active
+          ? "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/15 text-[color:var(--aqt-fg)]"
+          : "border-dashed border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-dim)] hover:border-[color:var(--aqt-teal)]/60"
+      )}
+    >
+      <PlayerRoleIcon role={getRoleIconName(code)} size={14} color={ROLE_ACCENT[code]} decorative />
+      <span className="truncate">{text}</span>
+    </button>
+  );
+}
+
 export function TeamRosters({
   teams,
   players,
@@ -162,7 +226,9 @@ export function TeamRosters({
   onClockTeamId = null,
   divisionGrid,
   variant = "grid",
-  onlineCaptainIds
+  onlineCaptainIds,
+  onSlotFilter,
+  activeSlotRole = null
 }: Readonly<TeamRostersProps>) {
   const t = useTranslations("draftRedesign");
   const rosters = buildRosterByTeam(players);
@@ -284,7 +350,7 @@ export function TeamRosters({
                       </div>
                     );
                   })}
-                  {Array.from({ length: view.openSlots }, (_, index) => (
+                  {view.openSlotCodes.map((code, index) => (
                     <div
                       key={`open-${index}`}
                       className="grid grid-cols-[24px_1fr_auto] items-center gap-2 px-3 py-2 text-sm"
@@ -295,7 +361,13 @@ export function TeamRosters({
                         ·
                       </span>
                       <span className="min-w-0 truncate italic text-[color:var(--aqt-fg-dim)]">
-                        {t("openSlot")} {view.roster.length + index + 1}
+                        <OpenSlotLabel
+                          ordinal={view.roster.length + index + 1}
+                          code={code}
+                          filterable={isMine && shape.has_role_slots}
+                          active={activeSlotRole === code}
+                          onSlotFilter={onSlotFilter}
+                        />
                       </span>
                       <span className="text-[color:var(--aqt-fg-dim)]">—</span>
                     </div>
@@ -329,8 +401,9 @@ export function TeamRosters({
       >
         {visibleTeams.map((team) => {
           const view = computeTeamRosterView(team, rosters, picks, shape, divisionGrid);
-          const { roster, avgRank, avgDivision, openSlots } = view;
+          const { roster, avgRank, avgDivision, openSlots, openSlotCodes } = view;
           const onClock = team.id === onClockTeamId;
+          const isMine = team.id === myTeamId;
 
           return (
             <TournamentTeamCardFrame
@@ -434,14 +507,20 @@ export function TeamRosters({
                           </tr>
                         );
                       })}
-                      {Array.from({ length: openSlots }, (_, index) => (
+                      {openSlotCodes.map((code, index) => (
                         <tr key={`open-${index}`}>
                           <td className="c">
                             <span className="inline-flex h-8 w-8 items-center justify-center text-[color:var(--aqt-fg-dim)]">—</span>
                           </td>
                           <td>
                             <span className="block max-w-[16rem] truncate text-[color:var(--aqt-fg-dim)]">
-                              {t("openSlot")} {roster.length + index + 1}
+                              <OpenSlotLabel
+                                ordinal={roster.length + index + 1}
+                                code={code}
+                                filterable={isMine && shape.has_role_slots}
+                                active={activeSlotRole === code}
+                                onSlotFilter={onSlotFilter}
+                              />
                             </span>
                           </td>
                           <td className="c">

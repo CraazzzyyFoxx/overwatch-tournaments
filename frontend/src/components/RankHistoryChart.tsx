@@ -11,7 +11,7 @@ import {
   ChartTooltipContent
 } from "@/components/ui/chart";
 import { RankSeries } from "@/types/rank.types";
-import { getTierForRank, OW_REFERENCE_GRID } from "@/lib/division-grid";
+import { getTierForRank, OW_REFERENCE_GRID } from "@/lib/divisions/grid";
 import {
   Select,
   SelectContent,

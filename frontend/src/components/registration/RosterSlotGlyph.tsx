@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { normalizePlayerRole } from "@/lib/player-role";
-import { isRosterSlotCode } from "@/lib/roster-shape";
+import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { isRosterSlotCode } from "@/lib/roster/shape";
 
 /**
  * A roster slot rendered as its role glyph, on the rows that display a slot

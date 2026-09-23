@@ -12,6 +12,7 @@ unit-testable without a database.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -135,20 +136,16 @@ def is_entry_bannable(entry, *, active_round: int | None) -> bool:
 
 
 def settled_in_order(pool: list) -> list:
-    """The pool's `picked`/`played` entries in PLAY order — for a map pool this
-    is the series' map order, and index + 1 is the map's position in the series
-    (``EncounterMapReport.map_index``, ``Match.map_index``).
+    """The pool's `picked` entries in PLAY order — for a map pool this is the
+    series' map order, and index + 1 is the map's position in the series
+    (``encounter_game.position``).
 
     Play order is ``action_index``, falling back to the legacy ``order``.
     ``order`` on its own is NOT the position: it is a per-round display/tiebreak
     field spaced by ``round * 1000`` (see ``captain._picked_map_ids``). Mirrors
     the frontend's ``pickedItemsInOrder``.
     """
-    settled = (
-        entry
-        for entry in pool
-        if entry.status in (enums.MapPoolEntryStatus.PICKED.value, enums.MapPoolEntryStatus.PLAYED.value)
-    )
+    settled = (entry for entry in pool if entry.status == enums.MapPoolEntryStatus.PICKED.value)
     return sorted(settled, key=lambda entry: entry.action_index if entry.action_index is not None else entry.order)
 
 
@@ -172,13 +169,14 @@ def undoable_entries(pool: list) -> list:
     reverted TOGETHER with the captain action beneath it. Undoing it alone would
     be a no-op the next read undoes again.
 
-    Refuses (returns empty) when the round in question is already settled:
+    Refuses (returns empty) when a round beyond the one in question exists in
+    the pool — a later round only opens once this one's map is played and
+    reported (``advance_to_next_round``), so the trailing action of THIS round
+    is behind that barrier.
 
-    - a `played` entry in that round — the map has been played, so its bans are
-      history, not a mistake still fixable;
-    - a round beyond it exists in the pool — a later round only opens once this
-      one's map is played and reported (``advance_to_next_round``), so the
-      trailing action of THIS round is behind that barrier.
+    "That map already has a result" is NOT this function's call: the pool no
+    longer records play state, so the undo service refuses on the game's own
+    state/claims.
     """
     committed = sorted(
         (e for e in pool if e.action_index is not None),
@@ -199,8 +197,6 @@ def undoable_entries(pool: list) -> list:
 
     target_round = group[-1].round
     for entry in pool:
-        if entry.round == target_round and entry.status == enums.MapPoolEntryStatus.PLAYED.value:
-            return []
         if target_round is not None and entry.round is not None and entry.round > target_round:
             return []
     return group
@@ -312,7 +308,7 @@ def resolve_round_opener(
     rotation: enums.FirstBanRotation,
     round_number: int,
     session_first_side: Side,
-    previous_round_winner: Side | None,
+    previous_round_outcome: MapOutcome | None,
     previous_round_loser_choice: Side | None,
 ) -> Side:
     """Who opens `round_number`'s bans (the side `_first` maps onto).
@@ -323,11 +319,15 @@ def resolve_round_opener(
 
     - `fixed`: same side every round (`session_first_side`).
     - `alternate`: flips each round from `session_first_side`.
-    - `result_winner_first` / `result_loser_first`: requires
-      `previous_round_winner` (raises `ValueError` if the caller invokes this
-      before that map's result is known — a caller bug, not a user error).
-    - `result_loser_choice`: requires `previous_round_loser_choice` — if it is
-      `None`, raises `RotationNeedsChoice` so the caller creates the round in
+    - `result_winner_first` / `result_loser_first`: read
+      `previous_round_outcome`. A `"draw"` has no winner and no loser, so the
+      rotation falls back to the fixed snapshot side (`session_first_side`).
+      `None` means the previous map has no accepted result yet — a caller bug,
+      so `ValueError`.
+    - `result_loser_choice`: a `"draw"` leaves nobody to elect, so it too
+      falls back to `session_first_side`; otherwise it requires
+      `previous_round_loser_choice` — if that is `None`, raises
+      `RotationNeedsChoice` so the caller creates the round in
       `awaiting_choice` state instead of resolving a side.
     """
     if round_number <= 1:
@@ -338,15 +338,19 @@ def resolve_round_opener(
     if rotation == enums.FirstBanRotation.ALTERNATE:
         flips = round_number - 1
         return session_first_side if flips % 2 == 0 else _other(session_first_side)
-    if rotation in (enums.FirstBanRotation.RESULT_WINNER_FIRST, enums.FirstBanRotation.RESULT_LOSER_FIRST):
-        if previous_round_winner is None:
-            raise ValueError("previous_round_winner is required for a result-dependent rotation")
-        return (
-            previous_round_winner
-            if rotation == enums.FirstBanRotation.RESULT_WINNER_FIRST
-            else _other(previous_round_winner)
-        )
-    if rotation == enums.FirstBanRotation.RESULT_LOSER_CHOICE:
+    if rotation in (
+        enums.FirstBanRotation.RESULT_WINNER_FIRST,
+        enums.FirstBanRotation.RESULT_LOSER_FIRST,
+        enums.FirstBanRotation.RESULT_LOSER_CHOICE,
+    ):
+        if previous_round_outcome is None:
+            raise ValueError("previous_round_outcome is required for a result-dependent rotation")
+        if previous_round_outcome == "draw":
+            return session_first_side
+        if rotation == enums.FirstBanRotation.RESULT_WINNER_FIRST:
+            return previous_round_outcome
+        if rotation == enums.FirstBanRotation.RESULT_LOSER_FIRST:
+            return _other(previous_round_outcome)
         if previous_round_loser_choice is None:
             raise RotationNeedsChoice()
         return previous_round_loser_choice
@@ -388,29 +392,39 @@ def reconcile_map_reports(pair: MapReportPair) -> ReconciliationResult:
     return ReconciliationResult(resolved=None, disputed=True)
 
 
-def winner_side(home_score: int, away_score: int) -> Side | None:
-    """None on a drawn map score (e.g. a hybrid 0-0 draw per both rulebooks'
-    §3.1) — callers must not create a result-dependent next round from a draw
-    without their own tiebreak handling; this function only reports what the
-    score says."""
+MapOutcome = Literal["home", "away", "draw"]
+
+
+def map_outcome(home_score: int, away_score: int) -> MapOutcome:
     if home_score > away_score:
         return "home"
     if away_score > home_score:
         return "away"
-    return None
+    return "draw"
 
 
-def series_decided(home_score: int, away_score: int, best_of: int) -> bool:
-    """Whether a series standing at ``home_score``-``away_score`` still has a
-    map left to play.
+@dataclass(frozen=True)
+class SeriesScore:
+    home_wins: int
+    away_wins: int
+    played: int  # confirmed positions, draws included
 
-    Two independent stop conditions, because neither covers the other: every
-    map of the series has been played (``Bo2`` ends 1-1 with nobody past
-    half), or one side is past half and the rest cannot change the outcome
-    (``Bo3`` ends 2-0 with a map unplayed). Read by the round-progression
-    trigger so a decided series stops opening pick-ban rounds for maps that
-    will never be played.
-    """
+
+def series_score(results: Iterable[tuple[int, int]]) -> SeriesScore:
+    """Wins and played positions over CONFIRMED games' accepted (home, away) scores."""
+    home = away = played = 0
+    for home_score, away_score in results:
+        played += 1
+        outcome = map_outcome(home_score, away_score)
+        home += outcome == "home"
+        away += outcome == "away"
+    return SeriesScore(home, away, played)
+
+
+def series_complete(score: SeriesScore, best_of: int) -> bool:
+    """Every position played (Bo2 1:1, or a draw consuming the last map), or one
+    side past half. Wins alone cannot say this: a drawn map adds no win but does
+    use a position (spec §6.3)."""
     if best_of < 1:
         return False
-    return home_score + away_score >= best_of or max(home_score, away_score) * 2 > best_of
+    return score.played >= best_of or max(score.home_wins, score.away_wins) * 2 > best_of

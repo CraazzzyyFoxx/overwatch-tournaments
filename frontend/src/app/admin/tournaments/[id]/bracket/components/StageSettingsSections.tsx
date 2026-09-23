@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { ALL_TIEBREAKERS } from "@/lib/tiebreakers";
-import { BEST_OF_OPTIONS, stageBestOfRoundSections } from "@/lib/best-of";
+import { ALL_TIEBREAKERS } from "@/lib/tournament/tiebreakers";
+import { BEST_OF_OPTIONS, stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { StageBestOfConfig } from "@/types/admin.types";
@@ -35,7 +35,7 @@ import {
   tiebreakOrderForPreset,
   type SeedRanking,
   type StageProjection
-} from "@/lib/bracket-projection";
+} from "@/lib/bracket/projection";
 import type { StageForm } from "../stageForm";
 import { BracketPreview } from "./BracketPreview";
 

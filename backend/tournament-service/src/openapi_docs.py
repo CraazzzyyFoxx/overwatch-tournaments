@@ -431,6 +431,11 @@ DOCS: dict[str, dict] = {
         "summary": "Elect a round's opener for a side",
         "description": "Permission: workspace `match.update` on the encounter's workspace. Names who opens the round a `result_loser_choice` rotation is holding and appends it, on behalf of a losing captain who is unreachable; returns the new room state.",
     },
+    # ── bespoke: admin correction of one series position's result ──────────
+    "rpc.tournament.admin_game_result": {
+        "summary": "Correct a game result",
+        "description": "Permission: workspace `match.update` on the encounter's workspace. Writes one series position's score as an `admin` result and journals the mandatory `reason`; this is the only way a `confirmed` game (locked against captains with 409 `result_locked`) ever changes. Flipping which side won a position scraps and re-opens the round that outcome had opened, so the response is `{game, rebuilt_rounds}`; 409 `downstream_started` when a later round was already acted in or a later position already has a claim, 409 `map_not_selected` while the position still has no map (an organizer names it through the pick-ban or the captain map choice first), and 404 when the game belongs to another encounter or is cancelled.",
+    },
     # ── bespoke: generic pick-ban config CRUD (map + hero) ──────────────────
     "rpc.tournament.admin_pick_ban_config_list": {
         "summary": "List pick-ban configs",
@@ -1026,15 +1031,29 @@ DOCS: dict[str, dict] = {
             "whose hero round has already started -- undo those hero actions first."
         ),
     },
-    "rpc.tournament.captain_report_map": {
-        "summary": "Report a map result",
+    "rpc.tournament.captain_report_game": {
+        "summary": "Report a game result",
         "description": (
             "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). "
-            "Files the calling captain's own claim of one played map's score, immediately after that map "
-            "rather than at series end. Both sides report independently: matching claims settle the map and "
-            "create its match row, differing ones mark the slot disputed for an organizer. Returns "
-            "`{disputed, resolved, match_id}`. 409 while the stage bracket is still a "
+            "Files the calling captain's own claim of ONE series position's score, immediately after that "
+            "game rather than at series end; the side is taken from the caller, never from the body. Both "
+            "sides claim independently: matching claims accept the game's result and open whatever the "
+            "series owes next, differing ones mark the game `disputed` for an organizer. Returns "
+            "`{disputed, resolved, game}`. 404 when the game belongs to another encounter or is cancelled, "
+            "409 `result_locked` once the game is confirmed (only the admin correction changes it), 409 "
+            "`map_not_selected` while the position still has no map (choose it first, through "
+            "captain_select_game_map or the map pick-ban), and 409 while the stage bracket is still a "
             "preview the organizer has not activated."
+        ),
+    },
+    "rpc.tournament.captain_select_game_map": {
+        "summary": "Name a game's map",
+        "description": (
+            "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). "
+            "Freeplay's half of what the map pick-ban does automatically: names the map an open position is "
+            "played on, moving a `planned` game to `awaiting_result`. Returns `{game}`. 404 when the game "
+            "belongs to another encounter, 409 `result_locked` when the position's result is already "
+            "settled, and 409 `map_locked` once a captain has claimed a score against the current map."
         ),
     },
     "rpc.tournament.captain_ready": {

@@ -70,7 +70,7 @@ client-side draft autosave.
   `registration_build._form_to_read`, `_common.form_custom_field_defs`,
   `balancer-service/src/services/draft/board.py::visible_custom_fields`.
 - Structured-error pattern already exists: `ApiHTTPException(detail=[ApiExc(msg, code)])`
-  (`shared/core/errors.py:12-52`) → `ApiError.details[].code` → `lib/registration-team-errors.ts`
+  (`shared/core/errors.py:12-52`) → `ApiError.details[].code` → `lib/registration/team-errors.ts`
   → i18n. `ApiExc` has no `field`.
 - `DraftPlayerCustomFieldRead.value: Any`; `full_export` passes `dict(roster.custom_fields)`.
   Typed answers are safe for backend consumers.
@@ -308,7 +308,7 @@ listed in both zones of `zone-namespaces.json`):
   → chips, `date` → locale) for the admin table, export views and the draft inspector.
 - `lib/forms/form-errors.ts` — `fieldErrorsFrom(error): { fields: Record<string, string>; form: string | null; stale: boolean }`
   from `ApiError.details[].{field, code, params}` through a `code → i18n` table with `msg`
-  fallback, modelled on `registration-team-errors.ts`.
+  fallback, modelled on `lib/registration/team-errors.ts`.
 - Builtin renderers in `components/registration/fields/`: `BattleTagField`, `SmurfTagsField`
   (wraps `SmurfTagsInput`), `IdentityField` (wraps `VerifiedAccountSelect`/`AccountCombobox`;
   prefill from `social_accounts` by provider — one loop instead of four copies), `RolesField`

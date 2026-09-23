@@ -51,13 +51,6 @@ def test_visible_when_must_point_at_an_earlier_field():
     assert ok.field("twitch_only").visible_when.field == "stream_pov"
 
 
-def test_show_in_draft_requires_public_visibility_and_custom_kind():
-    with pytest.raises(ValidationError, match="show_in_draft"):
-        _schema(FormField(key="phone", kind="text", label="Phone", visibility="organizers", show_in_draft=True))
-    with pytest.raises(ValidationError, match="show_in_draft"):
-        _schema(FormField(key="public_notes", kind="builtin", show_in_draft=True))
-
-
 def test_select_needs_unique_non_empty_options_and_other_kinds_none():
     with pytest.raises(ValidationError, match="options"):
         _schema(FormField(key="age", kind="select", label="Age", options=[]))

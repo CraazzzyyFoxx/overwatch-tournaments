@@ -266,7 +266,7 @@ export interface StreamPollHealth {
 
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
-import type { RosterSlotMap } from "@/lib/roster-shape";
+import type { RosterSlotMap } from "@/lib/roster/shape";
 import type {
   StageItemType,
   StageType,
@@ -309,6 +309,8 @@ export interface TournamentUpdateInput {
   end_date?: string;
   auto_transitions_enabled?: boolean;
   allow_late_registration?: boolean;
+  discord_broadcasts_enabled?: boolean;
+  discord_dms_enabled?: boolean;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;

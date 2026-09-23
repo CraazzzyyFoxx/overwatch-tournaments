@@ -21,7 +21,7 @@ the per-service ``_resolve_user_from_db`` consumes:
         {"workspace_id": int,
          "rbac_roles": [...], "rbac_permissions": [{"resource","action"}]}
       ],
-      "credential_type": "access_token" | "api_key",
+      "credential_type": "access_token" | "api_key" | "discord",
       "api_key": {"id","public_id","workspace_id","scopes"} | None
     }
 
@@ -52,8 +52,10 @@ __all__ = (
 # Mirrors ``TokenPayload.credential_type``. Anything else on the wire is a
 # corrupt payload, and reading it as a session is the safe way to be wrong: a
 # session is the narrower principal here, since only API keys unlock key-scoped
-# behaviour.
-_CREDENTIAL_TYPES = frozenset({"access_token", "api_key"})
+# behaviour. ``discord`` is the bot acting for the account that linked the
+# Discord user who clicked (``rpc.identity.discord_identity``): a session in
+# every permission sense, told apart only so the journal can say so.
+_CREDENTIAL_TYPES = frozenset({"access_token", "api_key", "discord"})
 
 
 class MissingIdentityError(Exception):

@@ -21,6 +21,7 @@ from shared.services.bracket.swiss_settings import remove_swiss_bye_round
 from src import models, schemas
 from src.core import enums
 from src.services.encounter.pick_ban_session import pick_ban_session_service
+from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.tournament.events import enqueue_tournament_recalculation
 
 # ``enqueue_tournament_recalculation`` emits ``tournament.encounters``, and the
@@ -250,6 +251,9 @@ class AdminEncounterService:
         # first write of this transaction (see the outbox-ordering regression test).
         session.add(encounter)
         await enqueue_tournament_recalculation(session, data.tournament_id)
+        if data.scheduled_at is not None:
+            # After the enqueue, whose flush is what gives the row its id.
+            await lifecycle_notifier.on_encounter_changed(session, encounter)
         await session.commit()
         await session.refresh(encounter)
 
@@ -322,13 +326,20 @@ class AdminEncounterService:
 
         tournament_id = encounter.tournament_id
         previous_teams = (encounter.home_team_id, encounter.away_team_id)
+        # Read only when the payload carries the field: an edit that never
+        # mentions ``scheduled_at`` cannot have changed it.
+        previous_scheduled_at = encounter.scheduled_at if "scheduled_at" in update_data else None
         for field, value in update_data.items():
             setattr(encounter, field, value)
 
-        if (encounter.home_team_id, encounter.away_team_id) != previous_teams:
+        teams_changed = (encounter.home_team_id, encounter.away_team_id) != previous_teams
+        if teams_changed:
             # Admin re-assigned a team slot: sync map/hero pick-ban sessions
             # (ensure when both teams are now known, reset a stale existing one).
             await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+
+        if teams_changed or ("scheduled_at" in update_data and encounter.scheduled_at != previous_scheduled_at):
+            await lifecycle_notifier.on_encounter_changed(session, encounter)
 
         await enqueue_tournament_recalculation(session, tournament_id)
         await session.commit()

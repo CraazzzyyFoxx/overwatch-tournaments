@@ -4,6 +4,7 @@
 from .challonge import *
 from .computation import *
 from .encounter import *
+from .encounter_game import *
 from .encounter_link import *
 from .encounter_report import *
 from .encounter_result_audit import *

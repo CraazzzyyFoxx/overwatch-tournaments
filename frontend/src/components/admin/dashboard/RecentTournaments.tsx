@@ -6,7 +6,7 @@ import { ArrowRight, Layers3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { formatTournamentStages } from "@/lib/tournament-stages";
+import { formatTournamentStages } from "@/lib/tournament/stages";
 import { PermissionHiddenNotice } from "./PermissionHiddenNotice";
 import { tournamentStatus } from "./tournament-status";
 import type { Tournament } from "@/types/tournament.types";

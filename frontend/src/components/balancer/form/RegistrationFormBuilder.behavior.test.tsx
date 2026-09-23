@@ -23,7 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import type { FormField, FormSchema } from "@/types/forms.types";
 
@@ -113,7 +113,6 @@ function builtin(key: string, required = false) {
     options: null,
     validation: null,
     params: {},
-    show_in_draft: false,
     editable: false
   };
 }
@@ -331,7 +330,6 @@ describe("registration form builder", () => {
               options: ["Twitch", "YouTube"],
               validation: null,
               params: {},
-              show_in_draft: false,
               editable: false,
               visible_when: { field: "stream_pov", op: "truthy" }
             }

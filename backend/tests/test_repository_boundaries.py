@@ -94,7 +94,6 @@ PENDING_REPOSITORY_MIGRATION = {
     "identity-service/src/services/rbac_admin.py",
     "identity-service/src/services/sessions.py",
     "tournament-service/src/services/encounter/captain.py",
-    "tournament-service/src/services/encounter/map_report.py",
     "tournament-service/src/services/encounter/pick_ban_session.py",
     "tournament-service/src/services/scrim/service.py",
 }

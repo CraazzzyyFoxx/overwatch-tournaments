@@ -1,13 +1,14 @@
-"""Typed-RPC subscribers for the notification inbox and announcement banner.
+"""Typed-RPC subscribers for the notification inbox, DM preferences and banner.
 
-Three queues, one service module underneath. The only thing decided here is
-*who is asking*: ``notifications_list``/``notifications_mark_read`` take the
-identity from the gateway envelope and refuse to run without it, while
-``active_announcements`` is the ``AuthOptional`` banner read whose anonymous
-response the gateway caches for every visitor.
+Five queues, one service module underneath. The only thing decided here is
+*who is asking*: everything except ``active_announcements`` takes the identity
+from the gateway envelope and refuses to run without it, while that one is the
+``AuthOptional`` banner read whose anonymous response the gateway caches for
+every visitor.
 
-No handler ever reads a caller-supplied user or workspace id: the audience is
-computed from ``c.actor(data).id`` alone (Global Constraint 3).
+No handler ever reads a caller-supplied user or workspace id: the audience --
+and, for the preference writes, the row being edited -- is computed from
+``c.actor(data).id`` alone (Global Constraint 3).
 """
 
 from __future__ import annotations
@@ -68,6 +69,32 @@ def register(broker: Any, logger: Any) -> None:
             )
 
         return await c.envelope(logger, "notifications.delete", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.notification_preferences_get")
+    async def _preferences_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            return await notification_service.preferences(session, auth_user_id=user.id)
+
+        return await c.envelope(logger, "notifications.preferences_get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.notification_preferences_update")
+    async def _preferences_update(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            body = schemas.NotificationPreferencesUpdate.model_validate(c.payload(data))
+            return await notification_service.update_preferences(
+                session,
+                auth_user_id=user.id,
+                # ``exclude_none`` is what makes the edit partial: an omitted
+                # (or explicitly null) group keeps its stored value, while
+                # False is a value like any other.
+                discord_dm=body.discord_dm.model_dump(exclude_none=True),
+            )
+
+        return await c.envelope(logger, "notifications.preferences_update", op, session_factory=_SF)
 
     @broker.subscriber("rpc.app.active_announcements")
     async def _active_announcements(data: dict, msg: RabbitMessage) -> dict:

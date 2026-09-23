@@ -2,7 +2,7 @@ import {
   SCHEDULABLE_PHASES,
   phaseRank,
   type SchedulablePhase
-} from "@/lib/tournament-lifecycle";
+} from "@/lib/tournament/lifecycle";
 import type { Tournament } from "@/types/tournament.types";
 
 /**

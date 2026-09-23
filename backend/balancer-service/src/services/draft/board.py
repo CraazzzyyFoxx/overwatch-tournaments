@@ -39,7 +39,7 @@ def _board_cache_key(session_id: int, last_event_id: int | None) -> str:
 
 
 class VisibleCustomField(NamedTuple):
-    """One registration custom field the organizer opted into the draft."""
+    """One public registration custom field, projected onto the draft board."""
 
     key: str
     label: str
@@ -54,7 +54,7 @@ def player_custom_fields(
 
     ``answers`` is the registration's own ``custom_fields_json``, read live --
     the draft no longer keeps a copy, so which answers a spectator may see is
-    decided by the CURRENT form schema (``show_in_draft``) against the CURRENT
+    decided by the CURRENT form schema (public visibility) against the CURRENT
     answers.
     Unanswered fields are dropped rather than rendered empty: the inspector is a
     pick aid, and a column of dashes is noise there (unlike the admin table).
@@ -94,18 +94,21 @@ class DraftBoardService:
         return await self.sessions_repo.get_latest_for_tournament(session, tournament_id)
 
     async def visible_custom_fields(self, session: AsyncSession, tournament_id: int) -> list[VisibleCustomField]:
-        """The tournament's ``show_in_draft`` custom questions, in schema order.
+        """The tournament's PUBLIC custom questions, in schema order.
+
+        Every custom field the organizer left public reaches the board: the form
+        builder's visibility switch is the only gate, so an organizer adding a
+        question sees it in the draft without a second opt-in.
 
         Resolved on every board build rather than frozen at seed time, so flipping a
         field's visibility (or renaming its label) shows up in a running draft. The
-        schema is read as raw JSON — balancer-service owns no copy of
-        tournament-service's ``FormSchema`` — so anything malformed is skipped
+        schema is read as raw JSON -- balancer-service owns no copy of
+        tournament-service's ``FormSchema`` -- so anything malformed is skipped
         instead of breaking the snapshot.
 
-        ``show_in_draft`` alone is not the gate: the schema forbids it on an
-        organizers-only field, but a form saved before that rule (or by a future
-        writer) must not leak one onto the public board, so visibility is checked
-        here too.
+        Builtins are skipped because their answers are not in
+        ``custom_fields_json`` at all (see ``registration.answers.custom_answers``);
+        they reach the board through the player's own columns.
         """
         raw = await session.scalar(
             sa.select(BalancerRegistrationFormVersion.schema_json)
@@ -123,7 +126,7 @@ class DraftBoardService:
                 if not isinstance(definition, dict):
                     continue
                 kind = definition.get("kind")
-                if kind == "builtin" or definition.get("show_in_draft") is not True:
+                if kind == "builtin":
                     continue
                 if definition.get("visibility") != "public":
                     continue

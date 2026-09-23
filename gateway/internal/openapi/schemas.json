@@ -1246,6 +1246,26 @@
       },
       "summary": "Retire notifications a workspace produced"
     },
+    "rpc.app.notification_preferences_get": {
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. Returns the three Discord-DM switches (`tournament`, `matches`, `team`) with the defaults filled in: a group the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether the account has a Discord connection at all \u2014 the switches deliver nothing without one.",
+      "response": {
+        "array": false,
+        "ref": "app.NotificationPreferencesRead"
+      },
+      "summary": "Read the caller's Discord DM preferences"
+    },
+    "rpc.app.notification_preferences_update": {
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. The edit is partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert the other two. Unknown group names are a 422. Answers with the same effective shape as the read. In-app notifications are not switchable \u2014 this only governs delivery to Discord.",
+      "request": {
+        "array": false,
+        "ref": "app.NotificationPreferencesUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.NotificationPreferencesRead"
+      },
+      "summary": "Update the caller's Discord DM preferences"
+    },
     "rpc.app.notifications_delete": {
       "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own inbox only. Removes rows from this caller's inbox and returns how many left it together with the refreshed unread count. An omitted or null `ids` targets the whole visible inbox, and `only_read: true` narrows that to rows already marked read (the \"clear read\" button). The deletion is per viewer: the underlying row survives, so one reader dismissing a platform-wide announcement does not take it out of anybody else's inbox. Ids outside the caller's audience are dropped silently rather than rejected, and a repeat call deletes nothing and is not an error.",
       "request": {
@@ -3646,6 +3666,26 @@
       },
       "summary": "List my administered Discord guilds"
     },
+    "rpc.app.workspaces.notification_config_get": {
+      "description": "Permission: workspace `workspace.update`, like the sibling Discord pickers \u2014 the stored channel names a private guild. Returns where this workspace's broadcast notifications are posted (`discord_channel_id`, a snowflake as a string), the language they are written in, which kinds are posted (`broadcast_kinds`), and the full set that may be enabled (`broadcastable_kinds`) so the screen needs no second source of truth. A workspace that never saved anything reads as its defaults \u2014 no channel, `ru`, registration and check-in openings. 404 if workspace missing.",
+      "response": {
+        "array": false,
+        "ref": "app.NotificationWorkspaceConfigRead"
+      },
+      "summary": "Read a workspace's notification delivery settings"
+    },
+    "rpc.app.workspaces.notification_config_update": {
+      "description": "Permission: workspace `workspace.update`. Stores the whole form. A non-null `discord_channel_id` must be a text channel of THIS workspace's verified guild \u2014 otherwise an administrator of one workspace could make the bot post into another organiser's server: 409 `discord_guild_not_linked` when no guild is bound, 422 `discord_channel_not_in_guild` when the channel is not one of its text channels, and 503 `discord_unavailable` when Discord cannot be asked (an unchecked channel is never stored). `broadcast_kinds` must be a subset of `broadcastable_kinds` and `locale` one of `ru`/`en`, both 422 otherwise. Returns the same shape as the read. 404 if workspace missing.",
+      "request": {
+        "array": false,
+        "ref": "app.NotificationWorkspaceConfigUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.NotificationWorkspaceConfigRead"
+      },
+      "summary": "Update a workspace's notification delivery settings"
+    },
     "rpc.app.workspaces.owner_get": {
       "description": "Permission: workspace `workspace.update` (the public workspace model deliberately publishes no owner). Resolves `Workspace.owner_id` \u2014 the account accountable for the workspace and counted against the per-account create cap \u2014 to its username, email and avatar; returns null data when no owner is stamped, 404 if workspace missing.",
       "response": {
@@ -4075,6 +4115,18 @@
         "ref": "balancer.DraftSessionRead"
       },
       "summary": "Autopick draft pick"
+    },
+    "rpc.balancer.draft.pick_extend": {
+      "description": "Permission: workspace `team.create`. Adds seconds to the current on-clock pick \u2014 to its deadline while the draft is live, to the frozen remainder while it is paused \u2014 and broadcasts the new deadline.",
+      "request": {
+        "array": false,
+        "ref": "balancer.DraftPickExtendRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftSessionRead"
+      },
+      "summary": "Extend draft pick clock"
     },
     "rpc.balancer.draft.pick_options": {
       "description": "Permission: the on-clock captain of the pick's team, or a workspace admin. Returns safe and blocked player-role choices for the current pick.",
@@ -6868,6 +6920,14 @@
       },
       "summary": "Captain report counters"
     },
+    "rpc.tournament.admin_game_result": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Writes one series position's score as an `admin` result and journals the mandatory `reason`; this is the only way a `confirmed` game (locked against captains with 409 `result_locked`) ever changes. Flipping which side won a position scraps and re-opens the round that outcome had opened, so the response is `{game, rebuilt_rounds}`; 409 `downstream_started` when a later round was already acted in or a later position already has a claim, 409 `map_not_selected` while the position still has no map (an organizer names it through the pick-ban or the captain map choice first), and 404 when the game belongs to another encounter or is cancelled.",
+      "request": {
+        "array": false,
+        "ref": "tournament.AdminGameResultInput"
+      },
+      "summary": "Correct a game result"
+    },
     "rpc.tournament.admin_match_get": {
       "description": "Permission: workspace `match.read` on the workspace named by `workspace_id`. One parsed map with the aggregates the list omits: the round count and how many statistics, kill-feed and event rows were written for it. Returns 404 both for an unknown match and for one outside the workspace named by `workspace_id`, so it cannot be used to probe for ids in another workspace.",
       "response": {
@@ -7093,17 +7153,25 @@
       "description": "Permission: authenticated user who captains one of the encounter's two teams (403 when the account captains neither team or has no linked player profile). Marks the calling captain's side ready to begin the encounter's pre-game phase and returns the resulting `{home, away}` readiness map; idempotent. The pick/ban session only opens once both sides are ready, and any change of team assignment clears both.",
       "summary": "Confirm readiness"
     },
-    "rpc.tournament.captain_report_map": {
-      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Files the calling captain's own claim of one played map's score, immediately after that map rather than at series end. Both sides report independently: matching claims settle the map and create its match row, differing ones mark the slot disputed for an organizer. Returns `{disputed, resolved, match_id}`. 409 while the stage bracket is still a preview the organizer has not activated.",
+    "rpc.tournament.captain_report_game": {
+      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Files the calling captain's own claim of ONE series position's score, immediately after that game rather than at series end; the side is taken from the caller, never from the body. Both sides claim independently: matching claims accept the game's result and open whatever the series owes next, differing ones mark the game `disputed` for an organizer. Returns `{disputed, resolved, game}`. 404 when the game belongs to another encounter or is cancelled, 409 `result_locked` once the game is confirmed (only the admin correction changes it), 409 `map_not_selected` while the position still has no map (choose it first, through captain_select_game_map or the map pick-ban), and 409 while the stage bracket is still a preview the organizer has not activated.",
       "request": {
         "array": false,
-        "ref": "tournament.MapReportInput"
+        "ref": "tournament.GameReportInput"
       },
-      "summary": "Report a map result"
+      "summary": "Report a game result"
     },
     "rpc.tournament.captain_reports": {
       "description": "Permission: public; no authentication required \u2014 visible to anyone who may view the tournament. Returns both captains' reports for an encounter (score, closeness, per-map codes, comment and custom field values) alongside the tournament's match-report form config under `form`, so the report dialog renders exactly the rules the submit endpoint enforces.",
       "summary": "Get captain reports"
+    },
+    "rpc.tournament.captain_select_game_map": {
+      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Freeplay's half of what the map pick-ban does automatically: names the map an open position is played on, moving a `planned` game to `awaiting_result`. Returns `{game}`. 404 when the game belongs to another encounter, 409 `result_locked` when the position's result is already settled, and 409 `map_locked` once a captain has claimed a score against the current map.",
+      "request": {
+        "array": false,
+        "ref": "tournament.GameMapSelectInput"
+      },
+      "summary": "Name a game's map"
     },
     "rpc.tournament.captain_submit_report": {
       "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Lets an encounter captain submit their own report: series score plus whatever the tournament's match-report form enables \u2014 closeness 1..10, per-map match codes, a free-text comment and any organizer-defined text fields. Fields the config disables are dropped rather than rejected, so a stale client cannot fail a submit; fields it marks required are enforced with a 422. Reports are per-captain; when both captains' scores match the encounter auto-confirms and closeness becomes their average (null when either side left it blank), otherwise it is disputed \u2014 comments and custom values never take part in that comparison. Upsert allowed until confirmed.",
@@ -13015,7 +13083,7 @@
       "type": "object"
     },
     "app.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
+      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
       "enum": [
         "Tank",
         "Damage",
@@ -14251,6 +14319,74 @@
       "title": "NotificationDeleteResult",
       "type": "object"
     },
+    "app.NotificationDmGroups": {
+      "description": "The three Discord-DM switches, defaults already filled in.\n\nSpelled out as fields rather than a free dict because this is a public\nresponse shape: the client renders one toggle per group and the generated\nOpenAPI has to name them. ``test_notification_preferences_rpc`` pins the\nfield set against ``NOTIFICATION_GROUPS``, so a fourth group cannot be\nadded upstream without this following.",
+      "properties": {
+        "matches": {
+          "title": "Matches",
+          "type": "boolean"
+        },
+        "team": {
+          "title": "Team",
+          "type": "boolean"
+        },
+        "tournament": {
+          "title": "Tournament",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tournament",
+        "matches",
+        "team"
+      ],
+      "title": "NotificationDmGroups",
+      "type": "object"
+    },
+    "app.NotificationDmGroupsUpdate": {
+      "additionalProperties": false,
+      "description": "A partial edit: an omitted group keeps whatever is stored for it.",
+      "properties": {
+        "matches": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matches"
+        },
+        "team": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team"
+        },
+        "tournament": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament"
+        }
+      },
+      "title": "NotificationDmGroupsUpdate",
+      "type": "object"
+    },
     "app.NotificationInboxRead": {
       "description": "One inbox round trip: the page, the badge count and the continuation.\n\nThe bell renders the count and the list together on every open, so serving\nthem from two endpoints would double the requests for a header component\nthat mounts on every page.",
       "properties": {
@@ -14390,6 +14526,36 @@
       "title": "NotificationMarkReadResult",
       "type": "object"
     },
+    "app.NotificationPreferencesRead": {
+      "properties": {
+        "discord_dm": {
+          "$ref": "#/components/schemas/app.NotificationDmGroups"
+        },
+        "discord_linked": {
+          "title": "Discord Linked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "discord_dm",
+        "discord_linked"
+      ],
+      "title": "NotificationPreferencesRead",
+      "type": "object"
+    },
+    "app.NotificationPreferencesUpdate": {
+      "additionalProperties": false,
+      "properties": {
+        "discord_dm": {
+          "$ref": "#/components/schemas/app.NotificationDmGroupsUpdate"
+        }
+      },
+      "required": [
+        "discord_dm"
+      ],
+      "title": "NotificationPreferencesUpdate",
+      "type": "object"
+    },
     "app.NotificationRetire": {
       "additionalProperties": false,
       "description": "Which of this workspace's notifications to take out of circulation.\n\n``ids`` and ``kind`` are filters over the same scoped statement and may be\ncombined. Naming neither is rejected \u2014 \"retire everything this workspace\never sent\" must be spelled out one kind at a time, not reached by omission.",
@@ -14443,6 +14609,101 @@
         "retired"
       ],
       "title": "NotificationRetireResult",
+      "type": "object"
+    },
+    "app.NotificationWorkspaceConfigRead": {
+      "description": "Where this workspace's broadcasts go, plus what the picker needs.\n\nDiscord snowflakes are strings: they exceed 2^53 and a JSON number loses\nprecision in the browser, the same way ``discord_guild_id`` is already\ncarried.",
+      "properties": {
+        "broadcast_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Broadcast Kinds",
+          "type": "array"
+        },
+        "broadcastable_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Broadcastable Kinds",
+          "type": "array"
+        },
+        "discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Channel Id"
+        },
+        "discord_guild_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Guild Id"
+        },
+        "locale": {
+          "title": "Locale",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "locale",
+        "broadcast_kinds",
+        "broadcastable_kinds"
+      ],
+      "title": "NotificationWorkspaceConfigRead",
+      "type": "object"
+    },
+    "app.NotificationWorkspaceConfigUpdate": {
+      "additionalProperties": false,
+      "description": "The settings form, submitted whole -- it edits one row of three values.",
+      "properties": {
+        "broadcast_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Broadcast Kinds",
+          "type": "array"
+        },
+        "discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Channel Id"
+        },
+        "locale": {
+          "default": "ru",
+          "enum": [
+            "ru",
+            "en"
+          ],
+          "title": "Locale",
+          "type": "string"
+        }
+      },
+      "title": "NotificationWorkspaceConfigUpdate",
       "type": "object"
     },
     "app.Paginated_AchievementEarned_": {
@@ -22058,6 +22319,25 @@
       "title": "DraftPickAutopickRequest",
       "type": "object"
     },
+    "balancer.DraftPickExtendRequest": {
+      "description": "An admin hands the on-clock captain more time.\n\nAdditive, not absolute: the deadline moves by ``seconds``, so two admins\npressing the button twice give twice the time instead of racing to set the\nsame value. ``expected_version`` is the same optimistic token the pick\nactions use -- extending a pick that has already resolved is a conflict.",
+      "properties": {
+        "expected_version": {
+          "title": "Expected Version",
+          "type": "integer"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected_version",
+        "seconds"
+      ],
+      "title": "DraftPickExtendRequest",
+      "type": "object"
+    },
     "balancer.DraftPickOptionRead": {
       "properties": {
         "blocking_player_ids": {
@@ -22267,6 +22547,18 @@
           "title": "Overall No",
           "type": "integer"
         },
+        "overtime_started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Overtime Started At"
+        },
         "pick_in_round": {
           "title": "Pick In Round",
           "type": "integer"
@@ -22347,6 +22639,7 @@
         "is_admin_override",
         "clock_started_at",
         "clock_expires_at",
+        "overtime_started_at",
         "version"
       ],
       "title": "DraftPickRead",
@@ -22399,7 +22692,7 @@
       "type": "string"
     },
     "balancer.DraftPlayerCustomFieldRead": {
-      "description": "One organizer-approved registration answer, ready to render.\n\nCarries the definition's current ``label``/``type`` alongside the value so\nthe draft client renders it without knowing anything about registration\nforms. Built by ``services.draft.board.player_custom_fields``; only fields\nflagged ``show_in_draft`` on the registration form ever appear here, because\nthe board snapshot is public.",
+      "description": "One public registration answer, ready to render.\n\nCarries the definition's current ``label``/``type`` alongside the value so\nthe draft client renders it without knowing anything about registration\nforms. Built by ``services.draft.board.player_custom_fields``; only custom\nquestions the organizer left PUBLIC ever appear here, because the board\nsnapshot is public.",
       "properties": {
         "key": {
           "title": "Key",
@@ -22864,6 +23157,11 @@
           "$ref": "#/components/schemas/balancer.DraftFormat",
           "default": "snake"
         },
+        "overtime_seconds": {
+          "default": 0,
+          "title": "Overtime Seconds",
+          "type": "integer"
+        },
         "pick_time_seconds": {
           "default": 45,
           "title": "Pick Time Seconds",
@@ -22918,6 +23216,18 @@
             }
           ],
           "default": null
+        },
+        "overtime_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overtime Seconds"
         },
         "pick_time_seconds": {
           "anyOf": [
@@ -23034,6 +23344,10 @@
           "title": "Id",
           "type": "integer"
         },
+        "overtime_seconds": {
+          "title": "Overtime Seconds",
+          "type": "integer"
+        },
         "pick_time_seconds": {
           "title": "Pick Time Seconds",
           "type": "integer"
@@ -23089,6 +23403,7 @@
         "format",
         "rounds",
         "pick_time_seconds",
+        "overtime_seconds",
         "roster_shape",
         "current_pick_id",
         "pool_source",
@@ -26950,7 +27265,8 @@
           "default": "access_token",
           "enum": [
             "access_token",
-            "api_key"
+            "api_key",
+            "discord"
           ],
           "title": "Credential Type",
           "type": "string"
@@ -30188,6 +30504,34 @@
         "participants"
       ],
       "title": "TournamentStreamsRead",
+      "type": "object"
+    },
+    "tournament.AdminGameResultInput": {
+      "description": "Body for the admin game-result correction: the position's score as the\norganizer decides it, plus the reason that goes into the audit journal (a\ncorrection is never anonymous -- spec \u00a76.5).",
+      "properties": {
+        "away_score": {
+          "minimum": 0,
+          "title": "Away Score",
+          "type": "integer"
+        },
+        "home_score": {
+          "minimum": 0,
+          "title": "Home Score",
+          "type": "integer"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "home_score",
+        "away_score",
+        "reason"
+      ],
+      "title": "AdminGameResultInput",
       "type": "object"
     },
     "tournament.AdminMatchDetail": {
@@ -35668,6 +36012,107 @@
       "title": "EncounterFiltersRead",
       "type": "object"
     },
+    "tournament.EncounterGameRead": {
+      "description": "One position of the series and what the tournament DECIDED for it.\n\nDistinct from ``MatchRead``, which is what a parsed log OBSERVED: a position\nexists (and names its map) long before any log arrives, and a series may\nplay the same map twice \u2014 only ``position`` tells those two plays apart.",
+      "properties": {
+        "accepted_away_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accepted Away Score"
+        },
+        "accepted_home_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accepted Home Score"
+        },
+        "confirmed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed At"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "map": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.MapRead"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "map_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Map Id"
+        },
+        "position": {
+          "title": "Position",
+          "type": "integer"
+        },
+        "result_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Source"
+        },
+        "result_version": {
+          "default": 0,
+          "title": "Result Version",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "position",
+        "state"
+      ],
+      "title": "EncounterGameRead",
+      "type": "object"
+    },
     "tournament.EncounterHistogramBucketRead": {
       "properties": {
         "count": {
@@ -36008,6 +36453,14 @@
           ],
           "default": null,
           "title": "Ended At"
+        },
+        "games": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/tournament.EncounterGameRead"
+          },
+          "title": "Games",
+          "type": "array"
         },
         "has_logs": {
           "title": "Has Logs",
@@ -36483,7 +36936,10 @@
         "auto_confirm",
         "auto_dispute",
         "import",
-        "cascade_reset"
+        "cascade_reset",
+        "game_confirm",
+        "game_correct",
+        "game_cancel"
       ],
       "title": "EncounterResultAuditAction",
       "type": "string"
@@ -37496,11 +37952,6 @@
           "title": "Required",
           "type": "boolean"
         },
-        "show_in_draft": {
-          "default": false,
-          "title": "Show In Draft",
-          "type": "boolean"
-        },
         "validation": {
           "anyOf": [
             {
@@ -37674,6 +38125,41 @@
       "title": "FormSection",
       "type": "object"
     },
+    "tournament.GameMapSelectInput": {
+      "description": "Freeplay's half of what the map pick-ban does automatically: a captain\nnames the map an open position is played on.",
+      "properties": {
+        "map_id": {
+          "title": "Map Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "map_id"
+      ],
+      "title": "GameMapSelectInput",
+      "type": "object"
+    },
+    "tournament.GameReportInput": {
+      "description": "One captain's independent claim of a single played GAME's result \u2014\nsubmitted immediately after that position, not at series end (contrast\n``CaptainReportSubmission``). The position, not the map, identifies what is\nbeing claimed: a series may play the same map twice. See\n``services.encounter.map_report``.",
+      "properties": {
+        "away_score": {
+          "minimum": 0,
+          "title": "Away Score",
+          "type": "integer"
+        },
+        "home_score": {
+          "minimum": 0,
+          "title": "Home Score",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "home_score",
+        "away_score"
+      ],
+      "title": "GameReportInput",
+      "type": "object"
+    },
     "tournament.GamemodeRead": {
       "properties": {
         "description": {
@@ -37715,7 +38201,7 @@
       "type": "object"
     },
     "tournament.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
+      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
       "enum": [
         "Tank",
         "Damage",
@@ -38152,27 +38638,6 @@
         "gamemode"
       ],
       "title": "MapRead",
-      "type": "object"
-    },
-    "tournament.MapReportInput": {
-      "description": "One captain's independent claim of a single played map's result \u2014\nsubmitted immediately after that map, not at series end (contrast\n``CaptainReportSubmission``). See ``services.encounter.map_report``.",
-      "properties": {
-        "away_score": {
-          "minimum": 0,
-          "title": "Away Score",
-          "type": "integer"
-        },
-        "home_score": {
-          "minimum": 0,
-          "title": "Home Score",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "home_score",
-        "away_score"
-      ],
-      "title": "MapReportInput",
       "type": "object"
     },
     "tournament.MapVetoMode": {
@@ -45483,6 +45948,16 @@
           ],
           "title": "Description"
         },
+        "discord_broadcasts_enabled": {
+          "default": true,
+          "title": "Discord Broadcasts Enabled",
+          "type": "boolean"
+        },
+        "discord_dms_enabled": {
+          "default": true,
+          "title": "Discord Dms Enabled",
+          "type": "boolean"
+        },
         "division_grid_version": {
           "anyOf": [
             {
@@ -45891,6 +46366,30 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "discord_broadcasts_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Broadcasts Enabled"
+        },
+        "discord_dms_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Dms Enabled"
         },
         "division_grid_version_id": {
           "anyOf": [

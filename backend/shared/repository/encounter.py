@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
+from shared.core import enums
 from shared.repository.base import BaseRepository
 
 
@@ -78,39 +79,39 @@ class EncounterMapCodeRepository(BaseRepository[models.EncounterMapCode]):
         return result.scalars().all()
 
 
+class EncounterGameRepository(BaseRepository[models.EncounterGame]):
+    def __init__(self) -> None:
+        super().__init__(models.EncounterGame)
+
+    async def list_for_encounter(
+        self, session: AsyncSession, encounter_id: int, *, include_cancelled: bool = False
+    ) -> Sequence[models.EncounterGame]:
+        query = self.select().where(models.EncounterGame.encounter_id == encounter_id)
+        if not include_cancelled:
+            query = query.where(models.EncounterGame.state != enums.EncounterGameState.CANCELLED)
+        result = await session.execute(query.order_by(models.EncounterGame.position, models.EncounterGame.id))
+        return result.scalars().all()
+
+    async def get_for_update(self, session: AsyncSession, game_id: int) -> models.EncounterGame | None:
+        result = await session.execute(
+            self.select()
+            .where(models.EncounterGame.id == game_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalars().first()
+
+
 class EncounterMapReportRepository(BaseRepository[models.EncounterMapReport]):
     def __init__(self) -> None:
         super().__init__(models.EncounterMapReport)
 
-    async def list_for_encounter(
-        self,
-        session: AsyncSession,
-        encounter_id: int,
-        *,
-        options: Sequence[_AbstractLoad] | None = None,
+    async def list_for_games(
+        self, session: AsyncSession, game_ids: Sequence[int]
     ) -> Sequence[models.EncounterMapReport]:
-        query = self._apply_options(
-            self.select().where(models.EncounterMapReport.encounter_id == encounter_id),
-            options,
-        )
-        result = await session.execute(query)
-        return result.unique().scalars().all()
-
-    async def list_for_map_slot(
-        self,
-        session: AsyncSession,
-        *,
-        encounter_id: int,
-        map_id: int,
-        map_index: int,
-    ) -> Sequence[models.EncounterMapReport]:
-        result = await session.execute(
-            self.select().where(
-                models.EncounterMapReport.encounter_id == encounter_id,
-                models.EncounterMapReport.map_id == map_id,
-                models.EncounterMapReport.map_index == map_index,
-            )
-        )
+        if not game_ids:
+            return []
+        result = await session.execute(self.select().where(models.EncounterMapReport.game_id.in_(tuple(game_ids))))
         return result.scalars().all()
 
 
@@ -213,6 +214,7 @@ class EncounterLinkRepository(BaseRepository[models.EncounterLink]):
 
 __all__ = (
     "EncounterCaptainReportRepository",
+    "EncounterGameRepository",
     "EncounterLinkRepository",
     "EncounterMapCodeRepository",
     "EncounterMapReportRepository",

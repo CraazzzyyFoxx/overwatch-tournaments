@@ -45,7 +45,7 @@ other.
 **Z2 — nothing outside `src/app` may import from `src/app`.**
 A `lib/` module that imports a route inverts the dependency: the shared layer then cannot be
 built, tested, or moved without the route tree. This is the rule that was broken when
-`lib/realtime-resources.ts` imported the admin tournament workspace's query keys.
+`lib/realtime/resources.ts` imported the admin tournament workspace's query keys.
 
 **Z3 — `src/components/admin` is admin-private.**
 Only `app/admin/**` (and `components/admin/**` itself) may import it. `components/admin` is
@@ -83,10 +83,10 @@ separate host, divergent framework versions), the cheapest shape is Next multi-z
 things in this codebase are single-instance today and would need an owner first:
 
 1. **QueryClient** — a module singleton in `app/providers.tsx`. Separate zones mean separate
-   caches; realtime invalidation (`lib/realtime-resources.ts`) stops crossing zones.
+   caches; realtime invalidation (`lib/realtime/resources.ts`) stops crossing zones.
 2. **The realtime WebSocket** — one `/ws` per tab today. Per-zone sockets multiply against the
    gateway's origin check and nginx's rate-limit zones.
-3. **Proactive token refresh** — `lib/use-proactive-token-refresh.ts` rotates the refresh
+3. **Proactive token refresh** — `hooks/use-proactive-token-refresh.ts` rotates the refresh
    token. Two zones rotating concurrently race and log the user out. Needs a single writer
    (Web Locks / `BroadcastChannel`).
 4. **Host → workspace resolution** — `src/middleware.ts` resolves the request host to a

@@ -180,46 +180,38 @@ export default defineConfig({
       // would report green while the whole invitee flow was unreachable, which
       // is exactly the state this route was added to fix.
       "src/app/(site)/invite/page.behavior.test.tsx",
-      // Same mixed-runner situation in `src/lib`, so file-level again. This one
-      // mirrors the backend's best-of resolution and sequence generation, and
-      // the veto room runs the SERVER's sequence — an unrun drift check is
-      // worse than none, since it reports green either way.
-      "src/lib/best-of.test.ts",
+      // `src/lib` is split by domain folder. These folders are vitest-only, so
+      // a directory glob is safe and covers the next test added there; the
+      // split gate (`scripts/test-runner-split.mjs`) fails CI if a `bun:test`
+      // file ever lands in one. `realtime` holds the manifest parity gate: a
+      // resource cannot be published without the client knowing which queries
+      // it stales.
+      "src/lib/divisions/**/*.test.ts",
+      "src/lib/draft/**/*.test.ts",
+      "src/lib/realtime/**/*.test.ts",
+      "src/lib/roster/**/*.test.ts",
+      "src/lib/social/**/*.test.ts",
+      // The other `src/lib` folders hold both runners' tests, so file-level
+      // again. This one mirrors the backend's best-of resolution and sequence
+      // generation, and the veto room runs the SERVER's sequence — an unrun
+      // drift check is worse than none, since it reports green either way.
+      "src/lib/tournament/best-of.test.ts",
       // The vocabulary every round name on the site is rendered from; unrun, a
       // screen could go back to calling the UB Final "Round 3" with a green suite.
-      "src/lib/bracket-round-name.test.ts",
-      "src/lib/roster-shape.test.ts",
-      "src/lib/return-to.test.ts",
-      // Same mixed-runner situation, so file-level again: this one pins the
-      // reason-code catalogue against both message files and the organizer-first
-      // ordering of the aggregate. Unrun, a new backend reason code would reach
-      // the UI as raw snake_case with a green suite.
-      "src/lib/admission.test.ts",
-      // Added when frontend CI landed: these nine imported `vitest` but matched
-      // no pattern above, so the suite reported green without ever running them
-      // (the allow-list trap this file warns about three times). `scripts/
-      // check-vitest-include.mjs` now fails CI on the next one, instead of it
-      // going unnoticed until someone reads this array.
-      "src/lib/draft-crest.test.ts",
-      "src/lib/draft-data.test.ts",
-      "src/lib/draft-logic.test.ts",
-      "src/lib/draft-visual.test.ts",
-      "src/lib/draft-workspace-model.test.ts",
-      "src/lib/stream-platform.test.ts",
+      "src/lib/bracket/round-name.test.ts",
+      "src/lib/auth/return-to.test.ts",
+      // Pins the reason-code catalogue against both message files and the
+      // organizer-first ordering of the aggregate. Unrun, a new backend reason
+      // code would reach the UI as raw snake_case with a green suite.
+      "src/lib/registration/admission.test.ts",
       "src/lib/image-capture.test.ts",
-      // Was in the same unrun state when the register-button gate got its first
-      // real test: the stream-visibility cases in it had never executed either.
-      "src/lib/tournament-status.test.ts",
-      "src/lib/tournament-stages.test.ts",
-      "src/lib/division-grid.test.ts",
-      // Promoted out of route/component trees so the zones stop importing each
-      // other (docs/frontend-zones.md). Same file-level treatment as the rest of
-      // `src/lib`, which holds both runners' tests — `bracket-view.test.ts`
-      // moved with them but speaks bun:test, so it is deliberately absent.
-      "src/lib/bracket-projection.test.ts",
-      "src/lib/encounter-score.test.ts",
-      "src/lib/pick-ban-config.test.ts",
-      "src/lib/roster-shape-editor-model.test.ts",
+      // Includes the register-button gate's stream-visibility cases.
+      "src/lib/tournament/status.test.ts",
+      "src/lib/tournament/stages.test.ts",
+      "src/lib/tournament/pick-ban-config.test.ts",
+      // `lib/bracket/view.test.ts` speaks bun:test, so it is deliberately absent.
+      "src/lib/bracket/projection.test.ts",
+      "src/lib/encounter/score.test.ts",
       "src/components/Header.mobile-layout.test.ts",
       "src/components/WorkspaceBootstrap.helpers.test.ts",
       // File-level: `src/components` holds both runners' tests, so a directory
@@ -238,9 +230,10 @@ export default defineConfig({
       "src/components/CreateWorkspaceLauncher.behavior.test.tsx",
       // Same file-level rule: `account-settings` is under `src/components`, and
       // these are its only vitest files so far.
-      "src/components/account-settings/MyAccountSection.behavior.test.tsx",
+      "src/components/account-settings/PrivacySection.behavior.test.tsx",
       "src/components/account-settings/FavoritesSection.behavior.test.tsx",
       "src/components/account-settings/MixBalancerSection.behavior.test.tsx",
+      "src/components/account-settings/NotificationsSection.behavior.test.tsx",
       // Same file-level rule: `src/components/match` is otherwise untested, and
       // this pins that the log download is offered only to a signed-in viewer.
       "src/components/match/MatchLogIndicator.behavior.test.tsx",
@@ -268,9 +261,10 @@ export default defineConfig({
       "src/hooks/useRealtimeCoalescedRefetch.test.ts",
       "src/hooks/useRealtimePatchedQuery.test.ts",
       "src/hooks/useInvalidation.test.ts",
-      // The manifest parity gate: this one is the reason a resource cannot be
-      // published without the client knowing which queries it stales.
-      "src/lib/realtime-resources.test.ts"
+      // File-level, not `src/components/draft/**`: that folder also holds
+      // `bun:test` files (`DraftRoomSkeleton.test.ts`), which fail on the
+      // import the moment vitest collects them.
+      "src/components/draft/PlayerProfileDialog.behavior.test.tsx"
     ]
   }
 });

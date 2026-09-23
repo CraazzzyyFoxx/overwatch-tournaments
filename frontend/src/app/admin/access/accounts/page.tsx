@@ -15,7 +15,7 @@ import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilter
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { getSingleLinkedPlayer } from "@/lib/auth-profile-links";
+import { getSingleLinkedPlayer } from "@/lib/auth/profile-links";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";

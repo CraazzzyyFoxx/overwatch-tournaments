@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { Hero, HeroLeaderboardEntry } from "@/types/hero.types";
 import HeroImage from "@/components/hero/HeroImage";
-import { heroVariantFromRole } from "@/lib/player-role";
+import { heroVariantFromRole } from "@/lib/roster/player-role";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { COL, StatKey, ALL_STAT_OPTIONS } from "../config/stat-columns";

@@ -1,4 +1,4 @@
-import { sortSocialAccounts } from "@/lib/social-providers";
+import { sortSocialAccounts } from "@/lib/social/providers";
 import type { SocialAccount } from "@/types/user.types";
 
 import { SocialAccountBadge } from "./SocialAccountBadge";

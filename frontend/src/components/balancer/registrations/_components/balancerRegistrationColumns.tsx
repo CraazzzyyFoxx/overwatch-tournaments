@@ -22,9 +22,9 @@ import {
   ADMISSION_SEARCH_TEXT,
   formatAdmissionReason,
   primaryAdmissionReason,
-} from "@/lib/admission";
+} from "@/lib/registration/admission";
 import { cn } from "@/lib/utils";
-import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roles";
+import { ROLE_LABELS, getRoleIconName, getSubroleLabel } from "@/lib/roster/roles";
 import type {
   AdminRegistration,
   AdminRegistrationRole,

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { announcementText } from "@/lib/announcement-text";
+import { announcementText } from "@/lib/notifications/announcement-text";
 import type { NotificationItem } from "@/types/notification.types";
 
 import { announcementState } from "./announcement-draft";

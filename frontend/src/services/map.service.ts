@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import { MapRead } from "@/types/map.types";
 

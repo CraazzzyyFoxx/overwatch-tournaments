@@ -27,7 +27,7 @@ import {
   GROUP_COLOR
 } from "@/utils/matchStats";
 import { sortTeamPlayers } from "@/utils/player";
-import { aggregateSeriesStats, type SeriesAggregate } from "@/lib/encounter-detail";
+import { aggregateSeriesStats, type SeriesAggregate } from "@/lib/encounter/detail";
 import { Fact, PlayerIdentity } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 

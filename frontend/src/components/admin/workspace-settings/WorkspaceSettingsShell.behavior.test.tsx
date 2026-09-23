@@ -112,7 +112,7 @@ describe("WorkspaceSettingsShell", () => {
     expect(container.querySelector("nav")).toBeNull();
   });
 
-  it("rails all eleven sections of the workspace hub", async () => {
+  it("rails all twelve sections of the workspace hub", async () => {
     await render(
       <WorkspaceSettingsShell basePath="/admin/settings">
         <p />
@@ -125,6 +125,7 @@ describe("WorkspaceSettingsShell", () => {
       "/admin/settings/visibility",
       "/admin/settings/domain",
       "/admin/settings/discord",
+      "/admin/settings/notifications",
       "/admin/settings/divisions",
       "/admin/settings/statuses",
       "/admin/settings/sub-roles",
@@ -150,7 +151,8 @@ describe("WorkspaceSettingsShell", () => {
       "/admin/workspaces/8/branding",
       "/admin/workspaces/8/visibility",
       "/admin/workspaces/8/domain",
-      "/admin/workspaces/8/discord"
+      "/admin/workspaces/8/discord",
+      "/admin/workspaces/8/notifications"
     ]);
     expect(currentLabel()).toBe("General");
     expect(container.textContent).not.toContain("Divisions");

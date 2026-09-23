@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { isSlotRearrangeable, type BracketMatch } from "@/lib/bracket-view";
+import { isSlotRearrangeable, type BracketMatch } from "@/lib/bracket/view";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";
 

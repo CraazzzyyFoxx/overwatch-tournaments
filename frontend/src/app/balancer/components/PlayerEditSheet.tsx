@@ -46,7 +46,7 @@ import {
   getDivisionLabel,
   resolveDivisionFromRank as resolveDivisionFromRankInGrid,
   resolveRankFromDivision as resolveRankFromDivisionInGrid,
-} from "@/lib/division-grid";
+} from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import type { DivisionGrid } from "@/types/workspace.types";
 import {

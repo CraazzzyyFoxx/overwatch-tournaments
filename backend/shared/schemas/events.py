@@ -6,9 +6,9 @@ replacing untyped dict objects with validated Pydantic models.
 
 import time
 import uuid
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class BaseEvent(BaseModel):
@@ -22,31 +22,119 @@ class BaseEvent(BaseModel):
     correlation_id: str | None = Field(default=None, description="Request correlation ID for tracing")
 
 
+#: Discord's cap on the text of every TextDisplay in one Components V2 message.
+DISCORD_CARD_TEXT_LIMIT = 4000
+
+
+#: The actions discord-service answers itself (``src/interactions/actions.py``
+#: says what each one calls). A literal rather than a string so a producer
+#: cannot put a button on a card that the bot could only answer "unknown".
+DiscordAction = Literal[
+    "invite.accept",
+    "invite.decline",
+    "check_in",
+    "registration.view",
+    "notifications.menu",
+    "notifications.mute",
+]
+
+
+class DiscordLinkButton(BaseModel):
+    """A link button: Discord opens ``url`` itself, so the bot handles no interaction."""
+
+    type: Literal["link"] = "link"
+    label: str = Field(min_length=1, max_length=80)
+    url: str = Field(max_length=512, pattern=r"^https?://")
+
+
+class DiscordActionButton(BaseModel):
+    """A button the bot answers itself, acting as whoever clicked it.
+
+    It names *what* and *on which object*, never *who*: the clicker comes from
+    the interaction Discord signs, and the bot acts only for an account that
+    linked that Discord user. The target RPC then authorizes as it does for the
+    site, so a button can never do more than its clicker could there.
+    """
+
+    type: Literal["action"] = "action"
+    label: str = Field(min_length=1, max_length=80)
+    action: DiscordAction
+    #: The object acted on: an invite id, a tournament id, a preference group.
+    target: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    style: Literal["primary", "secondary", "success", "danger"] = "secondary"
+
+
+DiscordButton = Annotated[DiscordLinkButton | DiscordActionButton, Field(discriminator="type")]
+
+
+class DiscordCard(BaseModel):
+    """One Components V2 message: an accent-coloured container the bot lays out as
+
+    ``text`` (with ``thumbnail_url`` beside it), a divider, ``details`` and the
+    ``answers`` row, with one action row per entry of ``rows`` under the
+    container rather than in it. ``answers`` holds the card's one-click answers,
+    ``rows`` where to read more and how to stop hearing it.
+    Both texts are Discord markdown, already escaped by the publisher. The
+    layout lives in discord-service; this is only what fills it.
+    """
+
+    accent_color: int | None = Field(default=None, ge=0, le=0xFFFFFF)
+    text: str = Field(min_length=1)
+    details: str | None = None
+    thumbnail_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://")
+    answers: list[DiscordButton] = Field(default_factory=list, max_length=5)
+    # Discord's own caps: five buttons to a row, five rows to a message.
+    rows: list[Annotated[list[DiscordButton], Field(min_length=1, max_length=5)]] = Field(
+        default_factory=list, max_length=5
+    )
+
+    @model_validator(mode="after")
+    def _fits_one_message(self) -> DiscordCard:
+        # Discord answers 400 past this, which is a DLQ entry rather than a message.
+        if len(self.text) + len(self.details or "") > DISCORD_CARD_TEXT_LIMIT:
+            raise ValueError(f"card text exceeds Discord's {DISCORD_CARD_TEXT_LIMIT}-character limit")
+        return self
+
+
 class DiscordCommandEvent(BaseEvent):
     """Event for triggering Discord bot commands.
 
-    Published by: parser-service (``process_all``), balancer-service (``post_message``)
+    Published by: parser-service (``process_all``), balancer-service (``post_message``),
+    app-service notification delivery (``post_message``, ``send_dm``)
     Consumed by: discord-service
 
     Actions:
     - ``process_all``: re-scan every registered channel of a tournament.
     - ``process_message``: re-process one known message.
-    - ``post_message``: send a message (content, embed and/or PNG attachment) to a channel.
+    - ``post_message``: send a message (content, embed and/or PNG attachment, or one card) to a channel.
+    - ``send_dm``: send a direct message (content and/or embed, or one card) to one Discord user.
     """
 
     event_type: str = Field(default="discord_command", frozen=True)
-    action: str = Field(..., description="Action to perform: 'process_all', 'process_message' or 'post_message'")
+    action: str = Field(
+        ..., description="Action to perform: 'process_all', 'process_message', 'post_message' or 'send_dm'"
+    )
     tournament_id: int | None = Field(default=None, description="Tournament ID to process (for 'process_all')")
     channel_id: int | None = Field(
         default=None, description="Discord channel ID (required for 'process_message' and 'post_message')"
     )
     message_id: int | None = Field(default=None, description="Discord message ID (required for 'process_message')")
-    content: str | None = Field(default=None, description="Plain message text (for 'post_message')")
+    discord_user_id: int | None = Field(default=None, description="Discord user ID (required for 'send_dm')")
+    content: str | None = Field(default=None, description="Plain message text (for 'post_message' and 'send_dm')")
     embed: dict[str, Any] | None = Field(
-        default=None, description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message')"
+        default=None,
+        description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message' and 'send_dm')",
     )
     image_b64: str | None = Field(default=None, description="Base64 PNG sent as an attachment (for 'post_message')")
     image_filename: str = Field(default="lineup.png", description="Filename for ``image_b64``")
+    card: DiscordCard | None = Field(
+        default=None,
+        description="Components V2 card (for 'post_message' and 'send_dm'); excludes content, embed and image_b64",
+    )
+    # Defaults to True so the balancer's existing mix posts keep their behaviour;
+    # notifications carry user-written team/tournament names and pass False, so
+    # an ``@everyone`` in a team name pings nobody.
+    allow_mentions: bool = Field(default=True, description="False = the bot sends with AllowedMentions.none()")
 
     def model_post_init(self, __context) -> None:
         """Validate that required fields are present for specific actions."""
@@ -59,8 +147,43 @@ class DiscordCommandEvent(BaseEvent):
         elif self.action == "post_message":
             if self.channel_id is None:
                 raise ValueError("channel_id is required for action='post_message'")
-            if self.content is None and self.embed is None and self.image_b64 is None:
-                raise ValueError("content, embed or image_b64 is required for action='post_message'")
+            if self.content is None and self.embed is None and self.image_b64 is None and self.card is None:
+                raise ValueError("content, embed, image_b64 or card is required for action='post_message'")
+        elif self.action == "send_dm":
+            if self.discord_user_id is None:
+                raise ValueError("discord_user_id is required for action='send_dm'")
+            if self.content is None and self.embed is None and self.card is None:
+                raise ValueError("content, embed or card is required for action='send_dm'")
+        # A Components V2 message carries no content or embeds: Discord refuses the mix.
+        if self.card is not None and (self.content is not None or self.embed is not None or self.image_b64 is not None):
+            raise ValueError("card cannot be combined with content, embed or image_b64")
+
+
+class NotificationCreatedEvent(BaseEvent):
+    """A personal notification row was written; deliver it outside the app.
+
+    Published by: ``shared.services.notifications.notify`` (outbox, same transaction)
+    Consumed by: app-service notification delivery
+    """
+
+    event_type: str = Field(default="notification.created", frozen=True)
+    notification_id: int = Field(..., description="notification.id of the personal row")
+
+
+class NotificationBroadcastEvent(BaseEvent):
+    """Post one event to the workspace's notification channel.
+
+    Carries the payload itself: a broadcast writes no notification row.
+
+    Published by: ``shared.services.notifications.broadcast`` (outbox, same transaction)
+    Consumed by: app-service notification delivery
+    """
+
+    event_type: str = Field(default="notification.broadcast", frozen=True)
+    workspace_id: int = Field(..., description="Workspace whose channel receives the post")
+    kind: str = Field(..., description="Notification kind, one of BROADCASTABLE_KINDS")
+    payload: dict[str, Any] = Field(..., description="Validated snapshot, same schema as the kind's inbox payload")
+    dedupe_key: str = Field(..., description="Producer identity of the event, the ledger key")
 
 
 class ProcessMatchLogEvent(BaseEvent):

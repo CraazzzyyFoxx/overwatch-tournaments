@@ -52,8 +52,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
-import { ROLE_LABELS, ROLES } from "@/lib/roles";
+import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { ROLE_LABELS, ROLES } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type {
   CustomGamePlayer,

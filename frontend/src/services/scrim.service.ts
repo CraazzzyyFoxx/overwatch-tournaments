@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { ScrimCreateInput, ScrimRoom } from "@/types/scrim.types";
 
 /** The share token is a path segment, so it is escaped rather than interpolated raw. */

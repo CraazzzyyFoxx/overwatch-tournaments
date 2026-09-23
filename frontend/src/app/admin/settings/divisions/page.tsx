@@ -26,7 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions, type AppPermission } from "@/hooks/usePermissions";
-import { OW_REFERENCE_GRID } from "@/lib/division-grid";
+import { OW_REFERENCE_GRID } from "@/lib/divisions/grid";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";

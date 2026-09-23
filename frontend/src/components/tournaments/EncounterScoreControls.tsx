@@ -11,7 +11,7 @@ import {
   getScorePresetsForBestOf,
   type EncounterScore,
   type EncounterScorePreset,
-} from "@/lib/encounter-score";
+} from "@/lib/encounter/score";
 
 type EncounterScoreControlsProps = EncounterScore & {
   idPrefix: string;

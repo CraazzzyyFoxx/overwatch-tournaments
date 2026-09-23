@@ -36,7 +36,7 @@ import type { DraftCaptainOrder, DraftFormat } from "@/types/draft.types";
 import { moveCaptain, orderCaptainIds } from "./setup-model";
 import { DraftSetupPreview } from "./DraftSetupPreview";
 import type { DraftCaptainSetup } from "./setup-types";
-import { poolRegistrationSummary, registrationLabel } from "./setup-types";
+import { captainRankSummary, registrationLabel } from "./setup-types";
 
 interface DraftOrderStepProps {
   value: DraftCaptainSetup;
@@ -60,8 +60,10 @@ export function DraftOrderStep({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+  // Same rank the captain picker seats by: a captain's STRONGEST playable
+  // role, so the previewed order matches the list it was chosen from.
   const ranks = new Map(
-    pool.map((registration) => [registration.id, poolRegistrationSummary(registration).rank])
+    pool.map((registration) => [registration.id, captainRankSummary(registration).rank])
   );
   const orderedIds = orderCaptainIds(value.ids, value.order, ranks, value.randomSeed);
 
@@ -127,7 +129,7 @@ export function DraftOrderStep({
                     id={id}
                     position={index + 1}
                     label={registrationLabel(registration)}
-                    rank={poolRegistrationSummary(registration).rank}
+                    rank={captainRankSummary(registration).rank}
                   />
                 );
               })}
@@ -154,7 +156,7 @@ export function DraftOrderStep({
                   {registrationLabel(registration)}
                 </span>
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {poolRegistrationSummary(registration).rank ?? "—"}
+                  {captainRankSummary(registration).rank ?? "—"}
                 </span>
               </div>
             );

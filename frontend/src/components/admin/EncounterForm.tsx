@@ -5,7 +5,7 @@ import { Star } from "lucide-react";
 
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import { buildEncounterName } from "@/components/admin/encounter-name";
-import { isGroupStageScoreContext } from "@/lib/encounter-score";
+import { isGroupStageScoreContext } from "@/lib/encounter/score";
 import { EncounterScoreControls } from "@/components/tournaments/EncounterScoreControls";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

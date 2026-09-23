@@ -14,7 +14,7 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { DISCORD_CLIENT_ID } from "@/config/site";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
-import { ApiError, getApiErrorMessage } from "@/lib/api-error";
+import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";

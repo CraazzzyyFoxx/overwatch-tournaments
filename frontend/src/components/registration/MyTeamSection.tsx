@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { isPhaseWindowActive, isRegistrationOpen } from "@/lib/tournament-status";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { isPhaseWindowActive, isRegistrationOpen } from "@/lib/tournament/status";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
 import type { Tournament } from "@/types/tournament.types";

@@ -6,8 +6,8 @@ import { LayoutGrid, ArrowUpRight } from "lucide-react";
 
 import type { Tournament } from "@/types/tournament.types";
 import { cn, formatDateRange } from "@/lib/utils";
-import { getTournamentStatusMeta } from "@/lib/tournament-status";
-import { tournamentHref } from "@/lib/tournament-url";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { tournamentHref } from "@/lib/tournament/url";
 import { relativeTime, stageProgress } from "./tournaments-helpers";
 
 const TournamentRow = ({ tournament }: { tournament: Tournament }) => {

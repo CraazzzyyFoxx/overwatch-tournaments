@@ -1,6 +1,7 @@
 /** Shared value formatters (framework-agnostic, safe in server & client). */
 
-export const formatPercent = (value: number, digits = 0) => `${(value * 100).toFixed(digits)}%`;
+export const formatPercent = (value: number, digits = 0) =>
+  `${((Number.isFinite(value) ? value : 0) * 100).toFixed(digits)}%`;
 
 export const formatSeconds = (secondsRaw: number) => {
   const seconds = Math.max(0, Math.floor(secondsRaw));

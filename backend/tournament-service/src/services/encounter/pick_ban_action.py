@@ -31,13 +31,14 @@ from shared.models.catalog.hero import Hero
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.pick_ban import EncounterPickBanLedger, PickBanEntry, PickBanSession
 from shared.repository import (
-    EncounterMapReportRepository,
     EncounterPickBanLedgerRepository,
     EncounterRepository,
     PickBanConfigRepository,
     PickBanEntryRepository,
 )
+from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter import pick_ban_undo
+from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 
@@ -158,7 +159,8 @@ def build_unavailable_state(reason: str, *, readiness: dict[str, bool]) -> dict[
         "turn_side": None,
         "current_round": None,
         "is_complete": False,
-        "map_reports": [],
+        "games": [],
+        "series": None,
         "repeat_banned": [],
         "unique_attribute": None,
         "undo": pick_ban_undo.undo_state(None, []),
@@ -208,9 +210,10 @@ def build_pick_ban_state(
         "turn_side": turn_side,
         "current_round": engine.current_round(pool),
         "is_complete": current_step is None,
-        # Filled in by `get_pick_ban_state` for kind=map only; a hero session
-        # has no per-map results of its own to report.
-        "map_reports": [],
+        # Filled in by `get_pick_ban_state` for kind=map only: the series'
+        # positions and their accepted results. A hero session has none.
+        "games": [],
+        "series": None,
         # Filled in below by `get_pick_ban_state` when the config remembers bans
         # per side (`no_repeat_scope=encounter_same_side`) -- see there.
         "repeat_banned": [],
@@ -331,14 +334,14 @@ class PickBanActionService:
         config_repo: PickBanConfigRepository = PickBanConfigRepository(),
         ledger_repo: EncounterPickBanLedgerRepository = EncounterPickBanLedgerRepository(),
         encounter_repo: EncounterRepository = EncounterRepository(),
-        map_report_repo: EncounterMapReportRepository = EncounterMapReportRepository(),
+        games: EncounterGameService = encounter_game_service,
         sessions: PickBanSessionService = pick_ban_session_service,
     ) -> None:
         self.entry_repo = entry_repo
         self.config_repo = config_repo
         self.ledger_repo = ledger_repo
         self.encounter_repo = encounter_repo
-        self.map_report_repo = map_report_repo
+        self.games = games
         self.sessions = sessions
 
     async def _load_pool(self, session: AsyncSession, pick_ban_id: int, *, refresh: bool = False) -> list[PickBanEntry]:
@@ -415,6 +418,12 @@ class PickBanActionService:
         if engine.get_current_step(pick_ban.resolved_sequence_json, pool) is None:
             pick_ban.status = MapVetoSessionStatus.COMPLETED.value
 
+        if kind == PickBanKind.MAP:
+            # The decider IS a pick: the position it settled becomes a game now,
+            # not on whatever read happens to come next.
+            encounter = await self.encounter_repo.get(session, encounter_id)
+            if encounter is not None:
+                await self.games.sync_games_with_picks(session, encounter, pick_ban)
         await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
         await session.refresh(entry)
@@ -585,38 +594,39 @@ class PickBanActionService:
             )
         )
 
-    async def _map_reports(self, session: AsyncSession, encounter: Encounter) -> list[dict[str, Any]]:
-        """Every per-map result claim filed for this encounter, as
-        ``{map_id, map_index, side, home_score, away_score}``.
+    async def _series_state(
+        self, session: AsyncSession, encounter: Encounter, pick_ban: PickBanSession | None
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """The series' positions and its live score, as the room renders them.
 
-        ``map_index`` is the map's 1-based position in the series, which is what the
-        room matches a claim against -- a series may play the same map twice, and
-        keying on ``map_id`` alone showed the earlier play's claims on the later one.
+        Read by the loop's third phase (map picked -> heroes banned -> map
+        played and reported -> next map): a position carries its own state and
+        both captains' claims, which is what tells "waiting on the opponent"
+        from "both agreed" from "the two disagree". ``submit_map_report``'s
+        return value only ever reaches the captain who filed it.
 
-        Read by the room's per-map result step, which is the loop's third phase
-        (map picked -> heroes banned -> map played and reported -> next map): it
-        needs to tell "waiting on the opponent" from "both agreed" from "the two
-        disagree", and ``submit_map_report``'s own return value only ever reaches
-        the captain who filed it, only until they reload.
+        With a map session the picks own the positions; without one (freeplay,
+        or a room that never opened) exactly one position is offered at a time --
+        but only for a room that can actually be played. A preview bracket, or an
+        encounter whose slots are still waiting on an upstream result, has no
+        series to open: creating its position on a mere READ wrote an
+        ``encounter_game`` row for a matchup that may never exist.
         """
-        reports: list[dict[str, Any]] = []
-        for row in await self.map_report_repo.list_for_encounter(session, encounter.id):
-            if row.team_id == encounter.home_team_id:
-                side = MapPickSide.HOME.value
-            elif row.team_id == encounter.away_team_id:
-                side = MapPickSide.AWAY.value
-            else:
-                continue  # filed by a team this encounter no longer has assigned
-            reports.append(
-                {
-                    "map_id": row.map_id,
-                    "map_index": row.map_index,
-                    "side": side,
-                    "home_score": row.home_score,
-                    "away_score": row.away_score,
-                }
-            )
-        return reports
+        if pick_ban is not None:
+            games = await self.games.sync_games_with_picks(session, encounter, pick_ban)
+        else:
+            if (
+                encounter.home_team_id is not None
+                and encounter.away_team_id is not None
+                and await is_encounter_live(session, encounter)
+            ):
+                await self.games.ensure_freeplay_game(session, encounter)
+            games = await self.games.list_games(session, encounter.id)
+        reports = await self.games.reports_by_game(session, games)
+        return (
+            [self.games.serialize(game, reports.get(game.id, [])) for game in games],
+            self.games.serialize_series(encounter, games),
+        )
 
     async def get_pick_ban_state(
         self,
@@ -644,7 +654,7 @@ class PickBanActionService:
             reason = await self.sessions.unavailable_reason(session, encounter, kind)
             state = build_unavailable_state(reason, readiness=readiness)
             if kind == PickBanKind.MAP:
-                state["map_reports"] = await self._map_reports(session, encounter)
+                state["games"], state["series"] = await self._series_state(session, encounter, None)
             return state
 
         config = await self.config_repo.get(session, pick_ban.config_id) if pick_ban.config_id else None
@@ -658,7 +668,7 @@ class PickBanActionService:
             unique_attribute=config.unique_attribute_per_side_per_round if config is not None else None,
         )
         if kind == PickBanKind.MAP:
-            state["map_reports"] = await self._map_reports(session, encounter)
+            state["games"], state["series"] = await self._series_state(session, encounter, pick_ban)
         if (
             config is not None
             and config.no_repeat_scope == PickBanNoRepeatScope.ENCOUNTER_SAME_SIDE
@@ -745,6 +755,13 @@ class PickBanActionService:
         # action (e.g. the last ban of a Bo1 round leaving exactly one item)
         # without a second client round-trip. Mirrors map_veto.perform_veto_action.
         await self.auto_complete_decider(session, encounter_id, kind, pick_ban=pick_ban, pool=pool)
+        if kind == PickBanKind.MAP and action == "pick":
+            # A pick names a position's map, so its game appears with the action
+            # rather than on whatever read comes next.
+            encounter = await self.encounter_repo.get(session, encounter_id)
+            if encounter is not None:
+                await self.games.sync_games_with_picks(session, encounter, pick_ban)
+                await session.commit()
         return entry
 
 

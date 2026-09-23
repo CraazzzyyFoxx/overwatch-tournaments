@@ -32,7 +32,9 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | **Bracket** | The elimination tree, single or double. |
 | **Encounter** | One meeting between two teams — the best-of series, `tournament.encounter`. |
 | **Encounter link** | An explicit advancement edge: the winner (or loser) of one encounter feeds a named slot of another. The bracket is these edges, not an implied tree shape. |
-| **Match** | One played map inside an encounter, `matches.match`. An encounter of best-of-3 has up to three matches. |
+| **Encounter game** | One position in the series — `tournament.encounter_game`. Owns the map for that position and the accepted result: `state` (`planned`, `awaiting_result`, `disputed`, `confirmed`, `cancelled`), the accepted home/away score, and `result_source` (`captain_agreement`, `admin`, `admin_log`). The series score is wins over confirmed, non-cancelled games; a game — not a `Match` — is the unit of result authority. |
+| **Encounter map report** | One side's claim about one game — `tournament.encounter_map_report`, at most one row per game per side (`home`/`away`). Two matching claims confirm the game with `result_source = captain_agreement`; two conflicting claims put it in `disputed` for an admin. A claim against a confirmed game is rejected (`result_locked`); changing that result is the admin correction command, which requires a reason. |
+| **Match** | The parsed-log record of one played map, `matches.match` — the carrier of statistics, not of the result. Captain reports no longer write `Match` rows; a match row comes from a parsed match log. Until Vertical 3 it keeps `source`, `encounter_id`, and `map_index` for the historical encounters that predate encounter games. |
 | **Standings** | The computed table for a stage: points, tiebreakers (Buchholz, head-to-head), placement. |
 | **Seed / seeding** | A team's ordering going into a stage; also the input to first-ban rules in map veto. |
 

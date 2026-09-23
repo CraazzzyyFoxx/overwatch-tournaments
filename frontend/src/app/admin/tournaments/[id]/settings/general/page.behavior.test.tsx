@@ -21,7 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Tournament } from "@/types/tournament.types";
-import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import GeneralSettingsPage from "./page";
 
 declare global {

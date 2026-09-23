@@ -36,10 +36,11 @@ from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from src import models
 from src.core import auth
-from src.rpc._helpers import _identity, _payload, _require_id, _run
+from src.rpc._helpers import _identity, _path_int, _payload, _require_id, _run
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter import pick_ban_config
 from src.services.encounter import pick_ban_session as pick_ban_session
+from src.services.encounter.game_correction import game_correction_service
 
 _CONFIG_LOAD = (
     selectinload(PickBanConfig.items),
@@ -49,7 +50,22 @@ _serialize_config = pick_ban_session.serialize_pick_ban_config
 
 
 async def _load_encounter(session: Any, encounter_id: int) -> models.Encounter:
-    encounter = await session.scalar(select(models.Encounter).where(models.Encounter.id == encounter_id))
+    """Load the encounter under ``FOR UPDATE``.
+
+    Every admin handler here mutates the live session or a game result, and the
+    game-result path re-derives the encounter score from its games -- so it takes
+    the same Encounter -> Game lock order the captain path uses (spec §7). Without
+    it a concurrent captain claim and an admin correction can each materialise a
+    score from a stale read. ``populate_existing`` rides along: a row already in
+    the identity map would otherwise be served at the version this session first
+    saw, defeating the lock.
+    """
+    encounter = await session.scalar(
+        select(models.Encounter)
+        .where(models.Encounter.id == encounter_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if encounter is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
     return encounter
@@ -80,6 +96,16 @@ class PickBanAdminElectOpener(BaseModel):
 
     kind: PickBanKind
     first_side: Literal["home", "away"]
+
+
+class AdminGameResultInput(BaseModel):
+    """Body for the admin game-result correction: the position's score as the
+    organizer decides it, plus the reason that goes into the audit journal (a
+    correction is never anonymous -- spec §6.5)."""
+
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class PickBanConfigSlotUpsert(BaseModel):
@@ -332,6 +358,45 @@ def register(broker: Any, logger: Any) -> None:
             )
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
                 session, encounter_id, body.kind, viewer_side=None
+            )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_game_result")
+    async def _admin_game_result(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            game_id = _path_int(data, "game_id")
+            body = AdminGameResultInput.model_validate(_payload(data))
+            encounter = await _load_encounter(session, encounter_id)
+            await record_admin_audit(
+                session,
+                action="encounter.game_result",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter.id,
+                after={
+                    "game_id": game_id,
+                    "home_score": body.home_score,
+                    "away_score": body.away_score,
+                    "reason": body.reason,
+                },
+            )
+            # Commits internally (the accepted score, the live series score and
+            # any rebuilt round land together).
+            return await game_correction_service.correct(
+                session,
+                encounter,
+                game_id=game_id,
+                home_score=body.home_score,
+                away_score=body.away_score,
+                actor_user_id=user.id,
+                reason=body.reason,
             )
 
         return await _run(logger, op)

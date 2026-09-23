@@ -26,7 +26,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { stageRoundShape } from "@/lib/bracket-view";
+import { stageRoundShape } from "@/lib/bracket/view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import type {
@@ -67,7 +67,7 @@ import {
   type PickBanStepAction,
   type PickBanStepSide,
   type SeriesLength
-} from "@/lib/pick-ban-config";
+} from "@/lib/tournament/pick-ban-config";
 import { CatalogueChips, CataloguePicker, type CatalogueItem } from "./CataloguePicker";
 import {
   PRE_GAME_STEPS,

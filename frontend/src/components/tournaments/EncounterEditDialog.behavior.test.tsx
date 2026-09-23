@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Real copy: these assertions are about the label an admin reads in the status
 // field, so an empty message set would only verify missing-message fallbacks.
 import messages from "@/i18n/messages/en.json";
-import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import type { Encounter } from "@/types/encounter.types";
 

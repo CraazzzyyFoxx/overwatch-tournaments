@@ -13,7 +13,7 @@ from unittest import TestCase
 
 from pydantic import ValidationError
 
-from shared.schemas.events import DiscordCommandEvent
+from shared.schemas.events import DiscordCard, DiscordCommandEvent
 
 
 class DiscordCommandEventTests(TestCase):
@@ -55,11 +55,34 @@ class DiscordCommandEventTests(TestCase):
         self.assertIsNone(event.embed)
 
     def test_post_message_requires_content_embed_or_image(self) -> None:
-        with self.assertRaises(ValidationError) as ctx:
+        with self.assertRaises(ValidationError):
             DiscordCommandEvent(action="post_message", channel_id=123)
-        self.assertIn("content, embed or image_b64 is required for action='post_message'", str(ctx.exception))
 
     def test_post_message_requires_channel(self) -> None:
         with self.assertRaises(ValidationError) as ctx:
             DiscordCommandEvent(action="post_message", content="hello")
         self.assertIn("channel_id is required for action='post_message'", str(ctx.exception))
+
+    def test_send_dm_requires_a_user_and_something_to_say(self) -> None:
+        event = DiscordCommandEvent(action="send_dm", discord_user_id=42, embed={"title": "Check-in"})
+        self.assertEqual(event.discord_user_id, 42)
+
+        with self.assertRaises(ValidationError) as ctx:
+            DiscordCommandEvent(action="send_dm", content="hello")
+        self.assertIn("discord_user_id is required for action='send_dm'", str(ctx.exception))
+
+        with self.assertRaises(ValidationError):
+            DiscordCommandEvent(action="send_dm", discord_user_id=42)
+
+    def test_a_card_travels_alone(self) -> None:
+        """Discord answers 400 to a Components V2 message that also has content or embeds."""
+        card = DiscordCard(text="### Check-in opened")
+        self.assertEqual(DiscordCommandEvent(action="send_dm", discord_user_id=42, card=card).card, card)
+
+        for extra in ({"content": "hi"}, {"embed": {"title": "x"}}, {"image_b64": "iVBORw0KGgo="}):
+            with self.assertRaises(ValidationError, msg=extra):
+                DiscordCommandEvent(action="post_message", channel_id=1, card=card, **extra)
+
+    def test_mentions_stay_allowed_unless_the_publisher_opts_out(self) -> None:
+        # The balancer's mix posts predate the flag and keep their behaviour.
+        self.assertTrue(DiscordCommandEvent(action="post_message", channel_id=1, content="x").allow_mentions)

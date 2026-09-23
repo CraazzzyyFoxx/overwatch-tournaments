@@ -20,9 +20,9 @@ import { Input } from "@/components/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
+import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { notify } from "@/lib/notify";
-import { ROLES, ROLE_LABELS } from "@/lib/roles";
+import { ROLES, ROLE_LABELS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { CustomGamePlayer } from "@/services/custom-game.service";
 import {

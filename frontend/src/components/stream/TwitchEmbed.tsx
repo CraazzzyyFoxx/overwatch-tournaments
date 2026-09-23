@@ -57,7 +57,7 @@ const serverHostname = () => null;
  *    platform apex, so on a tenant's custom domain it would not match and the
  *    player would silently refuse. Do not "simplify" this to a build-time env
  *    var, or the feature dies for every custom-domain tenant.
- *  - Normalised exactly like `resolveHost` (`@/lib/host`): lowercased with the
+ *  - Normalised exactly like `resolveHost` (`@/lib/site/host`): lowercased with the
  *    port stripped, because Twitch rejects a `parent` that carries a port.
  *  - Read AFTER mount. The server has no hostname, so the player is not
  *    rendered at all during SSR/first paint — a frame emitted with a guessed

@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { authService } from "@/services/auth.service";
-import { getTokenMaxAgeSeconds } from "@/lib/jwt";
+import { getTokenMaxAgeSeconds } from "@/lib/auth/jwt";
 import {
   FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS,
   REFRESH_COOKIE_MAX_AGE_SECONDS,
-  GUARD_COOKIE,
   clearGuardCookie,
   guardTicketErrorRedirect,
   safeRedirectTarget
-} from "@/lib/oauth-callback";
-import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth-cookies";
-import { publicOrigin } from "@/lib/request-origin";
+} from "@/lib/auth/oauth-callback";
+import { ACCESS_TOKEN_COOKIE, GUARD_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth/cookie-names";
+import { publicOrigin } from "@/lib/site/request-origin";
 
 const IS_PROD = process.env.NODE_ENV === "production";
 
@@ -29,7 +28,7 @@ const IS_PROD = process.env.NODE_ENV === "production";
 // platform's point of view — the browser would reject a cross-domain
 // `Set-Cookie` anyway, and a host-only cookie is the correct scope regardless.
 // GUARD_COOKIE (read below, cleared via clearGuardCookie) follows the same
-// host-only rule -- see lib/oauth-callback.ts for the shared definition and
+// host-only rule -- see lib/auth/oauth-callback.ts for the shared definition and
 // clear helper, which /auth/link/complete/route.ts also uses.
 
 export async function GET(request: Request) {

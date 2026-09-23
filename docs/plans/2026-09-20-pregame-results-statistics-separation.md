@@ -1,5 +1,5 @@
 # Pick/ban, результаты серии и независимая статистика игр
-**Status:** draft
+**Status:** draft — revised 2026-09-22 after review against HEAD `8c8af02a` (v1.15.5)
 
 ## 1. Назначение и статус решений
 
@@ -10,6 +10,10 @@
 Документ объединяет и уточняет [generic pick/ban](2026-08-09-generic-pickban-engine.md) и [предварительное отделение статистики](2026-09-13-decouple-stats-from-tournament.md). После утверждения для этой задачи приоритет имеют решения ниже. Старые документы сохраняются как история, а не как параллельные требования.
 
 Из предварительного плана НЕ переносится подход «остановиться после запрета parser-событий»: он не убирает обязательные FK на Encounter/Team. Также не переносится создание Match для scrim-отчёта без лога: такой результат принадлежит EncounterGame. Терминология действующей системы описана в [glossary](../glossary.md); новые термины ниже становятся evergreen-документацией только после реализации.
+
+Параллельный документ [multi-discipline stats engine](2026-09-20-multi-discipline-stats-engine.md) того же дня описывает ту же границу с другой стороны: словарь дисциплин/ролей, реестр парсеров, транспортный namespace `rpc.stats.*`; в своём §11 он откладывает «`Match.encounter_id` nullable, субъект статистики = `workspace_member`» до фаз 2–3 старого плана. Разграничение владения после утверждения обоих: форма данных `matches.*`, `encounter_game`, `encounter_game_log`, authority результата карты и ACL статистики определяются здесь; словарь дисциплин, `catalog.*`, `player.role` и имена очередей — там. Его B1 («parser перестаёт писать состояние серии») и §8.3 здесь — одно изменение; кто приземляется первым, на того ссылается второй. Совместимость: `Match`/`participant` не получают `discipline_id` — дисциплина unattached-записи разрешается его же резолвером через `workspace.default_discipline_id`; HTTP-пути и схемы этого документа не зависят от того, называется очередь `rpc.parser.*` или `rpc.stats.*`. «Нет stats-микросервиса» ниже означает отсутствие новой БД и нового артефакта с собственным хранилищем, а не запрет второго процесса того же пакета.
+
+С первой редакции чистые правила veto уже переехали в `shared/domain/pick_ban_engine.py` (ed74a93e), а pregame-комната получила общий [RoomChat](2026-09-21-shared-room-chat.md); §2, §11 и §12 учитывают оба факта.
 
 ## 2. Основания: что обнаружено в текущей системе
 
@@ -27,6 +31,13 @@
 | Parser публикует standings-invalidated и повторный encounter-completed | flows.py, _enqueue_match_log_tournament_events | События статистики выдаются за события турнирного результата; это не доказательство прямой записи parser в поля счёта |
 | Raw ML features проходят через Encounter, Tournament и Player | [extractors.py](../../backend/analytics-service/src/services/ml/features/extractors.py), extract_match_features | Отсутствие турнирного ростера отбрасывает реально сыгравшего участника |
 | Frontend самостоятельно соединяет Match, pool и claims | [PregameRoom.tsx](../../frontend/src/app/%28site%29/tournaments/%5Bslug%5D/pregame/%5BencounterId%5D/_components/PregameRoom.tsx), [pick-ban-model.ts](../../frontend/src/components/pick-ban/pick-ban-model.ts) | Фазы и источник результата определяются повторно на клиенте |
+| `Encounter.has_logs` — `column_property` EXISTS над matches.match по `encounter_id` и `source=log_parser` | match.py, `Encounter.has_logs`; читатели: tournament `encounter/service.py` (`_apply_encounter_filters`, сортировка `get_all_encounters`, `get_overview_data`), app-service `dashboard/service.py`, `dashboard/readiness.py`, `user/queries/encounters.py`; схема `EncounterRead` в tournament/parser/app | Удаление `encounter_id` и `source` из Match ломает выражение; признак «есть лог» нуждается в новом источнике |
+| Истечение хода разрешается только внутри `get_pick_ban_pool`; других вызовов `auto_resolve_timeout` нет | pick_ban_action.py, get_pick_ban_pool | Без читателя ход не истекает; APScheduler-воркер в tournament-service уже есть ([serve.py](../../backend/tournament-service/serve.py), `start_worker`) — нужен только новый job |
+| `WorkspaceMember.player_id → players.user` ON DELETE CASCADE; есть `UNIQUE(id, workspace_id)` | [workspace.py](../../backend/shared/models/tenancy/workspace.py), WorkspaceMember | Составной FK участника реализуем без новой родительской уникальности; удаление игрового профиля потянуло бы участия — правило удаления `participant` обязано быть явным |
+| user_merge перевешивает `user_id` в statistics/kill_feed/event списком колонок | [user_merge.py](../../backend/app-service/src/services/admin/user_merge.py), module-level список | После cutover перевешивается `participant.workspace_member_id`, с обработкой коллизии UNIQUE |
+| Achievements имеют grain `user_encounter` рядом с `user_match` | [achievement_validation.py](../../backend/parser-service/src/domain/achievement_validation.py), GRAIN_ARITY | Серийный grain — competitive, ключ по Encounter; статистическое отделение его не меняет |
+| Чистые правила уже в `shared/domain/pick_ban_engine.py` (5 импортёров) | commit ed74a93e | Повторный перенос не нужен |
+| Pregame-комната рендерит `RoomChat`; доступ — `encounter/chat_access.py` | PregameRoom.tsx | Чат — отдельный контракт, не часть pregame read-model |
 
 ### Проверенные сценарии review
 
@@ -105,6 +116,144 @@ Rules:
 4. Analytics может потреблять оба read-контракта, но raw extraction не требует successful JOIN с турнирным ростером.
 5. Shared ORM остаётся в shared/models; следуем [пяти слоям backend](../../backend/ARCHITECTURE.md). Не создаём таблицы в сервисных src/models.
 
+### 4.1. Карта таблиц
+
+Три контура и один мост. Ребро — FK child → parent; суффикс `_NEW`/`_CHG` — новая/изменённая таблица, остальное без изменений схемы.
+
+```mermaid
+erDiagram
+  WORKSPACE ||--o{ WORKSPACE_MEMBER : "workspace_id"
+  PLAYERS_USER ||--o{ WORKSPACE_MEMBER : "player_id"
+  WORKSPACE ||--o{ TOURNAMENT : "workspace_id"
+  TOURNAMENT ||--o{ TEAM : "tournament_id"
+  TOURNAMENT ||--o{ ENCOUNTER : "tournament_id"
+  TEAM ||--o{ PLAYER : "roster"
+  WORKSPACE_MEMBER ||--o{ PLAYER : "workspace_member_id"
+  TEAM |o--o{ ENCOUNTER : "home / away"
+  ENCOUNTER ||--o{ ENCOUNTER_GAME_NEW : "position"
+  CATALOG_MAP |o--o{ ENCOUNTER_GAME_NEW : "map_id RESTRICT"
+  ENCOUNTER_GAME_NEW ||--o{ ENCOUNTER_MAP_REPORT_CHG : "side"
+  ENCOUNTER ||--o{ ENCOUNTER_CAPTAIN_REPORT : "series claim"
+  ENCOUNTER ||--o{ ENCOUNTER_RESULT_AUDIT : "decisions"
+  ENCOUNTER ||--o{ ENCOUNTER_READINESS : "side"
+  ENCOUNTER ||--o{ PICK_BAN_SESSION_CHG : "kind"
+  PICK_BAN_CONFIG |o--o{ PICK_BAN_SESSION_CHG : "provenance"
+  PICK_BAN_SESSION_CHG ||--o{ PICK_BAN_ROUND_NEW : "number"
+  PICK_BAN_ROUND_NEW ||--o{ PICK_BAN_ENTRY_CHG : "candidates"
+  PICK_BAN_ROUND_NEW ||--o{ ENCOUNTER_PICK_BAN_LEDGER_CHG : "bans"
+  ENCOUNTER_GAME_NEW ||--o| ENCOUNTER_GAME_LOG_NEW : "game_id PK"
+  MATCH_CHG ||--o| ENCOUNTER_GAME_LOG_NEW : "match_id UNIQUE"
+  WORKSPACE ||--o{ LOG_PROCESSING_RECORD_CHG : "owner"
+  WORKSPACE ||--o{ MATCH_CHG : "workspace_id"
+  LOG_PROCESSING_RECORD_CHG |o--o{ MATCH_CHG : "log_record_id"
+  CATALOG_MAP ||--o{ MATCH_CHG : "map_id"
+  MATCH_CHG ||--o{ MATCH_PARTICIPANT_NEW : "side"
+  WORKSPACE_MEMBER ||--o{ MATCH_PARTICIPANT_NEW : "RESTRICT"
+  MATCH_PARTICIPANT_NEW ||--o{ MATCH_STATISTICS_CHG : "participant_id"
+  MATCH_PARTICIPANT_NEW ||--o{ MATCH_KILL_FEED_CHG : "killer / victim"
+  MATCH_PARTICIPANT_NEW ||--o{ MATCH_EVENT_CHG : "actor / related"
+  CATALOG_HERO |o--o{ MATCH_STATISTICS_CHG : "hero_id"
+  WORKSPACE_MEMBER ||--o{ ACHIEVEMENT_EVALUATION_RESULT : "subject"
+```
+
+### 4.2. Три контура и мост
+
+**Соревновательный контур** (`tournament.*`): Tournament → Stage → Encounter → EncounterGame. Team и Player — ростер; Encounter ссылается на две Team (home/away, nullable до жеребьёвки). Официальный результат карты — `encounter_game.accepted_*`; счёт серии до финализации — материализованное число побед по `confirmed` играм в `encounter.home_score/away_score`; официальный итог серии — `encounter.result_status/confirmed_at` плюс `encounter_result_audit`. Ни одна таблица контура не ссылается на `matches.*`.
+
+**Veto-контур** (`tournament.pick_ban_*`, `encounter_readiness`): одна PickBanSession на (Encounter, kind) среди не-cancelled; внутри — PickBanRound по номеру; внутри раунда — PickBanEntry-кандидаты; ledger банов — на session/round. Связь с играми — по номеру, не по FK: slot map round N и hero round N обслуживают `encounter_game.position = N`; flat map veto — один round, порождающий несколько игр по порядку picks/decider. Игра создаётся координатором как результат раунда, а не раунд — как свойство игры.
+
+**Статистический контур** (`log_processing.*`, `matches.*`): Workspace владеет записью лога и Match; Match → MatchParticipant (сторона + WorkspaceMember) → facts. Ни одна таблица контура не ссылается на `tournament.*`; сторона факта — `participant.side` в ориентации ЛОГА.
+
+**Мост**: единственная таблица `encounter_game_log` (game_id PK, match_id UNIQUE, orientation). Nullable контекст в `achievement_evaluation_result` (tournament_id/encounter_id/match_id) и competitive FK в `analytics.*` — проекции над обоими контурами, не raw facts, и мостом не считаются.
+
+### 4.3. Связи, кардинальности и правила удаления
+
+| Связь (child → parent) | Кардинальность / уникальность | ON DELETE | Почему |
+| --- | --- | --- | --- |
+| encounter_game.encounter_id → encounter | N:1; partial UNIQUE(encounter_id, position) WHERE state != cancelled | CASCADE | игра — часть серии; вместе с ней уходит attachment, но не Match |
+| encounter_game.map_id → catalog map | N:1, nullable до выбора | RESTRICT | карту каталога нельзя удалить, оставив игру без идентичности |
+| encounter_map_report.game_id → encounter_game | N:1; UNIQUE(game_id, side) — не более двух claims | CASCADE | claim без игры бессмыслен |
+| encounter_map_report.reporter_user_id → players.user | N:1 nullable | SET NULL | provenance, не ключ результата (как сейчас) |
+| pick_ban_session.encounter_id → encounter | N:1; partial UNIQUE(encounter_id, kind) WHERE status != cancelled | CASCADE | сессия живёт с серией |
+| pick_ban_session.config_id → pick_ban_config | N:1 nullable | SET NULL | исполняется snapshot, config — происхождение |
+| pick_ban_round.session_id → pick_ban_session | N:1; partial UNIQUE(session_id, number) WHERE state != cancelled; ≤1 waiting_opener/active | CASCADE | раунд — блок сессии |
+| pick_ban_entry.round_id → pick_ban_round | N:1; UNIQUE(round_id, item_id); partial UNIQUE(round_id, action_index) | CASCADE | кандидат принадлежит раунду |
+| encounter_pick_ban_ledger.session_id / round_id | N:1; UNIQUE(session_id, item_id, banned_by_side) | CASCADE | память банов — свойство сессии; отменённая сессия не влияет на новую |
+| encounter_readiness.encounter_id → encounter | N:1; UNIQUE(encounter_id, side) | CASCADE | без изменений |
+| encounter_game_log.game_id → encounter_game | 1:0..1 (PK) | CASCADE | удаление игры/серии/турнира снимает только привязку |
+| encounter_game_log.match_id → match | 1:0..1 (UNIQUE) | CASCADE | удаление Match снимает привязку; accepted score игры не пересчитывается |
+| match.workspace_id → workspace | N:1; UNIQUE(id, workspace_id) как parent key | CASCADE | workspace — граница владения, как сегодня у tournament |
+| match.map_id → catalog map | N:1 | RESTRICT (сейчас CASCADE) | удаление карты каталога не должно стирать статистику |
+| match.log_record_id → log_processing.record | N:1 nullable | SET NULL | очистка истории обработки не удаляет Match (как сейчас) |
+| match.created_by_auth_user_id → auth user | N:1 nullable | SET NULL | доступ к unattached записи; NULL = admin-only |
+| match_participant.match_id → match | N:1; UNIQUE(match_id, workspace_member_id, side); UNIQUE(match_id, id) | CASCADE | участие — часть записи |
+| match_participant.workspace_member_id → workspace_member | N:1 | RESTRICT | §5.5: удаление/merge профиля перевешивает участия явно |
+| match_participant (match_id, workspace_id) → match (id, workspace_id) | составной | — | один workspace у записи и участника |
+| match_participant (workspace_member_id, workspace_id) → workspace_member (id, workspace_id) | составной; parent key уже есть | — | участник из своего workspace |
+| statistics (match_id, participant_id) → participant (match_id, id) | N:1 составной | CASCADE | участник чужого Match не подмешивается |
+| kill_feed (match_id, killer_participant_id) и (match_id, victim_participant_id) → participant | N:1 составной ×2 | CASCADE | то же |
+| event (match_id, participant_id) и (match_id, related_participant_id nullable) → participant | N:1 составной ×2 | CASCADE | то же |
+| statistics/kill_feed/event.*hero_id → catalog hero | N:1 | как сейчас | каталог |
+| log_processing.record.workspace_id → workspace | N:1 NOT NULL | CASCADE | владелец файла |
+| log_processing.record.tournament_id → tournament | N:1 nullable | SET NULL (сейчас NOT NULL CASCADE) | import hint, не owner и не ACL |
+| log_processing.record.requested_game_id → encounter_game | N:1 nullable | SET NULL | запрос привязки, не действующая связь |
+| log_processing.record.uploader_id → players.user | N:1 nullable | SET NULL | без изменений |
+| achievement_evaluation_result.{tournament_id, encounter_id, match_id} | nullable контекст | без изменений | проекция, не raw fact |
+| analytics.* → tournament.* | competitive FK | без изменений | жизненный цикл проекции = турнир |
+
+### 4.4. Путь данных через модели
+
+Результат карты без лога:
+
+1. Ready обеих сторон → snapshot → `pick_ban_session(map)` и `pick_ban_round(1)`.
+2. Раунд завершён → координатор пишет `encounter_game(position, map_id, state=selected)`, открывает hero round этой позиции (если настроен), затем `awaiting_result`.
+3. Claim капитана → `encounter_map_report(game_id, side)`; второй claim → reconcile → `encounter_game.accepted_*`, `result_source=captain_agreement`, `state=confirmed`, `result_version+1`; `encounter.pregame_version+1`; `encounter.home_score/away_score` пересчитываются как число побед по confirmed играм.
+4. Confirmed outcome (home/away/draw) уходит в следующий Round как вход rotation; при `floor(best_of/2)+1` побед или исчерпании позиций — `series_complete`; официальный finalize — отдельная команда существующего пути.
+
+Лог → статистика → (опционально) evidence:
+
+1. Upload в workspace → `log_processing.record(workspace_id, object_key, content_hash, tournament_id hint, requested_game_id?)`.
+2. Parser → `match(workspace_id, map_id, observed score, stats_revision)` + `participant` по фактически присутствовавшим + facts, одной транзакцией; outbox `match.parsed`.
+3. Integration-шаг: при указанном `requested_game_id` или однозначной подсказке и наличии прав — `encounter_game_log(game_id, match_id, orientation)`; иначе Match остаётся unattached. Ошибка привязки не откатывает п. 2.
+4. Наличие строки `encounter_game_log` — единственное, что делает Match видимым через турнир: `has_logs`, публичные страницы серии, competitive context, achievements scope=competitive, public aggregates.
+
+Что джойнят read-модули, и только они: Game ⟷ Match через `encounter_game_log`; participant → workspace_member → players.user (публичный player_id); participant → tournament.player (roster context) по `workspace_member_id` и стороне после orientation; отсутствующий Player — отсутствующий контекст, не ошибка и не отбрасывание факта.
+
+### 4.5. Текущие модели → целевые
+
+| Сегодня | Целевое | Статус |
+| --- | --- | --- |
+| `matches.match.encounter_id`, `home_team_id`, `away_team_id` (FK tournament.*) | удалены; серия — через `encounter_game_log` | CHG |
+| `matches.match.map_index` | удалён; позиция — `encounter_game.position` | CHG |
+| `matches.match.source` (log_parser/captain_report) | удалён; captain-only строки мигрируют в `encounter_game` (§13B) | CHG |
+| `matches.match.{map_id, home_score, away_score, time, log_name, code, log_record_id}` | сохраняются; score/стороны — ориентация лога | — |
+| — | `matches.match.{workspace_id NOT NULL, stats_revision bigint, created_by_auth_user_id}`; `UNIQUE(id, workspace_id)` | NEW cols |
+| `matches.statistics.{team_id, user_id}` | `participant_id` (составной FK); индексы `ix_match_statistics_user_*` перестраиваются по `participant_id`; player-history — через `participant(workspace_member_id, match_id)` | CHG |
+| `matches.kill_feed.{killer_id, killer_team_id, victim_id, victim_team_id}` | `killer_participant_id`, `victim_participant_id` | CHG |
+| `matches.event.{team_id, user_id, related_team_id, related_user_id}` | `participant_id`, `related_participant_id` | CHG |
+| — | `matches.participant` | NEW |
+| `matches.stat_baselines` | без изменений | — |
+| `mv_hero_global_stats` | пересоздаётся с public-inclusion predicate (attached, non-scrim, разрешённый турнир) | CHG |
+| `Encounter.has_logs` = EXISTS(match by encounter_id, source=log_parser) | EXISTS(`encounter_game_log` ⋈ `encounter_game` by encounter_id) | CHG |
+| `Encounter.matches` relationship | удаляется; join — в integration read-модуле | DEL |
+| `Encounter.home_score/away_score` | до finalize — число побед по confirmed games; после — официальный итог (как сейчас) | семантика |
+| `Encounter.current_map_index` | без изменений: ручной admin-маркер live, не проекция Game | — |
+| — | `Encounter.pregame_version bigint` | NEW col |
+| `tournament.encounter_map_report(encounter_id, map_id, map_index, team_id)` | `(game_id, side)`, UNIQUE(game_id, side); `reporter_user_id` и scores сохраняются | CHG |
+| `tournament.encounter_captain_report` (серия целиком) | без изменений | — |
+| `tournament.encounter_result_audit` | без изменений таблицы; payload коррекций несёт game_id/result_version | — |
+| `pick_ban_session.{first_side, awaiting_choice, pending_loser_side, undo_requested_by, undo_target_index, current_step_started_at, resolved_sequence_json}` | переезжают в `pick_ban_round` как `opener_side, state=waiting_opener, pending_chooser_side, undo_*, deadline_at, resolved_sequence_json` | CHG |
+| — | `pick_ban_session.{rules_snapshot_json, snapshot_schema_version, initial_first_side}`; UNIQUE(encounter_id, kind) → partial по status | NEW cols |
+| `pick_ban_entry.round` (int), `team_id`, status `PLAYED` | `round_id` FK; `team_id` удалён; `PLAYED` удалён — сыграна Game | CHG |
+| `encounter_pick_ban_ledger(encounter_id, kind, …)` | `(session_id, round_id, …)` | CHG |
+| `encounter_readiness` | без изменений | — |
+| — | `tournament.encounter_game`, `tournament.encounter_game_log`, `tournament.pick_ban_round` | NEW |
+| `log_processing.record.tournament_id NOT NULL`, `attached_encounter_id`, ключ = tournament_id+filename | `workspace_id NOT NULL`, `tournament_id` nullable hint, `requested_game_id`, `object_key`, partial UNIQUE(workspace_id, content_hash) | CHG |
+| `WorkspaceMember` | без изменений; статистический субъект | — |
+| `tournament.player` (role/rank/substitution, `workspace_member_id`) | без изменений; roster context для competitive read-модуля | — |
+| `achievements.achievement_evaluation_result` | без изменений | — |
+| таблица `analytics.match_quality` / код `AnalyticsMatchQuality` | таблица без изменений; код/контракт → EncounterQuality | код |
+
 ## 5. Целевые данные и инварианты
 
 Ниже — логическая схема для миграций. Идентификаторы используют принятый в проекте тип соответствующего родителя, а новые счётчики версий — bigint. Не менять все PK проекта ради этой задачи. Времена — timestamptz; score/count/index — целые с CHECK неотрицательности/положительности; state/kind — существующие enum либо ограниченный enum нового домена, не произвольные строки.
@@ -137,9 +286,9 @@ Encounter получает pregame_version. Любая видимая мутац
 
 PickBanSession: id, encounter_id, kind, config_id nullable только provenance, rules_snapshot_json, snapshot_schema_version, исходные seeds/initial_first_side, status(active/completed/cancelled). Partial UNIQUE(encounter_id, kind) для status != cancelled. FK на Encounter остаётся интеграционной привязкой текущего продукта; pure rules его не видят. config_id SET NULL не меняет исполнение.
 
-PickBanRound: id, session_id, number >= 1, resolved_sequence_json, step_index, opener_side nullable до выбора, state(waiting_opener/active/completed/cancelled), pending_chooser_side nullable, deadline_at nullable. Partial UNIQUE(session_id, number) для state != cancelled; не более одного waiting_opener/active round на session. step_index в пределах sequence, pending chooser обязателен только для waiting_opener.
+PickBanRound: id, session_id, number >= 1, resolved_sequence_json, step_index, opener_side nullable до выбора, state(waiting_opener/active/completed/cancelled), pending_chooser_side nullable, deadline_at nullable, undo_requested_by/undo_action_index/undo_requested_version nullable (открытая заявка на undo: все три либо NULL, либо заполнены; заменяют текущие Session.undo_requested_by/undo_target_index). Partial UNIQUE(session_id, number) для state != cancelled; не более одного waiting_opener/active round на session. step_index в пределах sequence, pending chooser обязателен только для waiting_opener.
 
-PickBanEntry получает round_id; содержит item_id, стабильный display_order, status(available/banned/picked/protected), picked_by/protected_by и action_index внутри Round. UNIQUE(round_id,item_id), partial UNIQUE(round_id,action_index) для action_index IS NOT NULL. PLAYED у Entry больше нет: сыграна Game, не кандидат veto. Не удалять AVAILABLE-кандидатов закрытого раунда ради вычисления следующего — курсор и номер теперь явные.
+PickBanEntry получает round_id; содержит item_id, стабильный display_order, status(available/banned/picked/protected), picked_by/protected_by и action_index внутри Round. UNIQUE(round_id,item_id), partial UNIQUE(round_id,action_index) для action_index IS NOT NULL. PLAYED у Entry больше нет: сыграна Game, не кандидат veto. Существующий team_id (FK Team SET NULL) удаляется: сторона выражается picked_by/protected_by, команда стороны читается из Encounter. Не удалять AVAILABLE-кандидатов закрытого раунда ради вычисления следующего — курсор и номер теперь явные.
 
 Существующий ledger переводится с encounter_id/kind на session_id и ссылается на раунд. Его уникальность сохраняет запрет повторного бана стороной. No-repeat — правило набора раундов одной сессии; отменённая сессия не влияет на новую. При undo удаляется только соответствующая активная запись ledger. Защита не попадает в ban ledger.
 
@@ -159,11 +308,13 @@ PickBanEntry получает round_id; содержит item_id, стабиль
 
 ### 5.5. matches.participant — новая таблица; удаление raw-FK на Team
 
-Поля: id, match_id, workspace_id, workspace_member_id, side(home/away). UNIQUE(match_id, workspace_member_id, side). Один человек на обеих сторонах, если это действительно зафиксировано логом, — две записи участия, а не потеря части фактов.
+Поля: id, match_id (FK match ON DELETE CASCADE), workspace_id, workspace_member_id (FK workspace_member ON DELETE RESTRICT), side(home/away). UNIQUE(match_id, workspace_member_id, side); UNIQUE(match_id, id) как parent key для составных FK фактов. Один человек на обеих сторонах, если это действительно зафиксировано логом, — две записи участия, а не потеря части фактов. RESTRICT намеренно: `players.user` каскадирует в `workspace_member`, поэтому удаление или merge игрового профиля обязан сначала явно перевесить участия — как сегодня user_merge перевешивает `user_id` в трёх таблицах фактов, только теперь в одной таблице; коллизия UNIQUE при слиянии двух участников одного Match и стороны — конфликт для оператора, не тихий DELETE.
 
 WorkspaceMember уже является workspace-scoped игровым субъектом; не вводить вторую сущность игрока. Публичный player/user ID получается через WorkspaceMember.player_id, а не из auth.user и не из tournament.player. Создание записи участия не выдаёт человеку RBAC-права участника workspace.
 
-DB обеспечивает совпадение workspace участника, Match и WorkspaceMember составными FK и соответствующими UNIQUE parent keys. Повтор workspace_id на небольшой таблице участников оправдан этим инвариантом; на миллионы stat-строк его не копировать.
+DB обеспечивает совпадение workspace участника, Match и WorkspaceMember составными FK: `(match_id, workspace_id) → match(id, workspace_id)` (новый UNIQUE на match) и `(workspace_member_id, workspace_id) → workspace_member(id, workspace_id)` (существующий `uq_workspace_member_id_workspace`). Повтор workspace_id на небольшой таблице участников оправдан этим инвариантом; на миллионы stat-строк его не копировать.
+
+Что такое `participant_id` в факте — на примере. Сегодня `statistics(match_id=100, user_id=42, team_id=7, …)`; станет `statistics(match_id=100, participant_id=5001, …)`, где `participant(id=5001, match_id=100, workspace_id=3, workspace_member_id=88, side=home)` и `workspace_member(id=88, workspace_id=3, player_id=42)`. Строка participant — факт участия одного человека в одном Match на одной стороне: не человек и не игрок workspace. `user_id` факта выводится через `participant → workspace_member.player_id`; `team_id` заменяется `participant.side` плюс, только при наличии `encounter_game_log`, `orientation` и `encounter.home_team_id/away_team_id`. Промежуточная строка нужна, потому что сторона хранится один раз, а не на каждом факте; составной FK доказывает, что человек действительно был в этом Match; правка идентичности (неоднозначный BattleTag, merge профилей) — одна строка, а не N фактов. Запрос «вся статистика игрока 42» идёт через `participant(workspace_member_id, match_id)` по всем его workspace_member, затем факты по `(match_id, participant_id)`.
 
 | Таблица | Целевые ссылки вместо турнирной команды и глобального user в факте |
 | --- | --- |
@@ -252,7 +403,7 @@ Reset current round разрешён лишь без сыгранной Game и 
 - Любая команда комнаты содержит expected_version; veto-команда дополнительно session_id и round_id. Несовпадение версии/старый ID → 409 с code stale_state, без повторного применения на «текущий похожий ход». Это защита и от старого клиента после reset.
 - Под блокировкой сначала проверяется deadline. При now >= deadline текущий ход принадлежит timeout-пути; ручная команда не получает дополнительное время. Если timeout изменил комнату, его commit сохраняется, а ответ ручной команде — 409 turn_expired с новой версией. Не бросать исключение так, чтобы общий envelope откатил уже выполненный timeout.
 - Новый дедлайн считается от фактического начала нового хода; waiting_ready/result/opener не расходует turn timer. Undo начинает новый таймер восстановленного хода.
-- Worker tournament-service периодически выбирает просроченные активные раунды; несколько worker безопасны за счёт того же root-lock и повторной проверки. Выборка due IDs не берёт Round lock раньше Encounter. Не выполнять RPC/S3/ML под этими блокировками.
+- Worker tournament-service — новый interval-job в существующем APScheduler (`serve.py`, `start_worker`) — периодически выбирает просроченные активные раунды; несколько worker безопасны за счёт того же root-lock и повторной проверки. Выборка due IDs не берёт Round lock раньше Encounter. Не выполнять RPC/S3/ML под этими блокировками.
 - Последний ban, автоматический decider, запись выбранной Game и открытие разрешённой следующей фазы фиксируются одной транзакцией и одной версией комнаты. GET только читает.
 - Retry после потерянного ответа refetch-ит состояние. expected_version не обещает повторить исходный успешный HTTP-ответ; он обещает отсутствие второго применения. Отдельную универсальную таблицу request-id не вводить.
 
@@ -311,6 +462,7 @@ Composition-модуль для турнирного ML явно соединя�
 | AnalyticsMatchQuality | Семантически качество Encounter; переименовать код/контракт в EncounterQuality при cutover, без второй сущности «качество Match» |
 | OpenSkill replay | Сохранить вход Encounter+rosters+official score и формулу; get_matches_for_tournaments переименовать в get_encounters_for_tournaments у всех callers |
 | MLModelArtifact / analytics jobs | Остаются версиями моделей и турнирными заданиями; не переносятся в raw storage |
+| Achievement grain `user_encounter` | Оставить competitive: ключ (user, tournament, encounter), не зависит от Match/Game; statistical read-контракт его не обслуживает |
 
 Наличие слова analytics в схеме не делает таблицу кандидатом на отвязку. FK competitive projection → Tournament/Player допустим и продолжает отражать её жизненный цикл. Не добавлять в эти таблицы параллельные nullable match_id только для видимости универсальности.
 
@@ -359,6 +511,8 @@ Frontend удаляет собственные phase/seriesDecided/winner calcul
 
 Room подписывается на один encounter-scoped pregame changed сигнал с version вместо взаимного refetch двух kind-state и Encounter. ACL тот же encounter scope; старые map-veto/hero topic producers и subscribers мигрируют совместно. Клиент после reconnect refetch-ит state; polling может быть fallback доставки, но не условием исполнения таймера.
 
+RoomChat комнаты ([shared room chat](2026-09-21-shared-room-chat.md), `encounter/chat_access.py`) — отдельный контракт: pregame read-model и pregame changed сигнал его не включают, сообщения чата не увеличивают pregame_version. Общее у них — encounter scope ACL; смена пары команд, снимающая readiness и artifacts, историю чата не трогает.
+
 ### Статистика и загрузка
 
 Административный workspace upload принимает файл и optional game_id; workspace задаёт авторизованный контекст. Legacy tournament-scoped upload clients, Discord и gateway binary adapters переводятся на эту команду, передавая context hint отдельно. Response различает ingestion status и attachment status, возвращает log_record_id и после успеха match_id. Успешно распарсенный unattached лог не объявляется failed из-за невозможности подобрать игру.
@@ -372,15 +526,16 @@ Match read возвращает workspace_id, parsed score, duration, participan
 | Вертикаль | Основные файлы/модули |
 | --- | --- |
 | Game/result/round storage | Новые shared/models/tournament/encounter_game.py и pick_ban_round в существующем pick_ban.py; существующие encounter.py, encounter_report.py, repository/pick_ban.py; новые repositories Game/attachment |
-| Pure rules | Перенос shared/services/pick_ban_engine.py в shared/domain/pick_ban.py с полной миграцией imports; чистые sequence builders отделить от seed DB lookup в veto_session.py |
+| Pure rules | Уже в shared/domain/pick_ban_engine.py (перенос выполнен, повторно не переименовывать); чистые sequence builders отделить от seed DB lookup в veto_session.py; предикаты допустимости и переходов Round добавляются туда же |
 | Pregame coordinator | Новый tournament-service/src/services/encounter/pregame.py; переработка pick_ban_session.py, pick_ban_action.py, pick_ban_undo.py, map_report.py, captain.py |
 | Official result hooks | shared/services/encounter/finalize.py, bracket/advancement.py, tournament admin encounter/stage, Challonge sync; все team/best_of/reset пути |
 | Raw stats | shared/models/matches/match.py, новый shared/models/matches/participant.py; статистические repositories и bulk insert shapes |
 | Ingestion/attachment | shared/models/ingestion/log_processing.py, parser services/match_logs/{uploads,binary,log_records,flows,admin_reads}.py; parser encounter matching; отдельный tournament game-log integration |
-| Transport/events | tournament public_rpc.py / pick_ban_admin.py, parser upload/admin RPC, shared/schemas/events.py, service OpenAPI schemas/docs, gateway HTTP/binary/RPC/WS contracts, Discord ingestion producers |
+| Transport/events | tournament public_rpc.py / pick_ban_admin.py, parser upload/admin RPC, shared/schemas/events.py, service OpenAPI schemas/docs; gateway `internal/tournament/public_routes.go` (pick-ban `{kind}/state`, `/act`, `/elect-opener`, `/undo`, `map-pool/{map_id}/report`, map-pool WS) и `internal/tournament/admin_misc_routes.go` (`pick-ban-elect-opener`), binary/RPC/WS contracts; frontend `services/pickBan.service.ts`; Discord ingestion producers |
 | Analytical reads | analytics services/ml/features/{extractors,aggregations,opponent_strength,shift_features,standings_features}.py; services/analytics/service.py; inference cache/dataset metadata |
 | Achievements | parser achievement engine context/conditions/differ/runner, shared achievement_effective/repository conflict targets, rule schemas/editor, public achievement reads |
 | Public/admin UI | pickBan.service.ts, PregameRoom, pick-ban-model, EncounterPregamePanel, modal/map-pool consumers, encounter.types, Match cards/pages, parsed match browser/sheet, log upload/download clients |
+| Derived reads и consumers удалённых колонок | `Encounter.has_logs` column_property (match.py) → EXISTS над encounter_game_log ⋈ encounter_game; читатели: tournament encounter/service.py (`_apply_encounter_filters`, сортировка `get_all_encounters`, `get_overview_data`), app-service dashboard/service.py, dashboard/readiness.py, user/queries/encounters.py, `EncounterRead` в tournament/parser/app; app-service `user/_mappers.py sort_user_matches` (map_index → encounter_game.position через attachment), `map/service.py get_top_maps` и `user/queries/compare` (team-FK joins → participant.side + orientation); admin `user_merge.py` (перевешивание participant) |
 | Protection/operations | shared visibility/invalidation, app stats/profile/hero queries + MV refresh, backend migrations, tests, import-linter contracts, glossary/ERD/architecture |
 
 Кодовые переименования MatchQuality и get_matches_for_tournaments выполняются как clean cutover, не aliases/re-exports. SQL-таблицу competitive analytics.match_quality можно сохранить: имя physical table само по себе не смешивает write-authority; API/код должны явно называть grain Encounter.
@@ -470,7 +625,7 @@ Import-linter используется по существующей convention 
 
 ## 15. Последовательность реализации и завершение
 
-1. **Game/result authority:** новая identity игры и reports/corrections, общий live/official read-contract; прекращение captain-only Match writes. Результат этапа — V01/V02/R01/R05/R06 на Game без статистики.
+1. **Game/result authority:** новая identity игры и reports/corrections, общий live/official read-contract; прекращение captain-only Match writes. Результат этапа — V01/V02/R01/R05/R06 на Game без статистики. — ✅ implemented (branch `feat/pregame-game-authority`, alembic revision `encgame01`).
 2. **Veto lifecycle:** Round/snapshot/coordinator, команды с версией, worker, read-only room и перевод всех UI/RPC consumers. Результат — V03–V10 end-to-end.
 3. **Independent statistics:** MatchParticipant, raw schema, ingestion identity/provenance, optional binding/ACL, parser events. Результат — R03/R04/S01–S07 без фальшивых турниров/команд.
 4. **Read/analytics integration:** raw vs competitive extraction, achievements scope, public/MV gates, API/type cutover; parity A01–A05.

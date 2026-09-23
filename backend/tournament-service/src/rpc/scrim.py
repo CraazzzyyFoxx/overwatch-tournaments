@@ -8,7 +8,7 @@ room cap, one-captain-per-person, hidden-container visibility) lives in
 the same invariants and a handler-level check would only be enforced on one path.
 
 The rooms these subjects hand out are played through the EXISTING pre-game
-subjects (``captain_pick_ban_*``, ``captain_ready``, ``captain_report_map``) —
+subjects (``captain_pick_ban_*``, ``captain_ready``, ``captain_report_game``) —
 nothing here duplicates them. Once a room's two ``Team.captain_id`` values are
 set, the engine's own resolver does the rest.
 """

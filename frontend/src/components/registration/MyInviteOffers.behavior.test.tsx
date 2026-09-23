@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import type { Tournament } from "@/types/tournament.types";
 
 import MyInviteOffers from "./MyInviteOffers";

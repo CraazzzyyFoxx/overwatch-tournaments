@@ -10,7 +10,7 @@ two names each division answers to. Every consumer derives from it:
   into its write DTO — it does not re-derive anything;
 - ``parser-service``'s ``overwatch_rank.mapping`` takes its native
   division → base table from :func:`ow_division_bases`;
-- the frontend mirrors this table in ``frontend/src/lib/ow-ladder.ts``, pinned
+- the frontend mirrors this table in ``frontend/src/lib/divisions/ow-ladder.ts``, pinned
   by the parity test described there (it cannot import Python, and the default
   grid has to be available synchronously during SSR).
 

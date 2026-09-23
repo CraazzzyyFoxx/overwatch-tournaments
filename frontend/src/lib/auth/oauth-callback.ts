@@ -1,0 +1,409 @@
+import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { authService, OAuthLinkAuthRequiredError, OAuthLinkFailedError } from "@/services/auth.service";
+import { getForwardedClientHeaders } from "@/lib/auth/forward-client-headers";
+import { getTokenMaxAgeSeconds } from "@/lib/auth/jwt";
+import { resolveHost, PLATFORM_ZONE } from "@/lib/site/host";
+import { getAccessToken } from "@/lib/auth/cookies";
+import { ACCESS_TOKEN_COOKIE, CSRF_COOKIE, GUARD_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth/cookie-names";
+import { internalApiOrigin } from "@/lib/api/routes";
+import type { OAuthProviderName } from "@/types/auth.types";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// Cookie lifetime used when the access token's `exp` can't be decoded.
+// Exported so /auth/sso/route.ts (the custom-domain far side of the ticket
+// handoff below) and /auth/refresh/route.ts apply the exact same cookie
+// lifetimes instead of duplicating the literals.
+export const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
+export const REFRESH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+// Session cookies are readable across every subdomain (SSO) in production;
+// omitted in dev since `localhost` has no registrable platform-zone domain.
+const COOKIE_DOMAIN = `.${PLATFORM_ZONE}`;
+
+// Browser-binding CSRF cookie set by startOAuthLogin (oauth-login.ts). Single
+// use: read once here, forwarded raw to the backend, then always cleared.
+// Deployment-scoped name — see cookie-names.ts.
+
+// Task 10R fix 1: GUARD_COOKIE (cookie-names.ts) is the single-use, HOST-ONLY
+// guard cookie set by oauth-login.ts's custom-domain apex bounce, on THIS exact
+// domain, before the flow ever left for the apex. Read once by whichever
+// custom-domain route redeems a guard-bound ticket (/auth/sso/route.ts,
+// /auth/link/complete/route.ts), forwarded raw to identity-svc alongside
+// the ticket, then always cleared (single use, same as CSRF_COOKIE above).
+// See oauth-login.ts's module docstring for the full browser-binding
+// rationale.
+
+// Clears the single-use guard cookie. Host-only (no `domain` attribute) --
+// must match exactly what oauth-login.ts set, or the delete won't take.
+export function clearGuardCookie(response: NextResponse): void {
+  response.cookies.delete({ name: GUARD_COOKIE, path: "/" });
+}
+
+// Shared error-redirect for the two custom-domain guard-ticket routes
+// (/auth/sso, /auth/link/complete). Same `auth_error`(+`auth_error_provider`)
+// query shape as `errorRedirect` below, but scoped to the CALLER's own
+// origin (each of those routes runs on a foreign custom domain, not the
+// fixed platform SITE_URL) and clearing GUARD_COOKIE instead of CSRF_COOKIE.
+export function guardTicketErrorRedirect(origin: string, errorCode: string, provider?: string | null): NextResponse {
+  const errorUrl = new URL("/", origin);
+  errorUrl.searchParams.set("auth_error", errorCode);
+  if (provider) {
+    errorUrl.searchParams.set("auth_error_provider", provider);
+  }
+  const response = NextResponse.redirect(errorUrl);
+  clearGuardCookie(response);
+  return response;
+}
+
+const KNOWN_PROVIDERS: ReadonlySet<OAuthProviderName> = new Set<OAuthProviderName>([
+  "discord",
+  "twitch",
+  "battlenet",
+]);
+
+// Only redirect back to the platform apex or a valid tenant subdomain. The
+// `origin` field on the exchange/link response is echoed back from the
+// signed state, but the state's `origin` claim is only as trustworthy as
+// whatever Host header started the flow — never redirect to it unchecked.
+function isAllowedOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    if (u.hostname === PLATFORM_ZONE) return true;
+    return resolveHost(u.hostname).mode === "tenant";
+  } catch {
+    return false;
+  }
+}
+
+// `redirect` (from the exchange response, itself echoed from the HMAC-signed
+// state) is only constrained to a same-origin path by the *sender's* own
+// discipline (oauth-login.ts's `nextUrl.origin === origin` clamp) — the RPC
+// boundary (`rpc_oauth_url`) never validates its shape, so nothing here can
+// assume it's safe. Constructing `new URL(redirect, origin)` directly would
+// let an absolute URL, a protocol-relative `//evil.com`, or a backslash trick
+// (`/\evil.com`, which WHATWG URL parsing normalizes to `//evil.com` for
+// http(s)) silently escape `origin` entirely — a classic OAuth-state open
+// redirect. Let the URL parser do the normalization, then verify the
+// *resulting* origin still matches before trusting it.
+// Exported so /auth/sso/route.ts can clamp its own post-login redirect the
+// same way, so a `next` param can never escape the custom domain's origin.
+export function safeRedirectTarget(redirect: string, origin: string): URL {
+  try {
+    const target = new URL(redirect || "/", origin);
+    if (target.origin === new URL(origin).origin) return target;
+  } catch {
+    // fall through to the safe default below
+  }
+  return new URL("/", origin);
+}
+
+// AUTHORITATIVE gate for the ticket-handoff branch (see `handleOAuthCallback`
+// below). `isAllowedOrigin` is a cheap, purely syntactic pre-filter — it
+// accepts ANY well-formed http(s) FQDN that merely *looks* like a tenant
+// host (`resolveHost(...).mode === "tenant"`), including one nobody ever
+// registered. That's fine for the existing cookie-mode path, because those
+// cookies are set with `Domain=.owt` — a host outside the platform zone
+// could never read them regardless of what `origin` claims. It is NOT fine
+// for the ticket branch: the ticket is delivered by redirecting the user's
+// browser straight to `<origin>/auth/sso?ticket=...`, so an unverified
+// `origin` IS an account takeover (attacker crafts
+// `.../auth/discord/login?origin=https://evil.com`, victim logs in as
+// themselves, their ticket lands on evil.com, attacker redeems it via the
+// public `sso_exchange`).
+//
+// The only source of truth for "is this a real, resolvable workspace host"
+// is the backend's `by_host` lookup (already used by `middleware.ts`'s
+// `resolveWorkspace`, whose fetch shape/error handling this mirrors) — a
+// numeric `workspace_id` means a registered subdomain or a *verified*
+// custom domain; `null`, a non-OK response, or a thrown/network error must
+// all fail CLOSED (never deliver a ticket to an unverified host). Unlike
+// `middleware.ts`'s lookup, there is no TTL cache here: this runs once per
+// login, not on every page request, so there's no hot-path cost to trade
+// staleness for.
+export async function isVerifiedTenantOrigin(origin: string): Promise<boolean> {
+  if (!isAllowedOrigin(origin)) return false;
+
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+
+  try {
+    const base = internalApiOrigin() ?? SITE_URL;
+    const res = await fetch(`${base}/api/v1/workspaces/by-host?host=${encodeURIComponent(hostname)}`, {
+      headers: { accept: "application/json" }
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return typeof data?.workspace_id === "number";
+  } catch {
+    return false;
+  }
+}
+
+// Builds the `/auth/link/complete` redirect for a custom-domain account link
+// (Task 10R), gated by the SAME authoritative by_host check as the login
+// ticket handoff above. Returns null when the origin fails verification --
+// callers must fail closed (error-redirect), never fall back to delivering
+// the ticket anywhere else. Exported separately from handleOAuthCallback so
+// this gate is unit-testable without mocking cookies()/authService, mirroring
+// why isVerifiedTenantOrigin itself is exported.
+export async function buildLinkTicketRedirect(origin: string, ticket: string, redirect: string): Promise<URL | null> {
+  const verified = await isVerifiedTenantOrigin(origin);
+  if (!verified) return null;
+
+  const url = new URL("/auth/link/complete", origin);
+  url.searchParams.set("ticket", ticket);
+  url.searchParams.set("next", redirect || "/account");
+  return url;
+}
+
+function base64UrlDecodeToString(value: string): string {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+  return atob(padded);
+}
+
+interface StateRouting {
+  action: "login" | "link";
+  provider: OAuthProviderName | null;
+}
+
+// Best-effort, UNTRUSTED decode of the signed OAuth state — used only to pick
+// which provider/endpoint this apex callback should call next (there is a
+// single fixed OAuth redirect_uri for every provider, so nothing else on this
+// request tells us which one just completed). The backend independently
+// HMAC-verifies the state and cross-checks provider/action server-side
+// (`oauth_flows._verify_state_for`), so a tampered/forged read here can only
+// misroute the request to the wrong endpoint (which then fails verification),
+// never bypass verification itself. State shape is
+// `base64url(payloadJson).base64url(signature)` with short JSON keys:
+// {"o": origin, "r": redirect, "a": action, "p": provider, "n": nonce, "e": exp}
+// (confirmed against backend/identity-service's StatePayload, Task 9 report).
+// A decode failure defaults to the login action per the brief; provider has
+// no safe default (we'd have no endpoint to call), so it's null and the
+// caller must fail closed on that.
+function decodeStateForRouting(state: string): StateRouting {
+  try {
+    const payloadPart = state.split(".")[0];
+    const json = JSON.parse(base64UrlDecodeToString(payloadPart)) as Record<string, unknown>;
+    const action: "login" | "link" = json.a === "link" ? "link" : "login";
+    const provider =
+      typeof json.p === "string" && KNOWN_PROVIDERS.has(json.p as OAuthProviderName)
+        ? (json.p as OAuthProviderName)
+        : null;
+    return { action, provider };
+  } catch {
+    return { action: "login", provider: null };
+  }
+}
+
+// Clears the single-use CSRF cookie. Must be called with the same Domain/Path
+// attributes it was set with (oauth-login.ts) or the browser won't treat this
+// as an overwrite of the original cookie.
+function clearCsrfCookie(response: NextResponse): void {
+  response.cookies.delete({
+    name: CSRF_COOKIE,
+    path: "/",
+    ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {})
+  });
+}
+
+// `provider` is echoed as `auth_error_provider` so the toast can name the
+// provider the user was actually linking ("This Discord account is already
+// linked…") — the error page has no other way to know which one it was.
+function errorRedirect(errorCode: string, description?: string | null, provider?: string | null): NextResponse {
+  const errorUrl = new URL("/", SITE_URL);
+  errorUrl.searchParams.set("auth_error", errorCode);
+  if (description) {
+    errorUrl.searchParams.set("auth_error_description", description);
+  }
+  if (provider) {
+    errorUrl.searchParams.set("auth_error_provider", provider);
+  }
+  const response = NextResponse.redirect(errorUrl);
+  clearCsrfCookie(response);
+  return response;
+}
+
+export async function handleOAuthCallback(request: Request): Promise<NextResponse> {
+  const { cookies } = await import("next/headers");
+
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+  const errorDescription = url.searchParams.get("error_description");
+
+  if (error) {
+    return errorRedirect(error, errorDescription);
+  }
+
+  const cookieStore = await cookies();
+  const csrf = cookieStore.get(CSRF_COOKIE)?.value;
+
+  // Fail closed: the backend independently rejects a missing/mismatched csrf
+  // (Task 9b's `_verify_csrf_binding`), but there's no reason to spend an RPC
+  // round trip on a request that's already missing something required.
+  if (!code || !state || !csrf) {
+    return errorRedirect("invalid_state");
+  }
+
+  const { action, provider } = decodeStateForRouting(state);
+  if (!provider) {
+    return errorRedirect("invalid_provider");
+  }
+
+  try {
+    const forwardedHeaders = getForwardedClientHeaders(request);
+
+    if (action === "link") {
+      // May be absent -- and that's fine now (Task 10R): a custom-domain
+      // link has no apex session to present, and identity-svc itself decides
+      // (branching on the signed state's origin, never on anything supplied
+      // here) whether one was actually required. SECURITY INVARIANT: this
+      // value is NEVER used to pick who gets linked -- it's just the bearer
+      // forwarded on this one RPC call, same as any other authenticated
+      // request.
+      const accessToken = getAccessToken(cookieStore);
+
+      try {
+        const linkResult = await authService.linkOAuth(provider, { code, state, csrf, accessToken, headers: forwardedHeaders });
+
+        if (linkResult.mode === "link_ticket") {
+          if (!linkResult.ticket) {
+            // Defensive: ticket mode always carries a ticket per the backend
+            // contract (OAuthLinkResult); an absent one is a hard failure.
+            return errorRedirect("exchange_failed");
+          }
+
+          // AUTHORITATIVE check (see buildLinkTicketRedirect/
+          // isVerifiedTenantOrigin) -- the cheap syntactic isAllowedOrigin
+          // used for the "linked" branch below is NOT sufficient here: the
+          // ticket is single-use, so delivering it anywhere other than the
+          // verified origin either wastes it or hands it to whoever
+          // controls that unverified host. Fail closed.
+          const target = await buildLinkTicketRedirect(linkResult.origin, linkResult.ticket, linkResult.redirect);
+          if (!target) {
+            return errorRedirect("invalid_origin");
+          }
+
+          const response = NextResponse.redirect(target);
+          clearCsrfCookie(response);
+          return response;
+        }
+
+        // mode === "linked" (platform apex / a `.owt` subdomain): return the
+        // user to where they started the link — the signed state's `redirect`
+        // (e.g. `<page>?settings=profile`), clamped same-origin. `/account` is
+        // not a real route, so ignoring `redirect` here 404'd after linking.
+        const origin = isAllowedOrigin(linkResult.origin) ? linkResult.origin : `https://${PLATFORM_ZONE}`;
+        // The link wrote a new verified social account, but the public profile
+        // (users/[slug], getUserByName) is Next-Data-Cached under the "users"
+        // tag. Unlike the react-query social mutations (which call
+        // revalidateUser), this redirect path must bust it itself or the new
+        // account stays hidden until the 300s revalidate window elapses.
+        // Best-effort: the link is already committed, so never fail on it.
+        try {
+          revalidateTag("users", "max");
+        } catch {
+          // cache invalidation is best-effort
+        }
+        const response = NextResponse.redirect(safeRedirectTarget(linkResult.redirect, origin));
+        clearCsrfCookie(response);
+        return response;
+      } catch (err) {
+        if (err instanceof OAuthLinkAuthRequiredError) {
+          // Same UX as the old client-side pre-check: send the user to log
+          // in, then retry linking from account settings.
+          const loginUrl = new URL("/", SITE_URL);
+          loginUrl.searchParams.set("login", "1");
+          loginUrl.searchParams.set("next", "/?settings=profile");
+          const response = NextResponse.redirect(loginUrl);
+          clearCsrfCookie(response);
+          return response;
+        }
+        if (err instanceof OAuthLinkFailedError) {
+          // identity-svc refused the link for a reason the user can act on
+          // (most often: this provider account is already linked to another
+          // account here). Surface the specific code, not "exchange_failed".
+          console.error(`OAuth link refused (${err.code}):`, err.message);
+          return errorRedirect(err.code, null, provider);
+        }
+        throw err;
+      }
+    }
+
+    const result = await authService.exchangeOAuthCode(provider, code, state, csrf, forwardedHeaders);
+
+    if (result.mode === "ticket") {
+      if (!result.ticket) {
+        // Defensive: ticket mode always carries a ticket per the backend
+        // contract (OAuthCallbackResult); an absent one is a hard failure,
+        // not a fall-through to the cookie-mode field access below.
+        return errorRedirect("exchange_failed");
+      }
+
+      // AUTHORITATIVE check (see isVerifiedTenantOrigin) — the cheap
+      // syntactic `isAllowedOrigin` used for the cookie-mode `origin` below
+      // is NOT sufficient here. There is no safe fallback (e.g. "redirect
+      // to the apex instead") for an unverified origin: the ticket is
+      // single-use, so delivering it anywhere other than the verified
+      // origin either wastes it or, worse, hands it to whoever controls
+      // that unverified host. Fail closed.
+      const verified = await isVerifiedTenantOrigin(result.origin);
+      if (!verified) {
+        return errorRedirect("invalid_origin");
+      }
+
+      const ssoUrl = new URL("/auth/sso", result.origin);
+      ssoUrl.searchParams.set("ticket", result.ticket);
+      ssoUrl.searchParams.set("next", result.redirect);
+
+      const response = NextResponse.redirect(ssoUrl);
+      clearCsrfCookie(response);
+      return response;
+    }
+
+    if (!result.access_token || !result.refresh_token) {
+      // Defensive: cookie mode (the default) always carries both tokens per
+      // the backend contract; treat a missing one as a hard failure rather
+      // than setting a cookie to "undefined".
+      return errorRedirect("exchange_failed");
+    }
+
+    const origin = isAllowedOrigin(result.origin) ? result.origin : `https://${PLATFORM_ZONE}`;
+    const target = safeRedirectTarget(result.redirect, origin);
+
+    const response = NextResponse.redirect(target);
+    response.cookies.set(ACCESS_TOKEN_COOKIE, result.access_token, {
+      httpOnly: false,
+      sameSite: "lax",
+      secure: IS_PROD,
+      path: "/",
+      maxAge: getTokenMaxAgeSeconds(result.access_token, FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS),
+      ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {})
+    });
+
+    response.cookies.set(REFRESH_TOKEN_COOKIE, result.refresh_token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: IS_PROD,
+      path: "/",
+      maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
+      ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {})
+    });
+
+    clearCsrfCookie(response);
+    return response;
+  } catch (err) {
+    console.error("OAuth callback error:", err);
+    return errorRedirect("exchange_failed");
+  }
+}

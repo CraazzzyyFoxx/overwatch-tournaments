@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 import HeroImage from "@/components/hero/HeroImage";
-import { normalizeRole, type AqtRoleKey } from "@/lib/player-role";
+import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import type { PickBanEntry, PickBanEntryStatus, PickBanKind } from "@/types/tournament.types";
 
 import {
@@ -74,8 +74,7 @@ const STATUS_BADGE_VARIANT: Record<
   available: "outline",
   banned: "destructive",
   picked: "default",
-  protected: "secondary",
-  played: "secondary"
+  protected: "secondary"
 };
 
 /** Hero Pool role filter display order; each code is its own `common.roles.*` key. */
@@ -211,7 +210,6 @@ export function PickBanGrid({
               className={cn(
                 "object-cover transition-opacity",
                 dimmed ? "opacity-30 grayscale" : null,
-                entry.status === "played" ? "opacity-60" : null,
                 lockedRound != null ? "opacity-45 saturate-50" : null
               )}
             />

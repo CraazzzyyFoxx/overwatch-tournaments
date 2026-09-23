@@ -15,6 +15,10 @@ var NotificationRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/notifications", Queue: "rpc.app.notifications_list", AllQuery: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/notifications/read", Queue: "rpc.app.notifications_mark_read", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/notifications/delete", Queue: "rpc.app.notifications_delete", Body: true, Auth: edge.AuthRequired},
+	// Discord-DM opt-outs, three group switches. Self-service: the worker edits
+	// the row belonging to the injected identity and reads no id from the body.
+	{Method: "GET", Pattern: "/api/v1/notifications/preferences", Queue: "rpc.app.notification_preferences_get", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/notifications/preferences", Queue: "rpc.app.notification_preferences_update", Body: true, Auth: edge.AuthRequired},
 }
 
 // NotificationAdminRoutes is the operator screen for the notifications a

@@ -3,7 +3,7 @@ import TankIcon from "@/components/icons/TankIcon";
 import DamageIcon from "@/components/icons/DamageIcon";
 import SupportIcon from "@/components/icons/SupportIcon";
 import FlexIcon from "@/components/icons/FlexIcon";
-import { PLAYER_ROLE_LABEL_KEY } from "@/lib/player-role";
+import { PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-role";
 
 /** Canonical English player role names, the only values that map to a glyph. */
 const ROLE_ICON = {

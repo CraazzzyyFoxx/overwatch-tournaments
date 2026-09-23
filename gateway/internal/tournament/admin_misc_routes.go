@@ -40,6 +40,9 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-session/reset", Queue: "rpc.tournament.admin_pick_ban_session_reset", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-act", Queue: "rpc.tournament.admin_pick_ban_act", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-elect-opener", Queue: "rpc.tournament.admin_pick_ban_elect_opener", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// encounter_game correction — one series position's result, admin-decided and
+	// always reasoned (spec §6.5). Same worker-side "match"/"update" gate.
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/games/{game_id}/result", Queue: "rpc.tournament.admin_game_result", IDParam: "encounter_id", Path: []string{"game_id"}, Body: true, Auth: edge.AuthRequired},
 	// generic pick-ban config CRUD (map + hero, docs/plans/2026-08-09-generic-pickban-engine.md).
 	// Same cascade key as the veto-configs routes above, additionally partitioned
 	// by `kind` in the body/response.

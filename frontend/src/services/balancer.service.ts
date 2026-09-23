@@ -6,7 +6,7 @@ import {
   BalancerConfigResponse,
   BalancerConfigField
 } from "@/types/balancer.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 
 /** Widgets the drawer can render. A row typed anything else is dropped rather
  * than handed to `ConfigFieldControl`, which would fall through to a number

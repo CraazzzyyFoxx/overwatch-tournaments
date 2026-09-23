@@ -49,7 +49,7 @@ class ParseBestOfConfigTests(TestCase):
 
     def test_keeps_negative_round_keys(self) -> None:
         # Lower-bracket rounds are negative, and the frontend mirror
-        # (frontend/src/lib/best-of.ts `parseStageBestOf`) now keeps them to match.
+        # (frontend/src/lib/tournament/best-of.ts `parseStageBestOf`) now keeps them to match.
         # This pins the behaviour that mirror depends on.
         cfg = best_of.parse_best_of_config({"best_of": {"default": 3, "by_round": {"-1": 5, "2": 2}}})
         self.assertEqual(cfg.default, 3)

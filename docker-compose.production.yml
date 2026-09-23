@@ -323,6 +323,9 @@ services:
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Validate tokens via the gateway -> identity-svc (overrides common.env).
       - AUTH_SERVICE_URL=http://gateway:8080/api/auth
+      # Same root value the frontend builds NEXT_PUBLIC_SITE_URL from: the
+      # links in notification DMs must land on the site people actually use.
+      - PUBLIC_SITE_URL=${SITE_URL:-https://owt.craazzzyyfoxx.me}
       - WORKER_METRICS_PORT=9109
     extra_hosts:
       - "host.docker.internal:host-gateway"

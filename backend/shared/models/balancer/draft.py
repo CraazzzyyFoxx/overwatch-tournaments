@@ -66,6 +66,9 @@ class DraftSession(db.TimeStampIntegerMixin):
     format: Mapped[str] = mapped_column(String(16), nullable=False, server_default="snake", default="snake")
     rounds: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="4", default=4)
     pick_time_seconds: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="45", default=45)
+    # Grace period granted once, after the main pick clock runs out, before the
+    # autopick fires. 0 (the default) keeps the old behaviour: expiry autopicks.
+    overtime_seconds: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
     # Circular FK with draft_pick — created with use_alter so DDL ordering works.
     current_pick_id: Mapped[int | None] = mapped_column(
         ForeignKey("balancer.draft_pick.id", ondelete="SET NULL", use_alter=True, name="fk_draft_session_current_pick"),
@@ -270,6 +273,10 @@ class DraftPick(db.TimeStampIntegerMixin):
     clock_started_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     clock_expires_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     clock_remaining_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # None while the pick is on its main clock; stamped when the main clock ran
+    # out and ``clock_expires_at`` was re-armed to the overtime deadline, so the
+    # grace period is granted exactly once per pick.
+    overtime_started_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Optimistic-concurrency token: the atomic select-vs-autopick finalize
     # bumps this under a WHERE version = :expected guard.
     version: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)

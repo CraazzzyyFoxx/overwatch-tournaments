@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { getSocialProviderConfig, socialProfileUrl } from "@/lib/social-providers";
+import { getSocialProviderConfig, socialProfileUrl } from "@/lib/social/providers";
 import type { SocialAccount } from "@/types/user.types";
 
 import { SocialIcon } from "./SocialIcon";

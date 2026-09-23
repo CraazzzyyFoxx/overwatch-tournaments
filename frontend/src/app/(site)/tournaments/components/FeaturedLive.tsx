@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { ArrowRight, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { tournamentHref } from "@/lib/tournament-url";
+import { tournamentHref } from "@/lib/tournament/url";
 import {
   type LiveTournamentGroup,
   currentMapName,

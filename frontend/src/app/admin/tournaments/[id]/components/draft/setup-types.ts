@@ -10,6 +10,8 @@ import type {
 export interface DraftSetupConfig {
   teamCount: number;
   pickTimeSeconds: number;
+  /** Grace period added when the main clock expires; 0 disables overtime. */
+  overtimeSeconds: number;
   format: DraftFormat;
   autopickStrategy: DraftAutopickStrategy;
   allowAdminOverride: boolean;
@@ -49,6 +51,27 @@ export function poolRegistrationSummary(registration: AdminRegistration): DraftR
     roles: Array.from(new Set(playable.map((entry) => entry.role))) as DraftRole[],
     rank: lead?.rank_value ?? null
   };
+}
+
+export interface DraftCaptainRank {
+  rank: number | null;
+  /** The role that rank belongs to — `null` when no role is playable. */
+  role: DraftRole | null;
+}
+
+/**
+ * A captain's STRONGEST playable role, not their leading one.
+ *
+ * `poolRegistrationSummary` reads the primary role because that is what the
+ * seed and the pool checks care about. A captain is seated by strength
+ * ("strongest first"), and a player whose primary role happens to be their
+ * weakest ranked one would otherwise be seated as if that were their level.
+ */
+export function captainRankSummary(registration: AdminRegistration): DraftCaptainRank {
+  const best = (registration.roles ?? [])
+    .filter((entry) => entry.is_active && entry.rank_value != null)
+    .sort((left, right) => right.rank_value! - left.rank_value! || left.priority - right.priority)[0];
+  return { rank: best?.rank_value ?? null, role: (best?.role as DraftRole) ?? null };
 }
 
 export function registrationLabel(registration: AdminRegistration): string {

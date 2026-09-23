@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { notify } from "@/lib/notify";
-import { toRegistrationFormUpsert } from "@/lib/registration-form-upsert";
+import { toRegistrationFormUpsert } from "@/lib/registration/form-upsert";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   AdminRegistrationForm,

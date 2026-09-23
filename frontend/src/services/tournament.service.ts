@@ -8,8 +8,8 @@ import {
   TournamentFacets,
   TournamentStatus
 } from "@/types/tournament.types";
-import { apiFetch } from "@/lib/api-fetch";
-import { normalizePaginatedResponse } from "@/lib/normalize-paginated-response";
+import { apiFetch } from "@/lib/api/fetch";
+import { normalizePaginatedResponse } from "@/lib/api/normalize-paginated-response";
 
 type GetStandingsOptions = {
   workspaceId?: number | null;

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { tournamentOverviewQueryOptions } from "@/lib/tournament-overview-query";
+import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 
 export function useTournamentQuery(slug: string) {
   return useQuery({

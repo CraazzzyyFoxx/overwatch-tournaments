@@ -12,7 +12,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { encounterChatRoom } from "@/lib/chat-rooms";
+import { encounterChatRoom } from "@/lib/realtime/chat-rooms";
 import type { RealtimeEventEnvelope } from "@/types/realtime.types";
 
 import { RoomChat } from "./RoomChat";

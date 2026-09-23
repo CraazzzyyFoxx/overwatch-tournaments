@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { ApiError, getApiErrorMessage } from "@/lib/api-error";
+import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import registrationService from "@/services/registration.service";
 import meService from "@/services/me.service";
 import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";

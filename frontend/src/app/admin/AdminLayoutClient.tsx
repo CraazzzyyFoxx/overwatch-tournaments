@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
-import { SIDEBAR_COOKIE_NAMES } from "@/lib/sidebar-cookies";
+import { SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { NotificationItem } from "@/types/notification.types";
 

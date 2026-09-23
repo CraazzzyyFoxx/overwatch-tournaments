@@ -1,5 +1,5 @@
 import { PaginatedResponse } from "@/types/pagination.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import { Achievement, AchievementEarned } from "@/types/achievement.types";
 
 export default class achievementsService {

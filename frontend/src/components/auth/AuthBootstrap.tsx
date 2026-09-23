@@ -4,10 +4,10 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { isAuthRequiredPath } from "@/config/auth";
-import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-events";
-import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth-tokens";
-import { isExpiredOrNearExpiry } from "@/lib/jwt";
-import { useProactiveTokenRefresh } from "@/lib/use-proactive-token-refresh";
+import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth/events";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth/tokens";
+import { isExpiredOrNearExpiry } from "@/lib/auth/jwt";
+import { useProactiveTokenRefresh } from "@/hooks/use-proactive-token-refresh";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { realtimeClient } from "@/services/realtime.service";
 import { useAuthModalStore } from "@/stores/auth-modal.store";

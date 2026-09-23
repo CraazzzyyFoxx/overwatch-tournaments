@@ -39,8 +39,11 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository.notification import (
     DEFAULT_PAGE_LIMIT,
     InvalidCursorError,
+    NotificationPreferenceRepository,
     NotificationRepository,
 )
+from shared.services.notifications import effective_discord_dm
+from shared.services.subscriptions.strategies import load_provider_user_ids
 from src import schemas
 
 __all__ = (
@@ -50,12 +53,15 @@ __all__ = (
     "delete",
     "inbox_page",
     "mark_read",
+    "preferences",
+    "update_preferences",
     "workspace_ids_for",
 )
 
 logger = logging.getLogger(__name__)
 
 repository = NotificationRepository()
+preference_repository = NotificationPreferenceRepository()
 
 # 60 s: the set changes when somebody joins a workspace or is granted a role,
 # and a minute of staleness on "which announcements do I see" is invisible,
@@ -197,3 +203,38 @@ async def active_announcements(session: Any, *, auth_user_id: int | None = None)
     """
     rows = await repository.active_global(session, auth_user_id=auth_user_id)
     return [schemas.NotificationItem.model_validate(row) for row in rows]
+
+
+async def preferences(session: Any, *, auth_user_id: int) -> schemas.NotificationPreferencesRead:
+    """This caller's Discord-DM switches, with the defaults filled in.
+
+    ``discord_linked`` rides along because the switches are inert without a
+    connected account: a settings page that offers three toggles and delivers
+    nothing is the bug this field prevents.
+    """
+    stored = await preference_repository.stored_discord_dm(session, auth_user_id)
+    linked = await load_provider_user_ids(session, auth_user_ids=[auth_user_id], oauth_provider="discord")
+    return schemas.NotificationPreferencesRead(
+        discord_dm=schemas.NotificationDmGroups(**effective_discord_dm(stored)),
+        discord_linked=bool(linked.get(auth_user_id)),
+    )
+
+
+async def update_preferences(
+    session: Any,
+    *,
+    auth_user_id: int,
+    discord_dm: dict[str, bool],
+) -> schemas.NotificationPreferencesRead:
+    """Merge a partial edit into the stored switches and answer with the effect.
+
+    Partial rather than replacing: the row holds only what the user changed, so
+    a group added upstream stays on its default for everybody until they touch
+    it -- and one toggle flipped in a stale tab cannot silently re-assert the
+    other two.
+    """
+    stored = await preference_repository.stored_discord_dm(session, auth_user_id)
+    stored.update(discord_dm)
+    await preference_repository.set_discord_dm(session, auth_user_id=auth_user_id, discord_dm=stored)
+    await session.commit()
+    return await preferences(session, auth_user_id=auth_user_id)

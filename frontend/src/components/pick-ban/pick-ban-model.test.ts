@@ -4,6 +4,7 @@ import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
 import type {
   PickBanEntry,
+  PickBanGame,
   PickBanSession,
   PickBanState,
   VetoUnavailableReason
@@ -11,7 +12,9 @@ import type {
 
 import {
   PICK_BAN_UNAVAILABLE_COPY,
+  acceptedScore,
   attributeLocks,
+  gameAtPosition,
   isEntrySelectable,
   isSessionActive,
   parseStepToken,
@@ -20,11 +23,25 @@ import {
   poolRoundGroups,
   roundState,
   seriesMatchesByPosition,
-  agreedMapScore,
   statusLabelKey,
   stepRoundGroups,
   turnDeadlineMs
 } from "./pick-ban-model";
+
+function game(overrides: Partial<PickBanGame> & { position: number }): PickBanGame {
+  return {
+    id: overrides.position,
+    map_id: 21,
+    state: "awaiting_result",
+    accepted_home_score: null,
+    accepted_away_score: null,
+    result_source: null,
+    result_version: 1,
+    confirmed_at: null,
+    reports: [],
+    ...overrides
+  };
+}
 
 function entry(overrides: Partial<PickBanEntry>): PickBanEntry {
   return {
@@ -216,11 +233,11 @@ describe("parseStepToken", () => {
 });
 
 describe("pickedItemsInOrder", () => {
-  it("keeps picked and played items sorted by global action order", () => {
+  it("keeps picked items sorted by global action order", () => {
     const pool = [
       entry({ id: 1, item_id: 11, status: "banned", action_index: 0 }),
       entry({ id: 2, item_id: 12, status: "picked", action_index: 2 }),
-      entry({ id: 3, item_id: 13, status: "played", action_index: 1 }),
+      entry({ id: 3, item_id: 13, status: "picked", action_index: 1 }),
       entry({ id: 4, item_id: 14, status: "available" })
     ];
     expect(pickedItemsInOrder(pool).map((e) => e.item_id)).toEqual([13, 12]);
@@ -279,47 +296,76 @@ describe("seriesMatchesByPosition", () => {
   });
 });
 
-describe("agreedMapScore", () => {
-  /** One captain's claim for a position of the series. */
-  const claim = (
-    map_index: number,
-    side: "home" | "away",
-    home_score: number,
-    away_score: number
-  ) => ({
-    map_id: 21,
-    map_index,
-    side,
-    home_score,
-    away_score
+describe("gameAtPosition", () => {
+  it("finds the game by position, whatever order the payload lists them in", () => {
+    const games = [game({ position: 2 }), game({ position: 1 })];
+    expect(gameAtPosition(games, 1)?.position).toBe(1);
+    expect(gameAtPosition(games, 2)?.position).toBe(2);
   });
 
-  it("returns the score once both sides agree", () => {
-    const reports = [claim(1, "home", 2, 1), claim(1, "away", 2, 1)];
-    expect(agreedMapScore(reports, 1)).toEqual({ home: 2, away: 1 });
+  it("keys on the position, never the map a series plays twice", () => {
+    // Both positions ran map 21; keyed on the map alone the third play would
+    // inherit the first play's confirmed result.
+    const games = [
+      game({ position: 1, map_id: 21, state: "confirmed", accepted_home_score: 2, accepted_away_score: 1 }),
+      game({ position: 2, map_id: 21 })
+    ];
+    expect(acceptedScore(gameAtPosition(games, 2))).toBeNull();
   });
 
-  it("shows nothing while only one side has filed", () => {
-    expect(agreedMapScore([claim(1, "home", 2, 1)], 1)).toBeNull();
+  it("has no game for a position the server has not opened", () => {
+    expect(gameAtPosition([game({ position: 1 })], 3)).toBeNull();
+  });
+});
+
+describe("acceptedScore", () => {
+  it("returns the accepted score of a confirmed game", () => {
+    expect(
+      acceptedScore(
+        game({ position: 1, state: "confirmed", accepted_home_score: 2, accepted_away_score: 1 })
+      )
+    ).toEqual({ home: 2, away: 1 });
+  });
+
+  it("shows nothing while a single claim stands", () => {
+    expect(
+      acceptedScore(
+        game({
+          position: 1,
+          state: "awaiting_result",
+          reports: [{ side: "home", home_score: 2, away_score: 1 }]
+        })
+      )
+    ).toBeNull();
   });
 
   it("shows nothing on a dispute", () => {
     // The server refuses to advance the series here too, so there is no score
-    // yet to print — an averaged or first-in answer would invent one.
-    const reports = [claim(1, "home", 2, 1), claim(1, "away", 0, 2)];
-    expect(agreedMapScore(reports, 1)).toBeNull();
+    // yet to print — showing either claim would invent one.
+    expect(
+      acceptedScore(
+        game({
+          position: 1,
+          state: "disputed",
+          reports: [
+            { side: "home", home_score: 2, away_score: 1 },
+            { side: "away", home_score: 0, away_score: 2 }
+          ]
+        })
+      )
+    ).toBeNull();
   });
 
-  it("keeps two plays of the same map apart by position", () => {
-    const reports = [
-      claim(1, "home", 2, 1),
-      claim(1, "away", 2, 1),
-      claim(3, "home", 0, 2),
-      claim(3, "away", 0, 2)
-    ];
-    expect(agreedMapScore(reports, 1)).toEqual({ home: 2, away: 1 });
-    expect(agreedMapScore(reports, 3)).toEqual({ home: 0, away: 2 });
-    expect(agreedMapScore(reports, 2)).toBeNull();
+  it("shows nothing for a cancelled game that still carries its old numbers", () => {
+    expect(
+      acceptedScore(
+        game({ position: 1, state: "cancelled", accepted_home_score: 2, accepted_away_score: 1 })
+      )
+    ).toBeNull();
+  });
+
+  it("has nothing to show without a game", () => {
+    expect(acceptedScore(null)).toBeNull();
   });
 });
 
@@ -544,7 +590,7 @@ describe("statusLabelKey", () => {
     expect(statusLabelKey(entry({ status: "available" }))).toBe("status.available");
     expect(statusLabelKey(entry({ status: "banned" }))).toBe("status.banned");
     expect(statusLabelKey(entry({ status: "protected" }))).toBe("status.protected");
-    expect(statusLabelKey(entry({ status: "played" }))).toBe("status.played");
+    expect(statusLabelKey(entry({ status: "picked" }))).toBe("status.picked");
   });
 });
 

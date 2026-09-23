@@ -5,7 +5,7 @@ import { Check, ShieldCheck, ExternalLink } from "lucide-react";
 import type { SocialAccount, SocialProvider } from "@/types/user.types";
 
 import { useTranslations } from "next-intl";
-import { getSocialProviderConfig } from "@/lib/social-providers";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import {
   Select,

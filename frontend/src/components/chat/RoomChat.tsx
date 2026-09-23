@@ -32,8 +32,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { ApiError } from "@/lib/api-error";
-import type { ChatRoomDescriptor } from "@/lib/chat-rooms";
+import { ApiError } from "@/lib/api/error";
+import type { ChatRoomDescriptor } from "@/lib/realtime/chat-rooms";
 import { notify } from "@/lib/notify";
 import type { ChatMessage } from "@/types/chat.types";
 

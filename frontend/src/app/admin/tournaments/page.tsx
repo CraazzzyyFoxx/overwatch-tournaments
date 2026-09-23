@@ -25,8 +25,8 @@ import tournamentService from "@/services/tournament.service";
 import adminService from "@/services/admin.service";
 import { Tournament } from "@/types/tournament.types";
 import { usePermissions } from "@/hooks/usePermissions";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
-import { formatTournamentStages } from "@/lib/tournament-stages";
+import { paginateResults, sortArray } from "@/lib/api/paginate-results";
+import { formatTournamentStages } from "@/lib/tournament/stages";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 export default function TournamentsPage() {

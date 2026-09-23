@@ -16,7 +16,7 @@ import {
   StatusIconBadge,
   type StatusTone
 } from "@/components/status/StatusIconBadge";
-import { formatAdmissionReason } from "@/lib/admission";
+import { formatAdmissionReason } from "@/lib/registration/admission";
 import { cn } from "@/lib/utils";
 import type {
   Admission,

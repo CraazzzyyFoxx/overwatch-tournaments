@@ -29,7 +29,7 @@ const ssoExchangeCalls: SsoExchangeCall[] = [];
 let ssoExchangeShouldThrow = false;
 let ssoExchangeTokens = { access_token: "access-token-1", refresh_token: "refresh-token-1" };
 
-// This route imports safeRedirectTarget from @/lib/oauth-callback, which in turn
+// This route imports safeRedirectTarget from @/lib/auth/oauth-callback, which in turn
 // imports the two link-error classes from THIS module -- so the mock has to
 // re-export both names or the whole file dies on a SyntaxError at import time,
 // before a single test runs. Same requirement as /auth/link/complete's mock.

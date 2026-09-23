@@ -29,6 +29,7 @@ from shared.core import db
 from shared.models.catalog.map import Map
 from shared.models.identity.user import User
 from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.team import Team
 
 if TYPE_CHECKING:
@@ -120,51 +121,31 @@ class EncounterMapCode(db.TimeStampIntegerMixin):
 
 
 class EncounterMapReport(db.TimeStampIntegerMixin):
-    """One captain's independent claim of a single played map's winner.
+    """One captain side's independent claim of ONE game's score.
 
-    Submitted immediately after that map concludes — unlike
-    ``EncounterCaptainReport``, which is one row per captain for the WHOLE
-    series, filed only once it has ended. Both sides' reports for the same map
-    agreeing resolves it (writes a ``Match`` row, ``source=captain_report``);
-    disagreeing leaves it disputed for an admin to settle. This is what lets
-    the pick-ban engine advance to the next map without waiting for the
-    series-level report. See
-    ``docs/plans/2026-08-09-generic-pickban-engine.md`` §5.5, §5.6, Decision 13.
+    Filed right after the map ends. Two agreeing claims accept the game's result
+    (``EncounterGame.accepted_*``); disagreeing ones mark it ``disputed`` for an
+    admin. Keyed by the GAME, never by map id: a series may play the same map
+    twice. See docs/plans/2026-09-20-pregame-results-statistics-separation.md §5.2.
     """
 
     __tablename__ = "encounter_map_report"
     __table_args__ = (
-        UniqueConstraint(
-            "encounter_id",
-            "map_id",
-            "map_index",
-            "team_id",
-            name="uq_encounter_map_report_encounter_map_index_team",
-        ),
+        UniqueConstraint("game_id", "side", name="uq_encounter_map_report_game_side"),
         CheckConstraint("home_score >= 0 AND away_score >= 0", name="ck_encounter_map_report_scores"),
-        CheckConstraint("map_index >= 0", name="ck_encounter_map_report_index"),
+        CheckConstraint("side IN ('home', 'away')", name="ck_encounter_map_report_side"),
         {"schema": "tournament"},
     )
 
-    encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"), index=True)
-    map_id: Mapped[int] = mapped_column(ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True)
-    # Which map OF THE SERIES this claim is for, 1-based in play order — the
-    # same index ``EncounterMapCode.map_index`` uses. The map alone does not
-    # identify it: a series may play the same map twice (a slot config that
-    # lists it in two rounds, with ``no_repeat_scope=none``), and keying on
-    # ``map_id`` alone made the second play read back the first play's reports
-    # as already filed and agreed. 0 means "no position known" — a report filed
-    # for an encounter that has no map pick-ban session at all.
-    map_index: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
-    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey(EncounterGame.id, ondelete="CASCADE"), index=True)
+    # 'home' | 'away' in the encounter's orientation; the reporting TEAM is the
+    # encounter's team on that side at confirmation time, not stored here.
+    side: Mapped[str] = mapped_column(String(16))
     reporter_user_id: Mapped[int | None] = mapped_column(ForeignKey(User.id, ondelete="SET NULL"), nullable=True)
-    # In the encounter's home/away orientation, same convention as
-    # ``EncounterCaptainReport``, so the two reports for a map compare directly.
     home_score: Mapped[int] = mapped_column(Integer())
     away_score: Mapped[int] = mapped_column(Integer())
 
-    encounter: Mapped[Encounter] = relationship()
-    team: Mapped[Team] = relationship()
+    game: Mapped[EncounterGame] = relationship()
     reporter: Mapped[User | None] = relationship()
 
 

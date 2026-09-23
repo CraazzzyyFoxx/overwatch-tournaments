@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import type { PlayerRoleTint } from "@/lib/player-role";
+import type { PlayerRoleTint } from "@/lib/roster/player-role";
 import type { FormResult } from "@/app/(site)/users/components/shared/atoms";
 import type { Translate } from "@/app/(site)/users/components/shared/list-utils";
 

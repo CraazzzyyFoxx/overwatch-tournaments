@@ -11,7 +11,7 @@ encounter's ``ON DELETE CASCADE`` is the only thing that removes them. A NULL
 ``actor_user_id`` means a machine actor (Challonge import, bracket cascade).
 """
 
-from sqlalchemy import Enum, ForeignKey, Index, Integer, String
+from sqlalchemy import Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -70,6 +70,16 @@ class EncounterResultAudit(db.TimeStampIntegerMixin):
 
     # Which side's report was taken as truth, when the admin adopted one.
     adopted_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="SET NULL"), nullable=True)
+    # Per-game decisions (actions game_confirm/game_correct/game_cancel): which
+    # game, and its result_version AFTER the write. For those rows
+    # home/away_score_before/after carry the GAME's accepted score, not the
+    # series score. NULL for series-level rows.
+    game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.encounter_game.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    game_result_version: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # Admin's stated reason for a correction/cancel; NULL for automatic rows.
+    reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # Mirrors shared.services.encounter.finalize.FinalizeSource.
     source: Mapped[str] = mapped_column(String(16))
 

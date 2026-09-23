@@ -10,13 +10,13 @@ import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { TOURNAMENT_STATUS_LABELS } from "@/lib/tournament-lifecycle";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { TOURNAMENT_STATUS_LABELS } from "@/lib/tournament/lifecycle";
 import encounterService from "@/services/encounter.service";
 import teamService from "@/services/team.service";
 import { TournamentHubActions } from "./components/TournamentHubActions";
 import { formatDate, TOURNAMENT_STATUS_TONE } from "./components/tournamentWorkspace.helpers";
-import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import {
   TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
   useHubStagesQuery,
@@ -51,7 +51,7 @@ const READINESS_INVALIDATE_DEBOUNCE_MS = 400;
  * workspace header, the tab bar with route guards, the hub's two
  * `useInvalidation` mounts and the shared queries. Query keys MUST stay
  * identical to the tab pages — realtime patch-in-cache and workspace
- * invalidation depend on them (see lib/tournament-workspace-query-keys.ts).
+ * invalidation depend on them (see lib/tournament/workspace-query-keys.ts).
  */
 export function TournamentHubShell({
   tournamentId,

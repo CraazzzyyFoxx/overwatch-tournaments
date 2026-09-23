@@ -248,6 +248,16 @@ class PickBanEntryRepository(BaseRepository[models.PickBanEntry]):
             )
         )
 
+    async def delete_for_round(self, session: AsyncSession, *, session_id: int, round: int) -> None:
+        """Every entry of one round, whatever its status — the admin correction's
+        rebuild scraps a round wholesale, not just its leftovers."""
+        await session.execute(
+            sa.delete(models.PickBanEntry).where(
+                models.PickBanEntry.session_id == session_id,
+                models.PickBanEntry.round == round,
+            )
+        )
+
 
 class EncounterPickBanLedgerRepository(BaseRepository[models.EncounterPickBanLedger]):
     """``encounter_pick_ban_ledger`` — cross-round already-banned memory."""

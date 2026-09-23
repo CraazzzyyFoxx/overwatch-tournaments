@@ -171,6 +171,8 @@ class DraftSelectionService:
 
         next_pick.status = DraftPickStatus.ON_CLOCK.value
         next_pick.clock_remaining_ms = None
+        # A fresh pick starts on its main clock: the grace period is per pick.
+        next_pick.overtime_started_at = None
         draft_session.current_pick_id = next_pick.id
         if reordered:
             draft_session.status = DraftStatus.PAUSED.value

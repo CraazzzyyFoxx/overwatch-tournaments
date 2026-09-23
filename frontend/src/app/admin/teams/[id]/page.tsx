@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
-import { MAX_AVATAR_BYTES } from "@/lib/avatar";
+import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Player, Team } from "@/types/team.types";

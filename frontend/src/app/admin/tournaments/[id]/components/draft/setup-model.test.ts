@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
+
+import type { AdminRegistration } from "@/types/balancer-admin.types";
 
 import {
   buildDraftSchedule,
@@ -14,12 +16,13 @@ import {
   validateSetupStep,
   type DraftCaptainRow
 } from "./setup-model";
+import { captainRankSummary, poolRegistrationSummary } from "./setup-types";
 
 const CAPTAIN_ROWS: DraftCaptainRow[] = [
-  { id: 1, label: "Baida#21855", roles: ["tank", "damage", "support"], rank: null },
-  { id: 2, label: "agoNy4#2362", roles: ["support", "tank"], rank: 2600 },
-  { id: 3, label: "sleepdarya#2298", roles: ["support"], rank: 3800 },
-  { id: 4, label: "Zish#2101", roles: ["damage"], rank: 3100 }
+  { id: 1, label: "Baida#21855", roles: ["tank", "damage", "support"], rank: null, rankRole: null },
+  { id: 2, label: "agoNy4#2362", roles: ["support", "tank"], rank: 2600, rankRole: "support" },
+  { id: 3, label: "sleepdarya#2298", roles: ["support"], rank: 3800, rankRole: "support" },
+  { id: 4, label: "Zish#2101", roles: ["damage"], rank: 3100, rankRole: "damage" }
 ];
 
 /** A `roster_shape` payload as the server sends it, for a 3-slot roster. */
@@ -188,5 +191,45 @@ describe("draft setup model", () => {
       )
     ).toEqual([3]);
     expect(CAPTAIN_ROWS.map((row) => row.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("narrows the list to the chosen captains without losing the sort", () => {
+    expect(
+      filterCaptainRows(CAPTAIN_ROWS, {
+        query: "",
+        roles: [],
+        sort: "rank_desc",
+        selectedOnly: true,
+        selectedIds: [1, 4]
+      }).map((row) => row.id)
+    ).toEqual([4, 1]);
+    // The chip is off by default: passing the selection alone changes nothing.
+    expect(
+      filterCaptainRows(CAPTAIN_ROWS, {
+        query: "",
+        roles: [],
+        sort: "rank_desc",
+        selectedIds: [1]
+      })
+    ).toHaveLength(CAPTAIN_ROWS.length);
+  });
+
+  it("ranks a captain by their strongest playable role, not their primary one", () => {
+    // Primary tank 2000, secondary damage 3500, and an inactive support that
+    // must not count at all: seating this captain as a 2000 would put the
+    // pool's strongest damage player in the weakest seat.
+    const registration = {
+      id: 9,
+      roles: [
+        { role: "tank", is_active: true, is_primary: true, priority: 0, rank_value: 2000 },
+        { role: "damage", is_active: true, is_primary: false, priority: 1, rank_value: 3500 },
+        { role: "support", is_active: false, is_primary: false, priority: 2, rank_value: 4200 }
+      ]
+    } as unknown as AdminRegistration;
+    expect(captainRankSummary(registration)).toEqual({ rank: 3500, role: "damage" });
+    expect(poolRegistrationSummary(registration).rank).toBe(2000);
+    expect(
+      captainRankSummary({ id: 10, roles: [] } as unknown as AdminRegistration)
+    ).toEqual({ rank: null, role: null });
   });
 });

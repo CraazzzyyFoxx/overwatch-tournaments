@@ -1,4 +1,4 @@
-import { ADMISSION_ORDER } from "@/lib/admission";
+import { ADMISSION_ORDER } from "@/lib/registration/admission";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { AdmissionDecision } from "@/types/registration.types";
 

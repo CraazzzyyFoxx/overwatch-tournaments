@@ -31,7 +31,7 @@ from shared.core.enums import (
     PickBanKind,
 )
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.domain.pick_ban_engine import series_decided
+from shared.domain import pick_ban_engine as engine
 from shared.messaging.config import (
     TOURNAMENT_EVENTS_EXCHANGE,
 )
@@ -261,10 +261,9 @@ class CaptainService:
         ``EncounterMapCode`` rejects outright — and ``1000`` for a second map. The
         index is the position in PLAY order, which is what ``action_index`` records.
 
-        ``played`` counts as settled alongside ``picked``: by the time the series
-        report is filed every map of it has been played and reconciled
-        (``map_report.submit_map_report``), so a picked-only read went blind exactly
-        when the codes are actually entered.
+        ``picked`` is the whole settled set: a pick is never re-stamped once its
+        position is played (the result lives on ``EncounterGame``), so the veto's
+        play order is complete the moment the series ends.
 
         Returns an empty dict when there is no veto pool (map codes then keep
         ``map_id = NULL``). Soft binding: callers never fail on an index beyond the
@@ -279,7 +278,7 @@ class CaptainService:
             .where(
                 PickBanSession.encounter_id == encounter_id,
                 PickBanSession.kind == PickBanKind.MAP,
-                PickBanEntry.status.in_((MapPoolEntryStatus.PICKED, MapPoolEntryStatus.PLAYED)),
+                PickBanEntry.status == MapPoolEntryStatus.PICKED,
             )
         )
         settled = sorted(rows.all(), key=lambda row: row[1] if row[1] is not None else row[0])
@@ -516,7 +515,9 @@ class CaptainService:
         # format. Admin paths stay advisory — a historical or technical result is
         # the organizer's call.
         if (
-            not series_decided(home_score, away_score, encounter.best_of)
+            not engine.series_complete(
+                engine.SeriesScore(home_score, away_score, home_score + away_score), encounter.best_of
+            )
             or max(home_score, away_score) > encounter.best_of // 2 + 1
         ):
             raise HTTPException(

@@ -21,7 +21,6 @@ function field(key: string, visible_when: Condition | null = null): FormField {
     required: false,
     visibility: "public",
     params: {},
-    show_in_draft: false,
     visible_when,
   };
 }

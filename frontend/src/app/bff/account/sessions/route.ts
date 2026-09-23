@@ -1,6 +1,6 @@
-import { authServiceBase } from "@/lib/api-routes";
+import { authServiceBase } from "@/lib/api/routes";
 import { NextResponse } from "next/server";
-import { requireAccessToken } from "@/lib/auth-cookies";
+import { requireAccessToken } from "@/lib/auth/cookies";
 
 const AUTH_SERVICE_URL = authServiceBase();
 

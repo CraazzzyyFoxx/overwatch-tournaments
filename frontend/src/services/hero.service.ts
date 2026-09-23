@@ -1,7 +1,7 @@
 import { Hero, HeroLeaderboardEntry, HeroPlaytime } from "@/types/hero.types";
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import { LogStatsName } from "@/types/stats.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 
 export default class heroService {
   static async lookup(): Promise<LookupItem[]> {

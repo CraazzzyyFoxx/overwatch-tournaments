@@ -13,11 +13,11 @@ import {
   computeSlotHints,
   getDoubleEliminationFinalRounds,
   getRoundSectionMatchCapacity,
-  isSettled,
   type BracketMatch,
   type RoundGroup,
   type SlotHint
-} from "@/lib/bracket-view";
+} from "@/lib/bracket/view";
+import { isEncounterCompleted } from "@/lib/encounter/status";
 
 /** The match-number strip down a card's left edge; part of `CARD_WIDTH`. */
 export const GUTTER_WIDTH = 26;
@@ -116,7 +116,7 @@ function getMatchNames(match: BracketMatch) {
 }
 
 export function getWinner(match: BracketMatch): Side | null {
-  if (!isSettled(match)) return null;
+  if (!isEncounterCompleted(match)) return null;
   if (match.score.home === match.score.away) return null;
   return match.score.home > match.score.away ? "home" : "away";
 }
@@ -165,7 +165,7 @@ function edgeBetween(source: LayoutNode, target: LayoutNode): LayoutEdge {
   return {
     id: `edge-${source.encounter.id}-${target.encounter.id}`,
     path: buildPath(source, target),
-    isCompleted: isSettled(source.encounter),
+    isCompleted: isEncounterCompleted(source.encounter),
     sourceId: source.encounter.id,
     targetId: target.encounter.id,
     teamId: winnerTeamId(source.encounter)
@@ -199,7 +199,7 @@ function createNode(
       homeScore: match.score.home,
       awayScore: match.score.away,
       winner: getWinner(match),
-      isCompleted: isSettled(match)
+      isCompleted: isEncounterCompleted(match)
     },
     encounter: match
   };

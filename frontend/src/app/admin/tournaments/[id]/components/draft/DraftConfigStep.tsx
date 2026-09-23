@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId } from "react";
-import { ArrowUpRight, ChevronDown, Clock3 } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Clock3, TimerReset } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { NumberInput } from "@/components/ui/number-input";
@@ -18,10 +18,10 @@ import { Switch } from "@/components/ui/switch";
 import FlexIcon from "@/components/icons/FlexIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { TONE_CLASS } from "@/components/kit/tone";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftAutopickStrategy, DraftFormat } from "@/types/draft.types";
-import { isRoleSlotCode, orderSlotCodes, type RosterShape } from "@/lib/roster-shape";
+import { isRoleSlotCode, orderSlotCodes, type RosterShape } from "@/lib/roster/shape";
 
 import { DRAFT_ROUND_RULES, MAX_DRAFT_TEAM_COUNT, MIN_DRAFT_TEAM_COUNT } from "./setup-model";
 import type { DraftSetupConfig } from "./setup-types";
@@ -36,6 +36,7 @@ interface DraftConfigStepProps {
 }
 
 const PICK_TIME_PRESETS = [30, 45, 60, 90];
+const OVERTIME_PRESETS = [0, 15, 30, 60];
 const FORMATS: DraftFormat[] = ["snake", "linear", "custom"];
 
 export function DraftConfigStep({
@@ -52,6 +53,7 @@ export function DraftConfigStep({
   const pickTimeLabelId = useId();
   const formatLabelId = useId();
   const roundRulesLabelId = useId();
+  const overtimeLabelId = useId();
 
   const patch = (next: Partial<DraftSetupConfig>) => onChange({ ...value, ...next });
 
@@ -164,6 +166,56 @@ export function DraftConfigStep({
             />
           </div>
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <TimerReset className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <span id={overtimeLabelId} className="text-sm font-medium leading-none">
+            {t("overtime")}
+          </span>
+        </div>
+        <div
+          className="flex flex-wrap items-center gap-3"
+          role="group"
+          aria-labelledby={overtimeLabelId}
+        >
+          <div className="inline-flex h-9 items-center gap-0.5 rounded-md border border-border/70 bg-card p-0.5">
+            {OVERTIME_PRESETS.map((seconds) => (
+              <button
+                key={seconds}
+                type="button"
+                disabled={locked}
+                aria-pressed={value.overtimeSeconds === seconds}
+                onClick={() => patch({ overtimeSeconds: seconds })}
+                className={cn(
+                  "inline-flex h-8 min-w-13 items-center justify-center rounded-[5px] px-3 text-sm font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                  value.overtimeSeconds === seconds
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {seconds === 0 ? t("overtimeOff") : `${seconds}s`}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="draft-overtime" className="text-xs font-normal text-muted-foreground">
+              {t("customOvertime")}
+            </Label>
+            <NumberInput
+              id="draft-overtime"
+              integer
+              min={0}
+              max={300}
+              disabled={locked}
+              value={value.overtimeSeconds}
+              onValueChange={(next) => patch({ overtimeSeconds: next ?? 0 })}
+              className="h-9 w-20 tabular-nums"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">{t("overtimeHint")}</p>
       </div>
 
       <div className="space-y-3">

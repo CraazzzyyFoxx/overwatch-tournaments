@@ -57,4 +57,10 @@ var WorkspaceWriteRoutes = []edge.RouteSpec{
 	// value, a workspace admin may only lower it.
 	{Method: "GET", Pattern: "/api/v1/workspaces/{workspace_id}/quota/usage", Queue: "rpc.app.quota.workspace_usage", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/workspaces/{workspace_id}/quota", Queue: "rpc.app.workspaces.quota_set", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// --- notification delivery (event-notifications design §4.8): the channel
+	// this workspace's broadcasts are posted to, its language and which kinds
+	// are posted. workspace.update in the worker, like the discord_* reads --
+	// the stored channel makes the bot speak in a private guild.
+	{Method: "GET", Pattern: "/api/v1/workspaces/{workspace_id}/notification-config", Queue: "rpc.app.workspaces.notification_config_get", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/workspaces/{workspace_id}/notification-config", Queue: "rpc.app.workspaces.notification_config_update", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 }

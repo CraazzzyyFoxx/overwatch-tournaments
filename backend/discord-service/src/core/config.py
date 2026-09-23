@@ -19,6 +19,10 @@ class Settings(BaseServiceSettings):
     # configure_realtime(). Required — without it emit() drops every event.
     redis_url: RedisDsn
 
+    # Where a button reply links back to (profile, notification settings) --
+    # the same PUBLIC_SITE_URL app-service renders the cards' links from.
+    public_site_url: str = "http://localhost:3000"
+
     # RabbitMQ (optional)
     rabbitmq_url: str | None = None
 

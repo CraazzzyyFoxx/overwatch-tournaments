@@ -1,4 +1,4 @@
-import { reachedAtLeast } from "@/lib/tournament-lifecycle";
+import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import type { TournamentReadiness } from "@/types/admin.types";
 import type { StageSummary, Tournament, TournamentStatus } from "@/types/tournament.types";
 

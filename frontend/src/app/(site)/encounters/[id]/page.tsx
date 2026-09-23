@@ -9,7 +9,7 @@ import { StagePill } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import encounterService from "@/services/encounter.service";
-import { getEncounterState } from "@/lib/encounter-status";
+import { getEncounterState } from "@/lib/encounter/status";
 import EncounterScoreboard from "./components/EncounterScoreboard";
 import EncounterMapRow from "./components/EncounterMapRow";
 import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
@@ -18,6 +18,7 @@ import EncounterCaptainReports from "./components/EncounterCaptainReports";
 import EncounterPregamePanel from "./components/EncounterPregamePanel";
 import { PregameRoomLink } from "./components/PregameRoomLink";
 import { Pill } from "@/components/match/EncounterAtoms";
+import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import {
   buildSeriesSlots,
   countMapWins,
@@ -26,7 +27,7 @@ import {
   getSeriesSeconds,
   getSeriesVerdict,
   getStageKind
-} from "@/lib/encounter-detail";
+} from "@/lib/encounter/detail";
 import styles from "@/components/match/EncounterDetail.module.css";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +79,12 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
     encounter.stage_item?.name ?? encounter.stage?.name ?? t("common.unassignedStage");
 
   const slots = buildSeriesSlots(encounter);
-  const playedSlots = slots.filter((slot) => slot.match != null);
+  // A position counts as played once it has a RESULT or a parsed log: a scrim
+  // writes no `Match` rows at all, and a log can land before the captains
+  // confirm.
+  const playedSlots = slots.filter(
+    (slot) => slot.match != null || acceptedScore(slot.game) != null
+  );
   const verdict = getSeriesVerdict(encounter);
   const mapWins = countMapWins(encounter);
   const state = getEncounterState(encounter);
@@ -297,7 +303,7 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
         <div className={cn(styles.card, styles.mapList)}>
           {slots.map((slot) => (
             <EncounterMapRow
-              key={slot.match?.id ?? `empty-${slot.index}`}
+              key={slot.index}
               slot={slot}
               homeName={homeName}
               awayName={awayName}

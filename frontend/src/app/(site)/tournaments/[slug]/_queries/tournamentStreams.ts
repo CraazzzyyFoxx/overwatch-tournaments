@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import streamService from "@/services/stream.service";
 
 export function tournamentStreamsQueryOptions(tournamentId: number) {

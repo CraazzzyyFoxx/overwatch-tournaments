@@ -1,7 +1,7 @@
 "use client";
 
 import type { FieldRendererProps } from "@/components/forms/types";
-import type { RoleCode } from "@/lib/roles";
+import type { RoleCode } from "@/lib/roster/roles";
 import type { FormField, RolesParams } from "@/types/forms.types";
 import type { RoleInput } from "@/types/registration.types";
 

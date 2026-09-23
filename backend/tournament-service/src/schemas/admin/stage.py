@@ -41,7 +41,7 @@ class StageSettings(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     scoring: StageScoring | None = None
-    de_grand_final_type: Literal["single", "with_reset"] | None = None
+    de_grand_final_type: Literal["no_reset", "with_reset"] | None = None
     tiebreak_order: list[str] | None = None
 
 

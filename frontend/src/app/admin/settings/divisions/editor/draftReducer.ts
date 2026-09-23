@@ -20,7 +20,7 @@
  * after every action.
  */
 
-import { getTierForRank, OW_REFERENCE_GRID, sortTiersDescending } from "@/lib/division-grid";
+import { getTierForRank, OW_REFERENCE_GRID, sortTiersDescending } from "@/lib/divisions/grid";
 import type { DivisionTier } from "@/types/workspace.types";
 
 /**

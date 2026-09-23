@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import TournamentClientLayout from "./_components/TournamentClientLayout";
 import { getTournamentOverviewState } from "./_data";
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
-import { resolveSiteMetadata } from "@/lib/site-metadata";
+import { resolveSiteMetadata } from "@/lib/site/metadata";
 
 export const dynamic = "force-dynamic";
 

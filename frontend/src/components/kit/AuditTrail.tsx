@@ -23,7 +23,7 @@ import {
 } from "@/components/kit/audit-log";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { AuditLogRead } from "@/types/admin.types";

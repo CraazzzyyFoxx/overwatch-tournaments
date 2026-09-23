@@ -397,7 +397,6 @@ describe("Registration entries", () => {
                 required: false,
                 visibility: "public",
                 params: {},
-                show_in_draft: false
               }
             ]
           }

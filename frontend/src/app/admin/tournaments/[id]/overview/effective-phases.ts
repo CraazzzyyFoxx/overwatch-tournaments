@@ -1,10 +1,10 @@
-import { TOURNAMENT_PHASES, phaseRank } from "@/lib/tournament-lifecycle";
+import { TOURNAMENT_PHASES, phaseRank } from "@/lib/tournament/lifecycle";
 import type { TournamentStatus } from "@/types/tournament.types";
 
 /**
  * Effective lifecycle phase chain for the hub stepper (design D19).
  *
- * The chain is the machine's own order (`@/lib/tournament-lifecycle`) minus the
+ * The chain is the machine's own order (`@/lib/tournament/lifecycle`) minus the
  * phases this tournament will never enter.
  */
 

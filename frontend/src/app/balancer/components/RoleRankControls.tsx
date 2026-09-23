@@ -10,7 +10,7 @@ import {
   resolveDivisionFromRank,
   resolveRankFromDivision,
   sortTiersAscending,
-} from "@/lib/division-grid";
+} from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import type { DivisionGrid } from "@/types/workspace.types";
 

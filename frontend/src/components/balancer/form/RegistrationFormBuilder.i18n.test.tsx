@@ -54,7 +54,6 @@ function schemaFixture(): FormSchema {
     options: null,
     validation: null,
     params: {},
-    show_in_draft: false
   });
   return {
     schema_version: 1,

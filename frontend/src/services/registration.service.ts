@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import { rehydrateRegistrationList } from "@/services/registration.helpers";
 import type {
   Registration,

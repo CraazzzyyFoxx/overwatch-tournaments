@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { TournamentStreams } from "@/types/stream.types";
 
 export default class streamService {

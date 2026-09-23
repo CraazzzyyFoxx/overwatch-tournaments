@@ -63,6 +63,14 @@ interface PregameHeaderProps {
   round: number | null;
   /** Maps this series has settled, oldest first. Empty before the first pick. */
   series: PregameSeriesMap[];
+  /**
+   * The live series score: wins over the confirmed games, counted by the
+   * backend. Null for a room whose payload carries no games (hero-only, or an
+   * older read), where the encounter's own score is the best available.
+   */
+  seriesScore?: { home: number; away: number } | null;
+  /** The finalized official score, set only once the encounter is finalized. */
+  official?: { home_score: number; away_score: number } | null;
   /** Where the back arrow leads: the page the room was opened from. */
   returnTo: string;
 }
@@ -111,16 +119,18 @@ export function PregameHeader({
   phases,
   round,
   series,
+  seriesScore = null,
+  official = null,
   returnTo
 }: Readonly<PregameHeaderProps>) {
   const t = useTranslations("pickBan.room");
   const homeTeam = encounter.home_team ?? null;
   const awayTeam = encounter.away_team ?? null;
   const bestOf = encounter.best_of ?? null;
-  // The series score lives on the encounter, not in the pool: the pool only
-  // tracks each map's status, and `map_report.submit_map_report` is what
-  // increments the encounter's own home/away wins once a map is confirmed.
-  const score = encounter.score ?? null;
+  // Wins over the confirmed games, not the encounter's column: the encounter
+  // only carries a score once it is finalized, and until then the games ARE
+  // the series standing.
+  const score = seriesScore ?? encounter.score ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,6 +161,7 @@ export function PregameHeader({
         awaySeed={session?.away_seed ?? null}
         firstSide={session?.first_side ?? null}
         score={score}
+        official={official}
         bestOf={bestOf}
       />
 
@@ -203,6 +214,7 @@ function Scoreboard({
   awaySeed,
   firstSide,
   score,
+  official,
   bestOf
 }: Readonly<{
   homeName: string;
@@ -213,6 +225,7 @@ function Scoreboard({
   awaySeed: number | null;
   firstSide: "home" | "away" | null;
   score: { home: number; away: number } | null;
+  official: { home_score: number; away_score: number } | null;
   bestOf: number | null;
 }>) {
   const t = useTranslations("pickBan.room");
@@ -284,6 +297,17 @@ function Scoreboard({
             {t("board.score")}
           </span>
         )}
+        {official != null ? (
+          <span
+            data-official-score
+            className="text-label uppercase tracking-label text-[color:var(--aqt-support)]"
+          >
+            {t("board.official", {
+              home: official.home_score,
+              away: official.away_score
+            })}
+          </span>
+        ) : null}
       </div>
 
       <TeamSide

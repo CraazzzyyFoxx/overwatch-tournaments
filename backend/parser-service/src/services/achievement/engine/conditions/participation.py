@@ -33,7 +33,7 @@ OPERATORS = {
     grain=AchievementGrain.user_tournament,
     description="How much of the result reporting the player did for their team",
     required=("metric", "op", "value"),
-    depends_on=("tournament.encounter_report", "tournament.encounter"),
+    depends_on=("tournament.encounter_report", "tournament.encounter_game", "tournament.encounter"),
 )
 async def execute_captain_report_activity(
     session: AsyncSession,
@@ -52,9 +52,11 @@ async def execute_captain_report_activity(
         encounter_col = models.EncounterCaptainReport.encounter_id
         counted = models.EncounterCaptainReport.id
     elif metric == "map_reports":
+        # A claim is keyed by the GAME, not the encounter: the position it
+        # belongs to is what carries the encounter.
         source = models.EncounterMapReport
         user_col = models.EncounterMapReport.reporter_user_id
-        encounter_col = models.EncounterMapReport.encounter_id
+        encounter_col = models.EncounterGame.encounter_id
         counted = models.EncounterMapReport.id
     elif metric == "map_codes":
         # Codes hang off the filer's own captain report, which is what carries
@@ -78,6 +80,11 @@ async def execute_captain_report_activity(
         query = query.join(
             models.EncounterCaptainReport,
             models.EncounterCaptainReport.id == models.EncounterMapCode.report_id,
+        )
+    if metric == "map_reports":
+        query = query.join(
+            models.EncounterGame,
+            models.EncounterGame.id == models.EncounterMapReport.game_id,
         )
 
     query = (

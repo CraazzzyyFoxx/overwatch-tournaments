@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type SettingsTab = "profile" | "preferences" | "sessions" | "favorites";
+export type SettingsTab = "profile" | "privacy" | "security" | "notifications" | "favorites" | "mixes";
 
 type AccountSettingsModalStore = {
   isOpen: boolean;

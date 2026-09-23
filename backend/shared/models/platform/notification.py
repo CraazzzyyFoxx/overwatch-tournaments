@@ -3,13 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Index, String, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db
 
-__all__ = ("Notification", "NotificationRead")
+__all__ = (
+    "Notification",
+    "NotificationDelivery",
+    "NotificationPreference",
+    "NotificationRead",
+    "NotificationWorkspaceConfig",
+)
 
 
 class Notification(db.Base):
@@ -83,6 +89,16 @@ class Notification(db.Base):
             text("published_at DESC"),
             postgresql_where=text("source_workspace_id IS NOT NULL"),
         ),
+        # ``notify(dedupe_key=...)``'s existence check. Deliberately NOT unique:
+        # a unique index would turn two racing status transitions into an
+        # ``IntegrityError`` inside ``transition_status``; a rare duplicate row
+        # is the cheaper failure.
+        Index(
+            "ix_notification_dedupe",
+            "kind",
+            "dedupe_key",
+            postgresql_where=text("dedupe_key IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, autoincrement=True)
@@ -106,6 +122,11 @@ class Notification(db.Base):
     # reachable by the backfill.
     source_workspace_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Producer-chosen identity of "the same event" (``tournament:10``,
+    # ``encounter:5:<iso>``). ``notify()`` returns the existing row for the
+    # same kind + key + recipient instead of writing a second one. NULL = the
+    # kind has legitimate repeats (an invite sent again) and is never deduped.
+    dedupe_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # The render snapshot: named domain fields the frontend interpolates into
     # the ``kind``'s i18n message. No text is stored for system kinds, so a
     # translation fix reaches old rows too.
@@ -168,3 +189,93 @@ class NotificationRead(db.Base):
     # funnels through ``NotificationRepository.audience_clause``, which drops
     # the row for this identity alone.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NotificationDelivery(db.Base):
+    """One row per message actually handed to an outside channel.
+
+    The ledger that makes delivery idempotent: the consumer inserts
+    ``ON CONFLICT DO NOTHING`` on ``(channel, target, dedupe_key)`` in the same
+    transaction as the outbox command to the bot, so a redelivered event finds
+    its row and sends nothing. Skips (preference off, no Discord linked) are
+    not recorded -- only sends.
+
+    No foreign keys, like ``Notification``: a journal outlives its referents.
+    ``ponytail:`` no retention; add it to the purge tick when the table gets big.
+    """
+
+    __tablename__ = "notification_delivery"
+    __table_args__ = (UniqueConstraint("channel", "target", "dedupe_key", name="uq_notification_delivery_target"),)
+
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, autoincrement=True)
+    # ``discord_dm`` | ``discord_channel``.
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    # The Discord user id (DM) or channel id, as text: snowflakes, not keys.
+    target: Mapped[str] = mapped_column(String(64), nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    notification_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    workspace_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class NotificationPreference(db.Base):
+    """A user's opt-outs from Discord DMs, per kind group.
+
+    ``discord_dm`` holds only what the user changed: ``{"matches": false}``.
+    A missing key is the default (on), so a new group needs no backfill.
+    """
+
+    __tablename__ = "notification_preference"
+
+    auth_user_id: Mapped[int] = mapped_column(
+        BigInteger(),
+        ForeignKey("auth.user.id", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
+    )
+    # NOTE: JSONB does not track in-place mutation -- always reassign.
+    discord_dm: Mapped[dict[str, bool]] = mapped_column(JSONB(), nullable=False, server_default=text("'{}'"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class NotificationWorkspaceConfig(db.Base):
+    """Where a workspace's broadcast notifications are posted, and which ones.
+
+    Its own table rather than columns on ``workspace`` (same call as
+    ``balancer.workspace_config``): only the admin settings screen reads it,
+    and it must never reach the public ``WorkspaceRead``.
+    """
+
+    __tablename__ = "notification_workspace_config"
+
+    workspace_id: Mapped[int] = mapped_column(
+        BigInteger(),
+        ForeignKey("workspace.id", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
+    )
+    # NULL = no channel picked yet: broadcasts are skipped.
+    discord_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    locale: Mapped[str] = mapped_column(String(2), nullable=False, server_default=text("'ru'"))
+    # NOTE: JSONB does not track in-place mutation -- always reassign.
+    broadcast_kinds: Mapped[list[str]] = mapped_column(
+        JSONB(),
+        nullable=False,
+        server_default=text("""'["registration.opened", "check_in.opened"]'"""),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

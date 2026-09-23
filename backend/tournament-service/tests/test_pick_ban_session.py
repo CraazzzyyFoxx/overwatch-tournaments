@@ -16,9 +16,17 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.exc import MissingGreenlet  # noqa: E402
 
-from shared.core.enums import FirstBanRotation, MapVetoMode, MapVetoSessionStatus, PickBanKind  # noqa: E402
+from shared.core.enums import (  # noqa: E402
+    EncounterGameState,
+    EncounterStatus,
+    FirstBanRotation,
+    MapVetoMode,
+    MapVetoSessionStatus,
+    PickBanKind,
+)
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
+from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
     EncounterPickBanLedger,
     EncounterReadiness,
@@ -99,7 +107,24 @@ def _encounter(*, best_of: int, home: int | None = 10, away: int | None = 20) ->
         away_team_id=away,
         home_score=0,
         away_score=0,
+        # `EncounterGameService.materialize_series_score` refuses to touch an
+        # official (COMPLETED) encounter, so every path that lists games reads it.
+        status=EncounterStatus.OPEN,
     )
+
+
+def _game(position: int, *, state: EncounterGameState, home: int | None = None, away: int | None = None) -> Any:
+    """One ``EncounterGame``-shaped row of encounter 500's series."""
+    game = EncounterGame(
+        encounter_id=500,
+        position=position,
+        map_id=100 + position,
+        state=state,
+        accepted_home_score=home,
+        accepted_away_score=away,
+    )
+    game.id = 700 + position
+    return game
 
 
 def _loads_config_pool(statement: Any) -> bool:
@@ -175,6 +200,7 @@ class _FakeSession:
         entries: list[Any] | None = None,
         encounter: Any = None,
         map_session: Any = _INHERIT,
+        games: list[Any] | None = None,
         stage_published: bool = True,
     ) -> None:
         self.map_session = map_session
@@ -195,6 +221,9 @@ class _FakeSession:
         # reads them to decide whether the round in play is resolved (it never
         # stacks a round on an unfinished one) and which round already exists.
         self.entries = entries or []
+        # The encounter's `EncounterGame` rows -- the series' positions. Every
+        # path that asks "was position N played" reads these now.
+        self.games = games or []
         # `advance_to_next_round` reads `best_of` off the encounter to cap the
         # rounds it will ever open.
         self.encounter = encounter
@@ -253,7 +282,10 @@ class _FakeSession:
             ):
                 return _Result([] if self.map_session is None else [self.map_session])
             return _Result([] if self.existing is None else [self.existing])
-        if getattr(entity, "__name__", None) in {"EncounterMapReport", "Match"}:
+        if entity is EncounterGame:
+            # `EncounterGameRepository.list_for_encounter` excludes cancelled rows.
+            return _Result([game for game in self.games if game.state != EncounterGameState.CANCELLED])
+        if getattr(entity, "__name__", None) == "EncounterMapReport":
             return _Result([])
         if entity is PickBanConfig:
             if self.configs is not None:
@@ -507,10 +539,49 @@ class ResolveConfigTemplateShadowTests(IsolatedAsyncioTestCase):
         self.assertIs(resolved, child)
 
 
-class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
-    """No map veto: round 1 opens at ready; round 2 waits on an agreed report."""
+class MapRoundOutcomeTests(IsolatedAsyncioTestCase):
+    """The series position's CONFIRMED game is the only thing that names a map's
+    winner. A parsed ``Match`` is an observation, and an unconfirmed position has
+    no result to rotate the next round's opener on."""
 
-    def _hero_session(self, *, complete: bool) -> tuple[SimpleNamespace, SimpleNamespace, _FakeSession]:
+    async def outcome_of(self, games: list[Any], round_number: int) -> str | None:
+        session = _FakeSession(games=games)
+        return await pick_ban_session_service.map_round_outcome(session, _encounter(best_of=3), round_number)
+
+    async def test_a_confirmed_position_names_its_winner(self) -> None:
+        games = [_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)]
+
+        self.assertEqual("home", await self.outcome_of(games, 1))
+
+    async def test_the_away_side_wins_the_other_way_round(self) -> None:
+        games = [_game(1, state=EncounterGameState.CONFIRMED, home=0, away=3)]
+
+        self.assertEqual("away", await self.outcome_of(games, 1))
+
+    async def test_a_draw_is_an_outcome_of_its_own_not_a_missing_one(self) -> None:
+        games = [_game(1, state=EncounterGameState.CONFIRMED, home=1, away=1)]
+
+        self.assertEqual("draw", await self.outcome_of(games, 1))
+
+    async def test_an_unconfirmed_position_has_no_outcome(self) -> None:
+        games = [_game(1, state=EncounterGameState.DISPUTED)]
+
+        self.assertIsNone(await self.outcome_of(games, 1))
+
+    async def test_a_position_that_does_not_exist_yet_has_no_outcome(self) -> None:
+        games = [_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)]
+
+        self.assertIsNone(await self.outcome_of(games, 2))
+        self.assertIsNone(await self.outcome_of(games, 0), "round 0 is the loop's 'before the first map'")
+
+
+class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
+    """Freeplay (no map veto): round 1 opens at ready; round N+1 waits until
+    position N is confirmed."""
+
+    def _hero_session(
+        self, *, complete: bool, games: list[Any] | None = None
+    ) -> tuple[SimpleNamespace, SimpleNamespace, _FakeSession]:
         config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103, 104])
         config.sequence_json = ["ban_first", "ban_second"]
         pick_ban = SimpleNamespace(
@@ -535,12 +606,15 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
             existing=pick_ban,
             map_session=None,
             entries=entries,
+            games=games,
             encounter=_encounter(best_of=3),
         )
         return config, pick_ban, session
 
-    async def test_does_not_open_round_two_before_a_map_report(self) -> None:
-        _config_row, pick_ban, session = self._hero_session(complete=True)
+    async def test_does_not_open_round_two_before_the_first_position_is_confirmed(self) -> None:
+        _config_row, pick_ban, session = self._hero_session(
+            complete=True, games=[_game(1, state=EncounterGameState.AWAITING_RESULT)]
+        )
 
         with patch.object(
             pick_ban_session_service,
@@ -552,28 +626,31 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
         self.assertEqual([], session.pool_rows)
         self.assertEqual(MapVetoSessionStatus.COMPLETED, pick_ban.status)
 
-    async def test_opens_round_two_after_an_agreed_map_report(self) -> None:
-        _config_row, pick_ban, session = self._hero_session(complete=True)
+    async def test_opens_round_two_once_the_first_position_is_confirmed(self) -> None:
+        _config_row, pick_ban, session = self._hero_session(
+            complete=True, games=[_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)]
+        )
 
-        with (
-            patch.object(
-                pick_ban_session_service,
-                "_resolve_config",
-                new=AsyncMock(return_value=_config(slots=[])),
-            ),
-            patch.object(
-                pick_ban_session_service,
-                "_resolved_report_rounds",
-                new=AsyncMock(return_value=1),
-            ),
+        with patch.object(
+            pick_ban_session_service,
+            "_resolve_config",
+            new=AsyncMock(return_value=_config(slots=[])),
         ):
             await pick_ban_session_service.sync_hero_rounds(session, session.encounter, commit=True)
 
         self.assertEqual({2}, {row.round for row in session.pool_rows})
         self.assertEqual(MapVetoSessionStatus.ACTIVE, pick_ban.status)
 
-    async def test_does_not_open_round_two_while_round_one_is_still_in_play(self) -> None:
-        _config_row, pick_ban, session = self._hero_session(complete=False)
+    async def test_a_decided_series_opens_nothing_more(self) -> None:
+        # 2:0 in a Bo3 — the third position is never played, so its hero round
+        # must not open even though `confirmed + 1` would allow a third.
+        _config_row, _pick_ban, session = self._hero_session(
+            complete=True,
+            games=[
+                _game(1, state=EncounterGameState.CONFIRMED, home=2, away=1),
+                _game(2, state=EncounterGameState.CONFIRMED, home=3, away=0),
+            ],
+        )
 
         with patch.object(
             pick_ban_session_service,
@@ -584,29 +661,19 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([], session.pool_rows)
 
+    async def test_does_not_open_round_two_while_round_one_is_still_in_play(self) -> None:
+        _config_row, pick_ban, session = self._hero_session(
+            complete=False, games=[_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)]
+        )
 
-class FreeplayMapIndexTests(IsolatedAsyncioTestCase):
-    async def test_first_named_map_is_series_position_one(self) -> None:
-        from src.services.encounter.map_report import MapReportService
+        with patch.object(
+            pick_ban_session_service,
+            "_resolve_config",
+            new=AsyncMock(return_value=_config(slots=[])),
+        ):
+            await pick_ban_session_service.sync_hero_rounds(session, session.encounter, commit=True)
 
-        class Repo:
-            async def list_for_encounter(self, session: object, encounter_id: int) -> list:
-                return []
-
-        svc = MapReportService(report_repo=Repo())  # type: ignore[arg-type]
-        self.assertEqual(1, await svc._freeplay_index(None, 500, 21))
-
-    async def test_second_captain_must_report_the_open_map(self) -> None:
-        from src.services.encounter.map_report import MapReportService
-
-        class Repo:
-            async def list_for_encounter(self, session: object, encounter_id: int) -> list:
-                return [SimpleNamespace(map_index=1, map_id=21, team_id=10, home_score=2, away_score=1)]
-
-        svc = MapReportService(report_repo=Repo())  # type: ignore[arg-type]
-        self.assertEqual(1, await svc._freeplay_index(None, 500, 21))
-        with self.assertRaises(HTTPException):
-            await svc._freeplay_index(None, 500, 99)
+        self.assertEqual([], session.pool_rows)
 
 
 class ResetPickBanSessionTests(IsolatedAsyncioTestCase):
@@ -627,7 +694,8 @@ class ResetPickBanSessionTests(IsolatedAsyncioTestCase):
             {PickBanSession.__tablename__, EncounterPickBanLedger.__tablename__},
             set(session.deleted_tables()),
         )
-        self.assertEqual(1, session.flushes)
+        # Two flushes: one retiring the series' games, one after the deletes.
+        self.assertEqual(2, session.flushes)
         self.assertEqual(1, session.commits)
 
     async def test_no_existing_session_still_clears_the_ledger_and_recreates(self) -> None:
@@ -683,28 +751,45 @@ class SyncPickBanSessionAfterTeamChangeTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([], session.pool_rows)
 
-    async def test_an_existing_session_with_a_played_entry_is_left_alone(self) -> None:
+    async def test_an_existing_session_with_a_confirmed_game_is_left_alone(self) -> None:
         existing = SimpleNamespace(id=900)
-        session = _FakeSession(existing=existing, pool_count=1)
-        # A LIVE series: the played map already scored. (A cascade reset zeroes the
-        # score first, and then the stale session must go — see
-        # test_cascade_reset_reports.)
-        encounter = _encounter(best_of=3)
-        encounter.home_score = 1
-
-        await pick_ban_session_service.sync_pick_ban_session_after_team_change(session, encounter, PickBanKind.MAP)
+        session = _FakeSession(existing=existing, games=[_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)])
+        # A map really was played against the old pairing: an admin untangles
+        # that by hand rather than having the veto silently re-run (spec §6.5).
+        await pick_ban_session_service.sync_pick_ban_session_after_team_change(
+            session, _encounter(best_of=3), PickBanKind.MAP
+        )
 
         self.assertEqual([], session.deleted_tables())
 
-    async def test_an_existing_session_with_no_played_entries_is_reset(self) -> None:
+    async def test_a_drawn_position_still_counts_as_played(self) -> None:
+        # A draw scores 0:0, so the old "does the series carry a score" guard
+        # let a team change re-veto a map that had actually been played.
         existing = SimpleNamespace(id=900)
-        session = _FakeSession(existing=existing, pool_count=0, config=None)
+        session = _FakeSession(existing=existing, games=[_game(1, state=EncounterGameState.CONFIRMED, home=1, away=1)])
+
+        await pick_ban_session_service.sync_pick_ban_session_after_team_change(
+            session, _encounter(best_of=3), PickBanKind.MAP
+        )
+
+        self.assertEqual([], session.deleted_tables())
+
+    async def test_an_existing_session_with_no_confirmed_game_is_reset(self) -> None:
+        existing = SimpleNamespace(id=900)
+        session = _FakeSession(
+            existing=existing,
+            config=None,
+            games=[_game(1, state=EncounterGameState.AWAITING_RESULT)],
+        )
 
         await pick_ban_session_service.sync_pick_ban_session_after_team_change(
             session, _encounter(best_of=3), PickBanKind.MAP
         )
 
         self.assertIn(PickBanSession.__tablename__, session.deleted_tables())
+        # The reset retires the position the scrapped picks opened, or a stale
+        # game would keep collecting claims under a pool that no longer names it.
+        self.assertEqual([EncounterGameState.CANCELLED], [game.state for game in session.games])
 
 
 class ReadinessGateTests(IsolatedAsyncioTestCase):
@@ -921,7 +1006,7 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
         session.existing = pick_ban  # `advance_to_next_round` re-reads it under FOR UPDATE
 
         with self.assertRaises(HTTPException) as ctx:
-            await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner="home")
+            await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="home")
 
         self.assertEqual(422, ctx.exception.status_code)
         self.assertIn(
@@ -948,7 +1033,7 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
         session.existing = pick_ban
 
         result = await pick_ban_session_service.advance_to_next_round(
-            session, pick_ban, completed_round=1, winner="home"
+            session, pick_ban, completed_round=1, outcome="home"
         )
 
         self.assertIs(pick_ban, result)
@@ -1069,7 +1154,7 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
-        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner=None)
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome=None)
 
         self.assertEqual([21, 22], [row.item_id for row in session.pool_rows])
         self.assertEqual(["ban_home", "decider", "ban_home", "decider"], pick_ban.resolved_sequence_json)
@@ -1085,7 +1170,7 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
-        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner="home")
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="home")
 
         self.assertEqual([], session.pool_rows)
         self.assertEqual(["ban_home", "decider"], pick_ban.resolved_sequence_json)
@@ -1097,7 +1182,7 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
-        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner="home")
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="home")
 
         self.assertEqual([], session.pool_rows)
 
@@ -1117,7 +1202,7 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         pick_ban = self._pick_ban(config, kind=PickBanKind.HERO, sequence=["ban_home", "ban_away"])
         session.existing = pick_ban
 
-        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner="away")
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="away")
 
         self.assertEqual([101, 102, 103, 104], [row.item_id for row in session.pool_rows])
         self.assertEqual([2, 2, 2, 2], [row.round for row in session.pool_rows])
@@ -1127,9 +1212,9 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         self.assertIn(PickBanEntry.__tablename__, session.deleted_tables())
 
     async def test_a_drawn_map_keeps_the_established_opener(self) -> None:
-        # `result_winner_first` with no winner: a draw names none. Falling back
-        # to the session's opener beats stalling the series on a rotation that
-        # cannot resolve.
+        # `result_winner_first` on a DRAW: nobody won, so there is nothing to
+        # rotate on. Falling back to the session's opener beats stalling the
+        # series on a rotation that cannot resolve.
         config = _config(
             mode=MapVetoMode.SLOTS,
             rotation=FirstBanRotation.RESULT_WINNER_FIRST,
@@ -1139,9 +1224,28 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
-        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner=None)
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="draw")
 
         self.assertEqual(["ban_home", "decider", "ban_home", "ban_away", "decider"], pick_ban.resolved_sequence_json)
+
+    async def test_an_unconfirmed_previous_map_owes_the_round_instead_of_inventing_an_opener(self) -> None:
+        # `outcome=None` under a result-dependent rotation is not "no winner" --
+        # it is "no result yet". Opening the round anyway (the old `fixed`
+        # fallback) handed round 2's bans out before map 1 was played, and on
+        # the wrong side.
+        config = _config(
+            mode=MapVetoMode.SLOTS,
+            rotation=FirstBanRotation.RESULT_LOSER_FIRST,
+            slots=[_slot(1, [11, 12]), _slot(2, [21, 22, 23])],
+        )
+        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=2))
+        pick_ban = self._pick_ban(config)
+        session.existing = pick_ban
+
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome=None)
+
+        self.assertEqual([], session.pool_rows)
+        self.assertEqual(["ban_home", "decider"], pick_ban.resolved_sequence_json)
 
     async def test_the_next_round_loads_the_config_with_its_pool(self) -> None:
         # Regression, Sentry OWT-TOURNAMENTS-22Y: the config was fetched with
@@ -1158,7 +1262,7 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         with self.assertRaises(MissingGreenlet):
             _ = unloaded.slots
 
-        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner="home")
+        await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="home")
 
         self.assertEqual([21, 22], [row.item_id for row in session.pool_rows])
 
@@ -1193,7 +1297,7 @@ class AdvanceLocksTheSessionTests(IsolatedAsyncioTestCase):
             return target
 
         with patch.object(pick_ban_session_service, "lock_pick_ban_session", spy):
-            await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, winner=None)
+            await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome=None)
 
         self.assertEqual([900], locked)
         self.assertEqual([21, 22], [row.item_id for row in session.pool_rows])

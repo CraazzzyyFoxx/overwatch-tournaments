@@ -57,8 +57,8 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { notify } from "@/lib/notify";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
-import { getEncounterState, getEncounterWinner } from "@/lib/encounter-status";
+import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
+import { getEncounterState, getEncounterWinner } from "@/lib/encounter/status";
 import { cn } from "@/lib/utils";
 import {
   applyBuiltInView,

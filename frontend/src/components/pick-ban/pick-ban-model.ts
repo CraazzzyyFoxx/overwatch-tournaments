@@ -7,10 +7,11 @@
  * (design: docs/plans/2026-08-09-generic-pickban-engine.md).
  */
 import type {
+  EncounterGame,
   PickBanAction,
   PickBanEntry,
   PickBanEntryStatus,
-  PickBanMapReport,
+  PickBanGame,
   PickBanSession,
   PickBanState,
   VetoUnavailableReason
@@ -41,7 +42,7 @@ export function parseStepToken(token: string): ParsedPickBanStep {
 }
 
 /**
- * Picked/played items in their final play order (action_index, legacy `order`
+ * Picked items in their final play order (action_index, legacy `order`
  * fallback).
  *
  * For a map pool this IS the series' map order, and index + 1 is the round:
@@ -50,7 +51,7 @@ export function parseStepToken(token: string): ParsedPickBanStep {
  */
 export function pickedItemsInOrder(pool: PickBanEntry[]): PickBanEntry[] {
   return pool
-    .filter((entry) => entry.status === "picked" || entry.status === "played")
+    .filter((entry) => entry.status === "picked")
     .sort((left, right) => (left.action_index ?? left.order) - (right.action_index ?? right.order));
 }
 
@@ -96,31 +97,31 @@ export function seriesMatchesByPosition<T extends SeriesMatchLike>(
 }
 
 /**
- * The score BOTH captains agreed on for one 1-based position of the series, or
- * `null` while they have not, or disagree.
+ * The game at one 1-based position of the series, or null when the payload
+ * carries none (a hero-only room, or a position the server has not opened
+ * yet).
  *
- * Read as the fallback for a series position with no `Match` row. A scrim writes
- * none — its per-map score exists to run the series, not to record it
- * (docs/plans/2026-08-12-scrim-rooms.md §4.5) — so without this the room showed
- * a captain's own agreed maps as played with no score at all.
- *
- * Keyed on `map_index`, the same position `seriesMatchesByPosition` aligns on:
- * a series may play one map twice, and keying on the map alone printed the
- * earlier play's score on the later one.
+ * Position, never `map_id`, is what identifies a game: a series may play one
+ * map twice, and keying on the map alone showed the earlier play's result on
+ * the later one.
  */
-export function agreedMapScore(
-  reports: PickBanMapReport[],
-  position: number
+export function gameAtPosition(games: PickBanGame[], position: number): PickBanGame | null {
+  return games.find((game) => game.position === position) ?? null;
+}
+
+/**
+ * The accepted score of `game`, or null while it has none.
+ *
+ * Only a `confirmed` game has one: a dispute, or a single filed claim, is not
+ * yet a result, and printing either would tell the captains the position was
+ * settled. The server holds the same line before it advances the series.
+ */
+export function acceptedScore(
+  game: EncounterGame | null
 ): { home: number; away: number } | null {
-  const forPosition = reports.filter((report) => report.map_index === position);
-  const home = forPosition.find((report) => report.side === "home");
-  const away = forPosition.find((report) => report.side === "away");
-  if (home == null || away == null) return null;
-  // Both filed, and their claims match — the same reconciliation the server
-  // applies before it advances the series. A dispute shows no score, because
-  // there is not yet one to show.
-  if (home.home_score !== away.home_score || home.away_score !== away.away_score) return null;
-  return { home: home.home_score, away: home.away_score };
+  if (game == null || game.state !== "confirmed") return null;
+  if (game.accepted_home_score == null || game.accepted_away_score == null) return null;
+  return { home: game.accepted_home_score, away: game.accepted_away_score };
 }
 
 /**

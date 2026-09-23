@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
@@ -19,7 +19,7 @@ import type {
 } from "@/types/draft.types";
 import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
-import { applyDraftEvent, presenceFromEvent } from "@/lib/draft-logic";
+import { applyDraftEvent, presenceFromEvent } from "@/lib/draft/logic";
 
 const MAX_PENDING_DRAFT_EVENTS = 100;
 const EMPTY_DRAFT_PRESENCE: DraftPresenceState = { users: {}, anonymous_viewer_count: 0 };
@@ -241,6 +241,12 @@ export function useDraftMutations(tournamentId: number) {
     onSettled: invalidate,
   });
 
+  const extendClock = useMutation({
+    mutationFn: (v: { pickId: number; version: number; seconds: number }) =>
+      draftService.extend(v.pickId, { expected_version: v.version, seconds: v.seconds }),
+    onSettled: invalidate,
+  });
+
   const editPlayerRole = useMutation({
     mutationFn: (v: { sessionId: number; playerId: number; request: DraftRoleEditRequest }) =>
       draftService.editPlayerRole(v.sessionId, v.playerId, v.request),
@@ -254,5 +260,12 @@ export function useDraftMutations(tournamentId: number) {
     }
   });
 
-  return { makePick, autopick, override, lifecycle, editPlayerRole };
+  return { makePick, autopick, override, lifecycle, editPlayerRole, extendClock };
 }
+
+/**
+ * The mutation set the draft room passes around. Named here, at the module that
+ * owns it, so the room's components import one name instead of each spelling
+ * out `ReturnType<typeof useDraftMutations>`.
+ */
+export type DraftMutations = ReturnType<typeof useDraftMutations>;

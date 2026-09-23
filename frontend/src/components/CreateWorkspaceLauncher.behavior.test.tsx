@@ -15,7 +15,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreateWorkspaceLauncher } from "@/components/CreateWorkspaceLauncher";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import en from "@/i18n/messages/en.json";
 
 declare global {

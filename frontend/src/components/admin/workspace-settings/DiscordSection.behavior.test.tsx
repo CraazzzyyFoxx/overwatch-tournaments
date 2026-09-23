@@ -16,7 +16,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types";
 import { DiscordSection } from "./DiscordSection";
 

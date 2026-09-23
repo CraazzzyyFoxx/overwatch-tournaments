@@ -408,16 +408,18 @@ class _FormSession:
         return self._schema_json
 
 
-def test_visible_custom_fields_takes_only_flagged_definitions_in_form_order() -> None:
+def test_visible_custom_fields_takes_every_public_custom_definition_in_form_order() -> None:
     session = _FormSession(
         _schema(
-            {"key": "vk", "label": "VK profile", "kind": "url", "show_in_draft": True, "visibility": "public"},
+            {"key": "vk", "label": "VK profile", "kind": "url", "visibility": "public"},
+            # No opt-in flag exists any more: public custom questions all reach the board.
             {"key": "age", "label": "Age", "kind": "number", "visibility": "public"},
-            {"key": "rules", "label": "", "kind": "checkbox", "show_in_draft": True, "visibility": "public"},
-            # A builtin never reaches the custom-answer strip.
-            {"key": "battle_tag", "kind": "builtin", "show_in_draft": True, "visibility": "public"},
-            # show_in_draft on an organizers-only question must not leak.
-            {"key": "phone", "label": "Phone", "kind": "text", "show_in_draft": True, "visibility": "organizers"},
+            {"key": "rules", "label": "", "kind": "checkbox", "visibility": "public"},
+            # A builtin never reaches the custom-answer strip: its answer is not in
+            # ``custom_fields_json`` at all.
+            {"key": "battle_tag", "kind": "builtin", "visibility": "public"},
+            # An organizers-only question must not leak.
+            {"key": "phone", "label": "Phone", "kind": "text", "visibility": "organizers"},
             "not a definition",
         )
     )
@@ -426,6 +428,7 @@ def test_visible_custom_fields_takes_only_flagged_definitions_in_form_order() ->
 
     assert fields == [
         board.VisibleCustomField(key="vk", label="VK profile", type="url"),
+        board.VisibleCustomField(key="age", label="Age", type="number"),
         # A missing label falls back to the key.
         board.VisibleCustomField(key="rules", label="rules", type="checkbox"),
     ]
@@ -529,6 +532,7 @@ def _live_draft(session_id: int = 1) -> DraftSession:
         format=DraftFormat.SNAKE.value,
         rounds=4,
         pick_time_seconds=45,
+        overtime_seconds=0,
         current_pick_id=None,
         pool_source=DraftPoolSource.MANUAL.value,
         source_balance_id=None,
@@ -541,7 +545,7 @@ def _live_draft(session_id: int = 1) -> DraftSession:
     )
 
 
-def test_board_projects_flagged_answers_and_never_ships_the_rest(monkeypatch) -> None:
+def test_board_projects_public_answers_and_never_ships_the_rest(monkeypatch) -> None:
     async def _shape(*_args, **_kwargs):
         return DEFAULT_ROSTER_SHAPE
 
@@ -565,8 +569,8 @@ def test_board_projects_flagged_answers_and_never_ships_the_rest(monkeypatch) ->
     )
     session = _BoardSession(
         schema_json=_schema(
-            {"key": "vk", "label": "VK profile", "kind": "url", "show_in_draft": True, "visibility": "public"},
-            {"key": "phone", "label": "Phone", "kind": "text", "visibility": "public"},
+            {"key": "vk", "label": "VK profile", "kind": "url", "visibility": "public"},
+            {"key": "phone", "label": "Phone", "kind": "text", "visibility": "organizers"},
         ),
         players=[player],
     )
@@ -579,8 +583,8 @@ def test_board_projects_flagged_answers_and_never_ships_the_rest(monkeypatch) ->
     ]
     assert read.battle_tag == "Ana#1"
     assert read.notes == "prefers Ana"
-    # The un-flagged answer leaves the service in NO shape — the whole point of
-    # the opt-in is that the public board carries only what the organizer chose.
+    # The organizers-only answer leaves the service in NO shape — the public
+    # board carries every PUBLIC question and nothing else.
     assert "phone" not in snapshot.model_dump_json()
 
 

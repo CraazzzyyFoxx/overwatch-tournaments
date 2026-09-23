@@ -11,16 +11,17 @@ import {
   buildRoundGroups,
   orderEliminationRounds,
   type RoundGroup
-} from "@/lib/bracket-view";
+} from "@/lib/bracket/view";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import TeamName from "@/components/TeamName";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
-import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket-round-name";
-import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
-import { getStreamStatus, STREAM_STATUS_META } from "@/lib/stream-platform";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { groupTournamentStageFlow } from "@/lib/tournament-stages";
+import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
+import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
+import { ROSTER_SLOT_CODES } from "@/lib/roster/shape";
+import { getStreamStatus, STREAM_STATUS_META } from "@/lib/social/stream-platform";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { groupTournamentStageFlow } from "@/lib/tournament/stages";
 import { cn } from "@/lib/utils";
 import encounterService from "@/services/encounter.service";
 import heroService from "@/services/hero.service";
@@ -32,7 +33,7 @@ import type { StreamEntry } from "@/types/stream.types";
 import type { Team } from "@/types/team.types";
 import type { StageSummary, Standings, TournamentStatus } from "@/types/tournament.types";
 
-import { MatchCard, isEncounterCompleted, isEncounterLive } from "../_components/MatchCard";
+import { MatchCard } from "../_components/MatchCard";
 import { MatchRow } from "../_components/MatchRow";
 import { PhaseTimeline } from "../_components/PhaseTimeline";
 import { Podium, type PodiumTeam } from "../_components/Podium";

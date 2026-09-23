@@ -1,4 +1,4 @@
-import { ROLES, canonicalToRegistrationRole, type RoleCode } from "@/lib/roles";
+import { ROLES, canonicalToRegistrationRole, type RoleCode } from "@/lib/roster/roles";
 import type {
   CustomGameOutcome,
   CustomGameParticipationEntry,
@@ -24,7 +24,7 @@ export type PickupRecordOutcomeInput = {
  * their rank override or role order, so a host can toggle a late arrival on and
  * off without rebuilding anything.
  *
- * Role vocabulary is `@/lib/roles` — the same `tank`/`damage`/`support` codes the
+ * Role vocabulary is `@/lib/roster/roles` — the same `tank`/`damage`/`support` codes the
  * balancer and the registration form use.
  */
 

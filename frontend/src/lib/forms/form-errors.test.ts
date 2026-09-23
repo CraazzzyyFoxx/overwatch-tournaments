@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
-import { ApiError, type ApiErrorDetail } from "@/lib/api-error";
+import { ApiError, type ApiErrorDetail } from "@/lib/api/error";
 import { FORM_ERROR_CODES, fieldErrorsFrom, type Translate } from "@/lib/forms/form-errors";
 
 /**

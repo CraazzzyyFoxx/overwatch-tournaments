@@ -201,6 +201,8 @@ class TournamentFlowsService:
             challonge_slug=tournament_challonge_slug,
             auto_transitions_enabled=tournament.auto_transitions_enabled,
             allow_late_registration=tournament.allow_late_registration,
+            discord_broadcasts_enabled=tournament.discord_broadcasts_enabled,
+            discord_dms_enabled=tournament.discord_dms_enabled,
             phase_schedule=[
                 schemas.TournamentPhaseScheduleRead.model_validate(row, from_attributes=True)
                 for row in _loaded_relationship(tournament, "phase_schedule") or []

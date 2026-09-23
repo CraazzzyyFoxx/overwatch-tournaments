@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider
+from shared.repository import OAuthConnectionRepository
 from src import models, schemas
 from src.services.api_keys import ApiKeyService, api_keys
 from src.services.auth_users import AuthUserService, auth_users
@@ -39,6 +41,10 @@ def _credentials_error() -> HTTPException:
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _not_linked() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discord account is not linked")
 
 
 def _stamp_rbac(user: models.AuthUser, payload: schemas.TokenPayload) -> None:
@@ -75,12 +81,14 @@ class TokenValidationService:
         users: AuthUserService = auth_users,
         payloads: TokenPayloadBuilder = token_payloads,
         keys: ApiKeyService = api_keys,
+        connections: OAuthConnectionRepository = OAuthConnectionRepository(),
     ) -> None:
         self.codec = codec
         self.cache = cache
         self.users = users
         self.payloads = payloads
         self.keys = keys
+        self.connections = connections
 
     async def validate(self, session: AsyncSession, raw_token: str) -> schemas.TokenPayload:
         """Validate a JWT access token or workspace-scoped API key, returning RBAC.
@@ -99,6 +107,33 @@ class TokenValidationService:
         if not user.is_active:
             raise _credentials_error()
         return await self.payloads.build(session, user, cached=cached)
+
+    async def discord_identity(self, session: AsyncSession, discord_user_id: str) -> schemas.TokenPayload:
+        """RBAC for the account a Discord user id is linked to, for the bot to act as.
+
+        A button click on a notification card carries no bearer token: the OAuth
+        link *is* the credential, so the Discord id the bot reports plus the
+        connection row is the whole authentication. That only holds for trusted
+        broker traffic, which is why the subject is internal-only with no gateway
+        route, the same trust boundary as ``rpc.identity.oauth_discord_guilds``.
+
+        Deliberately not cached on the caller's side: unlinking the account must
+        stop working on the next click, not once some TTL happens to lapse.
+        """
+        connection = await self.connections.get_by_provider_subject(
+            session, provider=SocialProvider.DISCORD, provider_user_id=discord_user_id
+        )
+        if connection is None:
+            raise _not_linked()
+        user = await self.users.get_identity(session, connection.auth_user_id)
+        if user is None:
+            # The link outlived the account row; indistinguishable from "never
+            # linked" to the bot, and the same thing to tell the clicking user.
+            raise _not_linked()
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+        payload = await self.payloads.build(session, user)
+        return payload.model_copy(update={"credential_type": "discord"})
 
     async def resolve_active_user(self, session: AsyncSession, raw_token: str) -> models.AuthUser:
         """Resolve the authenticated, active user from a bearer access token.

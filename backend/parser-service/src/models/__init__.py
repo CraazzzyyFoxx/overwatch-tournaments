@@ -24,6 +24,7 @@ from shared.models.tenancy.workspace import *
 from shared.models.tournament.challonge import *
 from shared.models.tournament.computation import *
 from shared.models.tournament.encounter import *
+from shared.models.tournament.encounter_game import *
 from shared.models.tournament.encounter_link import *
 from shared.models.tournament.encounter_report import *
 from shared.models.tournament.pick_ban import *

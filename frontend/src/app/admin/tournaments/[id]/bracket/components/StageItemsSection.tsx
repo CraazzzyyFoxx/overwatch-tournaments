@@ -53,7 +53,7 @@ import {
   getInputDisplayLabel,
   STAGE_ITEM_TYPE_LABELS,
   type StageProgress
-} from "@/lib/bracket-projection";
+} from "@/lib/bracket/projection";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 /**

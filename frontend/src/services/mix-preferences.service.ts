@@ -1,5 +1,5 @@
-import { apiFetch } from "@/lib/api-fetch";
-import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
+import { apiFetch } from "@/lib/api/fetch";
+import type { RosterShape, RosterSlotMap } from "@/lib/roster/shape";
 
 /**
  * The mix engine's knobs, held per account rather than per mix.

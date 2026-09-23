@@ -1,9 +1,10 @@
-"""The Discord log-collection worker bot.
+"""The platform's Discord bot.
 
-Subclasses ``commands.Bot`` (rather than a bare ``discord.Client``) purely for
-its Cog/extension machinery -- there are no prefix or slash commands here, the
-bot only reacts to gateway events (via Cogs) and RabbitMQ RPC (via
-``DiscordRabbitGateway``).
+Subclasses ``commands.Bot`` (rather than a bare ``discord.Client``) for its
+Cog/extension machinery. It reacts to gateway events (via Cogs), RabbitMQ
+commands and RPC (via ``DiscordRabbitGateway``), and the action buttons on the
+notification cards it sends (``InteractionsCog``). There are no prefix or slash
+commands yet; a slash command would be another entry into ``ActionDispatcher``.
 """
 
 from __future__ import annotations
@@ -11,10 +12,12 @@ from __future__ import annotations
 import discord
 from discord.ext import commands
 
+from src.cogs.interactions import InteractionsCog
 from src.cogs.log_ingestion import LogIngestionCog
 from src.cogs.membership import MembershipEventsCog
 from src.core.config import Settings
 from src.core.db import async_session_maker
+from src.interactions.dispatcher import ActionDispatcher
 from src.rabbit.gateway import DiscordRabbitGateway
 from src.result_waiter import ResultWaiter
 from src.services.attachment_processor import AttachmentProcessor
@@ -59,6 +62,7 @@ class LogCollectorBot(commands.Bot):
         )
         self.directory = DiscordDirectoryService(self)
         self.subscription_sync = MemberSubscriptionSyncService(settings=settings, session_maker=self.session_maker)
+        self.action_dispatcher = ActionDispatcher(site_url=settings.public_site_url)
         self.rabbit_gateway = DiscordRabbitGateway(
             settings=settings,
             processor=self.attachment_processor,
@@ -71,6 +75,7 @@ class LogCollectorBot(commands.Bot):
     async def setup_hook(self) -> None:
         await self.add_cog(LogIngestionCog(self))
         await self.add_cog(MembershipEventsCog(self))
+        await self.add_cog(InteractionsCog(self))
         await self.rabbit_gateway.start()
 
     async def close(self) -> None:

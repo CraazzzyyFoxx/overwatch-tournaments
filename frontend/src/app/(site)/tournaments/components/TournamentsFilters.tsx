@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
-import { TOURNAMENT_STATUS_ORDER, getTournamentStatusMeta } from "@/lib/tournament-status";
+import { TOURNAMENT_STATUS_ORDER, getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TournamentStatus } from "@/types/tournament.types";
 import {
   Select,

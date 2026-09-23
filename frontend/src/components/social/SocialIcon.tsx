@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { Link2 } from "lucide-react";
 
-import { getSocialProviderConfig } from "@/lib/social-providers";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 
 interface SocialIconProps {
   provider: string;

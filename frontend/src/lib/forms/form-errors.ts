@@ -1,7 +1,7 @@
 /**
  * Server rejections of a registration submission → per-field UI strings.
  *
- * Modelled on `registration-team-errors.ts` (§12.2): every backend `msg` is
+ * Modelled on `lib/registration/team-errors.ts` (§12.2): every backend `msg` is
  * English and this audience is Russian-first, so the stable machine `code` is
  * what gets translated and `msg` is only the last resort for a code this build
  * does not know yet.
@@ -11,7 +11,7 @@
  * codes rather than invent a parallel vocabulary.
  */
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 
 /**
  * Every code a form write can return, grouped by origin. Generic codes are

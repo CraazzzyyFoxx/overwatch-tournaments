@@ -12,7 +12,7 @@
 import type { ComponentType } from "react";
 
 import type { Translate } from "@/lib/forms/form-errors";
-import type { RoleCode } from "@/lib/roles";
+import type { RoleCode } from "@/lib/roster/roles";
 import type { FormField } from "@/types/forms.types";
 import type { Hero } from "@/types/hero.types";
 import type { SubroleCatalog, SubscriptionStatus } from "@/types/registration.types";

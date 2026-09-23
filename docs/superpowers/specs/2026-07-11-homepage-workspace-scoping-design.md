@@ -30,7 +30,7 @@ workspace.
 - `frontend/src/middleware.ts` резолвит host → workspace и ставит заголовки
   `x-owt-workspace-id` + `x-owt-host-mode: tenant` (одинаково для сабдоменов и
   кастомных доменов; на апексе оба заголовка срезаются).
-- `frontend/src/lib/api-fetch.ts` для путей `/api/v1/*` **авто-инжектит**
+- `frontend/src/lib/api/fetch.ts` для путей `/api/v1/*` **авто-инжектит**
   `workspace_id` из `x-owt-workspace-id` (SSR) — но только если `skipWorkspace`
   не выставлен.
 - Бэкенд фильтрует по `workspace_id` на **всех** задействованных эндпоинтах:
@@ -50,7 +50,7 @@ workspace.
 
 Изменения затрагивают **только фронтенд** (бэкенд трогать не нужно).
 
-### 1. Новый хелпер `frontend/src/lib/tenant-host.ts`
+### 1. Новый хелпер `frontend/src/lib/site/tenant-host.ts`
 
 ```ts
 import { headers } from "next/headers";

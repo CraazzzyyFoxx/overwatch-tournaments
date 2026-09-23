@@ -7,7 +7,7 @@ import {
   type Coalescer,
   createLeadingCoalescer,
   createTrailingCoalescer,
-} from "@/lib/realtime-coalesce";
+} from "@/lib/realtime/coalesce";
 import { useRealtimeStore } from "@/stores/realtime.store";
 import type { RealtimeEventEnvelope } from "@/types/realtime.types";
 

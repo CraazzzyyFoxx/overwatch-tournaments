@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { parseQuotaAboveInherited } from "@/lib/quota";
+import { parseQuotaAboveInherited } from "@/lib/auth/quota";
 import type { QuotaDimension, QuotaScopePolicy } from "@/types/auth.types";
 import {
   draftFromLimits,

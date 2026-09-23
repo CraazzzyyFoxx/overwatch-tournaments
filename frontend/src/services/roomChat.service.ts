@@ -1,6 +1,6 @@
-import { parseApiError } from "@/lib/api-error";
-import { apiFetch } from "@/lib/api-fetch";
-import type { ChatRoomDescriptor } from "@/lib/chat-rooms";
+import { parseApiError } from "@/lib/api/error";
+import { apiFetch } from "@/lib/api/fetch";
+import type { ChatRoomDescriptor } from "@/lib/realtime/chat-rooms";
 import type { ChatEnvelope, ChatMessage, ChatMute, ChatSettings } from "@/types/chat.types";
 
 class RoomChatService {

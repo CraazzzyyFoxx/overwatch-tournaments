@@ -8,7 +8,7 @@ import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
-import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
+import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 

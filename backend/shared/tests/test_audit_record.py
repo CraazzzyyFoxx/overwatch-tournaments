@@ -95,6 +95,17 @@ class RecordAuditTests(IsolatedAsyncioTestCase):
         self.assertEqual("api_key", row.source)
         self.assertEqual(7, row.actor_auth_user_id)
 
+    async def test_a_discord_button_action_is_told_apart_from_a_session(self) -> None:
+        """The bot acts as the linked account; the journal must still say it came from Discord."""
+        session = _Session()
+        actor = SimpleNamespace(id=7, _credential_type="discord")
+
+        row = await record_audit(
+            session, action="registration.check_in", source="player", actor=actor, actor_label="kira"
+        )
+
+        self.assertEqual(("discord", "kira (via Discord)", 7), (row.source, row.actor_label, row.actor_auth_user_id))
+
     async def test_session_actor_keeps_admin_source(self) -> None:
         session = _Session()
         actor = SimpleNamespace(id=7, _credential_type="access_token")

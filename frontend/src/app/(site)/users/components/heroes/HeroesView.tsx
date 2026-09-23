@@ -8,11 +8,11 @@ import type { UserMapRead } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
 import { getHumanizedStats } from "@/utils/stats";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import { heroVariantFromRole, type AqtRoleKey } from "@/lib/player-role";
+import { heroVariantFromRole, type AqtRoleKey } from "@/lib/roster/player-role";
+import { formatPercent } from "@/lib/format";
 import {
   computeDelta,
   formatDelta,
-  formatPercent,
   formatStatValue,
   getOverall,
   isRevertedStat

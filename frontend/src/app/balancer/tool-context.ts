@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import type { BalancerTournamentSummary } from "@/types/balancer-admin.types";
 
 /**

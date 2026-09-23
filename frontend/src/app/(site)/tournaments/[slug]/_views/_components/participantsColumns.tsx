@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { normalizePlayerRole, playerRoleSlotCode, type PlayerRoleSlotCode } from "@/lib/player-role";
+import { normalizePlayerRole, playerRoleSlotCode, type PlayerRoleSlotCode } from "@/lib/roster/player-role";
 import { cn } from "@/lib/utils";
 import type {
   Registration,
@@ -43,8 +43,8 @@ import {
 import TournamentHistoryCell from "./TournamentHistoryCell";
 import { AnswerValue } from "@/components/forms/AnswerValue";
 import { useTranslations } from "next-intl";
-import { formatSubroleSlug } from "@/lib/roles";
-import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
+import { formatSubroleSlug } from "@/lib/roster/roles";
+import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/divisions/grid";
 import type { DivisionGrid } from "@/types/workspace.types";
 import DivisionIcon from "@/components/DivisionIcon";
 import { getPlayerSlug } from "@/utils/player";

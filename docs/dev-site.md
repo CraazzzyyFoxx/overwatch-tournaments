@@ -28,7 +28,7 @@ production's. Both sides of the stack therefore take the zone from the environme
 
 - backend — `PLATFORM_ZONE` in `backend/env/common.env` (`shared/tenancy/hostnames.py`);
 - frontend — `NEXT_PUBLIC_PLATFORM_ZONE`, a **build arg** as well as a runtime variable
-  (`frontend/src/lib/host.ts`), because the client bundle inlines it;
+  (`frontend/src/lib/site/host.ts`), because the client bundle inlines it;
 - compose — `PLATFORM_ZONE` in the root `.env` feeds that build arg.
 
 Both default to `owt.craazzzyyfoxx.me`, so production needs no configuration to keep working.
@@ -47,7 +47,7 @@ That is a permanently broken dev session for anyone who is logged into productio
 So each deployment owns a cookie namespace:
 
 - frontend — `NEXT_PUBLIC_COOKIE_PREFIX`, build arg **and** runtime variable
-  (`frontend/src/lib/cookie-names.ts` is the single source of the names);
+  (`frontend/src/lib/auth/cookie-names.ts` is the single source of the names);
 - gateway — `SESSION_COOKIE_PREFIX` in `backend/env/gateway.env`
   (`gateway/internal/auth`), which MUST match;
 - compose — `COOKIE_PREFIX` in the root `.env` feeds the frontend build arg.

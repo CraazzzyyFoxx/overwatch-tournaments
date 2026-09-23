@@ -19,7 +19,7 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { DiscordChannelInput, DiscordChannelRead } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
-import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const EMPTY_CHANNEL_FORM: DiscordChannelInput = {

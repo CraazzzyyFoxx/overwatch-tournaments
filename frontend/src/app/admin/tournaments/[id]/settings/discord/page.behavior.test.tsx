@@ -177,4 +177,27 @@ describe("Settings › Discord", () => {
     expect(setDiscordChannel).not.toHaveBeenCalled();
     expect(dialogForm.querySelector("[role=alert]")?.textContent).toContain("Pick the channel");
   });
+
+  it.each([
+    ["#settings-discord-broadcasts", "discord_broadcasts_enabled"],
+    ["#settings-discord-dms", "discord_dms_enabled"]
+  ])("switching %s off saves only %s", async (selector, field) => {
+    await render();
+    const toggle = () => container.querySelector(selector)!;
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+
+    await act(async () => {
+      toggle().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    await act(async () => {
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === "save")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(updateTournament).toHaveBeenCalledWith(64, { [field]: false });
+    expect(setDiscordChannel).not.toHaveBeenCalled();
+  });
 });

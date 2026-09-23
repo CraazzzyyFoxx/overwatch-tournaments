@@ -2,7 +2,7 @@
 
 import { createElement } from "react";
 
-import { getStatusIcon } from "@/lib/status-icons";
+import { getStatusIcon } from "@/lib/registration/status-icons";
 import { STATUS_TONE_PILL, type StatusTone } from "@/components/status/StatusIconBadge";
 import { cn, hexToRgba } from "@/lib/utils";
 import type { StatusMeta } from "@/types/registration.types";

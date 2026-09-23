@@ -17,8 +17,8 @@ import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
 import ActiveEvents from "@/components/ActiveEvents";
 import SiteNav from "@/components/site/SiteNav";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
-import { getAuthProfileHref } from "@/lib/auth-profile-links";
+import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
+import { getAuthProfileHref } from "@/lib/auth/profile-links";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 
 interface HeaderProps {

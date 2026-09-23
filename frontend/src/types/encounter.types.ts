@@ -1,6 +1,7 @@
 import { MapRead } from "@/types/map.types";
 import { Team, TeamWithStats } from "@/types/team.types";
 import {
+  EncounterGame,
   EncounterResultStatus,
   Stage,
   StageItem,
@@ -22,6 +23,15 @@ export interface EncounterSlotSource {
   encounter_id: number;
   role: "winner" | "loser";
   slot: "home" | "away";
+}
+
+/**
+ * A game as the public encounter read serves it: the position also names its
+ * map, so a map can be pictured before (or without) a parsed log. The pick-ban
+ * room's `PickBanGame` carries no map object — only `map_id`.
+ */
+export interface EncounterGameWithMap extends EncounterGame {
+  map: Match["map"];
 }
 
 export interface Encounter {
@@ -53,6 +63,12 @@ export interface Encounter {
   sources?: EncounterSlotSource[];
 
   matches: Match[];
+  /**
+   * One entry per position of the series, in play order — the encounter's own
+   * result authority. A `Match` row is a parsed log, a separate contract: the
+   * two are rendered as two facts, never merged (spec §11).
+   */
+  games: EncounterGameWithMap[];
   home_team: Team;
   away_team: Team;
   tournament: Tournament;

@@ -26,7 +26,7 @@ import type { Team } from "@/types/team.types";
 import type { Stage } from "@/types/tournament.types";
 
 import { BracketPreview } from "./components/BracketPreview";
-import { projectStage } from "@/lib/bracket-projection";
+import { projectStage } from "@/lib/bracket/projection";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;

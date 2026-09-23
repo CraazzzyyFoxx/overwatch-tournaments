@@ -30,11 +30,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
-from shared.core.enums import MapPoolEntryStatus, MapVetoSessionStatus, PickBanKind
+from shared.core.enums import EncounterGameState, MapPoolEntryStatus, MapVetoSessionStatus, PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
 from shared.models.tournament.pick_ban import EncounterPickBanLedger, PickBanEntry, PickBanSession
-from shared.repository import EncounterPickBanLedgerRepository, PickBanEntryRepository
+from shared.repository import EncounterPickBanLedgerRepository, EncounterRepository, PickBanEntryRepository
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 
@@ -118,10 +118,12 @@ class PickBanUndoService:
         *,
         entry_repo: PickBanEntryRepository = PickBanEntryRepository(),
         ledger_repo: EncounterPickBanLedgerRepository = EncounterPickBanLedgerRepository(),
+        encounter_repo: EncounterRepository = EncounterRepository(),
         sessions: PickBanSessionService = pick_ban_session_service,
     ) -> None:
         self.entry_repo = entry_repo
         self.ledger_repo = ledger_repo
+        self.encounter_repo = encounter_repo
         self.sessions = sessions
 
     async def perform_undo(
@@ -158,6 +160,7 @@ class PickBanUndoService:
         target_index = entries[0].action_index
         if kind == PickBanKind.MAP:
             await self._assert_hero_round_unstarted(session, encounter_id, entries[-1].round)
+            await self._assert_positions_unclaimed(session, encounter_id, pool, entries)
 
         if not consent:
             clear_undo_request(pick_ban)
@@ -172,6 +175,11 @@ class PickBanUndoService:
                 keys = ledger_keys(entries)
                 apply_undo(pick_ban, entries, now=datetime.now(UTC))
                 await self._forget_ledger_rows(session, encounter_id, kind, keys)
+                if kind == PickBanKind.MAP:
+                    # The pick is gone, so the position it opened must go with it.
+                    encounter = await self.encounter_repo.get(session, encounter_id)
+                    if encounter is not None:
+                        await self.sessions.games.sync_games_with_picks(session, encounter, pick_ban)
 
         await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
@@ -214,6 +222,36 @@ class PickBanUndoService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Undo this round's hero bans first — they were made for the map you are taking back",
+            )
+
+    async def _assert_positions_unclaimed(
+        self,
+        session: AsyncSession,
+        encounter_id: int,
+        pool: list[PickBanEntry],
+        entries: list[PickBanEntry],
+    ) -> None:
+        """Refuse to undo a MAP pick once its position has a result claim.
+
+        A pick opens a series position (``EncounterGame``); taking it back
+        cancels that position. Doing so with a captain's claim already on it —
+        or with the result accepted — would drop a played map's evidence on a
+        click, so the series score would move because two captains agreed to
+        change a MAP. Corrections are the admin command, with a reason.
+        """
+        undone = {id(entry) for entry in entries}
+        settled = engine.settled_in_order(pool)
+        positions = {index for index, entry in enumerate(settled, 1) if id(entry) in undone}
+        if not positions:
+            return
+        games = [
+            game for game in await self.sessions.games.list_games(session, encounter_id) if game.position in positions
+        ]
+        reports = await self.sessions.games.reports_by_game(session, games)
+        if any(game.state == EncounterGameState.CONFIRMED or reports.get(game.id) for game in games):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Undo is not possible: this map already has a result claim",
             )
 
     async def _forget_ledger_rows(

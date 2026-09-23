@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { formatStreamUptime, streamPlatformLabel } from "@/lib/stream-platform";
+import { formatStreamUptime, streamPlatformLabel } from "@/lib/social/stream-platform";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";
 

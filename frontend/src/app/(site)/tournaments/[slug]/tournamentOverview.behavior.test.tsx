@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { Fragment, isValidElement, Suspense, type ReactElement } from "react";
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -25,7 +25,7 @@ mock.module("next-intl", () => ({
     relativeTime: () => ""
   })
 }));
-mock.module("@/lib/site-metadata", () => ({
+mock.module("@/lib/site/metadata", () => ({
   resolveSiteMetadata: async () => ({ name: "Test OWT", origin: "https://example.test" })
 }));
 

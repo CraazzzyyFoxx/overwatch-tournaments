@@ -27,7 +27,7 @@ vi.mock("@/stores/workspace.store", () => ({
 
 import {
   adminEntryPermissions,
-} from "@/lib/admin-permissions";
+} from "@/lib/auth/admin-permissions";
 import {
   getMatchingAdminRoute,
   getVisibleAdminNavigationGroups,

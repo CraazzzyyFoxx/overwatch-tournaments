@@ -96,7 +96,6 @@ function template(id: number, name: string, sectionTitle: string) {
               options: null,
               validation: null,
               params: {},
-              show_in_draft: false
             }
           ]
         }

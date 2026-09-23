@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { MinimizedUser, User } from "@/types/user.types";
 
 /** Self-service account management for the current user (own player's social

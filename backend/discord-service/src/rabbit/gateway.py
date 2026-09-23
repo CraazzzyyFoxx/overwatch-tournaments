@@ -29,6 +29,7 @@ from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent
 from shared.schemas.rpc import rpc_error, rpc_ok
 from src.core.broker import set_worker_broker
 from src.core.config import Settings
+from src.interactions.cards import card_view
 from src.result_waiter import ResultWaiter
 from src.services.attachment_processor import AttachmentProcessor
 from src.services.channel_registry import ChannelRegistry
@@ -62,6 +63,34 @@ def _attachment(event: DiscordCommandEvent) -> discord.File | None:
     except (binascii.Error, ValueError) as exc:
         raise ValueError("image_b64 is not valid base64") from exc
     return discord.File(io.BytesIO(raw), filename=event.image_filename)
+
+
+def _message_kwargs(event: DiscordCommandEvent) -> dict[str, Any]:
+    """``send`` kwargs for the message body, shared by channel posts and DMs.
+
+    The event's own validation keeps a card apart from content and embed, which
+    Discord refuses to mix with a Components V2 layout.
+    """
+    return {
+        "content": event.content,
+        "embed": discord.Embed.from_dict(event.embed) if event.embed else None,
+        "view": card_view(event.card) if event.card else None,
+    }
+
+
+def _discord_error(exc: discord.HTTPException) -> str:
+    return f"HTTP {exc.status} (code {exc.code}): {exc.text}"
+
+
+def _mention_policy(event: DiscordCommandEvent) -> dict[str, Any]:
+    """``channel.send`` kwargs that keep user-written text from pinging anyone.
+
+    Empty when the publisher allows mentions, so the balancer's mix posts keep
+    discord.py's default behaviour.
+    """
+    if event.allow_mentions:
+        return {}
+    return {"allowed_mentions": discord.AllowedMentions.none()}
 
 
 class DiscordRabbitGateway:
@@ -167,13 +196,56 @@ class DiscordRabbitGateway:
 
                         try:
                             await channel.send(
-                                content=event.content,
-                                embed=discord.Embed.from_dict(event.embed) if event.embed else None,
+                                **_message_kwargs(event),
                                 file=attachment,
+                                **_mention_policy(event),
                             )
                         except discord.Forbidden:
                             observation.set_status("forbidden")
                             logger.error(f"❌ No permission to post in channel {event.channel_id}")
+                            await msg.reject()
+                            return
+                        except discord.HTTPException as exc:
+                            # discord.py already retried 429s and 5xx; what is left
+                            # (a 400 on the payload, an outage outlasting its
+                            # retries) fails the same way on every requeue.
+                            observation.set_status("discord_error")
+                            logger.error(
+                                f"❌ Discord refused post to channel {event.channel_id}: {_discord_error(exc)}"
+                            )
+                            await msg.reject()
+                            return
+
+                        await msg.ack()
+                        return
+
+                    if event.action == "send_dm":
+                        logger.info(f"📩 RabbitMQ command: send_dm user={event.discord_user_id}")
+                        try:
+                            user = self._bot.get_user(event.discord_user_id) or await self._bot.fetch_user(
+                                event.discord_user_id
+                            )
+                            await user.send(
+                                **_message_kwargs(event),
+                                allowed_mentions=discord.AllowedMentions.none(),
+                            )
+                        except discord.Forbidden:
+                            # DMs closed or no mutual guild: a retry cannot fix either,
+                            # and the notification is already in the in-app inbox.
+                            observation.set_status("dm_closed")
+                            logger.warning(f"⚠️ Cannot DM user {event.discord_user_id}: DMs closed")
+                            await msg.ack()
+                            return
+                        except discord.NotFound:
+                            observation.set_status("not_found")
+                            logger.warning(f"⚠️ Discord user {event.discord_user_id} not found for send_dm")
+                            await msg.ack()
+                            return
+                        except discord.HTTPException as exc:
+                            observation.set_status("discord_error")
+                            logger.error(
+                                f"❌ Discord refused DM to user {event.discord_user_id}: {_discord_error(exc)}"
+                            )
                             await msg.reject()
                             return
 

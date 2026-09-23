@@ -103,7 +103,7 @@ Per-captain пузыри (T3): по каждому капитану — онла
 `DraftBoard` уже получает `tournament`. Резолвим `tournamentGrid = tournament.division_grid_version ?? DEFAULT_DIVISION_GRID` один раз и прокидываем вниз (проп `divisionGrid`) в `PlayerPool`, `PlayerInspector`, `TeamRosters`, `DraftOrder`. Убираем локальный `useDivisionGrid()` в `TeamRosters`.
 
 ## Данные / API
-Изменений нет. Используемые существующие поля: `DraftPlayer.{role_ranks, role_top_heroes, sub_role, is_flex, secondary_roles_json, additional_info, division_number, rank_value, primary_role, is_captain}`; `DraftPick.{target_role, round_no, pick_in_round}`; `DraftSession.{team_size, format, settings_json}`; `Tournament.division_grid_version`. Хелперы: `resolveDivisionFromRank`, `getDivisionLabel`, `DEFAULT_DIVISION_GRID` (`lib/division-grid`), `getHeroIconUrl` (`utils/player`), `AvatarStack` (`ui/avatar`), `PlayerDivisionIcon`, `PlayerRoleIcon`.
+Изменений нет. Используемые существующие поля: `DraftPlayer.{role_ranks, role_top_heroes, sub_role, is_flex, secondary_roles_json, additional_info, division_number, rank_value, primary_role, is_captain}`; `DraftPick.{target_role, round_no, pick_in_round}`; `DraftSession.{team_size, format, settings_json}`; `Tournament.division_grid_version`. Хелперы: `resolveDivisionFromRank`, `getDivisionLabel`, `DEFAULT_DIVISION_GRID` (`lib/divisions/grid`), `getHeroIconUrl` (`utils/player`), `AvatarStack` (`ui/avatar`), `PlayerDivisionIcon`, `PlayerRoleIcon`.
 
 ## Визуальный язык (маппинг)
 - Акцент состояния: `live`→`--aqt-teal`, `paused`→`--aqt-amber`, `blocked`/`urgent`→`--aqt-live`(rose), `done`/`safe`→`--aqt-support`.

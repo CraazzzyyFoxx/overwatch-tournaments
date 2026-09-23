@@ -12,7 +12,7 @@ import {
   TableCell,
   TableRow,
 } from "@/components/ui/table";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import { formatSubRoleLabel } from "@/utils/player";
 import type { DivisionGrid } from "@/types/workspace.types";

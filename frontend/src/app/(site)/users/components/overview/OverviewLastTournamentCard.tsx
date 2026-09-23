@@ -11,7 +11,7 @@ import { UserTournamentStat } from "@/types/statistics.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { playerRoleTint } from "@/lib/player-role";
+import { playerRoleTint } from "@/lib/roster/player-role";
 import {
   Select,
   SelectContent,

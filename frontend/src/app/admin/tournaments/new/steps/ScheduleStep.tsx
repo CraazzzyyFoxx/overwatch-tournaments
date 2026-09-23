@@ -8,7 +8,7 @@ import {
   SCHEDULABLE_PHASES,
   TOURNAMENT_STATUS_LABELS,
   type SchedulablePhase
-} from "@/lib/tournament-lifecycle";
+} from "@/lib/tournament/lifecycle";
 
 import type { WizardScheduleState } from "../wizard-model";
 

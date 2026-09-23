@@ -25,8 +25,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { OW_REFERENCE_GRID } from "@/lib/division-grid";
-import { ROLE_LABELS, getRoleIconName, type RoleCode } from "@/lib/roles";
+import { OW_REFERENCE_GRID } from "@/lib/divisions/grid";
+import { ROLE_LABELS, getRoleIconName, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import {
   RANK_SOURCE_LABELS,

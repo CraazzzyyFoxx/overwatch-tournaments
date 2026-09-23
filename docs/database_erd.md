@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`reghero01`** (74 revisions in `backend/migrations/versions/`).
+Alembic head: **`discdm01`** (79 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -918,6 +918,20 @@ erDiagram
         text comment "nullable"
         json custom_fields_json
     }
+    TOURNAMENT_ENCOUNTER_GAME {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint encounter_id FK
+        int position
+        bigint map_id FK "nullable"
+        encountergamestate state
+        int accepted_home_score "nullable"
+        int accepted_away_score "nullable"
+        encountergameresultsource result_source "nullable"
+        int result_version
+        timestamptz confirmed_at "nullable"
+    }
     TOURNAMENT_ENCOUNTER_LINK {
         bigint id PK
         timestamptz created_at
@@ -940,10 +954,8 @@ erDiagram
         bigint id PK
         timestamptz created_at
         timestamptz updated_at "nullable"
-        bigint encounter_id FK
-        bigint map_id FK
-        int map_index
-        bigint team_id FK
+        bigint game_id FK
+        varchar(16) side
         bigint reporter_user_id FK "nullable"
         int home_score
         int away_score
@@ -988,6 +1000,9 @@ erDiagram
         int home_score_after
         int away_score_after
         bigint adopted_team_id FK "nullable"
+        bigint game_id FK "nullable"
+        int game_result_version "nullable"
+        text reason "nullable"
         varchar(16) source
     }
     TOURNAMENT_PICK_BAN_CONFIG {
@@ -1210,6 +1225,8 @@ erDiagram
         timestamptz end_date "nullable"
         boolean auto_transitions_enabled
         boolean allow_late_registration
+        boolean discord_broadcasts_enabled
+        boolean discord_dms_enabled
         float win_points
         float draw_points
         float loss_points
@@ -1249,8 +1266,8 @@ erDiagram
     AUTH_USER |o--o{ TOURNAMENT_COMPUTATION_JOB : "requested_by_user_id"
     AUTH_USER ||--o{ TOURNAMENT_SCRIM_ROOM : "created_by_auth_user_id"
     AUTH_USER ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : "auth_user_id"
+    OVERWATCH_MAP |o--o{ TOURNAMENT_ENCOUNTER_GAME : "map_id"
     OVERWATCH_MAP |o--o{ TOURNAMENT_ENCOUNTER_MAP_CODE : "map_id"
-    OVERWATCH_MAP ||--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : "map_id"
     PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : "reporter_user_id"
     PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : "reporter_user_id"
     PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_READINESS : "ready_user_id"
@@ -1266,15 +1283,17 @@ erDiagram
     TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "source_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : "encounter_id"
+    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_GAME : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : "source_encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : "target_encounter_id"
-    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_READINESS : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_PICK_BAN_SESSION : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o| TOURNAMENT_SCRIM_ROOM : "encounter_id"
     TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT ||--o{ TOURNAMENT_ENCOUNTER_MAP_CODE : "report_id"
+    TOURNAMENT_ENCOUNTER_GAME |o--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : "game_id"
+    TOURNAMENT_ENCOUNTER_GAME ||--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : "game_id"
     TOURNAMENT_PICK_BAN_CONFIG |o--o{ TOURNAMENT_PICK_BAN_SESSION : "config_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_ITEM : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT : "pick_ban_config_id"
@@ -1301,7 +1320,6 @@ erDiagram
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : "team_id"
-    TOURNAMENT_TEAM ||--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_PLAYER : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING : "team_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SOURCE : "tournament_id"
@@ -1331,7 +1349,7 @@ Composite unique keys:
 - `TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT` unique on (`encounter_id`, `team_id`)
 - `TOURNAMENT_ENCOUNTER_LINK` unique on (`source_encounter_id`, `role`)
 - `TOURNAMENT_ENCOUNTER_MAP_CODE` unique on (`report_id`, `map_index`)
-- `TOURNAMENT_ENCOUNTER_MAP_REPORT` unique on (`encounter_id`, `map_id`, `map_index`, `team_id`)
+- `TOURNAMENT_ENCOUNTER_MAP_REPORT` unique on (`game_id`, `side`)
 - `TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER` unique on (`encounter_id`, `kind`, `item_id`, `banned_by_side`)
 - `TOURNAMENT_ENCOUNTER_READINESS` unique on (`encounter_id`, `side`)
 - `TOURNAMENT_PICK_BAN_CONFIG_ITEM` unique on (`pick_ban_config_id`, `item_id`)
@@ -1709,6 +1727,7 @@ erDiagram
         timestamptz clock_started_at "nullable"
         timestamptz clock_expires_at "nullable"
         int clock_remaining_ms "nullable"
+        timestamptz overtime_started_at "nullable"
         int version
     }
     BALANCER_DRAFT_PLAYER {
@@ -1734,6 +1753,7 @@ erDiagram
         varchar(16) format
         int rounds
         int pick_time_seconds
+        int overtime_seconds
         bigint current_pick_id FK "nullable"
         varchar(32) pool_source
         bigint source_balance_id FK "nullable"
@@ -2700,17 +2720,40 @@ erDiagram
         bigint workspace_id "nullable"
         bigint source_workspace_id "nullable"
         varchar(64) kind
+        varchar(128) dedupe_key "nullable"
         jsonb payload_json
         bigint actor_auth_user_id "nullable"
         timestamptz published_at
         timestamptz expires_at "nullable"
         timestamptz created_at
     }
+    PUBLIC_NOTIFICATION_DELIVERY {
+        bigint id PK
+        varchar(32) channel
+        varchar(64) target
+        varchar(128) dedupe_key
+        bigint notification_id "nullable"
+        bigint workspace_id "nullable"
+        varchar(64) kind
+        timestamptz created_at
+    }
+    PUBLIC_NOTIFICATION_PREFERENCE {
+        bigint auth_user_id PK,FK
+        jsonb discord_dm
+        timestamptz updated_at
+    }
     PUBLIC_NOTIFICATION_READ {
         bigint auth_user_id PK
         bigint notification_id PK
         timestamptz read_at
         timestamptz deleted_at "nullable"
+    }
+    PUBLIC_NOTIFICATION_WORKSPACE_CONFIG {
+        bigint workspace_id PK,FK
+        bigint discord_channel_id "nullable"
+        varchar(2) locale
+        jsonb broadcast_kinds
+        timestamptz updated_at
     }
     REALTIME_WORKSPACE_EVENT {
         bigint id PK
@@ -2723,7 +2766,14 @@ erDiagram
         jsonb payload
         timestamptz occurred_at
     }
+
+    AUTH_USER ||--o| PUBLIC_NOTIFICATION_PREFERENCE : "auth_user_id"
+    PUBLIC_WORKSPACE ||--o| PUBLIC_NOTIFICATION_WORKSPACE_CONFIG : "workspace_id"
 ```
+
+Composite unique keys:
+
+- `PUBLIC_NOTIFICATION_DELIVERY` unique on (`channel`, `target`, `dedupe_key`)
 <!-- /ERD:auto -->
 
 ## quota — `quota`

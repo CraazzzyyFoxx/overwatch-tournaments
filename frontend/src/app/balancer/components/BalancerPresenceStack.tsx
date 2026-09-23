@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import workspaceService from "@/services/workspace.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { WorkspaceMember } from "@/types/workspace.types";
-import { memberDisplayName } from "@/lib/workspace-member";
+import { memberDisplayName } from "@/lib/workspace/member";
 
 /** Portal target rendered by {@link BalancerToolTopBar}. */
 const PRESENCE_SLOT_ID = "balancer-presence-slot";

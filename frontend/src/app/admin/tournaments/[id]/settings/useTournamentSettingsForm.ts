@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import { DEFAULT_WORKSPACE_TIMEZONE } from "@/lib/timezone";
+import { DEFAULT_WORKSPACE_TIMEZONE } from "@/lib/workspace/timezone";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { TournamentUpdateInput } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
@@ -15,7 +15,7 @@ import {
   getTournamentUpdatePayload,
   type TournamentFormState
 } from "../components/tournamentWorkspace.helpers";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 
 /**
  * Which tournament fields each settings section owns.
@@ -42,6 +42,7 @@ export const SETTINGS_SECTION_FIELDS = {
   schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
   roster: ["roster_slots_json"],
   challonge: ["challonge_slug"],
+  discord: ["discord_broadcasts_enabled", "discord_dms_enabled"],
   preview: ["is_hidden"]
 } as const satisfies Record<string, readonly (keyof TournamentUpdateInput)[]>;
 

@@ -44,7 +44,7 @@ import {
   projectStage,
   STAGE_TYPE_LABELS,
   type StageProgress
-} from "@/lib/bracket-projection";
+} from "@/lib/bracket/projection";
 import {
   buildStageUpdatePayload,
   stageFormChanges,

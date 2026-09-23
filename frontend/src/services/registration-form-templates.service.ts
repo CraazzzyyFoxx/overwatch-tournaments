@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { AdminRegistrationForm } from "@/types/balancer-admin.types";
 import type { FormSchema, RegistrationFormTemplate } from "@/types/forms.types";
 

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { PROVIDER_LABELS, requirementClauses } from "@/lib/subscription-requirement";
+import { PROVIDER_LABELS, requirementClauses } from "@/lib/registration/subscription-requirement";
 import type { SubscriptionRequirement } from "@/types/registration.types";
 
 /**

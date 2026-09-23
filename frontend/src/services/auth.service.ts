@@ -1,6 +1,6 @@
 import type { AuthUser, LinkedPlayer, OAuthProviderAvailability, OAuthProviderName, TokenPair } from "@/types/auth.types";
-import { apiFetch } from "@/lib/api-fetch";
-import { parseApiError } from "@/lib/api-error";
+import { apiFetch } from "@/lib/api/fetch";
+import { parseApiError } from "@/lib/api/error";
 
 type OAuthCallbackMode = "cookie" | "ticket";
 

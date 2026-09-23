@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { Encounter } from "@/types/encounter.types";
-import { getEncounterState, getEncounterWinner } from "@/lib/encounter-status";
+import { getEncounterState, getEncounterWinner } from "@/lib/encounter/status";
 import {
   DEFAULT_FILTERS,
   filtersToApiFilters,
