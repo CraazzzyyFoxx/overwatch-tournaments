@@ -1059,9 +1059,9 @@ class UserEncounterQueries:
             )
         )
         if workspace_id is not None:
-            per_match = per_match.join(
-                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
-            ).where(models.Tournament.workspace_id == workspace_id)
+            per_match = per_match.join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id).where(
+                models.Tournament.workspace_id == workspace_id
+            )
 
         per_match = per_match.group_by(models.MatchStatistics.match_id).cte("draft_card_mvp_per_match")
         query = (

@@ -1107,9 +1107,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             unsafe_first = pool["support"][0]
             weakest_damage = pool["damage"][0]
 
-            queued = await queue.queue_service.write(
-                s, draft, team, [unsafe_first, weakest_damage]
-            )
+            queued = await queue.queue_service.write(s, draft, team, [unsafe_first, weakest_damage])
             await s.commit()
 
             self.assertEqual(queued.player_ids, [unsafe_first, weakest_damage])
@@ -1119,9 +1117,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(preview.role, "damage")
             self.assertEqual(preview.source, "queue")
 
-            result = await selection.selection_service.autopick(
-                s, draft, current, expected_version=current.version
-            )
+            result = await selection.selection_service.autopick(s, draft, current, expected_version=current.version)
             await s.commit()
             # Preview and autopick are one code path: the board must land on
             # exactly the player the captain was shown.
@@ -1141,9 +1137,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             # BEST_FIT over an untouched queue takes the strongest damage seat.
             self.assertEqual(preview.player_id, pool["damage"][-1])
 
-            result = await selection.selection_service.autopick(
-                s, draft, current, expected_version=current.version
-            )
+            result = await selection.selection_service.autopick(s, draft, current, expected_version=current.version)
             await s.commit()
             self.assertEqual(result.pick.picked_player_id, preview.player_id)
 
@@ -1316,7 +1310,11 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             session_id, team_id = draft.id, current.draft_team_id
             captain_auth_user_id = (await s.get(lifecycle.DraftTeam, team_id)).captain_auth_user_id
 
-        reader = {"id": session_id, "team_id": team_id, "identity": _identity(captain_auth_user_id + 9999, self.workspace_id, ["read"])}
+        reader = {
+            "id": session_id,
+            "team_id": team_id,
+            "identity": _identity(captain_auth_user_id + 9999, self.workspace_id, ["read"]),
+        }
 
         self.assertTrue((await broker.handlers["rpc.balancer.draft.team_fit"](reader, None))["ok"])
 

@@ -235,9 +235,7 @@ class DraftFeasibilityService:
             return []  # this team's roster is full
         available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
         players = sug.fit_players(available, snapshot.rosters)
-        results = sug.candidates(
-            players, capacity, FitConfig(), DraftAutopickStrategy(draft_session.autopick_strategy)
-        )
+        results = sug.candidates(players, capacity, FitConfig(), DraftAutopickStrategy(draft_session.autopick_strategy))
         by_id = {player.player_id: player for player in players}
         ordered = sorted(results, key=lambda result: sug.sort_key(result, by_id))
         if not shape.has_role_slots:

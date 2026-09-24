@@ -41,7 +41,7 @@ def _team(tournament_id: int, *, placement: int | None, is_league: bool = False)
             id=tournament_id,
             name=f"OWT Mix #{tournament_id}",
             is_league=is_league,
-            start_date=datetime.datetime(2026, 1, tournament_id, tzinfo=datetime.timezone.utc),
+            start_date=datetime.datetime(2026, 1, tournament_id, tzinfo=datetime.UTC),
         ),
         standings=[SimpleNamespace(overall_position=placement or 0)],
     )
@@ -65,9 +65,7 @@ def _queries(
         patch.object(user_flows.users, "get", AsyncMock(return_value=SimpleNamespace(id=user_id))),
         patch.object(user_flows.users.profile, "get_overall_statistics", AsyncMock(return_value=overall)),
         patch.object(user_flows.users.profile, "get_roles", AsyncMock(return_value=roles or [])),
-        patch.object(
-            user_flows.users.profile, "get_teams", AsyncMock(return_value=(teams or [], len(teams or [])))
-        ),
+        patch.object(user_flows.users.profile, "get_teams", AsyncMock(return_value=(teams or [], len(teams or [])))),
         patch.object(
             user_flows.users.encounters,
             "get_user_hero_records",
@@ -136,7 +134,7 @@ class UserDraftCardTests(IsolatedAsyncioTestCase):
             overall=(40, 20, 0.5),
             roles=roles,
             teams=[_team(tid, placement=tid) for tid in range(1, 8)],
-            teams_counts={tid: 24 for tid in range(1, 8)},
+            teams_counts=dict.fromkeys(range(1, 8), 24),
         ):
             card = await user_flows.users.get_draft_card(object(), 103, workspace_id=1)
 
@@ -192,20 +190,12 @@ class DraftCardQueryScopeTests(IsolatedAsyncioTestCase):
     async def _compiled(self, coroutine_factory) -> str:
         session = self._CaptureSession()
         await coroutine_factory(session)
-        return str(
-            session.statements[0].compile(
-                dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
-            )
-        )
+        return str(session.statements[0].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
 
     async def test_hero_records_are_workspace_scoped(self) -> None:
-        sql = await self._compiled(
-            lambda session: queries.encounters.get_user_hero_records(session, 7, workspace_id=2)
-        )
+        sql = await self._compiled(lambda session: queries.encounters.get_user_hero_records(session, 7, workspace_id=2))
         self.assertIn("tournament.workspace_id = 2", sql)
 
     async def test_mvp_map_count_is_workspace_scoped(self) -> None:
-        sql = await self._compiled(
-            lambda session: queries.encounters.count_user_mvp_maps(session, 7, workspace_id=2)
-        )
+        sql = await self._compiled(lambda session: queries.encounters.count_user_mvp_maps(session, 7, workspace_id=2))
         self.assertIn("tournament.workspace_id = 2", sql)

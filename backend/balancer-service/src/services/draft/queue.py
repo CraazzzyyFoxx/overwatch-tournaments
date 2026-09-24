@@ -98,9 +98,7 @@ class DraftQueueService:
         # Filtered on READ rather than pruned on write: a player picked by
         # somebody else simply stops showing, and a rollback puts them back
         # where the captain had them.
-        available = {
-            player.id for player in snapshot.players if player.status == DraftPlayerStatus.AVAILABLE.value
-        }
+        available = {player.id for player in snapshot.players if player.status == DraftPlayerStatus.AVAILABLE.value}
         return schemas.DraftTeamQueueResponse(
             team_id=team.id,
             player_ids=[player_id for player_id in stored if player_id in available],

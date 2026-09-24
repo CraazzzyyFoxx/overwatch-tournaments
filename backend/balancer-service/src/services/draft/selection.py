@@ -167,9 +167,7 @@ class DraftSelectionService:
             draft_session.status = DraftStatus.COMPLETED.value
             draft_session.current_pick_id = None
             # No actor: the last pick completed the draft, nobody decided to.
-            await journal_service.record_lifecycle(
-                session, draft_session, action="completed", actor_auth_user_id=None
-            )
+            await journal_service.record_lifecycle(session, draft_session, action="completed", actor_auth_user_id=None)
             await session.flush()
             return None
 

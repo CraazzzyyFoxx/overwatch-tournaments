@@ -157,9 +157,7 @@ async def _load_team(session: AsyncSession, draft: DraftSession, team_id: int) -
     return team
 
 
-def _require_team_actor(
-    data: dict, user: Any, draft: DraftSession, team: DraftTeam, action: str
-) -> None:
+def _require_team_actor(data: dict, user: Any, draft: DraftSession, team: DraftTeam, action: str) -> None:
     """A team's own captain, else a workspace permission.
 
     Team-scoped data (the fit column, the pick queue) belongs to the captain
