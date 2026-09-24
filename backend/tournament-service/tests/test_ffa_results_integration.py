@@ -15,11 +15,13 @@ rows the completion emits) in ``finally``.
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 import sqlalchemy as sa
@@ -46,10 +48,12 @@ from shared.models.tournament import (  # noqa: E402
     Tournament,
 )
 from shared.services.chat import ChatRoom  # noqa: E402
+from src.rpc import _helpers as rpc_helpers  # noqa: E402
 from src.services.admin.stage import stage_service  # noqa: E402
 from src.services.encounter.chat_access import EncounterChatAccess  # noqa: E402
 from src.services.encounter.ffa import ffa_encounter_service  # noqa: E402
 from src.services.standings.service import standings_service  # noqa: E402
+from tests._rpc_fakes import FakeSessionMaker  # noqa: E402
 
 #: Score-only: a point per elimination, places derived from the scoreboard.
 SCORING = {"ffa_scoring": {"score_points": 1}}
@@ -600,6 +604,42 @@ def test_an_invalid_result_is_refused_with_its_own_code(db_session, settings, bu
     status_code, codes, games = asyncio.run(_run())
     assert (status_code, codes) == (422, [code])
     assert games == 0  # a refused result never opens a position
+
+
+def test_a_refusal_carries_its_code_through_the_rpc_envelope(db_session) -> None:
+    """Raising the code is half the contract; the envelope has to carry it out.
+
+    The FFA sites raise ``BaseAPIException`` with ``ApiExc`` *models*, not the
+    dicts ``ApiHTTPException`` dumps, and ``http_error`` used to keep dict items
+    only -- so this refusal reached the client as ``{"code": "unprocessable",
+    "message": "error"}`` with nothing to branch on.
+    """
+
+    async def _case() -> dict:
+        seeded = await _seed(db_session, settings=PLACEMENT_SCORING)
+        try:
+            with patch.object(rpc_helpers.db, "async_session_maker", FakeSessionMaker(db_session)):
+                envelope = await rpc_helpers._run(
+                    logging.getLogger(__name__),
+                    lambda session: ffa_encounter_service.set_game_results(
+                        session,
+                        seeded.lobby_id,
+                        1,
+                        _lines(seeded.team_ids, [1, 1, 1], [1, 1, 2]),
+                        actor_user_id=None,
+                        reason=None,
+                    ),
+                )
+            await db_session.rollback()
+            return envelope
+        finally:
+            await _drop(db_session, seeded)
+
+    envelope = asyncio.run(_case())
+    assert envelope["ok"] is False
+    assert envelope["error"]["code"] == "unprocessable"
+    assert [field["code"] for field in envelope["error"]["details"]["fields"]] == ["ffa_result_invalid_placement"]
+    assert envelope["error"]["message"] != "error"
 
 
 def test_recording_a_game_into_a_duel_is_refused(db_session) -> None:
