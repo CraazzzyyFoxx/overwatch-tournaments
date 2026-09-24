@@ -7695,6 +7695,21 @@
             "title": "Scope",
             "type": "string"
           }
+        },
+        {
+          "name": "format",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tournament.EncounterFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
         }
       ],
       "response": {
@@ -8302,6 +8317,21 @@
             ],
             "title": "Scope",
             "type": "string"
+          }
+        },
+        {
+          "name": "format",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tournament.EncounterFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         }
       ],
@@ -36577,6 +36607,15 @@
       "title": "EncounterFiltersRead",
       "type": "object"
     },
+    "tournament.EncounterFormat": {
+      "description": "How many sides an encounter has. Fixed at creation.\n\n``duel`` is two sides and a series -- every feature built on home/away\naccepts only it. ``ffa`` is a lobby of N participants\n(``tournament.encounter_participant``) scored per game per participant.",
+      "enum": [
+        "duel",
+        "ffa"
+      ],
+      "title": "EncounterFormat",
+      "type": "string"
+    },
     "tournament.EncounterGameRead": {
       "description": "One position of the series and what the tournament DECIDED for it.\n\nDistinct from ``MatchRead``, which is what a parsed log OBSERVED: a position\nexists (and names its map) long before any log arrives, and a series may\nplay the same map twice \u2014 only ``position`` tells those two plays apart.",
       "properties": {
@@ -37018,6 +37057,10 @@
           ],
           "default": null,
           "title": "Ended At"
+        },
+        "format": {
+          "$ref": "#/components/schemas/tournament.EncounterFormat",
+          "default": "duel"
         },
         "games": {
           "default": [],
@@ -37825,6 +37868,17 @@
           "title": "Fields",
           "type": "array"
         },
+        "format": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.EncounterFormat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "has_logs": {
           "anyOf": [
             {
@@ -38086,6 +38140,10 @@
           ],
           "default": null,
           "title": "Away Team Id"
+        },
+        "format": {
+          "$ref": "#/components/schemas/tournament.EncounterFormat",
+          "default": "duel"
         },
         "home_team_id": {
           "anyOf": [
@@ -44408,7 +44466,8 @@
         "round_robin",
         "single_elimination",
         "double_elimination",
-        "swiss"
+        "swiss",
+        "ffa_league"
       ],
       "title": "StageType",
       "type": "string"

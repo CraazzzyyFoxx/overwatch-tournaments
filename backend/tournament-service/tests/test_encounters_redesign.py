@@ -166,6 +166,7 @@ class EncounterRedesignSerializationTests(IsolatedAsyncioTestCase):
         encounter = models.Encounter(
             id=1,
             name="A vs B",
+            format="duel",
             home_score=2,
             away_score=1,
             round=1,

@@ -77,6 +77,7 @@ def _encounter(
         created_at=datetime.now(UTC),
         updated_at=None,
         name=f"Match {id}",
+        format=enums.EncounterFormat.DUEL.value,
         home_team_id=home_team_id,
         away_team_id=away_team_id,
         home_score=2,
