@@ -5,6 +5,7 @@ import { Encounter } from "@/types/encounter.types";
 import { Stage, Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament/match-order";
+import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { tiebreakerLabel, type TiebreakerMetricId } from "@/lib/tournament/tiebreakers";
@@ -72,31 +73,6 @@ export function upperBracketCut(
       ? advanceCount / 2
       : null;
   return upper != null && upper > 0 && upper < advanceCount ? upper : null;
-}
-
-/**
- * The tie clusters sitting on both sides of `boundary`.
- *
- * For those teams the assigned order — not anything they earned on the pitch —
- * decides which side of the line they land on, which is the one thing a
- * standings table has to say out loud. Soft signal: callers mark the rows and
- * block nothing.
- *
- * Takes the two columns it reads, not a `Standings`: an FFA lobby row carries
- * the same position/tie_group pair and marks its cut line the same way.
- */
-export function straddlingTieGroups(
-  rows: ReadonlyArray<{ position: number; tie_group: number | null }>,
-  boundary: number
-): Set<number> {
-  const groups = new Set<number>();
-  for (const row of rows) {
-    if (row.tie_group == null || row.position > boundary) continue;
-    if (rows.some((other) => other.tie_group === row.tie_group && other.position > boundary)) {
-      groups.add(row.tie_group);
-    }
-  }
-  return groups;
 }
 
 type ResultKind = "w" | "l" | "t";

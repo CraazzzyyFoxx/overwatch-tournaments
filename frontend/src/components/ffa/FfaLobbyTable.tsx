@@ -3,9 +3,9 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 
-import { straddlingTieGroups } from "@/components/StandingsTable";
 import TeamName from "@/components/TeamName";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { cn } from "@/lib/utils";
 import type { FfaLobby, FfaLobbyRow } from "@/types/ffa.types";
 

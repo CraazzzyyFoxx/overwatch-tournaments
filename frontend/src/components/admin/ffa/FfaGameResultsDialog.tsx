@@ -96,6 +96,8 @@ export function FfaGameResultsDialog({
   );
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Set by a refused submit, so an untouched form is not painted red on open.
+  const [blanksFlagged, setBlanksFlagged] = useState(false);
 
   const mutation = useMutation({
     mutationFn: (input: FfaGameResultsInput) =>
@@ -109,11 +111,16 @@ export function FfaGameResultsDialog({
       });
       onOpenChange(false);
     },
+    // The global mutation cache toasts every rejection; this one is reported
+    // inside the dialog, next to the fields it is about.
+    meta: { suppressErrorToast: true },
     onError: (failure: unknown) => setError(describeError(failure))
   });
 
   const setField = (teamId: number, field: "placement" | "score", value: string) =>
     setDraft((current) => ({ ...current, [teamId]: { ...current[teamId], [field]: value } }));
+
+  const blanks = rows.filter((row) => draft[row.team_id].score.trim() === "");
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -121,9 +128,22 @@ export function FfaGameResultsDialog({
     if (isCorrection && !trimmed) {
       // The server refuses this with `ffa_reason_required`. Spending the round
       // trip to learn it would only cost the organizer the numbers just typed.
+      setBlanksFlagged(false);
       setError(t("ffa.errors.ffa_reason_required"));
       return;
     }
+    if (blanks.length > 0) {
+      // A blank is NOT a zero. Sending it as one would record "played, scored
+      // nothing" for a team the organizer simply had not got to yet — and the
+      // server's own `ffa_result_missing_team` guard can never catch that,
+      // because the line was there.
+      setBlanksFlagged(true);
+      setError(
+        `Every team needs a ${scoreLabel.toLowerCase()} — type 0 for a team that scored nothing.`
+      );
+      return;
+    }
+    setBlanksFlagged(false);
     setError(null);
     mutation.mutate({
       results: rows.map((row) => {
@@ -131,7 +151,7 @@ export function FfaGameResultsDialog({
         return {
           team_id: row.team_id,
           placement: entry.placement.trim() === "" ? null : Number(entry.placement),
-          score: entry.score.trim() === "" ? 0 : Number(entry.score)
+          score: Number(entry.score)
         };
       }),
       reason: trimmed || null
@@ -160,6 +180,7 @@ export function FfaGameResultsDialog({
             placement={draft[row.team_id].placement}
             score={draft[row.team_id].score}
             scoreLabel={scoreLabel}
+            scoreMissing={blanksFlagged && draft[row.team_id].score.trim() === ""}
             onPlacement={(value) => setField(row.team_id, "placement", value)}
             onScore={(value) => setField(row.team_id, "score", value)}
           />
@@ -198,6 +219,7 @@ function FieldRow({
   placement,
   score,
   scoreLabel,
+  scoreMissing,
   onPlacement,
   onScore
 }: Readonly<{
@@ -205,6 +227,7 @@ function FieldRow({
   placement: string;
   score: string;
   scoreLabel: string;
+  scoreMissing: boolean;
   onPlacement: (value: string) => void;
   onScore: (value: string) => void;
 }>) {
@@ -224,6 +247,7 @@ function FieldRow({
         min={0}
         inputMode="numeric"
         aria-label={`${scoreLabel} for ${name}`}
+        aria-invalid={scoreMissing || undefined}
         value={score}
         onChange={(event) => onScore(event.target.value)}
       />

@@ -118,7 +118,10 @@ function LobbyCard({ lobby }: Readonly<{ lobby: FfaLobby }>) {
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-base">{lobby.name}</CardTitle>
-        <GamesCountForm lobby={lobby} />
+        {/* Keyed by the length it edits: the lobby refetches after every write,
+            and a field seeded once would keep showing the number the organizer
+            replaced (or the one another organizer replaced). */}
+        <GamesCountForm key={lobby.best_of} lobby={lobby} />
       </CardHeader>
       <CardContent className="space-y-3">
         {lobby.rows.length === 0 ? (
@@ -188,11 +191,17 @@ function GamesCountForm({ lobby }: Readonly<{ lobby: FfaLobby }>) {
       notify.success(`${lobby.name} now plays ${updated.best_of} games`);
       void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.ffaAll(lobby.tournament_id) });
     },
+    // One message per failure: the translated one below, not that plus the
+    // mutation cache's generic validation toast.
+    meta: { suppressErrorToast: true },
     onError: (error: unknown) => notify.error(describeError(error))
   });
 
+  // The server takes 1..50 (`FfaGamesCountInput`); cutting below the games
+  // already played is the one bound only it can judge, so that stays a 422.
   const parsed = Number(games);
-  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed !== lobby.best_of;
+  const valid =
+    Number.isInteger(parsed) && parsed >= 1 && parsed <= 50 && parsed !== lobby.best_of;
 
   return (
     <div className="flex items-center gap-2">
@@ -245,6 +254,9 @@ function VoidGameDialog({
       void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.ffaAll(lobby.tournament_id) });
       onClose();
     },
+    // Reported inside the dialog; the mutation cache's generic toast would be
+    // a second message for the same failure.
+    meta: { suppressErrorToast: true },
     onError: (failure: unknown) => setError(describeError(failure))
   });
 

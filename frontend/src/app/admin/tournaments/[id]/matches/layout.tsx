@@ -98,14 +98,20 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
     ? logStatsQuery.data.pending + logStatsQuery.data.processing
     : 0;
 
-  // Only once the stages are in: they are unknown on the first paint, and
-  // bouncing on that would kick an organizer off the view they linked to.
+  // Nothing is rendered under a view this tournament does not have, not even
+  // for the paint before the bounce lands: `hasFfaStage` is false until the
+  // stages are in, so the Lobbies page never mounts against a duel tournament.
+  const activeAllowed =
+    !(MATCHES_SUB_TABS as readonly string[]).includes(segment) ||
+    allowedMatchesSubTab(segment as MatchesSubTabKey, { hasFfaStage });
+
+  // The URL itself is corrected only once the stages are in: they are unknown
+  // on the first paint, and bouncing on that would kick an organizer off the
+  // view they linked to.
   useEffect(() => {
-    if (!stagesQuery.data) return;
-    if (segment === "lobbies" && !hasFfaStage) {
-      router.replace(`${basePath}/${MATCHES_SUB_TABS[0]}`);
-    }
-  }, [stagesQuery.data, segment, hasFfaStage, basePath, router]);
+    if (!stagesQuery.data || activeAllowed) return;
+    router.replace(`${basePath}/${MATCHES_SUB_TABS[0]}`);
+  }, [stagesQuery.data, activeAllowed, basePath, router]);
 
   const items: LinkTabItem[] = MATCHES_SUB_TABS.map((key) => ({
     key,
@@ -123,7 +129,7 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
   return (
     <div className="space-y-4">
       <LinkTabs items={items} activeKey={segment} level={2} ariaLabel="Matches views" />
-      {children}
+      {activeAllowed ? children : null}
     </div>
   );
 }

@@ -2,9 +2,9 @@
 //
 // What the organizer's game-entry dialog promises:
 //
-// 1. One line per participant leaves for the server. A lobby is scored as a
-//    whole — a missing line is `ffa_result_missing_team`, so the dialog must
-//    never send the teams it happens to have focused.
+// 1. One line per participant leaves for the server, and a blank score is not
+//    one of them: a lobby is scored as a whole, so a team the organizer has not
+//    got to yet must hold the request back rather than be recorded on zero.
 // 2. A rejection is readable: the server answers a machine code, and the
 //    organizer sees the sentence for that code rather than a raw enum token.
 // 3. Correcting a game that has already been played never leaves without a
@@ -138,7 +138,7 @@ beforeEach(() => {
 });
 
 describe("entering an FFA game", () => {
-  it("sends a line for every team of the lobby, not just the ones typed into", async () => {
+  it("sends a line for every team of the lobby once every score is in", async () => {
     await mount(lobby([row(1), row(2), row(3)]), 2);
 
     await type(field("Place for Team 1"), "1");
@@ -146,14 +146,41 @@ describe("entering an FFA game", () => {
     await type(field("Place for Team 2"), "2");
     await type(field("Score for Team 2"), "7");
     await type(field("Place for Team 3"), "3");
+    await type(field("Score for Team 3"), "0");
     await save();
 
     expect(setGameResults).toHaveBeenCalledWith(500, 2, {
       results: [
         { team_id: 1, placement: 1, score: 10 },
         { team_id: 2, placement: 2, score: 7 },
-        // Never typed into: an untouched team is still a line, scoring zero.
         { team_id: 3, placement: 3, score: 0 }
+      ],
+      reason: null
+    });
+  });
+
+  it("holds the request back while a team has no score, rather than recording a zero", async () => {
+    // A forgotten team used to leave as `score: 0` — a line the server accepts,
+    // so `ffa_result_missing_team` could never catch it. Nothing is sent until
+    // the zero is typed on purpose.
+    await mount(lobby([row(1), row(2), row(3)]), 2);
+
+    await type(field("Score for Team 1"), "10");
+    await type(field("Score for Team 2"), "7");
+    await save();
+
+    expect(setGameResults).not.toHaveBeenCalled();
+    expect(field("Score for Team 3").getAttribute("aria-invalid")).toBe("true");
+    expect(field("Score for Team 1").getAttribute("aria-invalid")).toBeNull();
+
+    await type(field("Score for Team 3"), "0");
+    await save();
+
+    expect(setGameResults).toHaveBeenCalledWith(500, 2, {
+      results: [
+        { team_id: 1, placement: null, score: 10 },
+        { team_id: 2, placement: null, score: 7 },
+        { team_id: 3, placement: null, score: 0 }
       ],
       reason: null
     });
@@ -167,7 +194,9 @@ describe("entering an FFA game", () => {
     );
     await mount(lobby([row(1), row(2), row(3)]), 1);
 
+    for (const slot of [1, 2, 3]) await type(field(`Score for Team ${slot}`), "4");
     await type(field("Place for Team 1"), "1");
+    // Two firsts: the server is the one that knows this is not a permutation.
     await type(field("Place for Team 2"), "1");
     await type(field("Place for Team 3"), "2");
     await save();
