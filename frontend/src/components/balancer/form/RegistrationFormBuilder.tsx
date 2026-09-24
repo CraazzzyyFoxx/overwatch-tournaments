@@ -337,14 +337,15 @@ export function SchemaEditor({
 
   return (
     <Tabs defaultValue="edit" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* Edit ⇄ preview is a mode switch that owns panels: `Tabs` in the
-            house pill drawing, same as every other view switch. */}
-        <TabsList variant="pill">
+      <div className="flex flex-wrap items-center gap-2">
+        {toolbar}
+        {/* Edit ⇄ preview is a mode of this form, not navigation: it sits at
+            the end of the form's own toolbar so it does not read as a third
+            row of tabs under the routed ones. `Tabs` because it owns panels. */}
+        <TabsList variant="pill" className="ml-auto">
           <TabsTrigger value="edit">{t("editTab")}</TabsTrigger>
           <TabsTrigger value="preview">{t("previewTab")}</TabsTrigger>
         </TabsList>
-        {toolbar}
       </div>
 
       <TabsContent value="edit" className="m-0">
