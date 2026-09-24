@@ -6,9 +6,9 @@
  * because module scope has no `t()`. `href` drives current-page matching,
  * `key` drives translation lookup.
  *
- * Every item is public. The admin entry is permission-gated and lives beside
- * the account controls instead (`useCanAccessAdminEntry`), so nothing in this
- * tree needs filtering per viewer.
+ * Every item is public. The admin entry is permission-gated, so `SiteNav`
+ * appends it after this tree (`useCanAccessAdminEntry`) and nothing in here
+ * needs filtering per viewer.
  */
 
 export type NavGroupKey = "tournaments" | "users" | "play";

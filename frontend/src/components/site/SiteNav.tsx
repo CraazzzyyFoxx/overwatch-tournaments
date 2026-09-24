@@ -96,6 +96,7 @@ export function SiteNav({ variant, className }: Readonly<SiteNavProps>) {
             </li>
           );
         })}
+        <SiteAdminLink variant="desktop" />
       </ul>
     </nav>
   );
@@ -139,26 +140,29 @@ export function SectionTabs() {
 }
 
 /**
- * The admin entry, for viewers who have one. It is a personal tool rather than
- * a section of the site, so on desktop it sits with the account controls; in
- * the mobile sheet it closes the list.
+ * The admin entry, for viewers who have one. It closes the section list: last
+ * of the desktop links, last row of the mobile sheet.
  */
-export function SiteAdminLink({ variant }: Readonly<{ variant: "header" | "mobile" }>) {
+function SiteAdminLink({ variant }: Readonly<{ variant: "desktop" | "mobile" }>) {
   const t = useTranslations();
   const canAccess = useCanAccessAdminEntry();
   if (!canAccess) return null;
 
+  const label = t("nav.items.admin.title");
+  if (variant === "mobile") {
+    return (
+      <HoverPrefetchLink href="/admin" className={cn(sheetLinkClass, "pt-4")}>
+        {label}
+      </HoverPrefetchLink>
+    );
+  }
+
   return (
-    <HoverPrefetchLink
-      href="/admin"
-      className={
-        variant === "header"
-          ? cn(sectionLinkClass, "hidden lg:inline-flex")
-          : cn(sheetLinkClass, "pt-4")
-      }
-    >
-      {t("nav.items.admin.title")}
-    </HoverPrefetchLink>
+    <li>
+      <HoverPrefetchLink href="/admin" className={sectionLinkClass}>
+        {label}
+      </HoverPrefetchLink>
+    </li>
   );
 }
 

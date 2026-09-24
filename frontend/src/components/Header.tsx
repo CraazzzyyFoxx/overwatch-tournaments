@@ -16,7 +16,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
 import ActiveEvents from "@/components/ActiveEvents";
-import SiteNav, { SectionTabs, SiteAdminLink } from "@/components/site/SiteNav";
+import SiteNav, { SectionTabs } from "@/components/site/SiteNav";
 import { sectionPageGroup } from "@/components/site/site-nav-groups";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
@@ -162,7 +162,6 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
           </div>
           {user ? (
             <>
-              <SiteAdminLink variant="header" />
               <NotificationBell />
               <UserMenu user={user} />
             </>
