@@ -1,19 +1,21 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ArrowRight, Calendar } from "lucide-react";
+import { useFormatter } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { formatTournamentStages } from "@/lib/tournament/stages";
+import type { DateFormatter } from "@/components/kit/format-time";
 import { PermissionHiddenNotice } from "./PermissionHiddenNotice";
 import { tournamentStatus } from "./tournament-status";
 import type { Tournament } from "@/types/tournament.types";
 
-function formatDate(value?: Date | string | null) {
+function formatDate(format: DateFormatter, value?: Date | string | null) {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString();
+  return format.dateTime(new Date(value), { dateStyle: "medium" });
 }
 
 interface ActiveTournamentCardProps {
@@ -30,6 +32,7 @@ interface ActiveTournamentCardProps {
  * screen was already saying.
  */
 export function ActiveTournamentCard({ canRead, tournament }: Readonly<ActiveTournamentCardProps>) {
+  const format = useFormatter();
   if (!canRead) {
     return (
       <Card>
@@ -49,10 +52,10 @@ export function ActiveTournamentCard({ canRead, tournament }: Readonly<ActiveTou
             dashboard.
           </p>
           <Button asChild variant="outline" size="sm" className="w-fit">
-            <Link href="/admin/tournaments">
+            <HoverPrefetchLink href="/admin/tournaments">
               View all tournaments
               <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
+            </HoverPrefetchLink>
           </Button>
         </CardContent>
       </Card>
@@ -83,7 +86,7 @@ export function ActiveTournamentCard({ canRead, tournament }: Readonly<ActiveTou
           <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
             <Calendar className="size-3.5 shrink-0" aria-hidden />
             <span className="tabular-nums">
-              {formatDate(tournament.start_date)} — {formatDate(tournament.end_date)}
+              {formatDate(format, tournament.start_date)} — {formatDate(format, tournament.end_date)}
             </span>
             {stageCount > 0 && (
               <>
@@ -105,10 +108,10 @@ export function ActiveTournamentCard({ canRead, tournament }: Readonly<ActiveTou
         </div>
 
         <Button asChild size="sm" className="shrink-0">
-          <Link href={`/admin/tournaments/${tournament.id}`}>
+          <HoverPrefetchLink href={`/admin/tournaments/${tournament.id}`}>
             Open tournament
             <ArrowRight className="size-3.5" aria-hidden />
-          </Link>
+          </HoverPrefetchLink>
         </Button>
       </CardContent>
     </Card>

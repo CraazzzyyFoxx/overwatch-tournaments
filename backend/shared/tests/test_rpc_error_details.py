@@ -118,6 +118,24 @@ class HttpErrorTests(IsolatedAsyncioTestCase):
             ],
         )
 
+    def test_raw_api_exc_models_keep_their_code(self) -> None:
+        """The FFA sites raise ``BaseAPIException`` with ``ApiExc`` models, not dicts.
+
+        Unlike ``ApiHTTPException`` nothing dumps them on the way in, so filtering
+        the list to dicts left clients with message "error" and no ``fields`` --
+        the code they branch on was gone.
+        """
+        exc = HTTPException(
+            status_code=422,
+            detail=[ApiExc(code="ffa_result_invalid_placement", msg="Placements must be 1..3 with no repeats")],
+        )
+        message, details = http_error(exc)
+        self.assertEqual(message, "Placements must be 1..3 with no repeats")
+        self.assertEqual(
+            details["fields"],
+            [{"field": None, "msg": "Placements must be 1..3 with no repeats", "code": "ffa_result_invalid_placement"}],
+        )
+
     def test_api_exc_carries_the_field_an_error_is_about(self) -> None:
         assert ApiExc(msg="m", code="c", field="f").model_dump(mode="json") == {"msg": "m", "code": "c", "field": "f"}
 

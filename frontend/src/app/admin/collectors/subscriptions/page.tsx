@@ -4,7 +4,7 @@ import { SubscriptionHealthDashboard } from "@/components/admin/collectors/subsc
 import { SubscriptionTaskHistory } from "@/components/admin/collectors/subscription-history";
 import { SubscriptionSettingsPanel } from "@/components/admin/collectors/subscription-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/kit/AdminTabs";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";
@@ -54,7 +54,7 @@ export default function SubscriptionCollectorPage() {
   return (
     <div className="space-y-4">
       {items.length > 1 && (
-        <AdminTabs
+        <LinkTabs
           items={items}
           activeKey={activeKey}
           level={2}

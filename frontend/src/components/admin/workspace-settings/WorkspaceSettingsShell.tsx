@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminSectionNav } from "@/components/kit/AdminSectionNav";
+import { SectionNav } from "@/components/kit/SectionNav";
 import {
   WORKSPACE_SETTINGS_SECTIONS,
   WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS,
@@ -73,7 +73,7 @@ export function WorkspaceSettingsShell({
         actions={actions}
       />
       <div className="flex flex-col gap-4 md:flex-row md:gap-6">
-        <AdminSectionNav
+        <SectionNav
           groups={workspaceSettingsNavGroups(basePath, sections)}
           activeKey={activeKey ?? ""}
         />

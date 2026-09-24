@@ -1,5 +1,6 @@
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 import type { Tone } from "@/components/kit/tone";
+import type { DateFormatter } from "@/components/kit/format-time";
 import type { TournamentPhaseScheduleEntryInput, TournamentUpdateInput } from "@/types/admin.types";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import {
@@ -48,9 +49,9 @@ export type TournamentFormState = {
 
 export const TOURNAMENT_DETAIL_PREVIEW_LIMIT = 8;
 
-export function formatDate(value?: Date | string | null) {
+export function formatDate(format: DateFormatter, value?: Date | string | null) {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString();
+  return format.dateTime(new Date(value), { dateStyle: "medium" });
 }
 
 /**

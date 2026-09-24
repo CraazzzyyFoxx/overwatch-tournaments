@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 
 import {
@@ -135,12 +135,12 @@ const LobbyLeaderboardModal = ({ userId, tournamentId, stat, statLabel, onClose 
                         </span>
                       </td>
                       <td className="px-3 py-2 align-middle">
-                        <Link
+                        <HoverPrefetchLink
                           href={`/users/${getPlayerSlug(e.name)}`}
                           className="font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
                         >
                           {e.name}
-                        </Link>
+                        </HoverPrefetchLink>
                         {isYou ? (
                           <span className="aqt-tnum ml-2 text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
                             {t("users.overview.leaderboard.you")}

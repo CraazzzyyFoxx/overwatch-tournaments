@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, LoaderCircle, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import TeamName from "@/components/TeamName";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Stage, Standings } from "@/types/tournament.types";
+import { Spinner } from "@/components/ui/spinner";
 
 /** A run of rows the engine could not separate: same `tie_group`, same scope. */
 export interface TieCluster {
@@ -261,7 +262,7 @@ export function StandingsTiesPanel({
                     onClick={() => mutation.mutate({ cluster, teamIds: null })}
                   >
                     {clearing ? (
-                      <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
+                      <Spinner />
                     ) : (
                       <RotateCcw aria-hidden className="size-4" />
                     )}
@@ -275,10 +276,7 @@ export function StandingsTiesPanel({
                       onClick={() => mutation.mutate({ cluster, teamIds: current })}
                     >
                       {saving ? (
-                        <LoaderCircle
-                          aria-hidden
-                          className="size-4 animate-spin motion-reduce:animate-none"
-                        />
+                        <Spinner />
                       ) : null}
                       Save order
                     </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { EncounterWithUserStats } from "@/types/user.types";
@@ -63,7 +63,7 @@ const EncounterRow = ({
   const stageLabel = enc.stage_item?.name ?? enc.stage?.name ?? enc.name ?? "—";
 
   return (
-    <Link
+    <HoverPrefetchLink
       href={`/encounters/${enc.id}`}
       className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-ui transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)] md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]"
       style={{ boxShadow: `inset 3px 0 0 0 ${scoreAccent[scoreKind]}` }}
@@ -149,7 +149,7 @@ const EncounterRow = ({
           }
         />
       </div>
-    </Link>
+    </HoverPrefetchLink>
   );
 };
 

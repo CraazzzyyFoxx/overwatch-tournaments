@@ -80,10 +80,12 @@ type StreamStatusMeta = {
    * site, same reasoning as `TOURNAMENT_STATUS_META`.
    */
   labelKey: StreamStatusLabelKey | null;
-  /** `.status-pill.{variant}` class from `globals.css` (scoped by `.aqt-tn`). */
-  pillClassName: string;
-  /** Whether the pill carries the animated `.dot`. */
-  hasDot: boolean;
+  /**
+   * Lifecycle variant for `TournamentStatusPill`, or `null` for no pill. Typed
+   * as literals rather than importing the component's union: `lib/` does not
+   * depend on `components/`.
+   */
+  pillStatus: "live" | "finished" | null;
   /** Whether the player may be embedded for this state. */
   embeddable: boolean;
 };
@@ -91,20 +93,17 @@ type StreamStatusMeta = {
 export const STREAM_STATUS_META: Record<StreamStatus, StreamStatusMeta> = {
   live: {
     labelKey: "stream.status.live",
-    pillClassName: "status-pill live",
-    hasDot: true,
+    pillStatus: "live",
     embeddable: true,
   },
   offline: {
     labelKey: "stream.status.offline",
-    pillClassName: "status-pill finished",
-    hasDot: false,
+    pillStatus: "finished",
     embeddable: false,
   },
   unknown: {
     labelKey: null,
-    pillClassName: "",
-    hasDot: false,
+    pillStatus: null,
     embeddable: false,
   },
 };

@@ -15,16 +15,18 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useFormatter } from "next-intl";
 import { useDebounce } from "use-debounce";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { type Tone } from "@/components/kit/tone";
+import type { DateFormatter } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
@@ -42,6 +44,7 @@ import {
   invalidateTournamentWorkspace
 } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 const PAGE_SIZE = 25;
 /**
@@ -94,8 +97,8 @@ function formatDuration(record: LogProcessingRecord) {
 }
 
 /** Matches `formatSyncTime` in ChallongeIntegrationSection so both admin logs read alike. */
-function formatLogTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
+function formatLogTime(format: DateFormatter, value: string) {
+  return format.dateTime(new Date(value), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -142,6 +145,7 @@ export function TournamentLogsTab({
   canUploadLogs,
   enabled
 }: Readonly<TournamentLogsTabProps>) {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   // Scoped to a tournament inside the hub, to the workspace on the
   // cross-tournament browser. Both keys are what realtime and the tab badge
@@ -184,7 +188,7 @@ export function TournamentLogsTab({
     ],
     [stats]
   );
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const rawStatus = String(filters.values.status ?? "");
   const statusFilter = (LOG_FILTERS as readonly string[]).includes(rawStatus)
     ? (rawStatus as LogFilter)
@@ -325,7 +329,7 @@ export function TournamentLogsTab({
                   onClick={() => processAllLogsMutation.mutate()}
                 >
                   {processAllLogsMutation.isPending ? (
-                    <Loader2 className="animate-spin" aria-hidden />
+                    <Spinner />
                   ) : null}
                   Process S3 logs
                 </Button>
@@ -355,7 +359,7 @@ export function TournamentLogsTab({
         </CardHeader>
 
         <CardContent className="flex flex-col gap-3 p-4 pt-0">
-          <AdminFilterBar
+          <FilterBar
             defs={defs}
             filters={filters}
             search={{
@@ -379,7 +383,7 @@ export function TournamentLogsTab({
                     <>
                       {" · newest "}
                       <span className="tabular-nums text-foreground/80">
-                        {formatLogTime(stats.last_created_at)}
+                        {formatLogTime(format, stats.last_created_at)}
                       </span>
                     </>
                   ) : null}
@@ -415,7 +419,7 @@ export function TournamentLogsTab({
                     }
                   >
                     {retryFailuresMutation.isPending ? (
-                      <Loader2 className="animate-spin" aria-hidden />
+                      <Spinner />
                     ) : (
                       <RotateCcw aria-hidden />
                     )}
@@ -511,7 +515,7 @@ export function TournamentLogsTab({
                           ) : null}
                         </div>
                         <p className="w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                          {formatLogTime(record.created_at)}
+                          {formatLogTime(format, record.created_at)}
                         </p>
                         <p className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                           {formatDuration(record)}
@@ -529,7 +533,7 @@ export function TournamentLogsTab({
                                   onClick={() => retryLogMutation.mutate(record.id)}
                                 >
                                   {retrying ? (
-                                    <Loader2 className="animate-spin" aria-hidden />
+                                    <Spinner />
                                   ) : (
                                     <RotateCcw aria-hidden />
                                   )}

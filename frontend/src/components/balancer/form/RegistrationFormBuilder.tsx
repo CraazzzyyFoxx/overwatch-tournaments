@@ -34,7 +34,6 @@ import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { segmentedFrame, toggleVariants } from "@/components/ui/toggle";
 import { defaultFormSchema } from "@/lib/forms/default-schema";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { makeUniqueFieldKey } from "@/lib/forms/keys";
@@ -338,19 +337,15 @@ export function SchemaEditor({
 
   return (
     <Tabs defaultValue="edit" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* The house segmented control, not the shadcn grey box: same drawing
-            as every other view switch (`ToggleGroup variant="pill"`, the
-            bracket's stage tabs), borrowed rather than restated. */}
-        <TabsList className={cn(segmentedFrame, "h-8")}>
-          <TabsTrigger value="edit" className={toggleVariants({ variant: "pill", size: "sm" })}>
-            {t("editTab")}
-          </TabsTrigger>
-          <TabsTrigger value="preview" className={toggleVariants({ variant: "pill", size: "sm" })}>
-            {t("previewTab")}
-          </TabsTrigger>
-        </TabsList>
+      <div className="flex flex-wrap items-center gap-2">
         {toolbar}
+        {/* Edit ⇄ preview is a mode of this form, not navigation: it sits at
+            the end of the form's own toolbar so it does not read as a third
+            row of tabs under the routed ones. `Tabs` because it owns panels. */}
+        <TabsList variant="pill" className="ml-auto">
+          <TabsTrigger value="edit">{t("editTab")}</TabsTrigger>
+          <TabsTrigger value="preview">{t("previewTab")}</TabsTrigger>
+        </TabsList>
       </div>
 
       <TabsContent value="edit" className="m-0">

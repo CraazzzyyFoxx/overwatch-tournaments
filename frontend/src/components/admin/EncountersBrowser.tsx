@@ -33,10 +33,10 @@ import {
 } from "@/components/admin/EncounterForm";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { hasChallongeSource } from "@/components/admin/tournament-checklist";
@@ -134,7 +134,7 @@ function InspectorField({
  * lowercase `status` the backend does not accept, while the browser page had no
  * stage scope at all.
  *
- * Everything the admin narrows by lives in the URL through `AdminFilterBar`, so
+ * Everything the admin narrows by lives in the URL through `FilterBar`, so
  * `?stage=` survives a move to the Standings or Reports view beside it.
  */
 export function EncountersBrowser({
@@ -254,7 +254,7 @@ export function EncountersBrowser({
     return list;
   }, [tournamentId, tournamentsQuery.data, stages, stageItems]);
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const stageFilter = String(filters.values.stage ?? "");
   const groupFilter = String(filters.values.group ?? "");
   const statusFilter = String(filters.values.status ?? "");
@@ -529,7 +529,7 @@ export function EncountersBrowser({
           inspectorId={openId}
           getRowId={(row) => String(row.id)}
           toolbar={
-            <AdminFilterBar
+            <FilterBar
               defs={defs}
               filters={filters}
               trailing={trailing}
@@ -599,7 +599,7 @@ export function EncountersBrowser({
         />
       </div>
 
-      <AdminInspector
+      <Inspector
         openId={openRow ? openId : null}
         onClose={() => setParams({ id: null })}
         title={openRow ? `Encounter #${openRow.id}` : ""}
@@ -745,7 +745,7 @@ export function EncountersBrowser({
             </section>
           </div>
         ) : null}
-      </AdminInspector>
+      </Inspector>
 
       <EntityFormDialog
         open={formMode != null}

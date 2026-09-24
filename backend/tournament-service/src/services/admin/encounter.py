@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core import http_status as status
+from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.encounter_format import ensure_format
 from shared.domain.encounter_naming import build_encounter_name
 from shared.repository import (
     EncounterRepository,
@@ -29,6 +31,10 @@ from src.services.tournament.events import enqueue_tournament_recalculation
 # after-commit hook, before the event reaches any client. The explicit
 # post-commit purge these writes used to do was the same drop, minus that
 # ordering guarantee.
+
+# What an admin may still edit on a lobby: it has no sides, no series score and
+# no bracket slot, so every other column of the duel-shaped row is meaningless.
+_FFA_EDITABLE_FIELDS = frozenset({"name", "scheduled_at", "started_at", "ended_at"})
 
 
 def _reject_completed_status(new_status: str | None) -> None:
@@ -279,6 +285,13 @@ class AdminEncounterService:
 
         # Update fields
         update_data = data.model_dump(exclude_unset=True)
+        if encounter.format == enums.EncounterFormat.FFA:
+            refused = sorted(set(update_data) - _FFA_EDITABLE_FIELDS)
+            if refused:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=[ApiExc(code="ffa_field_not_editable", msg=f"A lobby does not take {', '.join(refused)}")],
+                )
 
         # Status first: the completion guards must fire before any other
         # validation or write this method does.
@@ -402,6 +415,7 @@ class AdminEncounterService:
             )
             if not row:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+            ensure_format(row, enums.EncounterFormat.DUEL)
             locked[locked_id] = row
 
         source = locked[encounter_id]

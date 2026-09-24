@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, HelpCircle, Loader2, LogOut, Monitor, Smartphone } from "lucide-react";
+import { ChevronDown, HelpCircle, LogOut, Monitor, Smartphone } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { notify } from "@/lib/notify";
 import { detectBrowser, detectPlatform } from "@/lib/user-agent";
 import { cn } from "@/lib/utils";
 import type { AccountSession } from "@/types/auth.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { SETTINGS_GROUP_HEADING_CLASS, SettingsGroup } from "./SettingsGroup";
 
@@ -124,7 +125,7 @@ function SessionRow({
           aria-label={t("signOutAria", { device })}
           onClick={() => onRevoke(session.session_id)}
         >
-          {pending ? <Loader2 className="animate-spin" aria-hidden /> : <LogOut aria-hidden />}
+          {pending ? <Spinner /> : <LogOut aria-hidden />}
           {/* Icon-only on phones; the aria-label still names the device. */}
           <span className="sr-only sm:not-sr-only">{t("signOut")}</span>
         </Button>

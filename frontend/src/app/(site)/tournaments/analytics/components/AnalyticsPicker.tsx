@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface AnalyticsPickerProps {
   tournaments: Tournament[];
@@ -63,7 +63,7 @@ function TooltipSelect({
       <Select value={value} onValueChange={onValueChange} disabled={disabled}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <SelectTrigger aria-label={tooltip} className={cn("h-9", className)}>
+            <SelectTrigger aria-label={tooltip} className={cn("h-8", className)}>
               <SelectValue placeholder={placeholder} />
             </SelectTrigger>
           </TooltipTrigger>

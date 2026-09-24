@@ -7695,6 +7695,21 @@
             "title": "Scope",
             "type": "string"
           }
+        },
+        {
+          "name": "format",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tournament.EncounterFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
         }
       ],
       "response": {
@@ -7702,6 +7717,58 @@
         "ref": "tournament.EncounterOverviewRead"
       },
       "summary": "Get encounters overview"
+    },
+    "rpc.tournament.ffa_game_cancel": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Voids one game of a lobby, keeping it as history and freeing its position for a replay. Requires a reason. Answers the lobby's settled table \u2014 which may have reopened, since a voided game no longer counts towards the games count.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FfaGameCancelInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Cancel FFA game"
+    },
+    "rpc.tournament.ffa_game_results_set": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once. Placements are required when the stage pays for place and derived from the score otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table. 409 when a later stage has already been seeded from this group.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FfaGameResultsInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Set FFA game results"
+    },
+    "rpc.tournament.ffa_games_count_set": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Changes how many games THIS lobby plays. Never below the number it has already confirmed (422), since the games are the record. Answers the lobby's settled table, completed or reopened by the new count.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FfaGamesCountInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Set FFA lobby games count"
+    },
+    "rpc.tournament.ffa_lobby": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby's table, the same shape the stage read answers per group. 409 when the encounter is a duel rather than a lobby.",
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Get FFA lobby"
+    },
+    "rpc.tournament.ffa_stage": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points, and one cell per planned game. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.",
+      "response": {
+        "array": true,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Get FFA stage lobbies"
     },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
@@ -8303,6 +8370,21 @@
             "title": "Scope",
             "type": "string"
           }
+        },
+        {
+          "name": "format",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tournament.EncounterFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
         }
       ],
       "response": {
@@ -8713,67 +8795,6 @@
         "ref": "tournament.LookupItem"
       },
       "summary": "Lookup tournaments"
-    },
-    "rpc.tournament.owal_results": {
-      "description": "Permission: public; no authentication required. Returns OWAL league standings for the workspace, for a specific season when given or overall, normalized against the workspace division grid.",
-      "query_params": [
-        {
-          "name": "workspace_id",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        },
-        {
-          "name": "season",
-          "required": false,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "response": {
-        "array": false,
-        "ref": "tournament.OwalStandings"
-      },
-      "summary": "Get league standings"
-    },
-    "rpc.tournament.owal_seasons": {
-      "description": "Permission: public; no authentication required. Returns the list of available OWAL league seasons for the workspace.",
-      "query_params": [
-        {
-          "name": "workspace_id",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ],
-      "summary": "List league seasons"
-    },
-    "rpc.tournament.owal_stacks": {
-      "description": "Permission: public; no authentication required. Returns OWAL league player stacks for the workspace and season, defaulting to the latest season when none is given.",
-      "query_params": [
-        {
-          "name": "workspace_id",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        },
-        {
-          "name": "season",
-          "required": false,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "response": {
-        "array": true,
-        "ref": "tournament.LeaguePlayerStack"
-      },
-      "summary": "Get league player stacks"
     },
     "rpc.tournament.preview_access_add": {
       "description": "Permission: workspace `owner`/`admin` role on the tournament's workspace (403 otherwise). Allowlists one account (body `auth_user_id`, 422 when absent) to view a tournament before it is public and invalidates the cached tournament read so the change lands immediately.",
@@ -36577,6 +36598,15 @@
       "title": "EncounterFiltersRead",
       "type": "object"
     },
+    "tournament.EncounterFormat": {
+      "description": "How many sides an encounter has. Fixed at creation.\n\n``duel`` is two sides and a series -- every feature built on home/away\naccepts only it. ``ffa`` is a lobby of N participants\n(``tournament.encounter_participant``) scored per game per participant.",
+      "enum": [
+        "duel",
+        "ffa"
+      ],
+      "title": "EncounterFormat",
+      "type": "string"
+    },
     "tournament.EncounterGameRead": {
       "description": "One position of the series and what the tournament DECIDED for it.\n\nDistinct from ``MatchRead``, which is what a parsed log OBSERVED: a position\nexists (and names its map) long before any log arrives, and a series may\nplay the same map twice \u2014 only ``position`` tells those two plays apart.",
       "properties": {
@@ -36677,6 +36707,18 @@
       ],
       "title": "EncounterGameRead",
       "type": "object"
+    },
+    "tournament.EncounterGameState": {
+      "description": "Lifecycle of one position of a series (``tournament.encounter_game``).",
+      "enum": [
+        "planned",
+        "awaiting_result",
+        "disputed",
+        "confirmed",
+        "cancelled"
+      ],
+      "title": "EncounterGameState",
+      "type": "string"
     },
     "tournament.EncounterHistogramBucketRead": {
       "properties": {
@@ -37018,6 +37060,10 @@
           ],
           "default": null,
           "title": "Ended At"
+        },
+        "format": {
+          "$ref": "#/components/schemas/tournament.EncounterFormat",
+          "default": "duel"
         },
         "games": {
           "default": [],
@@ -37825,6 +37871,17 @@
           "title": "Fields",
           "type": "array"
         },
+        "format": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.EncounterFormat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "has_logs": {
           "anyOf": [
             {
@@ -38086,6 +38143,10 @@
           ],
           "default": null,
           "title": "Away Team Id"
+        },
+        "format": {
+          "$ref": "#/components/schemas/tournament.EncounterFormat",
+          "default": "duel"
         },
         "home_team_id": {
           "anyOf": [
@@ -38379,6 +38440,376 @@
         }
       },
       "title": "EncounterUpdate",
+      "type": "object"
+    },
+    "tournament.FfaGameCancelInput": {
+      "properties": {
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "FfaGameCancelInput",
+      "type": "object"
+    },
+    "tournament.FfaGameCellRead": {
+      "properties": {
+        "placement": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Placement"
+        },
+        "points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Points"
+        },
+        "position": {
+          "title": "Position",
+          "type": "integer"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.EncounterGameState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "position",
+        "state",
+        "placement",
+        "score",
+        "points"
+      ],
+      "title": "FfaGameCellRead",
+      "type": "object"
+    },
+    "tournament.FfaGameResultLineInput": {
+      "properties": {
+        "placement": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placement"
+        },
+        "score": {
+          "minimum": 0,
+          "title": "Score",
+          "type": "integer"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id",
+        "score"
+      ],
+      "title": "FfaGameResultLineInput",
+      "type": "object"
+    },
+    "tournament.FfaGameResultsInput": {
+      "properties": {
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaGameResultLineInput"
+          },
+          "maxItems": 100,
+          "minItems": 2,
+          "title": "Results",
+          "type": "array"
+        }
+      },
+      "required": [
+        "results"
+      ],
+      "title": "FfaGameResultsInput",
+      "type": "object"
+    },
+    "tournament.FfaGamesCountInput": {
+      "properties": {
+        "games": {
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Games",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "games"
+      ],
+      "title": "FfaGamesCountInput",
+      "type": "object"
+    },
+    "tournament.FfaLobbyRead": {
+      "properties": {
+        "advance_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Advance Count"
+        },
+        "best_of": {
+          "title": "Best Of",
+          "type": "integer"
+        },
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "result_status": {
+          "$ref": "#/components/schemas/tournament.EncounterResultStatus"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaLobbyRowRead"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "rules": {
+          "$ref": "#/components/schemas/tournament.FfaRulesRead"
+        },
+        "scheduled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Scheduled At"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Id"
+        },
+        "stage_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Item Id"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.EncounterStatus"
+        },
+        "tournament_id": {
+          "title": "Tournament Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "tournament_id",
+        "stage_id",
+        "stage_item_id",
+        "name",
+        "status",
+        "result_status",
+        "best_of",
+        "scheduled_at",
+        "advance_count",
+        "rules",
+        "rows"
+      ],
+      "title": "FfaLobbyRead",
+      "type": "object"
+    },
+    "tournament.FfaLobbyRowRead": {
+      "properties": {
+        "games": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaGameCellRead"
+          },
+          "title": "Games",
+          "type": "array"
+        },
+        "games_played": {
+          "title": "Games Played",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "number"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Position"
+        },
+        "score": {
+          "title": "Score",
+          "type": "integer"
+        },
+        "slot": {
+          "title": "Slot",
+          "type": "integer"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        },
+        "team_image_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team Image Url"
+        },
+        "team_name": {
+          "title": "Team Name",
+          "type": "string"
+        },
+        "tie_group": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tie Group"
+        },
+        "wins": {
+          "title": "Wins",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id",
+        "team_name",
+        "team_image_url",
+        "slot",
+        "position",
+        "tie_group",
+        "points",
+        "games_played",
+        "wins",
+        "score",
+        "games"
+      ],
+      "title": "FfaLobbyRowRead",
+      "type": "object"
+    },
+    "tournament.FfaRulesRead": {
+      "properties": {
+        "placement_points": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Placement Points",
+          "type": "array"
+        },
+        "score_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score Label"
+        },
+        "score_points": {
+          "title": "Score Points",
+          "type": "number"
+        }
+      },
+      "required": [
+        "placement_points",
+        "score_points",
+        "score_label"
+      ],
+      "title": "FfaRulesRead",
       "type": "object"
     },
     "tournament.FieldValidation": {
@@ -38765,17 +39196,6 @@
       "title": "GamemodeRead",
       "type": "object"
     },
-    "tournament.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
-      "enum": [
-        "Tank",
-        "Damage",
-        "Support",
-        "Flex"
-      ],
-      "title": "HeroClass",
-      "type": "string"
-    },
     "tournament.HeroRead": {
       "properties": {
         "color": {
@@ -38933,32 +39353,6 @@
         "created_at"
       ],
       "title": "LastResolutionRead",
-      "type": "object"
-    },
-    "tournament.LeaguePlayerStack": {
-      "properties": {
-        "avg_position": {
-          "title": "Avg Position",
-          "type": "number"
-        },
-        "games": {
-          "title": "Games",
-          "type": "integer"
-        },
-        "user_1": {
-          "$ref": "#/components/schemas/tournament.UserRead"
-        },
-        "user_2": {
-          "$ref": "#/components/schemas/tournament.UserRead"
-        }
-      },
-      "required": [
-        "user_1",
-        "user_2",
-        "games",
-        "avg_position"
-      ],
-      "title": "LeaguePlayerStack",
       "type": "object"
     },
     "tournament.LogProcessingSource": {
@@ -40095,146 +40489,6 @@
         "champions"
       ],
       "title": "OverallStatistics",
-      "type": "object"
-    },
-    "tournament.OwalStanding": {
-      "properties": {
-        "avg_points": {
-          "title": "Avg Points",
-          "type": "number"
-        },
-        "best_3_days": {
-          "title": "Best 3 Days",
-          "type": "number"
-        },
-        "count_days": {
-          "title": "Count Days",
-          "type": "integer"
-        },
-        "days": {
-          "additionalProperties": {
-            "$ref": "#/components/schemas/tournament.OwalStandingDay"
-          },
-          "title": "Days",
-          "type": "object"
-        },
-        "division": {
-          "title": "Division",
-          "type": "integer"
-        },
-        "draws": {
-          "title": "Draws",
-          "type": "integer"
-        },
-        "losses": {
-          "title": "Losses",
-          "type": "integer"
-        },
-        "place": {
-          "title": "Place",
-          "type": "integer"
-        },
-        "role": {
-          "$ref": "#/components/schemas/tournament.HeroClass"
-        },
-        "user": {
-          "$ref": "#/components/schemas/tournament.UserRead"
-        },
-        "win_rate": {
-          "title": "Win Rate",
-          "type": "number"
-        },
-        "wins": {
-          "title": "Wins",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "user",
-        "role",
-        "division",
-        "days",
-        "count_days",
-        "place",
-        "best_3_days",
-        "avg_points",
-        "wins",
-        "draws",
-        "losses",
-        "win_rate"
-      ],
-      "title": "OwalStanding",
-      "type": "object"
-    },
-    "tournament.OwalStandingDay": {
-      "properties": {
-        "division": {
-          "title": "Division",
-          "type": "integer"
-        },
-        "draws": {
-          "title": "Draws",
-          "type": "integer"
-        },
-        "losses": {
-          "title": "Losses",
-          "type": "integer"
-        },
-        "points": {
-          "title": "Points",
-          "type": "number"
-        },
-        "role": {
-          "$ref": "#/components/schemas/tournament.HeroClass"
-        },
-        "team": {
-          "title": "Team",
-          "type": "string"
-        },
-        "win_rate": {
-          "title": "Win Rate",
-          "type": "number"
-        },
-        "wins": {
-          "title": "Wins",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "team",
-        "role",
-        "division",
-        "points",
-        "wins",
-        "draws",
-        "losses",
-        "win_rate"
-      ],
-      "title": "OwalStandingDay",
-      "type": "object"
-    },
-    "tournament.OwalStandings": {
-      "properties": {
-        "days": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.TournamentRead"
-          },
-          "title": "Days",
-          "type": "array"
-        },
-        "standings": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.OwalStanding"
-          },
-          "title": "Standings",
-          "type": "array"
-        }
-      },
-      "required": [
-        "days",
-        "standings"
-      ],
-      "title": "OwalStandings",
       "type": "object"
     },
     "tournament.Paginated_AdminMatchRow_": {
@@ -44408,7 +44662,8 @@
         "round_robin",
         "single_elimination",
         "double_elimination",
-        "swiss"
+        "swiss",
+        "ffa_league"
       ],
       "title": "StageType",
       "type": "string"

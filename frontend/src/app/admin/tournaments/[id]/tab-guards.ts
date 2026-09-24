@@ -55,15 +55,29 @@ export type RegistrationSubTab = (typeof REGISTRATION_SUB_TABS)[number];
 export const TEAMS_SUB_TABS = ["roster", "draft"] as const;
 export type TeamsSubTab = (typeof TEAMS_SUB_TABS)[number];
 
-/** Sub-tabs of `matches`. `results` split into `encounters` + `standings`. */
+/**
+ * Sub-tabs of `matches`. `results` split into `encounters` + `standings`.
+ *
+ * `lobbies` is where an FFA league's games are entered. A duel tournament has
+ * no lobby to enter, so like `draft` it is a property of the tournament rather
+ * than a permission — hidden AND bounced, never hidden-but-reachable.
+ */
 export const MATCHES_SUB_TABS = [
   "encounters",
+  "lobbies",
   "standings",
   "reports",
   "parsed",
   "logs"
 ] as const;
 export type MatchesSubTabKey = (typeof MATCHES_SUB_TABS)[number];
+
+export function allowedMatchesSubTab(
+  tab: MatchesSubTabKey,
+  p: Readonly<{ hasFfaStage: boolean }>
+): boolean {
+  return tab === "lobbies" ? p.hasFfaStage : true;
+}
 
 /** Sections of `settings`, in navigation order (F9 ·1). */
 export const SETTINGS_SECTIONS = [

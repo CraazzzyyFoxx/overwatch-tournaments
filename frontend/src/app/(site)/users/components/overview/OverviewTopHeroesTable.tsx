@@ -1,6 +1,6 @@
 import { getFormatter, getTranslations } from "next-intl/server";
 import { ArrowRight, Swords, TrendingDown, TrendingUp } from "lucide-react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { UserMapRead } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -11,6 +11,7 @@ import { formatStatValue, getOverall, statAvg10, toFraction, winrateColor } from
 import HeroImage from "@/components/hero/HeroImage";
 import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { heroPopoverStats, type HeroPopoverStat } from "@/lib/hero/popover-stats";
 
 interface Props {
   heroes: HeroWithUserStats[];
@@ -48,8 +49,9 @@ const ROLE_COLOR: Record<AqtRoleKey, string> = {
 interface Row {
   id: number;
   hero: HeroWithUserStats["hero"];
-  /** Full per-hero stats, kept for the hover popover (design-book §11). */
-  stats: HeroWithUserStats["stats"];
+  /** Per-hero stats narrowed to what the hover popover reads (design-book §11).
+   *  The full array would be serialized into the RSC payload once per row. */
+  stats: HeroPopoverStat[];
   roleKey: AqtRoleKey | null;
   games: number;
   /** Total seconds on the hero — this is what the table is ordered by. */
@@ -99,7 +101,7 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
       return {
         id: h.hero.id,
         hero: h.hero,
-        stats: h.stats,
+        stats: heroPopoverStats(h.stats) ?? [],
         roleKey: normalizeRole(h.hero.type ?? h.hero.role),
         games,
         playtime,
@@ -133,10 +135,10 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
       icon={<Swords size={15} />}
       subtitle={t("users.overview.topHeroes.playedByTime", { count: heroes.length })}
       action={
-        <Link href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
           {t("common.all")} {heroes.length}
           <ArrowRight aria-hidden className="size-3" />
-        </Link>
+        </HoverPrefetchLink>
       }
     >
       <div className="overflow-x-auto">

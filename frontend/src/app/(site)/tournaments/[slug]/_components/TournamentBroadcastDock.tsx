@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
 import { Dock } from "@/components/ui/dock";
+import { StatusDot } from "@/components/ui/status-dot";
 import {
   embeddableTwitchChannel,
   getStreamStatus,
@@ -77,14 +78,13 @@ export function TournamentBroadcastDock({
       icon={<Radio className="size-4" aria-hidden />}
       showLabel={t("stream.broadcast.show")}
       hideLabel={t("stream.broadcast.hide")}
-      // Worth a glance without reopening the frame: the cast is on air. A plain
-      // dot rather than the `.status-pill.live` markup — that rule styles a
-      // pill, and stripping its box back off with `!important` would be three
-      // overrides to end up here anyway. Colour is not the only cue: the label
-      // beside it names the subject.
+      // Worth a glance without reopening the frame: the cast is on air. The
+      // dot alone, not `TournamentStatusPill` — a pill's box does not fit the
+      // dock header. Colour is not the only cue: the label beside it names the
+      // subject.
       badge={
         featuredStatus === "live" ? (
-          <span aria-hidden className="size-[7px] rounded-full bg-[color:var(--aqt-rose)]" />
+          <StatusDot className="size-[7px] text-[color:var(--aqt-status-live)]" />
         ) : null
       }
       className={className}

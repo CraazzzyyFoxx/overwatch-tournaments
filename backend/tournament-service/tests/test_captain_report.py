@@ -72,6 +72,7 @@ def _mk_encounter(
     away_team = SimpleNamespace(id=2, captain_id=away_captain_player_id)
     return SimpleNamespace(
         id=10,
+        format=enums.EncounterFormat.DUEL,
         tournament_id=1,
         home_team_id=home_team.id,
         away_team_id=away_team.id,

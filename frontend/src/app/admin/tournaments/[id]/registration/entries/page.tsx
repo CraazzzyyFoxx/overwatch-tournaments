@@ -16,7 +16,7 @@ const RegistrationsTable = dynamic(
  * The individual registrations of one tournament.
  *
  * Registered TEAMS are the sibling `teams` section, not a switcher inside this
- * one: the admin has a single tab implementation (`AdminTabs`, owned by the
+ * one: the admin has a single tab implementation (`LinkTabs`, owned by the
  * layout), and a Radix `Tabs` pair here made the teams view unlinkable.
  */
 export default function RegistrationEntriesPage() {

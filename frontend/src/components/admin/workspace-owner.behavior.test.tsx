@@ -8,9 +8,12 @@
 //    owner as well as superusers — the person on the hook may get off it, a
 //    `workspace.update` holder may not give away what they do not answer for.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import en from "@/i18n/messages/en.json";
 
 import { WorkspaceOwnerControl, WorkspaceOwnerTransferControl } from "./workspace-owner";
 
@@ -48,16 +51,18 @@ async function render(isSuperuser: boolean) {
   root = createRoot(container);
   await act(async () => {
     root.render(
-      <QueryClientProvider
-        client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
-      >
-        <WorkspaceOwnerControl workspaceId={8} isSuperuser={isSuperuser} />
-        <WorkspaceOwnerTransferControl
-          workspaceId={8}
-          workspaceName="Rivals Cup"
-          isSuperuser={isSuperuser}
-        />
-      </QueryClientProvider>
+      <NextIntlClientProvider locale="en" messages={en}>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
+        >
+          <WorkspaceOwnerControl workspaceId={8} isSuperuser={isSuperuser} />
+          <WorkspaceOwnerTransferControl
+            workspaceId={8}
+            workspaceName="Rivals Cup"
+            isSuperuser={isSuperuser}
+          />
+        </QueryClientProvider>
+      </NextIntlClientProvider>
     );
   });
   // Let the owner query settle so the gates see a resolved owner.

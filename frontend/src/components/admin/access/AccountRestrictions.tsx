@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Globe, Loader2 } from "lucide-react";
+import { Building2, Globe } from "lucide-react";
 
 import {
   PermissionPicker,
@@ -21,6 +21,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Self-service, allow-by-default capabilities an admin can revoke per account
@@ -125,7 +126,7 @@ export function AccountRestrictions({
         <div className="flex items-center gap-2">
           <h3 className={EYEBROW_CLASS}>Restricted actions</h3>
           {loading ? (
-            <Loader2 aria-hidden className="size-3.5 animate-spin text-muted-foreground" />
+            <Spinner className="size-3.5 text-muted-foreground" />
           ) : null}
         </div>
         <div className="flex items-center gap-2">

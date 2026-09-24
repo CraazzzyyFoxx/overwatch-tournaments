@@ -8,7 +8,7 @@ import { rankHealthDot } from "@/components/admin/collectors/rank-shared";
 import { streamHealthDot } from "@/components/admin/collectors/stream-shared";
 import { subscriptionHealthDot } from "@/components/admin/collectors/subscription-shared";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -58,7 +58,7 @@ export default function CollectorsLayout({ children }: Readonly<{ children: Reac
 
   const active = COLLECTORS.find((key) => pathname.startsWith(`/admin/collectors/${key}`));
 
-  const items: AdminTabItem[] = [
+  const items: LinkTabItem[] = [
     {
       key: "rank",
       label: "Rank",
@@ -88,7 +88,7 @@ export default function CollectorsLayout({ children }: Readonly<{ children: Reac
         title="Collectors"
         description="Background pollers: OverFast ranks, Boosty/Twitch subscriptions, Twitch live status."
       />
-      <AdminTabs items={items} activeKey={active ?? "rank"} ariaLabel="Collectors" />
+      <LinkTabs items={items} activeKey={active ?? "rank"} ariaLabel="Collectors" />
       {children}
     </div>
   );

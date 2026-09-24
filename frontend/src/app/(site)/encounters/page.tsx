@@ -2,12 +2,12 @@ import { getTranslations } from "next-intl/server";
 import encounterService from "@/services/encounter.service";
 import type { Encounter, EncounterOverview } from "@/types/encounter.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
-import EncountersRedesignClient from "./_components/EncountersRedesignClient";
+import EncountersClient from "./_components/EncountersClient";
 import {
   ENCOUNTERS_PAGE_SIZE,
   filtersToApiFilters,
   normalizeEncounterFilters,
-} from "./_components/encounters-redesign.helpers";
+} from "./_components/encounters.helpers";
 
 const DEFAULT_PAGE = 1;
 
@@ -133,7 +133,7 @@ async function EncountersContent({ page, filters }: Readonly<ParsedSearchParams>
   }
 
   return (
-    <EncountersRedesignClient
+    <EncountersClient
       initialData={data}
       initialOverview={overview}
       initialFilters={filters}

@@ -62,7 +62,7 @@ const AuthModal = ({ tenantWorkspace }: AuthModalProps) => {
   const isOpen = useAuthModalStore((state) => state.isOpen);
   const nextPath = useAuthModalStore((state) => state.nextPath);
   const close = useAuthModalStore((state) => state.close);
-  const { data, isLoading } = useOAuthProviders();
+  const { data, isLoading } = useOAuthProviders(isOpen);
 
   const next = encodeURIComponent(nextPath || "/");
   const providers = data?.map((item) => item.provider) ?? [];

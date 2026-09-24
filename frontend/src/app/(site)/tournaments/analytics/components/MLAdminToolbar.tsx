@@ -2,8 +2,8 @@
 
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertCircle, Brain, CheckCircle2, Loader2, PlayCircle } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { AlertCircle, Brain, CheckCircle2, PlayCircle } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ import type {
   AnalyticsJobProgressStage,
   AnalyticsJobRealtimePayload
 } from "@/types/analytics.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface MLAdminToolbarProps {
   tournamentId: number;
@@ -70,25 +71,9 @@ function StageRow({ name, stage }: Readonly<{ name: string; stage: AnalyticsJobP
   );
 }
 
-// Module-scoped so the impure `Date.now()` read is not flagged by the React
-// Compiler purity rule (matches the pattern used elsewhere for relative time).
-function formatRelative(
-  t: ReturnType<typeof useTranslations<never>>,
-  iso: string | null | undefined
-): string {
-  if (!iso) return "-";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.round(diffMs / 60_000);
-  if (minutes < 1) return t("analytics.job.relativeJustNow");
-  if (minutes < 60) return t("analytics.job.relativeMinutes", { count: minutes });
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return t("analytics.job.relativeHours", { count: hours });
-  const days = Math.round(hours / 24);
-  return t("analytics.job.relativeDays", { count: days });
-}
-
 export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<MLAdminToolbarProps>) {
   const t = useTranslations();
+  const format = useFormatter();
 
   const trainScopeDescription = (scope: TrainScope, selectedCount: number): string => {
     if (scope === "all") return t("analytics.job.sampleAll");
@@ -220,7 +205,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
         >
           <span className="truncate">{t("analytics.job.runAnalytics")}</span>
           {createJobMutation.isPending && createJobMutation.variables?.kind === "compute" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner />
           ) : (
             <PlayCircle className="h-4 w-4" />
           )}
@@ -235,7 +220,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
           >
             <span className="truncate">{t("analytics.job.trainMl")}</span>
             {createJobMutation.isPending && createJobMutation.variables?.kind === "train_ml" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Spinner />
             ) : (
               <Brain className="h-4 w-4" />
             )}
@@ -353,7 +338,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
                 disabled={isActive || createJobMutation.isPending || !isTrainScopeValid}
               >
                 {createJobMutation.isPending && createJobMutation.variables?.kind === "train_ml" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner className="mr-2" />
                 ) : (
                   <Brain className="mr-2 h-4 w-4" />
                 )}
@@ -374,7 +359,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
           <header className="mb-2 flex items-center justify-between gap-3">
             <span className="flex items-center gap-2 font-medium">
               {liveJob.status === "running" || liveJob.status === "pending" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Spinner className="size-3.5" />
               ) : liveJob.status === "succeeded" ? (
                 <CheckCircle2 className="h-3.5 w-3.5" />
               ) : (
@@ -386,10 +371,16 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
             </span>
             <span className="text-muted-foreground">
               {liveJob.finished_at
-                ? t("analytics.job.finishedRelative", { relative: formatRelative(t, liveJob.finished_at) })
+                ? t("analytics.job.finishedRelative", {
+                    relative: format.relativeTime(new Date(liveJob.finished_at))
+                  })
                 : liveJob.started_at
-                  ? t("analytics.job.startedRelative", { relative: formatRelative(t, liveJob.started_at) })
-                  : t("analytics.job.createdRelative", { relative: formatRelative(t, liveJob.created_at) })}
+                  ? t("analytics.job.startedRelative", {
+                      relative: format.relativeTime(new Date(liveJob.started_at))
+                    })
+                  : t("analytics.job.createdRelative", {
+                      relative: format.relativeTime(new Date(liveJob.created_at))
+                    })}
             </span>
           </header>
 

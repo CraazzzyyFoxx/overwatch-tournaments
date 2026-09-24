@@ -4,16 +4,18 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardCheck, Clock3, Gavel, ScrollText } from "lucide-react";
+import { useFormatter } from "next-intl";
 
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ResolveResultDialog } from "@/components/admin/ResolveResultDialog";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
+import type { DateFormatter } from "@/components/kit/format-time";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
@@ -50,8 +52,8 @@ function submittedAt(report: AdminCaptainReport | null): string | null {
   return report ? (report.updated_at ?? report.created_at) : null;
 }
 
-function fmtDate(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleString() : DASH;
+function fmtDate(format: DateFormatter, value: string | null | undefined): string {
+  return value ? format.dateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" }) : DASH;
 }
 
 /**
@@ -120,6 +122,7 @@ function ReportDetail({
   report: AdminCaptainReport | null;
   customFields: ReportCustomFieldDefinition[];
 }>) {
+  const format = useFormatter();
   if (!report) {
     return (
       <section className="rounded-xl border border-dashed border-border/60 p-3">
@@ -150,7 +153,7 @@ function ReportDetail({
 
       <dl className="space-y-1 text-sm">
         <Field label="Reported by" value={report.reporter_name ?? "unknown"} />
-        <Field label="Submitted" value={fmtDate(submittedAt(report))} mono />
+        <Field label="Submitted" value={fmtDate(format, submittedAt(report))} mono />
         <Field
           label="Closeness"
           value={report.closeness == null ? "not rated" : `${report.closeness}/10`}
@@ -198,7 +201,7 @@ function Field({
  * what needs attention and hands each row to the one write surface that can
  * settle it.
  *
- * Filters are chips in `AdminFilterBar` and the row detail is `AdminInspector`,
+ * Filters are chips in `FilterBar` and the row detail is `Inspector`,
  * so a narrowed list and the open row both travel in the URL — a disputed
  * encounter can be pasted to whoever has to settle it.
  */
@@ -215,6 +218,7 @@ export function EncounterReportsBrowser({
   /** Names the pinned chip inside a hub; the chip reads `#id` without it. */
   tournamentName?: string | null;
 }>) {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   // `id` is the inspector, not a filter: opening a row must not drop its page.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [] });
@@ -332,7 +336,7 @@ export function EncounterReportsBrowser({
     return list;
   }, [tournamentId, tournamentsQuery.data, stagesQuery.data]);
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const stageFilter = String(filters.values.stage ?? "");
   const resultStatusFilter = Array.isArray(filters.values.result_status)
     ? (filters.values.result_status as string[])
@@ -445,7 +449,7 @@ export function EncounterReportsBrowser({
         header: "Scheduled",
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="text-xs tabular-nums">{fmtDate(row.original.scheduled_at)}</span>
+          <span className="text-xs tabular-nums">{fmtDate(format, row.original.scheduled_at)}</span>
         ),
         meta: adminColumnMeta<EncounterReportsRow>({
           category: "meta",
@@ -462,7 +466,7 @@ export function EncounterReportsBrowser({
       }),
       sidesColumn("submitted", "Submitted", (report) => {
         const at = submittedAt(report);
-        return at ? new Date(at).toLocaleString() : "";
+        return at ? format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" }) : "";
       }, {
         category: "meta",
         defaultHidden: true,
@@ -574,7 +578,7 @@ export function EncounterReportsBrowser({
               <p className="truncate">
                 {resolution.action} by {resolution.actor_name ?? "an automated process"}
               </p>
-              <p className="tabular-nums text-muted-foreground">{fmtDate(resolution.created_at)}</p>
+              <p className="tabular-nums text-muted-foreground">{fmtDate(format, resolution.created_at)}</p>
             </div>
           );
         },
@@ -613,7 +617,7 @@ export function EncounterReportsBrowser({
         )
       )
     ],
-    [showTournament, customFields]
+    [showTournament, customFields, format]
   );
 
   if (workspaceId == null) {
@@ -674,7 +678,7 @@ export function EncounterReportsBrowser({
             inspectorId={openId}
             getRowId={(row) => String(row.id)}
             toolbar={
-              <AdminFilterBar
+              <FilterBar
                 defs={defs}
                 filters={filters}
                 pinned={
@@ -739,7 +743,7 @@ export function EncounterReportsBrowser({
           />
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={openRow ? openId : null}
           onClose={() => setParams({ id: null })}
           title={openRow ? openRow.name : ""}
@@ -812,7 +816,7 @@ export function EncounterReportsBrowser({
                 </div>
                 <div className="min-w-0">
                   <p className={EYEBROW_CLASS}>Scheduled</p>
-                  <p className="truncate text-sm tabular-nums">{fmtDate(openRow.scheduled_at)}</p>
+                  <p className="truncate text-sm tabular-nums">{fmtDate(format, openRow.scheduled_at)}</p>
                 </div>
                 <div className="min-w-0">
                   <p className={EYEBROW_CLASS}>Series check</p>
@@ -840,13 +844,13 @@ export function EncounterReportsBrowser({
                     {openRow.last_resolution.actor_name ?? "an automated process"}
                   </p>
                   <p className="text-xs tabular-nums text-muted-foreground">
-                    {fmtDate(openRow.last_resolution.created_at)}
+                    {fmtDate(format, openRow.last_resolution.created_at)}
                   </p>
                 </section>
               ) : null}
             </div>
           ) : null}
-        </AdminInspector>
+        </Inspector>
       </div>
 
       <ResolveResultDialog

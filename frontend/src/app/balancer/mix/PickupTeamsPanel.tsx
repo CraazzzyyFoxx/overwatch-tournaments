@@ -24,7 +24,6 @@ import {
   Copy,
   Dices,
   History,
-  Loader2,
   Send,
   Shuffle,
   Undo2
@@ -40,25 +39,16 @@ import {
   METRIC_PILL_CLASS,
   teamAccent
 } from "@/app/balancer/mix/pickup-chrome";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import DivisionIcon from "@/components/DivisionIcon";
 import { MapCombobox } from "@/components/MapCombobox";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { formatRelative } from "@/components/kit/format-time";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusDot } from "@/components/ui/status-dot";
 import { useNodeCapture } from "@/hooks/useNodeCapture";
 import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { notify } from "@/lib/notify";
@@ -66,6 +56,7 @@ import { ROLES, ROLE_LABELS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { CustomGame, CustomGameMatch } from "@/services/custom-game.service";
 import type { MapRead } from "@/types/map.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import {
   LOBBY_SIZE,
@@ -176,6 +167,7 @@ export function PickupTeamsPanel({
   // The matchup card is a self-contained graphic, so "share the teams" here needs
   // no detour through the fullscreen board.
   const { ref: captureRef, capturing, capture, rasterize } = useNodeCapture();
+  const [closeOpen, setCloseOpen] = useState(false);
 
   return (
     // Width-capped by the caller now, alongside the mix header that sits
@@ -289,7 +281,7 @@ export function PickupTeamsPanel({
               }
             >
               {balancing ? (
-                <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+                <Spinner className="mr-1.5 size-3.5" />
               ) : (
                 <Shuffle className="mr-1.5 size-3.5" aria-hidden="true" />
               )}
@@ -353,7 +345,7 @@ export function PickupTeamsPanel({
                 onClick={() => void capture()}
               >
                 {capturing ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  <Spinner />
                 ) : (
                   <Copy className="size-4" aria-hidden="true" />
                 )}
@@ -392,7 +384,7 @@ export function PickupTeamsPanel({
                   }}
                 >
                   {postingToDiscord ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    <Spinner />
                   ) : (
                     <Send className="size-4" aria-hidden="true" />
                   )}
@@ -404,43 +396,38 @@ export function PickupTeamsPanel({
                   {/* Once a night, irreversible from here: an icon that only
                       turns red on hover, behind the same confirm as before,
                       instead of the loudest pill in the row. */}
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className={cn(TOOL_ICON_CLASS, "hover:text-[color:var(--aqt-rose)]")}
-                        disabled={closingMix}
-                        aria-label="Close mix"
-                        title="Close mix"
-                      >
-                        {closingMix ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Archive className="size-4" aria-hidden="true" />
-                        )}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Close this mix?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Stops further balancing, roster edits, and outcome recording. Matches
-                          already recorded stay recorded -- this cannot be undone from here.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Keep it open</AlertDialogCancel>
-                        <AlertDialogAction
-                          className={buttonVariants({ variant: "destructive" })}
-                          onClick={onCloseMix}
-                        >
-                          Yes, close mix
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(TOOL_ICON_CLASS, "hover:text-[color:var(--aqt-rose)]")}
+                    disabled={closingMix}
+                    aria-label="Close mix"
+                    title="Close mix"
+                    onClick={() => setCloseOpen(true)}
+                  >
+                    {closingMix ? (
+                      <Spinner />
+                    ) : (
+                      <Archive className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                  <ConfirmDialog
+                    open={closeOpen}
+                    onOpenChange={setCloseOpen}
+                    intent={{
+                      title: "Close this mix?",
+                      description:
+                        "Stops further balancing, roster edits, and outcome recording. Matches already recorded stay recorded -- this cannot be undone from here.",
+                      confirmLabel: "Yes, close mix",
+                      tone: "danger"
+                    }}
+                    pending={closingMix}
+                    onConfirm={() => {
+                      setCloseOpen(false);
+                      onCloseMix();
+                    }}
+                  />
                 </>
               ) : null}
             </div>
@@ -568,7 +555,7 @@ function NextMapStrip({
             onClick={roll}
           >
             {saving ? (
-              <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+              <Spinner className="mr-1.5 size-3.5" />
             ) : (
               <Dices className="mr-1.5 size-3.5" aria-hidden="true" />
             )}
@@ -662,6 +649,7 @@ function MatchHistoryRow({
 }>) {
   const homeAccent = teamAccent(0);
   const awayAccent = teamAccent(1);
+  const [undoOpen, setUndoOpen] = useState(false);
 
   return (
     <li className="flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-2.5 py-2">
@@ -676,10 +664,7 @@ function MatchHistoryRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-1.5 text-caption font-semibold leading-tight">
-          <span
-            aria-hidden="true"
-            className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", homeAccent.bar)}
-          />
+          <StatusDot className={cn("inline-block", homeAccent.bar)} />
           <span
             className={cn(
               "truncate",
@@ -699,10 +684,7 @@ function MatchHistoryRow({
           >
             {match.away_team_name}
           </span>
-          <span
-            aria-hidden="true"
-            className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", awayAccent.bar)}
-          />
+          <StatusDot className={cn("inline-block", awayAccent.bar)} />
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 truncate text-label text-[color:var(--aqt-fg-dim)]">
           <span className="truncate">{match.map_name ?? "No map"}</span>
@@ -711,42 +693,36 @@ function MatchHistoryRow({
         </div>
       </div>
       {canUndo ? (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Undo this match"
-              disabled={undoing}
-            >
-              {undoing ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Undo2 className="size-4" aria-hidden="true" />
-              )}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Undo this match?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {match.points_per_win_applied != null
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Undo this match"
+            disabled={undoing}
+            onClick={() => setUndoOpen(true)}
+          >
+            {undoing ? <Spinner /> : <Undo2 className="size-4" aria-hidden="true" />}
+          </Button>
+          <ConfirmDialog
+            open={undoOpen}
+            onOpenChange={setUndoOpen}
+            intent={{
+              title: "Undo this match?",
+              description:
+                match.points_per_win_applied != null
                   ? `Removes it from the history and moves every player's rank back by ${match.points_per_win_applied} points. Players pinned as must-play before it were already released to the pool and stay there.`
-                  : "Removes it from the history. No rank points were applied."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep it</AlertDialogCancel>
-              <AlertDialogAction
-                className={buttonVariants({ variant: "destructive" })}
-                onClick={() => onUndoMatch?.(match.id)}
-              >
-                Undo match
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                  : "Removes it from the history. No rank points were applied.",
+              confirmLabel: "Undo match",
+              tone: "danger"
+            }}
+            pending={undoing}
+            onConfirm={() => {
+              setUndoOpen(false);
+              onUndoMatch?.(match.id);
+            }}
+          />
+        </>
       ) : null}
     </li>
   );

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { getTranslations } from "next-intl/server";
 import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp, BadgeCheck } from "lucide-react";
@@ -84,7 +84,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 pt-4 md:px-9 md:pt-5">
         <p className="aqt-tnum m-0 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
           <span aria-hidden className="mr-1.5 text-[color:var(--aqt-fg-dim)]">{"//"}</span>
-          <Link href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</Link>
+          <HoverPrefetchLink href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</HoverPrefetchLink>
           <span aria-hidden className="mx-1">·</span>
           <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
         </p>

@@ -9,8 +9,8 @@ import type { BracketMatch } from "@/lib/bracket/view";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
+import { StatusDot } from "@/components/ui/status-dot";
 import { withReturnTo } from "@/lib/auth/return-to";
-import { STREAM_STATUS_META } from "@/lib/social/stream-platform";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";
 
@@ -148,13 +148,14 @@ function SlotRow({
             aria-label={liveLabel}
             title={liveLabel}
             data-live-team-stream={liveStream.channel}
-            // The site's one liveness language: the pulsing rose `.dot` exists
-            // only under `.status-pill.live` in `globals.css`. The inline style
-            // strips the pill's own chrome, which does not fit a 30px row.
-            className={cn(STREAM_STATUS_META.live.pillClassName, "shrink-0")}
-            style={{ padding: 0, border: "none", background: "none" }}
+            className="inline-flex shrink-0 items-center"
           >
-            <span aria-hidden className="dot" />
+            {/* The site's one liveness language, in its smallest form: the pill's
+                chrome does not fit a 30px row, the pulsing dot does. */}
+            <StatusDot
+              pulse
+              className="size-[7px] text-[color:var(--aqt-status-live)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--aqt-status-live)_18%,transparent)]"
+            />
           </span>
         ) : null}
       </span>

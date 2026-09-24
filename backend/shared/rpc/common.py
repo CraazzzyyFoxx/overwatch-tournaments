@@ -212,9 +212,12 @@ def http_error(exc: HTTPException) -> tuple[str, dict[str, Any]]:
     Three detail dialects reach here:
 
     ``ApiHTTPException`` (the v1 read flows) carries ``detail`` as a
-    ``list[{msg, code}]``. Joining the ``msg`` fields is what a human reads, but
-    the per-item ``code`` is the only thing a client can branch on -- it used to
-    be dropped here, so it now rides ``details["fields"]`` instead.
+    ``list[{msg, code}]``; a bare ``BaseAPIException`` raised with
+    ``detail=[ApiExc(...)]`` (the FFA + game-correction sites) carries the models
+    themselves, so items are dumped here before being read. Joining the ``msg``
+    fields is what a human reads, but the per-item ``code`` is the only thing a
+    client can branch on -- it used to be dropped here, so it now rides
+    ``details["fields"]`` instead.
 
     A ``dict`` detail is either one item (``msg``/``code``) or an attribute bag:
     a ``code`` plus whatever the refusal is about (``limit_name``, ``scope``,
@@ -231,7 +234,8 @@ def http_error(exc: HTTPException) -> tuple[str, dict[str, Any]]:
     detail = exc.detail
     details: dict[str, Any] = {}
     if isinstance(detail, list):
-        items = [d for d in detail if isinstance(d, dict)]
+        items = [d.model_dump(mode="json") if hasattr(d, "model_dump") else d for d in detail]
+        items = [d for d in items if isinstance(d, dict)]
         if items:
             details["fields"] = [field_entry(d) for d in items]
         msgs = [str(d.get("msg")) for d in items if d.get("msg")]

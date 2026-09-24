@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronRight, Loader2, RefreshCcw } from "lucide-react";
+import { ChevronRight, RefreshCcw } from "lucide-react";
+import { useFormatter } from "next-intl";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, type Tone } from "@/components/kit/tone";
@@ -15,6 +16,7 @@ import type {
   AdminGoogleSheetFeed,
   AdminGoogleSheetFeedSyncResponse,
 } from "@/types/balancer-admin.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SourceSyncTabProps {
   feed: AdminGoogleSheetFeed | null | undefined;
@@ -65,6 +67,7 @@ export function SourceSyncTab({
   onChangeAutoSyncIntervalSeconds,
   onSync,
 }: Readonly<SourceSyncTabProps>) {
+  const format = useFormatter();
   const headers = feed?.header_row_json ?? [];
 
   return (
@@ -81,7 +84,13 @@ export function SourceSyncTab({
                 {feed.last_sync_status ?? "pending"}
               </StatusPill>
               <span className="text-xs text-muted-foreground">
-                Last sync {feed.last_synced_at ? new Date(feed.last_synced_at).toLocaleString() : "never"}
+                Last sync{" "}
+                {feed.last_synced_at
+                  ? format.dateTime(new Date(feed.last_synced_at), {
+                      dateStyle: "medium",
+                      timeStyle: "short"
+                    })
+                  : "never"}
               </span>
             </>
           ) : (
@@ -95,7 +104,7 @@ export function SourceSyncTab({
             title={canSync ? undefined : "Save the feed and any pending changes before syncing."}
           >
             {isSyncing ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
+              <Spinner className="mr-2" />
             ) : (
               <RefreshCcw className="mr-2 size-4" />
             )}

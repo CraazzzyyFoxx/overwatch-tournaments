@@ -17,7 +17,7 @@ import InfoDot from "@/app/(site)/tournaments/analytics/components/InfoDot";
 import ImpactBar from "@/app/(site)/tournaments/analytics/components/community/ImpactBar";
 import ChangeShiftDialog from "@/app/(site)/tournaments/analytics/components/community/ChangeShiftDialog";
 import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface PlayerDetailProps {
   player: PlayerVM;

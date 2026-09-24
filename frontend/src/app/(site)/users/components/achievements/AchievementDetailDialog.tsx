@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -14,23 +14,19 @@ import type { AchievementRarity, AchievementMatchLink } from "@/types/achievemen
 import { cn } from "@/lib/utils";
 import { classifyRarity, localizedText, type Rarity } from "./rarity";
 
-// `locale` is required, matching `formatDateRange` in @/lib/utils: passing
-// `undefined` here formatted match dates in the *browser* locale, so a Russian
-// UI rendered "Jul 30, 2026" on an en-US machine.
-const formatMatchDate = (time: number | null, locale: string): string => {
-  if (!time) return "";
-  const ms = time > 1e12 ? time : time * 1000;
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
-};
-
-const MatchRow = ({ match, locale }: { match: AchievementMatchLink; locale: string }) => {
-  const date = formatMatchDate(match.time, locale);
+const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
+  const format = useFormatter();
+  // Older rows store seconds, newer ones milliseconds.
+  const ms = match.time ? (match.time > 1e12 ? match.time : match.time * 1000) : null;
+  const at = ms === null ? null : new Date(ms);
+  const date =
+    at && !Number.isNaN(at.getTime())
+      ? format.dateTime(at, { year: "numeric", month: "short", day: "numeric" })
+      : "";
   const home = match.home_team?.name ?? "—";
   const away = match.away_team?.name ?? "—";
   return (
-    <Link
+    <HoverPrefetchLink
       href={`/encounters/${match.encounter_id}`}
       className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-2 text-caption transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
     >
@@ -38,7 +34,7 @@ const MatchRow = ({ match, locale }: { match: AchievementMatchLink; locale: stri
         {home} <span className="aqt-tnum opacity-80">{match.score.home}–{match.score.away}</span> {away}
       </span>
       {date ? <span className="aqt-tnum shrink-0 text-label text-[color:var(--aqt-fg-muted)]">{date}</span> : null}
-    </Link>
+    </HoverPrefetchLink>
   );
 };
 
@@ -128,7 +124,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                         </h3>
                         <div className="flex flex-col gap-1">
                           {ach.matches.map((m) => (
-                            <MatchRow key={m.id} match={m} locale={locale} />
+                            <MatchRow key={m.id} match={m} />
                           ))}
                         </div>
                       </section>

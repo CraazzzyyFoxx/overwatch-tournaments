@@ -10,7 +10,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { PlayerVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/AnomalyTooltip";
 import ImpactBar from "@/app/(site)/tournaments/analytics/components/community/ImpactBar";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface RosterRowProps {
   player: PlayerVM;

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Copy, Download, Images, Loader2 } from "lucide-react";
+import { AlertCircle, Copy, Download, Images } from "lucide-react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
   calculateTeamAverageFromPayload,
   calculateTeamTotalFromPayload
 } from "@/components/balancer/balancer-page-helpers";
+import { Spinner } from "@/components/ui/spinner";
 
 const TEAMS_PER_IMAGE = 10;
 const EXPORT_WIDTH = 1920;
@@ -252,7 +253,7 @@ export function BalanceImageExportDialog({
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {isGenerating ? (
               <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] text-sm text-[color:var(--aqt-fg-muted)]">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="mr-2" />
                 Generating images...
               </div>
             ) : null}

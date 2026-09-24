@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import type {
 import { MappingGroupSection } from "./MappingGroupSection";
 import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, targetsByGroup } from "./mappingConfig";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { StatusDot } from "@/components/ui/status-dot";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ColumnMappingTabProps {
   catalog: MappingCatalog;
@@ -75,7 +77,7 @@ export function ColumnMappingTab({
         </div>
         <Button variant="outline" size="sm" onClick={onSuggest} disabled={isSuggesting}>
           {isSuggesting ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
+            <Spinner className="mr-2" />
           ) : (
             <Sparkles className="mr-2 size-4" />
           )}
@@ -103,7 +105,7 @@ export function ColumnMappingTab({
                   >
                     {GROUP_LABELS[group]}
                     {hasErrors(group) && (
-                      <span className="ml-1.5 inline-flex h-1.5 w-1.5 rounded-full bg-destructive" />
+                      <StatusDot tone="danger" className="ml-1.5" />
                     )}
                   </Button>
                 ))}

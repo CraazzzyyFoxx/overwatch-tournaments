@@ -7,16 +7,11 @@ import { CircleMinus, CirclePlus, CornerDownRight, Crown } from "lucide-react";
 import PlayerName from "@/components/PlayerName";
 import { Team } from "@/types/team.types";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Skeleton } from "@/components/ui/skeleton";
 import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import TeamName from "@/components/TeamName";
 import { cn } from "@/lib/utils";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-
-export const TournamentTeamCardSkeleton = () => {
-  return <Skeleton className="h-[380px] w-full rounded-xl" />;
-};
 
 function NewMark({ active }: Readonly<{ active: boolean }>) {
   return (

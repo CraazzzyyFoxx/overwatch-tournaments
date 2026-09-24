@@ -12,7 +12,7 @@ import { ApiError } from "@/lib/api/error";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import { notify } from "@/lib/notify";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
-import type { RoleCode } from "@/lib/roster/roles";
+import { isRoleSlotCode, type RosterSlotCode } from "@/lib/roster/shape";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import meService from "@/services/me.service";
 import registrationTeamService from "@/services/registration-team.service";
@@ -63,7 +63,7 @@ export default function TeamRegistrationWizard({
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
-  const [slot, setSlot] = useState<RoleCode | null>(availableSlots[0]?.code ?? null);
+  const [slot, setSlot] = useState<RosterSlotCode | null>(availableSlots[0]?.code ?? null);
   const [error, setError] = useState<string | null>(null);
   // Team-name errors stay hidden until the field has been left once, so the
   // panel does not open with a red "Enter a team name" on an untouched form.
@@ -276,8 +276,10 @@ export default function TeamRegistrationWizard({
         hideTitle
         userProfile={userQuery.data}
         // The captain's chosen slot drives the role step, so the matrix shows the
-        // one row they will actually play instead of asking the question twice.
-        lockedRole={slot}
+        // one row they will actually play instead of asking the question twice. A
+        // `flex` slot names no role, so it locks nothing — locking on it would
+        // filter every row away and leave the step with nothing to answer.
+        lockedRole={slot != null && isRoleSlotCode(slot) ? slot : null}
         onSubmit={async ({ form_version_id, answers }) => {
           setError(null);
           if (nameError) {

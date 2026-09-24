@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`draftq01`** (80 revisions in `backend/migrations/versions/`).
+Alembic head: **`ffa0001`** (81 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -887,6 +887,7 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at "nullable"
         varchar name
+        varchar(8) format
         bigint home_team_id FK "nullable"
         bigint away_team_id FK "nullable"
         int home_score
@@ -924,6 +925,7 @@ erDiagram
         timestamptz updated_at "nullable"
         bigint encounter_id FK
         int position
+        varchar(8) format
         bigint map_id FK "nullable"
         encountergamestate state
         int accepted_home_score "nullable"
@@ -931,6 +933,16 @@ erDiagram
         encountergameresultsource result_source "nullable"
         int result_version
         timestamptz confirmed_at "nullable"
+    }
+    TOURNAMENT_ENCOUNTER_GAME_RESULT {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint game_id FK
+        bigint encounter_id FK
+        bigint team_id FK
+        int placement
+        int score
     }
     TOURNAMENT_ENCOUNTER_LINK {
         bigint id PK
@@ -959,6 +971,14 @@ erDiagram
         bigint reporter_user_id FK "nullable"
         int home_score
         int away_score
+    }
+    TOURNAMENT_ENCOUNTER_PARTICIPANT {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint encounter_id FK
+        bigint team_id FK
+        int slot
     }
     TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER {
         bigint id PK
@@ -997,8 +1017,9 @@ erDiagram
         encounterresultstatus to_result_status
         int home_score_before "nullable"
         int away_score_before "nullable"
-        int home_score_after
-        int away_score_after
+        int home_score_after "nullable"
+        int away_score_after "nullable"
+        jsonb ffa_results_json "nullable"
         bigint adopted_team_id FK "nullable"
         bigint game_id FK "nullable"
         int game_result_version "nullable"
@@ -1286,6 +1307,7 @@ erDiagram
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_GAME : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : "source_encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : "target_encounter_id"
+    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PARTICIPANT : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_READINESS : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : "encounter_id"
@@ -1293,7 +1315,10 @@ erDiagram
     TOURNAMENT_ENCOUNTER ||--o| TOURNAMENT_SCRIM_ROOM : "encounter_id"
     TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT ||--o{ TOURNAMENT_ENCOUNTER_MAP_CODE : "report_id"
     TOURNAMENT_ENCOUNTER_GAME |o--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : "game_id"
+    TOURNAMENT_ENCOUNTER_GAME ||--o{ TOURNAMENT_ENCOUNTER_GAME_RESULT : "game_id"
     TOURNAMENT_ENCOUNTER_GAME ||--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : "game_id"
+    TOURNAMENT_ENCOUNTER_PARTICIPANT ||--o{ TOURNAMENT_ENCOUNTER_GAME_RESULT : "encounter_id"
+    TOURNAMENT_ENCOUNTER_PARTICIPANT ||--o{ TOURNAMENT_ENCOUNTER_GAME_RESULT : "team_id"
     TOURNAMENT_PICK_BAN_CONFIG |o--o{ TOURNAMENT_PICK_BAN_SESSION : "config_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_ITEM : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT : "pick_ban_config_id"
@@ -1320,6 +1345,7 @@ erDiagram
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : "team_id"
+    TOURNAMENT_TEAM ||--o{ TOURNAMENT_ENCOUNTER_PARTICIPANT : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_PLAYER : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING : "team_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SOURCE : "tournament_id"
@@ -1347,9 +1373,12 @@ Composite unique keys:
 - `TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING` unique on (`source_id`, `challonge_participant_id`)
 - `TOURNAMENT_CHALLONGE_SOURCE` unique on (`tournament_id`, `challonge_tournament_id`)
 - `TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT` unique on (`encounter_id`, `team_id`)
+- `TOURNAMENT_ENCOUNTER_GAME_RESULT` unique on (`game_id`, `team_id`)
 - `TOURNAMENT_ENCOUNTER_LINK` unique on (`source_encounter_id`, `role`)
 - `TOURNAMENT_ENCOUNTER_MAP_CODE` unique on (`report_id`, `map_index`)
 - `TOURNAMENT_ENCOUNTER_MAP_REPORT` unique on (`game_id`, `side`)
+- `TOURNAMENT_ENCOUNTER_PARTICIPANT` unique on (`encounter_id`, `slot`)
+- `TOURNAMENT_ENCOUNTER_PARTICIPANT` unique on (`encounter_id`, `team_id`)
 - `TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER` unique on (`encounter_id`, `kind`, `item_id`, `banned_by_side`)
 - `TOURNAMENT_ENCOUNTER_READINESS` unique on (`encounter_id`, `side`)
 - `TOURNAMENT_PICK_BAN_CONFIG_ITEM` unique on (`pick_ban_config_id`, `item_id`)

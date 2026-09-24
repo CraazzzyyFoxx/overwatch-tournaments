@@ -1,21 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RotateCcw, ShieldCheck } from "lucide-react";
+import { RotateCcw, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation } from "@tanstack/react-query";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
@@ -32,6 +22,7 @@ import type {
 } from "@/types/tournament.types";
 
 import type { PickBanSide } from "@/components/pick-ban/pick-ban-model";
+import { Spinner } from "@/components/ui/spinner";
 
 interface PregameAdminControlsProps {
   kind: PickBanKind;
@@ -70,6 +61,7 @@ export function PregameAdminControls({
   // The override is stored WITH the step it was made for, so a new step
   // automatically falls back to what the sequence expects.
   const step = state.current_step_index;
+  const [resetOpen, setResetOpen] = useState(false);
   const [override, setOverride] = useState<{
     step: number | null;
     side: PickBanSide;
@@ -84,6 +76,7 @@ export function PregameAdminControls({
   const resetMutation = useMutation({
     mutationFn: () => adminService.resetPickBanSession(encounterId, kind),
     onSuccess: () => {
+      setResetOpen(false);
       notify.success(t("admin.resetSuccess"));
       onMutated();
     },
@@ -158,7 +151,7 @@ export function PregameAdminControls({
               }}
             >
               {actMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                <Spinner className="mr-2" />
               ) : null}
               {t("admin.confirm")}
               {selectedItemName ? `: ${selectedItemName}` : ""}
@@ -187,7 +180,7 @@ export function PregameAdminControls({
                   onClick={() => electMutation.mutate(value)}
                 >
                   {electMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                    <Spinner className="mr-2" />
                   ) : null}
                   {t(value === "home" ? "side.home" : "side.away")}
                 </Button>
@@ -196,30 +189,32 @@ export function PregameAdminControls({
           </div>
         ) : null}
 
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive" disabled={pending} className="ml-auto">
-              {resetMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
-              )}
-              {t("admin.reset")}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("admin.resetConfirmTitle")}</AlertDialogTitle>
-              <AlertDialogDescription>{t("admin.resetConfirmHint")}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t("captain.cancel")}</AlertDialogCancel>
-              <AlertDialogAction onClick={() => resetMutation.mutate()}>
-                {t("admin.resetConfirmAction")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={pending}
+          className="ml-auto"
+          onClick={() => setResetOpen(true)}
+        >
+          {resetMutation.isPending ? (
+            <Spinner className="mr-2" />
+          ) : (
+            <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
+          )}
+          {t("admin.reset")}
+        </Button>
+        <ConfirmDialog
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          intent={{
+            title: t("admin.resetConfirmTitle"),
+            description: t("admin.resetConfirmHint"),
+            confirmLabel: t("admin.resetConfirmAction"),
+            tone: "danger"
+          }}
+          pending={resetMutation.isPending}
+          onConfirm={() => resetMutation.mutate()}
+        />
       </div>
 
       {correctable.length > 0 ? (
@@ -323,7 +318,7 @@ function GameCorrection({
         disabled={reason.trim() === "" || mutation.isPending}
         onClick={() => mutation.mutate()}
       >
-        {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+        {mutation.isPending ? <Spinner className="mr-2" /> : null}
         {t("admin.correctSubmit")}
       </Button>
     </div>

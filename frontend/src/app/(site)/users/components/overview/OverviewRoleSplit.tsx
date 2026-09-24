@@ -9,6 +9,7 @@ import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import HeroImage from "@/components/hero/HeroImage";
 import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
+import { heroPopoverStats, type HeroPopoverStat } from "@/lib/hero/popover-stats";
 import {
   normalizeRole,
   PLAYER_ROLE_LABEL_KEY,
@@ -72,8 +73,9 @@ interface Bucket {
 interface Signature {
   key: AqtRoleKey;
   hero: HeroWithUserStats["hero"];
-  /** Full per-hero stats, kept for the hover popover (design-book §11). */
-  stats: HeroWithUserStats["stats"];
+  /** Per-hero stats narrowed to what the hover popover reads (design-book §11).
+   *  The full array would be serialized into the RSC payload once per row. */
+  stats: HeroPopoverStat[];
   games: number;
   kda: number | null;
   winPct: number | null;
@@ -135,7 +137,7 @@ const OverviewRoleSplit = async ({ profile, heroes = [], maps = [] }: Props) => 
     signatures.push({
       key,
       hero: top.hero,
-      stats: top.stats,
+      stats: heroPopoverStats(top.stats) ?? [],
       games: gamesByHero.get(top.hero.id) ?? 0,
       kda: statAvg10(top.stats, LogStatsName.KDA),
       winPct: winFrac == null ? null : winFrac * 100

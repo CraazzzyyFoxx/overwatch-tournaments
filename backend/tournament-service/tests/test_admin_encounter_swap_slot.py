@@ -43,6 +43,7 @@ def assert_http_status(test_case: IsolatedAsyncioTestCase, expected_status: int)
 def _encounter(encounter_id: int, home: int | None, away: int | None, **overrides) -> SimpleNamespace:
     fields = {
         "id": encounter_id,
+        "format": enums.EncounterFormat.DUEL,
         "tournament_id": 1,
         "stage_id": 5,
         "stage_item_id": 6,

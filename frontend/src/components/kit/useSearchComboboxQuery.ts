@@ -35,7 +35,7 @@ export interface UseSearchComboboxQueryOptions<TItem, TSelected> {
 /**
  * Open/search-value/debounce/query/select scaffolding shared by every
  * server-searched admin combobox (`AuthUserSearchCombobox`,
- * `UserSearchCombobox`). Callers own the `<AdminCombobox>` shell, the row
+ * `UserSearchCombobox`). Callers own the `<Combobox>` shell, the row
  * rendering, and any selection-shape mapping; this hook owns the plumbing
  * that reaches the server.
  */

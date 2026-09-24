@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 
 import { useHubTournamentQuery } from "../hubQueries";
@@ -65,7 +65,7 @@ export default function TeamsLayout({ children }: Readonly<{ children: ReactNode
     }
   }, [permissionsLoaded, tournamentQuery.data, activeAllowed, basePath, router]);
 
-  const items: AdminTabItem[] = TEAMS_SUB_TABS.map((key) => ({
+  const items: LinkTabItem[] = TEAMS_SUB_TABS.map((key) => ({
     key,
     label: SUB_TAB_LABELS[key],
     href: `${basePath}/${key}`,
@@ -74,7 +74,7 @@ export default function TeamsLayout({ children }: Readonly<{ children: ReactNode
 
   return (
     <div className="space-y-4">
-      <AdminTabs items={items} activeKey={active} level={2} ariaLabel="Teams sections" />
+      <LinkTabs items={items} activeKey={active} level={2} ariaLabel="Teams sections" />
       {activeAllowed ? children : null}
     </div>
   );

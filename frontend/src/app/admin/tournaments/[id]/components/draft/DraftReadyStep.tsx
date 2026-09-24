@@ -2,20 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowUpRight, CheckCircle2, Play, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Play, ShieldAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { TONE_CLASS } from "@/components/kit/tone";
@@ -79,7 +71,7 @@ export function DraftReadyStep({
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button size="lg" disabled={pending || !ready} onClick={() => setStartDialogOpen(true)}>
           {pending ? (
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            <Spinner className="mr-2" />
           ) : (
             <Play className="mr-2 h-4 w-4" aria-hidden />
           )}
@@ -96,27 +88,21 @@ export function DraftReadyStep({
         </Button>
       </div>
 
-      <AlertDialog open={startDialogOpen} onOpenChange={setStartDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("startConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("startConfirmDescription")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>{t("keepEditing")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={pending}
-              onClick={(event) => {
-                event.preventDefault();
-                setStartDialogOpen(false);
-                onStart();
-              }}
-            >
-              {t("startDraft")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={startDialogOpen}
+        onOpenChange={setStartDialogOpen}
+        intent={{
+          title: t("startConfirmTitle"),
+          description: t("startConfirmDescription"),
+          confirmLabel: t("startDraft"),
+          tone: "warning"
+        }}
+        pending={pending}
+        onConfirm={() => {
+          setStartDialogOpen(false);
+          onStart();
+        }}
+      />
     </div>
   );
 }

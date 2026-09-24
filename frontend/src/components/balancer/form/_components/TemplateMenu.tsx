@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle, Save, Upload } from "lucide-react";
+import { Save, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { EmptyNote } from "@/components/kit/EmptyNote";
@@ -28,6 +28,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import registrationFormTemplatesService from "@/services/registration-form-templates.service";
 import type { FormSchema } from "@/types/forms.types";
+import { Spinner } from "@/components/ui/spinner";
 
 export const registrationFormTemplatesKey = (workspaceId: number) =>
   ["admin", "registration-form-templates", workspaceId] as const;
@@ -123,7 +124,7 @@ export function TemplateMenu({
 
           {listQuery.isLoading ? (
             <output className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+              <Spinner />
               {t("loading")}
             </output>
           ) : templates.length === 0 ? (

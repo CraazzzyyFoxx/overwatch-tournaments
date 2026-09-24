@@ -75,7 +75,7 @@ const SearchableImageSelect = ({
           aria-label={placeholder}
           disabled={disabled}
           className={cn(
-            "h-10 w-full justify-between font-normal",
+            "h-8 w-full justify-between font-normal",
             triggerClassName ??
               "border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[color:var(--aqt-fg)] hover:bg-[hsl(0_0%_100%/0.04)]"
           )}

@@ -141,47 +141,6 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _read(logger, op)
 
-    @broker.subscriber("rpc.tournament.owal_seasons")
-    async def _owal_seasons(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            return await tournament_flows.flows_service.get_owal_seasons(
-                session, workspace_id=_q1(data, "workspace_id", int)
-            )
-
-        return await _read(logger, op)
-
-    @broker.subscriber("rpc.tournament.owal_results")
-    async def _owal_results(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            workspace_id = _q1(data, "workspace_id", int)
-            season = _q1(data, "season")
-            grid = await get_division_grid(session, workspace_id)
-            if season:
-                return await tournament_flows.flows_service.get_owal_standings_by_season(
-                    session, season, workspace_id=workspace_id, grid=grid
-                )
-            return await tournament_flows.flows_service.get_owal_standings(
-                session, workspace_id=workspace_id, grid=grid
-            )
-
-        return await _read(logger, op)
-
-    @broker.subscriber("rpc.tournament.owal_stacks")
-    async def _owal_stacks(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            workspace_id = _q1(data, "workspace_id", int)
-            season = _q1(data, "season")
-            if not season:
-                seasons = await tournament_flows.flows_service.get_owal_seasons(session, workspace_id=workspace_id)
-                season = seasons[0] if seasons else None
-            if not season:
-                return []
-            return await tournament_flows.flows_service.get_league_player_stacks(
-                session, season, workspace_id=workspace_id
-            )
-
-        return await _read(logger, op)
-
     # --- encounters / matches / teams (single reads) ---
 
     @broker.subscriber("rpc.tournament.get_match")

@@ -33,6 +33,7 @@ from sqlalchemy.orm import selectinload
 
 from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.encounter_format import ensure_format
 from shared.domain.encounter_naming import build_encounter_name
 from shared.repository import (
     ChallongeMatchMappingRepository,
@@ -1195,6 +1196,9 @@ class ChallongeMappingService:
         encounters_result = await session.execute(
             sa.select(models.Encounter).where(
                 models.Encounter.tournament_id == tournament_id,
+                # A Challonge match is a duel; a lobby sitting in the same
+                # tournament must never be claimed as one of its slots.
+                models.Encounter.format == enums.EncounterFormat.DUEL,
                 models.Encounter.home_team_id.is_not(None),
                 models.Encounter.away_team_id.is_not(None),
             )
@@ -2135,6 +2139,10 @@ class ChallongeSyncService:
                 .where(
                     models.Encounter.tournament_id == tournament_id,
                     models.Encounter.status == enums.EncounterStatus.COMPLETED,
+                    # Challonge matches are two-sided: a completed lobby has no
+                    # home/away score to push, so push_single_result would 409
+                    # once per export and fill the sync log with it.
+                    models.Encounter.format == enums.EncounterFormat.DUEL,
                     models.Encounter.id.in_(tuple(linked_encounter_ids)),
                 )
                 .options(
@@ -2212,6 +2220,7 @@ class ChallongeSyncService:
         participant_mappings: dict[tuple[int, int], list[models.ChallongeParticipantMapping]] | None = None,
     ) -> bool:
         """Push a single encounter result to Challonge."""
+        ensure_format(encounter, enums.EncounterFormat.DUEL)
         source, challonge_match_id = await self._resolve_export_target(
             session, tournament, encounter, sources=sources, match_mappings=match_mappings
         )

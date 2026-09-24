@@ -2,25 +2,25 @@
 
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useFormatter } from "next-intl";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { TOURNAMENT_STATUS_LABELS } from "@/lib/tournament/lifecycle";
-import encounterService from "@/services/encounter.service";
-import teamService from "@/services/team.service";
 import { TournamentHubActions } from "./components/TournamentHubActions";
 import { formatDate, TOURNAMENT_STATUS_TONE } from "./components/tournamentWorkspace.helpers";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import {
-  TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
+  useHubEncountersCountQuery,
   useHubStagesQuery,
   useHubStandingsQuery,
+  useHubTeamsCountQuery,
   useHubTournamentQuery
 } from "./hubQueries";
 import { allowedTab, isLegacyTabSegment, isTabKey, TAB_KEYS, type TabKey } from "./tab-guards";
@@ -60,6 +60,7 @@ export function TournamentHubShell({
   tournamentId: number;
   children: ReactNode;
 }>) {
+  const format = useFormatter();
   const router = useRouter();
   const pathname = usePathname();
   const isValidTournamentId = Number.isFinite(tournamentId) && tournamentId > 0;
@@ -78,21 +79,8 @@ export function TournamentHubShell({
 
   const tournamentQuery = useHubTournamentQuery(tournamentId);
 
-  const teamsCountQuery = useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "teams", "count"],
-    queryFn: () => teamService.getCount(tournamentId),
-    enabled: isValidTournamentId,
-    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
-
-  const encountersCountQuery = useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "encounters", "count"],
-    queryFn: () => encounterService.getCount(tournamentId),
-    enabled: isValidTournamentId,
-    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
+  const teamsCountQuery = useHubTeamsCountQuery(tournamentId);
+  const encountersCountQuery = useHubEncountersCountQuery(tournamentId);
 
   const stagesQuery = useHubStagesQuery(tournamentId);
   // Pre-T5 the standings query was gated to the overview|matches tabs, but the
@@ -268,7 +256,7 @@ export function TournamentHubShell({
     );
   }
 
-  const tabItems: AdminTabItem[] = TAB_KEYS.map((key) => ({
+  const tabItems: LinkTabItem[] = TAB_KEYS.map((key) => ({
     key,
     label: TAB_LABELS[key],
     href: `${basePath}/${key}`,
@@ -285,7 +273,7 @@ export function TournamentHubShell({
         }}
         meta={[
           <span key="dates" className="tabular-nums">
-            {formatDate(tournament.start_date)} — {formatDate(tournament.end_date)}
+            {formatDate(format, tournament.start_date)} — {formatDate(format, tournament.end_date)}
           </span>,
           tournament.is_league ? "League" : null,
           <span key="teams" className="tabular-nums">
@@ -308,7 +296,7 @@ export function TournamentHubShell({
           />
         }
       />
-      <AdminTabs items={tabItems} activeKey={isLegacySegment ? "" : activeTab} ariaLabel="Tournament sections" />
+      <LinkTabs items={tabItems} activeKey={isLegacySegment ? "" : activeTab} ariaLabel="Tournament sections" />
       {activeTabAllowed ? children : null}
     </div>
   );

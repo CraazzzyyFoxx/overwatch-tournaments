@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Loader2, RefreshCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import type {
 
 import { PreviewTable } from "./PreviewTable";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 interface PreviewTabProps {
   catalog: MappingCatalog;
@@ -95,7 +96,7 @@ export function PreviewTab({
           ) : null}
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={isRefreshing || !canPreview}>
             {isRefreshing ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
+              <Spinner className="mr-2" />
             ) : (
               <RefreshCcw className="mr-2 size-4" />
             )}

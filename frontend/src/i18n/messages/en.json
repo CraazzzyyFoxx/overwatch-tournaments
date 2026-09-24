@@ -72,6 +72,10 @@
       "median_buchholz": "Median Buchholz",
       "buchholz": "Buchholz",
       "score_differential": "Score differential",
+      "ffa_game_wins": "Game wins",
+      "ffa_score": "Score",
+      "ffa_best_placement": "Best placement",
+      "ffa_last_placement": "Last placement",
       "manual_override": "Manual override"
     },
     "combined": "Combined",
@@ -278,6 +282,10 @@
       "connecting": "Connecting",
       "connected": "Live connection",
       "reconnecting": "Reconnecting"
+    },
+    "confirm": {
+      "cascade": "This also removes:",
+      "typeToConfirm": "Type <code>{name}</code> to confirm"
     }
   },
   "registration": {
@@ -903,7 +911,6 @@
       "delete": "Delete account",
       "confirmTitle": "Delete your account?",
       "confirmBody": "Your account, sessions, linked OAuth connections and API keys will be deleted permanently. Your tournament history and player profile are kept, without an owner. You will be signed out right away.",
-      "confirmCancel": "Keep my account",
       "confirmDelete": "Delete permanently"
     },
     "sessions": {
@@ -1091,6 +1098,10 @@
       "roundColumn": "Round",
       "timeColumn": "Start time",
       "matchesColumn": "Matches",
+      "lobbiesColumn": "Lobbies",
+      "lobbiesRound": "Lobbies",
+      "emptyTitleLobbies": "No lobbies in this stage yet",
+      "emptyBodyLobbies": "Generate the stage first — the start time is written onto lobbies that already exist.",
       "actionsColumn": "Apply the round time",
       "timeInputLabel": "Start time for {round}",
       "timeFieldLabel": "Start time (hours and minutes) for {round}",
@@ -1670,7 +1681,9 @@
         "onForm": "on form",
         "predShort": "pred {place}",
         "viewList": "List",
-        "viewTable": "Table"
+        "viewTable": "Table",
+        "viewLabel": "Standings view",
+        "sortLabel": "Sort standings by"
       },
       "horizon": {
         "title": "Predicted vs Actual",
@@ -1784,10 +1797,6 @@
       "workspaces": "Workspaces",
       "workspaceListNotLoaded": "Workspace list is not loaded.",
       "selectAtLeastOneWorkspace": "Select at least one workspace.",
-      "relativeJustNow": "just now",
-      "relativeMinutes": "{count}m ago",
-      "relativeHours": "{count}h ago",
-      "relativeDays": "{count}d ago",
       "finishedRelative": "finished {relative}",
       "startedRelative": "started {relative}",
       "createdRelative": "created {relative}"
@@ -1862,25 +1871,9 @@
       "final": "Final",
       "signups": "Sign-ups",
       "setup": "Setup"
-    },
-    "time": {
-      "justNow": "just now",
-      "soon": "soon",
-      "minutesAgo": "{count, plural, one {#m ago} other {#m ago}}",
-      "inMinutes": "{count, plural, one {in #m} other {in #m}}",
-      "hoursAgo": "{count, plural, one {#h ago} other {#h ago}}",
-      "inHours": "{count, plural, one {in #h} other {in #h}}",
-      "daysAgo": "{count, plural, one {#d ago} other {#d ago}}",
-      "inDays": "{count, plural, one {in #d} other {in #d}}"
     }
   },
   "teams": {
-    "subtitle": "Browse balanced teams, jump to a team, and adjust sorting.",
-    "tournamentsLoadError": "Failed to load tournaments",
-    "loadingTournaments": "Loading tournaments...",
-    "selectTournament": "Select a tournament",
-    "findTeam": "Find team",
-    "sortValue": "{field} — {order}",
     "groupLabel": "Group {name}",
     "roster": {
       "role": "Role",
@@ -1889,21 +1882,10 @@
       "newcomer": "New",
       "newcomerRole": "New role",
       "avgSr": "Avg. SR"
-    },
-    "sortAvgSr": "Avg. SR",
-    "sortPlacement": "Placement",
-    "sortGroup": "Group",
-    "selectTournamentToView": "Select a tournament to view teams.",
-    "teamsLoadError": "Failed to load teams.",
-    "noTeamsFound": "No teams found for this tournament.",
-    "meta": {
-      "description": "View teams on {siteName}."
     }
   },
   "matches": {
     "col": {
-      "map": "Map",
-      "match": "Match",
       "score": "Score",
       "division": "Division",
       "prs": "PRS",
@@ -2017,9 +1999,6 @@
       "shotsHit": "Shots Hit",
       "shotsMissed": "Shots Missed"
     },
-    "matchesTotal": "{count, plural, one {# match total} other {# matches total}}",
-    "allTournaments": "All tournaments",
-    "noMatchesFound": "No matches found.",
     "round": "Round {round}",
     "gamemode": "Gamemode",
     "playtime": "Playtime",
@@ -2027,7 +2006,6 @@
     "allMatch": "All Match",
     "teamLabel": "Team {name}",
     "meta": {
-      "description": "View matches on {siteName}.",
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Overview for {home} vs {away} on {siteName}."
     }
@@ -2539,32 +2517,6 @@
     "roleTank": "Tank",
     "roleDamage": "Damage",
     "roleSupport": "Support"
-  },
-  "owal": {
-    "metaDescription": "View OWAL Standings on {siteName}.",
-    "season": "Season:",
-    "selectSeason": "Select season",
-    "stacks": "Stacks",
-    "searchUser": "Search user...",
-    "standingsTableLabel": "OWAL standings. Scroll horizontally for all day and record columns.",
-    "stacksTableLabel": "OWAL stacks. Scroll horizontally for all columns.",
-    "only3Days": "Only 3+ days",
-    "playerOne": "Player One",
-    "playerTwo": "Player Two",
-    "days": "Days",
-    "averagePlacement": "Average Placement",
-    "place": "Place",
-    "player": "Player",
-    "role": "Role",
-    "division": "Division",
-    "played": "Played",
-    "totalBest3": "TOTAL (best 3 days)",
-    "average": "Average",
-    "wins": "W",
-    "losses": "L",
-    "draws": "D",
-    "winRatio": "Win ratio",
-    "title": "OWAL"
   },
   "notConfigured": {
     "title": "Workspace not configured",
@@ -4291,62 +4243,19 @@
     "groups": {
       "tournaments": "Tournaments",
       "users": "Players",
-      "matches": "Matches",
-      "organization": "Organization"
+      "play": "Play"
     },
     "items": {
-      "tournaments": {
-        "title": "Tournaments",
-        "desc": "Every tournament run on the platform"
-      },
-      "teams": {
-        "title": "Teams",
-        "desc": "Balanced team rosters across tournaments"
-      },
-      "analytics": {
-        "title": "Analytics",
-        "desc": "Tournament analytics, forecasts and standings"
-      },
-      "users": {
-        "title": "Players",
-        "desc": "Every competitor across every tournament"
-      },
-      "compare": {
-        "title": "Compare",
-        "desc": "Compare two players head-to-head"
-      },
-      "heroesLeaderboard": {
-        "title": "Heroes Leaderboard",
-        "desc": "Per-hero performance ranking across all players"
-      },
-      "achievements": {
-        "title": "Achievements",
-        "desc": "All achievements and how to earn them"
-      },
-      "encounters": {
-        "title": "Encounters",
-        "desc": "Every series across all tournaments"
-      },
-      "matches": {
-        "title": "Matches",
-        "desc": "Every match played on the platform"
-      },
-      "scrims": {
-        "title": "Scrims",
-        "desc": "Ad-hoc pre-game rooms for practice matches"
-      },
-      "balancer": {
-        "title": "Balancer",
-        "desc": "Balance teams by player roles and ratings"
-      },
-      "mixes": {
-        "title": "Mixes",
-        "desc": "Pickup lobbies balanced from your workspace roster"
-      },
-      "admin": {
-        "title": "Admin",
-        "desc": "Manage tournaments, access and operations"
-      }
+      "tournaments": { "title": "Tournaments" },
+      "encounters": { "title": "Encounters" },
+      "analytics": { "title": "Analytics" },
+      "users": { "title": "Players" },
+      "compare": { "title": "Compare" },
+      "heroesLeaderboard": { "title": "Heroes leaderboard" },
+      "achievements": { "title": "Achievements" },
+      "scrims": { "title": "Scrims" },
+      "mixes": { "title": "Mixes" },
+      "admin": { "title": "Admin" }
     },
     "workspaces": "Workspaces",
     "switchWorkspace": "Switch workspace",
@@ -4368,7 +4277,7 @@
       "clearHistory": "Clear history",
       "removeFromHistory": "Remove from history"
     },
-    "mobileMenuTitle": "Site navigation"
+    "label": "Site navigation"
   },
   "draftAdmin": {
     "title": "Draft administration",
@@ -4550,7 +4459,6 @@
     "back": "Back",
     "continue": "Continue",
     "seedDraft": "Seed draft",
-    "keepEditing": "Keep editing",
     "discardSetup": "Discard setup",
     "reseedConfirmTitle": "Replace the current draft seed",
     "reseedConfirmDescription": "Teams, players and upcoming picks will be rebuilt from the reviewed configuration. The draft has not started, so no completed live pick will be changed.",
@@ -4658,8 +4566,7 @@
         "rollback": "Last pick rolled back",
         "cancel": "Draft cancelled",
         "export": "Teams exported"
-      },
-      "dismiss": "Keep as is"
+      }
     },
     "roleConflict": {
       "title": "Add a missing player role",
@@ -6126,7 +6033,6 @@
         "action": "Unpublish",
         "title": "Unpublish this announcement?",
         "description": "It stops being shown from now on. The record and everyone's read marks stay, so who saw it remains answerable — but it cannot be put back on air from this screen.",
-        "cancel": "Keep it up",
         "done": "Announcement unpublished"
       }
     },
@@ -6426,6 +6332,51 @@
       "zoomReset": "Reset zoom",
       "rendering": "Rendering the diagram…",
       "renderError": "The diagram failed to render: {message}"
+    }
+  },
+  "ffa": {
+    "colPlace": "Place",
+    "colTeam": "Team",
+    "colPoints": "Pts",
+    "colGames": "Games",
+    "colScore": "Score",
+    "colGame": "G{position}",
+    "gameLabel": "Game {position}",
+    "tableLabel": "{lobby} standings",
+    "advancing": "Adv",
+    "eliminated": "Out",
+    "tieStatus": "Tie",
+    "tieCluster": "Equal on every tiebreaker — order assigned, not earned",
+    "tieDecidesAdvance": "Tied on every tiebreaker — the assigned order, not the lobby results, decides whether this team advances",
+    "gamesPerLobby": "Games per lobby",
+    "participants": "{count, plural, one {# team} other {# teams}}",
+    "lobbyEmpty": "No teams have been seeded into this lobby yet",
+    "stageLobbies": "Lobbies",
+    "stageEmpty": "No lobbies have been generated for this stage yet",
+    "stageFailed": "The lobbies failed to load",
+    "retry": "Try again",
+    "lobbyLede": "{teams} in one lobby, {games, plural, one {# game} other {# games}} each. The table below is this group's standings.",
+    "metaDescription": "{lobby}: placements, points and every game of the lobby on {siteName}.",
+    "openRoom": "Lobby room",
+    "backToLobby": "Back to the lobby",
+    "roomHint": "No veto and no readiness gate here: a lobby is played as one group. The organizer posts the lobby code in the chat and enters every game's result.",
+    "roomParticipants": "Participants",
+    "errors": {
+      "ffa_result_unknown_team": "One of the teams is not seated in this lobby.",
+      "ffa_result_duplicate_team": "A team is listed twice — every team gets exactly one line.",
+      "ffa_result_missing_team": "Every team of the lobby needs a line in the game.",
+      "ffa_result_invalid_score": "A score cannot be negative.",
+      "ffa_result_mixed_placement": "Give a place to every team, or to none of them.",
+      "ffa_result_placement_required": "This stage pays for places, so every team needs one.",
+      "ffa_result_invalid_placement": "Places run from 1 to the number of teams, each taken exactly once.",
+      "ffa_reason_required": "Changing a game that has been played needs a reason.",
+      "ffa_game_out_of_range": "This lobby does not play that game — change the number of games first.",
+      "ffa_games_below_played": "The series cannot be shorter than the games already played.",
+      "ffa_game_not_found": "That game has not been played, so there is nothing to void.",
+      "encounter_not_ffa": "This match is not an FFA lobby.",
+      "encounter_not_duel": "This match is an FFA lobby, not a duel.",
+      "ffa_field_not_editable": "That field cannot be edited on a lobby.",
+      "ffa_lobby_size": "A lobby seats between 2 and 100 teams."
     }
   }
 }

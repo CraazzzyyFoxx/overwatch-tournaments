@@ -61,7 +61,7 @@ Method groups:
 
 | Group | Subject prefix | Purpose |
 | --- | --- | --- |
-| Public reads | `get_*`, `list_*`, `lookup_*`, `statistics_*`, `owal_*`, `encounters_overview`, `tournaments_facets`, `saved_view*` | Tournaments, teams, encounters, matches, stages, standings, statistics and saved encounter views |
+| Public reads | `get_*`, `list_*`, `lookup_*`, `statistics_*`, `encounters_overview`, `tournaments_facets`, `saved_view*` | Tournaments, teams, encounters, matches, stages, standings, statistics and saved encounter views |
 | Computation jobs | `job_*`, `standing_recalculate` | Job status reads and manual standings recomputation |
 | Registration (admin) | `reg_*`, `regstatus_*` | The registration queue, bulk operations, rank autofill, exports, status catalog |
 | Registration (public) | `reg_pub_*`, `sub_me`, `sub_redeem_code` | Self-service registration, check-in, subscription status |

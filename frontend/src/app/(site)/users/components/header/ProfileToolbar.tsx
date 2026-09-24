@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 import { GitCompare } from "lucide-react";
 
@@ -15,7 +15,7 @@ interface ProfileToolbarProps {
 }
 
 const BTN =
-  "inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.03)] px-2.5 py-1.5 text-caption font-semibold text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]";
+  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.03)] px-2.5 text-caption font-semibold text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]";
 
 /**
  * Header toolbar for the player profile. Share opens the player-card dialog
@@ -29,15 +29,15 @@ const ProfileToolbar = ({ card, playerId }: ProfileToolbarProps) => {
   return (
     <div className="flex items-center gap-2">
       <SharePlayerCard card={card} />
-      <Link
+      <HoverPrefetchLink
         href={{ pathname: "/users/compare", query: { user_id: playerId } }}
         className={BTN}
         aria-label={t("users.profile.toolbar.comparePlayers")}
       >
         <GitCompare size={13} aria-hidden />
         {t("users.profile.toolbar.compare")}
-      </Link>
-      <FavoriteStarButton playerId={playerId} size="sm" />
+      </HoverPrefetchLink>
+      <FavoriteStarButton playerId={playerId} size="sm" className="h-8 w-8" />
     </div>
   );
 };

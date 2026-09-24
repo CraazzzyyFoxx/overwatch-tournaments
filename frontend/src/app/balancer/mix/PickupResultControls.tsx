@@ -1,6 +1,7 @@
 "use client";
 
 import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
+import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import type { CustomGameOutcome } from "@/services/custom-game.service";
 
@@ -70,10 +71,7 @@ export function PickupResultControls({
           "disabled:cursor-default disabled:opacity-60"
         )}
       >
-        <span
-          aria-hidden="true"
-          className={cn("inline-block size-2 shrink-0 rounded-full", accent.bar)}
-        />
+        <StatusDot className={cn("inline-block size-2", accent.bar)} />
         <span className="truncate">{team.label}</span>
         {/* A draw never adjusts ranks, so it never earns the hint. The leading
             space is collapsed by flex but keeps the accessible name readable. */}

@@ -10,8 +10,8 @@ import { CatalogAliasesField, CatalogNameField } from "@/components/admin/Catalo
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { createAliasesColumn } from "@/components/admin/catalog-table-columns";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,7 +116,7 @@ export default function HeroesAdminPage() {
     ],
     []
   );
-  const filters = useAdminFilters(filterDefs);
+  const filters = useFilters(filterDefs);
   const roleFilter = String(filters.values.role ?? "");
 
   const columns: ColumnDef<Hero>[] = [
@@ -219,7 +219,7 @@ export default function HeroesAdminPage() {
         columns={columns}
         searchPlaceholder="Search heroes…"
         filterKey={filters.filterKey}
-        toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
+        toolbar={<FilterBar defs={filterDefs} filters={filters} />}
         emptyMessage="No heroes yet. Use “Create hero” to add the first one."
         onRowDoubleClick={isSuperuser ? (row) => openEdit(row.original) : undefined}
         actions={

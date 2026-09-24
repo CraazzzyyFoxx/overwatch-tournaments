@@ -10,7 +10,7 @@ import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { WorkspaceOwnerValue } from "@/components/admin/workspace-owner";
@@ -289,7 +289,7 @@ export default function WorkspacesPage() {
           />
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={openRow ? openId : null}
           onClose={() => setParams({ id: null })}
           title={openRow?.name ?? ""}
@@ -366,7 +366,7 @@ export default function WorkspacesPage() {
               </div>
             </div>
           ) : null}
-        </AdminInspector>
+        </Inspector>
       </div>
 
       <CreateWorkspaceDialog

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CheckCircle2, Loader2 } from "lucide-react";
+import { BarChart3, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
@@ -10,6 +10,7 @@ import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentStatusControl } from "./TournamentStatusControl";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * The hub header's action cluster.
@@ -63,7 +64,7 @@ export function TournamentHubActions({
           disabled={toggleFinishedMutation.isPending}
         >
           {toggleFinishedMutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <Spinner />
           ) : (
             <CheckCircle2 className="size-4" aria-hidden />
           )}

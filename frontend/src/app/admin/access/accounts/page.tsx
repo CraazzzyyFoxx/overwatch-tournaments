@@ -8,10 +8,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AccountInspector } from "@/components/admin/access/AccountInspector";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -79,7 +79,7 @@ export default function AccessAdminAccountsPage() {
     [roles]
   );
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const roleFilter = String(filters.values.role ?? "");
   const statusFilter = String(filters.values.status ?? "");
   const superuserFilter = filters.values.superuser === true;
@@ -206,7 +206,7 @@ export default function AccessAdminAccountsPage() {
           filterKey={filters.filterKey}
           inspectorId={openId}
           getRowId={(row) => String(row.id)}
-          toolbar={<AdminFilterBar defs={defs} filters={filters} />}
+          toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage="No auth accounts match. Clear the filters to see every account."
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
           renderMobileCard={(row) => (
@@ -252,7 +252,7 @@ export default function AccessAdminAccountsPage() {
         />
       </div>
 
-      <AdminInspector
+      <Inspector
         openId={openRow ? openId : null}
         onClose={() => setParams({ id: null })}
         title={openRow ? openRow.email : ""}
@@ -276,7 +276,7 @@ export default function AccessAdminAccountsPage() {
             roles={roles}
           />
         ) : null}
-      </AdminInspector>
+      </Inspector>
 
       <ConfirmDialog
         open={pendingDelete !== null}

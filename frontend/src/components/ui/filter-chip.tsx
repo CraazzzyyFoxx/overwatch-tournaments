@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 
 export interface FilterChipProps
@@ -34,13 +35,7 @@ export const FilterChip = React.forwardRef<HTMLButtonElement, FilterChipProps>(
       className={cn("aqt-filter-chip", active && "active", className)}
       {...props}
     >
-      {dotColor ? (
-        <span
-          aria-hidden
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{ background: dotColor }}
-        />
-      ) : null}
+      {dotColor ? <StatusDot style={{ color: dotColor }} /> : null}
       {children}
       {count !== undefined && count !== null ? (
         <span className="aqt-count">{count}</span>

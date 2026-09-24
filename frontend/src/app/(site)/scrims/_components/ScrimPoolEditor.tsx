@@ -3,7 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Check, LoaderCircle } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   type PickBanDraft,
   type PickBanValidationIssue
 } from "@/lib/tournament/pick-ban-config";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * A room's hand-authored pick-ban rules.
@@ -154,7 +155,7 @@ function ItemPicker({
       />
       {isLoading ? (
         <p className="text-muted-foreground flex items-center gap-2 text-xs">
-          <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
+          <Spinner className="size-3.5" />
           {loadingLabel}
         </p>
       ) : visible.length === 0 ? (

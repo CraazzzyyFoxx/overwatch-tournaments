@@ -2,13 +2,14 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Command } from "@/components/ui/command";
 import { usePlayerSearch } from "@/hooks/usePlayerSearch";
 import PlayerSearchCommandList from "@/components/PlayerSearchCommandList";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Full-screen player search for narrow viewports, where the desktop popover
@@ -96,10 +97,7 @@ const MobilePlayerSearchSheet = () => {
             className="h-10 rounded-xl border-border/60 bg-background/15 pl-9 pr-10 shadow-sm"
           />
           {isSearching ? (
-            <Loader2
-              aria-hidden
-              className="pointer-events-none absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground"
-            />
+            <Spinner className="pointer-events-none absolute right-3 top-3 text-muted-foreground" />
           ) : searchValue.length > 0 ? (
             <button
               type="button"

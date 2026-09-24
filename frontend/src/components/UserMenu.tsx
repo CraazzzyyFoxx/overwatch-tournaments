@@ -16,13 +16,9 @@ import {
 import { LanguageMenuRadioGroup } from "@/components/LanguageSwitcher";
 import { getAuthProfileHref } from "@/lib/auth/profile-links";
 import { logout } from "@/lib/auth/logout";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { useAuthProfileStore, type AuthProfile } from "@/stores/auth-profile.store";
-
-export function getInitials(username?: string | null) {
-  return username ? username.slice(0, 2).toUpperCase() : "AQ";
-}
 
 type AccountMenuContentProps = ComponentPropsWithoutRef<typeof DropdownMenuContent> & {
   user: AuthProfile;
@@ -60,7 +56,7 @@ export function AccountMenuContent({
       <Avatar aria-hidden className="size-9 rounded-lg">
         <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
         <AvatarFallback className="rounded-lg text-xs font-medium">
-          {getInitials(user.username)}
+          {initials(user.username)}
         </AvatarFallback>
       </Avatar>
       <span className="grid min-w-0 flex-1 leading-tight">
@@ -130,7 +126,7 @@ const UserMenu = ({ user }: Readonly<{ user: AuthProfile }>) => {
         >
           <Avatar className="size-8">
             <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
-            <AvatarFallback className="text-xs font-medium">{getInitials(user.username)}</AvatarFallback>
+            <AvatarFallback className="text-xs font-medium">{initials(user.username)}</AvatarFallback>
           </Avatar>
         </button>
       </DropdownMenuTrigger>

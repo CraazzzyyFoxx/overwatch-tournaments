@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle, Copy, LoaderCircle } from "lucide-react";
+import { CheckCircle, Copy } from "lucide-react";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { PLATFORM_ZONE } from "@/lib/site/host";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import type { Workspace } from "@/types/workspace.types";
+import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 
@@ -203,7 +204,7 @@ export function DomainSection({ workspaceId }: Readonly<{ workspaceId: number | 
                   </StatusPill>
                 ) : domain.domain ? (
                   <StatusPill tone="warning">
-                    <LoaderCircle aria-hidden className="size-3 animate-spin" />{" "}
+                    <Spinner className="size-3" />{" "}
                     Pending — checking DNS…
                   </StatusPill>
                 ) : null}

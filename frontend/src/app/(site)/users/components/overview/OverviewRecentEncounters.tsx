@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { ArrowRight, Swords } from "lucide-react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { tournamentTag } from "@/app/(site)/users/components/shared/list-utils";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
@@ -46,10 +46,10 @@ const OverviewRecentEncounters = async ({ encounters, userName, tournaments }: P
       title={t("users.overview.recent.title")}
       icon={<Swords size={15} />}
       action={
-        <Link href={`/users/${userSlug}?tab=matches`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=matches`} className="aqt-seeall">
           {t("users.overview.recent.allMatches")}
           <ArrowRight aria-hidden className="size-3" />
-        </Link>
+        </HoverPrefetchLink>
       }
     >
       {encounters.map((enc) => {
@@ -92,7 +92,7 @@ const OverviewRecentEncounters = async ({ encounters, userName, tournaments }: P
         const encHeroes = Array.from(heroMap.values());
 
         return (
-          <Link
+          <HoverPrefetchLink
             key={enc.id}
             href={`/encounters/${enc.id}`}
             className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)] sm:grid-cols-[auto_1fr_auto_auto_auto_auto]"
@@ -129,7 +129,7 @@ const OverviewRecentEncounters = async ({ encounters, userName, tournaments }: P
               {scoreStr}
             </span>
             <MatchLogIndicator hasLogs={enc.has_logs} size={13} className="h-6 w-6" />
-          </Link>
+          </HoverPrefetchLink>
         );
       })}
     </CardSurface>

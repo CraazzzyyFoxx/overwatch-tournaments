@@ -16,9 +16,9 @@ type TournamentStatusMeta = {
   isEnded: boolean;
 };
 
-// Colors mirror `.status-pill.{variant}` in globals.css (draft=blue,
-// upcoming=amber, live=rose, finished=dim) so a card and the tournament
-// page never disagree about what a status looks like.
+// Colors mirror `TournamentStatusPill`'s variants (draft=blue, upcoming=amber,
+// live=rose, finished=dim) so a card and the tournament page never disagree
+// about what a status looks like.
 const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
   // Announced but not yet open. It shares the amber "upcoming" bucket with
   // registration deliberately: to a visitor both mean "this has not started",

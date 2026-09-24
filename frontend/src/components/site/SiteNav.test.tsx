@@ -1,88 +1,72 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
+import type { ReactNode } from "react";
 
-interface TestNavGroup {
-  key: string;
-  items: { key: string; href: string }[];
-}
+const route = vi.hoisted(() => ({ pathname: "/" }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/tournaments" }));
-
-const groups = vi.hoisted(() => ({ value: [] as TestNavGroup[] }));
-
-vi.mock("./useVisibleNavGroups", () => ({ useVisibleNavGroups: () => groups.value }));
+vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
+vi.mock("./useCanAccessAdminEntry", () => ({ useCanAccessAdminEntry: () => false }));
 
 // Must follow the hoisted vi.mock calls above.
-import { SiteNav } from "./SiteNav";
+import messages from "@/i18n/messages/en.json";
+import { SectionTabs, SiteNav } from "./SiteNav";
 
-const messages = {
-  nav: {
-    groups: { tournaments: "Tournaments", organization: "Organization" },
-    items: {
-      tournaments: { title: "Tournaments", desc: "Every tournament" },
-      teams: { title: "Teams", desc: "Team rosters" },
-      admin: { title: "Admin", desc: "Manage tournaments" }
-    }
-  }
-};
-
-const MULTI: TestNavGroup = {
-  key: "tournaments",
-  items: [
-    { key: "tournaments", href: "/tournaments" },
-    { key: "teams", href: "/teams" }
-  ]
-};
-const SINGLE: TestNavGroup = { key: "organization", items: [{ key: "admin", href: "/admin" }] };
-
-function render(variant: "desktop" | "mobile", value: TestNavGroup[]): string {
-  groups.value = value;
+function render(pathname: string, node: ReactNode): string {
+  route.pathname = pathname;
   return renderToStaticMarkup(
     <NextIntlClientProvider locale="en" messages={messages}>
-      <SiteNav variant={variant} />
+      {node}
     </NextIntlClientProvider>
   );
 }
 
-// A dropdown that opens onto a single row costs a click and a guess for nothing,
-// and labels the destination with a section name it does not have.
-describe.each(["desktop", "mobile"] as const)("SiteNav (%s)", (variant) => {
-  it("renders a single-item group as a direct link to that item", () => {
-    const html = render(variant, [SINGLE]);
-
-    expect(html).toContain('href="/admin"');
-    expect(html).toContain("Admin");
-    // No disclosure: nothing to expand when there is one destination.
-    expect(html).not.toContain("<button");
-    // The group label must not appear: the link goes to Admin, not to a section.
-    expect(html).not.toContain("Organization");
+/** Link labels in order, each suffixed with its aria-current when it has one. */
+function links(html: string): string[] {
+  return [...html.matchAll(/<a ([^>]*)>([^<]+)<\/a>/g)].map(([, attrs, label]) => {
+    const current = /aria-current="(\w+)"/.exec(attrs)?.[1];
+    return current ? `${label}=${current}` : label;
   });
+}
 
-  it("keeps a multi-item group as a disclosure labelled by the group", () => {
-    const html = render(variant, [MULTI]);
-
-    // Both surfaces render the panel lazily, so a closed group shows only its
-    // trigger — asserting on the item hrefs here would assert on nothing.
-    expect(html).toContain("<button");
-    expect(html).toContain("Tournaments");
-    expect(html).not.toContain("href=");
-  });
-
-  it("marks the single link as the current page when it matches the route", () => {
-    const html = render(variant, [
-      { key: "organization", items: [{ key: "admin", href: "/tournaments" }] }
+describe("SiteNav section links", () => {
+  it("marks a section as the location from any page under it", () => {
+    expect(links(render("/users", <SiteNav variant="desktop" />))).toEqual([
+      "Tournaments",
+      "Players=page",
+      "Play"
     ]);
+    // Analytics is the section's fourth page, not its landing page.
+    expect(links(render("/tournaments/analytics", <SiteNav variant="desktop" />))).toContain(
+      "Tournaments=true"
+    );
+    expect(links(render("/balancer/mix/42", <SiteNav variant="desktop" />))).toContain("Play=true");
+  });
 
-    expect(html).toContain('aria-current="page"');
+  it("marks nothing outside the tree, including a path that only shares a prefix", () => {
+    for (const pathname of ["/", "/users-archive"]) {
+      expect(links(render(pathname, <SiteNav variant="desktop" />))).toEqual([
+        "Tournaments",
+        "Players",
+        "Play"
+      ]);
+    }
   });
 });
 
-describe("SiteNav (desktop)", () => {
-  it("emits one list for the whole nav, not one per group", () => {
-    const html = render("desktop", [MULTI, SINGLE]);
+describe("SectionTabs", () => {
+  it("lists the current section's pages with only the open one current", () => {
+    // /tournaments/analytics also sits under /tournaments; only one may be current.
+    expect(links(render("/tournaments/analytics", <SectionTabs />))).toEqual([
+      "Tournaments",
+      "Encounters",
+      "Analytics=page"
+    ]);
+  });
 
-    // N single-item <ul>s announced N separate navigations to assistive tech.
-    expect(html.match(/<ul/g)?.length).toBe(1);
+  it("stays out of detail pages, which carry their own tab row", () => {
+    expect(render("/tournaments/winter-cup/bracket", <SectionTabs />)).toBe("");
+    expect(render("/users/some-player", <SectionTabs />)).toBe("");
+    expect(render("/", <SectionTabs />)).toBe("");
   });
 });

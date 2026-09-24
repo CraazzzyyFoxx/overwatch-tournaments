@@ -175,6 +175,10 @@ export default defineConfig({
       // The invite ledger. Unrun, a green suite would coexist with a section that
       // fetches on every mount or renders raw i18n key paths.
       "src/components/registration/InviteHistorySection.behavior.test.tsx",
+      // The captain's entry point. Unrun, a green suite would coexist with a
+      // roster shape (`{flex: 3}`) whose "Register a team" button never renders
+      // at all — the squad simply cannot be founded.
+      "src/components/registration/TeamRegistrationEntry.behavior.test.tsx",
       // File-level for the same mixed-runner reason as its neighbours above.
       // The landing page for a shared invite link: an unrun mount test here
       // would report green while the whole invitee flow was unreachable, which
@@ -209,6 +213,10 @@ export default defineConfig({
       "src/lib/tournament/status.test.ts",
       "src/lib/tournament/stages.test.ts",
       "src/lib/tournament/pick-ban-config.test.ts",
+      // The tie-break catalog the StageManager editor offers per stage type;
+      // unrun, an FFA stage could go back to offering head-to-head — a metric
+      // the engine drops — with a green suite.
+      "src/lib/tournament/tiebreakers.test.ts",
       // `lib/bracket/view.test.ts` speaks bun:test, so it is deliberately absent.
       "src/lib/bracket/projection.test.ts",
       "src/lib/encounter/score.test.ts",
@@ -225,6 +233,10 @@ export default defineConfig({
       "src/components/FavoriteStarButton.behavior.test.tsx",
       "src/components/UserSearch.behavior.test.tsx",
       "src/components/StandingsTable.advance.behavior.test.tsx",
+      // Same file-level rule: `src/components/ffa` is vitest-only so far, and
+      // unrun the lobby table could go back to printing a `0` for a game
+      // nobody has played with a green suite.
+      "src/components/ffa/**/*.test.tsx",
       // The only workspace-creation surface a plain account can reach; unrun,
       // a green suite would coexist with a dead self-service entry point.
       "src/components/CreateWorkspaceLauncher.behavior.test.tsx",

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Circle, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 export type BalancerOperationStepStatus = "pending" | "running" | "succeeded" | "failed";
 
@@ -53,7 +54,7 @@ export function updateOperationStepStatus(
 
 function OperationStepIcon({ status }: Readonly<{ status: BalancerOperationStepStatus }>) {
   if (status === "running") {
-    return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+    return <Spinner className="text-blue-500" />;
   }
 
   if (status === "succeeded") {

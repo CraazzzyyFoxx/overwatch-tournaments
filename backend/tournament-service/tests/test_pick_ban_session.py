@@ -17,6 +17,7 @@ import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.exc import MissingGreenlet  # noqa: E402
 
 from shared.core.enums import (  # noqa: E402
+    EncounterFormat,
     EncounterGameState,
     EncounterStatus,
     FirstBanRotation,
@@ -95,8 +96,11 @@ def _config(
     )
 
 
-def _encounter(*, best_of: int, home: int | None = 10, away: int | None = 20) -> SimpleNamespace:
+def _encounter(
+    *, best_of: int, home: int | None = 10, away: int | None = 20, format: str = EncounterFormat.DUEL
+) -> SimpleNamespace:
     return SimpleNamespace(
+        format=format,
         id=500,
         tournament_id=7,
         stage_id=3,

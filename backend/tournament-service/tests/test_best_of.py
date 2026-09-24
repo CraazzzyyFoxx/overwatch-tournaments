@@ -131,10 +131,11 @@ class ApplyBestOfToExistingTests(TestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             settings_json={"best_of": {"default": 3, "by_round": {"1": 1}, "final": 5}},
         )
+        duel = enums.EncounterFormat.DUEL
         encounters = [
-            SimpleNamespace(round=1, best_of=3),  # by_round -> 1
-            SimpleNamespace(round=2, best_of=3),  # default (not max round)
-            SimpleNamespace(round=3, best_of=3),  # max round + elimination -> final 5
+            SimpleNamespace(round=1, best_of=3, format=duel),  # by_round -> 1
+            SimpleNamespace(round=2, best_of=3, format=duel),  # default (not max round)
+            SimpleNamespace(round=3, best_of=3, format=duel),  # max round + elimination -> final 5
         ]
         changed, session, published = self._run_backfill(stage, encounters)
 
@@ -151,8 +152,9 @@ class ApplyBestOfToExistingTests(TestCase):
             settings_json={"best_of": {"default": 2, "final": 5}},
         )
         encounters = [
-            SimpleNamespace(round=1, best_of=3),
-            SimpleNamespace(round=2, best_of=3),  # highest round, but not elimination
+            SimpleNamespace(round=1, best_of=3, format=enums.EncounterFormat.DUEL),
+            # Highest round, but not elimination.
+            SimpleNamespace(round=2, best_of=3, format=enums.EncounterFormat.DUEL),
         ]
         changed, session, _ = self._run_backfill(stage, encounters)
 
@@ -166,7 +168,7 @@ class ApplyBestOfToExistingTests(TestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             settings_json=None,  # no config -> everything resolves to default 3
         )
-        encounters = [SimpleNamespace(round=1, best_of=3)]
+        encounters = [SimpleNamespace(round=1, best_of=3, format=enums.EncounterFormat.DUEL)]
         changed, session, published = self._run_backfill(stage, encounters)
 
         self.assertEqual(changed, 0)

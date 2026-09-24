@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 
 import { TeamLogo } from "@/components/TeamName";
@@ -62,9 +62,9 @@ export function Podium({ first, second, third, className }: Readonly<PodiumProps
       champion ? "border-[color:var(--aqt-teal)] pt-4" : "border-[color:var(--aqt-border)] pt-3"
     );
     return team.href ? (
-      <Link href={team.href} className={cn(classes, "transition-colors hover:text-[color:var(--aqt-teal)]")}>
+      <HoverPrefetchLink href={team.href} className={cn(classes, "transition-colors hover:text-[color:var(--aqt-teal)]")}>
         {body}
-      </Link>
+      </HoverPrefetchLink>
     ) : (
       <div className={classes}>{body}</div>
     );

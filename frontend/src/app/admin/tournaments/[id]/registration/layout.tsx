@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useHubTournamentQuery } from "../hubQueries";
 import { REGISTRATION_SUB_TABS, type RegistrationSubTab } from "../tab-guards";
@@ -74,7 +74,7 @@ export default function RegistrationLayout({ children }: Readonly<{ children: Re
     router.replace(`${basePath}/${DEFAULT_SUB_TAB}`);
   }, [known, basePath, router]);
 
-  const items: AdminTabItem[] = REGISTRATION_SUB_TABS.map((key) => ({
+  const items: LinkTabItem[] = REGISTRATION_SUB_TABS.map((key) => ({
     key,
     label: SUB_TAB_LABELS[key],
     href: `${basePath}/${key}`,
@@ -87,7 +87,7 @@ export default function RegistrationLayout({ children }: Readonly<{ children: Re
 
   return (
     <div className="space-y-4">
-      <AdminTabs items={items} activeKey={active} level={2} ariaLabel="Registration sections" />
+      <LinkTabs items={items} activeKey={active} level={2} ariaLabel="Registration sections" />
       {allowed && known ? children : null}
     </div>
   );

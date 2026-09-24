@@ -65,7 +65,7 @@ const SOCIAL_PROVIDER_CONFIG: Record<SocialProvider, SocialProviderConfig> = {
   boosty: {
     value: "boosty",
     label: "Boosty",
-    icon: null,
+    icon: "/boosty.svg",
     color: "var(--aqt-brand-boosty)",
     placeholder: "username",
     profileUrl: (u) => `https://boosty.to/${encodeURIComponent(u)}`

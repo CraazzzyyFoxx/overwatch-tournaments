@@ -6,19 +6,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { History, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { type Tone } from "@/components/kit/tone";
 import { notify } from "@/lib/notify";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -196,34 +187,22 @@ export function DraftHistoryPanel({ tournamentId, onSessionDeleted }: Readonly<D
         </ul>
       )}
 
-      <AlertDialog
+      <ConfirmDialog
         open={pendingDelete != null}
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("history.confirmTitle", { id: pendingDelete?.id ?? 0 })}
-            </AlertDialogTitle>
-            <AlertDialogDescription>{t("history.confirmDescription")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>{t("keepEditing")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleteMutation.isPending}
-              className={buttonVariants({ variant: "destructive" })}
-              onClick={(event) => {
-                event.preventDefault();
-                if (pendingDelete) deleteMutation.mutate(pendingDelete.id);
-              }}
-            >
-              {t("history.deleteConfirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        intent={{
+          title: t("history.confirmTitle", { id: pendingDelete?.id ?? 0 }),
+          description: t("history.confirmDescription"),
+          confirmLabel: t("history.deleteConfirm"),
+          tone: "danger"
+        }}
+        pending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (pendingDelete) deleteMutation.mutate(pendingDelete.id);
+        }}
+      />
     </section>
   );
 }

@@ -568,6 +568,7 @@ def _gf_encounter() -> SimpleNamespace:
     away_team = SimpleNamespace(id=2069, captain_id=AVERET_CAPTAIN)
     return SimpleNamespace(
         id=GF_ENCOUNTER_ID,
+        format=enums.EncounterFormat.DUEL,
         tournament_id=72,
         home_team_id=home_team.id,
         away_team_id=away_team.id,
@@ -940,6 +941,7 @@ def _db_encounter(
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=enc_id,
+        format=enums.EncounterFormat.DUEL,
         tournament_id=72,
         stage_id=stage_id,
         stage_item_id=stage_item_id,

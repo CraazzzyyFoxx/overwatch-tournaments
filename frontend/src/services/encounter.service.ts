@@ -151,31 +151,4 @@ export default class encounterService {
       .then((res) => res.json())
       .then((response: PaginatedResponse<Encounter>) => response.total);
   }
-
-  static async getAllMatches(
-    page: number,
-    perPage: number,
-    query: string,
-    tournamentId: number | null = null
-  ): Promise<PaginatedResponse<MatchWithStats>> {
-    return apiFetch(`/api/v1/matches`, {
-      query: {
-        per_page: perPage,
-        page: page,
-        query: query,
-        sort: "id",
-        order: "desc",
-        entities: [
-          "teams",
-          "map",
-          "map.gamemode",
-          "encounter",
-          "encounter.tournament",
-          "encounter.stage",
-          "encounter.stage_item"
-        ],
-        tournament_id: tournamentId
-      }
-    }).then((res) => res.json());
-  }
 }

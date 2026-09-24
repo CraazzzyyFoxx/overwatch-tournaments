@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { useRequirementDescription } from "@/components/admin/subscriptions/useRequirementDescription";
 import { Label } from "@/components/ui/label";
+import { SocialIcon } from "@/components/social/SocialIcon";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -135,7 +136,10 @@ export default function SubscriptionRequirementEditor({
                   .filter(Boolean)
                   .map((provider) => (
                     <SelectItem key={provider} value={provider}>
-                      {PROVIDER_LABELS[provider] ?? provider}
+                      <span className="flex items-center gap-2">
+                        <SocialIcon provider={provider} size={14} decorative />
+                        <span>{PROVIDER_LABELS[provider] ?? provider}</span>
+                      </span>
                     </SelectItem>
                   ))}
               </SelectContent>

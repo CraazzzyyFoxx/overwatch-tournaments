@@ -3,13 +3,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef, Row } from "@tanstack/react-table";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import {
   ArrowRight,
   Check,
   Clock,
   History,
-  Loader2,
   Pencil,
   ShieldX,
   Trash2,
@@ -35,14 +34,15 @@ import { AdminDataTable, type AdminDataTableGroup, type AdminTableFilters, creat
 import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
 import { BulkBar } from "@/components/kit/BulkBar";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import type { DateFormatter } from "@/components/kit/format-time";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import {
-  useAdminFilters,
+  useFilters,
   type FilterDef,
   type FilterValue
-} from "@/components/kit/useAdminFilters";
+} from "@/components/kit/useFilters";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -76,6 +76,7 @@ import type { AdmissionDecision } from "@/types/registration.types";
 import type { RegistrationForm, SubroleCatalog } from "@/types/registration.types";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { Spinner } from "@/components/ui/spinner";
 
 // Minimal fallback used only until the real registration form loads. Its schema
 // is EMPTY on purpose: the questions this tournament asks are the ones the
@@ -109,15 +110,17 @@ const SUBSCRIPTION_LABELS = {
  * onto the column whose values it matches. The remaining chips narrow
  * `visibleRegistrations` below instead: "which role" is not a column value to
  * match against. Both halves read the same
- * URL-backed `useAdminFilters` store, so there is still exactly one place a
+ * URL-backed `useFilters` store, so there is still exactly one place a
  * filter lives.
  */
 const COLUMN_FILTER_KEYS = ["status", "inclusion", "source"] as const;
 
-function formatSubmittedAt(value: string | null | undefined): string {
+function formatSubmittedAt(format: DateFormatter, value: string | null | undefined): string {
   if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : format.dateTime(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
 function RolesCell({
@@ -387,12 +390,12 @@ export default function RegistrationsTable({
     [admissionOptions, roleOptions, requireSubscription, statusFilterOptions, facets, t]
   );
 
-  const filters = useAdminFilters(filterDefs);
+  const filters = useFilters(filterDefs);
   const tableFilters = filters.toTableFilters();
 
   // With the header funnels gone the chips are the only thing a user can
   // change, but the table still calls back on a deep link, a back/forward and
-  // its own "Clear filters". Routing those through `useAdminFilters` keeps ONE
+  // its own "Clear filters". Routing those through `useFilters` keeps ONE
   // store for filter state (the URL) instead of a controlled prop that could
   // drift from it.
   const handleTableFiltersChange = (next: AdminTableFilters) => {
@@ -814,7 +817,7 @@ export default function RegistrationsTable({
           inspectorId={openId}
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
           groupRows={groupBy === "none" ? undefined : groupPageRows}
-          toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
+          toolbar={<FilterBar defs={filterDefs} filters={filters} />}
           bulkActions={(selected, clearSelection) => (
             <BulkBar count={selected.length} unit="registrations" onClear={clearSelection}>
               <Button
@@ -828,7 +831,7 @@ export default function RegistrationsTable({
                 disabled={bulkApproveMutation.isPending}
               >
                 {bulkApproveMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  <Spinner className="mr-2" />
                 ) : (
                   <Check className="mr-2 h-4 w-4" aria-hidden />
                 )}
@@ -851,7 +854,7 @@ export default function RegistrationsTable({
                 disabled={bulkAddToBalancerMutation.isPending}
               >
                 {bulkAddToBalancerMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  <Spinner className="mr-2" />
                 ) : (
                   <Check className="mr-2 h-4 w-4" aria-hidden />
                 )}
@@ -907,7 +910,7 @@ export default function RegistrationsTable({
         />
       </div>
 
-      <AdminInspector
+      <Inspector
         openId={inspected ? openId : null}
         onClose={() => setParams({ id: null })}
         title={inspected?.battle_tag ?? inspected?.display_name ?? "Registration"}
@@ -926,7 +929,7 @@ export default function RegistrationsTable({
             t={t}
           />
         ) : null}
-      </AdminInspector>
+      </Inspector>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-3xl gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50 sm:rounded-xl">
@@ -1029,6 +1032,7 @@ function RegistrationInspectorBody({
   schemaKnown: boolean;
   t: AdmissionTranslator;
 }>) {
+  const format = useFormatter();
   // Answered questions of the CURRENT schema, then whatever the row still
   // carries that the current schema no longer asks. The second list is the
   // whole reason a stale registration is readable at all: its answers were
@@ -1124,13 +1128,13 @@ function RegistrationInspectorBody({
           </div>
           <div className="flex justify-between gap-3">
             <dt>Submitted</dt>
-            <dd className="text-right">{formatSubmittedAt(registration.submitted_at)}</dd>
+            <dd className="text-right">{formatSubmittedAt(format, registration.submitted_at)}</dd>
           </div>
           {registration.reviewed_at ? (
             <div className="flex justify-between gap-3">
               <dt>Reviewed</dt>
               <dd className="text-right">
-                {formatSubmittedAt(registration.reviewed_at)}
+                {formatSubmittedAt(format, registration.reviewed_at)}
                 {registration.reviewed_by_username ? ` · ${registration.reviewed_by_username}` : ""}
               </dd>
             </div>

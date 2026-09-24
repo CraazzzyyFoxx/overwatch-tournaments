@@ -5,12 +5,13 @@ import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ResponsiveBracket } from "./ResponsiveBracket";
+import { FfaStagePanel } from "./FfaStagePanel";
+import { FFA_STAGE_TYPES, GROUP_STAGE_TYPES } from "@/lib/bracket/projection";
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
 import StandingsTable from "@/components/StandingsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedLinks, type SegmentedLinkItem } from "@/components/ui/segmented";
-import { toggleVariants, segmentedFrame } from "@/components/ui/toggle";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { refreshEncounterViews } from "@/components/tournaments/refreshEncounterViews";
@@ -28,7 +29,6 @@ import type { StreamEntry } from "@/types/stream.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
 import { ListOrdered, Network } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { tournamentHref } from "@/lib/tournament/url";
 import { useTranslations } from "next-intl";
 import { TournamentPageState } from "../_components/TournamentPageState";
@@ -55,25 +55,23 @@ const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
 
 /**
  * Standings ⇄ bracket switch, icon-only like the tournaments list's view
- * switch. Both bracket panels draw it, so the frame and the pill live in one
- * place instead of four copies of a 200-character class string.
+ * switch. A mode switch that owns panels, so it is `Tabs` in the pill drawing.
  */
 function ViewTabs({
   hasStandings,
   bracketValue
 }: Readonly<{ hasStandings: boolean; bracketValue: string }>) {
   const t = useTranslations();
-  const item = toggleVariants({ variant: "pill", size: "sm" });
 
   return (
-    <TabsList className={cn(segmentedFrame, "h-8 text-[color:var(--aqt-fg-muted)]")}>
+    <TabsList variant="pill">
       {hasStandings && (
-        <TabsTrigger value="standings" className={item}>
+        <TabsTrigger value="standings">
           <ListOrdered aria-hidden width={14} height={14} />
           <span className="sr-only">{t("common.standings")}</span>
         </TabsTrigger>
       )}
-      <TabsTrigger value={bracketValue} className={item}>
+      <TabsTrigger value={bracketValue}>
         <Network aria-hidden width={14} height={14} />
         <span className="sr-only">{t("common.bracket")}</span>
       </TabsTrigger>
@@ -333,8 +331,12 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
       }
     : undefined;
 
+  // An FFA league joins the "group scope": it has no pairings, so it is never a
+  // bracket, and its tab, its stage selection and its per-group panels follow
+  // exactly the same route as a round robin's. Only the PANEL differs.
   const groupStages = stages.filter(
-    (stage) => stage.stage_type === "round_robin" || stage.stage_type === "swiss"
+    (stage) =>
+      GROUP_STAGE_TYPES.includes(stage.stage_type) || FFA_STAGE_TYPES.includes(stage.stage_type)
   );
 
   const eliminationStages = stages.filter(
@@ -376,9 +378,17 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
   const bracketTabs = useMemo(() => {
     const tabs: SegmentedLinkItem[] = [];
 
+    // An FFA stage is ONE scope however many groups it has: its panel renders
+    // every lobby of the stage at once, so its groups are not separate tabs.
     const groupScopeCount = groupStages.reduce(
-      (count, stage) => count + Math.max(stage.items.length, 1),
+      (count, stage) =>
+        count + (FFA_STAGE_TYPES.includes(stage.stage_type) ? 1 : Math.max(stage.items.length, 1)),
       0
+    );
+    const ffaStageIds = new Set(
+      groupStages
+        .filter((stage) => FFA_STAGE_TYPES.includes(stage.stage_type))
+        .map((stage) => stage.id)
     );
 
     const activeStageId = queryPlan.initialStageId ?? fallbackStage?.id;
@@ -388,9 +398,13 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
       (!!activeStageId && groupStages.some((stage) => stage.id === activeStageId));
 
     // The tab you are standing on stays live even when empty; you are already
-    // looking at its empty state.
+    // looking at its empty state. An FFA stage never appears in the encounter
+    // list this counts — that list answers duels — so its tab is judged on the
+    // stage existing, not on matches nobody asked for.
     const isDead = (isActive: boolean, stageIds: readonly number[]) =>
-      !isActive && matchCountsKnown && !stageIds.some((id) => stageIdsWithMatches.has(id));
+      !isActive &&
+      matchCountsKnown &&
+      !stageIds.some((id) => stageIdsWithMatches.has(id) || ffaStageIds.has(id));
 
     if (groupScopeCount > 1) {
       tabs.push({
@@ -452,6 +466,21 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
     const encounters = allEncounters?.results ?? [];
 
     return activeGroupStages.flatMap((stage) => {
+      // One panel per FFA STAGE, not per group: `FfaStagePanel` reads every
+      // lobby of the stage in a single request and renders a table per lobby,
+      // so splitting by item here would repeat that request per group.
+      if (FFA_STAGE_TYPES.includes(stage.stage_type)) {
+        return [
+          {
+            key: `stage-${stage.id}`,
+            stage,
+            stageItem: undefined as StageItem | undefined,
+            encounters: [] as Encounter[],
+            standings: [] as Standings[]
+          }
+        ];
+      }
+
       if (stage.items.length === 0) {
         return [
           {
@@ -547,25 +576,34 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
         {activeStages.length > 0 ? (
           <div className="space-y-6">
             {shouldShowGroupStage
-              ? groupStagePanels.map((panel, index) => (
-                  <GroupStagePanel
-                    key={panel.key}
-                    stage={panel.stage}
-                    stageItem={panel.stageItem}
-                    encounters={panel.encounters}
-                    standings={panel.standings}
-                    stages={stages}
-                    onEdit={handleEdit}
-                    onReport={handleReport}
-                    canEdit={canEdit}
-                    canReport={canReport}
-                    onSwapSlots={handleSwapSlots}
-                    bracketTabs={index === 0 ? bracketTabs : undefined}
-                    liveTeamStreams={liveTeamStreams}
-                    defaultView={viewParam === "standings" ? "standings" : "matches"}
-                    highlightMatchId={highlightMatchId}
-                  />
-                ))
+              ? groupStagePanels.map((panel, index) =>
+                  FFA_STAGE_TYPES.includes(panel.stage.stage_type) ? (
+                    <FfaStagePanel
+                      key={panel.key}
+                      tournamentId={tournament.id}
+                      stage={panel.stage}
+                      bracketTabs={index === 0 ? bracketTabs : undefined}
+                    />
+                  ) : (
+                    <GroupStagePanel
+                      key={panel.key}
+                      stage={panel.stage}
+                      stageItem={panel.stageItem}
+                      encounters={panel.encounters}
+                      standings={panel.standings}
+                      stages={stages}
+                      onEdit={handleEdit}
+                      onReport={handleReport}
+                      canEdit={canEdit}
+                      canReport={canReport}
+                      onSwapSlots={handleSwapSlots}
+                      bracketTabs={index === 0 ? bracketTabs : undefined}
+                      liveTeamStreams={liveTeamStreams}
+                      defaultView={viewParam === "standings" ? "standings" : "matches"}
+                      highlightMatchId={highlightMatchId}
+                    />
+                  )
+                )
               : activeStages.map((stage) => {
                   const encounters = encountersByStage.get(stage.id) ?? [];
                   if (encounters.length === 0 && bracketTabs.length <= 1) {

@@ -43,6 +43,14 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// encounter_game correction — one series position's result, admin-decided and
 	// always reasoned (spec §6.5). Same worker-side "match"/"update" gate.
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/games/{game_id}/result", Queue: "rpc.tournament.admin_game_result", IDParam: "encounter_id", Path: []string{"game_id"}, Body: true, Auth: edge.AuthRequired},
+	// FFA lobby results (src/rpc/ffa.py) — one game of a lobby is identified by
+	// its POSITION, like the duel game correction above: a lobby may replay a
+	// cancelled position, and only the position tells the two plays apart. The
+	// games count is the lobby's own best_of. Same worker-side
+	// "match"/"update" gate as every other result write.
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/ffa/games/{position}/results", Queue: "rpc.tournament.ffa_game_results_set", IDParam: "encounter_id", Path: []string{"position"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/ffa/games/{position}/cancel", Queue: "rpc.tournament.ffa_game_cancel", IDParam: "encounter_id", Path: []string{"position"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/ffa/games-count", Queue: "rpc.tournament.ffa_games_count_set", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	// generic pick-ban config CRUD (map + hero, docs/plans/2026-08-09-generic-pickban-engine.md).
 	// Same cascade key as the veto-configs routes above, additionally partitioned
 	// by `kind` in the body/response.

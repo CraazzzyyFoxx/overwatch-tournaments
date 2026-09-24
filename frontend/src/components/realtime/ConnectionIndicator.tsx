@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
+import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 
@@ -29,15 +30,7 @@ export function ConnectionIndicator({
         className
       )}
     >
-      <span
-        aria-hidden
-        className="h-1.5 w-1.5 rounded-full"
-        style={
-          connected
-            ? { background: "var(--aqt-support)", boxShadow: "0 0 6px var(--aqt-support)" }
-            : { background: "var(--aqt-warm)" }
-        }
-      />
+      <StatusDot className={connected ? "shadow-[0_0_6px_currentColor]" : undefined} />
       <span className={connected ? "sr-only" : undefined}>{label}</span>
     </span>
   );

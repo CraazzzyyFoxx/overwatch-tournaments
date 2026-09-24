@@ -12,6 +12,7 @@
  */
 import type { Tone } from "@/components/kit/tone";
 import { resolveBestOf, stageBestOfRoundSections } from "@/lib/tournament/best-of";
+import type { FfaScoringSettings } from "@/lib/ffa/scoring-presets";
 import { bracketRoundLabelEn } from "@/lib/bracket/round-name";
 import type { StageBestOfConfig } from "@/types/admin.types";
 import type {
@@ -33,12 +34,20 @@ export type StageProgress = Awaited<
 
 export const BRACKET_STAGE_TYPES: StageType[] = ["single_elimination", "double_elimination"];
 export const GROUP_STAGE_TYPES: StageType[] = ["round_robin", "swiss"];
+/**
+ * FFA is its own family, in NEITHER list above: its encounters are lobbies of
+ * many teams, so nothing that pairs opponents (seeding, merging, Buchholz,
+ * round-robin round counts) applies — but its items are still groups that
+ * advance a top N, which is why `getDefaultStageItemType` answers "group".
+ */
+export const FFA_STAGE_TYPES: StageType[] = ["ffa_league"];
 
 export const STAGE_TYPE_LABELS: Record<StageType, string> = {
   round_robin: "Round Robin",
   single_elimination: "Single Elimination",
   double_elimination: "Double Elimination",
-  swiss: "Swiss"
+  swiss: "Swiss",
+  ffa_league: "FFA League"
 };
 
 export const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
@@ -87,6 +96,15 @@ export const DEFAULT_BRACKET_TIEBREAKERS = [
   "manual_override"
 ];
 
+/** Mirrors the backend `ffa_default` preset (`RULE_PRESET_DEFAULTS`). */
+export const DEFAULT_FFA_TIEBREAKERS = [
+  "points",
+  "ffa_game_wins",
+  "ffa_score",
+  "ffa_last_placement",
+  "manual_override"
+];
+
 /** `settings_json` fields this editor owns. The column itself is free-form. */
 export interface StageSettings {
   ranking_preset?: string;
@@ -96,6 +114,8 @@ export interface StageSettings {
   de_grand_final_type?: "no_reset" | "with_reset";
   best_of?: StageBestOfConfig;
   seed_ranking?: SeedRanking;
+  /** FFA leagues only: what a place and a point of raw score are worth. */
+  ffa_scoring?: FfaScoringSettings;
   [key: string]: unknown;
 }
 
@@ -106,8 +126,15 @@ export const RANKING_PRESETS = [
   { value: "bracket_default", label: "Default bracket" }
 ] as const;
 
+/** The FFA catalogue: the duel presets order metrics a lobby cannot compute. */
+export const FFA_RANKING_PRESETS = [
+  { value: "default", label: "System default (based on type)" },
+  { value: "ffa_default", label: "FFA default (game wins, then score)" }
+] as const;
+
 /** The tiebreak order a stage type falls back to with no preset chosen. */
 export function defaultTiebreakOrder(stageType: StageType): string[] {
+  if (stageType === "ffa_league") return DEFAULT_FFA_TIEBREAKERS;
   if (stageType === "swiss") return DEFAULT_SWISS_TIEBREAKERS;
   if (stageType === "round_robin") return DEFAULT_RR_TIEBREAKERS;
   return DEFAULT_BRACKET_TIEBREAKERS;
@@ -118,6 +145,7 @@ export function tiebreakOrderForPreset(preset: string, stageType: StageType): st
   if (preset === "challonge_swiss") return DEFAULT_SWISS_TIEBREAKERS;
   if (preset === "challonge_round_robin") return DEFAULT_RR_TIEBREAKERS;
   if (preset === "bracket_default") return DEFAULT_BRACKET_TIEBREAKERS;
+  if (preset === "ffa_default") return DEFAULT_FFA_TIEBREAKERS;
   return defaultTiebreakOrder(stageType);
 }
 
@@ -374,6 +402,8 @@ export interface ProjectedRound {
 export interface StageProjection {
   isBracket: boolean;
   isGroups: boolean;
+  /** Lobby stage: group-shaped for advancement, but nothing is paired. */
+  isFfa: boolean;
   itemCount: number;
   slots: number;
   assigned: number;
@@ -413,15 +443,18 @@ export function projectStage({
 }): StageProjection {
   const isBracket = BRACKET_STAGE_TYPES.includes(stageType);
   const isGroups = GROUP_STAGE_TYPES.includes(stageType);
+  const isFfa = FFA_STAGE_TYPES.includes(stageType);
   const slots = getStageTeamSlots(stage);
   const assigned = getStageAssignedTeams(stage);
   const bracketTeams = resolveBracketTeamCount(stage, splitLowerBracket, stages);
   // A stage with no items still counts as one implicit group on the default.
-  const advanceCounts = isGroups
-    ? (stage.items.length > 0 ? stage.items : [null]).map(
-        (item) => item?.advance_count ?? stage.advance_count ?? 0
-      )
-    : [];
+  // An FFA lobby advances a top N the same way a group does.
+  const advanceCounts =
+    isGroups || isFfa
+      ? (stage.items.length > 0 ? stage.items : [null]).map(
+          (item) => item?.advance_count ?? stage.advance_count ?? 0
+        )
+      : [];
   const advancingTotal = advanceCounts.reduce((acc, count) => acc + count, 0);
 
   const sections = stageBestOfRoundSections({
@@ -474,6 +507,7 @@ export function projectStage({
   return {
     isBracket,
     isGroups,
+    isFfa,
     itemCount: stage.items.length,
     slots,
     assigned,

@@ -2,13 +2,15 @@
 
 import { useTranslations } from "next-intl";
 
+import FlexIcon from "@/components/icons/FlexIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { getRoleIconName, ROLE_ACCENT, ROLE_ACCENTS, type RoleCode } from "@/lib/roster/roles";
+import { getRoleIconName, ROLE_ACCENT, ROLE_ACCENTS } from "@/lib/roster/roles";
+import { isRoleSlotCode, type RosterSlotCode } from "@/lib/roster/shape";
 import { cn } from "@/lib/utils";
 
 /** One offerable slot plus how many of it the tournament's roster has. */
 export interface RosterSlotOption {
-  code: RoleCode;
+  code: RosterSlotCode;
   count: number;
 }
 
@@ -16,8 +18,8 @@ interface RosterSlotPickerProps {
   /** Radio group name — must be unique on the page. */
   name: string;
   options: readonly RosterSlotOption[];
-  value: RoleCode | null;
-  onChange: (code: RoleCode) => void;
+  value: RosterSlotCode | null;
+  onChange: (code: RosterSlotCode) => void;
   disabled?: boolean;
 }
 
@@ -40,6 +42,10 @@ interface RosterSlotPickerProps {
  * `count` is the slot's multiplicity in the roster, shown only when it is above
  * one: it answers "if I take a damage slot, is there still one left for someone
  * else?" without a second line of copy.
+ *
+ * `flex` has no role glyph and no hue of its own, so it renders `FlexIcon` in the
+ * surrounding text colour — the same mark the roster-shape editor and the role
+ * matrix already use for it.
  */
 export default function RosterSlotPicker({
   name,
@@ -83,12 +89,20 @@ export default function RosterSlotPicker({
                   : "border-[color:var(--aqt-border)] hover:bg-[color:var(--aqt-overlay-2)]",
               )}
             >
-              <PlayerRoleIcon
-                role={getRoleIconName(code)}
-                size={26}
-                color={selected ? ROLE_ACCENT[code] : "var(--aqt-fg-muted)"}
-                decorative
-              />
+              {isRoleSlotCode(code) ? (
+                <PlayerRoleIcon
+                  role={getRoleIconName(code)}
+                  size={26}
+                  color={selected ? ROLE_ACCENT[code] : "var(--aqt-fg-muted)"}
+                  decorative
+                />
+              ) : (
+                <FlexIcon
+                  width={26}
+                  height={26}
+                  color={selected ? "var(--aqt-fg)" : "var(--aqt-fg-muted)"}
+                />
+              )}
               <span className="flex items-baseline gap-1 leading-tight">
                 <span
                   className={cn(

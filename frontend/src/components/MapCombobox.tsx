@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import type { LookupItem } from "@/types/pagination.types";
 
@@ -22,7 +22,7 @@ type MapComboboxProps = {
 
 /**
  * The optional map picker behind a "record result" control — a searchable
- * "No map" + OW catalogue combobox, built on the same `AdminCombobox` shell
+ * "No map" + OW catalogue combobox, built on the same `Combobox` shell
  * every other picker in the app uses. Shared so every recording surface (the
  * mix panel, the fullscreen lobby board, …) stays in lockstep instead of
  * drifting as separate copies of the same dropdown.
@@ -46,7 +46,7 @@ export function MapCombobox({ maps, mapId, onMapIdChange, size = "sm" }: Readonl
   );
 
   return (
-    <AdminCombobox
+    <Combobox
       open={open}
       onOpenChange={setOpen}
       label={selectedLabel}
@@ -59,15 +59,15 @@ export function MapCombobox({ maps, mapId, onMapIdChange, size = "sm" }: Readonl
       <CommandGroup>
         <CommandItem value="no-map" onSelect={() => handleSelect(null)}>
           <span className="min-w-0 flex-1 truncate">No map</span>
-          <AdminComboboxCheck selected={mapId == null} />
+          <ComboboxCheck selected={mapId == null} />
         </CommandItem>
         {maps.map((map) => (
           <CommandItem key={map.id} value={map.name} onSelect={() => handleSelect(map.id)}>
             <span className="min-w-0 flex-1 truncate">{map.name}</span>
-            <AdminComboboxCheck selected={mapId === map.id} />
+            <ComboboxCheck selected={mapId === map.id} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }

@@ -116,7 +116,7 @@ describe("teams sub-tab bar", () => {
   it("offers Draft and renders it for a drafting tournament", async () => {
     await render(<TeamsLayout>{<div data-testid="body" />}</TeamsLayout>);
 
-    const tabs = [...container.querySelectorAll("a[data-admin-tab]")].map((tab) => tab.textContent);
+    const tabs = [...container.querySelectorAll("a[data-link-tab]")].map((tab) => tab.textContent);
     expect(tabs).toEqual(["Roster", "Draft"]);
     expect(container.querySelector("[data-testid='body']")).toBeTruthy();
     expect(mocks.replace).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe("teams sub-tab bar", () => {
 
     await render(<TeamsLayout>{<div data-testid="body" />}</TeamsLayout>);
 
-    const tabs = [...container.querySelectorAll("a[data-admin-tab]")].map((tab) => tab.textContent);
+    const tabs = [...container.querySelectorAll("a[data-link-tab]")].map((tab) => tab.textContent);
     expect(tabs).toEqual(["Roster"]);
     // Not merely hidden: the body is withheld and the URL corrected, so a
     // pasted link cannot open a draft on a tournament that has none.

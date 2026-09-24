@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, LogIn, UserPlus, XCircle } from "lucide-react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 
 import {
   Dialog,
@@ -114,7 +114,7 @@ export default function TournamentRegisterButton({
     const config = statusMap[myReg.status] ?? statusMap.pending;
     const StatusIcon = config.icon;
     return (
-      <Link
+      <HoverPrefetchLink
         href={tournamentHref(tournament, "/participants")}
         className={cn(
           "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80",
@@ -123,7 +123,7 @@ export default function TournamentRegisterButton({
       >
         <StatusIcon className="size-4" aria-hidden />
         {config.label}
-      </Link>
+      </HoverPrefetchLink>
     );
   }
 

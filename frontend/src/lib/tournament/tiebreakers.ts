@@ -3,6 +3,7 @@
 // Keeps the public StandingsTable, the admin standings page, and the admin
 // StageManager config editor in sync with the backend engine metrics
 // (see backend `RULE_PRESET_DEFAULTS` / `_metric_value`).
+import type { StageType } from "@/types/tournament.types";
 
 export type TiebreakerMetricId =
   | "points"
@@ -11,6 +12,10 @@ export type TiebreakerMetricId =
   | "median_buchholz"
   | "buchholz"
   | "score_differential"
+  | "ffa_game_wins"
+  | "ffa_score"
+  | "ffa_best_placement"
+  | "ffa_last_placement"
   | "manual_override";
 
 // Default English labels. Used as a fallback when no i18n resolver is supplied.
@@ -21,6 +26,10 @@ const TIEBREAKER_LABELS: Record<string, string> = {
   median_buchholz: "Median Buchholz",
   buchholz: "Buchholz",
   score_differential: "Score Differential",
+  ffa_game_wins: "Game Wins",
+  ffa_score: "Score",
+  ffa_best_placement: "Best Placement",
+  ffa_last_placement: "Last Placement",
   manual_override: "Manual Override"
 };
 
@@ -34,6 +43,29 @@ export const ALL_TIEBREAKERS: { id: TiebreakerMetricId; label: string }[] = [
   { id: "score_differential", label: TIEBREAKER_LABELS.score_differential },
   { id: "manual_override", label: TIEBREAKER_LABELS.manual_override }
 ];
+
+/**
+ * The FFA catalog, in `ffa_default` order (backend `RULE_PRESET_DEFAULTS`).
+ *
+ * Disjoint from the list above on purpose: an FFA lobby has no opponent
+ * pairing, so head-to-head and both Buchholz variants compute nothing there,
+ * and a duel encounter has no placement or lobby score.
+ */
+export const FFA_TIEBREAKERS: { id: TiebreakerMetricId; label: string }[] = [
+  { id: "points", label: TIEBREAKER_LABELS.points },
+  { id: "ffa_game_wins", label: TIEBREAKER_LABELS.ffa_game_wins },
+  { id: "ffa_score", label: TIEBREAKER_LABELS.ffa_score },
+  { id: "ffa_best_placement", label: TIEBREAKER_LABELS.ffa_best_placement },
+  { id: "ffa_last_placement", label: TIEBREAKER_LABELS.ffa_last_placement },
+  { id: "manual_override", label: TIEBREAKER_LABELS.manual_override }
+];
+
+/** The metrics the engine can actually compute for `stageType`. */
+export function tiebreakersForStageType(
+  stageType: StageType
+): { id: TiebreakerMetricId; label: string }[] {
+  return stageType === "ffa_league" ? FFA_TIEBREAKERS : ALL_TIEBREAKERS;
+}
 
 /** Resolve a single metric id to a human label, optionally via an i18n resolver. */
 export function tiebreakerLabel(

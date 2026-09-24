@@ -2,18 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Crown, Lock, LogOut, Trash2, UserCheck, UserMinus, UserPlus } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -50,6 +42,8 @@ interface MyTeamPanelProps {
   checkInAvailable: boolean;
 }
 
+type ConfirmKind = "transfer" | "kick" | "disband" | "lock" | "leave";
+
 /**
  * The roster-management surface for a team the viewer belongs to.
  *
@@ -68,6 +62,7 @@ export default function MyTeamPanel({
   registrationOpen,
   checkInAvailable,
 }: Readonly<MyTeamPanelProps>) {
+  const format = useFormatter();
   const t = useTranslations("registrationTeams");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("registrationTeams.errors");
@@ -91,14 +86,15 @@ export default function MyTeamPanel({
   /** Owned here, not by the drawer, because a refusal at the invite cap has to
    *  force it open — the answer to "where did 60 invites go" is in there. */
   const [historyOpen, setHistoryOpen] = useState(false);
-  /** Per-row confirmation targets — mirrors the admin card's own
-   *  `rejectTarget`/`resetTarget` pattern: the project's own `AlertDialog`
-   *  instead of the browser's un-stylable `window.confirm`, with a button that
-   *  repeats the verb instead of a bare "OK". */
-  const [transferTarget, setTransferTarget] = useState<RegistrationTeamMember | null>(null);
-  const [kickTarget, setKickTarget] = useState<RegistrationTeamMember | null>(null);
-  const [disbandOpen, setDisbandOpen] = useState(false);
-  const [leaveOpen, setLeaveOpen] = useState(false);
+  /** One confirmation surface for every irreversible roster action — the
+   *  project's own `ConfirmDialog` instead of the browser's un-stylable
+   *  `window.confirm`, with a button that repeats the verb instead of a bare
+   *  "OK". A member-scoped action carries its target here. */
+  const [confirming, setConfirming] = useState<
+    | { kind: Extract<ConfirmKind, "transfer" | "kick">; member: RegistrationTeamMember }
+    | { kind: Exclude<ConfirmKind, "transfer" | "kick"> }
+    | null
+  >(null);
   const [draftName, setDraftName] = useState(team.name);
   /** The name this draft was seeded from. A rename that lands from anywhere
    *  (this captain, a co-manager, an organizer) reseeds the field during
@@ -106,7 +102,6 @@ export default function MyTeamPanel({
   const [seededName, setSeededName] = useState(team.name);
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
-  const [lockOpen, setLockOpen] = useState(false);
   const [coverCode, setCoverCode] = useState("");
   const [excludeIds, setExcludeIds] = useState<number[]>([]);
 
@@ -303,7 +298,7 @@ export default function MyTeamPanel({
     mutationFn: () => registrationTeamService.lockRoster(team.id),
     onSuccess: async () => {
       notify.success(t("lock.success"));
-      setLockOpen(false);
+      setConfirming(null);
       await invalidate();
     },
     onError: failure,
@@ -414,6 +409,45 @@ export default function MyTeamPanel({
     setTargetRegistrationId(null);
     setInviteValidation(null);
     setInviteOpen(true);
+  };
+
+  // One flat table: the dialog is mounted once and reads whichever row the
+  // pending action names. Only the two member-scoped rows interpolate a name.
+  const confirmName =
+    confirming && "member" in confirming
+      ? (confirming.member.display_name ?? confirming.member.battle_tag ?? "")
+      : "";
+  const CONFIRM_INTENTS: Record<ConfirmKind, ConfirmIntent> = {
+    transfer: {
+      title: t("member.makeCaptainConfirm", { name: confirmName }),
+      description: "",
+      confirmLabel: t("member.makeCaptain"),
+      tone: "warning"
+    },
+    kick: {
+      title: t("member.kickConfirm", { name: confirmName }),
+      description: "",
+      confirmLabel: t("member.kick"),
+      tone: "danger"
+    },
+    disband: {
+      title: t("disband.confirm"),
+      description: "",
+      confirmLabel: t("disband.action"),
+      tone: "danger"
+    },
+    lock: {
+      title: t("lock.action"),
+      description: "",
+      confirmLabel: t("lock.action"),
+      tone: "warning"
+    },
+    leave: {
+      title: t("member.leaveConfirm"),
+      description: "",
+      confirmLabel: t("member.leave"),
+      tone: "danger"
+    }
   };
 
   return (
@@ -634,7 +668,7 @@ export default function MyTeamPanel({
                     variant="ghost"
                     size="sm"
                     disabled={busy}
-                    onClick={() => setTransferTarget(member)}
+                    onClick={() => setConfirming({ kind: "transfer", member })}
                   >
                     <Crown className="size-3.5" aria-hidden />
                     {t("member.makeCaptain")}
@@ -646,7 +680,7 @@ export default function MyTeamPanel({
                     variant="ghost"
                     size="sm"
                     disabled={busy}
-                    onClick={() => setKickTarget(member)}
+                    onClick={() => setConfirming({ kind: "kick", member })}
                   >
                     <UserMinus className="size-3.5" aria-hidden />
                     {t("member.kick")}
@@ -735,7 +769,7 @@ export default function MyTeamPanel({
                   {invite.expires_at && (
                     <span className="text-xs text-[color:var(--aqt-fg-muted)]">
                       {t("invite.expiresAt", {
-                        date: new Date(invite.expires_at).toLocaleDateString(),
+                        date: format.dateTime(new Date(invite.expires_at), { dateStyle: "medium" }),
                       })}
                     </span>
                   )}
@@ -812,7 +846,7 @@ export default function MyTeamPanel({
             variant="ghost"
             size="sm"
             disabled={busy}
-            onClick={() => setLockOpen(true)}
+            onClick={() => setConfirming({ kind: "lock" })}
           >
             <Lock className="size-4" aria-hidden />
             {t("lock.action")}
@@ -855,7 +889,7 @@ export default function MyTeamPanel({
               variant="ghost"
               size="sm"
               disabled={busy}
-              onClick={() => setDisbandOpen(true)}
+              onClick={() => setConfirming({ kind: "disband" })}
             >
               <Trash2 className="size-4" aria-hidden />
               {t("disband.action")}
@@ -866,7 +900,7 @@ export default function MyTeamPanel({
               variant="ghost"
               size="sm"
               disabled={busy}
-              onClick={() => setLeaveOpen(true)}
+              onClick={() => setConfirming({ kind: "leave" })}
             >
               <LogOut className="size-4" aria-hidden />
               {t("member.leave")}
@@ -1131,108 +1165,40 @@ export default function MyTeamPanel({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={transferTarget != null}
-        onOpenChange={(open) => !open && setTransferTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("member.makeCaptainConfirm", {
-                name: transferTarget
-                  ? (transferTarget.display_name ?? transferTarget.battle_tag ?? "")
-                  : ""
-              })}
-            </AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={transferMutation.isPending}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={transferMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                if (!transferTarget) return;
-                transferMutation.mutate(transferTarget.registration_id);
-                setTransferTarget(null);
-              }}
-            >
-              {t("member.makeCaptain")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={kickTarget != null} onOpenChange={(open) => !open && setKickTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("member.kickConfirm", {
-                name: kickTarget ? (kickTarget.display_name ?? kickTarget.battle_tag ?? "") : ""
-              })}
-            </AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={kickMutation.isPending}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={kickMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                if (!kickTarget) return;
-                kickMutation.mutate(kickTarget.registration_id);
-                setKickTarget(null);
-              }}
-            >
-              {t("member.kick")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={disbandOpen} onOpenChange={setDisbandOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("disband.confirm")}</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={disbandMutation.isPending}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={disbandMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                disbandMutation.mutate();
-              }}
-            >
-              {t("disband.action")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={lockOpen} onOpenChange={setLockOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("lock.action")}</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={lockMutation.isPending}>{tCommon("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={lockMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                lockMutation.mutate();
-              }}
-            >
-              {t("lock.action")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={confirming != null}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        intent={CONFIRM_INTENTS[confirming?.kind ?? "leave"]}
+        pending={
+          transferMutation.isPending ||
+          kickMutation.isPending ||
+          disbandMutation.isPending ||
+          lockMutation.isPending ||
+          leaveMutation.isPending
+        }
+        onConfirm={() => {
+          if (!confirming) return;
+          switch (confirming.kind) {
+            case "transfer":
+              transferMutation.mutate(confirming.member.registration_id);
+              setConfirming(null);
+              break;
+            case "kick":
+              kickMutation.mutate(confirming.member.registration_id);
+              setConfirming(null);
+              break;
+            case "disband":
+              disbandMutation.mutate();
+              break;
+            case "lock":
+              lockMutation.mutate();
+              break;
+            case "leave":
+              leaveMutation.mutate();
+              break;
+          }
+        }}
+      />
 
       <Dialog open={checkInOpen} onOpenChange={setCheckInOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1282,28 +1248,6 @@ export default function MyTeamPanel({
           </Button>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("member.leaveConfirm")}</AlertDialogTitle>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={leaveMutation.isPending}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={leaveMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                leaveMutation.mutate();
-              }}
-            >
-              {t("member.leave")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </section>
   );
 }

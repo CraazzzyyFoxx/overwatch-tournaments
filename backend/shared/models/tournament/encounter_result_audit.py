@@ -11,7 +11,8 @@ encounter's ``ON DELETE CASCADE`` is the only thing that removes them. A NULL
 ``actor_user_id`` means a machine actor (Challonge import, bracket cascade).
 """
 
-from sqlalchemy import Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -48,6 +49,11 @@ class EncounterResultAudit(db.TimeStampIntegerMixin):
     __table_args__ = (
         # Every read is "the history of this encounter", newest first.
         Index("ix_encounter_result_audit_encounter_created", "encounter_id", "created_at"),
+        # An FFA row carries no series score: the lobby's truth is the snapshot.
+        CheckConstraint(
+            "(home_score_after IS NOT NULL AND away_score_after IS NOT NULL) OR ffa_results_json IS NOT NULL",
+            name="ck_encounter_result_audit_after_shape",
+        ),
         {"schema": "tournament"},
     )
 
@@ -65,8 +71,11 @@ class EncounterResultAudit(db.TimeStampIntegerMixin):
 
     home_score_before: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     away_score_before: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    home_score_after: Mapped[int] = mapped_column(Integer())
-    away_score_after: Mapped[int] = mapped_column(Integer())
+    home_score_after: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    away_score_after: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: Snapshot of the lobby's results before/after the decision; stands in for
+    #: the score on FFA rows, NULL on duel rows.
+    ffa_results_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Which side's report was taken as truth, when the admin adopted one.
     adopted_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="SET NULL"), nullable=True)

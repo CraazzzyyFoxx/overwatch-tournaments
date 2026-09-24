@@ -39,17 +39,7 @@ import {
 } from "@/app/balancer/mix/pickup-chrome";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
@@ -184,6 +174,7 @@ export function PickupLobbyPanel({
   }));
 
   const [draggingRow, setDraggingRow] = useState<CustomGamePlayer | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
   // 6px before a drag starts: without it, a plain click on a row (opening the
   // sheet, toggling a role, removing) reads as a zero-distance drag and
   // dnd-kit swallows the event.
@@ -252,35 +243,37 @@ export function PickupLobbyPanel({
             </Button>
           ) : null}
           {canWrite && rows.length > 0 ? (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                {/* Icon-only: the confirm dialog already spells the action out in
-                    full, and a text button here competed with Add players. */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(ICON_BUTTON_CLASS, "size-7 shrink-0 hover:text-rose-200")}
-                  title="Empty the lobby"
-                  disabled={clearing}
-                >
-                  <Trash2 className="size-3.5" aria-hidden="true" />
-                  <span className="sr-only">Empty the lobby</span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Empty the lobby?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {`This removes all ${rows.length} players from this mix, along with their role order. Ranks are not affected \u2014 they live in your own book and the workspace roster.`}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep the lobby</AlertDialogCancel>
-                  <AlertDialogAction onClick={onClear}>Remove everyone</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <>
+              {/* Icon-only: the confirm dialog already spells the action out in
+                  full, and a text button here competed with Add players. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(ICON_BUTTON_CLASS, "size-7 shrink-0 hover:text-rose-200")}
+                title="Empty the lobby"
+                disabled={clearing}
+                onClick={() => setClearOpen(true)}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+                <span className="sr-only">Empty the lobby</span>
+              </Button>
+              <ConfirmDialog
+                open={clearOpen}
+                onOpenChange={setClearOpen}
+                intent={{
+                  title: "Empty the lobby?",
+                  description: `This removes all ${rows.length} players from this mix, along with their role order. Ranks are not affected \u2014 they live in your own book and the workspace roster.`,
+                  confirmLabel: "Remove everyone",
+                  tone: "danger"
+                }}
+                pending={clearing}
+                onConfirm={() => {
+                  setClearOpen(false);
+                  onClear();
+                }}
+              />
+            </>
           ) : null}
         </div>
       </div>

@@ -4,7 +4,7 @@ import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { LoaderCircle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ import {
   pickBanDraftToInput,
   stageRoundOptions
 } from "@/lib/tournament/pick-ban-config";
+import { Spinner } from "@/components/ui/spinner";
 
 import {
   ScrimPoolEditor,
@@ -382,7 +383,7 @@ export function ScrimCreateDialog({
           </Button>
           <Button onClick={submit} disabled={!canSubmit || createMutation.isPending}>
             {createMutation.isPending ? (
-              <LoaderCircle aria-hidden className="size-4 animate-spin" />
+              <Spinner />
             ) : null}
             {t("submit")}
           </Button>

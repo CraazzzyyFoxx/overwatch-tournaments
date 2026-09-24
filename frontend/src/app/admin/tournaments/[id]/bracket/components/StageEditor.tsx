@@ -5,7 +5,6 @@ import { useMutation } from "@tanstack/react-query";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   GitMerge,
-  Loader2,
   MoreHorizontal,
   PlayCircle,
   Shuffle,
@@ -17,7 +16,7 @@ import {
   Zap
 } from "lucide-react";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SaveBar } from "@/components/kit/SaveBar";
@@ -35,6 +34,7 @@ import type { Team } from "@/types/team.types";
 
 import {
   BRACKET_STAGE_TYPES,
+  FFA_STAGE_TYPES,
   getDefaultMergedStageName,
   getStageStatus,
   getStageStatusTone,
@@ -45,12 +45,14 @@ import {
   STAGE_TYPE_LABELS,
   type StageProgress
 } from "@/lib/bracket/projection";
+import { Spinner } from "@/components/ui/spinner";
 import {
   buildStageUpdatePayload,
   stageFormChanges,
   stageFormFromStage,
   type StageForm
 } from "../stageForm";
+import { FfaScoringSection } from "./FfaScoringSection";
 import { RoundScheduleSection } from "./RoundScheduleSection";
 import { StageItemsSection } from "./StageItemsSection";
 import {
@@ -63,6 +65,7 @@ import {
 export const BRACKET_SECTIONS = [
   "general",
   "seeding",
+  "ffa-scoring",
   "tiebreakers",
   "best-of",
   "schedule",
@@ -73,6 +76,7 @@ export type BracketSection = (typeof BRACKET_SECTIONS)[number];
 const SECTION_LABELS: Record<BracketSection, string> = {
   general: "General",
   seeding: "Seeding",
+  "ffa-scoring": "FFA scoring",
   tiebreakers: "Tiebreakers",
   "best-of": "Best-of",
   schedule: "Round schedule",
@@ -162,8 +166,11 @@ export function StageEditor({
   const sectionAllowed: Record<BracketSection, boolean> = {
     general: true,
     seeding: true,
-    // Standings presets, scoring and tiebreakers only rank a group stage.
-    tiebreakers: GROUP_STAGE_TYPES.includes(form.stageType),
+    "ffa-scoring": FFA_STAGE_TYPES.includes(form.stageType),
+    // Standings presets and tiebreakers rank the stages that produce a table:
+    // a group, and an FFA league (whose lobby IS its table).
+    tiebreakers:
+      GROUP_STAGE_TYPES.includes(form.stageType) || FFA_STAGE_TYPES.includes(form.stageType),
     "best-of": true,
     schedule: true,
     items: true
@@ -315,8 +322,9 @@ export function StageEditor({
   });
 
   const isBracket = BRACKET_STAGE_TYPES.includes(stage.stage_type);
-  const canSeed =
-    GROUP_STAGE_TYPES.includes(stage.stage_type) && teams.length > 0 && stage.items.length > 0;
+  // A lobby is seated the same way a group is filled: teams into the stage's
+  // items. Only a bracket takes its slots from a preceding stage instead.
+  const canSeed = !isBracket && teams.length > 0 && stage.items.length > 0;
   const canDeactivate = (stage.is_active || stage.is_published) && !stage.is_completed;
 
   const intent = pendingOp
@@ -351,7 +359,7 @@ export function StageEditor({
     else generateMutation.mutate();
   };
 
-  const tabs: AdminTabItem[] = BRACKET_SECTIONS.map((key) => ({
+  const tabs: LinkTabItem[] = BRACKET_SECTIONS.map((key) => ({
     key,
     label: SECTION_LABELS[key],
     href: sectionHref(key),
@@ -409,7 +417,7 @@ export function StageEditor({
                 title="Generates the bracket as a preview without activating the stage — captains cannot report or veto until it is activated. With no teams seeded yet, a playoff is built from the group stage's advancing count and filled in once the groups finish."
               >
                 {generateMutation.isPending ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  <Spinner />
                 ) : (
                   <Wand2 className="size-4" aria-hidden />
                 )}
@@ -483,7 +491,7 @@ export function StageEditor({
       </div>
 
       <div className="border-b border-border px-4 py-2">
-        <AdminTabs
+        <LinkTabs
           items={tabs}
           activeKey={activeSection}
           level={2}
@@ -510,6 +518,13 @@ export function StageEditor({
             form={form}
             onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
             onChanged={onChanged}
+          />
+        ) : null}
+
+        {activeSection === "ffa-scoring" ? (
+          <FfaScoringSection
+            form={form}
+            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
           />
         ) : null}
 

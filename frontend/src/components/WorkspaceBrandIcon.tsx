@@ -1,14 +1,4 @@
-import { cn } from "@/lib/utils";
-
-/** 1–2 letter initials from a workspace name, for icon fallbacks. */
-export function workspaceInitials(name: string): string {
-  return name
-    .split(/[\s-]+/)
-    .slice(0, 2)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .toUpperCase();
-}
+import { cn, initials } from "@/lib/utils";
 
 interface WorkspaceBrandIconProps {
   name: string;
@@ -35,7 +25,7 @@ const WorkspaceBrandIcon = ({ name, iconUrl, className }: WorkspaceBrandIconProp
         className
       )}
     >
-      {workspaceInitials(name)}
+      {initials(name)}
     </span>
   );
 

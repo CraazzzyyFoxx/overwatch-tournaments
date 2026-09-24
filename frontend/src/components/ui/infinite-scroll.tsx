@@ -1,10 +1,10 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 interface InfiniteScrollOptions {
   hasNextPage: boolean;
@@ -91,7 +91,8 @@ interface InfiniteScrollFooterProps extends InfiniteScrollOptions {
  * Auto-loading alone is not an interface: the button is always rendered so the
  * next page is reachable by keyboard and pointer even when the observer never
  * fires, and the status line is a stable live region whose text is replaced on
- * each page (a region created per update announces unreliably).
+ * each page (a region created per update announces unreliably). Progress is
+ * screen-reader-only: the rows themselves show it; only a failure is visible.
  */
 export function InfiniteScrollFooter({
   loaded,
@@ -114,9 +115,7 @@ export function InfiniteScrollFooter({
 
   return (
     <div className={cn("flex flex-col items-center gap-2 pt-1", className)}>
-      <output
-        className={cn("text-xs tabular-nums", isError ? "text-danger" : "text-muted-foreground")}
-      >
+      <output className={cn("text-xs tabular-nums", isError ? "text-danger" : "sr-only")}>
         {isError
           ? (errorLabel ?? `Unable to load more ${unit}. Check your connection and try again.`)
           : isFetchingNextPage
@@ -133,7 +132,7 @@ export function InfiniteScrollFooter({
             disabled={isFetchingNextPage || disabled}
             onClick={() => fetchNextPage()}
           >
-            {isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            {isFetchingNextPage ? <Spinner /> : null}
             {isError ? `Try loading ${unit} again` : (loadMoreLabel ?? `Load more ${unit}`)}
           </Button>
         </>

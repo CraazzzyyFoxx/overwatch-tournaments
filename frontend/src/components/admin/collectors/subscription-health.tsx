@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Pause, Play, RefreshCw } from "lucide-react";
+import { AlertTriangle, Pause, Play, RefreshCw } from "lucide-react";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatTileGridSkeleton } from "@/components/admin/StatTileGridSkeleton";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { SubscriptionCollectionStats } from "@/types/admin.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { RUN_STATE_TONES } from "./collector-state";
 import {
@@ -145,7 +146,7 @@ export function SubscriptionHealthDashboard() {
             onClick={() => sweepMutation.mutate()}
           >
             {sweepMutation.isPending ? (
-              <Loader2 aria-hidden className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none" />
+              <Spinner className="mr-1.5" />
             ) : (
               <RefreshCw aria-hidden className="mr-1.5 h-4 w-4" />
             )}
@@ -159,7 +160,7 @@ export function SubscriptionHealthDashboard() {
               onClick={() => toggleMutation.mutate()}
             >
               {toggleMutation.isPending ? (
-                <Loader2 aria-hidden className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none" />
+                <Spinner className="mr-1.5" />
               ) : stats.enabled ? (
                 <Pause aria-hidden className="mr-1.5 h-4 w-4" />
               ) : (

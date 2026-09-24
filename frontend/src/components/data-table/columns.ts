@@ -3,6 +3,9 @@ import type { ColumnMeta } from "@tanstack/react-table";
 import type { AdminColumnFilterSpec } from "@/components/data-table/filters";
 import type { KebabAction } from "@/components/data-table/kebab-column";
 
+/** Id of the row-actions column, which always sits last and never moves. */
+export const ADMIN_ACTION_COLUMN_ID = "actions";
+
 /** Breakpoint below which a column is hidden entirely. */
 export type AdminColumnResponsive = "always" | "sm" | "md" | "lg";
 
@@ -11,7 +14,7 @@ export type AdminColumnCategory = "core" | "meta" | "admin";
 
 /** Column metadata `AdminDataTable` understands. */
 export interface AdminColumnMeta<TData = unknown> {
-  /** Column filter contract for `kit/AdminFilterBar` and the table's engine. */
+  /** Column filter contract for `kit/FilterBar` and the table's engine. */
   filter?: AdminColumnFilterSpec;
   /** Picker group. Columns without one are not offered for hiding. */
   category?: AdminColumnCategory;

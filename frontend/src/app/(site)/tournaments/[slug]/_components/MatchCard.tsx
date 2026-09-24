@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
@@ -80,7 +81,7 @@ export function MatchCard({
   };
 
   return (
-    <Link
+    <HoverPrefetchLink
       href={href}
       className={cn(
         "block overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)] transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
@@ -97,11 +98,10 @@ export function MatchCard({
         <div className="flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2.5 py-1 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
           <span className="truncate">{size === "md" ? eyebrow : null}</span>
           {live ? (
-            <span className="status-pill live shrink-0" style={{ padding: "0 6px" }}>
-              <span aria-hidden className="dot" />
+            <TournamentStatusPill status="live" className="shrink-0 px-1.5 py-0">
               {t("common.live")}
               {streamsCount ? ` · ${streamsCount}` : null}
-            </span>
+            </TournamentStatusPill>
           ) : null}
         </div>
       ) : null}
@@ -128,6 +128,6 @@ export function MatchCard({
           })}
         </ul>
       ) : null}
-    </Link>
+    </HoverPrefetchLink>
   );
 }

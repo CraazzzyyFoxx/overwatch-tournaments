@@ -62,7 +62,7 @@ vi.mock("@/lib/notify", () => ({
 }));
 
 // `SaveBar` and `EntityFormDialog` guard navigation with the app router, and
-// `AdminTabs` renders `next/link` — neither context exists in a test tree.
+// `LinkTabs` renders `next/link` — neither context exists in a test tree.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
   usePathname: () => "/admin/tournaments/84/bracket",

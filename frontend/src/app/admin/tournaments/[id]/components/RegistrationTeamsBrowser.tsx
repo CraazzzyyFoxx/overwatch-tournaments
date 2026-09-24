@@ -9,7 +9,6 @@ import {
   Crown,
   FolderInput,
   LifeBuoy,
-  Loader2,
   Pencil,
   RotateCcw,
   Unlock,
@@ -19,15 +18,15 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { AdminDataTable, adminColumnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";
 import { BulkBar } from "@/components/kit/BulkBar";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { type Tone } from "@/components/kit/tone";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -68,6 +67,7 @@ import type {
   RegistrationTeamMember
 } from "@/types/registration-team.types";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Organizer view of the registered teams (§8 of the team-registration design).
@@ -77,9 +77,9 @@ import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-
  * question an organizer asks before formation closes — it gets a column of its
  * own rather than hiding behind a status badge.
  *
- * It is a T2 browser (DESIGN.md): `AdminDataTable` rows, `AdminFilterBar` chips
+ * It is a T2 browser (DESIGN.md): `AdminDataTable` rows, `FilterBar` chips
  * that live in the URL, one always-visible kebab per row, and the row detail in
- * `AdminInspector` at `?id=`. Unlike the public roster it also shows the
+ * `Inspector` at `?id=`. Unlike the public roster it also shows the
  * invites, and it is the only place that can reject a team or materialize the
  * complete ones into `tournament.team` (the export). Both are server-authorized;
  * the actions follow the same permissions, so a caller is never offered an
@@ -617,7 +617,7 @@ export function RegistrationTeamsBrowser({
     ],
     [t]
   );
-  const filters = useAdminFilters(filterDefs);
+  const filters = useFilters(filterDefs);
   const stateFilter = String(filters.values.state ?? "");
   const admissionFilter = String(filters.values.admission ?? "");
 
@@ -1036,7 +1036,7 @@ export function RegistrationTeamsBrowser({
                           }}
                         >
                           {exportMutation.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                            <Spinner className="mr-2" />
                           ) : (
                             <FolderInput className="mr-2 h-4 w-4" aria-hidden />
                           )}
@@ -1046,7 +1046,7 @@ export function RegistrationTeamsBrowser({
                     )
                   : undefined
               }
-              toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
+              toolbar={<FilterBar defs={filterDefs} filters={filters} />}
               actions={
                 <span
                   className="shrink-0 text-xs tabular-nums text-muted-foreground"
@@ -1059,7 +1059,7 @@ export function RegistrationTeamsBrowser({
           )}
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={selectedTeam ? openId : null}
           onClose={() => setParams({ id: null })}
           title={selectedTeam?.name ?? ""}
@@ -1346,7 +1346,7 @@ export function RegistrationTeamsBrowser({
               />
             </div>
           ) : null}
-        </AdminInspector>
+        </Inspector>
       </div>
 
       <ConfirmDialog
@@ -1460,7 +1460,7 @@ export function RegistrationTeamsBrowser({
       >
         <div className="grid gap-1.5">
           <Label htmlFor={placeFieldId}>{t("invite.accountLabel")}</Label>
-          <AdminCombobox
+          <Combobox
             id={placeFieldId}
             open={placeOpen}
             onOpenChange={setPlaceOpen}
@@ -1493,7 +1493,7 @@ export function RegistrationTeamsBrowser({
                     setPlaceOpen(false);
                   }}
                 >
-                  <AdminComboboxCheck selected={agent.registration_id === placeRegistrationId} />
+                  <ComboboxCheck selected={agent.registration_id === placeRegistrationId} />
                   <span className="truncate">{agent.battle_tag}</span>
                   {/* The roles the player registered for, as glyphs: the
                       organizer is filling one specific slot. */}
@@ -1505,7 +1505,7 @@ export function RegistrationTeamsBrowser({
                 </CommandItem>
               ))}
             </CommandGroup>
-          </AdminCombobox>
+          </Combobox>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor={`${placeFieldId}-tag`}>{t("admin.placeBattleTag")}</Label>

@@ -2,20 +2,10 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/auth/logout";
 import meService from "@/services/me.service";
@@ -52,37 +42,25 @@ export default function DeleteAccountSection() {
       <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
         <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("deleteDesc")}</p>
         <p className="text-caption text-[color:var(--aqt-fg-dim)]">{t("deleteKeeps")}</p>
-        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm">
-              <Trash2 aria-hidden />
-              {t("delete")}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("confirmTitle")}</AlertDialogTitle>
-              <AlertDialogDescription>{t("confirmBody")}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteAccount.isPending}>{t("confirmCancel")}</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                disabled={deleteAccount.isPending}
-                onClick={(event) => {
-                  // Hold the dialog open while the request is in flight so the
-                  // pending state stays visible; onError closes it and the
-                  // global toast carries the reason.
-                  event.preventDefault();
-                  deleteAccount.mutate();
-                }}
-              >
-                {deleteAccount.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
-                {t("confirmDelete")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button variant="destructive" size="sm" onClick={() => setConfirmOpen(true)}>
+          <Trash2 aria-hidden />
+          {t("delete")}
+        </Button>
+        {/* The dialog stays open while the request is in flight so the pending
+            state stays visible; onError closes it and the global toast carries
+            the reason. */}
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          intent={{
+            title: t("confirmTitle"),
+            description: t("confirmBody"),
+            confirmLabel: t("confirmDelete"),
+            tone: "danger"
+          }}
+          pending={deleteAccount.isPending}
+          onConfirm={() => deleteAccount.mutate()}
+        />
       </div>
     </SettingsGroup>
   );

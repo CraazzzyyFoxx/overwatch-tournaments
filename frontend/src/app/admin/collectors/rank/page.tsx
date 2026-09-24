@@ -4,7 +4,7 @@ import { RankHealthDashboard } from "@/components/admin/collectors/rank-health";
 import { RankTaskHistory } from "@/components/admin/collectors/rank-history";
 import { RankSettingsPanel } from "@/components/admin/collectors/rank-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/kit/AdminTabs";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -49,7 +49,7 @@ export default function RankCollectorPage() {
     <div className="space-y-4">
       {/* A one-tab bar is a heading with a hover state; non-superusers get none. */}
       {items.length > 1 && (
-        <AdminTabs items={items} activeKey={activeKey} level={2} ariaLabel="Rank collector views" />
+        <LinkTabs items={items} activeKey={activeKey} level={2} ariaLabel="Rank collector views" />
       )}
       {activeKey === "settings" ? (
         <RankSettingsPanel />

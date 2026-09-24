@@ -200,7 +200,7 @@ async function click(element: Element | null | undefined) {
 }
 
 function tab(container: HTMLElement, label: string) {
-  return Array.from(container.querySelectorAll("a[data-admin-tab]")).find(
+  return Array.from(container.querySelectorAll("a[data-link-tab]")).find(
     (link) => link.textContent?.trim() === label
   );
 }
@@ -254,7 +254,7 @@ describe("RankCollectorPage", () => {
     expect(getRankCollectionStats).not.toHaveBeenCalled();
     expect(getRankFetchLog).not.toHaveBeenCalled();
     // No tab bar either: there is nothing behind any of the slots.
-    expect(container.querySelectorAll("a[data-admin-tab]")).toHaveLength(0);
+    expect(container.querySelectorAll("a[data-link-tab]")).toHaveLength(0);
   });
 
   it("shows health and the fetch log on one screen; an old ?tab=history link lands there", async () => {
@@ -265,7 +265,7 @@ describe("RankCollectorPage", () => {
     expect(container.textContent).toContain("Task history");
     // Status is the only slot a non-superuser has, so there is no tab bar to
     // pick it from — a one-tab bar would be a heading with a hover state.
-    expect(container.querySelectorAll("a[data-admin-tab]")).toHaveLength(0);
+    expect(container.querySelectorAll("a[data-link-tab]")).toHaveLength(0);
   });
 
   // The September 2026 OverFast outage: the upstream host stopped resolving, the

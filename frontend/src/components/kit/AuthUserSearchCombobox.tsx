@@ -2,7 +2,7 @@
 
 import { rbacService } from "@/services/rbac.service";
 import type { AuthAdminUser } from "@/types/rbac.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { useSearchComboboxQuery } from "@/components/kit/useSearchComboboxQuery";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 
@@ -58,7 +58,7 @@ export function AuthUserSearchCombobox({
     selectedLabel ?? (typeof value === "number" && value > 0 ? `User #${value}` : placeholder);
 
   return (
-    <AdminCombobox
+    <Combobox
       id={id}
       open={open}
       onOpenChange={setOpen}
@@ -91,10 +91,10 @@ export function AuthUserSearchCombobox({
               <span className="truncate">{user.username}</span>
               <span className="truncate text-xs text-muted-foreground">{user.email}</span>
             </div>
-            <AdminComboboxCheck selected={value === user.id} />
+            <ComboboxCheck selected={value === user.id} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }

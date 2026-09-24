@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
+import { tournamentHref } from "@/lib/tournament/url";
 import { Crown, Trophy } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { UserTournament } from "@/types/user.types";
@@ -248,12 +249,12 @@ const SingleDossier = ({
           <PlaceBadge placement={t.placement ?? null} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href={`/tournaments/${t.id}`}
+              <HoverPrefetchLink
+                href={tournamentHref(t.id)}
                 className="aqt-display text-title font-bold leading-tight text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
               >
                 {t.name}
-              </Link>
+              </HoverPrefetchLink>
               {t.is_league ? <LeagueBadge>{tr("users.tournaments.leagueBadge")}</LeagueBadge> : null}
             </div>
             <div className="mt-1.5 flex items-center gap-2 text-caption text-[color:var(--aqt-fg-muted)]">
@@ -279,12 +280,12 @@ const DivisionHeader = ({ t }: { t: UserTournament }) => {
   return (
     <div className="flex items-center gap-3 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-4 py-2.5">
       <DivisionIcon division={t.division} tournamentGrid={t.division_grid_version} width={28} height={28} />
-      <Link
-        href={`/tournaments/${t.id}`}
+      <HoverPrefetchLink
+        href={tournamentHref(t.id)}
         className="min-w-0 flex-1 truncate text-body font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
       >
         {divisionLabel(t)}
-      </Link>
+      </HoverPrefetchLink>
       <PlaceBadge placement={t.placement ?? null} size="sm" />
       <WdlText won={agg.won} lost={agg.lost} draw={agg.draw} className="text-label" />
     </div>

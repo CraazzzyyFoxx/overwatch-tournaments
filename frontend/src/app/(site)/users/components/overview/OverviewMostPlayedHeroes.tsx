@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { ArrowRight, Star } from "lucide-react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroPlaytime } from "@/types/hero.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { normalizeRole } from "@/lib/roster/player-role";
@@ -36,10 +36,10 @@ const OverviewMostPlayedHeroes = async ({ heroes, userSlug, totalCount, limit = 
       title={t("users.overview.mostPlayed.title")}
       icon={<Star size={15} />}
       action={
-        <Link href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
           {t("common.all")} {totalCount}
           <ArrowRight aria-hidden className="size-3" />
-        </Link>
+        </HoverPrefetchLink>
       }
     >
       <div className="flex flex-col gap-2.5 py-0.5">

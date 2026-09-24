@@ -87,6 +87,7 @@ class AdminEncounterOutboxTests(IsolatedAsyncioTestCase):
         calls: list[str] = []
         encounter = SimpleNamespace(
             id=10,
+            format=admin_encounter_service.enums.EncounterFormat.DUEL,
             tournament_id=1,
             stage_id=20,
             stage_item_id=None,

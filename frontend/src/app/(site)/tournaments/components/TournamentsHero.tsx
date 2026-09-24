@@ -3,6 +3,7 @@
 import { useFormatter, useTranslations } from "next-intl";
 
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
+import { StatusDot } from "@/components/ui/status-dot";
 
 interface TournamentsHeroProps {
   workspaceName?: string | null;
@@ -49,10 +50,7 @@ const TournamentsHero = ({
             label={
               <span className="inline-flex items-center gap-1.5">
                 {liveEvents > 0 ? (
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full bg-[color:var(--aqt-rose)] [animation:aqtPulse_2s_ease-in-out_infinite] motion-reduce:animate-none"
-                  />
+                  <StatusDot className="text-[color:var(--aqt-status-live)] [animation:aqtPulse_2s_ease-in-out_infinite] motion-reduce:animate-none" />
                 ) : null}
                 {t("tournamentsList.hero.liveNow")}
               </span>

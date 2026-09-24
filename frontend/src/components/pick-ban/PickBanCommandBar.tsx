@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Loader2, Shield } from "lucide-react";
+import { Ban, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import type {
   PickBanSession,
   PickBanState
 } from "@/types/tournament.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { turnDeadlineMs, type PickBanSide } from "./pick-ban-model";
 import { PickBanCountdown } from "./PickBanCountdown";
@@ -122,7 +123,7 @@ export function PickBanCommandBar({
             >
               {captainAction === "ban" ? <Ban className="mr-2 h-4 w-4" aria-hidden /> : null}
               {captainAction === "protect" ? <Shield className="mr-2 h-4 w-4" aria-hidden /> : null}
-              {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+              {pending ? <Spinner className="mr-2" /> : null}
               {pending ? t("captain.sending") : confirmLabel}
             </Button>
           </div>

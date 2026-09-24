@@ -518,7 +518,10 @@
   color: var(--aqt-fg-muted);
   font-size: var(--text-label);
   font-weight: 500;
-  padding: 7px 12px;
+  /* Fixed, not padding-derived: a count badge made chips 36px, a bare label
+     34px, while every search/select/segment in the same row is 32px (`h-8`). */
+  height: 32px;
+  padding: 0 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: 0.15s;
@@ -1495,6 +1498,15 @@
   --aqt-flex: var(--aqt-violet);
   --aqt-live: var(--aqt-rose);
   --aqt-warm: var(--aqt-amber);
+  /* Tournament lifecycle statuses (design-book §1). Aliases, not new hues: a
+     status can be recoloured without moving the accent it borrows today.
+     `finished` points at --aqt-fg-muted rather than the book's literal
+     hsl(213 9% 47%), which predates the contrast lift of the grey ramp and
+     would land the pill's own text under 4.5:1. */
+  --aqt-status-live: var(--aqt-rose);
+  --aqt-status-upcoming: var(--aqt-amber);
+  --aqt-status-finished: var(--aqt-fg-muted);
+  --aqt-status-draft: var(--aqt-blue);
   /* Third-party brand marks. Not ours to re-hue, but they belong in one place
      rather than as raw hex sprinkled through participant and profile cards.
      These are the only sanctioned raw-hex declarations in this file: holding
@@ -1831,7 +1843,8 @@
   border: 1px solid var(--tn-border);
   color: var(--tn-fg);
   border-radius: 8px;
-  padding: 7px 12px 7px 32px;
+  height: 32px;
+  padding: 0 12px 0 32px;
   /* 16px below the sm breakpoint: iOS Safari zooms the page when a focused
      input renders smaller than that. */
   font-size: 16px;
@@ -1999,46 +2012,6 @@
 .aqt-tn .feat-name em {
   font-style: normal;
   color: var(--teal);
-}
-.aqt-tn .status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-label);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  padding: 4px 9px;
-  border-radius: 6px;
-  font-family: Inter, sans-serif;
-}
-.aqt-tn .status-pill.live {
-  background: color-mix(in srgb, var(--rose) 14%, transparent);
-  color: var(--rose);
-  border: 1px solid color-mix(in srgb, var(--rose) 30%, transparent);
-}
-.aqt-tn .status-pill.live .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--rose);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rose) 18%, transparent);
-  animation: aqtPulse 2s ease-in-out infinite;
-}
-.aqt-tn .status-pill.upcoming {
-  background: color-mix(in srgb, var(--amber) 12%, transparent);
-  color: var(--amber);
-  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
-}
-.aqt-tn .status-pill.finished {
-  background: color-mix(in srgb, var(--fg-dim) 18%, transparent);
-  color: var(--fg-muted);
-  border: 1px solid var(--border-2);
-}
-.aqt-tn .status-pill.draft {
-  background: color-mix(in srgb, var(--blue) 12%, transparent);
-  color: var(--blue);
-  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
 }
 .aqt-tn .feat-meta {
   position: relative;
@@ -3174,9 +3147,9 @@
 
 /* ═══════════════════════════════════════════════════════════════════════
    Team roster card (TournamentTeamCard / TournamentTeamTable).
-   GLOBAL (not .aqt-tn-scoped) — reused on the tournament Teams page, the
-   global /teams catalog, and user profiles, which are not all under the
-   tournament shell. References the global --aqt-* token layer.
+   GLOBAL (not .aqt-tn-scoped) — reused on the tournament Teams page and
+   user profiles, which are not all under the tournament shell. References
+   the global --aqt-* token layer.
    ═══════════════════════════════════════════════════════════════════════ */
 .team-card {
   background: var(--aqt-overlay-1);
@@ -3571,15 +3544,6 @@
 }
 .aqt-matches .m-media .pill.empty {
   opacity: 0.4;
-}
-.aqt-matches .m-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--rose);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rose) 18%, transparent);
-  animation: aqtPulse 2s ease-in-out infinite;
-  display: inline-block;
 }
 .aqt-matches .m-empty {
   padding: 48px 24px;

@@ -134,9 +134,9 @@ function options(scope: HTMLElement, name: string): string[] {
   );
 }
 
-/** The scope tabs are `AdminTabs` links, not segments — read as rendered. */
+/** The scope tabs are `LinkTabs` links, not segments — read as rendered. */
 function scopeTabs(scope: HTMLElement): string[] {
-  return [...field(scope, "audience").querySelectorAll("a[data-admin-tab]")].map(
+  return [...field(scope, "audience").querySelectorAll("a[data-link-tab]")].map(
     (item) => (item.textContent ?? "").trim()
   );
 }

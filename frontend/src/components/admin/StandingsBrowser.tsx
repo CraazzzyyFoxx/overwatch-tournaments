@@ -8,9 +8,9 @@ import { Pencil, RefreshCw, Trash2, Trophy } from "lucide-react";
 import { AdminDataTable, createKebabColumn } from "@/components/data-table";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { StandingsTiesPanel } from "@/components/admin/StandingsTiesPanel";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
@@ -163,7 +163,7 @@ export function StandingsBrowser({
     return list;
   }, [tournamentId, tournamentsQuery.data, stageList, stageItems]);
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const stageFilter = String(filters.values.stage ?? "");
   const groupFilter = String(filters.values.group ?? "");
 
@@ -373,7 +373,7 @@ export function StandingsBrowser({
         filterKey={filters.filterKey}
         getRowId={(row) => String(row.id)}
         toolbar={
-          <AdminFilterBar
+          <FilterBar
             defs={defs}
             filters={filters}
             pinned={

@@ -1,7 +1,5 @@
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import {
-  OwalStack,
-  OwalStandings,
   Stage,
   Standings,
   Tournament,
@@ -114,32 +112,6 @@ export default class tournamentService {
       query: {
         workspace_id: params.workspaceId,
         ...tournamentFilterQuery(params)
-      }
-    }).then((response) => response.json());
-  }
-  static async getOwalSeasons(workspaceId?: number | null): Promise<string[]> {
-    return apiFetch(`/api/v1/tournaments/league/seasons`, {
-      query: { workspace_id: workspaceId }
-    }).then((response) => response.json());
-  }
-
-  static async getOwalStandings(
-    season?: string,
-    workspaceId?: number | null
-  ): Promise<OwalStandings> {
-    return apiFetch(`/api/v1/tournaments/league/results`, {
-      query: {
-        season,
-        workspace_id: workspaceId
-      }
-    }).then((response) => response.json());
-  }
-
-  static async getOwalStacks(season?: string, workspaceId?: number | null): Promise<OwalStack[]> {
-    return apiFetch(`/api/v1/tournaments/league/stacks`, {
-      query: {
-        season,
-        workspace_id: workspaceId
       }
     }).then((response) => response.json());
   }

@@ -2,8 +2,9 @@
 
 import { useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Search } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
+import { useFormatter } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +28,7 @@ import {
   formatRelative
 } from "@/components/admin/collectors/subscription-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SelectUser {
   (userId: number, label: string): void;
@@ -180,6 +182,7 @@ export function SubscriptionPlayerSearch({ onSelect }: Readonly<{ onSelect: Sele
  * inactive on Friday, active again after a re-subscribe") is visible at all.
  */
 function PlayerCheckTimeline({ userId }: Readonly<{ userId: number }>) {
+  const format = useFormatter();
   // Scoped server-side to the injected workspace; see `admin.service.ts`.
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const query = useQuery({
@@ -207,7 +210,9 @@ function PlayerCheckTimeline({ userId }: Readonly<{ userId: number }>) {
                 className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border border-border/60 bg-card/50 px-2.5 py-1.5 text-xs"
               >
                 <span aria-hidden className={cn("h-2 w-2 rounded-full", STATE_BAR[row.state] ?? "bg-muted")} />
-                <span className="tabular-nums text-muted-foreground">{formatDate(row.created_at)}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {formatDate(format, row.created_at)}
+                </span>
                 <span className="font-medium">{PROVIDER_LABELS[row.provider] ?? row.provider}</span>
                 <span>{STATE_LABELS[row.state] ?? row.state}</span>
                 {row.tier_label || row.tier_rank != null ? (
@@ -245,6 +250,7 @@ export function SubscriptionPlayerPanel({
   userId,
   label
 }: Readonly<{ userId: number; label: string }>) {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
@@ -282,7 +288,7 @@ export function SubscriptionPlayerPanel({
             onClick={() => triggerMutation.mutate(null)}
           >
             {triggerMutation.isPending ? (
-              <Loader2 aria-hidden className="mr-1.5 h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+              <Spinner className="mr-1.5 size-3.5" />
             ) : (
               <RefreshCw aria-hidden className="mr-1.5 h-3.5 w-3.5" />
             )}
@@ -328,7 +334,7 @@ export function SubscriptionPlayerPanel({
                   </TableCell>
                   <TableCell
                     className="text-sm tabular-nums text-muted-foreground"
-                    title={formatDate(row.checked_at)}
+                    title={formatDate(format, row.checked_at)}
                   >
                     {formatRelative(row.checked_at)}
                   </TableCell>

@@ -452,6 +452,47 @@ def test_overview_closeness_uses_union_all_sides() -> None:
     _assert_indexable_encounter_join(_postgres_sql(session.statements[-1]))
 
 
+class _NonEmptyRows(_Rows):
+    def scalar_one(self):
+        return 3
+
+
+class _NonEmptyCaptureSession(_CaptureSession):
+    """``_CaptureSession`` with a non-empty population, so callers that short
+    circuit on a zero count still emit their remaining statements."""
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        return _NonEmptyRows()
+
+
+def test_overview_stats_with_logs_probes_from_the_candidate_side() -> None:
+    """``matches.statistics`` is ~27M rows, so the "has parsed logs" KPI must be
+    a semi-join driven by the (few thousand) candidate users. Written as
+    ``statistics.user_id IN (candidates)`` the stats table becomes the outer
+    relation and the whole thing is scanned and de-duplicated on every request.
+    Both shapes return the same number, so only the SQL shape catches this.
+    """
+    session = _NonEmptyCaptureSession()
+    asyncio.run(
+        overview_queries.get_overview_stats(
+            session,
+            role=None,
+            div_min=None,
+            div_max=None,
+            query=None,
+            grid=DEFAULT_GRID,
+            workspace_id=None,
+        )
+    )
+    # [0] is the candidate count, [1] the "has parsed logs" count.
+    sql = _postgres_sql(session.statements[1])
+    assert "count(*)" in sql
+    assert "EXISTS (SELECT 1" in sql
+    assert "matches.statistics.user_id = overview_candidates.id" in sql
+    assert "user_id IN" not in sql
+
+
 def test_statistics_encounter_query_uses_union_all_sides() -> None:
     _assert_indexable_encounter_join(_postgres_sql(encounter_query))
 

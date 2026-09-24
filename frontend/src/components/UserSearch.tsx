@@ -2,13 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { usePlayerSearch } from "@/hooks/usePlayerSearch";
 import { Command } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import PlayerSearchCommandList from "@/components/PlayerSearchCommandList";
+import { Spinner } from "@/components/ui/spinner";
 
 const UserSearch = () => {
   const t = useTranslations();
@@ -99,10 +100,7 @@ const UserSearch = () => {
               )}
             />
             {isSearching ? (
-              <Loader2
-                aria-hidden
-                className="pointer-events-none absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground"
-              />
+              <Spinner className="pointer-events-none absolute right-3 top-3 text-muted-foreground" />
             ) : searchValue.length > 0 ? (
               <button
                 type="button"

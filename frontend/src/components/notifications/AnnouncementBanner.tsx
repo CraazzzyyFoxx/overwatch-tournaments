@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info, X } from "lucide-react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -169,7 +169,7 @@ const AnnouncementBanner = ({ initial }: AnnouncementBannerProps) => {
                 </AlertDescription>
                 {content.href && (
                   <div className="mt-2">
-                    <Link
+                    <HoverPrefetchLink
                       href={content.href}
                       // The visible label stays short; the accessible name carries the
                       // destination, so the link still makes sense in a screen reader's
@@ -179,7 +179,7 @@ const AnnouncementBanner = ({ initial }: AnnouncementBannerProps) => {
                     >
                       <span>{t("notifications.banner.more")}</span>
                       <span aria-hidden>→</span>
-                    </Link>
+                    </HoverPrefetchLink>
                   </div>
                 )}
               </div>
@@ -213,7 +213,7 @@ const AnnouncementBanner = ({ initial }: AnnouncementBannerProps) => {
           </div>
 
           {content.href && (
-            <Link
+            <HoverPrefetchLink
               href={content.href}
               // The visible label stays short; the accessible name carries the
               // destination, so the link still makes sense in a screen reader's
@@ -223,7 +223,7 @@ const AnnouncementBanner = ({ initial }: AnnouncementBannerProps) => {
             >
               <span>{t("notifications.banner.more")}</span>
               <span aria-hidden>→</span>
-            </Link>
+            </HoverPrefetchLink>
           )}
 
           <Button

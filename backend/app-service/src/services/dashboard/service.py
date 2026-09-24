@@ -144,7 +144,9 @@ class DashboardService:
         encounters_missing_logs = (
             sa.select(sa.func.count(models.Encounter.id))
             .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-            .where(models.Encounter.has_logs.is_(False), *ws_filters)
+            # Same reason as the coverage join in ``get_active_tournament_stats``: a
+            # lobby produces no match logs at all, so "missing logs" never applies.
+            .where(models.Encounter.has_logs.is_(False), models.Encounter.format == "duel", *ws_filters)
         )
 
         # Anti-joins use correlated NOT EXISTS instead of NOT IN (subquery):
@@ -270,7 +272,15 @@ class DashboardService:
                 sa.func.count(models.Encounter.id).filter(models.Encounter.has_logs.is_(False)),
             )
             .select_from(active)
-            .outerjoin(models.Encounter, models.Encounter.tournament_id == active.c.tournament_id)
+            .outerjoin(
+                models.Encounter,
+                sa.and_(
+                    models.Encounter.tournament_id == active.c.tournament_id,
+                    # A lobby has no log format yet: counting it as "missing logs"
+                    # would drag coverage down for a tournament that is complete.
+                    models.Encounter.format == "duel",
+                ),
+            )
             .group_by(active.c.tournament_id)
         )
         row = (await session.execute(stats_q)).one_or_none()

@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, UserMinus } from "lucide-react";
-import { AdminCombobox } from "@/components/kit/AdminCombobox";
+import { UserMinus } from "lucide-react";
+import { Combobox } from "@/components/kit/Combobox";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { rbacService } from "@/services/rbac.service";
+import { Spinner } from "@/components/ui/spinner";
 
 interface TournamentPreviewAllowlistProps {
   tournamentId: number;
@@ -78,7 +79,7 @@ export function TournamentPreviewAllowlist({
 
   return (
     <div className="space-y-3">
-      <AdminCombobox
+      <Combobox
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         label="Add a user to the allowlist…"
@@ -90,7 +91,7 @@ export function TournamentPreviewAllowlist({
         emptyMessage={
           candidatesLoading ? (
             <span className="flex items-center justify-center gap-2 text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              <Spinner className="size-3.5" />
               Loading workspace users…
             </span>
           ) : (
@@ -113,11 +114,11 @@ export function TournamentPreviewAllowlist({
             </CommandItem>
           ))}
         </CommandGroup>
-      </AdminCombobox>
+      </Combobox>
 
       {entriesLoading ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          <Spinner className="size-3.5" />
           Loading allowlist…
         </div>
       ) : (entries ?? []).length === 0 ? (

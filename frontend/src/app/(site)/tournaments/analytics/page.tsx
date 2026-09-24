@@ -18,7 +18,7 @@ import BottomSheet, {
 } from "@/app/(site)/tournaments/analytics/components/BottomSheet";
 import { type GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import OrganizerTools from "@/app/(site)/tournaments/analytics/components/OrganizerTools";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 import {
   canShowAnalyticsAdminToolbar,
   getPreferredAnalyticsAlgorithmId,

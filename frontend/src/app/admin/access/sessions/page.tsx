@@ -6,11 +6,12 @@ import { Globe, MonitorSmartphone, UserCog } from "lucide-react";
 import { useFormatter } from "next-intl";
 
 import { AdminDataTable, createKebabColumn } from "@/components/data-table";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
-import type { AdminDateFormatter } from "@/components/kit/format-time";
+import type { DateFormatter } from "@/components/kit/format-time";
+import { StatusDot } from "@/components/ui/status-dot";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { cn } from "@/lib/utils";
 import { detectBrowser, detectPlatform } from "@/lib/user-agent";
@@ -25,7 +26,7 @@ const STATUS_META: Record<AdminSessionStatus, { label: string; tone: Tone }> = {
   expired: { label: "Expired", tone: "neutral" }
 };
 
-function formatTimestamp(format: AdminDateFormatter, value: string | null | undefined): string {
+function formatTimestamp(format: DateFormatter, value: string | null | undefined): string {
   if (!value) return "Unavailable";
 
   return format.dateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" });
@@ -55,7 +56,7 @@ function StatusCell({ status }: Readonly<{ status: AdminSessionStatus }>) {
     <span
       className={cn("inline-flex items-center gap-1.5 text-xs font-medium", TONE_TEXT[meta.tone])}
     >
-      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      <StatusDot />
       {meta.label}
     </span>
   );
@@ -100,7 +101,7 @@ export default function AccessAdminSessionsPage() {
     ],
     []
   );
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const statusFilter = String(filters.values.status ?? "");
 
   const openRow = pageRows.find((row) => row.session_id === openId) ?? null;
@@ -191,7 +192,7 @@ export default function AccessAdminSessionsPage() {
           filterKey={filters.filterKey}
           inspectorId={openId}
           getRowId={(row) => row.session_id}
-          toolbar={<AdminFilterBar defs={defs} filters={filters} />}
+          toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage="No session matches. Clear the status chip to see every session."
           onRowClick={(row) => setParams({ id: row.original.session_id })}
           renderMobileCard={(row) => (
@@ -235,7 +236,7 @@ export default function AccessAdminSessionsPage() {
         />
       </div>
 
-      <AdminInspector
+      <Inspector
         openId={openRow ? openId : null}
         onClose={() => setParams({ id: null })}
         title={openRow ? (openRow.email ?? `Account #${openRow.user_id}`) : ""}
@@ -291,7 +292,7 @@ export default function AccessAdminSessionsPage() {
             </Field>
           </div>
         ) : null}
-      </AdminInspector>
+      </Inspector>
     </div>
   );
 }

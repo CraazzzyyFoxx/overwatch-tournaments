@@ -42,6 +42,14 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	},
 	"/api/v1/tournaments/{id}/stages":    {Extract: respcache.FromPathValue("id"), AuthedRead: true},
 	"/api/v1/tournaments/{id}/standings": {Extract: respcache.FromPathValue("id"), AuthedRead: true},
+	// An ffa stage's lobby tables: same shape of read as stages/standings —
+	// the body does not depend on the viewer (identity is used only in the
+	// visibility gate) and every result write enqueues the tournament
+	// recalculation whose signal drops these entries. The single-lobby read
+	// /encounters/{encounter_id}/ffa is NOT cached, for the same reason
+	// /encounters/{id} is not: its path id is an encounter id, which the
+	// invalidation index cannot map to a tournament.
+	"/api/v1/tournaments/{id}/stages/{stage_id}/ffa": {Extract: respcache.FromPathValue("id"), AuthedRead: true},
 	// Bracket/matches/teams tabs: list reads carry tournament_id as a query
 	// param; requests without it (admin-style global lists) bypass the cache.
 	//

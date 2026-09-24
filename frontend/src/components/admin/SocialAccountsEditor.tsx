@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Eye, EyeOff, Loader2, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
+import { Check, Eye, EyeOff, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import adminService from "@/services/admin.service";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import type { SocialAccount, SocialProvider, User } from "@/types/user.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SocialAccountsEditorProps {
   userId: number;
@@ -79,7 +80,7 @@ function VisibilityControls({ account, userId, workspaceId, onUserUpdated }: Rea
           <EyeOff className="h-3 w-3" /> This workspace
         </label>
       )}
-      {mutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+      {mutation.isPending && <Spinner className="size-3" />}
     </div>
   );
 }
@@ -174,7 +175,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
           disabled={updateMutation.isPending || !editValue.trim()}
           aria-label="Save"
         >
-          {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {updateMutation.isPending ? <Spinner /> : <Check className="h-4 w-4" />}
         </Button>
         <Button
           size="icon"
@@ -216,7 +217,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
                 title="Manually verify (requires a matching OAuth connection)"
               >
                 {verifyMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Spinner className="size-3.5" />
                 ) : (
                   <ShieldCheck className="h-3.5 w-3.5" />
                 )}
@@ -239,7 +240,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
                 aria-label="Make primary"
                 title="Make primary"
               >
-                {primaryMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+                {primaryMutation.isPending ? <Spinner className="size-3.5" /> : <Star className="h-3.5 w-3.5" />}
               </Button>
             )
           )}
@@ -255,7 +256,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
                 onClick={() => setDeleteOpen(true)}
                 aria-label={`Delete ${account.username}`}
               >
-                {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                {deleteMutation.isPending ? <Spinner className="size-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
               </Button>
             </div>
           )}
@@ -324,7 +325,7 @@ function AddAccountRow({ provider, userId, onUserUpdated }: Readonly<{ provider:
           disabled={!value.trim() || addMutation.isPending}
           aria-label={`Add ${config.label}`}
         >
-          {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {addMutation.isPending ? <Spinner /> : <Plus className="h-4 w-4" />}
         </Button>
       </div>
       {addMutation.isError && addMutation.error instanceof Error && (

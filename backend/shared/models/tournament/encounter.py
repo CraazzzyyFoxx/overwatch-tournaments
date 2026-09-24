@@ -1,7 +1,7 @@
 import typing
 from datetime import datetime
 
-from sqlalchemy import Enum, Float, ForeignKey, Index, Integer, String, text
+from sqlalchemy import CheckConstraint, Enum, Float, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -12,6 +12,7 @@ from shared.models.tournament.tournament import Tournament
 if typing.TYPE_CHECKING:
     from shared.models.matches.match import Match
     from shared.models.tournament.encounter_game import EncounterGame
+    from shared.models.tournament.encounter_participant import EncounterParticipant
     from shared.models.tournament.encounter_report import EncounterCaptainReport
     from shared.models.tournament.encounter_result_audit import EncounterResultAudit
 
@@ -58,10 +59,19 @@ class Encounter(db.TimeStampIntegerMixin):
                 "status IN ('PENDING'::tournament.encounterstatus, 'OPEN'::tournament.encounterstatus)"
             ),
         ),
+        CheckConstraint("format IN ('duel', 'ffa')", name="ck_encounter_format"),
+        CheckConstraint(
+            "format = 'duel' OR (home_team_id IS NULL AND away_team_id IS NULL AND home_score = 0 AND away_score = 0)",
+            name="ck_encounter_ffa_has_no_sides",
+        ),
         {"schema": "tournament"},
     )
 
     name: Mapped[str] = mapped_column(String())
+    #: ``duel`` | ``ffa`` (``enums.EncounterFormat``). Fixed at creation: a
+    #: lobby's rows (participants, per-game results) mean nothing to a duel and
+    #: the other way round. Plain text + CHECK, like ``Tournament.team_formation``.
+    format: Mapped[str] = mapped_column(String(8), default=enums.EncounterFormat.DUEL.value, server_default="duel")
     home_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), nullable=True, index=True)
     away_team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), nullable=True, index=True)
     home_score: Mapped[int] = mapped_column(Integer())
@@ -142,4 +152,10 @@ class Encounter(db.TimeStampIntegerMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="EncounterGame.position",
+    )
+    participants: Mapped[list[EncounterParticipant]] = relationship(
+        back_populates="encounter",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="EncounterParticipant.slot",
     )

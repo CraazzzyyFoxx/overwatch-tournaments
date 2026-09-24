@@ -381,16 +381,9 @@ export function DraftWorkspace({
           // Radix Tabs, not hand-rolled roles: it wires aria-controls, roving
           // tabindex and arrow-key traversal that a plain button row lacks.
           <Tabs value={viewParams.view} onValueChange={(view) => onViewParamsChange({ view: view as DraftMobileView })}>
-            <TabsList
-              className="flex h-auto w-full gap-1 rounded-xl bg-[color:var(--aqt-card-2)] p-1"
-              aria-label={t("mobileViews")}
-            >
+            <TabsList aria-label={t("mobileViews")}>
               {DRAFT_MOBILE_VIEWS.map((view) => (
-                <TabsTrigger
-                  key={view}
-                  value={view}
-                  className="min-h-11 flex-1 rounded-lg px-2 text-sm font-medium data-[state=active]:bg-[color:var(--aqt-card)] data-[state=active]:text-[color:var(--aqt-teal)] data-[state=active]:shadow-none"
-                >
+                <TabsTrigger key={view} value={view} className="min-h-11 flex-1 justify-center">
                   {t(`shell.tabs.${view}`)}
                 </TabsTrigger>
               ))}

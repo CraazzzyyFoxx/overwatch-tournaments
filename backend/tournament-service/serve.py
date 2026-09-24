@@ -42,6 +42,7 @@ from src.core.caching import configure_cache
 from src.core.redis import close_realtime_redis
 from src.rpc import (
     admin_misc,
+    ffa,
     integrations,
     pick_ban_admin,
     public_rpc,
@@ -125,6 +126,8 @@ registration_admin.register(broker, logger)
 integrations.register(broker, logger)
 stage_admin.register(broker, logger)
 pick_ban_admin.register(broker, logger)
+# FFA lobbies: the public table reads and the organizer's three result levers.
+ffa.register(broker, logger)
 public_rpc.register(broker, logger)
 # Team logo upload/delete (binary body, base64 on the wire).
 team_binary.register(broker, logger)

@@ -2,7 +2,7 @@
 
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, CornerDownLeft, Loader2, Plus, Search, UserPlus, X } from "lucide-react";
+import { Check, ChevronDown, CornerDownLeft, Plus, Search, UserPlus, X } from "lucide-react";
 
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import {
@@ -31,6 +31,7 @@ import {
   type RosterAuthor,
   type RosterMember,
 } from "@/services/workspace-player.service";
+import { Spinner } from "@/components/ui/spinner";
 
 import {
   LOBBY_SIZE,
@@ -475,7 +476,7 @@ export function PickupAddPlayersDialog({
                             disabled={addByTag.isPending}
                           >
                             {addByTag.isPending ? (
-                              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                              <Spinner className="size-3.5" />
                             ) : null}
                             Add
                           </Button>

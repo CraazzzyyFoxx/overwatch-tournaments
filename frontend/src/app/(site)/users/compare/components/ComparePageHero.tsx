@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, CircleHelp, RefreshCw } from "lucide-react";
+import { ChevronRight, CircleHelp } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import type { CompareScope } from "@/app/(site)/users/compare/types";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Spinner } from "@/components/ui/spinner";
 import type { UserCompareBaselineMode } from "@/types/user.types";
 
 import { getComparePageHeroModel } from "./compare-page-hero.model";
@@ -130,7 +131,7 @@ const ComparePageHero = ({
                 {stat.value}
               </span>
               <span className="mt-1 flex max-w-full items-center gap-1 truncate text-label text-[color:var(--aqt-fg-dim)]">
-                {stat.refreshing ? <RefreshCw className="h-3 w-3 shrink-0 animate-spin" /> : null}
+                {stat.refreshing ? <Spinner className="size-3 shrink-0" /> : null}
                 <span className="truncate">{stat.sub}</span>
               </span>
             </div>

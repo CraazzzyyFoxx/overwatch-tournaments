@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { ROLES } from "@/lib/roster/roles";
+import { orderSlotCodes } from "@/lib/roster/shape";
 import { isRegistrationOpen } from "@/lib/tournament/status";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationService from "@/services/registration.service";
@@ -61,14 +62,15 @@ export default function TeamRegistrationEntry({
   /**
    * Slots the captain may occupy, each with its multiplicity in the roster.
    * Constrained to the tournament's roster override when it has one, because the
-   * server rejects a slot the shape does not define (`slot_not_in_shape`). An
-   * all-`flex` roster yields none and the entry hides — that shape needs a slot
-   * picker this UI does not have yet.
+   * server rejects a slot the shape does not define (`slot_not_in_shape`). The
+   * codes come off the override itself rather than from `ROLES`, so an all-`flex`
+   * roster — a battle-royale squad's `{flex: 3}` — offers its flex slot instead
+   * of nothing at all, which hid this entry and made such a squad unfoundable.
    */
   const override = tournament.roster_slots_json ?? null;
-  const availableSlots: RosterSlotOption[] = ROLES.filter(
-    (role) => !override || (override[role.code] ?? 0) > 0,
-  ).map((role) => ({ code: role.code, count: override?.[role.code] ?? 1 }));
+  const availableSlots: RosterSlotOption[] = override
+    ? orderSlotCodes(override).map((code) => ({ code, count: override[code] ?? 1 }))
+    : ROLES.map((role) => ({ code: role.code, count: 1 }));
   if (availableSlots.length === 0) return null;
 
   return (

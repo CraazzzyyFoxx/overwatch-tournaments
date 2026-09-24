@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { AchievementRule } from "@/types/admin.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 
@@ -59,7 +59,7 @@ export function AchievementCombobox({
   }, [rules]);
 
   return (
-    <AdminCombobox
+    <Combobox
       id={id}
       open={open}
       onOpenChange={setOpen}
@@ -93,11 +93,11 @@ export function AchievementCombobox({
                   {rule.slug}
                 </Badge>
               </div>
-              <AdminComboboxCheck selected={value === rule.id} />
+              <ComboboxCheck selected={value === rule.id} />
             </CommandItem>
           ))}
         </CommandGroup>
       ))}
-    </AdminCombobox>
+    </Combobox>
   );
 }

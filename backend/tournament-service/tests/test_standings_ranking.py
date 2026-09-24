@@ -152,3 +152,65 @@ class TieGroupTests(TestCase):
             ]
         )
         self.assertEqual([1, 1, 3, 3], [team.tie_group for team in ordered])
+
+
+class FfaTiebreakTests(TestCase):
+    """Plan §5.3: the lobby metrics, and what "no games yet" ranks as."""
+
+    ORDER = ["points", "ffa_last_placement", "manual_override"]
+
+    def test_ffa_metrics_are_known_and_garbage_is_still_dropped(self) -> None:
+        self.assertEqual(
+            ["ffa_game_wins", "manual_override"],
+            service.normalize_tiebreak_order(["ffa_game_wins", "bogus"]),
+        )
+
+    def test_every_ffa_metric_survives_normalization(self) -> None:
+        metrics = ["ffa_game_wins", "ffa_score", "ffa_best_placement", "ffa_last_placement"]
+        self.assertEqual([*metrics, "manual_override"], service.normalize_tiebreak_order(metrics))
+
+    def test_a_better_last_placement_breaks_a_points_tie(self) -> None:
+        # Lower place is better, and the sort is descending -- the metric must
+        # invert, or first place would rank below last.
+        ordered = service._sort_ranked_teams(
+            [_team(1, points=6.0, ffa_last_placement=4), _team(2, points=6.0, ffa_last_placement=1)],
+            tiebreak_order=self.ORDER,
+            manual_positions={},
+        )
+        self.assertEqual([2, 1], [team.team_id for team in ordered])
+
+    def test_a_team_with_no_games_ranks_below_every_real_place(self) -> None:
+        # `None` is "never played", not "placed 0th": a team the lobby has not
+        # seen yet must not win the tiebreak against a team that did play.
+        ordered = service._sort_ranked_teams(
+            [
+                _team(1, points=0.0, ffa_last_placement=None),
+                _team(2, points=0.0, ffa_last_placement=9),
+                _team(3, points=0.0, ffa_last_placement=2),
+            ],
+            tiebreak_order=self.ORDER,
+            manual_positions={},
+        )
+        self.assertEqual([3, 2, 1], [team.team_id for team in ordered])
+
+    def test_ffa_score_and_game_wins_rank_higher_first(self) -> None:
+        by_score = service._sort_ranked_teams(
+            [_team(1, ffa_score=12), _team(2, ffa_score=30)],
+            tiebreak_order=["ffa_score", "manual_override"],
+            manual_positions={},
+        )
+        by_wins = service._sort_ranked_teams(
+            [_team(1, wins=0), _team(2, wins=3)],
+            tiebreak_order=["ffa_game_wins", "manual_override"],
+            manual_positions={},
+        )
+        self.assertEqual([2, 1], [team.team_id for team in by_score])
+        self.assertEqual([2, 1], [team.team_id for team in by_wins])
+
+    def test_an_ffa_league_stage_defaults_to_the_ffa_preset(self) -> None:
+        stage = SimpleNamespace(settings_json=None, stage_type=service.StageType.FFA_LEAGUE)
+        self.assertEqual("ffa_default", service._rule_profile(stage))
+        self.assertEqual(
+            ["points", "ffa_game_wins", "ffa_score", "ffa_last_placement", "manual_override"],
+            service._tiebreak_order(stage),
+        )

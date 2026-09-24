@@ -31,6 +31,28 @@ export function ariaSortValue(
 }
 
 /**
+ * Avatar-fallback initials. One implementation for every surface — this used to
+ * be copy-pasted seven times with subtly different letters for the same person.
+ *
+ * A battletag suffix (`Karnage#22778`) is noise, so it is dropped before
+ * splitting; a single-word name contributes its first `max` letters, a
+ * multi-word one the first letter of its first `max` words.
+ */
+export function initials(name: string | null | undefined, max = 2): string {
+  const parts = (name ?? "")
+    .replace(/#.*$/, "")
+    .split(/[\s_-]+/)
+    .filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, max).toUpperCase();
+  return parts
+    .slice(0, max)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+/**
  * Localized inclusive date range, e.g. `Jan 15 – 20, 2026` / `15–20 янв. 2026 г.`
  *
  * `locale` is REQUIRED on purpose. It used to default to `"ru"`, and the two

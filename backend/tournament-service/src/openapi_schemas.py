@@ -28,6 +28,7 @@ from src import schemas
 from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
+from src.schemas import ffa as ffa_schemas
 from src.schemas import registration as reg_schemas
 from src.schemas import registration_form as reg_form_schemas
 from src.schemas import registration_team as reg_team_schemas
@@ -35,7 +36,6 @@ from src.schemas import registration_team as reg_team_schemas
 # Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
 _ENTITIES = QueryParam("entities", array=True)
 _WS = QueryParam("workspace_id", "integer")
-_SEASON = QueryParam("season")
 
 OPERATIONS: dict[str, Op] = {
     # ── public reads (single object) ───────────────────────────────────────
@@ -48,22 +48,20 @@ OPERATIONS: dict[str, Op] = {
         response=schemas.EncounterOverviewRead, query=schemas.EncounterSearchQueryParams
     ),
     "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics, query_params=(_WS,)),
-    "rpc.tournament.owal_results": Op(response=schemas.OwalStandings, query_params=(_WS, _SEASON)),
-    "rpc.tournament.owal_seasons": Op(query_params=(_WS,)),
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": Op(
         response=schemas.LookupItem, response_array=True, query_params=(_WS, QueryParam("is_league", "boolean"))
     ),
     "rpc.tournament.get_stages": Op(response=schemas.StageRead, response_array=True),
     "rpc.tournament.get_standings": Op(response=schemas.StandingRead, response_array=True, query_params=(_ENTITIES,)),
+    # ── ffa lobbies: one shape for the stage list and the single lobby ────
+    "rpc.tournament.ffa_stage": Op(response=ffa_schemas.FfaLobbyRead, response_array=True),
+    "rpc.tournament.ffa_lobby": Op(response=ffa_schemas.FfaLobbyRead),
     "rpc.tournament.statistics_history": Op(
         response=schemas.TournamentStatistics, response_array=True, query_params=(_WS,)
     ),
     "rpc.tournament.statistics_division": Op(
         response=schemas.DivisionStatistics, response_array=True, query_params=(_WS,)
-    ),
-    "rpc.tournament.owal_stacks": Op(
-        response=schemas.LeaguePlayerStack, response_array=True, query_params=(_WS, _SEASON)
     ),
     "rpc.tournament.saved_views": Op(response=schemas.EncounterSavedViewRead, response_array=True, query_params=(_WS,)),
     # ── public reads (paginated) ───────────────────────────────────────────
@@ -428,6 +426,12 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.tournament.encounter_reopen_result": Op(response=schemas.EncounterResultRead),
     "rpc.tournament.encounter_result_audit": Op(response=schemas.EncounterResultAuditRead, response_array=True),
+    # ── ffa lobby results: every write answers the settled lobby table ────
+    "rpc.tournament.ffa_game_results_set": Op(
+        request=ffa_schemas.FfaGameResultsInput, response=ffa_schemas.FfaLobbyRead
+    ),
+    "rpc.tournament.ffa_game_cancel": Op(request=ffa_schemas.FfaGameCancelInput, response=ffa_schemas.FfaLobbyRead),
+    "rpc.tournament.ffa_games_count_set": Op(request=ffa_schemas.FfaGamesCountInput, response=ffa_schemas.FfaLobbyRead),
     # ── per-map match edit (admin) ─────────────────────────────────────────
     # Answers an ad-hoc dict of the match's own columns rather than MatchRead, so
     # only the request body is mapped here.

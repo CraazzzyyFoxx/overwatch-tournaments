@@ -5,7 +5,7 @@
 //  1. the health dot. Putting three pollers on one screen is only worth it if
 //     the bar reports the two you are NOT looking at, and the marker must not
 //     be colour alone — every dot carries a word, rendered `sr-only` by
-//     `AdminTabs`;
+//     `LinkTabs`;
 //  2. who sees which tab. Rank and subscriptions are workspace-scoped, streams
 //     is global (one poller, one Redis key), so a holder whose `stream.read`
 //     is a workspace grant must not be offered it — and the bar must not fire
@@ -100,14 +100,14 @@ async function mount() {
 }
 
 function tab(container: HTMLElement, label: string) {
-  return Array.from(container.querySelectorAll("a[data-admin-tab]")).find((link) =>
+  return Array.from(container.querySelectorAll("a[data-link-tab]")).find((link) =>
     link.textContent?.includes(label)
   );
 }
 
 function tabKeys(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("a[data-admin-tab]")).map((link) =>
-    link.getAttribute("data-admin-tab")
+  return Array.from(container.querySelectorAll("a[data-link-tab]")).map((link) =>
+    link.getAttribute("data-link-tab")
   );
 }
 

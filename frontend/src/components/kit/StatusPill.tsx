@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import type { Tone } from "@/components/kit/tone";
 
 export interface StatusPillProps extends ComponentPropsWithoutRef<"span"> {
@@ -30,7 +31,7 @@ export function StatusPill({
 }: Readonly<StatusPillProps>) {
   return (
     <Badge tone={tone} shape="pill" className={className} {...props}>
-      {dot ? <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" /> : null}
+      {dot ? <StatusDot /> : null}
       {children}
     </Badge>
   );

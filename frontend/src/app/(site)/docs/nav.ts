@@ -157,8 +157,8 @@ export const GUIDES: Record<GuideId, GuideGroup[]> = {
           slug: "stats",
           title: { ru: "Профиль, статистика и ранги", en: "Profile, stats and ranks" },
           keywords: {
-            ru: "профиль статистика ранг дивизион сравнение mvp влияние аналитика owal",
-            en: "profile statistics rank division compare mvp impact analytics owal",
+            ru: "профиль статистика ранг дивизион сравнение mvp влияние аналитика",
+            en: "profile statistics rank division compare mvp impact analytics",
           },
         },
         {

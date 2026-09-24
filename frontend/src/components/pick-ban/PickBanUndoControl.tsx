@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Undo2, X } from "lucide-react";
+import { Check, Undo2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -9,6 +9,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind, PickBanUndo } from "@/types/tournament.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import type { PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";
@@ -139,7 +140,7 @@ export function PickBanUndoControl({
               </Button>
               <Button size="sm" disabled={pending} onClick={() => mutation.mutate(true)}>
                 {pending ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                  <Spinner className="mr-1.5 size-3.5" />
                 ) : (
                   <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                 )}
@@ -163,7 +164,7 @@ export function PickBanUndoControl({
               onClick={() => mutation.mutate(true)}
             >
               {pending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+                <Spinner className="mr-1.5 size-3.5" />
               ) : (
                 <Undo2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               )}

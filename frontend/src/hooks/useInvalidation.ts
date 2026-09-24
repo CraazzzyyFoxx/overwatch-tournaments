@@ -41,10 +41,18 @@ export type UseInvalidationOptions = ResourceKeyContext & {
  * leading window for (re)subscribe, where the plan is deliberately broader —
  * every resource of the scope, since a client that was away cannot know what
  * it missed (Redis pub/sub is at-most-once and its replay window is bounded).
+ *
+ * A query read within `CATCH_UP_FRESH_MS`, or still being read, is left alone by
+ * that catch-up: on a page load the first subscribe lands moments after the
+ * SSR/first fetch, and re-reading those keys is a duplicate request (an
+ * in-flight one would even be cancelled and restarted), not a recovery. The cost is an
+ * event published inside that window going unseen — the same at-most-once
+ * trade the transport already makes.
  */
 const MIN_DELAY_MS = 250;
 const JITTER_MS = 2500;
 const CATCH_UP_MS = 100;
+const CATCH_UP_FRESH_MS = 5_000;
 
 export function useInvalidation({
   scopeKind,
@@ -95,8 +103,13 @@ export function useInvalidation({
       }
       const all = Object.keys(RESOURCE_QUERY_KEYS) as RealtimeResource[];
       const scoped = all.filter((resource) => resource.startsWith(`${scopeKind}.`));
+      const staleBefore = Date.now() - CATCH_UP_FRESH_MS;
       for (const key of resourceQueryKeys(scoped, scopeId, keyContext)) {
-        void queryClient.invalidateQueries({ queryKey: key });
+        void queryClient.invalidateQueries({
+          queryKey: key,
+          predicate: (query) =>
+            query.state.fetchStatus !== "fetching" && query.state.dataUpdatedAt < staleBefore,
+        });
       }
     },
     onFlush: () => {

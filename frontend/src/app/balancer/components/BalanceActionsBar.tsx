@@ -4,7 +4,6 @@ import {
   Copy,
   Download,
   Gauge,
-  Loader2,
   MoreHorizontal,
   Sparkles,
   Upload
@@ -18,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { InternalBalancePayload } from "@/types/balancer-admin.types";
 import { MUTED_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
+import { Spinner } from "@/components/ui/spinner";
 import { BalanceStatsRow, type VariantStats } from "./BalanceStatsRow";
 
 type BalanceActionsBarProps = {
@@ -87,7 +87,7 @@ export function BalanceActionsBar({
           disabled={!activeVariant || isBalanceSaved || isSavePending || isExportPending}
         >
           {isSavePending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Spinner className="mr-2" />
           ) : (
             <Check className="mr-2 h-4 w-4" />
           )}
@@ -106,7 +106,7 @@ export function BalanceActionsBar({
           disabled={!activeVariant || isBalanceExported || isExportPending || isSavePending}
         >
           {isExportPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Spinner className="mr-2" />
           ) : (
             <Upload className="mr-2 h-4 w-4" />
           )}
@@ -121,7 +121,7 @@ export function BalanceActionsBar({
           disabled={!canExportRanks || isExportRanksPending || isExportPending || isSavePending}
         >
           {isExportRanksPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Spinner className="mr-2" />
           ) : (
             <Gauge className="mr-2 h-4 w-4" />
           )}

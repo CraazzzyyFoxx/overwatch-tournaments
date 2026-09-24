@@ -2,9 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, Loader2, Users } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, Users } from "lucide-react";
+import { useFormatter } from "next-intl";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
+import type { DateFormatter } from "@/components/kit/format-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +17,7 @@ import adminService from "@/services/admin.service";
 import type { ChallongeSyncLogEntry } from "@/types/admin.types";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ChallongeIntegrationSectionProps {
   tournamentId: number;
@@ -24,8 +27,8 @@ interface ChallongeIntegrationSectionProps {
   onSlugChange: (value: string) => void;
 }
 
-function formatSyncTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
+function formatSyncTime(format: DateFormatter, value: string) {
+  return format.dateTime(new Date(value), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -78,6 +81,7 @@ export function ChallongeIntegrationSection({
   slug,
   onSlugChange
 }: Readonly<ChallongeIntegrationSectionProps>) {
+  const format = useFormatter();
   const queryClient = useQueryClient();
 
   const { data: logs = [], isLoading } = useQuery({
@@ -168,7 +172,7 @@ export function ChallongeIntegrationSection({
           onClick={() => importMutation.mutate()}
         >
           {importMutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <Spinner />
           ) : (
             <ArrowDownToLine className="size-4" aria-hidden />
           )}
@@ -182,7 +186,7 @@ export function ChallongeIntegrationSection({
           onClick={() => exportMutation.mutate()}
         >
           {exportMutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <Spinner />
           ) : (
             <ArrowUpFromLine className="size-4" aria-hidden />
           )}
@@ -202,7 +206,7 @@ export function ChallongeIntegrationSection({
           <span className={EYEBROW_CLASS}>Last sync</span>
           {syncPending ? (
             <span className="inline-flex items-center gap-1.5 text-foreground">
-              <Loader2 className="size-3 animate-spin" aria-hidden />
+              <Spinner className="size-3" />
               Sync running — the log updates when it finishes.
             </span>
           ) : isLoading ? (
@@ -217,7 +221,7 @@ export function ChallongeIntegrationSection({
                 {lastLog.entity_id ? ` #${lastLog.entity_id}` : ""}
               </span>
               <span aria-hidden>·</span>
-              <span className="tabular-nums">{formatSyncTime(lastLog.created_at)}</span>
+              <span className="tabular-nums">{formatSyncTime(format, lastLog.created_at)}</span>
             </>
           ) : null}
           {failedLogCount > 0 ? (
@@ -300,7 +304,7 @@ export function ChallongeIntegrationSection({
                     </span>
                   ) : null}
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {formatSyncTime(log.created_at)}
+                    {formatSyncTime(format, log.created_at)}
                   </span>
                 </div>
               ))}

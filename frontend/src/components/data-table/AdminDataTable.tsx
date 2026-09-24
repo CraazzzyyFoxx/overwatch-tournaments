@@ -21,10 +21,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
-import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Copy, Download, LoaderCircle, Rows3, Rows4, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Copy, Download, Rows3, Rows4, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import {
   Table,
@@ -50,6 +47,7 @@ import {
   type AdminTableFilters
 } from "@/components/data-table/filters";
 import {
+  ADMIN_ACTION_COLUMN_ID,
   ALIGN_CLASS,
   ALIGN_FLEX_CLASS,
   RESPONSIVE_CLASS,
@@ -65,8 +63,10 @@ import { isInteractiveRowTarget, useRowSelectionGestures } from "@/components/da
 import { AdminSavedViews } from "@/components/data-table/SavedViews";
 import { AdminTableSearchContext, HighlightMatch } from "@/components/data-table/HighlightMatch";
 import { downloadCsv } from "@/components/data-table/csv";
+import { AdminTableHead } from "@/components/data-table/AdminTableHead";
+import type { ColumnDndModule } from "@/components/data-table/ColumnDnd";
+import { Spinner } from "@/components/ui/spinner";
 
-const ADMIN_ACTION_COLUMN_ID = "actions";
 const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
 /** Width of the select/expand column — keep in sync with its `w-10` class. */
 const ADMIN_LEADING_COLUMN_WIDTH = 40;
@@ -192,7 +192,7 @@ export interface AdminDataTableProps<TData> {
    * the query in server mode and to the rows in client mode, and mirrors into
    * the URL under each spec's own param name.
    *
-   * Pass both to let `kit/AdminFilterBar` own the state: the chips write the
+   * Pass both to let `kit/FilterBar` own the state: the chips write the
    * URL, this reads it. Uncontrolled otherwise — there is no filter control
    * in the header any more, so the only writers left are a deep link, a
    * back/forward, and the empty state's "Clear filters".
@@ -231,7 +231,7 @@ export interface AdminDataTableProps<TData> {
   actions?: React.ReactNode;
 
   /**
-   * Rendered in its own row above the table: this is where `AdminFilterBar`
+   * Rendered in its own row above the table: this is where `FilterBar`
    * goes. Unlike `actions` (a cluster to the right of the search box) it owns
    * the full width, because a chip row wraps.
    */
@@ -836,11 +836,22 @@ export function AdminDataTable<TData>({
   const tabbableRowId = focusedRowId !== null && table.getRowModel().rowsById[focusedRowId] ? focusedRowId : firstRowId;
 
   // Column drag-to-reorder. Only the header row is sortable; the actions
-  // column keeps its place at the right edge.
-  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const handleColumnDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    setColumnOrder(arrayMove(columnOrder, columnOrder.indexOf(String(active.id)), columnOrder.indexOf(String(over.id))));
+  // column keeps its place at the right edge. `@dnd-kit` is fetched when a
+  // pointer first reaches the table (see `armColumnDnd`), not shipped with it,
+  // so a list page that is only read never downloads it.
+  const [columnDnd, setColumnDnd] = useState<ColumnDndModule | null>(null);
+  const columnDndRequestedRef = useRef(false);
+  const armColumnDnd = () => {
+    if (columnDndRequestedRef.current) return;
+    columnDndRequestedRef.current = true;
+    void import("@/components/data-table/ColumnDnd").then(setColumnDnd);
+  };
+  // dnd-kit's `arrayMove`: drop the dragged id, reinsert it at the index the
+  // drop target holds in the order it was dragged from.
+  const handleColumnReorder = (activeId: string, overId: string) => {
+    const next = columnOrder.filter((id) => id !== activeId);
+    next.splice(columnOrder.indexOf(overId), 0, activeId);
+    setColumnOrder(next);
   };
 
   /** Selected rows when there are any, else the whole current view (every filtered row in client mode). */
@@ -1014,6 +1025,10 @@ export function AdminDataTable<TData>({
   );
   const fillerCell = <TableCell key="filler" aria-hidden className={cn("p-0", !fillerStyle && "w-full")} style={fillerStyle} />;
 
+  // Plain until the drag chunk lands; `SortableHead` renders the same cell
+  // with dnd-kit's bindings on it.
+  const HeadCell: ColumnDndModule["SortableHead"] = columnDnd?.SortableHead ?? AdminTableHead;
+
   const renderHead = (header: Header<TData, unknown>, index: number, count: number) => {
     const isActionColumn = header.column.id === ADMIN_ACTION_COLUMN_ID;
     const isFirstColumn = index === 0 && !hasLeadingColumn;
@@ -1026,10 +1041,9 @@ export function AdminDataTable<TData>({
     const sticky = stickyCell(header.column.id, getColumnStyle(header.column));
 
     return (
-      <SortableHead
+      <HeadCell
         key={header.id}
         header={header}
-        disabled={isActionColumn}
         aria-sort={canSort ? ariaSortValue(sorted) : undefined}
         className={cn(
           "border-b border-border/40 text-xs font-medium text-muted-foreground",
@@ -1073,7 +1087,7 @@ export function AdminDataTable<TData>({
             )}
           </span>
         )}
-      </SortableHead>
+      </HeadCell>
     );
   };
 
@@ -1267,7 +1281,7 @@ export function AdminDataTable<TData>({
 
         {isRefreshing ? (
           <output className="flex shrink-0 items-center text-muted-foreground">
-            <LoaderCircle aria-hidden className="size-3 animate-spin" />
+            <Spinner className="size-3" />
             <span className="sr-only">Refreshing results…</span>
           </output>
         ) : null}
@@ -1338,16 +1352,22 @@ export function AdminDataTable<TData>({
             <div className="py-8 text-center">{emptyState}</div>
           )
         ) : (
-        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
-        <SortableContext
-          items={visibleColumns.filter((column) => column.id !== ADMIN_ACTION_COLUMN_ID).map((column) => column.id)}
-          strategy={horizontalListSortingStrategy}
+        // The table scrolls in its own box so the header can stick and the
+        // body can be virtualised; the box's height is measured to fill the
+        // viewport (see the effect on `scrollElement`).
+        <Table
+          ref={tableRef}
+          className="min-w-full border-separate border-spacing-0"
+          // A pointer reaching the table is the warning a column drag gives:
+          // the reorder chunk is fetched then, usually before the header is hit.
+          onPointerEnter={armColumnDnd}
         >
-        {/* The table scrolls in its own box so the header can stick and the
-            body can be virtualised; the box's height is measured to fill the
-            viewport (see the effect on `scrollElement`). */}
-        <Table ref={tableRef} className="min-w-full border-separate border-spacing-0">
-          <TableHeader className="sticky top-0 z-10">
+          <TableHeader className="sticky top-0 z-10" onPointerDown={armColumnDnd}>
+            <ColumnDndBoundary
+              columnDnd={columnDnd}
+              columnIds={visibleColumns.filter((column) => column.id !== ADMIN_ACTION_COLUMN_ID).map((column) => column.id)}
+              onReorder={handleColumnReorder}
+            >
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {hasLeadingColumn ? (
@@ -1381,6 +1401,7 @@ export function AdminDataTable<TData>({
                 {fillerIndex === headerGroup.headers.length ? fillerHead : null}
               </TableRow>
             ))}
+            </ColumnDndBoundary>
           </TableHeader>
           <TableBody onKeyDown={handleBodyKeyDown}>
             {bodyItems.length === 0 ? (
@@ -1419,8 +1440,6 @@ export function AdminDataTable<TData>({
             ) : null}
           </TableBody>
         </Table>
-        </SortableContext>
-        </DndContext>
         )}
       </div>
 
@@ -1511,47 +1530,30 @@ export function AdminDataTable<TData>({
 }
 
 /**
- * Header cell that can be dragged to reorder its column and has a resize
- * handle on its right edge. Only dnd-kit's pointer listeners are spread, not
- * its `attributes`: those would put `role="button"` on a `<th>`.
+ * Renders the header rows inside dnd-kit's contexts once the reorder chunk has
+ * resolved, and bare until then.
+ *
+ * The swap remounts the header rows once (React cannot keep a subtree's
+ * identity when its ancestor appears). It sits inside `<thead>` so the scroll
+ * box and the body — scroll position, virtualised rows, row focus — survive it.
  */
-function SortableHead<TData>({
-  header,
-  disabled,
-  className,
-  style,
-  children,
-  ...rest
-}: Readonly<
-  { header: Header<TData, unknown>; disabled?: boolean } & React.ThHTMLAttributes<HTMLTableCellElement>
->) {
-  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: header.column.id, disabled });
-  const resizeHandler = header.getResizeHandler();
+function ColumnDndBoundary({
+  columnDnd,
+  columnIds,
+  onReorder,
+  children
+}: Readonly<{
+  columnDnd: ColumnDndModule | null;
+  columnIds: string[];
+  onReorder: (activeId: string, overId: string) => void;
+  children: React.ReactNode;
+}>) {
+  if (!columnDnd) return children;
+
+  const { ColumnDndProvider } = columnDnd;
   return (
-    <TableHead
-      ref={setNodeRef}
-      {...rest}
-      {...listeners}
-      className={cn(className, "relative select-none", isDragging && "z-20 opacity-70")}
-      style={{ ...style, transform: CSS.Translate.toString(transform), transition }}
-    >
+    <ColumnDndProvider columnIds={columnIds} onReorder={onReorder}>
       {children}
-      {header.column.getCanResize() ? (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={`Resize ${header.column.id} column`}
-          title="Drag to resize, double-click to reset"
-          onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={resizeHandler}
-          onTouchStart={resizeHandler}
-          onDoubleClick={() => header.column.resetSize()}
-          className={cn(
-            "absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none hover:bg-primary/40",
-            header.column.getIsResizing() && "bg-primary"
-          )}
-        />
-      ) : null}
-    </TableHead>
+    </ColumnDndProvider>
   );
 }

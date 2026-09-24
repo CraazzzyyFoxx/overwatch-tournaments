@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AlertTriangle, ArrowRight, CheckCircle2, Circle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ function ActionRow({ item }: Readonly<{ item: ChecklistItem }>) {
     return <div className={shared}>{body}</div>;
   }
   return (
-    <Link
+    <HoverPrefetchLink
       href={item.href}
       className={cn(
         shared,
@@ -58,7 +58,7 @@ function ActionRow({ item }: Readonly<{ item: ChecklistItem }>) {
       )}
     >
       {body}
-    </Link>
+    </HoverPrefetchLink>
   );
 }
 
@@ -139,10 +139,10 @@ export function ActiveTournamentReadiness({
             size="sm"
             className="-mt-1.5 shrink-0 text-muted-foreground"
           >
-            <Link href={`${basePath}/overview`}>
+            <HoverPrefetchLink href={`${basePath}/overview`}>
               Full checklist
               <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
+            </HoverPrefetchLink>
           </Button>
         </div>
         {trackedCount > 0 && (

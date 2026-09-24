@@ -13,6 +13,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import type { PlayerRoleTint } from "@/lib/roster/player-role";
+import { initials } from "@/lib/utils";
 import type { FormResult } from "@/app/(site)/users/components/shared/atoms";
 import type { Translate } from "@/app/(site)/users/components/shared/list-utils";
 
@@ -33,7 +34,7 @@ export interface ShareCardData {
 }
 
 const BTN =
-  "inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.03)] px-2.5 py-1.5 text-caption font-semibold text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:opacity-50";
+  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.03)] px-2.5 text-caption font-semibold text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] disabled:opacity-50";
 
 const CARD_W = 1200;
 const CARD_H = 630;
@@ -58,13 +59,6 @@ const TOKEN_FALLBACK = "#788391";
 
 function token(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || TOKEN_FALLBACK;
-}
-
-function initialsFrom(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  const single = parts[0] ?? "?";
-  return single.slice(0, 2).toUpperCase();
 }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -199,7 +193,7 @@ function drawCard(
   ctx.font = `800 64px ${onest}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(initialsFrom(card.name), avX + AV / 2, avY + AV / 2 + 4);
+  ctx.fillText(initials(card.name), avX + AV / 2, avY + AV / 2 + 4);
 
   // name + tag
   const nameX = avX + AV + 34;

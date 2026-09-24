@@ -21,7 +21,6 @@ import {
   ArrowUpRight,
   CheckCircle2,
   GripVertical,
-  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -55,6 +54,7 @@ import {
   type StageProgress
 } from "@/lib/bracket/projection";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * The `updateStageItemInput` calls that move `source`'s team into `target`'s slot.
@@ -456,7 +456,7 @@ export function StageItemsSection({
                                 >
                                   {updateInputMutation.isPending &&
                                   updateInputMutation.variables?.inputId === input.id ? (
-                                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                                    <Spinner className="size-3" />
                                   ) : (
                                     <CheckCircle2 className="size-3" aria-hidden />
                                   )}
@@ -565,7 +565,7 @@ export function StageItemsSection({
                   >
                     {createInputMutation.isPending &&
                     createInputMutation.variables?.stageItemId === item.id ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      <Spinner />
                     ) : (
                       <Plus className="size-4" aria-hidden />
                     )}
@@ -629,7 +629,7 @@ export function StageItemsSection({
           onClick={() => createItemMutation.mutate()}
         >
           {createItemMutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <Spinner />
           ) : (
             <Plus className="size-4" aria-hidden />
           )}

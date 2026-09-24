@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
-import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { AlertTriangle } from "lucide-react";
 
 import {
   AlertDialog,
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TONE_TEXT } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 export type ConfirmTone = "danger" | "warning" | "neutral";
 
@@ -46,7 +48,8 @@ const TONE_ICON: Record<ConfirmTone, string> = {
 };
 
 /**
- * The single confirmation surface for the admin panel.
+ * The single confirmation surface for the whole app — admin screens, the site
+ * and the tools alike.
  *
  * One instance per screen with a swapped `intent`. That is what replaced the
  * six near-identical delete-confirmation mounts in the old stage manager —
@@ -60,6 +63,7 @@ export function ConfirmDialog({
   pending = false
 }: Readonly<ConfirmDialogProps>) {
   const typedFieldId = useId();
+  const t = useTranslations("common");
   const [typed, setTyped] = useState("");
 
   // A reused instance must not carry the previous intent's typed value into
@@ -87,7 +91,7 @@ export function ConfirmDialog({
           </AlertDialogDescription>
           {intent.cascade && intent.cascade.length > 0 ? (
             <div className="mt-4 rounded-md border border-danger/20 bg-danger/10 p-3">
-              <p className="mb-2 font-medium text-danger">This also removes:</p>
+              <p className="mb-2 font-medium text-danger">{t("confirm.cascade")}</p>
               <ul className="list-inside list-disc space-y-1 text-sm">
                 {intent.cascade.map((entry) => (
                   <li key={entry}>{entry}</li>
@@ -100,7 +104,10 @@ export function ConfirmDialog({
         {intent.requireTyped !== undefined ? (
           <div className="space-y-1.5">
             <Label htmlFor={typedFieldId}>
-              Type <span className="font-mono">{intent.requireTyped}</span> to confirm
+              {t.rich("confirm.typeToConfirm", {
+                name: intent.requireTyped,
+                code: (chunks) => <span className="font-mono">{chunks}</span>
+              })}
             </Label>
             <Input
               id={typedFieldId}
@@ -112,7 +119,7 @@ export function ConfirmDialog({
         ) : null}
 
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>{t("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(event) => {
               event.preventDefault();
@@ -126,7 +133,7 @@ export function ConfirmDialog({
                 "bg-destructive text-destructive-foreground hover:bg-destructive/90"
             )}
           >
-            {pending ? <LoaderCircle aria-hidden className="size-4 animate-spin" /> : null}
+            {pending ? <Spinner /> : null}
             {intent.confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

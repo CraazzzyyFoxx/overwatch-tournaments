@@ -14,14 +14,16 @@ import type { DateTimeFormatOptions } from "next-intl";
  * helpers take the formatter instead: client components pass `useFormatter()`,
  * server components `await getFormatter()`. Both satisfy this shape.
  */
-export interface AdminDateFormatter {
+export interface DateFormatter {
   dateTime: (value: Date, options?: DateTimeFormatOptions) => string;
 }
 
-export function formatDate(value: string | null | undefined): string {
+export function formatDate(format: DateFormatter, value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : format.dateTime(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** Compact "5m ago" / "2h ago" style relative time; falls back to "—". */

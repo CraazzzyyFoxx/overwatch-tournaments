@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, EyeOff, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, EyeOff, ShieldCheck, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { TONE_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftSeedResponse } from "@/types/draft.types";
@@ -58,7 +59,7 @@ export function DraftReviewStep({
     <div className="space-y-6">
       {previewPending && (
         <output className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-          <RefreshCw className="h-4 w-4 animate-spin text-primary" aria-hidden />
+          <Spinner className="text-primary" />
           {t("validatingDraft")}
         </output>
       )}

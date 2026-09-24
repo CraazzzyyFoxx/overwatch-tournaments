@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { LoaderCircle } from "lucide-react";
 
 import { stageRoundShape } from "@/lib/bracket/view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { PickBanConfig, PickBanKind, Stage } from "@/types/tournament.types";
 import type { PickBanScopeEncounter } from "@/lib/tournament/pick-ban-config";
+import { Spinner } from "@/components/ui/spinner";
 import { useStageRounds } from "./useStageRounds";
 import {
   encodePreGameScope,
@@ -123,7 +123,7 @@ export function ScopeTree({
                   <ul className="flex flex-col gap-0.5">
                     {roundsLoading ? (
                       <li className="flex items-center gap-2 ps-8 py-1.5 text-xs text-muted-foreground">
-                        <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
+                        <Spinner className="size-3.5" />
                         {t("roundHintLoading")}
                       </li>
                     ) : rounds.length === 0 ? (

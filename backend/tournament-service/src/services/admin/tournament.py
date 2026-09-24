@@ -38,7 +38,7 @@ from src.services.tournament.events import (
     publish_tournament_invalidation,
 )
 
-GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS}
+GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS, StageType.FFA_LEAGUE}
 
 
 def _status_value(value: TournamentStatus | str) -> str:

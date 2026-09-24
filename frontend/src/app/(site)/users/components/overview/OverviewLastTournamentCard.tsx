@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Trophy } from "lucide-react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
 import { type MapResultPip } from "@/app/(site)/users/components/overview/map-results";
@@ -12,6 +12,7 @@ import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { playerRoleTint } from "@/lib/roster/player-role";
+import { tournamentHref } from "@/lib/tournament/url";
 import {
   Select,
   SelectContent,
@@ -178,9 +179,9 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
     <>
     <CardSurface
       title={
-        <Link href={`/tournaments/${tournament.id}`} className="hover:text-[color:var(--aqt-teal)]">
+        <HoverPrefetchLink href={tournamentHref(tournament.id)} className="hover:text-[color:var(--aqt-teal)]">
           {tournament.name}
-        </Link>
+        </HoverPrefetchLink>
       }
       icon={<Trophy size={15} />}
       action={

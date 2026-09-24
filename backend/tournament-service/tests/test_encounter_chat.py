@@ -23,6 +23,7 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
+from shared.core.enums import EncounterFormat  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.services.chat import SPECTATOR_ROLE, ChatRoom  # noqa: E402
 from src.services.encounter import chat_access  # noqa: E402
@@ -73,8 +74,10 @@ class _Ctx:
         self._patches = [
             patch.object(
                 chat_access.captain_service,
-                "_load_encounter",
-                AsyncMock(return_value=SimpleNamespace(id=ENCOUNTER_ID)),
+                "load_encounter_any_format",
+                # A duel: the format decides which captaincy question is asked,
+                # and a row in the database always carries one.
+                AsyncMock(return_value=SimpleNamespace(id=ENCOUNTER_ID, format=EncounterFormat.DUEL)),
             ),
             patch.object(
                 chat_access.visibility_resolvers.visibility_resolvers_service,

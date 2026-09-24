@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 import {
   embeddableTwitchChannel,
@@ -102,11 +103,14 @@ export function StreamTheater({ entry, isPlaying, onPlay, now }: Readonly<Stream
                 className="group absolute inset-0 flex items-center justify-center bg-[hsl(220_22%_4%/0.45)] outline-none transition-colors hover:bg-[hsl(220_22%_4%/0.25)] focus-visible:bg-[hsl(220_22%_4%/0.25)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
               >
                 <span className="sr-only">{t("stream.page.play", { name })}</span>
-                {meta.labelKey ? (
-                  <span className={`${meta.pillClassName} absolute left-3 top-3`} aria-hidden>
-                    {meta.hasDot ? <span className="dot" /> : null}
+                {meta.labelKey && meta.pillStatus ? (
+                  <TournamentStatusPill
+                    status={meta.pillStatus}
+                    className="absolute left-3 top-3"
+                    aria-hidden
+                  >
                     {t(meta.labelKey)}
-                  </span>
+                  </TournamentStatusPill>
                 ) : null}
                 <span
                   aria-hidden
@@ -118,11 +122,10 @@ export function StreamTheater({ entry, isPlaying, onPlay, now }: Readonly<Stream
                   <Play className="size-7 translate-x-0.5 fill-current" />
                 </span>
               </button>
-            ) : meta.labelKey ? (
-              <span className={`${meta.pillClassName} absolute left-3 top-3`}>
-                {meta.hasDot ? <span aria-hidden className="dot" /> : null}
+            ) : meta.labelKey && meta.pillStatus ? (
+              <TournamentStatusPill status={meta.pillStatus} className="absolute left-3 top-3">
                 {t(meta.labelKey)}
-              </span>
+              </TournamentStatusPill>
             ) : null}
           </>
         )}
@@ -130,11 +133,8 @@ export function StreamTheater({ entry, isPlaying, onPlay, now }: Readonly<Stream
 
       <div className="flex min-w-0 flex-col gap-2.5 p-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {meta.labelKey && isPlaying ? (
-            <span className={meta.pillClassName}>
-              {meta.hasDot ? <span aria-hidden className="dot" /> : null}
-              {t(meta.labelKey)}
-            </span>
+          {meta.labelKey && meta.pillStatus && isPlaying ? (
+            <TournamentStatusPill status={meta.pillStatus}>{t(meta.labelKey)}</TournamentStatusPill>
           ) : null}
           {entry.viewer_count != null ? (
             <span className="aqt-tnum text-caption font-semibold tabular-nums text-[color:var(--aqt-fg)]">

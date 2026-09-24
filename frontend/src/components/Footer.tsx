@@ -75,14 +75,8 @@ export function Footer() {
             <FooterLink href="/tournaments" className={FOOTER_LINK_CLASS}>
               {t("nav.items.tournaments.title")}
             </FooterLink>
-            <FooterLink href="/teams" className={FOOTER_LINK_CLASS}>
-              {t("nav.items.teams.title")}
-            </FooterLink>
             <FooterLink href="/users" className={FOOTER_LINK_CLASS}>
               {t("nav.items.users.title")}
-            </FooterLink>
-            <FooterLink href="/matches" className={FOOTER_LINK_CLASS}>
-              {t("nav.items.matches.title")}
             </FooterLink>
             <FooterLink href="/achievements" className={FOOTER_LINK_CLASS}>
               {t("nav.items.achievements.title")}

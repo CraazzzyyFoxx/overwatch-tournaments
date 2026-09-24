@@ -31,7 +31,12 @@ let superuser = true;
 let managesAny = true;
 let mayCreate = true;
 
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("next-intl", () => {
+  // `rich` because the shared ConfirmDialog renders its typed-name prompt as
+  // rich text; a plain key echo has no `.rich` and takes the dialog down.
+  const translate = Object.assign((key: string) => key, { rich: (key: string) => key });
+  return { useTranslations: () => translate };
+});
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: () => ({
     isLoaded: true,

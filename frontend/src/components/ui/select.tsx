@@ -15,13 +15,20 @@ const SelectValue = SelectPrimitive.Value;
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDown, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
       "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate",
       className
     )}
+    // Radix opens on pointerdown and honours only its own `disabled`, but the
+    // browser still dispatches pointerdown to a button disabled by an ancestor
+    // `<fieldset disabled>` — so a locked select would open anyway.
+    onPointerDown={(event) => {
+      onPointerDown?.(event);
+      if (event.currentTarget.matches(":disabled")) event.preventDefault();
+    }}
     {...props}
   >
     {children}

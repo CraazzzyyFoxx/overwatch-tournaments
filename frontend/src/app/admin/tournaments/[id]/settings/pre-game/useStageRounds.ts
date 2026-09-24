@@ -4,7 +4,11 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import adminService from "@/services/admin.service";
-import { GROUP_STAGE_TYPES, projectedRoundRobinRounds } from "@/lib/bracket/projection";
+import {
+  FFA_STAGE_TYPES,
+  GROUP_STAGE_TYPES,
+  projectedRoundRobinRounds
+} from "@/lib/bracket/projection";
 import type { Stage } from "@/types/tournament.types";
 import { stageRoundOptions, type PickBanScopeEncounter } from "@/lib/tournament/pick-ban-config";
 
@@ -38,6 +42,12 @@ export interface StageRounds {
  * rows for. A round the generated bracket never has is inert; a round missing
  * from this list is one nobody can configure.
  *
+ * An FFA stage is fixed at one round and needs neither derivation nor a server
+ * prediction: its lobbies all sit in round 1, and `best_of` sizes the series
+ * inside a lobby rather than adding rounds. Without that, the pre-game scope
+ * tree offered a stage with lobbies no round at all, so its map pool and
+ * best-of were unauthorable.
+ *
  * Shared by the scope tree and the stage editor: both need the same rounds, and
  * one query key means the second one costs nothing.
  */
@@ -53,7 +63,14 @@ export function useStageRounds(
     [stageId, encounters]
   );
   const planned = useMemo(() => {
-    if (stage == null || !GROUP_STAGE_TYPES.includes(stage.stage_type)) return EMPTY_ROUNDS;
+    if (stage == null) return EMPTY_ROUNDS;
+    // An FFA stage plays ONE round: every lobby of a group is round 1, and
+    // `best_of` sizes the series inside a lobby rather than adding rounds. So
+    // the pre-game scope tree offers a single round to hang a map pool on,
+    // instead of a row per game nobody plays in sequence. (The lobbies' kickoff
+    // is a different screen: `RoundScheduleSection` reads them itself.)
+    if (FFA_STAGE_TYPES.includes(stage.stage_type)) return FFA_ROUNDS;
+    if (!GROUP_STAGE_TYPES.includes(stage.stage_type)) return EMPTY_ROUNDS;
     const derived =
       stage.stage_type === "round_robin" ? projectedRoundRobinRounds(stage) : 0;
     const count = derived > 0 ? derived : Math.floor(stage.max_rounds);
@@ -93,3 +110,5 @@ export function useStageRounds(
 }
 
 const EMPTY_ROUNDS: number[] = [];
+/** Every lobby of an FFA stage is round 1; there is no second round to author. */
+const FFA_ROUNDS: number[] = [1];

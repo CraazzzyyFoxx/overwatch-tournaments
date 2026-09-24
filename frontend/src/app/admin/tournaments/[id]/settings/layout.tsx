@@ -3,7 +3,7 @@
 import { useParams, usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AdminSectionNav, type AdminSectionNavGroup } from "@/components/kit/AdminSectionNav";
+import { SectionNav, type SectionNavGroup } from "@/components/kit/SectionNav";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useHubTournamentQuery } from "../hubQueries";
 import { allowedSettingsSection, SETTINGS_SECTIONS, type TabAccess } from "../tab-guards";
@@ -42,7 +42,7 @@ export default function TournamentSettingsLayout({
     teamFormation: tournamentQuery.data?.team_formation === "draft" ? "draft" : "balancer"
   };
 
-  const groups: AdminSectionNavGroup[] = SETTINGS_SECTION_GROUPS.map((group) => ({
+  const groups: SectionNavGroup[] = SETTINGS_SECTION_GROUPS.map((group) => ({
     label: group.label,
     items: group.sections.map((section) => ({
       key: section,
@@ -55,7 +55,7 @@ export default function TournamentSettingsLayout({
 
   return (
     <div className="flex flex-col gap-4 md:flex-row md:gap-6">
-      <AdminSectionNav groups={groups} activeKey={activeKey} />
+      <SectionNav groups={groups} activeKey={activeKey} />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

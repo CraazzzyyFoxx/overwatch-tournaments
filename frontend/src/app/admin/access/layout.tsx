@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import {
   accessApiKeysPermissions,
@@ -52,7 +52,7 @@ const ACCESS_TABS: {
  * Access (F15): navigation and chrome only.
  *
  * The hand-rolled pill `<nav>` this replaces was the last bespoke tab bar in
- * the admin panel; it is now the same `AdminTabs` every other hub uses, so a
+ * the admin panel; it is now the same `LinkTabs` every other hub uses, so a
  * section reads as a tab whether you arrive from the sidebar, the command
  * palette or a link.
  */
@@ -61,7 +61,7 @@ export default function AccessAdminLayout({ children }: Readonly<{ children: Rea
   const { isSuperuser, hasAnyPermission, hasAnyWorkspacePermission, canManageAnyWorkspace } =
     usePermissions();
 
-  const items: AdminTabItem[] = ACCESS_TABS.map((tab) => {
+  const items: LinkTabItem[] = ACCESS_TABS.map((tab) => {
     const visible = tab.superuserOnly
       ? isSuperuser
       : isSuperuser ||
@@ -86,7 +86,7 @@ export default function AccessAdminLayout({ children }: Readonly<{ children: Rea
         title="Access"
         description="Staff accounts, roles, permissions, API keys, OAuth connections and sessions."
       />
-      <AdminTabs items={items} activeKey={activeKey} level={1} ariaLabel="Access sections" />
+      <LinkTabs items={items} activeKey={activeKey} level={1} ariaLabel="Access sections" />
       {items.every((item) => item.hidden) ? (
         <PageStateCard
           state="empty"

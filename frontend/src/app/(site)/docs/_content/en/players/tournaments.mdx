@@ -64,6 +64,7 @@ A tournament is made of stages. Usually that is a group stage followed by playof
 - **Swiss** — a fixed number of rounds, and in each one opponents are matched by current score, so leaders meet leaders. The system avoids putting the same two teams together twice. With an odd number of teams somebody sits a round out, and the organizer sets how many points that is worth.
 - **Single elimination** — one loss and the team is done.
 - **Double elimination** — there is an upper and a lower bracket. The first loss drops a team into the lower bracket, the second knocks it out for good. Rounds are labelled **UB Round**, **UB Final**, **LB Round**, **LB Final** and **Grand Final**.
+- **FFA league** — teams are not paired off at all: the whole group plays in one **lobby**, several games in a row, and every game gives everyone a placement and a score at once.
 
 <Callout>
 In a double-elimination **Grand Final** the team from the upper bracket arrives with a cushion: it has never lost. If the lower-bracket team beats it, both sides are level on losses and a second match is created — the **Grand Final Reset**. It only appears in the bracket in that one case.
@@ -87,6 +88,25 @@ Standings count only fully played rounds. While a round still has an open match,
 </Callout>
 
 Sometimes teams end up equal on every tiebreaker. The table says so plainly: **Equal on every tiebreaker — order assigned, not earned**. The organizer may place such teams by hand.
+
+## The lobby table
+
+An FFA league group has no matches you can open one by one: its result IS one lobby table. The same table opens from the lobby's own page and from the **Bracket** section.
+
+What it holds:
+
+- **Place** — the position in the group. Two teams sharing a place show the same number: no tiebreaker separated them.
+- **Pts** — the total over every game played. A placement pays on the organizer's scale (first is worth more than second), and the score on top of it may pay too.
+- **Games** — how many of the lobby's games this team already has counted.
+- **Score** — whatever the organizer is counting: kills, points, anything. The column is headed with their own word, so it is named differently from tournament to tournament.
+- **G1, G2, …** — one column per game of the lobby. The cell shows the placement on top and that game's score under it. **An empty cell means the game has not been entered yet** — it is not a zero.
+- **Adv** and **Out** — who moves on; the **TOP N ADVANCE** line is drawn exactly where the advancing places end.
+
+<Callout>
+When the advance line runs through a tie, both teams are marked **Tie** rather than advancing: which of them goes through is decided by the assigned order, not by the games. The organizer may place such teams by hand.
+</Callout>
+
+The lobby code and the organizer's instructions arrive in the **lobby room** chat, linked from the lobby page. There is no map veto and no readiness check there: a lobby is played as one group, and the organizer enters each game's result.
 
 ## Streams
 

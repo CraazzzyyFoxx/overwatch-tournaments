@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useFormatter } from "next-intl";
 
 import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";
@@ -32,6 +33,7 @@ const SOURCE_FILTERS = ["all", "scheduled", "registration", "manual"];
  * detail surface below the fold.
  */
 export function RankTaskHistory() {
+  const format = useFormatter();
   const [status, setStatus] = useState("all");
   const [source, setSource] = useState("all");
   // Rows come back scoped to the workspace `apiFetch` injects — key on it so a
@@ -113,7 +115,7 @@ export function RankTaskHistory() {
                   return (
                     <ClickableLogRow key={row.id} href={href}>
                       <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {formatDate(row.created_at)}
+                        {formatDate(format, row.created_at)}
                       </TableCell>
                       <ClickableLogCell href={href} label={row.battle_tag} />
                       <TableCell>

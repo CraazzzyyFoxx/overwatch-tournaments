@@ -6,9 +6,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { AdminDataTable } from "@/components/data-table";
 import { ParsedMatchDetail } from "@/components/admin/ParsedMatchDetail";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { type Tone } from "@/components/kit/tone";
 import {
@@ -54,7 +54,7 @@ const LOG_STATUS_OPTIONS: readonly { value: LogProcessingStatus; label: string }
  * any of this existed: a boolean on the encounter that could not say which
  * upload produced which map, or whether a map had been parsed at all.
  *
- * Filtering lives in `AdminFilterBar` and row detail in `AdminInspector`, the
+ * Filtering lives in `FilterBar` and row detail in `Inspector`, the
  * two surfaces every admin browser uses, so what an admin narrowed to travels
  * in the URL and the table stays visible beside the map being investigated.
  */
@@ -133,7 +133,7 @@ export function ParsedMatchesBrowser({
     return list;
   }, [tournamentId, tournamentsQuery.data, mapsQuery.data]);
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const mapFilter = String(filters.values.map_id ?? "");
   const statusFilter = Array.isArray(filters.values.log_status)
     ? (filters.values.log_status as LogProcessingStatus[])
@@ -244,7 +244,7 @@ export function ParsedMatchesBrowser({
             inspectorId={openId}
             getRowId={(row) => String(row.id)}
             toolbar={
-              <AdminFilterBar
+              <FilterBar
                 defs={defs}
                 filters={filters}
                 pinned={
@@ -310,7 +310,7 @@ export function ParsedMatchesBrowser({
           />
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={openRow ? openId : null}
           onClose={() => setParams({ id: null })}
           title={openRow?.map_name ?? ""}
@@ -327,7 +327,7 @@ export function ParsedMatchesBrowser({
           }
         >
           {openRow ? <ParsedMatchDetail row={openRow} workspaceId={workspaceId} /> : null}
-        </AdminInspector>
+        </Inspector>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -26,6 +26,7 @@ import {
 import { notify } from "@/lib/notify";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanGame } from "@/types/tournament.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { acceptedScore } from "./pick-ban-model";
 
@@ -187,7 +188,7 @@ export function MapReportDialog({
               onClick={() => mutation.mutate()}
             >
               {mutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                <Spinner className="mr-2" />
               ) : null}
               {mutation.isPending ? t("sending") : t("submit")}
             </Button>

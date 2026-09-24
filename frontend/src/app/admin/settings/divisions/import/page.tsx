@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { LoaderCircle } from "lucide-react";
 
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { StatusPill } from "@/components/kit/StatusPill";
@@ -27,6 +26,7 @@ import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { DivisionGridMarketplaceImportRequest } from "@/types/workspace.types";
+import { Spinner } from "@/components/ui/spinner";
 
 const STEPS = ["source", "version", "create"] as const;
 type StepKey = (typeof STEPS)[number];
@@ -379,7 +379,7 @@ export default function DivisionGridImportPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 <p className="flex items-center gap-2 text-sm">
-                  <LoaderCircle aria-hidden className="size-4 animate-spin" />
+                  <Spinner />
                   Copying the grid…
                 </p>
                 <Progress value={job.progress} />

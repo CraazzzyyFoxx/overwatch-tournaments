@@ -16,7 +16,12 @@ import type { Stage } from "@/types/tournament.types";
 
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { useHubEncountersQuery } from "../../hubQueries";
-import { BRACKET_STAGE_TYPES, type BracketTeamCountSource, type StageProjection } from "@/lib/bracket/projection";
+import {
+  BRACKET_STAGE_TYPES,
+  FFA_STAGE_TYPES,
+  type BracketTeamCountSource,
+  type StageProjection
+} from "@/lib/bracket/projection";
 
 const COUNT_SOURCE_NOTE: Record<BracketTeamCountSource, string> = {
   seeded: "from the teams already seeded into this stage",
@@ -250,7 +255,9 @@ export function BracketPreview({
           <p className="text-xs text-muted-foreground">
             {isBracket
               ? "Nothing to draw yet — wire at least two teams, or set the preceding group stage's advancing count."
-              : "A group stage's matches are drawn once they are generated."}
+              : FFA_STAGE_TYPES.includes(stage.stage_type)
+                ? "An FFA stage's lobbies are drawn once they are generated."
+                : "A group stage's matches are drawn once they are generated."}
           </p>
         )}
       </div>

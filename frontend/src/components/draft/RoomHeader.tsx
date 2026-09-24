@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
+import { StatusDot } from "@/components/ui/status-dot";
 import type { DraftGating } from "@/lib/draft/logic";
 import { seatOf, viewerCount } from "@/lib/draft/room-model";
-import { cn } from "@/lib/utils";
 import type { DraftBoard, DraftPresenceState } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type { Tournament } from "@/types/tournament.types";
@@ -63,14 +63,7 @@ export function RoomHeader({ tournament, board, gating, presence, connectionStat
         className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold uppercase tracking-[0.08em]"
         style={{ color, borderColor: `color-mix(in srgb, ${color} 45%, transparent)` }}
       >
-        <span
-          aria-hidden
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            status === "live" && "animate-pulse motion-reduce:animate-none"
-          )}
-          style={{ background: color }}
-        />
+        <StatusDot pulse={status === "live"} />
         {t(`shell.status.${status}`)}
       </span>
 

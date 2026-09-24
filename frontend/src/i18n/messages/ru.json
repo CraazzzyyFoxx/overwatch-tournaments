@@ -72,6 +72,10 @@
       "median_buchholz": "Медианный Бухгольц",
       "buchholz": "Бухгольц",
       "score_differential": "Разница карт",
+      "ffa_game_wins": "Победы в играх",
+      "ffa_score": "Счёт",
+      "ffa_best_placement": "Лучшее место",
+      "ffa_last_placement": "Последнее место",
       "manual_override": "Ручное переопределение"
     },
     "combined": "Комбинированная",
@@ -278,6 +282,10 @@
       "connecting": "Подключение",
       "connected": "Подключено",
       "reconnecting": "Переподключение"
+    },
+    "confirm": {
+      "cascade": "Вместе с этим будет удалено:",
+      "typeToConfirm": "Введите <code>{name}</code> для подтверждения"
     }
   },
   "registration": {
@@ -903,7 +911,6 @@
       "delete": "Удалить аккаунт",
       "confirmTitle": "Удалить ваш аккаунт?",
       "confirmBody": "Аккаунт, сессии, привязанные OAuth-подключения и API-ключи будут удалены безвозвратно. Турнирная история и профиль игрока сохранятся, но без владельца. Вы сразу выйдете из аккаунта.",
-      "confirmCancel": "Оставить аккаунт",
       "confirmDelete": "Удалить безвозвратно"
     },
     "sessions": {
@@ -1091,6 +1098,10 @@
       "roundColumn": "Раунд",
       "timeColumn": "Время начала",
       "matchesColumn": "Матчи",
+      "lobbiesColumn": "Лобби",
+      "lobbiesRound": "Лобби",
+      "emptyTitleLobbies": "На этом этапе ещё нет лобби",
+      "emptyBodyLobbies": "Сначала сгенерируйте этап — время начала записывается уже существующим лобби.",
       "actionsColumn": "Применить время раунда",
       "timeInputLabel": "Время начала для «{round}»",
       "timeFieldLabel": "Время начала (часы и минуты) для «{round}»",
@@ -1670,7 +1681,9 @@
         "onForm": "в форме",
         "predShort": "прог. {place}",
         "viewList": "Список",
-        "viewTable": "Таблица"
+        "viewTable": "Таблица",
+        "viewLabel": "Вид таблицы",
+        "sortLabel": "Сортировка таблицы"
       },
       "horizon": {
         "title": "Прогноз и факт",
@@ -1784,10 +1797,6 @@
       "workspaces": "Воркспейсы",
       "workspaceListNotLoaded": "Список воркспейсов не загружен.",
       "selectAtLeastOneWorkspace": "Выберите хотя бы один воркспейс.",
-      "relativeJustNow": "только что",
-      "relativeMinutes": "{count, plural, one {# минуту назад} few {# минуты назад} many {# минут назад} other {# минут назад}}",
-      "relativeHours": "{count, plural, one {# час назад} few {# часа назад} many {# часов назад} other {# часов назад}}",
-      "relativeDays": "{count, plural, one {# день назад} few {# дня назад} many {# дней назад} other {# дней назад}}",
       "finishedRelative": "завершено {relative}",
       "startedRelative": "запущено {relative}",
       "createdRelative": "создано {relative}"
@@ -1862,25 +1871,9 @@
       "final": "Финал",
       "signups": "Приём заявок",
       "setup": "Подготовка"
-    },
-    "time": {
-      "justNow": "только что",
-      "soon": "скоро",
-      "minutesAgo": "{count, plural, one {# мин назад} few {# мин назад} many {# мин назад} other {# мин назад}}",
-      "inMinutes": "{count, plural, one {через # мин} few {через # мин} many {через # мин} other {через # мин}}",
-      "hoursAgo": "{count, plural, one {# ч назад} few {# ч назад} many {# ч назад} other {# ч назад}}",
-      "inHours": "{count, plural, one {через # ч} few {через # ч} many {через # ч} other {через # ч}}",
-      "daysAgo": "{count, plural, one {# дн назад} few {# дн назад} many {# дн назад} other {# дн назад}}",
-      "inDays": "{count, plural, one {через # дн} few {через # дн} many {через # дн} other {через # дн}}"
     }
   },
   "teams": {
-    "subtitle": "Просматривайте сбалансированные команды, переходите к нужной и настраивайте сортировку.",
-    "tournamentsLoadError": "Не удалось загрузить турниры",
-    "loadingTournaments": "Загрузка турниров…",
-    "selectTournament": "Выберите турнир",
-    "findTeam": "Найти команду",
-    "sortValue": "{field} — {order}",
     "groupLabel": "Группа {name}",
     "roster": {
       "role": "Роль",
@@ -1889,21 +1882,10 @@
       "newcomer": "Новичок",
       "newcomerRole": "Новая роль",
       "avgSr": "Средний SR"
-    },
-    "sortAvgSr": "Средний SR",
-    "sortPlacement": "Место",
-    "sortGroup": "Группа",
-    "selectTournamentToView": "Выберите турнир, чтобы посмотреть команды.",
-    "teamsLoadError": "Не удалось загрузить команды.",
-    "noTeamsFound": "Для этого турнира команды не найдены.",
-    "meta": {
-      "description": "Команды на {siteName}."
     }
   },
   "matches": {
     "col": {
-      "map": "Карта",
-      "match": "Матч",
       "score": "Счёт",
       "division": "Дивизион",
       "prs": "PRS",
@@ -2017,9 +1999,6 @@
       "shotsHit": "Попаданий",
       "shotsMissed": "Промахов"
     },
-    "matchesTotal": "{count, plural, one {# матч всего} few {# матча всего} many {# матчей всего} other {# матчей всего}}",
-    "allTournaments": "Все турниры",
-    "noMatchesFound": "Матчи не найдены.",
     "round": "Раунд {round}",
     "gamemode": "Режим игры",
     "playtime": "Игровое время",
@@ -2027,7 +2006,6 @@
     "allMatch": "Весь матч",
     "teamLabel": "Команда {name}",
     "meta": {
-      "description": "Просмотр матчей на {siteName}.",
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Обзор матча {home} vs {away} на {siteName}."
     }
@@ -2539,32 +2517,6 @@
     "roleTank": "Танк",
     "roleDamage": "Дамаг",
     "roleSupport": "Саппорт"
-  },
-  "owal": {
-    "metaDescription": "Смотрите таблицу OWAL на {siteName}.",
-    "season": "Сезон:",
-    "selectSeason": "Выберите сезон",
-    "stacks": "Стаки",
-    "searchUser": "Поиск игрока…",
-    "standingsTableLabel": "Таблица OWAL. Прокрутите по горизонтали, чтобы увидеть все дни и статистику.",
-    "stacksTableLabel": "Стаки OWAL. Прокрутите по горизонтали, чтобы увидеть все столбцы.",
-    "only3Days": "Только 3+ дней",
-    "playerOne": "Игрок 1",
-    "playerTwo": "Игрок 2",
-    "days": "Дни",
-    "averagePlacement": "Среднее место",
-    "place": "Место",
-    "player": "Игрок",
-    "role": "Роль",
-    "division": "Дивизион",
-    "played": "Сыграно",
-    "totalBest3": "ИТОГО (лучшие 3 дня)",
-    "average": "Среднее",
-    "wins": "W",
-    "losses": "L",
-    "draws": "D",
-    "winRatio": "Винрейт",
-    "title": "OWAL"
   },
   "notConfigured": {
     "title": "Воркспейс не настроен",
@@ -4291,62 +4243,19 @@
     "groups": {
       "tournaments": "Турниры",
       "users": "Игроки",
-      "matches": "Матчи",
-      "organization": "Организация"
+      "play": "Играть"
     },
     "items": {
-      "tournaments": {
-        "title": "Турниры",
-        "desc": "Все турниры, проведённые на платформе"
-      },
-      "teams": {
-        "title": "Команды",
-        "desc": "Сбалансированные составы команд с турниров"
-      },
-      "analytics": {
-        "title": "Аналитика",
-        "desc": "Аналитика турниров, прогнозы и таблицы"
-      },
-      "users": {
-        "title": "Игроки",
-        "desc": "Все участники всех турниров"
-      },
-      "compare": {
-        "title": "Сравнение",
-        "desc": "Сравнение двух игроков напрямую"
-      },
-      "heroesLeaderboard": {
-        "title": "Рейтинг героев",
-        "desc": "Рейтинг игроков по каждому герою"
-      },
-      "achievements": {
-        "title": "Достижения",
-        "desc": "Все достижения и условия их получения"
-      },
-      "encounters": {
-        "title": "Встречи",
-        "desc": "Все серии встреч со всех турниров"
-      },
-      "matches": {
-        "title": "Матчи",
-        "desc": "Все матчи, сыгранные на платформе"
-      },
-      "scrims": {
-        "title": "Скримы",
-        "desc": "Временные комнаты для тренировочных матчей"
-      },
-      "balancer": {
-        "title": "Балансировщик",
-        "desc": "Балансировка команд по ролям и рейтингу"
-      },
-      "mixes": {
-        "title": "Миксы",
-        "desc": "Пикап-лобби, сбалансированные по составу воркспейса"
-      },
-      "admin": {
-        "title": "Администрирование",
-        "desc": "Управление турнирами, доступом и операциями"
-      }
+      "tournaments": { "title": "Турниры" },
+      "encounters": { "title": "Встречи" },
+      "analytics": { "title": "Аналитика" },
+      "users": { "title": "Игроки" },
+      "compare": { "title": "Сравнение" },
+      "heroesLeaderboard": { "title": "Рейтинг героев" },
+      "achievements": { "title": "Достижения" },
+      "scrims": { "title": "Скримы" },
+      "mixes": { "title": "Миксы" },
+      "admin": { "title": "Администрирование" }
     },
     "workspaces": "Воркспейсы",
     "switchWorkspace": "Сменить воркспейс",
@@ -4368,7 +4277,7 @@
       "clearHistory": "Очистить историю",
       "removeFromHistory": "Удалить из истории"
     },
-    "mobileMenuTitle": "Навигация по сайту"
+    "label": "Навигация по сайту"
   },
   "draftAdmin": {
     "title": "Управление драфтом",
@@ -4550,7 +4459,6 @@
     "back": "Назад",
     "continue": "Продолжить",
     "seedDraft": "Посеять драфт",
-    "keepEditing": "Продолжить настройку",
     "discardSetup": "Отменить настройку",
     "reseedConfirmTitle": "Заменить текущий посев драфта",
     "reseedConfirmDescription": "Команды, игроки и будущие пики будут пересобраны по проверенной конфигурации. Драфт ещё не начался, поэтому уже сделанные пики не изменятся.",
@@ -4658,8 +4566,7 @@
         "rollback": "Откат последнего пика выполнен",
         "cancel": "Драфт отменён",
         "export": "Команды экспортированы"
-      },
-      "dismiss": "Оставить как есть"
+      }
     },
     "roleConflict": {
       "title": "Добавить игроку недостающую роль",
@@ -6126,7 +6033,6 @@
         "action": "Снять с публикации",
         "title": "Снять объявление с публикации?",
         "description": "Оно перестанет показываться с этого момента. Запись и отметки о прочтении сохранятся, поэтому останется видно, кто его читал, — но снова опубликовать его с этого экрана нельзя.",
-        "cancel": "Оставить",
         "done": "Объявление снято с публикации"
       }
     },
@@ -6426,6 +6332,51 @@
       "zoomReset": "Сбросить масштаб",
       "rendering": "Рисуем диаграмму…",
       "renderError": "Не удалось отрисовать диаграмму: {message}"
+    }
+  },
+  "ffa": {
+    "colPlace": "Место",
+    "colTeam": "Команда",
+    "colPoints": "Очки",
+    "colGames": "Игры",
+    "colScore": "Счёт",
+    "colGame": "И{position}",
+    "gameLabel": "Игра {position}",
+    "tableLabel": "Таблица лобби {lobby}",
+    "advancing": "Проходит",
+    "eliminated": "Вылет",
+    "tieStatus": "Равенство",
+    "tieCluster": "Равны по всем тай-брейкам — порядок назначен, а не заслужен",
+    "tieDecidesAdvance": "Равенство по всем тай-брейкам — пройдёт ли команда дальше, решает назначенный порядок, а не результаты лобби",
+    "gamesPerLobby": "Игр в лобби",
+    "participants": "{count, plural, one {# команда} few {# команды} many {# команд} other {# команды}}",
+    "lobbyEmpty": "В это лобби ещё не посадили ни одной команды",
+    "stageLobbies": "Лобби",
+    "stageEmpty": "Для этой стадии ещё не сгенерировано ни одного лобби",
+    "stageFailed": "Не удалось загрузить лобби",
+    "retry": "Повторить",
+    "lobbyLede": "{teams} в одном лобби, по {games, plural, one {# игре} few {# игры} many {# игр} other {# игры}}. Таблица ниже — это таблица группы.",
+    "metaDescription": "{lobby}: места, очки и каждая игра лобби на {siteName}.",
+    "openRoom": "Комната лобби",
+    "backToLobby": "Назад к лобби",
+    "roomHint": "Здесь нет вето и подтверждения готовности: лобби играется одной группой. Организатор публикует код лобби в чате и вносит результат каждой игры.",
+    "roomParticipants": "Участники",
+    "errors": {
+      "ffa_result_unknown_team": "Одна из команд не сидит в этом лобби.",
+      "ffa_result_duplicate_team": "Команда указана дважды — у каждой ровно одна строка.",
+      "ffa_result_missing_team": "В игре нужна строка для каждой команды лобби.",
+      "ffa_result_invalid_score": "Счёт не может быть отрицательным.",
+      "ffa_result_mixed_placement": "Проставьте место каждой команде или никому.",
+      "ffa_result_placement_required": "Стадия начисляет очки за место, поэтому место нужно каждой команде.",
+      "ffa_result_invalid_placement": "Места идут от 1 до числа команд, каждое занято ровно один раз.",
+      "ffa_reason_required": "Чтобы изменить сыгранную игру, нужна причина.",
+      "ffa_game_out_of_range": "Такой игры в лобби нет — сначала измените число игр.",
+      "ffa_games_below_played": "Серия не может быть короче уже сыгранных игр.",
+      "ffa_game_not_found": "Эта игра не сыграна, аннулировать нечего.",
+      "encounter_not_ffa": "Эта встреча — не FFA-лобби.",
+      "encounter_not_duel": "Эта встреча — FFA-лобби, а не дуэль.",
+      "ffa_field_not_editable": "Это поле у лобби не редактируется.",
+      "ffa_lobby_size": "В лобби от 2 до 100 команд."
     }
   }
 }

@@ -5,7 +5,7 @@ from typing import Literal
 import sqlalchemy as sa
 from pydantic import BaseModel, Field
 
-from src.core import db, pagination
+from src.core import db, enums, pagination
 from src.schemas import (
     BaseRead,
     MapRead,
@@ -45,6 +45,7 @@ __all__ = (
 
 class EncounterSummaryRead(BaseRead):
     name: str
+    format: enums.EncounterFormat = enums.EncounterFormat.DUEL
     home_team_id: int | None = None
     away_team_id: int | None = None
     score: Score
@@ -92,6 +93,7 @@ class EncounterGameRead(BaseRead):
 
 class EncounterRead(BaseRead):
     name: str
+    format: enums.EncounterFormat = enums.EncounterFormat.DUEL
     home_team_id: int | None = None
     away_team_id: int | None = None
     score: Score
@@ -253,6 +255,9 @@ class EncounterSearchParams(pagination.PaginationSortSearchParams):
     closeness_min: float | None = None
     closeness_max: float | None = None
     scope: Literal["all", "my_team"] = "all"
+    #: ``None`` reads as ``duel``: every existing list, search and overview is a
+    #: list of series, and a lobby has no home/away to render there.
+    format: enums.EncounterFormat | None = None
 
     def apply_search(self, query: sa.Select, model: type[db.Base]) -> sa.Select:
         criteria = []
@@ -280,6 +285,9 @@ class EncounterSearchQueryParams(pagination.PaginationSortSearchQueryParams):
     closeness_min: float | None = Field(default=None, ge=0.0, le=1.0)
     closeness_max: float | None = Field(default=None, ge=0.0, le=1.0)
     scope: Literal["all", "my_team"] = "all"
+    #: ``None`` reads as ``duel``: every existing list, search and overview is a
+    #: list of series, and a lobby has no home/away to render there.
+    format: enums.EncounterFormat | None = None
 
 
 @dataclass

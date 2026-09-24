@@ -9,7 +9,6 @@ import {
   ArrowRight,
   ClipboardList,
   Gauge,
-  Loader2,
   Pencil,
   Plus,
   RefreshCw,
@@ -19,7 +18,7 @@ import {
 } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import {
   AdminDetailTableShell,
   getAdminDetailTableStyles
@@ -56,6 +55,7 @@ import type { Team } from "@/types/team.types";
 import { TOURNAMENT_DETAIL_PREVIEW_LIMIT } from "./tournamentWorkspace.helpers";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 interface TournamentTeamsTabProps {
   tournamentId: number;
@@ -128,7 +128,7 @@ function ChallongeTeamPicker({
   };
 
   return (
-    <AdminCombobox
+    <Combobox
       open={open}
       onOpenChange={setOpen}
       label={selected ? selected.name : "Unmapped"}
@@ -163,11 +163,11 @@ function ChallongeTeamPicker({
               ) : null}
             </div>
             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{team.id}</span>
-            <AdminComboboxCheck selected={String(team.id) === value} />
+            <ComboboxCheck selected={String(team.id) === value} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }
 
@@ -629,7 +629,7 @@ export function TournamentTeamsTab({
                         <TableRow className={tableStyles.row}>
                           <TableCell className={tableStyles.cell} colSpan={5}>
                             <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              <Spinner />
                               Loading Challonge participants…
                             </div>
                           </TableCell>

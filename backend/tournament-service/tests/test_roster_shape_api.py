@@ -1,9 +1,9 @@
 """Read-side exposure of the resolved roster shape (D16).
 
 ``TournamentRead.roster_shape`` is an **opt-in entity**, not a required field:
-``TournamentRead`` is nested in six other schemas (``EncounterRead.tournament``,
+``TournamentRead`` is nested in five other schemas (``EncounterRead.tournament``,
 ``TeamRead.tournament``, ``PlayerRead.tournament``, ``StandingRead.tournament``,
-``AchievementRead.tournaments``, ``OwalStandings.days``) that are built from ORM
+``AchievementRead.tournaments``) that are built from ORM
 rows without a session at hand. Making it mandatory would force every one of
 them to resolve the fallback chain, so ``to_pydantic`` fills it only when the
 caller asks — exactly like ``division_grid_version``.

@@ -126,7 +126,7 @@ const CompareFiltersPanel = ({
             updateParams({ [fieldKey]: v === "all" ? undefined : parseOptionalInt(v) })
           }
         >
-          <SelectTrigger className="liquid-glass-panel" aria-label={t(`users.compare.filters.${labelKey}`)}>
+          <SelectTrigger className="liquid-glass-panel h-8" aria-label={t(`users.compare.filters.${labelKey}`)}>
             <div className="flex items-center gap-2">
               {value ? (
                 <Image
@@ -224,7 +224,7 @@ const CompareFiltersPanel = ({
           <div className="space-y-1">
             <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("users.compare.filters.compareScope")}</div>
             <Select value={scope} onValueChange={(value) => updateParams({ scope: value as CompareScope })}>
-              <SelectTrigger className="liquid-glass-panel" aria-label={t("users.compare.filters.compareScope")}>
+              <SelectTrigger className="liquid-glass-panel h-8" aria-label={t("users.compare.filters.compareScope")}>
                 <SelectValue placeholder={t("users.compare.filters.scopePlaceholder")} />
               </SelectTrigger>
               <SelectContent className="liquid-glass-panel">
@@ -241,7 +241,7 @@ const CompareFiltersPanel = ({
               disabled={isTargetBaseline}
               onValueChange={(value) => updateParams({ role: value === "all" ? undefined : value })}
             >
-              <SelectTrigger className="liquid-glass-panel" aria-label={t("users.compare.filters.roleFilter")}>
+              <SelectTrigger className="liquid-glass-panel h-8" aria-label={t("users.compare.filters.roleFilter")}>
                 <div className="flex items-center gap-2">
                   {role ? (
                     <Image

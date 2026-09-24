@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ChevronDown, LoaderCircle, Lock } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useFormatter } from "next-intl";
 
 import {
@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { AuditLogRead } from "@/types/admin.types";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Per-line marker for the field diff.
@@ -339,7 +340,7 @@ export function AuditTrailBody({ scope }: Readonly<{ scope: AuditTrailScope }>) 
               onClick={() => trailQuery.fetchNextPage()}
             >
               {trailQuery.isFetchingNextPage ? (
-                <LoaderCircle aria-hidden className="size-3.5 animate-spin" />
+                <Spinner className="size-3.5" />
               ) : null}
               Load more
             </Button>

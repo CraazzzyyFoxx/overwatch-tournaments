@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ArrowRight, Layers3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,10 +31,10 @@ export function RecentTournaments({ canRead, tournaments }: Readonly<RecentTourn
               size="sm"
               className="-mt-1.5 shrink-0 text-muted-foreground"
             >
-              <Link href="/admin/tournaments">
+              <HoverPrefetchLink href="/admin/tournaments">
                 View all tournaments
                 <ArrowRight className="size-3.5" aria-hidden />
-              </Link>
+              </HoverPrefetchLink>
             </Button>
           )}
         </div>
@@ -52,7 +52,7 @@ export function RecentTournaments({ canRead, tournaments }: Readonly<RecentTourn
               return (
                 <li key={t.id}>
                   {/* Bleeds to the card edge so the hover fill spans the card. */}
-                  <Link
+                  <HoverPrefetchLink
                     href={`/admin/tournaments/${t.id}`}
                     className="-mx-6 flex items-center justify-between gap-3 px-6 py-2.5 transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
@@ -73,7 +73,7 @@ export function RecentTournaments({ canRead, tournaments }: Readonly<RecentTourn
                       </span>
                       <StatusPill tone={status.tone}>{status.label}</StatusPill>
                     </div>
-                  </Link>
+                  </HoverPrefetchLink>
                 </li>
               );
             })}
