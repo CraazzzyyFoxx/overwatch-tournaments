@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFormatter } from "next-intl";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,15 +13,14 @@ import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { TOURNAMENT_STATUS_LABELS } from "@/lib/tournament/lifecycle";
-import encounterService from "@/services/encounter.service";
-import teamService from "@/services/team.service";
 import { TournamentHubActions } from "./components/TournamentHubActions";
 import { formatDate, TOURNAMENT_STATUS_TONE } from "./components/tournamentWorkspace.helpers";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import {
-  TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
+  useHubEncountersCountQuery,
   useHubStagesQuery,
   useHubStandingsQuery,
+  useHubTeamsCountQuery,
   useHubTournamentQuery
 } from "./hubQueries";
 import { allowedTab, isLegacyTabSegment, isTabKey, TAB_KEYS, type TabKey } from "./tab-guards";
@@ -80,21 +79,8 @@ export function TournamentHubShell({
 
   const tournamentQuery = useHubTournamentQuery(tournamentId);
 
-  const teamsCountQuery = useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "teams", "count"],
-    queryFn: () => teamService.getCount(tournamentId),
-    enabled: isValidTournamentId,
-    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
-
-  const encountersCountQuery = useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "encounters", "count"],
-    queryFn: () => encounterService.getCount(tournamentId),
-    enabled: isValidTournamentId,
-    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
+  const teamsCountQuery = useHubTeamsCountQuery(tournamentId);
+  const encountersCountQuery = useHubEncountersCountQuery(tournamentId);
 
   const stagesQuery = useHubStagesQuery(tournamentId);
   // Pre-T5 the standings query was gated to the overview|matches tabs, but the

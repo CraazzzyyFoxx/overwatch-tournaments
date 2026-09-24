@@ -11,6 +11,12 @@ import workspaceService from "@/services/workspace.service";
 import type { DivisionGridEntity, DivisionGridVersion } from "@/types/workspace.types";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 
+/**
+ * How often the hub refreshes its polled metrics while the tab is in front.
+ * Foreground only (`refetchIntervalInBackground: false` everywhere below): the
+ * hub already invalidates on realtime events and TanStack refetches on focus,
+ * so a hidden tab polling every minute only bills the API for nothing.
+ */
 export const TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS = 60_000;
 
 /** Shared loading fallback of every hub tab route. */
@@ -56,13 +62,35 @@ export function useHubTeamsQuery(tournamentId: number) {
   });
 }
 
+/** Header metric only — the count endpoint, not the team list. */
+export function useHubTeamsCountQuery(tournamentId: number) {
+  return useQuery({
+    queryKey: ["admin", "tournament", tournamentId, "teams", "count"],
+    queryFn: () => teamService.getCount(tournamentId),
+    enabled: Number.isFinite(tournamentId) && tournamentId > 0,
+    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false
+  });
+}
+
 export function useHubEncountersQuery(tournamentId: number) {
   return useQuery({
     queryKey: getTournamentWorkspaceQueryKeys(tournamentId).encounters,
     queryFn: () => encounterService.getAll(1, "", tournamentId, -1),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
     refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
+    refetchIntervalInBackground: false
+  });
+}
+
+/** Header metric only — the count endpoint, not the encounter list. */
+export function useHubEncountersCountQuery(tournamentId: number) {
+  return useQuery({
+    queryKey: ["admin", "tournament", tournamentId, "encounters", "count"],
+    queryFn: () => encounterService.getCount(tournamentId),
+    enabled: Number.isFinite(tournamentId) && tournamentId > 0,
+    refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
+    refetchIntervalInBackground: false
   });
 }
 
@@ -76,7 +104,7 @@ export function useHubStandingsQuery(tournamentId: number) {
       }),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
     refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
+    refetchIntervalInBackground: false
   });
 }
 

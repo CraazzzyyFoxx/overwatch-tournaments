@@ -54,7 +54,11 @@ the new project's equivalents; nothing else in the folder reaches outside it exc
   `select`, `checkbox`, `dialog`, `dropdown-menu`, `context-menu`, plus two small custom
   ones this repo keeps there — `categorized-column-picker` and `infinite-scroll`;
 - npm: `@tanstack/react-table` 8, `@tanstack/react-query` 5, `@tanstack/react-virtual` 3,
-  `@dnd-kit/{core,sortable,utilities}`, `use-debounce`, `lucide-react`;
+  `use-debounce`, `lucide-react`, plus `@dnd-kit/{core,sortable,utilities}` — those three
+  are imported only by `ColumnDnd.tsx`, which `AdminDataTable` fetches with a dynamic
+  `import()` when a pointer first reaches the table, so they are not in the chunk a list
+  page loads. Drop that file and the header stays plain (`AdminTableHead`) but keeps
+  sorting, resizing and everything else;
 - three CSS rule groups in the global stylesheet: `.admin-sticky-col*`, `.admin-table-head`
   and `.admin-row` — the row's hover / selected / current tint, which the pinned cells
   repaint over their own opaque base (search `globals.css` for `admin-sticky-col`).
