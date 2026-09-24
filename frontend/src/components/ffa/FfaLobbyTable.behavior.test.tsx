@@ -186,6 +186,23 @@ describe("ffa lobby game cells", () => {
     expect(cells).toHaveLength(3);
     expect([cells[1].textContent, cells[2].textContent]).toEqual(["", ""]);
   });
+
+  it("keeps a game recorded past a lowered games count on screen", async () => {
+    // The organizer cut the series to 2 after game 3 was confirmed. The backend
+    // keeps answering that cell (`_read_lobby`: `max(best_of, recorded)`) —
+    // it still scores, and voiding it is the only way to finish the cut — so a
+    // column count taken from `best_of` alone hid a counted game.
+    await mount(
+      lobby([row(1, { games: [game(1), game(2), game(3, { placement: 1, score: 31 })] })], {
+        best_of: 2
+      })
+    );
+
+    const cells = [...container.querySelectorAll("tbody tr [data-ffa-game]")];
+    expect(cells.map((node) => node.getAttribute("data-ffa-game"))).toEqual(["1", "2", "3"]);
+    expect(headers()).toContain("G3");
+    expect(cells[2].textContent).toContain("31");
+  });
 });
 
 describe("ffa lobby score column", () => {

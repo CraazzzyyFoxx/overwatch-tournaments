@@ -17,6 +17,7 @@ import { parseStageBestOf } from "@/lib/tournament/best-of";
 
 import {
   BRACKET_STAGE_TYPES,
+  FFA_STAGE_TYPES,
   buildBestOfSettings,
   defaultTiebreakOrder,
   normalizeMaxRounds,
@@ -123,14 +124,14 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
   // the format this stage used to be would silently beat "Games per lobby",
   // with nothing in the editor that can reach it, so only `default` is kept.
   const bestOf = buildBestOfSettings(
-    form.stageType === "ffa_league" ? { default: form.bestOf.default } : form.bestOf
+    FFA_STAGE_TYPES.includes(form.stageType) ? { default: form.bestOf.default } : form.bestOf
   );
   if (bestOf) settings.best_of = bestOf;
   else delete settings.best_of;
 
   // Only an FFA league is scored by place and raw score; on any other type the
   // block is a rule the engine would read for a format that cannot produce it.
-  if (form.stageType === "ffa_league") {
+  if (FFA_STAGE_TYPES.includes(form.stageType)) {
     settings.ffa_scoring = {
       placement_points: form.ffaPlacementPoints,
       score_points: form.ffaScorePoints,

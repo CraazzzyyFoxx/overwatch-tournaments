@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { FfaGameResultsDialog, useFfaErrorMessage } from "@/components/admin/ffa/FfaGameResultsDialog";
-import FfaLobbyTable from "@/components/ffa/FfaLobbyTable";
+import FfaLobbyTable, { lobbyGamePositions } from "@/components/ffa/FfaLobbyTable";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
@@ -103,13 +103,9 @@ function LobbyCard({ lobby }: Readonly<{ lobby: FfaLobby }>) {
   const [entering, setEntering] = useState<number | null>(null);
   const [voiding, setVoiding] = useState<number | null>(null);
 
-  // Every position the lobby carries a cell for. Normally `1..best_of`, but a
-  // lowered games count leaves the results past the new end visible — and
-  // voiding one of those is the only way to finish lowering it.
-  const positions = Array.from(
-    { length: Math.max(lobby.best_of, lobby.rows[0]?.games.length ?? 0, 1) },
-    (_, index) => index + 1
-  );
+  // The same positions the table above draws columns for, so a game recorded
+  // past a lowered games count is never voidable-but-invisible.
+  const positions = lobbyGamePositions(lobby);
   const played = new Set(
     lobby.rows.flatMap((row) => row.games.filter((game) => game.state != null).map((game) => game.position))
   );

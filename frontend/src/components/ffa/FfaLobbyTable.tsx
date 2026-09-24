@@ -10,6 +10,27 @@ import { cn } from "@/lib/utils";
 import type { FfaLobby, FfaLobbyRow } from "@/types/ffa.types";
 
 /**
+ * Every game position the lobby has a cell for.
+ *
+ * Normally `1..best_of`, but NOT only that: `_read_lobby` (backend
+ * `services/encounter/ffa.py`) answers `max(best_of, …recorded positions)`
+ * columns on purpose. Lowering a lobby's games count does not delete the games
+ * already played past the new end — they stay confirmed and keep scoring, and
+ * voiding one is the only way to finish lowering the count. Sizing this from
+ * `best_of` alone hid a counted game from the table while the organizer's own
+ * void button for it sat right underneath.
+ */
+export function lobbyGamePositions(lobby: FfaLobby): number[] {
+  let last = Math.max(lobby.best_of, 1);
+  for (const row of lobby.rows) {
+    for (const cell of row.games) {
+      if (cell.position > last) last = cell.position;
+    }
+  }
+  return Array.from({ length: last }, (_, index) => index + 1);
+}
+
+/**
  * One FFA lobby, as its standings.
  *
  * A lobby has no second screen: the group's table IS this table, so it carries
@@ -47,10 +68,9 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
           advanceCount
         );
 
-  // The series length, not the games entered so far: an organizer resizes the
-  // lobby with `games-count`, and the empty columns are what say how many
-  // games are still to come.
-  const positions = Array.from({ length: Math.max(lobby.best_of, 1) }, (_, index) => index + 1);
+  // The whole series, not the games entered so far: the empty columns are what
+  // say how many games are still to come.
+  const positions = lobbyGamePositions(lobby);
   const scoreLabel = lobby.rules.score_label?.trim() || t("ffa.colScore");
   const columnCount = 5 + positions.length + (advanceCount == null ? 0 : 1);
   const tieClusterTitle = t("ffa.tieCluster");

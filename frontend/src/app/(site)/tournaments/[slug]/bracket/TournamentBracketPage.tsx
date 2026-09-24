@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ResponsiveBracket } from "./ResponsiveBracket";
 import { FfaStagePanel } from "./FfaStagePanel";
+import { FFA_STAGE_TYPES, GROUP_STAGE_TYPES } from "@/lib/bracket/projection";
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
 import StandingsTable from "@/components/StandingsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -335,9 +336,7 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
   // exactly the same route as a round robin's. Only the PANEL differs.
   const groupStages = stages.filter(
     (stage) =>
-      stage.stage_type === "round_robin" ||
-      stage.stage_type === "swiss" ||
-      stage.stage_type === "ffa_league"
+      GROUP_STAGE_TYPES.includes(stage.stage_type) || FFA_STAGE_TYPES.includes(stage.stage_type)
   );
 
   const eliminationStages = stages.filter(
@@ -383,11 +382,13 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
     // every lobby of the stage at once, so its groups are not separate tabs.
     const groupScopeCount = groupStages.reduce(
       (count, stage) =>
-        count + (stage.stage_type === "ffa_league" ? 1 : Math.max(stage.items.length, 1)),
+        count + (FFA_STAGE_TYPES.includes(stage.stage_type) ? 1 : Math.max(stage.items.length, 1)),
       0
     );
     const ffaStageIds = new Set(
-      groupStages.filter((stage) => stage.stage_type === "ffa_league").map((stage) => stage.id)
+      groupStages
+        .filter((stage) => FFA_STAGE_TYPES.includes(stage.stage_type))
+        .map((stage) => stage.id)
     );
 
     const activeStageId = queryPlan.initialStageId ?? fallbackStage?.id;
@@ -468,7 +469,7 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
       // One panel per FFA STAGE, not per group: `FfaStagePanel` reads every
       // lobby of the stage in a single request and renders a table per lobby,
       // so splitting by item here would repeat that request per group.
-      if (stage.stage_type === "ffa_league") {
+      if (FFA_STAGE_TYPES.includes(stage.stage_type)) {
         return [
           {
             key: `stage-${stage.id}`,
@@ -576,7 +577,7 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
           <div className="space-y-6">
             {shouldShowGroupStage
               ? groupStagePanels.map((panel, index) =>
-                  panel.stage.stage_type === "ffa_league" ? (
+                  FFA_STAGE_TYPES.includes(panel.stage.stage_type) ? (
                     <FfaStagePanel
                       key={panel.key}
                       tournamentId={tournament.id}
