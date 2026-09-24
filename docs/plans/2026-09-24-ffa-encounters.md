@@ -1,6 +1,6 @@
 # FFA-встречи: лобби на N участников в турнирном движке
 
-**Status:** implementing — F1 (tasks 1–3) and F2 (tasks 4–9) on `develop`; F3–F5 pending
+**Status:** implementing — F1 (tasks 1–3), F2 (tasks 4–9) and F3 (tasks 10–14) on `develop`; F4–F5 pending (design only)
 
 **Goal:** турнирный движок проводит стадии, где в одной встрече играют больше двух участников — FFA-лобби
 Overwatch, королевская битва, гонки. Участники группы играют N игр, очки за место и за счёт суммируются, топ‑N
