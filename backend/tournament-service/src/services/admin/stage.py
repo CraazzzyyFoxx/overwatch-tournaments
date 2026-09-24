@@ -66,11 +66,14 @@ from src.domain.stage.seeds import (
 )
 from src.services.admin.stage_common import (
     BRACKET_STAGE_TYPES,
+    FFA_STAGE_TYPES,
     GROUPED_GENERATION_STAGE_TYPES,
+    QUALIFYING_SOURCE_STAGE_TYPES,
     _apply_seeding,
     _bracket_seeds,
     _pick_ban_config_signature,
 )
+from src.services.encounter.ffa import ffa_encounter_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
@@ -1485,10 +1488,10 @@ class AdminStageService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Source and target stages must belong to the same tournament",
             )
-        if source_stage.stage_type not in GROUPED_GENERATION_STAGE_TYPES:
+        if source_stage.stage_type not in QUALIFYING_SOURCE_STAGE_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Source stage must be ROUND_ROBIN or SWISS",
+                detail="Source stage must be a group stage (round robin, swiss or ffa league)",
             )
         if target_stage.stage_type not in BRACKET_STAGE_TYPES:
             raise HTTPException(
@@ -1766,7 +1769,7 @@ class AdminStageService:
             self.stage_repo.select()
             .where(
                 models.Stage.tournament_id == stage.tournament_id,
-                models.Stage.stage_type.in_(GROUPED_GENERATION_STAGE_TYPES),
+                models.Stage.stage_type.in_(QUALIFYING_SOURCE_STAGE_TYPES),
                 models.Stage.order < stage.order,
             )
             .options(selectinload(models.Stage.items))
@@ -1983,7 +1986,9 @@ class AdminStageService:
         )
         existing_by_item: dict[int | None, int] = dict(existing_by_item_result.all())
 
-        if stage.stage_type in GROUPED_GENERATION_STAGE_TYPES and len(stage.items) > 1:
+        if stage.stage_type in FFA_STAGE_TYPES:
+            encounters = await self._generate_ffa_encounters(session, stage, existing_by_item)
+        elif stage.stage_type in GROUPED_GENERATION_STAGE_TYPES and len(stage.items) > 1:
             encounters = await self._generate_grouped_encounters(session, stage, existing_by_item)
         else:
             encounters = await self._generate_bracket_encounters(session, stage, existing_by_item)
@@ -1996,6 +2001,30 @@ class AdminStageService:
             schedule_standings=schedule_standings,
         )
         return encounters
+
+    async def _generate_ffa_encounters(
+        self,
+        session: AsyncSession,
+        stage: models.Stage,
+        existing_by_item: dict[int | None, int],
+    ) -> list[models.Encounter]:
+        """One lobby per group that has none yet (plan §5.1). A lobby is not a
+        bracket: nothing here goes through ``generate_bracket``/``Pairing``."""
+        items = [
+            item
+            for item in sorted(stage.items, key=lambda it: (it.order, it.id))
+            if existing_by_item.get(item.id, 0) == 0
+        ]
+        if not items:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Every group already has a lobby. Delete a lobby to regenerate it.",
+            )
+        games = resolve_best_of(parse_best_of_config(stage.settings_json), 1, is_final=False)
+        return [
+            await ffa_encounter_service.create_lobby(session, stage, item, _collect_item_team_ids(item), games=games)
+            for item in items
+        ]
 
     async def _generate_grouped_encounters(
         self,

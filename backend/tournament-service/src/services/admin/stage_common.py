@@ -9,7 +9,9 @@ from src.domain.stage.seeds import bracket_seeds, collect_item_team_ids
 
 __all__ = (
     "BRACKET_STAGE_TYPES",
+    "FFA_STAGE_TYPES",
     "GROUPED_GENERATION_STAGE_TYPES",
+    "QUALIFYING_SOURCE_STAGE_TYPES",
     "_apply_seeding",
     "_bracket_seeds",
     "_collect_item_team_ids",
@@ -20,6 +22,11 @@ GROUPED_GENERATION_STAGE_TYPES = {
     enums.StageType.ROUND_ROBIN,
     enums.StageType.SWISS,
 }
+
+FFA_STAGE_TYPES = frozenset({enums.StageType.FFA_LEAGUE})
+
+#: Stages whose per-group ``Standing`` a later bracket can be seeded from.
+QUALIFYING_SOURCE_STAGE_TYPES = frozenset(GROUPED_GENERATION_STAGE_TYPES) | FFA_STAGE_TYPES
 
 BRACKET_STAGE_TYPES = {
     enums.StageType.SINGLE_ELIMINATION,
