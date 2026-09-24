@@ -218,7 +218,8 @@ def serialize_registration_form_template(
         workspace_id=template.workspace_id,
         name=template.name,
         form_schema=FormSchema.model_validate(template.schema_json),
-        updated_at=template.updated_at,
+        # ``updated_at`` is only set by ``onupdate`` -- NULL until the first edit.
+        updated_at=template.updated_at or template.created_at,
     )
 
 

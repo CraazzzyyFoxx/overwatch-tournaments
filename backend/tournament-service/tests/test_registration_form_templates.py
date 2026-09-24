@@ -492,7 +492,9 @@ def _template_row(**overrides: Any) -> SimpleNamespace:
         "workspace_id": 1,
         "name": "Open Cup",
         "schema_json": default_schema().model_dump(mode="json"),
-        "updated_at": datetime(2026, 5, 1, 12, 30, tzinfo=UTC),
+        # A fresh row: ``updated_at`` stays NULL until the first edit (``onupdate``).
+        "created_at": datetime(2026, 5, 1, 12, 30, tzinfo=UTC),
+        "updated_at": None,
     }
     base.update(overrides)
     return SimpleNamespace(**base)
