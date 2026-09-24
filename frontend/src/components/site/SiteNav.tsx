@@ -135,7 +135,7 @@ export function SiteNav({ variant, className }: Readonly<SiteNavProps>) {
   }
 
   return (
-    <NavigationMenu className={cn("hidden md:flex", className)}>
+    <NavigationMenu className={cn("hidden lg:flex", className)}>
       {/* One list, not one per group: N single-item <ul>s told assistive
           technology the header held N separate navigations. */}
       <NavigationMenuList>

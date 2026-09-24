@@ -87,7 +87,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
       <MobilePlayerSearchSheet />
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="shrink-0 md:hidden">
+          <Button variant="outline" size="icon" className="shrink-0 lg:hidden">
             <Menu className="h-5 w-5" aria-hidden />
             <span className="sr-only">{t("nav.toggleMenu")}</span>
           </Button>
@@ -120,6 +120,10 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
             </Link>
             <SiteNav variant="mobile" />
           </nav>
+          {/* Below `sm` the header has no room for RU | EN beside the sign-in
+              button (it pushed the row past a 375px viewport), so a signed-out
+              visitor finds it here. Signed in, it lives in the account menu. */}
+          {user ? null : <LanguageSwitcher className="mt-6 sm:hidden" />}
         </SheetContent>
       </Sheet>
       <div className="flex min-w-0 flex-1 items-center gap-1 md:ml-auto md:gap-4">
@@ -136,7 +140,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
           </>
         ) : (
           <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-3 md:ml-0">
-            <LanguageSwitcher />
+            <LanguageSwitcher className="hidden sm:inline-flex" />
             <Button
               variant="outline"
               className="text-base"
