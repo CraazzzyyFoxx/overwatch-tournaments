@@ -10,7 +10,7 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 // public routes in src/routes/{tournament,encounter,match,team}.py.
 // Auth: single-tournament reads are AuthOptional so the worker can 404 hidden
 // tournaments for ineligible viewers (issue #115) while staying public for
-// everyone else; workspace-scoped aggregates (lookup/statistics/league) stay
+// everyone else; workspace-scoped aggregates (lookup/statistics) stay
 // AuthNone; saved-views require a logged-in user.
 var PublicReadRoutes = []edge.RouteSpec{
 	// tournament.py
@@ -19,9 +19,6 @@ var PublicReadRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/history", Queue: "rpc.tournament.statistics_history", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/division", Queue: "rpc.tournament.statistics_division", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/overall", Queue: "rpc.tournament.statistics_overall", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
-	{Method: "GET", Pattern: "/api/v1/tournaments/league/seasons", Queue: "rpc.tournament.owal_seasons", Query: []string{"workspace_id"}, Auth: edge.AuthNone},
-	{Method: "GET", Pattern: "/api/v1/tournaments/league/results", Queue: "rpc.tournament.owal_results", Query: []string{"workspace_id", "season"}, Auth: edge.AuthNone},
-	{Method: "GET", Pattern: "/api/v1/tournaments/league/stacks", Queue: "rpc.tournament.owal_stacks", Query: []string{"workspace_id", "season"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/tournaments/facets", Queue: "rpc.tournament.tournaments_facets", Query: []string{"workspace_id", "status", "is_league", "query"}, Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}", Queue: "rpc.tournament.get_tournament", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages", Queue: "rpc.tournament.get_stages", IDParam: "id", Auth: edge.AuthOptional},

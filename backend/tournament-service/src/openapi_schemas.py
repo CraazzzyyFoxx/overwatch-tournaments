@@ -35,7 +35,6 @@ from src.schemas import registration_team as reg_team_schemas
 # Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
 _ENTITIES = QueryParam("entities", array=True)
 _WS = QueryParam("workspace_id", "integer")
-_SEASON = QueryParam("season")
 
 OPERATIONS: dict[str, Op] = {
     # ── public reads (single object) ───────────────────────────────────────
@@ -48,8 +47,6 @@ OPERATIONS: dict[str, Op] = {
         response=schemas.EncounterOverviewRead, query=schemas.EncounterSearchQueryParams
     ),
     "rpc.tournament.statistics_overall": Op(response=schemas.OverallStatistics, query_params=(_WS,)),
-    "rpc.tournament.owal_results": Op(response=schemas.OwalStandings, query_params=(_WS, _SEASON)),
-    "rpc.tournament.owal_seasons": Op(query_params=(_WS,)),
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": Op(
         response=schemas.LookupItem, response_array=True, query_params=(_WS, QueryParam("is_league", "boolean"))
@@ -61,9 +58,6 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.tournament.statistics_division": Op(
         response=schemas.DivisionStatistics, response_array=True, query_params=(_WS,)
-    ),
-    "rpc.tournament.owal_stacks": Op(
-        response=schemas.LeaguePlayerStack, response_array=True, query_params=(_WS, _SEASON)
     ),
     "rpc.tournament.saved_views": Op(response=schemas.EncounterSavedViewRead, response_array=True, query_params=(_WS,)),
     # ── public reads (paginated) ───────────────────────────────────────────

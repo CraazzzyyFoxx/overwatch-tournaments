@@ -36,14 +36,6 @@ DOCS: dict[str, dict] = {
         "summary": "Get overall statistics",
         "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace.",
     },
-    "rpc.tournament.owal_results": {
-        "summary": "Get league standings",
-        "description": "Permission: public; no authentication required. Returns OWAL league standings for the workspace, for a specific season when given or overall, normalized against the workspace division grid.",
-    },
-    "rpc.tournament.owal_seasons": {
-        "summary": "List league seasons",
-        "description": "Permission: public; no authentication required. Returns the list of available OWAL league seasons for the workspace.",
-    },
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": {
         "summary": "Lookup tournaments",
@@ -64,10 +56,6 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.statistics_division": {
         "summary": "Get division statistics",
         "description": "Permission: public; no authentication required. Returns average-division statistics per tournament, normalized against the workspace division grid with fallback to the global grid.",
-    },
-    "rpc.tournament.owal_stacks": {
-        "summary": "Get league player stacks",
-        "description": "Permission: public; no authentication required. Returns OWAL league player stacks for the workspace and season, defaulting to the latest season when none is given.",
     },
     "rpc.tournament.saved_views": {
         "summary": "List saved encounter views",

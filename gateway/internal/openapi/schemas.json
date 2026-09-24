@@ -8744,67 +8744,6 @@
       },
       "summary": "Lookup tournaments"
     },
-    "rpc.tournament.owal_results": {
-      "description": "Permission: public; no authentication required. Returns OWAL league standings for the workspace, for a specific season when given or overall, normalized against the workspace division grid.",
-      "query_params": [
-        {
-          "name": "workspace_id",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        },
-        {
-          "name": "season",
-          "required": false,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "response": {
-        "array": false,
-        "ref": "tournament.OwalStandings"
-      },
-      "summary": "Get league standings"
-    },
-    "rpc.tournament.owal_seasons": {
-      "description": "Permission: public; no authentication required. Returns the list of available OWAL league seasons for the workspace.",
-      "query_params": [
-        {
-          "name": "workspace_id",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ],
-      "summary": "List league seasons"
-    },
-    "rpc.tournament.owal_stacks": {
-      "description": "Permission: public; no authentication required. Returns OWAL league player stacks for the workspace and season, defaulting to the latest season when none is given.",
-      "query_params": [
-        {
-          "name": "workspace_id",
-          "required": false,
-          "schema": {
-            "type": "integer"
-          }
-        },
-        {
-          "name": "season",
-          "required": false,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "response": {
-        "array": true,
-        "ref": "tournament.LeaguePlayerStack"
-      },
-      "summary": "Get league player stacks"
-    },
     "rpc.tournament.preview_access_add": {
       "description": "Permission: workspace `owner`/`admin` role on the tournament's workspace (403 otherwise). Allowlists one account (body `auth_user_id`, 422 when absent) to view a tournament before it is public and invalidates the cached tournament read so the change lands immediately.",
       "summary": "Grant preview access"
@@ -38823,17 +38762,6 @@
       "title": "GamemodeRead",
       "type": "object"
     },
-    "tournament.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
-      "enum": [
-        "Tank",
-        "Damage",
-        "Support",
-        "Flex"
-      ],
-      "title": "HeroClass",
-      "type": "string"
-    },
     "tournament.HeroRead": {
       "properties": {
         "color": {
@@ -38991,32 +38919,6 @@
         "created_at"
       ],
       "title": "LastResolutionRead",
-      "type": "object"
-    },
-    "tournament.LeaguePlayerStack": {
-      "properties": {
-        "avg_position": {
-          "title": "Avg Position",
-          "type": "number"
-        },
-        "games": {
-          "title": "Games",
-          "type": "integer"
-        },
-        "user_1": {
-          "$ref": "#/components/schemas/tournament.UserRead"
-        },
-        "user_2": {
-          "$ref": "#/components/schemas/tournament.UserRead"
-        }
-      },
-      "required": [
-        "user_1",
-        "user_2",
-        "games",
-        "avg_position"
-      ],
-      "title": "LeaguePlayerStack",
       "type": "object"
     },
     "tournament.LogProcessingSource": {
@@ -40153,146 +40055,6 @@
         "champions"
       ],
       "title": "OverallStatistics",
-      "type": "object"
-    },
-    "tournament.OwalStanding": {
-      "properties": {
-        "avg_points": {
-          "title": "Avg Points",
-          "type": "number"
-        },
-        "best_3_days": {
-          "title": "Best 3 Days",
-          "type": "number"
-        },
-        "count_days": {
-          "title": "Count Days",
-          "type": "integer"
-        },
-        "days": {
-          "additionalProperties": {
-            "$ref": "#/components/schemas/tournament.OwalStandingDay"
-          },
-          "title": "Days",
-          "type": "object"
-        },
-        "division": {
-          "title": "Division",
-          "type": "integer"
-        },
-        "draws": {
-          "title": "Draws",
-          "type": "integer"
-        },
-        "losses": {
-          "title": "Losses",
-          "type": "integer"
-        },
-        "place": {
-          "title": "Place",
-          "type": "integer"
-        },
-        "role": {
-          "$ref": "#/components/schemas/tournament.HeroClass"
-        },
-        "user": {
-          "$ref": "#/components/schemas/tournament.UserRead"
-        },
-        "win_rate": {
-          "title": "Win Rate",
-          "type": "number"
-        },
-        "wins": {
-          "title": "Wins",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "user",
-        "role",
-        "division",
-        "days",
-        "count_days",
-        "place",
-        "best_3_days",
-        "avg_points",
-        "wins",
-        "draws",
-        "losses",
-        "win_rate"
-      ],
-      "title": "OwalStanding",
-      "type": "object"
-    },
-    "tournament.OwalStandingDay": {
-      "properties": {
-        "division": {
-          "title": "Division",
-          "type": "integer"
-        },
-        "draws": {
-          "title": "Draws",
-          "type": "integer"
-        },
-        "losses": {
-          "title": "Losses",
-          "type": "integer"
-        },
-        "points": {
-          "title": "Points",
-          "type": "number"
-        },
-        "role": {
-          "$ref": "#/components/schemas/tournament.HeroClass"
-        },
-        "team": {
-          "title": "Team",
-          "type": "string"
-        },
-        "win_rate": {
-          "title": "Win Rate",
-          "type": "number"
-        },
-        "wins": {
-          "title": "Wins",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "team",
-        "role",
-        "division",
-        "points",
-        "wins",
-        "draws",
-        "losses",
-        "win_rate"
-      ],
-      "title": "OwalStandingDay",
-      "type": "object"
-    },
-    "tournament.OwalStandings": {
-      "properties": {
-        "days": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.TournamentRead"
-          },
-          "title": "Days",
-          "type": "array"
-        },
-        "standings": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.OwalStanding"
-          },
-          "title": "Standings",
-          "type": "array"
-        }
-      },
-      "required": [
-        "days",
-        "standings"
-      ],
-      "title": "OwalStandings",
       "type": "object"
     },
     "tournament.Paginated_AdminMatchRow_": {

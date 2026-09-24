@@ -2531,32 +2531,6 @@
     "roleDamage": "Дамаг",
     "roleSupport": "Саппорт"
   },
-  "owal": {
-    "metaDescription": "Смотрите таблицу OWAL на {siteName}.",
-    "season": "Сезон:",
-    "selectSeason": "Выберите сезон",
-    "stacks": "Стаки",
-    "searchUser": "Поиск игрока…",
-    "standingsTableLabel": "Таблица OWAL. Прокрутите по горизонтали, чтобы увидеть все дни и статистику.",
-    "stacksTableLabel": "Стаки OWAL. Прокрутите по горизонтали, чтобы увидеть все столбцы.",
-    "only3Days": "Только 3+ дней",
-    "playerOne": "Игрок 1",
-    "playerTwo": "Игрок 2",
-    "days": "Дни",
-    "averagePlacement": "Среднее место",
-    "place": "Место",
-    "player": "Игрок",
-    "role": "Роль",
-    "division": "Дивизион",
-    "played": "Сыграно",
-    "totalBest3": "ИТОГО (лучшие 3 дня)",
-    "average": "Среднее",
-    "wins": "W",
-    "losses": "L",
-    "draws": "D",
-    "winRatio": "Винрейт",
-    "title": "OWAL"
-  },
   "notConfigured": {
     "title": "Воркспейс не настроен",
     "description": "Этот адрес пока не привязан к воркспейсу."

@@ -2531,32 +2531,6 @@
     "roleDamage": "Damage",
     "roleSupport": "Support"
   },
-  "owal": {
-    "metaDescription": "View OWAL Standings on {siteName}.",
-    "season": "Season:",
-    "selectSeason": "Select season",
-    "stacks": "Stacks",
-    "searchUser": "Search user...",
-    "standingsTableLabel": "OWAL standings. Scroll horizontally for all day and record columns.",
-    "stacksTableLabel": "OWAL stacks. Scroll horizontally for all columns.",
-    "only3Days": "Only 3+ days",
-    "playerOne": "Player One",
-    "playerTwo": "Player Two",
-    "days": "Days",
-    "averagePlacement": "Average Placement",
-    "place": "Place",
-    "player": "Player",
-    "role": "Role",
-    "division": "Division",
-    "played": "Played",
-    "totalBest3": "TOTAL (best 3 days)",
-    "average": "Average",
-    "wins": "W",
-    "losses": "L",
-    "draws": "D",
-    "winRatio": "Win ratio",
-    "title": "OWAL"
-  },
   "notConfigured": {
     "title": "Workspace not configured",
     "description": "This address is not linked to a workspace yet."

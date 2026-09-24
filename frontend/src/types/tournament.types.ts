@@ -1,4 +1,3 @@
-import { User } from "@/types/user.types";
 import { Team } from "@/types/team.types";
 import { Encounter } from "@/types/encounter.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
@@ -228,37 +227,6 @@ export type VetoSequenceToken =
 export type MapVetoMode = "pool" | "slots";
 
 
-interface OwalStandingDay {
-  tournament: Tournament;
-  team: string;
-  role: string;
-  points: number;
-  wins: number;
-  draws: number;
-  losses: number;
-  win_rate: number;
-}
-
-export interface OwalStanding {
-  user: User;
-  role: string;
-  division: number;
-  days: Record<string, OwalStandingDay>;
-  count_days: number;
-  place: number;
-  best_3_days: number;
-  avg_points: number;
-  wins: number;
-  draws: number;
-  losses: number;
-  win_rate: number;
-}
-
-export interface OwalStandings {
-  days: Tournament[];
-  standings: OwalStanding[];
-}
-
 export interface Standings {
   id: number;
   tournament_id: number;
@@ -291,13 +259,6 @@ export interface Standings {
   stage: Stage | null;
   stage_item: StageItem | null;
   matches_history: Encounter[];
-}
-
-export interface OwalStack {
-  user_1: User;
-  user_2: User;
-  games: number;
-  avg_position: number;
 }
 
 // ─── Generic pick-ban engine (map + hero) ───────────────────────────────────

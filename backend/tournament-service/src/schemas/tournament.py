@@ -5,7 +5,6 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from src.core import enums, pagination
-from src.schemas import UserRead
 from src.schemas.admin.tournament_link import TournamentLinkRead
 from src.schemas.base import BaseRead
 from src.schemas.division_grid import DivisionGridVersionRead
@@ -15,14 +14,10 @@ from src.schemas.stage import StageSummaryRead
 __all__ = (
     "TournamentRead",
     "TournamentPhaseScheduleRead",
-    "OwalStanding",
-    "OwalStandingDay",
-    "OwalStandings",
     "TournamentPaginationSortSearchQueryParams",
     "TournamentPaginationSortSearchParams",
     "TournamentFacets",
     "TournamentFacetsQueryParams",
-    "LeaguePlayerStack",
 )
 
 
@@ -94,37 +89,6 @@ class TournamentRead(BaseRead):
     links: list[TournamentLinkRead] = []
 
 
-class OwalStandingDay(BaseModel):
-    team: str
-    role: enums.HeroClass
-    division: int
-    points: float
-    wins: int
-    draws: int
-    losses: int
-    win_rate: float
-
-
-class OwalStanding(BaseModel):
-    user: UserRead
-    role: enums.HeroClass
-    division: int
-    days: dict[int, OwalStandingDay]
-    count_days: int
-    place: int
-    best_3_days: float
-    avg_points: float
-    wins: int
-    draws: int
-    losses: int
-    win_rate: float
-
-
-class OwalStandings(BaseModel):
-    days: list[TournamentRead]
-    standings: list[OwalStanding]
-
-
 class TournamentPaginationSortSearchQueryParams(
     pagination.PaginationSortSearchQueryParams[
         typing.Literal["id", "name", "start_date", "end_date", "similarity:name", "participants_count"]
@@ -185,10 +149,3 @@ class TournamentFacets(BaseModel):
     by_status: dict[enums.TournamentStatus, int]
     league: int
     standard: int
-
-
-class LeaguePlayerStack(BaseModel):
-    user_1: UserRead
-    user_2: UserRead
-    games: int
-    avg_position: float

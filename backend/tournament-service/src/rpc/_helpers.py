@@ -100,7 +100,7 @@ async def _read(logger: Any, op: Callable[[Any], Awaitable[Any]], *, exclude_non
 
     ``exclude_none`` must match each route's ``response_model_exclude_none``:
     True for get_one/get_stages/get_standings; False (keep nulls) for
-    statistics/OWAL.
+    statistics.
     """
     try:
         async with db.async_session_maker() as session:

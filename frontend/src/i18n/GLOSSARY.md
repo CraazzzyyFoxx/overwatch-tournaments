@@ -50,7 +50,7 @@ appears, use exactly this translation for consistency across the app.
 - Tone: address the user with «вы», no officialese; short and to the point (UI strings).
 - Buttons are imperative («Снять заявку», «Пройти чек-ин»), headings are nouns.
 - Numbers: Russian pluralization via ICU (`plural` with `one/few/many/other`).
-- Never translated: `SR`, `BattleTag`, `OWAL`, hero and map names, `Overwatch`.
+- Never translated: `SR`, `BattleTag`, hero and map names, `Overwatch`.
 - «Rotation» as a noun is not translated: in this community «ротация» already means
   map/hero rotation, so «ротация первого бана» reads as something about pool
   composition. The control is labelled «Кто банит первым», with the options «Всегда
