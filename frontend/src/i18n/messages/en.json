@@ -6405,6 +6405,23 @@
     "openRoom": "Lobby room",
     "backToLobby": "Back to the lobby",
     "roomHint": "No veto and no readiness gate here: a lobby is played as one group. The organizer posts the lobby code in the chat and enters every game's result.",
-    "roomParticipants": "Participants"
+    "roomParticipants": "Participants",
+    "errors": {
+      "ffa_result_unknown_team": "One of the teams is not seated in this lobby.",
+      "ffa_result_duplicate_team": "A team is listed twice — every team gets exactly one line.",
+      "ffa_result_missing_team": "Every team of the lobby needs a line in the game.",
+      "ffa_result_invalid_score": "A score cannot be negative.",
+      "ffa_result_mixed_placement": "Give a place to every team, or to none of them.",
+      "ffa_result_placement_required": "This stage pays for places, so every team needs one.",
+      "ffa_result_invalid_placement": "Places run from 1 to the number of teams, each taken exactly once.",
+      "ffa_reason_required": "Changing a game that has been played needs a reason.",
+      "ffa_game_out_of_range": "This lobby does not play that game — change the number of games first.",
+      "ffa_games_below_played": "The series cannot be shorter than the games already played.",
+      "ffa_game_not_found": "That game has not been played, so there is nothing to void.",
+      "encounter_not_ffa": "This match is not an FFA lobby.",
+      "encounter_not_duel": "This match is an FFA lobby, not a duel.",
+      "ffa_field_not_editable": "That field cannot be edited on a lobby.",
+      "ffa_lobby_size": "A lobby seats between 2 and 100 teams."
+    }
   }
 }

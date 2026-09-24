@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  allowedMatchesSubTab,
   allowedSettingsSection,
   allowedTab,
   allowedTeamsSubTab,
@@ -121,6 +122,7 @@ describe("sub-tabs", () => {
   test("matches splits results into encounters and standings", () => {
     expect(MATCHES_SUB_TABS).toEqual([
       "encounters",
+      "lobbies",
       "standings",
       "reports",
       "parsed",
@@ -128,6 +130,14 @@ describe("sub-tabs", () => {
     ]);
     // `report-form` is gone: it configures the report, it does not report.
     expect(MATCHES_SUB_TABS as readonly string[]).not.toContain("report-form");
+  });
+
+  test("matches offers lobbies only where an FFA stage exists", () => {
+    // A duel tournament has no lobby to referee, and a hidden-but-reachable
+    // view is the bug the layout's bounce pairs with this.
+    expect(allowedMatchesSubTab("lobbies", { hasFfaStage: false })).toBe(false);
+    expect(allowedMatchesSubTab("lobbies", { hasFfaStage: true })).toBe(true);
+    expect(allowedMatchesSubTab("encounters", { hasFfaStage: false })).toBe(true);
   });
 });
 
