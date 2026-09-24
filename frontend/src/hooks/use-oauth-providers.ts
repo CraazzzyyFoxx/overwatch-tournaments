@@ -20,10 +20,12 @@ async function fetchOAuthProviders(): Promise<OAuthProviderAvailability[]> {
   return response.json();
 }
 
-export function useOAuthProviders() {
+/** `enabled`: the sign-in dialog is mounted on every page, but only an open one needs the list. */
+export function useOAuthProviders(enabled: boolean) {
   return useQuery({
     queryKey: OAUTH_PROVIDERS_QUERY_KEY,
     queryFn: fetchOAuthProviders,
+    enabled,
     retry: false,
     staleTime: 60 * 1000
   });

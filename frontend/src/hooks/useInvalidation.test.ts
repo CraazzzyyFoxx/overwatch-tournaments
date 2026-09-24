@@ -162,4 +162,18 @@ describe("useInvalidation", () => {
 
     expect(invalidatedKeys).toEqual([JSON.stringify(["admin", "stages", 99])]);
   });
+
+  it("catches up on subscribe only for keys not read moments ago", () => {
+    // The real invalidation: the predicate decides, not the key list.
+    vi.mocked(queryClient.invalidateQueries).mockRestore();
+    queryClient.setQueryData(["teams", 42], [], { updatedAt: Date.now() });
+    queryClient.setQueryData(["standings", 42], [], { updatedAt: Date.now() - 60_000 });
+    render({ scopeKind: "tournament", scopeId: 42 });
+
+    act(() => subscriptions.get("tournament:42:invalidation")?.onSubscribed?.());
+    act(() => vi.advanceTimersByTime(FLUSH_MS));
+
+    expect(queryClient.getQueryState(["teams", 42])?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(["standings", 42])?.isInvalidated).toBe(true);
+  });
 });

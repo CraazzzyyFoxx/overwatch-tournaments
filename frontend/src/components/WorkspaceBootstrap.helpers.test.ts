@@ -19,8 +19,14 @@ describe("shouldRefreshWorkspaceScope", () => {
     "/tournaments/72/heroes",
     "/tournaments/72/standings",
     "/tournaments/72/draft",
+    "/tournaments/turnir-thao-4-fleks-turnir",
+    "/tournaments/anak-cup/bracket",
+    "/tournaments/analytics-cup",
     "/draft/78",
-    "/draft/78/"
+    "/draft/78/",
+    "/draft/anak-cup",
+    "/users",
+    "/users/"
   ])("skips the first-load correction on workspace-independent public path %s", (pathname) => {
     expect(shouldRefreshWorkspaceScope({ ...initialCorrection, pathname })).toBe(false);
   });
@@ -29,19 +35,13 @@ describe("shouldRefreshWorkspaceScope", () => {
     "/tournaments",
     "/tournaments/",
     "/tournaments/analytics",
-    "/tournaments/0",
-    "/tournaments/072",
-    "/tournaments/72abc",
-    "/tournaments/9007199254740992",
+    "/tournaments/analytics/",
     "/draft",
     "/draft/",
-    "/draft/0",
-    "/draft/078",
     "/draft/78/extra",
-    "/draft/78abc",
-    "/draft/9007199254740992",
     "/admin/tournaments/72",
-    "/players"
+    "/players",
+    "/users/andremorua"
   ])("keeps the first-load correction on non-detail path %s", (pathname) => {
     expect(shouldRefreshWorkspaceScope({ ...initialCorrection, pathname })).toBe(true);
   });
