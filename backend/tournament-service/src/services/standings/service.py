@@ -11,6 +11,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.core import enums
 from shared.core.enums import StageType
+from shared.domain.ffa_scoring import FfaGameLine, parse_ffa_rules, team_totals
 from shared.domain.tournament_utils import (
     completed_encounters as _shared_completed_encounters,
 )
@@ -22,6 +23,7 @@ from shared.repository import EncounterRepository, StandingRepository, TeamRepos
 from shared.services.bracket.swiss_settings import swiss_bye_counts, swiss_scope_stopped
 from src import models, schemas
 from src.core import utils
+from src.services.encounter.ffa import ffa_encounter_service
 from src.services.encounter.service import encounter_service
 
 GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS}
@@ -689,6 +691,68 @@ def _build_group_stage_standings(
     return standings
 
 
+def _build_ffa_stage_standings(
+    tournament: models.Tournament,
+    stage: models.Stage,
+    stage_item: models.StageItem,
+    participant_ids: typing.Sequence[int],
+    games: typing.Sequence[typing.Sequence[FfaGameLine]],
+) -> list[models.Standing]:
+    """Rank one FFA group: its roster plus every confirmed game of its lobbies.
+
+    The group is the table, so the roster comes from BOTH the seed inputs and
+    the teams actually seated in a lobby -- a team moved into a lobby by hand
+    still belongs in the standing.
+    """
+    seed_ids = list(dict.fromkeys([*_stage_item_team_ids(stage_item), *participant_ids]))
+    if not seed_ids:
+        return []
+
+    totals = team_totals(seed_ids, games, parse_ffa_rules(stage.settings_json))
+    teams = [
+        RankedStageTeam(
+            team_id=row.team_id,
+            matches=row.games,
+            wins=row.wins,
+            points=row.points,
+            ffa_score=row.score,
+            ffa_best_placement=row.best_placement,
+            ffa_last_placement=row.last_placement,
+        )
+        for row in totals.values()
+    ]
+    order = _tiebreak_order(stage)
+    manual = _manual_positions(stage)
+    ordered = _sort_ranked_teams(teams, tiebreak_order=order, manual_positions=manual)
+    assign_tie_groups(ordered, tiebreak_order=order, manual_positions=manual)
+    return [
+        models.Standing(
+            tournament_id=tournament.id,
+            team_id=team.team_id,
+            stage_id=stage.id,
+            stage_item_id=stage_item.id,
+            position=position,
+            overall_position=0,
+            matches=team.matches,
+            win=team.wins,
+            draw=0,
+            lose=0,
+            points=team.points,
+            # Not a Buchholz: app-service and parser-service read ``buchholz IS
+            # NULL`` as "playoff row" (Standing.buchholz). An ffa league is a
+            # group stage, so its rows must read as group rows.
+            buchholz=0.0,
+            full_buchholz=None,
+            tie_group=team.tie_group,
+            tb=None,
+            score_differential=None,
+            stage=stage,
+            stage_item=stage_item,
+        )
+        for position, team in enumerate(ordered, 1)
+    ]
+
+
 def _build_elimination_stage_standings(
     tournament: models.Tournament,
     stage: models.Stage,
@@ -1085,10 +1149,13 @@ class StandingsService:
         all_standings: list[models.Standing] = []
 
         for stage in stages:
-            stage_encounters = sort_matches(
-                await encounter_service.get_by_stage_id(session, tournament.id, stage.id, [])
-            )
+            # Loaded per branch, not up front: an FFA stage ranks from its game
+            # results, so fetching its lobbies here would be a query per stage
+            # whose rows nothing reads.
             if stage.stage_type in GROUP_STAGE_TYPES:
+                stage_encounters = sort_matches(
+                    await encounter_service.get_by_stage_id(session, tournament.id, stage.id, [])
+                )
                 stage_items = sorted(stage.items, key=lambda item: item.order) if stage.items else []
                 if stage_items:
                     for stage_item in stage_items:
@@ -1101,7 +1168,22 @@ class StandingsService:
                 else:
                     all_standings.extend(_build_group_stage_standings(tournament, stage, None, stage_encounters))
             elif stage.stage_type in ELIMINATION_STAGE_TYPES:
+                stage_encounters = sort_matches(
+                    await encounter_service.get_by_stage_id(session, tournament.id, stage.id, [])
+                )
                 all_standings.extend(_build_elimination_stage_standings(tournament, stage, stage_encounters))
+            elif stage.stage_type in FFA_STAGE_TYPES:
+                results = await ffa_encounter_service.load_stage_results(session, stage.id)
+                for stage_item in sorted(stage.items or [], key=lambda item: item.order):
+                    all_standings.extend(
+                        _build_ffa_stage_standings(
+                            tournament,
+                            stage,
+                            stage_item,
+                            results.participant_ids(stage_item.id),
+                            results.games(stage_item.id),
+                        )
+                    )
 
         final_standings = calculate_overall_positions(all_standings, stages)
         await self.standing_repo.create_many(session, final_standings)

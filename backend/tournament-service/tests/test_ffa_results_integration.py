@@ -38,11 +38,14 @@ from shared.models.tournament import (  # noqa: E402
     EncounterResultAudit,
     Stage,
     StageItem,
+    StageItemInput,
+    Standing,
     Team,
     Tournament,
 )
 from src.services.admin.stage import stage_service  # noqa: E402
 from src.services.encounter.ffa import ffa_encounter_service  # noqa: E402
+from src.services.standings.service import standings_service  # noqa: E402
 
 #: Score-only: a point per elimination, places derived from the scoreboard.
 SCORING = {"ffa_scoring": {"score_points": 1}}
@@ -164,6 +167,24 @@ async def _reload(session: Any, lobby_id: int) -> Encounter:
     lobby = await session.get(Encounter, lobby_id)
     await session.refresh(lobby)
     return lobby
+
+
+async def _reload_stage(session: Any, stage_id: int) -> Stage:
+    stage = await session.get(Stage, stage_id)
+    await session.refresh(stage)
+    return stage
+
+
+async def _standings(session: Any, tournament_id: int) -> list[tuple]:
+    result = await session.execute(
+        sa.select(Standing)
+        .where(Standing.tournament_id == tournament_id)
+        .order_by(Standing.stage_item_id, Standing.position)
+    )
+    return [
+        (row.stage_item_id, row.position, row.team_id, row.matches, row.points, row.win, row.buchholz)
+        for row in result.scalars()
+    ]
 
 
 # ── recording games ──────────────────────────────────────────────────────────
@@ -624,3 +645,139 @@ def test_stage_results_group_confirmed_games_by_lobby_group(db_session) -> None:
     # The cancelled second game is gone from the read the standings sum.
     assert games == [[(team_ids[0], 1, 10), (team_ids[1], 2, 6), (team_ids[2], 3, 2)]]
     assert (unknown_participants, unknown_games) == ([], [])
+
+
+# ── ranking a league and seeding the bracket behind it ───────────────────────
+
+
+async def _seed_league(session: Any) -> SimpleNamespace:
+    """Two ffa groups of three, with a single-elimination bracket behind them."""
+    suffix = uuid.uuid4().hex[:12]
+    workspace = Workspace(slug=f"ffaleague-{suffix}", name=f"FFA league {suffix}")
+    session.add(workspace)
+    await session.flush()
+    tournament = Tournament(
+        workspace_id=workspace.id,
+        name=f"FFA league {suffix}",
+        slug=f"ffaleague-{suffix}",
+        status=enums.TournamentStatus.REGISTRATION,
+    )
+    session.add(tournament)
+    await session.flush()
+    teams = [
+        Team(tournament_id=tournament.id, name=f"Team {index} {suffix}", balancer_name=f"team-{index}-{suffix}")
+        for index in range(6)
+    ]
+    session.add_all(teams)
+    await session.flush()
+    team_ids = [team.id for team in teams]
+
+    league = Stage(
+        tournament_id=tournament.id,
+        name="League",
+        stage_type=enums.StageType.FFA_LEAGUE,
+        order=1,
+        settings_json=dict(SCORING),
+    )
+    bracket_stage = Stage(
+        tournament_id=tournament.id,
+        name="Playoffs",
+        stage_type=enums.StageType.SINGLE_ELIMINATION,
+        order=2,
+    )
+    session.add_all([league, bracket_stage])
+    await session.flush()
+
+    groups = []
+    lobbies = []
+    for index, name in enumerate(("Group A", "Group B")):
+        group = StageItem(stage_id=league.id, name=name, type=enums.StageItemType.GROUP, order=index)
+        session.add(group)
+        await session.flush()
+        seats = team_ids[index * 3 : index * 3 + 3]
+        for slot, team_id in enumerate(seats, 1):
+            session.add(
+                StageItemInput(
+                    stage_item_id=group.id,
+                    slot=slot,
+                    input_type=enums.StageItemInputType.FINAL,
+                    team_id=team_id,
+                )
+            )
+        lobbies.append(await ffa_encounter_service.create_lobby(session, league, group, seats, games=1))
+        groups.append(group)
+
+    bracket = StageItem(stage_id=bracket_stage.id, name="Playoffs", type=enums.StageItemType.SINGLE_BRACKET, order=0)
+    session.add(bracket)
+    await session.commit()
+    return SimpleNamespace(
+        workspace_id=workspace.id,
+        tournament_id=tournament.id,
+        stage_id=league.id,
+        bracket_stage_id=bracket_stage.id,
+        group_ids=[group.id for group in groups],
+        lobby_ids=[lobby.id for lobby in lobbies],
+        team_ids=team_ids,
+    )
+
+
+def test_a_finished_league_ranks_its_groups_and_seeds_the_bracket(db_session) -> None:
+    """The whole handover: games -> Standing rows -> stage done -> bracket teams.
+
+    ``activate_stage`` is untouched by FFA -- it resolves TENTATIVE inputs from
+    ``Standing.position`` of the source group, so an ffa league qualifies the
+    next stage exactly like a round robin does.
+    """
+
+    async def _run() -> tuple:
+        seeded = await _seed_league(db_session)
+        try:
+            await stage_service.wire_from_groups(
+                db_session, seeded.bracket_stage_id, seeded.stage_id, top=2, commit=True
+            )
+            # Group A: teams 0 > 1 > 2. Group B the other way round: 5 > 4 > 3.
+            for lobby_id, seats, scores in (
+                (seeded.lobby_ids[0], seeded.team_ids[:3], [10, 6, 2]),
+                (seeded.lobby_ids[1], seeded.team_ids[3:], [2, 6, 10]),
+            ):
+                await ffa_encounter_service.set_game_results(
+                    db_session, lobby_id, 1, _lines(seats, scores), actor_user_id=None, reason=None
+                )
+            await db_session.commit()
+
+            await standings_service.recalculate_for_tournament(db_session, seeded.tournament_id)
+            league = await _reload_stage(db_session, seeded.stage_id)
+            table = await _standings(db_session, seeded.tournament_id)
+
+            bracket_stage = await stage_service.activate_stage(db_session, seeded.bracket_stage_id)
+            wired = sorted(
+                (inp.source_stage_item_id, inp.source_position, inp.team_id, inp.input_type)
+                for item in bracket_stage.items
+                for inp in item.inputs
+            )
+            return league.is_completed, table, wired, seeded.group_ids, seeded.team_ids
+        finally:
+            await _drop(db_session, seeded)
+
+    completed, table, wired, group_ids, team_ids = asyncio.run(_run())
+    group_a, group_b = group_ids
+
+    assert completed is True
+    # Six group rows, ranked inside each group, every one a GROUP row.
+    assert table == [
+        (group_a, 1, team_ids[0], 1, 10.0, 1, 0.0),
+        (group_a, 2, team_ids[1], 1, 6.0, 0, 0.0),
+        (group_a, 3, team_ids[2], 1, 2.0, 0, 0.0),
+        (group_b, 1, team_ids[5], 1, 10.0, 1, 0.0),
+        (group_b, 2, team_ids[4], 1, 6.0, 0, 0.0),
+        (group_b, 3, team_ids[3], 1, 2.0, 0, 0.0),
+    ]
+    # Every tentative slot became a real team: the top two of each group.
+    assert wired == sorted(
+        [
+            (group_a, 1, team_ids[0], enums.StageItemInputType.FINAL),
+            (group_a, 2, team_ids[1], enums.StageItemInputType.FINAL),
+            (group_b, 1, team_ids[5], enums.StageItemInputType.FINAL),
+            (group_b, 2, team_ids[4], enums.StageItemInputType.FINAL),
+        ]
+    )
