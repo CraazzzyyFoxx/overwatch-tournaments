@@ -34,11 +34,20 @@ export interface EncounterGameWithMap extends EncounterGame {
   map: Match["map"];
 }
 
+/**
+ * Which shape of result the encounter carries: a duel is the two-team series
+ * every list below assumes, an `ffa` encounter is a multi-team lobby whose
+ * rows live in `FfaLobby` (`@/types/ffa.types`) and whose `score`, `home_team`
+ * and `away_team` are placeholders. List reads are duel-only by default.
+ */
+export type EncounterFormat = "duel" | "ffa";
+
 export interface Encounter {
   id: number;
   created_at: Date;
   updated_at: Date | null;
   name: string;
+  format: EncounterFormat;
   home_team_id: number;
   away_team_id: number;
   score: Score;

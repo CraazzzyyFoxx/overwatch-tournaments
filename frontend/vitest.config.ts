@@ -209,6 +209,10 @@ export default defineConfig({
       "src/lib/tournament/status.test.ts",
       "src/lib/tournament/stages.test.ts",
       "src/lib/tournament/pick-ban-config.test.ts",
+      // The tie-break catalog the StageManager editor offers per stage type;
+      // unrun, an FFA stage could go back to offering head-to-head — a metric
+      // the engine drops — with a green suite.
+      "src/lib/tournament/tiebreakers.test.ts",
       // `lib/bracket/view.test.ts` speaks bun:test, so it is deliberately absent.
       "src/lib/bracket/projection.test.ts",
       "src/lib/encounter/score.test.ts",

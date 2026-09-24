@@ -72,6 +72,10 @@
       "median_buchholz": "Медианный Бухгольц",
       "buchholz": "Бухгольц",
       "score_differential": "Разница карт",
+      "ffa_game_wins": "Победы в играх",
+      "ffa_score": "Счёт",
+      "ffa_best_placement": "Лучшее место",
+      "ffa_last_placement": "Последнее место",
       "manual_override": "Ручное переопределение"
     },
     "combined": "Комбинированная",

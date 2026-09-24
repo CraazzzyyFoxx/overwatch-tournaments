@@ -72,6 +72,10 @@
       "median_buchholz": "Median Buchholz",
       "buchholz": "Buchholz",
       "score_differential": "Score differential",
+      "ffa_game_wins": "Game wins",
+      "ffa_score": "Score",
+      "ffa_best_placement": "Best placement",
+      "ffa_last_placement": "Last placement",
       "manual_override": "Manual override"
     },
     "combined": "Combined",

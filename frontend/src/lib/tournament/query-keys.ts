@@ -28,6 +28,13 @@ export const tournamentQueryKeys = {
     workspaceId == null
       ? (["encounters", "tournament", tournamentId] as const)
       : (["encounters", "tournament", tournamentId, workspaceId] as const),
+  /** Every FFA lobby of one stage, and one lobby on the encounter page. Both
+   *  sit under the `["ffa", tournamentId]` prefix so a result write — which
+   *  moves the whole group's table, not one row — stales them together. */
+  ffaStage: (tournamentId: number, stageId: number) =>
+    ["ffa", tournamentId, "stage", stageId] as const,
+  ffaLobby: (tournamentId: number, encounterId: number) =>
+    ["ffa", tournamentId, "lobby", encounterId] as const,
   encountersOverview: (workspaceId?: number | null) =>
     workspaceId == null
       ? (["encounters", "overview"] as const)

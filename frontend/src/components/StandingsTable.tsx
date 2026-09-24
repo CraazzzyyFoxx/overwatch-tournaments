@@ -81,8 +81,14 @@ export function upperBracketCut(
  * decides which side of the line they land on, which is the one thing a
  * standings table has to say out loud. Soft signal: callers mark the rows and
  * block nothing.
+ *
+ * Takes the two columns it reads, not a `Standings`: an FFA lobby row carries
+ * the same position/tie_group pair and marks its cut line the same way.
  */
-export function straddlingTieGroups(rows: Standings[], boundary: number): Set<number> {
+export function straddlingTieGroups(
+  rows: ReadonlyArray<{ position: number; tie_group: number | null }>,
+  boundary: number
+): Set<number> {
   const groups = new Set<number>();
   for (const row of rows) {
     if (row.tie_group == null || row.position > boundary) continue;

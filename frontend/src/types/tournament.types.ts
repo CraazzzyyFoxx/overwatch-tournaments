@@ -16,7 +16,12 @@ export type TournamentStatus =
   | "completed"
   | "archived";
 
-export type StageType = "round_robin" | "single_elimination" | "double_elimination" | "swiss";
+export type StageType =
+  | "round_robin"
+  | "single_elimination"
+  | "double_elimination"
+  | "swiss"
+  | "ffa_league";
 
 export type StageItemType = "group" | "bracket_upper" | "bracket_lower" | "single_bracket";
 

@@ -59,15 +59,19 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
     getTournamentWorkspaceQueryKeys(id).tournament,
   ],
   "tournament.stages": (id) => [getTournamentWorkspaceQueryKeys(id).stages],
+  // The `["ffa", id]` prefix covers both the stage list and every single-lobby
+  // key: an FFA result is a group-wide move, so nothing under it survives one.
   "tournament.encounters": (id) => [
     tournamentQueryKeys.encounters(id),
     getTournamentWorkspaceQueryKeys(id).encounters,
+    ["ffa", id],
   ],
   "tournament.standings": (id) => [
     tournamentQueryKeys.standings(id),
     tournamentQueryKeys.heroPlaytime(id),
     getTournamentWorkspaceQueryKeys(id).standings,
     getTournamentWorkspaceQueryKeys(id).standingsTable,
+    ["ffa", id],
   ],
   "tournament.teams": (id) => [
     tournamentQueryKeys.teams(id),
