@@ -14,6 +14,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
 from shared.core import enums
+from shared.domain.ffa_scoring import FfaGameLine
 from shared.repository.base import BaseRepository
 
 
@@ -143,6 +144,32 @@ class EncounterGameResultRepository(BaseRepository[models.EncounterGameResult]):
 
     def __init__(self) -> None:
         super().__init__(models.EncounterGameResult)
+
+    async def replace_for_game(
+        self,
+        session: AsyncSession,
+        game: models.EncounterGame,
+        lines: Sequence[FfaGameLine],
+    ) -> None:
+        """Swap a game's result set for already-normalized lines. No commit.
+
+        ``placement`` is NOT NULL in the table: a line that skipped
+        ``normalize_game_lines`` fails here instead of storing a hole.
+        """
+        await session.execute(
+            sa.delete(models.EncounterGameResult).where(models.EncounterGameResult.game_id == game.id)
+        )
+        session.add_all(
+            models.EncounterGameResult(
+                game_id=game.id,
+                encounter_id=game.encounter_id,
+                team_id=line.team_id,
+                placement=line.placement,
+                score=line.score,
+            )
+            for line in lines
+        )
+        await session.flush()
 
     async def list_for_games(
         self, session: AsyncSession, game_ids: Sequence[int]

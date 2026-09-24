@@ -2147,9 +2147,15 @@ class AdminStageService:
                 encounter.round,
                 is_final=is_elimination and encounter.round == max_round,
             )
-            if encounter.best_of != target:
-                encounter.best_of = target
-                changed += 1
+            if encounter.best_of == target:
+                continue
+            encounter.best_of = target
+            changed += 1
+            # A lobby's completion is derived from "confirmed games >= best_of",
+            # so moving the bar here settles or reopens it (plan §5.4). A duel's
+            # is decided by its series score, which this does not touch.
+            if encounter.format == enums.EncounterFormat.FFA:
+                await ffa_encounter_service.refresh_completion(session, encounter, actor_user_id=None)
 
         if changed:
             await self._publish_structure_changed(session, stage.tournament_id)

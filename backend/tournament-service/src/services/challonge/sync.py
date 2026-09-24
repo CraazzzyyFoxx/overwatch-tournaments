@@ -2139,6 +2139,10 @@ class ChallongeSyncService:
                 .where(
                     models.Encounter.tournament_id == tournament_id,
                     models.Encounter.status == enums.EncounterStatus.COMPLETED,
+                    # Challonge matches are two-sided: a completed lobby has no
+                    # home/away score to push, so push_single_result would 409
+                    # once per export and fill the sync log with it.
+                    models.Encounter.format == enums.EncounterFormat.DUEL,
                     models.Encounter.id.in_(tuple(linked_encounter_ids)),
                 )
                 .options(
