@@ -29,6 +29,7 @@ ELIMINATION_STAGE_TYPES = {
     StageType.SINGLE_ELIMINATION,
     StageType.DOUBLE_ELIMINATION,
 }
+FFA_STAGE_TYPES = {StageType.FFA_LEAGUE}
 DEFAULT_STAGE_MAX_ROUNDS = 5
 
 RULE_PRESET_DEFAULTS: dict[str, list[str]] = {
@@ -53,6 +54,12 @@ RULE_PRESET_DEFAULTS: dict[str, list[str]] = {
         "score_differential",
         "match_wins",
     ],
+    "ffa_default": [
+        "points",
+        "ffa_game_wins",
+        "ffa_score",
+        "ffa_last_placement",
+    ],
 }
 
 
@@ -71,6 +78,10 @@ KNOWN_TIEBREAK_METRICS = frozenset(
         "map_differential",
         "wins_as_higher_stage_specific_metric",
         "manual_override",
+        "ffa_game_wins",
+        "ffa_score",
+        "ffa_best_placement",
+        "ffa_last_placement",
     }
 )
 
@@ -88,6 +99,10 @@ class RankedStageTeam:
     median_buchholz: float = 0.0
     head_to_head: int = 0
     score_differential: int = 0
+    #: FFA only: raw score summed and placement metrics (plan §5.3).
+    ffa_score: int = 0
+    ffa_best_placement: int | None = None
+    ffa_last_placement: int | None = None
     #: Position of the head of this team's tie cluster, ``None`` when it is not
     #: tied. Teams sharing a value were equal on every configured metric; their
     #: relative order is assigned (manual override, else team id), not earned.
@@ -179,6 +194,8 @@ def _rule_profile(stage: models.Stage) -> str:
     settings = _stage_settings(stage)
     if isinstance(settings.get("ranking_preset"), str):
         return settings["ranking_preset"]
+    if stage.stage_type == StageType.FFA_LEAGUE:
+        return "ffa_default"
     if stage.stage_type == StageType.SWISS:
         return "challonge_swiss"
     if stage.stage_type == StageType.ROUND_ROBIN:
@@ -251,6 +268,11 @@ def _scoring(stage: models.Stage, tournament: models.Tournament) -> tuple[float,
     return tournament.win_points, tournament.draw_points, tournament.loss_points
 
 
+#: Stands in for "this team has no placement yet" so the negated placement
+#: metrics sort it below every real place instead of above first place.
+_NO_PLACEMENT = 10**9
+
+
 def _metric_value(
     team: RankedStageTeam,
     metric: str,
@@ -273,6 +295,16 @@ def _metric_value(
         return team.score_differential
     if metric == "wins_as_higher_stage_specific_metric":
         return team.wins
+    if metric == "ffa_game_wins":
+        return team.wins
+    if metric == "ffa_score":
+        return team.ffa_score
+    # Lower place is better and the sort is descending: negate, with "never
+    # played" ranking below every real place.
+    if metric == "ffa_best_placement":
+        return -(team.ffa_best_placement or _NO_PLACEMENT)
+    if metric == "ffa_last_placement":
+        return -(team.ffa_last_placement or _NO_PLACEMENT)
     if metric == "manual_override":
         return manual_positions.get(team.team_id, 10**9)
     return 0

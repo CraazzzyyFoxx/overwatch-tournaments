@@ -1,8 +1,9 @@
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from shared.core.enums import StageItemInputType, StageItemType, StageType
+from shared.domain.ffa_scoring import FFA_MAX_LOBBY_SIZE
 
 __all__ = (
     "StageCreate",
@@ -28,6 +29,25 @@ class StageScoring(BaseModel):
     loss: float = 0
 
 
+class FfaScoring(BaseModel):
+    """``settings_json['ffa_scoring']`` of an ffa_league stage (plan §4.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    placement_points: list[float] = Field(default_factory=list, max_length=FFA_MAX_LOBBY_SIZE)
+    score_points: float = Field(default=1.0, ge=0)
+    #: The organizer's word for the score column ("Kills", "Убийства"): each game
+    #: has its own, so it is data, not a translation key.
+    score_label: str | None = Field(default=None, max_length=32)
+
+    @field_validator("placement_points")
+    @classmethod
+    def _non_negative(cls, value: list[float]) -> list[float]:
+        if any(points < 0 for points in value):
+            raise ValueError("placement points cannot be negative")
+        return value
+
+
 class StageSettings(BaseModel):
     """The known keys of ``Stage.settings_json``.
 
@@ -43,6 +63,7 @@ class StageSettings(BaseModel):
     scoring: StageScoring | None = None
     de_grand_final_type: Literal["no_reset", "with_reset"] | None = None
     tiebreak_order: list[str] | None = None
+    ffa_scoring: FfaScoring | None = None
 
 
 def _validate_settings_json(value: dict | None) -> dict | None:
