@@ -42,6 +42,7 @@ import { PickBanGrid, type PickBanItemLike } from "@/components/pick-ban/PickBan
 import { PickBanStepTimeline } from "@/components/pick-ban/PickBanStepTimeline";
 import { PickBanUndoControl } from "@/components/pick-ban/PickBanUndoControl";
 import { ElectOpenerDialog } from "@/components/pick-ban/ElectOpenerDialog";
+import { FfaPregameRoom } from "./FfaPregameRoom";
 import { PregameAdminControls } from "./PregameAdminControls";
 import type { PregameHeroAction, PregameHeroRound } from "./PregameHeroBans";
 import {
@@ -83,12 +84,39 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
  * asked precisely when the readiness gate is up. Docked, it also costs the
  * room no width, and `RoomChat` renders nothing at all for a viewer the room
  * will not let read.
+ *
+ * An FFA lobby takes a different room entirely (`FfaPregameRoom`): it has no
+ * two sides to veto, ban or declare ready, so the whole phase machine below is
+ * meaningless there. The encounter read that decides this shares its key with
+ * the body's own, so the branch costs no extra request.
  */
 export function PregameRoom(props: Readonly<PregameRoomProps>) {
+  const { encounterId } = props;
+  const encounterQuery = useQuery({
+    queryKey: ["encounter-detail", encounterId],
+    queryFn: () => encounterService.getEncounter(encounterId),
+    enabled: Number.isFinite(encounterId) && encounterId > 0
+  });
+
+  // Until the format is known, neither room is the right one to show: rendering
+  // the duel room first would flash a readiness gate at a lobby.
+  if (encounterQuery.isPending) {
+    return (
+      <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_2fr]">
+        <Skeleton className="h-72 w-full rounded-xl" />
+        <Skeleton className="h-96 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  if (encounterQuery.data?.format === "ffa") {
+    return <FfaPregameRoom encounter={encounterQuery.data} />;
+  }
+
   return (
     <>
       <PregameRoomBody {...props} />
-      <RoomChat room={encounterChatRoom(props.encounterId)} />
+      <RoomChat room={encounterChatRoom(encounterId)} />
     </>
   );
 }

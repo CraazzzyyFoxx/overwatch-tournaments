@@ -229,6 +229,10 @@ export default defineConfig({
       "src/components/FavoriteStarButton.behavior.test.tsx",
       "src/components/UserSearch.behavior.test.tsx",
       "src/components/StandingsTable.advance.behavior.test.tsx",
+      // Same file-level rule: `src/components/ffa` is vitest-only so far, and
+      // unrun the lobby table could go back to printing a `0` for a game
+      // nobody has played with a green suite.
+      "src/components/ffa/**/*.test.tsx",
       // The only workspace-creation surface a plain account can reach; unrun,
       // a green suite would coexist with a dead self-service entry point.
       "src/components/CreateWorkspaceLauncher.behavior.test.tsx",

@@ -52,7 +52,7 @@ The one exception to the allowlist rule is the **scrim container**: a hidden ser
 
 ## Stages
 
-A stage is one competitive segment of a tournament. Its `stage_type` is `round_robin`, `single_elimination`, `double_elimination` or `swiss`.
+A stage is one competitive segment of a tournament. Its `stage_type` is `round_robin`, `single_elimination`, `double_elimination`, `swiss` or `ffa_league`.
 
 A stage has no state column — the state is derived from three booleans the API does expose:
 
@@ -66,6 +66,21 @@ A stage has no state column — the state is derived from three booleans the API
 The split between `is_active` and `is_published` matters to an integrator. `is_active` means "the currently selected stage" and goes out as soon as the organizer activates the next one. `is_published` is sticky: set once on activation and never cleared. Every captain action and every pick-ban check gates on `is_published`, so a stage that has gone live stays usable forever, while writes against an unpublished preview bracket are rejected with 409.
 
 A stage decomposes into **items** (`stage_item`) of type `group`, `bracket_upper`, `bracket_lower` or `single_bracket`, and each item declares **inputs** (`stage_item_input`), one per slot. An input is `final` (the team is known), `tentative` (the slot is owed by another stage's result — it carries `source_stage_item_id` and `source_position`) or `empty`. How many teams advance is `advance_count` on the stage, overridable per group.
+
+### `ffa_league`
+
+An FFA stage never pairs teams. Its items are ordinary groups, but a group holds ONE encounter for the whole group, and that encounter carries `format: "ffa"` instead of two sides. It is a **lobby**: 2 to 100 participants, `best_of` games, and in each game every participant has exactly one placement and one score. A lobby's `home_team_id` and `away_team_id` are empty, and the encounter lists do not answer it by default — read a lobby through its own routes:
+
+```http
+GET /api/v1/tournaments/42/stages/7/ffa HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+```
+
+`GET /api/v1/tournaments/{id}/stages/{stage_id}/ffa` answers every lobby of the stage and `GET /api/v1/encounters/{encounter_id}/ffa` answers one; the shape is identical either way. It carries `advance_count` (the group's override, else the stage's number; `null` draws no cut line), `rules` and `rows`. A row is one participant: `team_id`, `slot`, `position`, `tie_group`, `points`, `games_played`, `wins`, `score` and a `games` array with one cell per game position. A game nobody has opened has `state: null` — that is not a zero, it is a game nobody has entered.
+
+The rules are resolved from the stage's `settings_json.ffa_scoring`: `placement_points` (points for 1st, 2nd, …; a shorter list scores the tail at zero), `score_points` (the multiplier on the raw score) and `score_label` — what the score column counts ("Kills", "Points"), which the frontend prints verbatim. A game's points are `placement_points[place − 1] + score × score_points`.
+
+The organizer enters game position `p` (`POST /api/v1/admin/encounters/{id}/ffa/games/{position}/results`), voids it (`…/cancel`) or resizes the series (`…/ffa/games-count`). The lobby completes itself once its confirmed live games reach `best_of`.
 
 ```http
 GET /api/v1/tournaments/42/stages HTTP/1.1
@@ -103,6 +118,8 @@ Points come from the tournament — `win_points` (1.0 by default), `draw_points`
 A standings row carries `position`, `overall_position`, `matches`, `win`, `draw`, `lose`, `points`, `buchholz` (the trimmed, median one), `full_buchholz` (the untrimmed sum), `score_differential`, `tie_group`, plus `tiebreak_order` and `source_rule_profile` — the order that was actually applied and the preset it came from.
 
 The order itself is the stage's `tiebreak_order` setting; without one, a preset chosen by stage type is used. The known metrics are `points`, `match_wins`, `head_to_head`, `buchholz`, `median_buchholz`, `score_differential`, `map_differential`, `wins_as_higher_stage_specific_metric` and `manual_override`. Unknown entries in a configured order are dropped, duplicates collapse to their first occurrence, and `manual_override` is appended when the organizer did not mention it.
+
+An FFA stage ranks a group from its lobbies, and its metrics are different ones: a lobby has no opponent, so head-to-head and both Buchholz variants compute nothing there at all. What it does have is `ffa_game_wins` (games won from 1st place; a shared first counts), `ffa_score` (the raw score summed), `ffa_best_placement` and `ffa_last_placement` (the placement in the last game played). The placement metrics are returned negated, so one "higher is better" sort covers every metric. The default preset is `ffa_default`: `points`, `ffa_game_wins`, `ffa_score`, `ffa_last_placement`.
 
 `manual_override` is the pinned-position step: a `manual_positions` map in the stage settings, team to place. It never takes part in detecting ties — `tie_group` is computed from the other metrics only, so a manual arrangement does not hide the fact that no tiebreaker separated those teams.
 
