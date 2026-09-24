@@ -51,7 +51,9 @@ from src.services.registration.teams import TEAM_COMPLETE, TEAM_FORMING, teams_s
 ALL_FLEX = {"flex": 3}
 
 #: The least a registrant can be asked, so the assertions stay about slots.
-SCHEMA = FormSchema(sections=[FormSection(key="all", fields=[FormField(key="battle_tag", kind="builtin", required=True)])])
+SCHEMA = FormSchema(
+    sections=[FormSection(key="all", fields=[FormField(key="battle_tag", kind="builtin", required=True)])]
+)
 
 
 async def _seed(session: Any) -> SimpleNamespace:
