@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core.enums import (
+    EncounterFormat,
     EncounterGameState,
     FirstBanRotation,
     MapPickSide,
@@ -425,6 +426,10 @@ class PickBanSessionService:
         existing = await self.get_pick_ban_session(session, encounter.id, kind)
         if existing is not None:
             return existing
+        # Not an error: this is the "is there a veto here" query the room polls,
+        # and a lobby has no two sides to veto between.
+        if encounter.format == EncounterFormat.FFA:
+            return None
         if encounter.home_team_id is None or encounter.away_team_id is None:
             return None
         if not await is_encounter_live(session, encounter):

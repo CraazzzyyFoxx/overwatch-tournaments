@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 
 from shared.core import http_status as status
 from shared.core.enums import (
+    EncounterFormat,
     EncounterResultAuditAction,
     EncounterResultStatus,
     EncounterStatus,
@@ -32,6 +33,7 @@ from shared.core.enums import (
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
+from shared.domain.encounter_format import ensure_format
 from shared.messaging.config import (
     TOURNAMENT_EVENTS_EXCHANGE,
 )
@@ -223,6 +225,8 @@ class CaptainService:
         return await self._resolve_captain_identity(session, auth_user, encounter)
 
     async def _load_encounter(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
+        """Every caller of this is a series feature -- a lobby has no home/away
+        report to file, so it is refused here rather than at each command."""
         encounter = await self.encounter_repo.get_for_update(
             session, encounter_id, options=list(_ENCOUNTER_LOCK_OPTIONS)
         )
@@ -231,6 +235,7 @@ class CaptainService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Encounter not found",
             )
+        ensure_format(encounter, EncounterFormat.DUEL)
         return encounter
 
     async def _load_encounter_with_reports(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
@@ -248,6 +253,7 @@ class CaptainService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Encounter not found",
             )
+        ensure_format(encounter, EncounterFormat.DUEL)
         return encounter
 
     async def _picked_map_ids(self, session: AsyncSession, encounter_id: int) -> dict[int, int]:

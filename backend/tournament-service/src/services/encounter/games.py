@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.enums import (
+    EncounterFormat,
     EncounterGameResultSource,
     EncounterGameState,
     EncounterResultAuditAction,
@@ -31,6 +32,7 @@ from shared.core.enums import (
 from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
+from shared.domain.encounter_format import ensure_format
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.encounter_report import EncounterMapReport
@@ -134,6 +136,7 @@ class EncounterGameService:
     async def ensure_freeplay_game(self, session: AsyncSession, encounter: Encounter) -> EncounterGame | None:
         """The position captains should be reporting right now, opening a new one
         if the series has room. ``None`` once the series is decided."""
+        ensure_format(encounter, EncounterFormat.DUEL)
         games = await self.list_games(session, encounter.id)
         if engine.series_complete(self.live_score(games), encounter.best_of):
             return None
@@ -182,6 +185,7 @@ class EncounterGameService:
     ) -> EncounterGame:
         """Write one position's accepted score. First write confirms it; a later
         one is a correction — both bump ``result_version`` and journal a row."""
+        ensure_format(encounter, EncounterFormat.DUEL)
         before = (game.accepted_home_score, game.accepted_away_score)
         game.accepted_home_score = home_score
         game.accepted_away_score = away_score
@@ -213,6 +217,7 @@ class EncounterGameService:
     ) -> EncounterGame:
         """Name the map a live position is played on (freeplay's half of what the
         pick-ban does automatically)."""
+        ensure_format(encounter, EncounterFormat.DUEL)
         if game.state not in OPEN_STATES:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

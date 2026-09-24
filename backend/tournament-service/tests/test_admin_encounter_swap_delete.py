@@ -44,6 +44,7 @@ def _encounter(
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=id,
+        format=enums.EncounterFormat.DUEL,
         tournament_id=7,
         stage_id=stage_id,
         stage_item_id=stage_item_id,

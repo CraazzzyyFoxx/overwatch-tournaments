@@ -52,6 +52,7 @@ class PushTie(IsolatedAsyncioTestCase):
         source = sync._ImportSource(challonge_id=777, source_id=5)
         encounter = SimpleNamespace(
             id=10,
+            format=sync.enums.EncounterFormat.DUEL,
             home_score=1,
             away_score=1,
             home_team=SimpleNamespace(id=1),

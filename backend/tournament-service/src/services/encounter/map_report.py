@@ -22,10 +22,11 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
-from shared.core.enums import EncounterGameResultSource, EncounterGameState, PickBanKind
+from shared.core.enums import EncounterFormat, EncounterGameResultSource, EncounterGameState, PickBanKind
 from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
+from shared.domain.encounter_format import ensure_format
 from shared.models.identity.user import User
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
@@ -121,6 +122,7 @@ class MapReportService:
         The claim targets a GAME, never a map: a series may play the same map
         twice, and only the position tells the two plays apart.
         """
+        ensure_format(encounter, EncounterFormat.DUEL)
         if not await is_encounter_live(session, encounter):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
