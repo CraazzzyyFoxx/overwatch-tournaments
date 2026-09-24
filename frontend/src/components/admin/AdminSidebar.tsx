@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
 
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import {
   Sidebar,
   SidebarContent,
@@ -146,7 +146,7 @@ export function AdminSidebar() {
                           ]
                         )}
                       >
-                        <Link href={item.href} aria-current={isActive ? "page" : undefined}>
+                        <HoverPrefetchLink href={item.href} aria-current={isActive ? "page" : undefined}>
                           <item.icon
                             aria-hidden
                             className={cn(
@@ -156,7 +156,7 @@ export function AdminSidebar() {
                           />
                           <span className="flex-1 truncate">{item.title}</span>
                           <NavBadge value={item.badge?.()} isActive={isActive} />
-                        </Link>
+                        </HoverPrefetchLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { tournamentHref } from "@/lib/tournament/url";
 import {
   getTournamentStatusMeta,
   isTournamentStatusActive,
@@ -136,7 +137,7 @@ export default function ActiveEvents() {
                   return (
                     <Link
                       key={tournament.id}
-                      href={`/tournaments/${tournament.id}`}
+                      href={tournamentHref(tournament)}
                       className={cn(
                         "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
                         "transition-colors hover:bg-accent"

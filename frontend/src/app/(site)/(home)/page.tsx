@@ -1,5 +1,5 @@
 import React, { Suspense, cache } from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { getTranslations } from "next-intl/server";
 import { BadgeCheck, BarChart3, Calendar, Plus, Trophy } from "lucide-react";
 
@@ -165,16 +165,16 @@ async function PageIntroSection({ tenantMode }: Readonly<{ tenantMode: boolean }
       actions={
         <>
           <Button asChild size="lg" className="shadow-lg shadow-primary/20">
-            <Link href="/tournaments">
+            <HoverPrefetchLink href="/tournaments">
               <Trophy className="mr-2 h-5 w-5" aria-hidden />
               {t("home.browseTournaments")}
-            </Link>
+            </HoverPrefetchLink>
           </Button>
           <Button asChild variant="secondary" size="lg">
-            <Link href="/tournaments/analytics">
+            <HoverPrefetchLink href="/tournaments/analytics">
               <BarChart3 className="mr-2 h-5 w-5" aria-hidden />
               {t("common.analytics")}
-            </Link>
+            </HoverPrefetchLink>
           </Button>
         </>
       }
@@ -251,7 +251,7 @@ async function NoEventsState() {
         </p>
       </div>
       <Button variant="outline" size="sm" asChild className="mt-1">
-        <Link href="/tournaments">{t("home.browsePastTournaments")}</Link>
+        <HoverPrefetchLink href="/tournaments">{t("home.browsePastTournaments")}</HoverPrefetchLink>
       </Button>
     </div>
   );
@@ -287,7 +287,7 @@ async function WorkspaceCard({ workspace }: Readonly<{ workspace: Workspace }>) 
   const abbr = workspace.name.slice(0, 2).toUpperCase();
 
   return (
-    <Link
+    <HoverPrefetchLink
       href={`/workspace/${workspace.slug}`}
       className={`border border-border/60 bg-card/50 p-5 flex flex-col gap-3 hover:bg-card hover:border-border transition-all duration-150 ${CARD_LINK_FOCUS}`}
     >
@@ -334,7 +334,7 @@ async function WorkspaceCard({ workspace }: Readonly<{ workspace: Workspace }>) 
           )}
         </div>
       </div>
-    </Link>
+    </HoverPrefetchLink>
   );
 }
 
@@ -342,7 +342,7 @@ async function GetWorkspaceCard() {
   const t = await getTranslations();
 
   return (
-    <Link
+    <HoverPrefetchLink
       href="/get-workspace"
       className={`border border-dashed border-border/60 bg-transparent p-5 flex flex-col gap-3 hover:bg-card/50 hover:border-border transition-all duration-150 ${CARD_LINK_FOCUS}`}
     >
@@ -362,7 +362,7 @@ async function GetWorkspaceCard() {
           </div>
         </div>
       </div>
-    </Link>
+    </HoverPrefetchLink>
   );
 }
 
@@ -458,12 +458,12 @@ function LeaderboardRow({
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <PlaceBadge place={rank} />
-        <Link
+        <HoverPrefetchLink
           href={`/users/${name.replace("#", "-")}`}
           className="font-semibold truncate rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
         >
           {name}
-        </Link>
+        </HoverPrefetchLink>
       </div>
       <span
         className="font-bold tabular-nums min-w-[44px] text-right"

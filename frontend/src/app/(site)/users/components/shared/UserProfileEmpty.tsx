@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { getTranslations } from "next-intl/server";
 import { CalendarSearch, Medal, Sparkles, Swords, Trophy, Users } from "lucide-react";
 
@@ -71,20 +71,20 @@ const UserProfileEmpty = async ({ name }: { name: string }) => {
         </ul>
 
         <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-          <Link
+          <HoverPrefetchLink
             href="/tournaments"
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-[color:var(--aqt-teal)]/35 bg-[color:var(--aqt-teal)]/10 px-4 text-caption font-medium text-[color:var(--aqt-teal)] transition-colors hover:bg-[color:var(--aqt-teal)]/16 focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg)] focus-visible:outline-none"
           >
             <Trophy aria-hidden className="size-4" />
             {t("users.profile.empty.browseTournaments")}
-          </Link>
-          <Link
+          </HoverPrefetchLink>
+          <HoverPrefetchLink
             href="/users"
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-4 text-caption font-medium text-[color:var(--aqt-fg)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg)] focus-visible:outline-none"
           >
             <Users aria-hidden className="size-4" />
             {t("users.profile.empty.browsePlayers")}
-          </Link>
+          </HoverPrefetchLink>
         </div>
       </div>
     </HeroFrame>

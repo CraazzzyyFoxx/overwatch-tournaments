@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 import { GitCompare } from "lucide-react";
 
@@ -29,14 +29,14 @@ const ProfileToolbar = ({ card, playerId }: ProfileToolbarProps) => {
   return (
     <div className="flex items-center gap-2">
       <SharePlayerCard card={card} />
-      <Link
+      <HoverPrefetchLink
         href={{ pathname: "/users/compare", query: { user_id: playerId } }}
         className={BTN}
         aria-label={t("users.profile.toolbar.comparePlayers")}
       >
         <GitCompare size={13} aria-hidden />
         {t("users.profile.toolbar.compare")}
-      </Link>
+      </HoverPrefetchLink>
       <FavoriteStarButton playerId={playerId} size="sm" className="h-8 w-8" />
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
@@ -81,7 +81,7 @@ export function MatchCard({
   };
 
   return (
-    <Link
+    <HoverPrefetchLink
       href={href}
       className={cn(
         "block overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)] transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
@@ -128,6 +128,6 @@ export function MatchCard({
           })}
         </ul>
       ) : null}
-    </Link>
+    </HoverPrefetchLink>
   );
 }

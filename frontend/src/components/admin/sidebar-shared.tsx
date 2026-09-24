@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -67,7 +67,7 @@ export function SidebarWorkspaceLogoItem({ href }: Readonly<{ href: string }>) {
           size="lg"
           className="h-9 rounded-lg px-2 hover:bg-transparent group-data-[collapsible=icon]:justify-center"
         >
-          <Link href={href} aria-label={`${currentWorkspace?.name ?? SITE_NAME} admin home`}>
+          <HoverPrefetchLink href={href} aria-label={`${currentWorkspace?.name ?? SITE_NAME} admin home`}>
             {currentWorkspace?.icon_url ? (
               <div className="flex size-7 items-center justify-center">
                 <Image
@@ -96,7 +96,7 @@ export function SidebarWorkspaceLogoItem({ href }: Readonly<{ href: string }>) {
             <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
               {currentWorkspace?.name ?? SITE_NAME}
             </span>
-          </Link>
+          </HoverPrefetchLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
@@ -113,10 +113,10 @@ export function SidebarBackToSite() {
           tooltip="Return to site"
           className="h-7 rounded-md px-2.5 text-sm text-sidebar-foreground/40 hover:text-sidebar-foreground/70 hover:bg-sidebar-accent/40"
         >
-          <Link href="/">
+          <HoverPrefetchLink href="/">
             <ArrowLeft aria-hidden className="size-4 text-sidebar-foreground/30" />
             <span>Return to site</span>
-          </Link>
+          </HoverPrefetchLink>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>

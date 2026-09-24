@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -306,12 +306,12 @@ function OverviewCard({
 
 function CardLink({ href, children }: Readonly<{ href: string; children: React.ReactNode }>) {
   return (
-    <Link
+    <HoverPrefetchLink
       href={href}
       className="text-label uppercase tracking-label text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-teal)]"
     >
       {children}
-    </Link>
+    </HoverPrefetchLink>
   );
 }
 
@@ -332,7 +332,7 @@ function OverviewStreamCard({
 
   return (
     <OverviewCard title={t("tournamentDetail.overview.stream.title")} action={action}>
-      <Link
+      <HoverPrefetchLink
         href={href}
         className="group relative block overflow-hidden rounded-lg bg-[color:var(--aqt-overlay-2)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
       >
@@ -362,7 +362,7 @@ function OverviewStreamCard({
             <span className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">{viewers}</span>
           ) : null}
         </span>
-      </Link>
+      </HoverPrefetchLink>
     </OverviewCard>
   );
 }

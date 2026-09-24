@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AlertCircle, AlertTriangle, ChevronRight, Info, type LucideIcon } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,7 +72,7 @@ export function IssuesQueue({ items }: Readonly<IssuesQueueProps>) {
               return (
                 <li key={item.label}>
                   {/* Bleeds to the card edge so the hover fill spans the card. */}
-                  <Link
+                  <HoverPrefetchLink
                     href={item.href}
                     className="-mx-6 flex items-center gap-3 px-6 py-2.5 transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
@@ -90,7 +90,7 @@ export function IssuesQueue({ items }: Readonly<IssuesQueueProps>) {
                       {item.count}
                     </span>
                     <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  </Link>
+                  </HoverPrefetchLink>
                 </li>
               );
             })}

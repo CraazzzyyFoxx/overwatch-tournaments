@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 import { ArrowRight, Users } from "lucide-react";
 import { UserBestTeammate } from "@/types/user.types";
@@ -102,7 +102,7 @@ const TeammateRows = ({
         const wrPct = Math.max(0, Math.min(100, tm.winrate * 100));
         const color = wrColorOf(tm.winrate);
         return (
-          <Link
+          <HoverPrefetchLink
             key={tm.user.id}
             href={`/users/${getPlayerSlug(tm.user.name)}`}
             className="group grid grid-cols-[26px_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-[18px] py-2.5 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
@@ -133,7 +133,7 @@ const TeammateRows = ({
                 {wrPct.toFixed(0)}%
               </span>
             </div>
-          </Link>
+          </HoverPrefetchLink>
         );
       })}
       <div className="aqt-tnum flex justify-between px-[18px] py-2.5 text-label text-[color:var(--aqt-fg-dim)]">
@@ -209,10 +209,10 @@ const AllTeammatesTable = ({
               return (
                 <tr key={tm.user.id} className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
                   <td className="px-3 py-2">
-                    <Link href={`/users/${getPlayerSlug(tm.user.name)}`} className="inline-flex items-center gap-1.5 hover:text-[color:var(--aqt-teal)]">
+                    <HoverPrefetchLink href={`/users/${getPlayerSlug(tm.user.name)}`} className="inline-flex items-center gap-1.5 hover:text-[color:var(--aqt-teal)]">
                       <span className="font-semibold text-[color:var(--aqt-fg)]">{tmName}</span>
                       {tmTag ? <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">#{tmTag}</span> : null}
-                    </Link>
+                    </HoverPrefetchLink>
                   </td>
                   <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.tournaments}</td>
                   <td className="aqt-tnum px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</td>

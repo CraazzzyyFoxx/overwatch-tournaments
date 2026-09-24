@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { ArrowRight, Award } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AchievementRarity } from "@/types/achievement.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import {
@@ -45,10 +45,10 @@ const OverviewAchievementsPreview = async ({ achievements, userSlug, limit = DEF
       title={t("users.overview.achievementsPreview.title")}
       icon={<Award size={15} />}
       action={
-        <Link href={`/users/${userSlug}?tab=achievements`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=achievements`} className="aqt-seeall">
           {t("common.all")} {unlocked.length}
           <ArrowRight aria-hidden className="size-3" />
-        </Link>
+        </HoverPrefetchLink>
       }
     >
       <div className="flex flex-col gap-2">

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Calendar, Users } from "lucide-react";
 
@@ -27,7 +27,7 @@ export async function EventCard({
   const dateStr = formatDateRange(tournament.start_date, tournament.end_date, locale);
 
   return (
-    <Link
+    <HoverPrefetchLink
       href={tournamentHref(tournament)}
       className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg)]"
     >
@@ -90,7 +90,7 @@ export async function EventCard({
           </div>
         </div>
       </div>
-    </Link>
+    </HoverPrefetchLink>
   );
 }
 

@@ -172,6 +172,7 @@ ym(${ymId}, 'init', {clickmap:true, trackLinks:true, accurateTrackBounce:true});
               siteName: SITE_NAME,
               privacy: (chunks) => (
                 <Link
+                  prefetch={false}
                   href="/privacy"
                   className="font-medium text-[color:var(--aqt-fg-muted)] underline underline-offset-2 hover:text-[color:var(--aqt-fg)]"
                 >

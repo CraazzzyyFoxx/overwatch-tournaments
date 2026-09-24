@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ArrowRight, Calendar } from "lucide-react";
 import { useFormatter } from "next-intl";
 
@@ -52,10 +52,10 @@ export function ActiveTournamentCard({ canRead, tournament }: Readonly<ActiveTou
             dashboard.
           </p>
           <Button asChild variant="outline" size="sm" className="w-fit">
-            <Link href="/admin/tournaments">
+            <HoverPrefetchLink href="/admin/tournaments">
               View all tournaments
               <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
+            </HoverPrefetchLink>
           </Button>
         </CardContent>
       </Card>
@@ -108,10 +108,10 @@ export function ActiveTournamentCard({ canRead, tournament }: Readonly<ActiveTou
         </div>
 
         <Button asChild size="sm" className="shrink-0">
-          <Link href={`/admin/tournaments/${tournament.id}`}>
+          <HoverPrefetchLink href={`/admin/tournaments/${tournament.id}`}>
             Open tournament
             <ArrowRight className="size-3.5" aria-hidden />
-          </Link>
+          </HoverPrefetchLink>
         </Button>
       </CardContent>
     </Card>

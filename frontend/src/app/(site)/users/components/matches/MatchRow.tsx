@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ResTag, ScoreCell, StagePill } from "@/components/match/cells";
@@ -11,6 +11,7 @@ import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EncounterWithUserStats } from "@/types/user.types";
 import type { Hero } from "@/types/hero.types";
+import { tournamentHref } from "@/lib/tournament/url";
 
 const stageKindFor = (name: string | undefined): "group" | "playoffs" | "finals" | "default" => {
   if (!name) return "default";
@@ -60,8 +61,8 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
       className="cursor-pointer border-b border-[color:var(--aqt-border)] transition-colors last:border-b-0 hover:bg-[color:var(--aqt-overlay-2)]"
     >
       <td className="px-3.5 py-3">
-        <Link
-          href={`/tournaments/${enc.tournament_id}`}
+        <HoverPrefetchLink
+          href={tournamentHref(enc.tournament_id)}
           onClick={(e) => e.stopPropagation()}
           className="aqt-tnum inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-label font-bold"
           style={{
@@ -71,7 +72,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
           }}
         >
           {enc.tournament?.name ?? `#${enc.tournament_id}`}
-        </Link>
+        </HoverPrefetchLink>
       </td>
       <td className="px-3.5 py-3">
         <StagePill kind={kind}>{stageLabel(enc.stage_item?.name ?? enc.stage?.name)}</StagePill>
@@ -79,13 +80,13 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
       <td className="px-3.5 py-3">
         <span className="inline-flex items-center gap-2">
           <ResTag kind={resKind} />
-          <Link
+          <HoverPrefetchLink
             href={`/encounters/${enc.id}`}
             onClick={(e) => e.stopPropagation()}
             className="hover:text-[color:var(--aqt-teal)]"
           >
             {userTeamName} {t("common.vs")} {opponentName}
-          </Link>
+          </HoverPrefetchLink>
         </span>
       </td>
       <td className="px-3.5 py-3">

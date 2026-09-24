@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent } from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 
 import type { Tone } from "@/components/kit/tone";
 import { TabBadge, TabDot, revealTab, tabsListVariants, tabsTriggerVariants } from "@/components/ui/tabs";
@@ -82,7 +82,7 @@ export function LinkTabs({ items, activeKey, level = 1, ariaLabel }: Readonly<Li
           const isActive = item.key === activeKey;
           return (
             <li key={item.key} className="shrink-0">
-              <Link
+              <HoverPrefetchLink
                 href={item.href}
                 data-link-tab={item.key}
                 ref={isActive ? activeRef : undefined}
@@ -92,7 +92,7 @@ export function LinkTabs({ items, activeKey, level = 1, ariaLabel }: Readonly<Li
                 {item.dot ? <TabDot {...item.dot} /> : null}
                 {item.label}
                 {item.badge ? <TabBadge>{item.badge}</TabBadge> : null}
-              </Link>
+              </HoverPrefetchLink>
             </li>
           );
         })}

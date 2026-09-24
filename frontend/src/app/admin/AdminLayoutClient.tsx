@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, type CSSProperties, type ReactNode } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { skipToken, useQuery } from "@tanstack/react-query";
 
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import AnnouncementBanner from "@/components/notifications/AnnouncementBanner";
 import { AuditTrailProvider } from "@/components/kit/AuditTrailSheet";
@@ -52,12 +52,12 @@ function UnauthorizedState() {
         <p className="mt-2 text-sm text-muted-foreground">
           Please contact an administrator if you believe this is an error.
         </p>
-        <Link
+        <HoverPrefetchLink
           href="/"
           className="mt-6 inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Go Home
-        </Link>
+        </HoverPrefetchLink>
       </div>
     </div>
   );
@@ -85,7 +85,9 @@ function AdminBreadcrumb() {
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink href="/admin">Admin</BreadcrumbLink>
+          <BreadcrumbLink asChild>
+            <HoverPrefetchLink href="/admin">Admin</HoverPrefetchLink>
+          </BreadcrumbLink>
         </BreadcrumbItem>
         {segments.slice(1).map((segment, index) => {
           const href = `/admin/${segments.slice(1, index + 2).join("/")}`;
@@ -110,7 +112,9 @@ function AdminBreadcrumb() {
                 {isLast ? (
                   <BreadcrumbPage>{label}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink href={href}>{label}</BreadcrumbLink>
+                  <BreadcrumbLink asChild>
+                    <HoverPrefetchLink href={href}>{label}</HoverPrefetchLink>
+                  </BreadcrumbLink>
                 )}
               </BreadcrumbItem>
             </Fragment>

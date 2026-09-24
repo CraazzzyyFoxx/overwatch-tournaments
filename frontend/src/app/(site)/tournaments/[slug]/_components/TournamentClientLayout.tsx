@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 
@@ -174,10 +174,10 @@ export default function TournamentClientLayout({
   // trade is gone, and the formation itself reads in the Format card, beside the
   // roster shape a pill could not show.
   const draftButton = showDraftLink ? (
-    <Link href={`/draft/${tournament.slug}`} className={TOURNAMENT_ACTION_CLASS}>
+    <HoverPrefetchLink href={`/draft/${tournament.slug}`} className={TOURNAMENT_ACTION_CLASS}>
       {t("common.draft")}
       <ExternalLink className="size-3.5 opacity-80" aria-hidden />
-    </Link>
+    </HoverPrefetchLink>
   ) : null;
 
   const registerButton = !isEnded ? <TournamentRegisterButton tournament={tournament} /> : null;
@@ -207,12 +207,12 @@ export default function TournamentClientLayout({
           align={tournament.cover_image_url ? "start" : "end"}
           eyebrow={
             <HeroCoord className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
-              <Link
+              <HoverPrefetchLink
                 href="/tournaments"
                 className="transition-colors hover:text-[color:var(--aqt-teal)]"
               >
                 {t("common.tournaments")}
-              </Link>
+              </HoverPrefetchLink>
               <span className="opacity-50">/</span>
               <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
               {tournament.is_league ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useFormatter, useTranslations } from "next-intl";
 import { Crown, Trophy } from "lucide-react";
 import { LogStatsName } from "@/types/stats.types";
@@ -58,7 +58,7 @@ const HeroBestGames = ({ hero }: { hero: HeroWithUserStats }) => {
           {records.map(({ name, best, isGlobalRecord }) => (
             <Tooltip key={name}>
               <TooltipTrigger asChild>
-                <Link
+                <HoverPrefetchLink
                   href={`/encounters/${best.encounter_id}`}
                   className="flex flex-col gap-1 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-3 py-2.5 transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
                 >
@@ -78,7 +78,7 @@ const HeroBestGames = ({ hero }: { hero: HeroWithUserStats }) => {
                   <span className="aqt-tnum truncate text-label text-[color:var(--aqt-fg-dim)]">
                     {best.map_name} · {best.tournament_name}
                   </span>
-                </Link>
+                </HoverPrefetchLink>
               </TooltipTrigger>
               <TooltipContent className="w-60 overflow-hidden p-0">
                 {best.map_image_path ? (

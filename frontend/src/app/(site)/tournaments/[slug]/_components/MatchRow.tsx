@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -75,14 +75,14 @@ export function MatchRow({
       <span className="flex items-center justify-end gap-2 text-label text-[color:var(--aqt-fg-faint)]">
         {trailing ? <span className="hidden sm:inline">{trailing}</span> : null}
         {bracketHref ? (
-          <Link
+          <HoverPrefetchLink
             href={bracketHref}
             className="inline-flex hover:text-[color:var(--aqt-teal)]"
             aria-label={t("tournamentDetail.matchRow.openInBracket")}
             title={t("tournamentDetail.matchRow.openInBracket")}
           >
             <ArrowUpRight className="size-3.5" aria-hidden />
-          </Link>
+          </HoverPrefetchLink>
         ) : null}
         {expandable ? (
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
@@ -127,23 +127,23 @@ export function MatchRow({
             </span>
             <span className="flex justify-end gap-2 text-label">
               {map.log_name ? (
-                <Link href={`/matches/${map.id}`} className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]">
+                <HoverPrefetchLink href={`/matches/${map.id}`} className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]">
                   {t("tournamentDetail.matchRow.log")}
-                </Link>
+                </HoverPrefetchLink>
               ) : null}
             </span>
           </div>
         ))}
         <div className="mt-1.5 flex gap-3 border-t border-[color:var(--aqt-border)]/60 pt-1.5 text-label">
-          <Link href={`/encounters/${encounter.id}`} className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]">
+          <HoverPrefetchLink href={`/encounters/${encounter.id}`} className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]">
             {t("bracket.viewMatch")}
-          </Link>
-          <Link
+          </HoverPrefetchLink>
+          <HoverPrefetchLink
             href={withReturnTo(`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`, returnTo)}
             className="text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-teal)]"
           >
             {t("bracket.pregameRoom")}
-          </Link>
+          </HoverPrefetchLink>
         </div>
       </div>
     </details>

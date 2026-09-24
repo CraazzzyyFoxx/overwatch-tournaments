@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import {
   Dialog,
@@ -26,7 +26,7 @@ const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
   const home = match.home_team?.name ?? "—";
   const away = match.away_team?.name ?? "—";
   return (
-    <Link
+    <HoverPrefetchLink
       href={`/encounters/${match.encounter_id}`}
       className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-2 text-caption transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)]"
     >
@@ -34,7 +34,7 @@ const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
         {home} <span className="aqt-tnum opacity-80">{match.score.home}–{match.score.away}</span> {away}
       </span>
       {date ? <span className="aqt-tnum shrink-0 text-label text-[color:var(--aqt-fg-muted)]">{date}</span> : null}
-    </Link>
+    </HoverPrefetchLink>
   );
 };
 
