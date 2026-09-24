@@ -9,6 +9,10 @@ Point-in-time intention. Факты о текущей системе: [`../busin
 Расходимся с ним в одном: он запрещает и отдельный namespace (`rpc.stats.*`), а здесь namespace вводится —
 потому что шов, который он описывает, без имени на проводе не держится дольше одного релиза.
 
+**Частично заменён** [`2026-09-24-discipline-catalog-and-team-formats.md`](./2026-09-24-discipline-catalog-and-team-formats.md):
+§4.3 (`catalog.discipline_role`), §5 A1 (`disc0001`/`disc0002`), A3 (`RoleSet`), A4 (место декларации и синка),
+A6 (CRUD ролей) и два пункта §11 (каталог сущностей и ладдер по дисциплине) читать там. Фаза B и остальное — здесь.
+
 ---
 
 ## 0. Область
@@ -527,7 +531,7 @@ const OverwatchStatPanels = dynamic(
 | Группа | Файлы | Что делать |
 | --- | --- | --- |
 | Вторая таблица ролей | `lib/roles.ts` (+14 потребителей в `app/balancer/**`, `components/draft/**`) | удалить, перевести на `useRoleSet`/`role-set.ts` |
-| Inline label-карты | `participantsColumns.tsx:78-81,166-169`, `ParticipantsPool.tsx:35-38`, `TournamentHistoryCell.tsx:12-34`, `TournamentParticipantsPage.tsx:174-177`, `TournamentTeamsPage.tsx:70-73`, `OverviewRoleSplit.tsx:22-25`, `OverviewTopHeroesTable.tsx:29-31`, `HeroUserStatsPopover.tsx:23-25`, `compare/constants.ts:17-20`, `UsersRedesignClient.tsx:75-78`, `mix-balancer-prefs.ts:36-39`, `TournamentsDivisionChart.tsx:21-29`, `balancer/feed/_components/mappingConfig.ts:104-109`, `ValueMapEditor.tsx:37-40,63-72`, `PlayerEditSheet.tsx:71-81` | заменить на `roleLabel(code)` из хука |
+| Inline label-карты | `participantsColumns.tsx:78-81,166-169`, `ParticipantsPool.tsx:35-38`, `TournamentHistoryCell.tsx:12-34`, `TournamentParticipantsPage.tsx:174-177`, `TournamentTeamsPage.tsx:70-73`, `OverviewRoleSplit.tsx:22-25`, `OverviewTopHeroesTable.tsx:29-31`, `HeroUserStatsPopover.tsx:23-25`, `compare/constants.ts:17-20`, `UsersClient.tsx:75-78`, `mix-balancer-prefs.ts:36-39`, `TournamentsDivisionChart.tsx:21-29`, `balancer/feed/_components/mappingConfig.ts:104-109`, `ValueMapEditor.tsx:37-40,63-72`, `PlayerEditSheet.tsx:71-81` | заменить на `roleLabel(code)` из хука |
 | Захардкоженные списки | `admin/content/heroes/page.tsx:33`, `draft/admin-control-model.ts:11`, `DraftCaptainsStep.tsx:42`, `DraftPoolStep.tsx:23`, `setup-model.ts:122`, `PlayerPool.tsx:39`, `balancer-page-helpers.ts:118`, `workspace-helpers.ts:23-27,95-97,392-396`, `balance-editor-helpers.ts:101-116`, `draft-workspace-model.ts:37-39` | взять из `RoleSet.codes` |
 | Дефолты `"Damage"`/`"Tank"`/`"Support"` | `PlayerForm.tsx:68`, `TeamRosterEditor.tsx:74`, `useBalancerDragGhosts.ts:65-99`, `PickupLobbyPanel.tsx:291,539`, `PickupTeamsPanel.tsx:1045,1110`, `PickupAddPlayersDialog.tsx:615` | первый элемент `RoleSet.roles` |
 | Дисциплино-зависимая логика | `heroVariantFromRole` и его 5 потребителей (`HeroImage.tsx`, `HeroesView.tsx`, `HeroCompareHero.tsx`, `HeroLeaderboardTable.tsx`, `HeroUserStatsPopover.tsx`) | переезжает в `src/games/overwatch/` |
