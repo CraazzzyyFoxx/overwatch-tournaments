@@ -276,7 +276,7 @@
   width: auto;
   max-width: 220px;
   flex: 0 0 auto;
-  height: 34px;
+  height: 32px;
   border: 1px solid var(--enc-border);
   border-radius: 8px;
   background: var(--aqt-overlay-2);

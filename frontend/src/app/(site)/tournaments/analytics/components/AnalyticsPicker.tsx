@@ -63,7 +63,7 @@ function TooltipSelect({
       <Select value={value} onValueChange={onValueChange} disabled={disabled}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <SelectTrigger aria-label={tooltip} className={cn("h-9", className)}>
+            <SelectTrigger aria-label={tooltip} className={cn("h-8", className)}>
               <SelectValue placeholder={placeholder} />
             </SelectTrigger>
           </TooltipTrigger>

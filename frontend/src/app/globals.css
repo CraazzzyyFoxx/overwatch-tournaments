@@ -518,7 +518,10 @@
   color: var(--aqt-fg-muted);
   font-size: var(--text-label);
   font-weight: 500;
-  padding: 7px 12px;
+  /* Fixed, not padding-derived: a count badge made chips 36px, a bare label
+     34px, while every search/select/segment in the same row is 32px (`h-8`). */
+  height: 32px;
+  padding: 0 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: 0.15s;
@@ -1840,7 +1843,8 @@
   border: 1px solid var(--tn-border);
   color: var(--tn-fg);
   border-radius: 8px;
-  padding: 7px 12px 7px 32px;
+  height: 32px;
+  padding: 0 12px 0 32px;
   /* 16px below the sm breakpoint: iOS Safari zooms the page when a focused
      input renders smaller than that. */
   font-size: 16px;

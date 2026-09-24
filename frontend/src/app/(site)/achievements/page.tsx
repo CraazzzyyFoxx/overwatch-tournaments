@@ -285,7 +285,6 @@ const AchievementsPage = () => {
             label={t("common.searchLabel")}
             placeholder={t("achievements.searchPlaceholder")}
             containerClassName="w-full sm:w-auto sm:min-w-[180px]"
-            className="h-8"
           />
         </div>
       </div>

@@ -132,7 +132,7 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
           <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
             <SelectTrigger
               aria-label={t("users.heroes.sortHeroes")}
-              className="aqt-tnum h-9 w-[116px] shrink-0 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] text-label text-[color:var(--aqt-fg)] shadow-none"
+              className="aqt-tnum h-8 w-[116px] shrink-0 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] text-label text-[color:var(--aqt-fg)] shadow-none"
             >
               <SelectValue />
             </SelectTrigger>
