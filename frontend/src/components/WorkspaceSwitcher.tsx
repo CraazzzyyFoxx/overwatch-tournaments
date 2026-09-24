@@ -65,10 +65,14 @@ export default function WorkspaceSwitcher() {
 
   return (
     <>
-      {/* Reads as "platform / workspace" beside the header's home logo. Rendered
-        here rather than in the header so it never outlives the switcher, which
-        renders nothing until the workspaces have loaded. */}
-      <span aria-hidden className="h-5 w-px rotate-[18deg] bg-[color:var(--aqt-border-3)]" />
+      {/* Reads as "platform / workspace" beside the header's home logo, and
+        hides with it below `sm`. Rendered here rather than in the header so it
+        never outlives the switcher, which renders nothing until the workspaces
+        have loaded. */}
+      <span
+        aria-hidden
+        className="hidden h-5 w-px rotate-[18deg] bg-[color:var(--aqt-border-3)] sm:block"
+      />
       <Popover open={open} onOpenChange={setOpen}>
         {/* Click-only: one real button is the whole control, no hover intent. */}
         <PopoverTrigger asChild>
