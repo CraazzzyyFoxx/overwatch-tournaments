@@ -30,6 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.core import enums  # noqa: E402
 from shared.core.errors import BaseAPIException  # noqa: E402
 from shared.domain.ffa_scoring import FfaGameLine  # noqa: E402
+from shared.models.identity.auth_user import AuthUser  # noqa: E402
+from shared.models.identity.user import User  # noqa: E402
 from shared.models.platform.outbox import EventOutbox  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import (  # noqa: E402
@@ -43,7 +45,9 @@ from shared.models.tournament import (  # noqa: E402
     Team,
     Tournament,
 )
+from shared.services.chat import ChatRoom  # noqa: E402
 from src.services.admin.stage import stage_service  # noqa: E402
+from src.services.encounter.chat_access import EncounterChatAccess  # noqa: E402
 from src.services.encounter.ffa import ffa_encounter_service  # noqa: E402
 from src.services.standings.service import standings_service  # noqa: E402
 
@@ -781,3 +785,227 @@ def test_a_finished_league_ranks_its_groups_and_seeds_the_bracket(db_session) ->
             (group_b, 2, team_ids[4], enums.StageItemInputType.FINAL),
         ]
     )
+
+
+# ── the reads the lobby table is drawn from ──────────────────────────────────
+
+#: Placement pays, and the organizer named the score column.
+LABELLED_SCORING = {"ffa_scoring": {"placement_points": [10, 6, 4], "score_points": 1, "score_label": "Kills"}}
+
+
+def test_the_lobby_read_carries_rules_rows_and_one_cell_per_planned_game(db_session) -> None:
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=2, settings=LABELLED_SCORING)
+        try:
+            await ffa_encounter_service.set_game_results(
+                db_session,
+                seeded.lobby_id,
+                1,
+                # Placement pays here, so the organizer gives every place.
+                _lines(seeded.team_ids, [5, 3, 1], [1, 2, 3]),
+                actor_user_id=None,
+                reason=None,
+            )
+            return await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id), seeded
+        finally:
+            await _drop(db_session, seeded)
+
+    lobby, seeded = asyncio.run(_run())
+    team_ids = seeded.team_ids
+    assert (lobby.encounter_id, lobby.tournament_id, lobby.stage_id, lobby.stage_item_id) == (
+        seeded.lobby_id,
+        seeded.tournament_id,
+        seeded.stage_id,
+        seeded.item_id,
+    )
+    assert (lobby.name, lobby.best_of, lobby.advance_count) == ("Group A", 2, None)
+    assert (lobby.status, lobby.result_status) == (enums.EncounterStatus.OPEN, enums.EncounterResultStatus.NONE)
+    assert (lobby.rules.placement_points, lobby.rules.score_points, lobby.rules.score_label) == (
+        [10.0, 6.0, 4.0],
+        1.0,
+        "Kills",
+    )
+    # Nothing has ranked the group yet, so the read says so instead of inventing
+    # a place -- and unranked rows fall back to seat order.
+    assert [(row.team_id, row.slot, row.position, row.tie_group) for row in lobby.rows] == [
+        (team_ids[0], 1, None, None),
+        (team_ids[1], 2, None, None),
+        (team_ids[2], 3, None, None),
+    ]
+    assert [(row.points, row.games_played, row.wins, row.score) for row in lobby.rows] == [
+        (15.0, 1, 1, 5),
+        (9.0, 1, 0, 3),
+        (5.0, 1, 0, 1),
+    ]
+    assert lobby.rows[0].team_name.startswith("Team 0 ")
+    # One cell per PLANNED game: the unplayed second one is a hole, not a zero.
+    assert [(cell.position, cell.state, cell.placement, cell.score, cell.points) for cell in lobby.rows[0].games] == [
+        (1, enums.EncounterGameState.CONFIRMED, 1, 5, 15.0),
+        (2, None, None, None, None),
+    ]
+
+
+def test_a_cancelled_game_leaves_its_cell_free_again(db_session) -> None:
+    """Cancelling frees the position (the partial unique index says so), so the
+    cell must read as unplayed rather than showing the void numbers."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1)
+        try:
+            await ffa_encounter_service.set_game_results(
+                db_session, seeded.lobby_id, 1, _lines(seeded.team_ids, [5, 3, 1]), actor_user_id=None, reason=None
+            )
+            await ffa_encounter_service.cancel_game(
+                db_session, seeded.lobby_id, 1, actor_user_id=None, reason="restarted"
+            )
+            lobby = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            return [(cell.state, cell.points) for cell in lobby.rows[0].games], [row.points for row in lobby.rows]
+        finally:
+            await _drop(db_session, seeded)
+
+    cells, points = asyncio.run(_run())
+    assert cells == [(None, None)]
+    assert points == [0.0, 0.0, 0.0]
+
+
+def test_lobby_row_points_and_positions_are_the_standing_the_bracket_reads(db_session) -> None:
+    """The table the organizer sees and the table advancement reads are one row set."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1)
+        try:
+            # The last seat wins, so seat order and rank order disagree.
+            await ffa_encounter_service.set_game_results(
+                db_session, seeded.lobby_id, 1, _lines(seeded.team_ids, [1, 3, 5]), actor_user_id=None, reason=None
+            )
+            await standings_service.recalculate_for_tournament(db_session, seeded.tournament_id)
+            lobby = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            rows = await db_session.execute(sa.select(Standing).where(Standing.stage_item_id == seeded.item_id))
+            table = {row.team_id: (row.position, row.points, row.tie_group) for row in rows.scalars()}
+            return (
+                [(row.team_id, row.slot, row.position, row.points, row.tie_group) for row in lobby.rows],
+                table,
+                seeded.team_ids,
+            )
+        finally:
+            await _drop(db_session, seeded)
+
+    rows, table, team_ids = asyncio.run(_run())
+    assert [row[0] for row in rows] == [team_ids[2], team_ids[1], team_ids[0]]
+    # Sorted by position, NOT by seat: the seats come back 3, 2, 1.
+    assert [row[1] for row in rows] == [3, 2, 1]
+    assert [row[2] for row in rows] == [1, 2, 3]
+    for team_id, _slot, position, points, tie_group in rows:
+        assert (position, points, tie_group) == table[team_id]
+
+
+def test_the_stage_read_lists_every_lobby_in_group_order(db_session) -> None:
+    async def _run() -> tuple:
+        seeded = await _seed_league(db_session)
+        try:
+            # Group A: teams 0 > 1 > 2. Group B the other way round: 5 > 4 > 3.
+            for lobby_id, seats, scores in (
+                (seeded.lobby_ids[0], seeded.team_ids[:3], [10, 6, 2]),
+                (seeded.lobby_ids[1], seeded.team_ids[3:], [2, 6, 10]),
+            ):
+                await ffa_encounter_service.set_game_results(
+                    db_session, lobby_id, 1, _lines(seats, scores), actor_user_id=None, reason=None
+                )
+            await standings_service.recalculate_for_tournament(db_session, seeded.tournament_id)
+            lobbies = await ffa_encounter_service.load_stage_lobbies(
+                db_session, seeded.stage_id, tournament_id=seeded.tournament_id
+            )
+            with pytest.raises(BaseAPIException) as raised:
+                # A stage of another tournament must not be readable through this
+                # tournament's (visibility-gated) path.
+                await ffa_encounter_service.load_stage_lobbies(db_session, seeded.stage_id, tournament_id=-1)
+            return lobbies, raised.value.status_code, seeded
+        finally:
+            await _drop(db_session, seeded)
+
+    lobbies, mismatch, seeded = asyncio.run(_run())
+    team_ids = seeded.team_ids
+    assert [lobby.encounter_id for lobby in lobbies] == seeded.lobby_ids
+    assert [lobby.stage_item_id for lobby in lobbies] == seeded.group_ids
+    assert [[row.team_id for row in lobby.rows] for lobby in lobbies] == [
+        [team_ids[0], team_ids[1], team_ids[2]],
+        [team_ids[5], team_ids[4], team_ids[3]],
+    ]
+    assert [[row.position for row in lobby.rows] for lobby in lobbies] == [[1, 2, 3], [1, 2, 3]]
+    assert all(lobby.status == enums.EncounterStatus.COMPLETED for lobby in lobbies)
+    assert mismatch == 404
+
+
+def test_the_lobby_read_refuses_a_duel_and_an_unknown_encounter(db_session) -> None:
+    async def _run() -> tuple[int, int]:
+        seeded = await _seed(db_session)
+        try:
+            with pytest.raises(BaseAPIException) as duel:
+                await ffa_encounter_service.load_lobby(db_session, seeded.duel_id)
+            with pytest.raises(BaseAPIException) as missing:
+                await ffa_encounter_service.load_lobby(db_session, -1)
+            return duel.value.status_code, missing.value.status_code
+        finally:
+            await _drop(db_session, seeded)
+
+    assert asyncio.run(_run()) == (409, 404)
+
+
+# ── who may talk in a lobby's room ───────────────────────────────────────────
+
+
+async def _seed_account(session: Any, name: str) -> tuple[int, int, str]:
+    """An auth account with a linked player: ``(auth_user_id, player_id, name)``."""
+    suffix = uuid.uuid4().hex[:12]
+    auth_user = AuthUser(email=f"{name}-{suffix}@example.com", username=f"{name}-{suffix}")
+    session.add(auth_user)
+    await session.flush()
+    player = User(name=f"{name} {suffix}", auth_user_id=auth_user.id)
+    session.add(player)
+    await session.flush()
+    return auth_user.id, player.id, player.name
+
+
+async def _caller(session: Any, auth_user_id: int) -> AuthUser:
+    """The account as the gateway hands it over: no roles, no permissions, so
+    nothing but captaincy can let it write (staff is a separate branch)."""
+    auth_user = await session.get(AuthUser, auth_user_id)
+    auth_user.set_rbac_cache([], [], [], {})
+    return auth_user
+
+
+def test_a_lobby_participant_captain_writes_in_its_chat_and_an_outsider_watches(db_session) -> None:
+    async def _run() -> tuple:
+        seeded = await _seed(db_session)
+        players: list[int] = []
+        auths: list[int] = []
+        try:
+            captain_auth_id, captain_player_id, captain_name = await _seed_account(db_session, "captain")
+            outsider_auth_id, outsider_player_id, _ = await _seed_account(db_session, "outsider")
+            players = [captain_player_id, outsider_player_id]
+            auths = [captain_auth_id, outsider_auth_id]
+            # The captain of a SEATED team -- and the lobby has no sides at all,
+            # so only the participant rows can answer this.
+            await db_session.execute(
+                sa.update(Team).where(Team.id == seeded.team_ids[1]).values(captain_id=captain_player_id)
+            )
+            await db_session.commit()
+            access = EncounterChatAccess()
+            room = ChatRoom.encounter(seeded.lobby_id)
+            mine = await access.resolve(db_session, await _caller(db_session, captain_auth_id), room)
+            theirs = await access.resolve(db_session, await _caller(db_session, outsider_auth_id), room)
+            return (
+                (mine.role, mine.can_write, mine.can_moderate, mine.display_name),
+                (theirs.role, theirs.can_write),
+                captain_name,
+            )
+        finally:
+            await _drop(db_session, seeded)
+            # Accounts are not workspace-scoped, so the cascade leaves them behind.
+            await db_session.execute(sa.delete(User).where(User.id.in_(players)))
+            await db_session.execute(sa.delete(AuthUser).where(AuthUser.id.in_(auths)))
+            await db_session.commit()
+
+    mine, theirs, captain_name = asyncio.run(_run())
+    assert mine == ("captain", True, False, captain_name)
+    assert theirs == ("spectator", False)

@@ -68,15 +68,21 @@ const (
 	encounterTournamentSQL = `SELECT tournament_id FROM tournament.encounter WHERE id = $1`
 	// Same players."user" bridge as isMemberSQL above, for the other direction:
 	// tournament.team.captain_id references players."user".id, while the gateway
-	// only ever holds an auth user id (from the JWT). An encounter has at most
-	// two teams, so the IN over (home_team_id, away_team_id) covers both sides
-	// in one indexed pass (ix_tournament_team_captain_id).
+	// only ever holds an auth user id (from the JWT). An encounter's teams are
+	// its two sides for a duel and its participant rows for an ffa lobby; one of
+	// the two lists is always empty, and both are indexed lookups by encounter
+	// id, so the union costs one extra index probe
+	// (ix_tournament_team_captain_id still covers the captain side).
 	isEncounterCaptainSQL = `SELECT EXISTS(
 		SELECT 1
-		FROM tournament.encounter e
-		JOIN tournament.team t ON t.id IN (e.home_team_id, e.away_team_id)
+		FROM tournament.team t
 		JOIN players."user" u ON u.id = t.captain_id
-		WHERE e.id = $1 AND u.auth_user_id = $2
+		WHERE u.auth_user_id = $2
+		  AND t.id IN (
+			SELECT e.home_team_id FROM tournament.encounter e WHERE e.id = $1
+			UNION ALL SELECT e.away_team_id FROM tournament.encounter e WHERE e.id = $1
+			UNION ALL SELECT p.team_id FROM tournament.encounter_participant p WHERE p.encounter_id = $1
+		  )
 	)`
 	// The draft room's participants. balancer.draft_team carries the captain's
 	// AUTH id directly (captain_auth_user_id), so this needs no players."user"
@@ -235,8 +241,9 @@ func (s *Store) IsWorkspaceOrganizer(ctx context.Context, userID, workspaceID in
 	return organizer, nil
 }
 
-// IsEncounterCaptain reports whether the auth user captains either side of the
-// encounter. Both outcomes are cached like IsWorkspaceMember; on a query error
+// IsEncounterCaptain reports whether the auth user captains a team of the
+// encounter — either side of a duel, or any team seated in an ffa lobby.
+// Both outcomes are cached like IsWorkspaceMember; on a query error
 // nothing is cached and the error is returned, so a transient DB failure is
 // never memoized as "allowed" (callers must treat an error as denied).
 func (s *Store) IsEncounterCaptain(ctx context.Context, authUserID, encounterID int64) (bool, error) {

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import EncounterFormat
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import UserRepository
 from shared.services.chat import SPECTATOR_ROLE, ChatMembership, ChatRoom, ChatService
@@ -19,6 +20,7 @@ from src import models
 from src.core import auth
 from src.services import visibility_resolvers
 from src.services.encounter.captain import captain_service
+from src.services.encounter.ffa import ffa_encounter_service
 
 __all__ = ("EncounterChatAccess", "encounter_chat_service")
 
@@ -55,12 +57,20 @@ class EncounterChatAccess:
         if auth_user is None:
             return _SPECTATOR
 
-        try:
-            side = await captain_service.resolve_captain_side(session, auth_user, encounter)
-        except HTTPException:
-            # ``resolve_captain_side`` says "not a captain" with a 403, same as
-            # ``_captain_my_role`` reads it; here it is the fall-through to staff.
-            side = None
+        if encounter.format == EncounterFormat.FFA:
+            # A lobby has no sides, so "which side are you?" has no answer: the
+            # seated teams are the whole roster, and captaining one of them is
+            # the same membership a duel captain gets (plan §5.6).
+            side = (
+                "captain" if await ffa_encounter_service.is_participant_captain(session, auth_user, encounter) else None
+            )
+        else:
+            try:
+                side = await captain_service.resolve_captain_side(session, auth_user, encounter)
+            except HTTPException:
+                # ``resolve_captain_side`` says "not a captain" with a 403, same as
+                # ``_captain_my_role`` reads it; here it is the fall-through to staff.
+                side = None
         if side:
             return ChatMembership(
                 role=side,

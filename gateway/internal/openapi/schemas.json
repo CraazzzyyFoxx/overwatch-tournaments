@@ -7718,6 +7718,58 @@
       },
       "summary": "Get encounters overview"
     },
+    "rpc.tournament.ffa_game_cancel": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Voids one game of a lobby, keeping it as history and freeing its position for a replay. Requires a reason. Answers the lobby's settled table \u2014 which may have reopened, since a voided game no longer counts towards the games count.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FfaGameCancelInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Cancel FFA game"
+    },
+    "rpc.tournament.ffa_game_results_set": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once. Placements are required when the stage pays for place and derived from the score otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table. 409 when a later stage has already been seeded from this group.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FfaGameResultsInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Set FFA game results"
+    },
+    "rpc.tournament.ffa_games_count_set": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Changes how many games THIS lobby plays. Never below the number it has already confirmed (422), since the games are the record. Answers the lobby's settled table, completed or reopened by the new count.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FfaGamesCountInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Set FFA lobby games count"
+    },
+    "rpc.tournament.ffa_lobby": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby's table, the same shape the stage read answers per group. 409 when the encounter is a duel rather than a lobby.",
+      "response": {
+        "array": false,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Get FFA lobby"
+    },
+    "rpc.tournament.ffa_stage": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points, and one cell per planned game. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.",
+      "response": {
+        "array": true,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Get FFA stage lobbies"
+    },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
       "query_params": [
@@ -36656,6 +36708,18 @@
       "title": "EncounterGameRead",
       "type": "object"
     },
+    "tournament.EncounterGameState": {
+      "description": "Lifecycle of one position of a series (``tournament.encounter_game``).",
+      "enum": [
+        "planned",
+        "awaiting_result",
+        "disputed",
+        "confirmed",
+        "cancelled"
+      ],
+      "title": "EncounterGameState",
+      "type": "string"
+    },
     "tournament.EncounterHistogramBucketRead": {
       "properties": {
         "count": {
@@ -38376,6 +38440,376 @@
         }
       },
       "title": "EncounterUpdate",
+      "type": "object"
+    },
+    "tournament.FfaGameCancelInput": {
+      "properties": {
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "FfaGameCancelInput",
+      "type": "object"
+    },
+    "tournament.FfaGameCellRead": {
+      "properties": {
+        "placement": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Placement"
+        },
+        "points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Points"
+        },
+        "position": {
+          "title": "Position",
+          "type": "integer"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.EncounterGameState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "position",
+        "state",
+        "placement",
+        "score",
+        "points"
+      ],
+      "title": "FfaGameCellRead",
+      "type": "object"
+    },
+    "tournament.FfaGameResultLineInput": {
+      "properties": {
+        "placement": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placement"
+        },
+        "score": {
+          "minimum": 0,
+          "title": "Score",
+          "type": "integer"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id",
+        "score"
+      ],
+      "title": "FfaGameResultLineInput",
+      "type": "object"
+    },
+    "tournament.FfaGameResultsInput": {
+      "properties": {
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaGameResultLineInput"
+          },
+          "maxItems": 100,
+          "minItems": 2,
+          "title": "Results",
+          "type": "array"
+        }
+      },
+      "required": [
+        "results"
+      ],
+      "title": "FfaGameResultsInput",
+      "type": "object"
+    },
+    "tournament.FfaGamesCountInput": {
+      "properties": {
+        "games": {
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Games",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "games"
+      ],
+      "title": "FfaGamesCountInput",
+      "type": "object"
+    },
+    "tournament.FfaLobbyRead": {
+      "properties": {
+        "advance_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Advance Count"
+        },
+        "best_of": {
+          "title": "Best Of",
+          "type": "integer"
+        },
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "result_status": {
+          "$ref": "#/components/schemas/tournament.EncounterResultStatus"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaLobbyRowRead"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "rules": {
+          "$ref": "#/components/schemas/tournament.FfaRulesRead"
+        },
+        "scheduled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Scheduled At"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Id"
+        },
+        "stage_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stage Item Id"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.EncounterStatus"
+        },
+        "tournament_id": {
+          "title": "Tournament Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "tournament_id",
+        "stage_id",
+        "stage_item_id",
+        "name",
+        "status",
+        "result_status",
+        "best_of",
+        "scheduled_at",
+        "advance_count",
+        "rules",
+        "rows"
+      ],
+      "title": "FfaLobbyRead",
+      "type": "object"
+    },
+    "tournament.FfaLobbyRowRead": {
+      "properties": {
+        "games": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaGameCellRead"
+          },
+          "title": "Games",
+          "type": "array"
+        },
+        "games_played": {
+          "title": "Games Played",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "number"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Position"
+        },
+        "score": {
+          "title": "Score",
+          "type": "integer"
+        },
+        "slot": {
+          "title": "Slot",
+          "type": "integer"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        },
+        "team_image_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team Image Url"
+        },
+        "team_name": {
+          "title": "Team Name",
+          "type": "string"
+        },
+        "tie_group": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tie Group"
+        },
+        "wins": {
+          "title": "Wins",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id",
+        "team_name",
+        "team_image_url",
+        "slot",
+        "position",
+        "tie_group",
+        "points",
+        "games_played",
+        "wins",
+        "score",
+        "games"
+      ],
+      "title": "FfaLobbyRowRead",
+      "type": "object"
+    },
+    "tournament.FfaRulesRead": {
+      "properties": {
+        "placement_points": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Placement Points",
+          "type": "array"
+        },
+        "score_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score Label"
+        },
+        "score_points": {
+          "title": "Score Points",
+          "type": "number"
+        }
+      },
+      "required": [
+        "placement_points",
+        "score_points",
+        "score_label"
+      ],
+      "title": "FfaRulesRead",
       "type": "object"
     },
     "tournament.FieldValidation": {

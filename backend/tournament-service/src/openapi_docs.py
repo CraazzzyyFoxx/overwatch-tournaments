@@ -49,6 +49,25 @@ DOCS: dict[str, dict] = {
         "summary": "Get tournament standings",
         "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the standings for a tournament with optionally hydrated related entities selected via the entities query param.",
     },
+    # ── ffa lobbies (docs/plans/2026-09-24-ffa-encounters.md) ─────────────
+    "rpc.tournament.ffa_stage": {
+        "summary": "Get FFA stage lobbies",
+        "description": (
+            "Permission: public; no authentication required — a hidden tournament is visible only to its "
+            "workspace's admins and users on its preview allowlist. Returns one lobby table per group of an "
+            "ffa_league stage, in group order: the stage's scoring rules, every seated team with its running "
+            "points, and one cell per planned game. Positions come from the group's standings, so a stage "
+            "nobody has ranked yet answers null positions in seat order."
+        ),
+    },
+    "rpc.tournament.ffa_lobby": {
+        "summary": "Get FFA lobby",
+        "description": (
+            "Permission: public; no authentication required — a hidden tournament is visible only to its "
+            "workspace's admins and users on its preview allowlist. Returns one lobby's table, the same shape "
+            "the stage read answers per group. 409 when the encounter is a duel rather than a lobby."
+        ),
+    },
     "rpc.tournament.statistics_history": {
         "summary": "Get tournament history stats",
         "description": "Permission: public; no authentication required. Returns per-tournament historical statistics for the workspace.",
@@ -329,6 +348,36 @@ DOCS: dict[str, dict] = {
             "Permission: workspace `match.read` on the encounter's workspace. "
             "Returns every recorded transition of the encounter's result, newest first. A null actor_user_id "
             "means a machine actor (Challonge import, bracket cascade)."
+        ),
+    },
+    # ── ffa lobby results (the organizer's three levers) ──────────────────
+    "rpc.tournament.ffa_game_results_set": {
+        "summary": "Set FFA game results",
+        "description": (
+            "Permission: workspace `match.update` on the encounter's workspace. "
+            "Records one game of a lobby: a line per seated team, every team exactly once. Placements are "
+            "required when the stage pays for place and derived from the score otherwise (ties share a place). "
+            "Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself "
+            "when its confirmed games reach its games count, and reopens when they no longer do. Answers the "
+            "lobby's settled table. 409 when a later stage has already been seeded from this group."
+        ),
+    },
+    "rpc.tournament.ffa_game_cancel": {
+        "summary": "Cancel FFA game",
+        "description": (
+            "Permission: workspace `match.update` on the encounter's workspace. "
+            "Voids one game of a lobby, keeping it as history and freeing its position for a replay. Requires "
+            "a reason. Answers the lobby's settled table — which may have reopened, since a voided game no "
+            "longer counts towards the games count."
+        ),
+    },
+    "rpc.tournament.ffa_games_count_set": {
+        "summary": "Set FFA lobby games count",
+        "description": (
+            "Permission: workspace `match.update` on the encounter's workspace. "
+            "Changes how many games THIS lobby plays. Never below the number it has already confirmed (422), "
+            "since the games are the record. Answers the lobby's settled table, completed or reopened by the "
+            "new count."
         ),
     },
     # ── generic CRUD engine: standing ──────────────────────────────────────
