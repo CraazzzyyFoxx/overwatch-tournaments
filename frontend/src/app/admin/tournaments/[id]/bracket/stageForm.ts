@@ -117,7 +117,14 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     delete settings.seed_ranking;
   }
 
-  const bestOf = buildBestOfSettings(form.bestOf);
+  // An FFA lobby is one round of N games, and the generator resolves that count
+  // as `resolve_best_of(cfg, 1, is_final=False)` — `by_round["1"]` outranks
+  // `default`, and `final` is a bracket's last round. Either one left over from
+  // the format this stage used to be would silently beat "Games per lobby",
+  // with nothing in the editor that can reach it, so only `default` is kept.
+  const bestOf = buildBestOfSettings(
+    form.stageType === "ffa_league" ? { default: form.bestOf.default } : form.bestOf
+  );
   if (bestOf) settings.best_of = bestOf;
   else delete settings.best_of;
 

@@ -379,4 +379,21 @@ describe("Stage editor, FFA league scoring", () => {
 
     expect(payload().settings_json.best_of).toEqual({ default: 5 });
   });
+
+  it("drops a per-round override the lobby would silently obey", async () => {
+    // `by_round` survives a format change, and the lobby generator resolves its
+    // games count as round 1 — which outranks the default. Left in the payload,
+    // a leftover "5" from the generic grid decides the lobby instead of the
+    // knob above, and no FFA control can reach it to clear it.
+    await mount(
+      stage("ffa_league", { best_of: { default: 3, by_round: { "1": 5 }, final: 7 } }),
+      "best-of"
+    );
+
+    await click(select("Games per lobby"));
+    await choose("7 games");
+    await save();
+
+    expect(payload().settings_json.best_of).toEqual({ default: 7 });
+  });
 });

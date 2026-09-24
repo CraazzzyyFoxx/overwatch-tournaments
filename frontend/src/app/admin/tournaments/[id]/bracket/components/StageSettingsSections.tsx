@@ -693,9 +693,11 @@ export function BestOfSection({
           Apply to existing matches
         </Button>
       </div>
+      {/* One expression, not JSX text: Next's SWC transform drops the leading
+          space of a multi-line text node that follows an expression and carries
+          an HTML entity, which read as "Baked into lobbieson (re)generation". */}
       <p className="text-xs text-muted-foreground">
-        Baked into {isFfa ? "lobbies" : "matches"} on (re)generation. Use &quot;Apply to existing
-        matches&quot; to backfill without regenerating.
+        {`Baked into ${isFfa ? "lobbies" : "matches"} on (re)generation. Use "Apply to existing matches" to backfill without regenerating.`}
         {isDoubleElimination ? " Upper and lower bracket rounds are configured separately." : ""}
       </p>
 
