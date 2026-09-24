@@ -64,10 +64,12 @@ const MobilePlayerSearchSheet = () => {
           <Search className="h-5 w-5" aria-hidden />
         </Button>
       </SheetTrigger>
+      {/* The sheet's built-in close (its last child) sits at top-4, centred on a
+        16px row; top-7 centres it on this 40px input instead. */}
       <SheetContent
         side="top"
         aria-describedby={undefined}
-        className="flex h-[100dvh] max-h-[100dvh] w-full flex-col gap-4 overflow-hidden border-none p-4"
+        className="flex h-[100dvh] max-h-[100dvh] w-full flex-col gap-4 overflow-hidden border-none p-4 [&>button:last-child]:top-7"
       >
         <SheetTitle className="sr-only">{t("nav.search.mobileTrigger")}</SheetTitle>
         <div className="relative pr-10">

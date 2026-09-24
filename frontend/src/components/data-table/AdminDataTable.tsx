@@ -366,12 +366,18 @@ export function AdminDataTable<TData>({
       // Measure with the cap lifted: with the box capped, a page shorter than
       // the viewport reports the slack under the card as "content below", and
       // the cap would lock at whatever height the box happened to have.
+      // Uncapped, the box no longer overflows and the browser clamps its
+      // scroll offset to 0, so it is put back once the cap returns — without
+      // that, every row the virtualiser measured threw the user to the top.
+      const { scrollTop, scrollLeft } = scrollElement;
       scrollElement.style.maxHeight = "";
       const cardRect = card.getBoundingClientRect();
       const chrome = cardRect.height - scrollElement.getBoundingClientRect().height;
       const cardTop = cardRect.top + window.scrollY;
       const below = Math.max(0, document.documentElement.scrollHeight - (cardRect.bottom + window.scrollY));
       scrollElement.style.maxHeight = `${Math.max(240, window.innerHeight - cardTop - chrome - below)}px`;
+      scrollElement.scrollTop = scrollTop;
+      scrollElement.scrollLeft = scrollLeft;
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(fit); };
     fit();

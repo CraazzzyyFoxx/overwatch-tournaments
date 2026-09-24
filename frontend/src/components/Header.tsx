@@ -95,13 +95,15 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
         ) : (
           // The platform's home link. The workspace avatar beside it used to be
           // one, until it became the switcher's trigger — that left the desktop
-          // header with no way back to `/`.
+          // header with no way back to `/`. Below `sm` the menu sheet's logo is
+          // that way back, and the row has no room for this one: it pushed the
+          // signed-in avatar off a 360px viewport.
           <div className="flex shrink-0 items-center gap-2.5">
             <Link
               prefetch={false}
               href="/"
               aria-label={t("common.homeLink")}
-              className="shrink-0 rounded-md outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
+              className="hidden shrink-0 rounded-md outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring sm:block"
             >
               <Image src={SITE_ICON} alt="" width={28} height={28} className="size-7 rounded-md" />
             </Link>
