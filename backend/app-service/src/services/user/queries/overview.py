@@ -994,9 +994,22 @@ class UserOverviewQueries:
         # join over that (very large) table, which times out for big workspaces. The
         # candidate set is already workspace-scoped, so this counts scoped players who
         # have parsed logs anywhere; the slight cross-workspace leniency is acceptable.
-        with_logs_query = sa.select(sa.func.count(sa.distinct(models.MatchStatistics.user_id))).where(
-            models.MatchStatistics.user_id.in_(candidate_ids)
+        #
+        # Driven from the candidate side, NOT as `statistics.user_id IN (candidates)`:
+        # with the candidate set being ~every user, that IN-semi-join has
+        # matches.statistics (27M rows, see models/matches/match.py) as its outer
+        # relation, so the whole table/index has to be scanned and de-duplicated on
+        # every request. The EXISTS probes ix_match_statistics_user_round_name once
+        # per candidate and stops at the first row. Same number: `candidates` is
+        # DISTINCT, so counting candidates that own a stats row equals counting the
+        # distinct stats user_ids inside the candidate set.
+        has_logs = (
+            sa.select(sa.literal(1))
+            .select_from(models.MatchStatistics)
+            .where(models.MatchStatistics.user_id == candidates.c.id)
+            .exists()
         )
+        with_logs_query = sa.select(sa.func.count()).select_from(candidates).where(has_logs)
         with_logs_count = (await session.execute(with_logs_query)).scalar_one() or 0
 
         tournaments_query = (
