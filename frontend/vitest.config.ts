@@ -175,6 +175,10 @@ export default defineConfig({
       // The invite ledger. Unrun, a green suite would coexist with a section that
       // fetches on every mount or renders raw i18n key paths.
       "src/components/registration/InviteHistorySection.behavior.test.tsx",
+      // The captain's entry point. Unrun, a green suite would coexist with a
+      // roster shape (`{flex: 3}`) whose "Register a team" button never renders
+      // at all — the squad simply cannot be founded.
+      "src/components/registration/TeamRegistrationEntry.behavior.test.tsx",
       // File-level for the same mixed-runner reason as its neighbours above.
       // The landing page for a shared invite link: an unrun mount test here
       // would report green while the whole invitee flow was unreachable, which
