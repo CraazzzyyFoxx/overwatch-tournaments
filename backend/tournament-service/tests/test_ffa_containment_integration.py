@@ -32,11 +32,13 @@ from shared.core.errors import BaseAPIException  # noqa: E402
 from shared.domain.encounter_format import ensure_format  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Encounter, Team, Tournament  # noqa: E402
+from shared.services.chat import ChatRoom, ChatRoomKind  # noqa: E402
 from src import schemas  # noqa: E402
 from src.services.admin.encounter import encounter_service as admin_encounter_service  # noqa: E402
 from src.services.challonge.sync import sync_service  # noqa: E402
 from src.services.encounter import flows  # noqa: E402
 from src.services.encounter.captain import captain_service  # noqa: E402
+from src.services.encounter.chat_access import EncounterChatAccess  # noqa: E402
 from src.services.encounter.games import encounter_game_service  # noqa: E402
 from src.services.encounter.map_report import map_report_service  # noqa: E402
 from src.services.encounter.pick_ban_session import pick_ban_session_service  # noqa: E402
@@ -311,6 +313,25 @@ def test_pick_ban_session_is_never_started_for_a_lobby(db_session) -> None:
             await _drop(db_session, workspace_id)
 
     assert asyncio.run(_run()) is None
+
+
+def test_lobby_chat_membership_resolves_instead_of_refusing(db_session) -> None:
+    """A lobby has a pre-game room like any duel, so its chat must stay reachable:
+    the loader chat membership goes through is the format-agnostic one."""
+
+    async def _run() -> tuple[str, bool]:
+        workspace_id, _, _, lobby_id = await _seed(db_session)
+        try:
+            membership = await EncounterChatAccess().resolve(
+                db_session, None, ChatRoom(kind=ChatRoomKind.ENCOUNTER, ref_id=lobby_id)
+            )
+            return membership.role, membership.can_write
+        finally:
+            await _drop(db_session, workspace_id)
+
+    role, can_write = asyncio.run(_run())
+    assert role == "spectator"
+    assert can_write is False
 
 
 def test_ensure_format_accepts_an_encounter_whose_default_is_not_written_yet() -> None:

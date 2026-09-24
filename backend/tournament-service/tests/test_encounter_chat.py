@@ -73,7 +73,7 @@ class _Ctx:
         self._patches = [
             patch.object(
                 chat_access.captain_service,
-                "_load_encounter",
+                "load_encounter_any_format",
                 AsyncMock(return_value=SimpleNamespace(id=ENCOUNTER_ID)),
             ),
             patch.object(

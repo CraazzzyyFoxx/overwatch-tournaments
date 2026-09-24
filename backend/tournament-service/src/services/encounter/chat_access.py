@@ -42,7 +42,9 @@ class EncounterChatAccess:
         auth_user: models.AuthUser | None,
         room: ChatRoom,
     ) -> ChatMembership:
-        encounter = await captain_service._load_encounter(session, room.ref_id)
+        # Format-agnostic: a lobby has a pre-game room too, and its chat is not
+        # a series feature (plan 2026-09-24-ffa-encounters §5.6).
+        encounter = await captain_service.load_encounter_any_format(session, room.ref_id)
         # Before anything else: an outsider must not learn that a hidden
         # tournament's encounter exists, chat setting or not.
         tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_encounter(

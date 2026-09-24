@@ -224,9 +224,13 @@ class CaptainService:
         side ``resolve_captain_side`` returns."""
         return await self._resolve_captain_identity(session, auth_user, encounter)
 
-    async def _load_encounter(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
-        """Every caller of this is a series feature -- a lobby has no home/away
-        report to file, so it is refused here rather than at each command."""
+    async def load_encounter_any_format(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
+        """The locked row, whatever format it is. 404 when there is none.
+
+        A lobby has a pre-game room like any other encounter, so chat membership
+        (``chat_access.EncounterChatAccess.resolve``) resolves through this one.
+        Anything that reads or writes a SERIES takes :meth:`_load_encounter`.
+        """
         encounter = await self.encounter_repo.get_for_update(
             session, encounter_id, options=list(_ENCOUNTER_LOCK_OPTIONS)
         )
@@ -235,6 +239,16 @@ class CaptainService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Encounter not found",
             )
+        return encounter
+
+    async def _load_encounter(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
+        """:meth:`load_encounter_any_format`, refused for a lobby.
+
+        Every caller of THIS one is a series feature -- captain reports, the
+        admin result writes, the captain's own side, the pick-ban room -- so the
+        format is checked once here instead of at each command.
+        """
+        encounter = await self.load_encounter_any_format(session, encounter_id)
         ensure_format(encounter, EncounterFormat.DUEL)
         return encounter
 
