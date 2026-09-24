@@ -15,8 +15,9 @@ export type PhaseTimelineProps = {
   >;
   /**
    * `horizontal` — a stepper across the page, for the registration-phase
-   * overview where the phases ARE the page. `vertical` — a compact side-column
-   * list once play has started and the phases are context, not content.
+   * overview where the phases ARE the page; below `sm` it falls back to the
+   * vertical list, since four steps do not fit a phone. `vertical` — a compact
+   * side-column list once play has started and the phases are context, not content.
    */
   orientation: "horizontal" | "vertical";
   /** Viewer clock override for deterministic tests; defaults to the minute clock. */
@@ -100,136 +101,144 @@ export function PhaseTimeline({
     </>
   );
 
-  if (orientation === "horizontal") {
-    return (
-      <div id={id} className={cn("scroll-mt-28", className)}>
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h2 className="aqt-tnum text-label uppercase tracking-[0.06em] text-[color:var(--aqt-fg-faint)]">
-            {t("tournamentDetail.publicPages.schedule.title")}
-          </h2>
-          <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-            {zoneLabel}
-          </span>
-        </div>
-        {/* `overflow-x-auto` also clips vertically, so the 7px the "now" dot
-            rises above the step bar is padding inside the scroll box. */}
-        <ol className="grid auto-cols-fr grid-flow-col gap-1 overflow-x-auto pt-2" aria-label={t("tournamentDetail.publicPages.schedule.title")}>
-          {segments.map((segment) => {
-            const now = isNow(segment);
-            const startText = stamp(segment.startsAt);
-            const endText = segment.endsAt === null ? null : clock24(segment.endsAt);
-            const countdownText = countdown(segment);
-            // How far through its own window the phase is — set by the model
-            // only for a current phase whose window has an end. The step bar
-            // then fills to it and the marker rides it, so "closes in 46
-            // minutes" is also readable as a position.
-            const elapsed = now && segment.progress !== null ? segment.progress : null;
-            const pct = elapsed === null ? null : `${Math.round(elapsed * 1000) / 10}%`;
-            return (
-              <li
-                key={segment.status}
-                aria-current={segment.state === "current" ? "step" : undefined}
+  const verticalList = (
+    <ol aria-label={t("tournamentDetail.publicPages.schedule.title")}>
+      {segments.map((segment, index) => {
+        const now = isNow(segment);
+        const isLast = index === segments.length - 1;
+        const startText = stamp(segment.startsAt);
+        const countdownText = countdown(segment);
+        return (
+          <li
+            key={segment.status}
+            aria-current={segment.state === "current" ? "step" : undefined}
+            className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3"
+          >
+            <div className="flex flex-col items-center pt-1.5">
+              <span
+                aria-hidden
                 className={cn(
-                  "relative min-w-[9rem] border-t-[3px] px-3 pb-2 pt-2.5",
+                  "size-2.5 shrink-0 rounded-full",
                   now
-                    ? cn(
-                        "bg-[color:var(--aqt-overlay-1)]",
-                        // With a progress fill the border is the unspent part of
-                        // the window, so it drops to the neutral track colour.
-                        pct === null
-                          ? "border-[color:var(--aqt-teal)]"
-                          : "border-[color:var(--aqt-border)]"
-                      )
+                    ? "bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-overlay-2)]"
                     : segment.state === "upcoming"
-                      ? "border-[color:var(--aqt-border)] text-[color:var(--aqt-fg-dim)]"
-                      : "border-[color:var(--aqt-fg-faint)]"
+                      ? "border border-[color:var(--aqt-border)]"
+                      : "bg-[color:var(--aqt-fg-faint)]"
+                )}
+              />
+              {isLast ? null : (
+                <span aria-hidden className="mt-1 w-px flex-1 bg-[color:var(--aqt-border)]" />
+              )}
+            </div>
+            <div className={cn("flex min-w-0 flex-wrap items-baseline justify-between gap-x-3", isLast ? "pb-0" : "pb-3")}>
+              <span
+                className={cn(
+                  "text-sm",
+                  now
+                    ? "font-semibold text-[color:var(--aqt-teal)]"
+                    : segment.state === "upcoming"
+                      ? "text-[color:var(--aqt-fg-dim)]"
+                      : "text-[color:var(--aqt-fg-muted)]"
                 )}
               >
-                {pct === null ? null : (
-                  <span
-                    aria-hidden
-                    className="absolute -top-[3px] left-0 h-[3px] bg-[color:var(--aqt-teal)]"
-                    style={{ width: pct }}
-                  />
-                )}
-                {now ? (
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute -top-[7px] size-[11px] rounded-full bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-bg)]",
-                      pct === null ? "left-3" : "-translate-x-1/2"
-                    )}
-                    // Clamped to the segment's own edges: at 0% or 100% an
-                    // untranslated marker would hang outside the scroll box and
-                    // get clipped.
-                    style={pct === null ? undefined : { left: `clamp(6px, ${pct}, calc(100% - 6px))` }}
-                  />
-                ) : null}
-                <div className={cn("text-ui font-semibold", now && "text-[color:var(--aqt-teal)]")}>
-                  {label(segment)}
-                </div>
-                <div className="aqt-tnum mt-0.5 text-label text-[color:var(--aqt-fg-muted)]">
-                  {startText ? <time dateTime={segment.startsAt}>{startText}</time> : null}
-                  {endText ? <> – <time dateTime={segment.endsAt ?? undefined}>{endText}</time></> : null}
-                </div>
-                {countdownText ? (
-                  <div className="aqt-tnum mt-1 text-caption text-[color:var(--aqt-teal)]">{countdownText}</div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
+                {label(segment)}
+              </span>
+              <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
+                {countdownText ?? (startText ? <time dateTime={segment.startsAt}>{startText}</time> : null)}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+
+  if (orientation === "vertical") {
+    return (
+      <div id={id} className={cn("scroll-mt-28", className)}>
+        {verticalList}
       </div>
     );
   }
 
   return (
     <div id={id} className={cn("scroll-mt-28", className)}>
-      <ol aria-label={t("tournamentDetail.publicPages.schedule.title")}>
-        {segments.map((segment, index) => {
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h2 className="aqt-tnum text-label uppercase tracking-[0.06em] text-[color:var(--aqt-fg-faint)]">
+          {t("tournamentDetail.publicPages.schedule.title")}
+        </h2>
+        <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+          {zoneLabel}
+        </span>
+      </div>
+      <div className="sm:hidden">{verticalList}</div>
+      {/* `overflow-x-auto` also clips vertically, so the 7px the "now" dot
+          rises above the step bar is padding inside the scroll box. */}
+      <ol
+        className="hidden auto-cols-[minmax(9rem,1fr)] grid-flow-col gap-1 overflow-x-auto pt-2 sm:grid"
+        aria-label={t("tournamentDetail.publicPages.schedule.title")}
+      >
+        {segments.map((segment) => {
           const now = isNow(segment);
-          const isLast = index === segments.length - 1;
           const startText = stamp(segment.startsAt);
+          const endText = segment.endsAt === null ? null : clock24(segment.endsAt);
           const countdownText = countdown(segment);
+          // How far through its own window the phase is — set by the model
+          // only for a current phase whose window has an end. The step bar
+          // then fills to it and the marker rides it, so "closes in 46
+          // minutes" is also readable as a position.
+          const elapsed = now && segment.progress !== null ? segment.progress : null;
+          const pct = elapsed === null ? null : `${Math.round(elapsed * 1000) / 10}%`;
           return (
             <li
               key={segment.status}
               aria-current={segment.state === "current" ? "step" : undefined}
-              className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3"
+              className={cn(
+                "relative border-t-[3px] px-3 pb-2 pt-2.5",
+                now
+                  ? cn(
+                      "bg-[color:var(--aqt-overlay-1)]",
+                      // With a progress fill the border is the unspent part of
+                      // the window, so it drops to the neutral track colour.
+                      pct === null
+                        ? "border-[color:var(--aqt-teal)]"
+                        : "border-[color:var(--aqt-border)]"
+                    )
+                  : segment.state === "upcoming"
+                    ? "border-[color:var(--aqt-border)] text-[color:var(--aqt-fg-dim)]"
+                    : "border-[color:var(--aqt-fg-faint)]"
+              )}
             >
-              <div className="flex flex-col items-center pt-1.5">
+              {pct === null ? null : (
+                <span
+                  aria-hidden
+                  className="absolute -top-[3px] left-0 h-[3px] bg-[color:var(--aqt-teal)]"
+                  style={{ width: pct }}
+                />
+              )}
+              {now ? (
                 <span
                   aria-hidden
                   className={cn(
-                    "size-2.5 shrink-0 rounded-full",
-                    now
-                      ? "bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-overlay-2)]"
-                      : segment.state === "upcoming"
-                        ? "border border-[color:var(--aqt-border)]"
-                        : "bg-[color:var(--aqt-fg-faint)]"
+                    "absolute -top-[7px] size-[11px] rounded-full bg-[color:var(--aqt-teal)] ring-[3px] ring-[color:var(--aqt-bg)]",
+                    pct === null ? "left-3" : "-translate-x-1/2"
                   )}
+                  // Clamped to the segment's own edges: at 0% or 100% an
+                  // untranslated marker would hang outside the scroll box and
+                  // get clipped.
+                  style={pct === null ? undefined : { left: `clamp(6px, ${pct}, calc(100% - 6px))` }}
                 />
-                {isLast ? null : (
-                  <span aria-hidden className="mt-1 w-px flex-1 bg-[color:var(--aqt-border)]" />
-                )}
+              ) : null}
+              <div className={cn("text-ui font-semibold", now && "text-[color:var(--aqt-teal)]")}>
+                {label(segment)}
               </div>
-              <div className={cn("flex min-w-0 flex-wrap items-baseline justify-between gap-x-3", isLast ? "pb-0" : "pb-3")}>
-                <span
-                  className={cn(
-                    "text-sm",
-                    now
-                      ? "font-semibold text-[color:var(--aqt-teal)]"
-                      : segment.state === "upcoming"
-                        ? "text-[color:var(--aqt-fg-dim)]"
-                        : "text-[color:var(--aqt-fg-muted)]"
-                  )}
-                >
-                  {label(segment)}
-                </span>
-                <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
-                  {countdownText ?? (startText ? <time dateTime={segment.startsAt}>{startText}</time> : null)}
-                </span>
+              <div className="aqt-tnum mt-0.5 text-label text-[color:var(--aqt-fg-muted)]">
+                {startText ? <time dateTime={segment.startsAt}>{startText}</time> : null}
+                {endText ? <> – <time dateTime={segment.endsAt ?? undefined}>{endText}</time></> : null}
               </div>
+              {countdownText ? (
+                <div className="aqt-tnum mt-1 text-caption text-[color:var(--aqt-teal)]">{countdownText}</div>
+              ) : null}
             </li>
           );
         })}
