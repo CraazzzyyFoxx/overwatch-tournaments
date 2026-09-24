@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
@@ -83,7 +83,7 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
     ? logStatsQuery.data.pending + logStatsQuery.data.processing
     : 0;
 
-  const items: AdminTabItem[] = MATCHES_SUB_TABS.map((key) => ({
+  const items: LinkTabItem[] = MATCHES_SUB_TABS.map((key) => ({
     key,
     label: SUB_TAB_LABELS[key],
     href: scopeQuery ? `${basePath}/${key}?${scopeQuery}` : `${basePath}/${key}`,
@@ -97,7 +97,7 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
 
   return (
     <div className="space-y-4">
-      <AdminTabs items={items} activeKey={segment} level={2} ariaLabel="Matches views" />
+      <LinkTabs items={items} activeKey={segment} level={2} ariaLabel="Matches views" />
       {children}
     </div>
   );

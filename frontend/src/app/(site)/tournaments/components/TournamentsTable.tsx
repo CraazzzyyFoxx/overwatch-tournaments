@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { LayoutGrid, ArrowUpRight } from "lucide-react";
 
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
 import { cn, formatDateRange } from "@/lib/utils";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
-import { relativeTime, stageProgress } from "./tournaments-helpers";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
+import { stageProgress } from "./tournaments-helpers";
 
 const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const locale = useLocale();
   const { variant } = getTournamentStatusMeta(tournament.status);
   const stage = stageProgress(tournament, tournament.status, t);
@@ -35,23 +37,14 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
               {tournament.name}
             </Link>
             {(tournament.status === "live" || tournament.status === "playoffs") && (
-              <span className="status-pill live" style={{ padding: "2px 7px" }}>
-                <span aria-hidden className="dot" />
+              <TournamentStatusPill status="live" className="px-[7px] py-0.5">
                 {t("common.live")}
-              </span>
+              </TournamentStatusPill>
             )}
             {tournament.is_hidden && (
-              <span
-                className="status-pill"
-                style={{
-                  padding: "2px 7px",
-                  background: "hsl(var(--muted) / 0.6)",
-                  color: "hsl(var(--muted-foreground))",
-                  border: "1px solid hsl(var(--border))"
-                }}
-              >
+              <TournamentStatusPill status="finished" className="px-[7px] py-0.5">
                 {t("common.previewBadge")}
-              </span>
+              </TournamentStatusPill>
             )}
           </span>
           <span className="sub">
@@ -102,7 +95,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
       </td>
       <td className="r">
         <span className="tn-id">
-          {relativeTime(tournament.updated_at ?? tournament.start_date, t, locale)}
+          {format.relativeTime(new Date(tournament.updated_at ?? tournament.start_date))}
         </span>
       </td>
       <td className="r">

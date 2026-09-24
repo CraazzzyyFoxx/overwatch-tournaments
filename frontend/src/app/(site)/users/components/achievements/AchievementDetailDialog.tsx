@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -14,19 +14,15 @@ import type { AchievementRarity, AchievementMatchLink } from "@/types/achievemen
 import { cn } from "@/lib/utils";
 import { classifyRarity, localizedText, type Rarity } from "./rarity";
 
-// `locale` is required, matching `formatDateRange` in @/lib/utils: passing
-// `undefined` here formatted match dates in the *browser* locale, so a Russian
-// UI rendered "Jul 30, 2026" on an en-US machine.
-const formatMatchDate = (time: number | null, locale: string): string => {
-  if (!time) return "";
-  const ms = time > 1e12 ? time : time * 1000;
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
-};
-
-const MatchRow = ({ match, locale }: { match: AchievementMatchLink; locale: string }) => {
-  const date = formatMatchDate(match.time, locale);
+const MatchRow = ({ match }: { match: AchievementMatchLink }) => {
+  const format = useFormatter();
+  // Older rows store seconds, newer ones milliseconds.
+  const ms = match.time ? (match.time > 1e12 ? match.time : match.time * 1000) : null;
+  const at = ms === null ? null : new Date(ms);
+  const date =
+    at && !Number.isNaN(at.getTime())
+      ? format.dateTime(at, { year: "numeric", month: "short", day: "numeric" })
+      : "";
   const home = match.home_team?.name ?? "—";
   const away = match.away_team?.name ?? "—";
   return (
@@ -128,7 +124,7 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
                         </h3>
                         <div className="flex flex-col gap-1">
                           {ach.matches.map((m) => (
-                            <MatchRow key={m.id} match={m} locale={locale} />
+                            <MatchRow key={m.id} match={m} />
                           ))}
                         </div>
                       </section>

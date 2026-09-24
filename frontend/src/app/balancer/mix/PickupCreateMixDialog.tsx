@@ -2,9 +2,8 @@
 
 import { useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { Loader2 } from "lucide-react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import {
@@ -18,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getApiErrorMessage } from "@/lib/api/error";
 import type { CustomGame } from "@/services/custom-game.service";
+import { Spinner } from "@/components/ui/spinner";
 
 type PickupCreateMixDialogProps = {
   games: CustomGame[];
@@ -140,7 +140,7 @@ export function PickupCreateMixDialog({
           {copyLineup ? (
             <div className="min-w-0 space-y-2">
               <Label htmlFor="pickup-clone-from">{t("source")}</Label>
-              <AdminCombobox
+              <Combobox
                 id="pickup-clone-from"
                 open={sourceOpen}
                 onOpenChange={setSourceOpen}
@@ -169,11 +169,11 @@ export function PickupCreateMixDialog({
                       <span className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">
                         {sourceLabel(game)}
                       </span>
-                      <AdminComboboxCheck selected={sourceId === game.id} />
+                      <ComboboxCheck selected={sourceId === game.id} />
                     </CommandItem>
                   ))}
                 </CommandGroup>
-              </AdminCombobox>
+              </Combobox>
               {sourceInvalid ? (
                 <p id="pickup-source-error" className="text-caption text-destructive">
                   {t("sourceRequired")}
@@ -204,7 +204,7 @@ export function PickupCreateMixDialog({
             {t("cancel")}
           </Button>
           <Button type="submit" disabled={creating}>
-            {creating ? <Loader2 className="me-2 size-4 animate-spin" aria-hidden /> : null}
+            {creating ? <Spinner className="me-2" /> : null}
             {t("submit")}
           </Button>
         </DialogFooter>

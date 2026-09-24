@@ -7,7 +7,7 @@ import { ArrowRightLeft } from "lucide-react";
 
 import { PlayerProfileBody } from "@/components/admin/PlayerProfileDialog";
 import { UserMergeDialog } from "@/components/admin/UserMergeDialog";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { PersonAccountTab } from "@/components/admin/people/PersonAccountTab";
 import { PersonAchievementsTab } from "@/components/admin/people/PersonAchievementsTab";
@@ -112,7 +112,7 @@ export default function PersonHubPage() {
   }
 
   const person: User | undefined = personQuery.data;
-  const items: AdminTabItem[] = TABS.map((key) => ({
+  const items: LinkTabItem[] = TABS.map((key) => ({
     key,
     label: TAB_LABELS[key],
     href: `/admin/people/${personId}?tab=${key}`
@@ -139,7 +139,7 @@ export default function PersonHubPage() {
         }
       />
 
-      <AdminTabs items={items} activeKey={tab} ariaLabel="Person sections" />
+      <LinkTabs items={items} activeKey={tab} ariaLabel="Person sections" />
 
       {tab === "identity" ? (
         person ? (

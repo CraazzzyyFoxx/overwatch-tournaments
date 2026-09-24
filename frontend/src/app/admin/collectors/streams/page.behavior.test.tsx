@@ -135,8 +135,8 @@ describe("StreamCollectorPage", () => {
     const container = await mount();
 
     expect(
-      Array.from(container.querySelectorAll("a[data-admin-tab]")).map((link) =>
-        link.getAttribute("data-admin-tab")
+      Array.from(container.querySelectorAll("a[data-link-tab]")).map((link) =>
+        link.getAttribute("data-link-tab")
       )
     ).toEqual(["status", "settings"]);
   });
@@ -145,7 +145,7 @@ describe("StreamCollectorPage", () => {
     const container = await mount();
 
     // Status would be the only slot; a one-tab bar is noise, so it is omitted.
-    expect(container.querySelectorAll("a[data-admin-tab]")).toHaveLength(0);
+    expect(container.querySelectorAll("a[data-link-tab]")).toHaveLength(0);
     expect(getStreamPollHealth).toHaveBeenCalled();
     expect(container.textContent).toContain("Last tick OK");
   });

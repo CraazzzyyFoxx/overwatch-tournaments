@@ -10,7 +10,7 @@ import { act, forwardRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminSectionNav } from "@/components/kit/AdminSectionNav";
+import { SectionNav } from "@/components/kit/SectionNav";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -69,7 +69,7 @@ async function render(activeKey = "rules") {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(<AdminSectionNav groups={GROUPS} activeKey={activeKey} />);
+    root.render(<SectionNav groups={GROUPS} activeKey={activeKey} />);
   });
 }
 
@@ -92,7 +92,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-describe("AdminSectionNav", () => {
+describe("SectionNav", () => {
   it("marks exactly the active section", async () => {
     await render("rules");
 

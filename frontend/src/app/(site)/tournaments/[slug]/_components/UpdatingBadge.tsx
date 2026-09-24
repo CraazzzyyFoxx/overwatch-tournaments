@@ -1,9 +1,9 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import styles from "../TournamentDetail.module.css";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * The "a background refresh is in flight" affordance for every tournament data
@@ -17,7 +17,7 @@ export function UpdatingBadge() {
 
   return (
     <span className={styles.updatingBadge} role="status" aria-live="polite" aria-label={label}>
-      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+      <Spinner />
     </span>
   );
 }

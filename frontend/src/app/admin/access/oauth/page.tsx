@@ -10,10 +10,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { PROVIDER_META, ProviderBadge } from "@/components/admin/OAuthProviderBadge";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -82,7 +82,7 @@ export default function OAuthConnectionsAdminPage() {
     ],
     []
   );
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const providerFilter = String(filters.values.provider ?? "");
 
   const openRow = pageRows.find((row) => String(row.id) === openId) ?? null;
@@ -214,7 +214,7 @@ export default function OAuthConnectionsAdminPage() {
           filterKey={filters.filterKey}
           inspectorId={openId}
           getRowId={(row) => String(row.id)}
-          toolbar={<AdminFilterBar defs={defs} filters={filters} />}
+          toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage="No OAuth connection matches. Clear the provider chip to see every connection."
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
           renderMobileCard={(row) => (
@@ -259,7 +259,7 @@ export default function OAuthConnectionsAdminPage() {
         />
       </div>
 
-      <AdminInspector
+      <Inspector
         openId={openRow ? openId : null}
         onClose={() => setParams({ id: null })}
         title={openRow ? (openRow.display_name ?? openRow.username) : ""}
@@ -303,7 +303,7 @@ export default function OAuthConnectionsAdminPage() {
             </Field>
           </div>
         ) : null}
-      </AdminInspector>
+      </Inspector>
 
       <ConfirmDialog
         open={pendingDelete !== null}

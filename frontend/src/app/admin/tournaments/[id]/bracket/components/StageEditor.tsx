@@ -5,7 +5,6 @@ import { useMutation } from "@tanstack/react-query";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   GitMerge,
-  Loader2,
   MoreHorizontal,
   PlayCircle,
   Shuffle,
@@ -17,7 +16,7 @@ import {
   Zap
 } from "lucide-react";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SaveBar } from "@/components/kit/SaveBar";
@@ -45,6 +44,7 @@ import {
   STAGE_TYPE_LABELS,
   type StageProgress
 } from "@/lib/bracket/projection";
+import { Spinner } from "@/components/ui/spinner";
 import {
   buildStageUpdatePayload,
   stageFormChanges,
@@ -351,7 +351,7 @@ export function StageEditor({
     else generateMutation.mutate();
   };
 
-  const tabs: AdminTabItem[] = BRACKET_SECTIONS.map((key) => ({
+  const tabs: LinkTabItem[] = BRACKET_SECTIONS.map((key) => ({
     key,
     label: SECTION_LABELS[key],
     href: sectionHref(key),
@@ -409,7 +409,7 @@ export function StageEditor({
                 title="Generates the bracket as a preview without activating the stage — captains cannot report or veto until it is activated. With no teams seeded yet, a playoff is built from the group stage's advancing count and filled in once the groups finish."
               >
                 {generateMutation.isPending ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  <Spinner />
                 ) : (
                   <Wand2 className="size-4" aria-hidden />
                 )}
@@ -483,7 +483,7 @@ export function StageEditor({
       </div>
 
       <div className="border-b border-border px-4 py-2">
-        <AdminTabs
+        <LinkTabs
           items={tabs}
           activeKey={activeSection}
           level={2}

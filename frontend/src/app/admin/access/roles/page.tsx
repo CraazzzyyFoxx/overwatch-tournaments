@@ -7,10 +7,10 @@ import { Plus } from "lucide-react";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { RoleEditor } from "@/components/admin/access/RoleEditor";
 import { RoleList } from "@/components/admin/access/RoleList";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { MasterDetail } from "@/components/kit/MasterDetail";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,7 +81,7 @@ export default function AccessAdminRolesPage() {
     ],
     [canReadGlobalRoles, adminWorkspaces]
   );
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
 
   // Falls back to whatever the reader may actually see: a workspace admin
   // without the global `role.read` would otherwise land on an empty Global
@@ -187,7 +187,7 @@ export default function AccessAdminRolesPage() {
 
   return (
     <div className="space-y-4">
-      <AdminFilterBar
+      <FilterBar
         defs={defs}
         filters={filters}
         trailing={

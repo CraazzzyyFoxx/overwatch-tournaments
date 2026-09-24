@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Save, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { EYEBROW_CLASS } from "@/components/kit/tone";
@@ -30,6 +30,7 @@ import {
   type ReportCustomFieldDefinition
 } from "@/types/encounter.types";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 type BuiltInKey = keyof MatchReportForm["built_in_fields"];
 
@@ -521,7 +522,7 @@ export function MatchReportFormBuilder({ tournamentId }: Readonly<{ tournamentId
           aria-describedby={blockingError ? saveBlockedId : undefined}
         >
           {saveMutation.isPending ? (
-            <Loader2 className="animate-spin" aria-hidden />
+            <Spinner />
           ) : (
             <Save aria-hidden />
           )}

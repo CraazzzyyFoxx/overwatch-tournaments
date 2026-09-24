@@ -3,7 +3,6 @@
 import { memo, useDeferredValue, useId, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Loader2,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
@@ -48,6 +47,7 @@ import {
   workspacePlayerService,
   type RosterMember,
 } from "@/services/workspace-player.service";
+import { Spinner } from "@/components/ui/spinner";
 
 const PER_PAGE = 30;
 
@@ -408,7 +408,7 @@ export function WorkspacePlayersSidebar({
                       disabled={addPlayer.isPending}
                     >
                       {addPlayer.isPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                        <Spinner className="size-3.5" />
                       ) : null}
                       Add player
                     </Button>

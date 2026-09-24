@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2, CheckCircle, CircleDot, Crown, EyeOff, Trophy } from "lucide-react";
+import { useFormatter } from "next-intl";
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
@@ -30,6 +31,7 @@ import { formatTournamentStages } from "@/lib/tournament/stages";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 export default function TournamentsPage() {
+  const format = useFormatter();
   const router = useRouter();
   const { canAccessPermission } = usePermissions();
   const queryClient = useQueryClient();
@@ -110,7 +112,7 @@ export default function TournamentsPage() {
       header: "Start date",
       cell: ({ row }) => (
         <span className="tabular-nums">
-          {new Date(row.getValue("start_date")).toLocaleDateString()}
+          {format.dateTime(new Date(row.getValue("start_date")), { dateStyle: "medium" })}
         </span>
       )
     },
@@ -119,7 +121,7 @@ export default function TournamentsPage() {
       header: "End date",
       cell: ({ row }) => (
         <span className="tabular-nums">
-          {new Date(row.getValue("end_date")).toLocaleDateString()}
+          {format.dateTime(new Date(row.getValue("end_date")), { dateStyle: "medium" })}
         </span>
       )
     },

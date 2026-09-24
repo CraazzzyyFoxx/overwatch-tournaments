@@ -3,7 +3,7 @@
 import { type ReactNode } from "react";
 import { Code2, RefreshCw } from "lucide-react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
@@ -151,7 +151,7 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
 
   return (
     <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
-      <AdminCombobox
+      <Combobox
         id={id}
         open={open}
         onOpenChange={onOpenChange}
@@ -188,12 +188,12 @@ export function DiscordEntitySelect<T extends { id: string; name: string }>({
                 onSelect={() => onPick(entity)}
               >
                 {renderOption(entity)}
-                <AdminComboboxCheck selected={entity.id === value} />
+                <ComboboxCheck selected={entity.id === value} />
               </CommandItem>
             ))}
           </CommandGroup>
         ))}
-      </AdminCombobox>
+      </Combobox>
       <Button
         type="button"
         variant="ghost"

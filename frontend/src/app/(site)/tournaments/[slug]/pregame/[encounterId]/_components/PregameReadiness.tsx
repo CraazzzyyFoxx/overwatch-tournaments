@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, Hourglass, Loader2 } from "lucide-react";
+import { Check, Hourglass } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface PregameReadinessProps {
   encounter: Encounter;
@@ -77,7 +78,7 @@ export function PregameReadiness({
         ) : (
           <div>
             <Button onClick={onReady} disabled={pending}>
-              {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+              {pending ? <Spinner className="mr-2" /> : null}
               {pending ? t("ready.sending") : t("ready.button")}
             </Button>
           </div>

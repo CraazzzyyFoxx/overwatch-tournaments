@@ -1,6 +1,6 @@
 "use client";
 
-import type { AdminTabItem } from "@/components/kit/AdminTabs";
+import type { LinkTabItem } from "@/components/kit/LinkTabs";
 import { useQueryParams } from "@/hooks/useQueryParams";
 
 export interface CollectorSlot {
@@ -25,7 +25,7 @@ export interface CollectorSlot {
 export function useCollectorTab(
   collector: string,
   slots: CollectorSlot[]
-): { activeKey: string; items: AdminTabItem[] } {
+): { activeKey: string; items: LinkTabItem[] } {
   const { searchParams } = useQueryParams();
   const visible = slots.filter((slot) => !slot.hidden);
   const requested = searchParams?.get("tab") ?? "";

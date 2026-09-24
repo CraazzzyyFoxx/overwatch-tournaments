@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
@@ -16,6 +16,7 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Where a shared team-invite link lands.
@@ -34,6 +35,7 @@ export default function InviteLandingPage() {
   const t = useTranslations("registrationTeams");
   const tErrors = useTranslations("registrationTeams.errors");
   const tSlot = useTranslations("rosterShape.slotCodes");
+  const tCommon = useTranslations("common");
   const router = useRouter();
   const { status: authStatus, user } = useAuthProfile();
   const openAuthModal = useAuthModalStore((state) => state.open);
@@ -72,7 +74,7 @@ export default function InviteLandingPage() {
   if (!hashRead || (token && previewQuery.isLoading)) {
     return (
       <Shell title={t("landing.title")}>
-        <Loader2 className="size-5 animate-spin text-[color:var(--aqt-fg-muted)]" aria-hidden />
+        <Spinner className="size-5 text-[color:var(--aqt-fg-muted)]" label={tCommon("loading")} />
       </Shell>
     );
   }
@@ -148,7 +150,7 @@ export default function InviteLandingPage() {
     return (
       <Shell title={t("landing.title")}>
         {offer}
-        <Loader2 className="size-5 animate-spin text-[color:var(--aqt-fg-muted)]" aria-hidden />
+        <Spinner className="size-5 text-[color:var(--aqt-fg-muted)]" label={tCommon("loading")} />
       </Shell>
     );
   }

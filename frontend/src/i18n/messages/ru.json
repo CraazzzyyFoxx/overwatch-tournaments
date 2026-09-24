@@ -278,6 +278,10 @@
       "connecting": "Подключение",
       "connected": "Подключено",
       "reconnecting": "Переподключение"
+    },
+    "confirm": {
+      "cascade": "Вместе с этим будет удалено:",
+      "typeToConfirm": "Введите <code>{name}</code> для подтверждения"
     }
   },
   "registration": {
@@ -903,7 +907,6 @@
       "delete": "Удалить аккаунт",
       "confirmTitle": "Удалить ваш аккаунт?",
       "confirmBody": "Аккаунт, сессии, привязанные OAuth-подключения и API-ключи будут удалены безвозвратно. Турнирная история и профиль игрока сохранятся, но без владельца. Вы сразу выйдете из аккаунта.",
-      "confirmCancel": "Оставить аккаунт",
       "confirmDelete": "Удалить безвозвратно"
     },
     "sessions": {
@@ -1670,7 +1673,9 @@
         "onForm": "в форме",
         "predShort": "прог. {place}",
         "viewList": "Список",
-        "viewTable": "Таблица"
+        "viewTable": "Таблица",
+        "viewLabel": "Вид таблицы",
+        "sortLabel": "Сортировка таблицы"
       },
       "horizon": {
         "title": "Прогноз и факт",
@@ -1784,10 +1789,6 @@
       "workspaces": "Воркспейсы",
       "workspaceListNotLoaded": "Список воркспейсов не загружен.",
       "selectAtLeastOneWorkspace": "Выберите хотя бы один воркспейс.",
-      "relativeJustNow": "только что",
-      "relativeMinutes": "{count, plural, one {# минуту назад} few {# минуты назад} many {# минут назад} other {# минут назад}}",
-      "relativeHours": "{count, plural, one {# час назад} few {# часа назад} many {# часов назад} other {# часов назад}}",
-      "relativeDays": "{count, plural, one {# день назад} few {# дня назад} many {# дней назад} other {# дней назад}}",
       "finishedRelative": "завершено {relative}",
       "startedRelative": "запущено {relative}",
       "createdRelative": "создано {relative}"
@@ -1862,16 +1863,6 @@
       "final": "Финал",
       "signups": "Приём заявок",
       "setup": "Подготовка"
-    },
-    "time": {
-      "justNow": "только что",
-      "soon": "скоро",
-      "minutesAgo": "{count, plural, one {# мин назад} few {# мин назад} many {# мин назад} other {# мин назад}}",
-      "inMinutes": "{count, plural, one {через # мин} few {через # мин} many {через # мин} other {через # мин}}",
-      "hoursAgo": "{count, plural, one {# ч назад} few {# ч назад} many {# ч назад} other {# ч назад}}",
-      "inHours": "{count, plural, one {через # ч} few {через # ч} many {через # ч} other {через # ч}}",
-      "daysAgo": "{count, plural, one {# дн назад} few {# дн назад} many {# дн назад} other {# дн назад}}",
-      "inDays": "{count, plural, one {через # дн} few {через # дн} many {через # дн} other {через # дн}}"
     }
   },
   "teams": {
@@ -4550,7 +4541,6 @@
     "back": "Назад",
     "continue": "Продолжить",
     "seedDraft": "Посеять драфт",
-    "keepEditing": "Продолжить настройку",
     "discardSetup": "Отменить настройку",
     "reseedConfirmTitle": "Заменить текущий посев драфта",
     "reseedConfirmDescription": "Команды, игроки и будущие пики будут пересобраны по проверенной конфигурации. Драфт ещё не начался, поэтому уже сделанные пики не изменятся.",
@@ -4658,8 +4648,7 @@
         "rollback": "Откат последнего пика выполнен",
         "cancel": "Драфт отменён",
         "export": "Команды экспортированы"
-      },
-      "dismiss": "Оставить как есть"
+      }
     },
     "roleConflict": {
       "title": "Добавить игроку недостающую роль",
@@ -6126,7 +6115,6 @@
         "action": "Снять с публикации",
         "title": "Снять объявление с публикации?",
         "description": "Оно перестанет показываться с этого момента. Запись и отметки о прочтении сохранятся, поэтому останется видно, кто его читал, — но снова опубликовать его с этого экрана нельзя.",
-        "cancel": "Оставить",
         "done": "Объявление снято с публикации"
       }
     },

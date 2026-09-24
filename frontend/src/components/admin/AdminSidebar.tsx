@@ -28,6 +28,7 @@ import {
   SidebarUserDropdown,
   SidebarWorkspaceLogoItem
 } from "@/components/admin/sidebar-shared";
+import { Badge } from "@/components/ui/badge";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
@@ -39,16 +40,17 @@ function NavBadge({ value, isActive }: Readonly<{ value?: number; isActive: bool
   if (!value) return null;
 
   return (
-    <span
+    <Badge
+      shape="pill"
       className={cn(
-        "ml-auto shrink-0 rounded-full px-1.5 text-xs tabular-nums group-data-[collapsible=icon]:hidden",
+        "ml-auto shrink-0 border-transparent px-1.5 tabular-nums group-data-[collapsible=icon]:hidden",
         isActive
           ? "bg-sidebar-primary/20 text-sidebar-primary"
           : "bg-sidebar-accent text-sidebar-foreground/60"
       )}
     >
       {value}
-    </span>
+    </Badge>
   );
 }
 

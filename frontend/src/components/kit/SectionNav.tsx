@@ -15,7 +15,7 @@ import {
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
-export interface AdminSectionNavItem {
+export interface SectionNavItem {
   key: string;
   label: string;
   href: string;
@@ -24,13 +24,13 @@ export interface AdminSectionNavItem {
   hidden?: boolean;
 }
 
-export interface AdminSectionNavGroup {
+export interface SectionNavGroup {
   label?: string;
-  items: AdminSectionNavItem[];
+  items: SectionNavItem[];
 }
 
-export interface AdminSectionNavProps {
-  groups: AdminSectionNavGroup[];
+export interface SectionNavProps {
+  groups: SectionNavGroup[];
   activeKey: string;
 }
 
@@ -42,7 +42,7 @@ export interface AdminSectionNavProps {
  * room for a 200px rail beside a form, so the same list becomes a `Select` —
  * still one URL per section, so a link to "Danger zone" is shareable.
  */
-export function AdminSectionNav({ groups, activeKey }: Readonly<AdminSectionNavProps>) {
+export function SectionNav({ groups, activeKey }: Readonly<SectionNavProps>) {
   const router = useRouter();
   const visibleGroups = groups
     .map((group) => ({ ...group, items: group.items.filter((item) => !item.hidden) }))

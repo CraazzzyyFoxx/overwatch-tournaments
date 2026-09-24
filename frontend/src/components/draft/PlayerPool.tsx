@@ -184,24 +184,6 @@ export function PlayerPool({
             <h2 id={headingId} className="font-onest text-base font-semibold leading-snug">
               {t("pool.title")}
             </h2>
-            <TabsList
-              aria-label={t("pool.tabsLabel")}
-              className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-card-2)] p-[3px]"
-            >
-              {DRAFT_POOL_TABS.filter((entry) =>
-                // A finished draft has nobody available and nothing left to queue: only everyone remains.
-                finished ? entry === "all" : entry !== "shortlist" || queue != null
-              ).map((entry) => (
-                <TabsTrigger
-                  key={entry}
-                  value={entry}
-                  className="min-h-11 gap-1.5 rounded-lg px-[11px] py-0 text-caption font-medium text-[color:var(--aqt-fg-muted)] ring-offset-0 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 data-[state=active]:bg-[color:var(--aqt-card)] data-[state=active]:text-[color:var(--aqt-fg)] data-[state=active]:shadow-none sm:min-h-[30px]"
-                >
-                  {t(`pool.tab.${entry}`)}
-                  <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{tabCounts[entry]}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
             <label className="relative ml-auto flex min-w-[180px] flex-[0_1_280px] items-center">
               <span className="sr-only">{t("pool.search")}</span>
               <Search
@@ -217,6 +199,16 @@ export function PlayerPool({
               />
             </label>
           </div>
+          <TabsList aria-label={t("pool.tabsLabel")}>
+            {DRAFT_POOL_TABS.filter((entry) =>
+              // A finished draft has nobody available and nothing left to queue: only everyone remains.
+              finished ? entry === "all" : entry !== "shortlist" || queue != null
+            ).map((entry) => (
+              <TabsTrigger key={entry} value={entry} badge={tabCounts[entry]} className="max-sm:h-11">
+                {t(`pool.tab.${entry}`)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
           <div className="flex flex-wrap items-center gap-2">
             <div role="group" aria-label={t("pool.roleFilter")} className="flex flex-wrap items-center gap-2">

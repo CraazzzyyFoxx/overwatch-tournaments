@@ -5,9 +5,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { PageStateCard } from "@/components/ui/page-state-card";
@@ -56,7 +56,7 @@ export default function AccessAdminPermissionsPage() {
     ];
   }, [permissions]);
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const resourceFilter = String(filters.values.resource ?? "");
   const actionFilter = String(filters.values.action ?? "");
 
@@ -126,13 +126,13 @@ export default function AccessAdminPermissionsPage() {
           filterKey={filters.filterKey}
           inspectorId={openId}
           getRowId={(row) => String(row.id)}
-          toolbar={<AdminFilterBar defs={defs} filters={filters} />}
+          toolbar={<FilterBar defs={defs} filters={filters} />}
           emptyMessage="No permission matches. Clear the filters to see the full inventory."
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
         />
       </div>
 
-      <AdminInspector
+      <Inspector
         openId={openRow ? openId : null}
         onClose={() => setParams({ id: null })}
         title={openRow ? openRow.name : ""}
@@ -176,7 +176,7 @@ export default function AccessAdminPermissionsPage() {
             </p>
           </div>
         ) : null}
-      </AdminInspector>
+      </Inspector>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import userService from "@/services/user.service";
 import { MinimizedUser } from "@/types/user.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { useSearchComboboxQuery } from "@/components/kit/useSearchComboboxQuery";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 
@@ -68,7 +68,7 @@ export function UserSearchCombobox({
   }, [placeholder, results, selectedName, value]);
 
   return (
-    <AdminCombobox
+    <Combobox
       id={id}
       open={open}
       onOpenChange={setOpen}
@@ -99,10 +99,10 @@ export function UserSearchCombobox({
               <span className="truncate">{user.name}</span>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{user.id}</span>
             </div>
-            <AdminComboboxCheck selected={value === user.id} />
+            <ComboboxCheck selected={value === user.id} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }

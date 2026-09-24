@@ -1,12 +1,13 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_CLASS, TONE_TEXT } from "@/components/kit/tone";
+import type { DateFormatter } from "@/components/kit/format-time";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
@@ -18,17 +19,18 @@ import type {
   RegistrationRankAutofillRole
 } from "@/types/balancer-admin.types";
 
-function formatCapturedAt(value: string | null | undefined): string {
-  if (!value) return "-";
+function formatCapturedAt(format: DateFormatter, value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : format.dateTime(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
-function formatRankSource(role: RegistrationRankAutofillRole): string {
+function formatRankSource(format: DateFormatter, role: RegistrationRankAutofillRole): string {
   const nativeRank = role.division
     ? `${role.division}${role.tier != null ? ` ${role.tier}` : ""}`
     : null;
-  const capturedAt = role.captured_at ? formatCapturedAt(role.captured_at) : null;
+  const capturedAt = role.captured_at ? formatCapturedAt(format, role.captured_at) : null;
   return [role.platform?.toUpperCase(), nativeRank, capturedAt].filter(Boolean).join(" / ");
 }
 
@@ -102,9 +104,10 @@ function playerLabel(player: RegistrationRankAutofillPlayer): string {
 
 function RankAutofillRolePill({ role }: Readonly<{ role: RegistrationRankAutofillRole }>) {
   const t = useTranslations();
+  const format = useFormatter();
   const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
-  const source = formatRankSource(role);
+  const source = formatRankSource(format, role);
   const breakdown = formatBlendBreakdown(role);
   const tone = resolveRolePillTone(role);
   // The tone already ranks these two apart: an update is what gets written, a

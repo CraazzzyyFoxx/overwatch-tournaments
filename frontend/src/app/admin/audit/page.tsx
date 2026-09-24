@@ -22,9 +22,9 @@ import {
   formatAuditTimestamp,
   isMachineActor,
 } from "@/components/kit/audit-log";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,7 +67,7 @@ const ALL_WORKSPACES = "all";
  * Two writers used to share the query string — this page merged its filters onto
  * `window.location.search` by hand while `AdminDataTable` wrote `page`/`search`
  * through the History API — and a filter change and a page change overwrote each
- * other depending on which landed last. Now the filters are a `useAdminFilters`
+ * other depending on which landed last. Now the filters are a `useFilters`
  * chip set (one `router.replace` per change, which also drops `page` and `id`)
  * and the table keeps its own five names. Nothing else touches the URL.
  */
@@ -145,7 +145,7 @@ export default function AdminAuditPage() {
     return list;
   }, [isSuperuser, entityIdParam, actorParam, actionParam, pageRows]);
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   // `filters` is a fresh object every render; its two writers are not. Pulled
   // out here so the column memo below depends on the callbacks themselves
   // rather than on the container that carries them.
@@ -428,7 +428,7 @@ export default function AdminAuditPage() {
             getRowId={(row) => String(row.id)}
             searchPlaceholder="Search actor, action, source, or target…"
             emptyMessage={emptyMessage}
-            toolbar={<AdminFilterBar defs={defs} filters={filters} />}
+            toolbar={<FilterBar defs={defs} filters={filters} />}
             onRowClick={(row) => setParams({ id: String(row.original.id) })}
             renderMobileCard={(row) => (
               <div className="min-w-0 flex-1">
@@ -483,7 +483,7 @@ export default function AdminAuditPage() {
           />
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={openRow ? openId : null}
           onClose={() => setParams({ id: null })}
           title={openAction?.label ?? ""}
@@ -527,7 +527,7 @@ export default function AdminAuditPage() {
               </dl>
             </div>
           ) : null}
-        </AdminInspector>
+        </Inspector>
       </div>
 
       {/*

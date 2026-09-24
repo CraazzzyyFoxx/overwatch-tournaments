@@ -14,6 +14,7 @@ import {
 } from "@/lib/bracket/view";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import TeamName from "@/components/TeamName";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
@@ -346,11 +347,10 @@ function OverviewStreamCard({
         ) : (
           <span aria-hidden className="block aspect-video w-full bg-[color:var(--aqt-overlay-3)]" />
         )}
-        {meta.labelKey ? (
-          <span className={`${meta.pillClassName} absolute left-3 top-3 z-[1]`}>
-            {meta.hasDot ? <span aria-hidden className="dot" /> : null}
+        {meta.labelKey && meta.pillStatus ? (
+          <TournamentStatusPill status={meta.pillStatus} className="absolute left-3 top-3 z-[1]">
             {t(meta.labelKey)}
-          </span>
+          </TournamentStatusPill>
         ) : null}
         <span
           aria-hidden

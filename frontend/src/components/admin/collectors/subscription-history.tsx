@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useFormatter } from "next-intl";
 
 import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";
@@ -42,6 +43,7 @@ const PROVIDER_FILTERS = ["all", "boosty", "twitch"];
  * person's page (F14 ·3) rather than opening a detail panel here.
  */
 export function SubscriptionTaskHistory() {
+  const format = useFormatter();
   const [state, setState] = useState("all");
   const [source, setSource] = useState("all");
   const [provider, setProvider] = useState("all");
@@ -142,7 +144,7 @@ export function SubscriptionTaskHistory() {
                   return (
                     <ClickableLogRow key={row.id} href={href}>
                       <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {formatDate(row.created_at)}
+                        {formatDate(format, row.created_at)}
                       </TableCell>
                       <ClickableLogCell href={href} label={label} />
                       <TableCell className="text-sm">

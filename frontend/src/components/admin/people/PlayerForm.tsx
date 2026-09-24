@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -173,7 +173,7 @@ function SearchableSelect({
   const selected = options.find((option) => option.value === value);
 
   return (
-    <AdminCombobox
+    <Combobox
       id={id}
       open={open}
       onOpenChange={setOpen}
@@ -201,11 +201,11 @@ function SearchableSelect({
                 <span className="shrink-0 text-xs text-muted-foreground">{option.meta}</span>
               ) : null}
             </div>
-            <AdminComboboxCheck selected={value === option.value} />
+            <ComboboxCheck selected={value === option.value} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }
 

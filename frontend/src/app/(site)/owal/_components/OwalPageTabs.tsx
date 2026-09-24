@@ -13,7 +13,7 @@ const OwalPageTabs = async ({ standings, stacks }: OwalPageTabsProps) => {
   const t = await getTranslations();
   return (
     <Tabs defaultValue="standings">
-      <TabsList className="mb-4 grid w-full max-w-[400px] grid-cols-2">
+      <TabsList>
         <TabsTrigger value="standings">{t("common.standings")}</TabsTrigger>
         <TabsTrigger value="stacks">{t("owal.stacks")}</TabsTrigger>
       </TabsList>

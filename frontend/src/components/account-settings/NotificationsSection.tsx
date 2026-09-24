@@ -1,10 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
+import { Spinner } from "@/components/ui/spinner";
 import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import { notify } from "@/lib/notify";
 import notificationService from "@/services/notification.service";
@@ -49,9 +49,9 @@ export default function NotificationsSection() {
 
   if (preferencesQuery.isLoading) {
     return (
-      <Loader2
-        className="h-4 w-4 animate-spin text-[color:var(--aqt-fg-muted)]"
-        aria-label={t("notifications.title")}
+      <Spinner
+        className="text-[color:var(--aqt-fg-muted)]"
+        label={t("notifications.title")}
       />
     );
   }

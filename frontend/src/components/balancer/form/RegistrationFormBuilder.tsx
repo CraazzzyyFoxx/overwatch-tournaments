@@ -34,7 +34,6 @@ import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { segmentedFrame, toggleVariants } from "@/components/ui/toggle";
 import { defaultFormSchema } from "@/lib/forms/default-schema";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { makeUniqueFieldKey } from "@/lib/forms/keys";
@@ -339,16 +338,11 @@ export function SchemaEditor({
   return (
     <Tabs defaultValue="edit" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* The house segmented control, not the shadcn grey box: same drawing
-            as every other view switch (`ToggleGroup variant="pill"`, the
-            bracket's stage tabs), borrowed rather than restated. */}
-        <TabsList className={cn(segmentedFrame, "h-8")}>
-          <TabsTrigger value="edit" className={toggleVariants({ variant: "pill", size: "sm" })}>
-            {t("editTab")}
-          </TabsTrigger>
-          <TabsTrigger value="preview" className={toggleVariants({ variant: "pill", size: "sm" })}>
-            {t("previewTab")}
-          </TabsTrigger>
+        {/* Edit ⇄ preview is a mode switch that owns panels: `Tabs` in the
+            house pill drawing, same as every other view switch. */}
+        <TabsList variant="pill">
+          <TabsTrigger value="edit">{t("editTab")}</TabsTrigger>
+          <TabsTrigger value="preview">{t("previewTab")}</TabsTrigger>
         </TabsList>
         {toolbar}
       </div>

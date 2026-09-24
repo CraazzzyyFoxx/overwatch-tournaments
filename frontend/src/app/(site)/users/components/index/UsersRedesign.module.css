@@ -729,57 +729,6 @@
   }
 }
 
-/* ===== View switcher ===== */
-.viewSwitch {
-  display: inline-flex;
-  background: var(--u-card);
-  border: 1px solid var(--u-border);
-  padding: 4px;
-  border-radius: 10px;
-  gap: 2px;
-}
-
-.viewSwitch button {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--u-muted);
-  font-family: inherit;
-  font-weight: 600;
-  font-size: var(--text-caption);
-  padding: 8px 16px;
-  border-radius: 7px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: 0.15s;
-}
-
-.viewSwitch button:hover {
-  color: var(--u-fg);
-}
-
-.viewSwitchActive {
-  background: color-mix(in srgb, var(--u-teal) 14%, transparent);
-  color: var(--u-teal);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--u-teal) 30%, transparent);
-}
-
-.viewSwitch .countBadge {
-  font-family: var(--u-mono);
-  font-size: var(--text-label);
-  color: var(--u-faint);
-  background: var(--aqt-overlay-3);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.viewSwitchActive .countBadge {
-  background: color-mix(in srgb, var(--u-teal) 18%, transparent);
-  color: var(--u-teal);
-}
-
 /* ===== Alphabet index ===== */
 .alphaBar {
   display: flex;

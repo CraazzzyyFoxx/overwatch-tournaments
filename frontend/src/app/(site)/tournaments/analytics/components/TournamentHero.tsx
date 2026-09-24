@@ -3,11 +3,12 @@
 import React from "react";
 
 import type { Tournament } from "@/types/tournament.types";
-import { cn, formatDateRange } from "@/lib/utils";
+import { formatDateRange } from "@/lib/utils";
 import { useTranslations, useLocale } from "next-intl";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 interface HeroTotals {
@@ -73,12 +74,7 @@ export default function TournamentHero({
 
   const meta = (
     <>
-      {statusMeta ? (
-        <span className={cn(styles.cStatusPill, statusMeta.textClassName)}>
-          <span className={cn(styles.cStatusDot, statusMeta.isActive && styles.cStatusDotLive)} />
-          {statusText}
-        </span>
-      ) : null}
+      <TournamentStatusPill status={statusMeta.variant}>{statusText}</TournamentStatusPill>
       <span className={styles.cMetaPill}>
         <span className={styles.cMetaPillK}>{t("analytics.hero.pillFormat")}</span>
         <span className={styles.cMetaPillV}>

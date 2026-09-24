@@ -1,11 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { LoaderCircle } from "lucide-react";
 
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Workspace } from "@/types/workspace.types";
+import { Spinner } from "@/components/ui/spinner";
 import type { WorkspaceSettingsFormState } from "./fields";
 import type { WorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 
@@ -51,7 +51,7 @@ export function WorkspaceSettingsFrame({
   if (!isLoaded || settings.isLoading) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <LoaderCircle aria-hidden className="mr-2 size-5 animate-spin" /> Loading workspace…
+        <Spinner className="mr-2 size-5" /> Loading workspace…
       </div>
     );
   }

@@ -8,51 +8,6 @@ import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 // callers can hand their `t` straight through (strictFunctionTypes-safe).
 type Translate = ReturnType<typeof useTranslations<never>>;
 
-// Compact relative time ("2m ago", "in 19d", "Mar 01") for the Updated column
-// and live-card timestamps. `now` is injectable for deterministic tests.
-//
-// `locale` is required: the fallback used to be pinned to `en-US`, so a Russian
-// reader saw an English "Jun 13" in the Updated column of a row whose date
-// column was already correctly localized.
-export function relativeTime(
-  value: Date | string | null | undefined,
-  t: Translate,
-  locale: string,
-  now: Date = new Date()
-): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-
-  const diffMs = now.getTime() - date.getTime();
-  const past = diffMs >= 0;
-  const minutes = Math.round(Math.abs(diffMs) / 60_000);
-
-  if (minutes < 1)
-    return past ? t("tournamentsList.time.justNow") : t("tournamentsList.time.soon");
-  if (minutes < 60)
-    return past
-      ? t("tournamentsList.time.minutesAgo", { count: minutes })
-      : t("tournamentsList.time.inMinutes", { count: minutes });
-
-  const hours = Math.round(minutes / 60);
-  if (hours < 24)
-    return past
-      ? t("tournamentsList.time.hoursAgo", { count: hours })
-      : t("tournamentsList.time.inHours", { count: hours });
-
-  const days = Math.round(hours / 24);
-  if (days < 30)
-    return past
-      ? t("tournamentsList.time.daysAgo", { count: days })
-      : t("tournamentsList.time.inDays", { count: days });
-
-  return date.toLocaleDateString(locale.startsWith("ru") ? "ru-RU" : "en-US", {
-    month: "short",
-    day: "numeric"
-  });
-}
-
 export interface LiveTournamentGroup {
   tournament: Tournament;
   encounters: Encounter[];

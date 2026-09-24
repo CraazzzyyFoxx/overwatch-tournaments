@@ -3,21 +3,13 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useUnsavedGuard } from "@/components/kit/useUnsavedGuard";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 interface EntityFormDialogProps {
   open: boolean;
@@ -182,7 +174,7 @@ export function EntityFormDialog({
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
-                      <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" />
+                      <Spinner />
                       {submittingLabel}
                     </>
                   ) : (
@@ -195,18 +187,20 @@ export function EntityFormDialog({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{dirtyTitle}</AlertDialogTitle>
-            <AlertDialogDescription>{dirtyDescription}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingNavigationHref(null)}>Keep editing</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDiscardConfirm}>Discard changes</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={discardDialogOpen}
+        onOpenChange={(next) => {
+          setDiscardDialogOpen(next);
+          if (!next) setPendingNavigationHref(null);
+        }}
+        intent={{
+          title: dirtyTitle,
+          description: dirtyDescription,
+          confirmLabel: "Discard changes",
+          tone: "danger"
+        }}
+        onConfirm={handleDiscardConfirm}
+      />
     </>
   );
 }

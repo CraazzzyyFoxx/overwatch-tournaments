@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Star, Trash2 } from "lucide-react";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SaveBar } from "@/components/kit/SaveBar";
@@ -286,7 +286,7 @@ export function DraftEditor({
     return `/admin/settings/divisions/v/${version.id}?${query.toString()}`;
   };
 
-  const tabs: AdminTabItem[] = [
+  const tabs: LinkTabItem[] = [
     { key: "divisions", label: "Divisions", href: tabHref("divisions") },
     {
       key: "changes",
@@ -448,7 +448,7 @@ export function DraftEditor({
         />
 
         <div className="flex min-w-0 flex-col gap-3">
-          <AdminTabs
+          <LinkTabs
             items={tabs}
             activeKey={activeTab}
             level={2}

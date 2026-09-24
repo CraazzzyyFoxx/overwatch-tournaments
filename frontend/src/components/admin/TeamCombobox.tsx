@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { Team } from "@/types/team.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import TeamName from "@/components/TeamName";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 
@@ -44,7 +44,7 @@ export function TeamCombobox({
   );
 
   return (
-    <AdminCombobox
+    <Combobox
       id={id}
       open={open}
       onOpenChange={setOpen}
@@ -75,10 +75,10 @@ export function TeamCombobox({
               <TeamName team={team} size="xs" />
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{team.id}</span>
             </div>
-            <AdminComboboxCheck selected={value === team.id} />
+            <ComboboxCheck selected={value === team.id} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }

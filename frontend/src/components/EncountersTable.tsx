@@ -12,9 +12,14 @@ import {
 } from "@/lib/public-page-query-presentation";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import TeamName from "@/components/TeamName";
+import {
+  TournamentStatusPill,
+  type TournamentStatusVariant
+} from "@/components/tournaments/StatusPill";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import {
   getEncounterState,
@@ -116,12 +121,12 @@ const STATE_LABEL_KEY: Record<EncounterState, StateLabelKey> = {
   Open: "encounters.state.open"
 };
 
-const STATE_PILL_CLASS: Record<EncounterState, string> = {
-  Live: styles.statusLive,
-  Upcoming: styles.statusUpcoming,
-  Final: styles.statusFinal,
-  Pending: styles.statusUpcoming,
-  Open: styles.statusOpen
+const STATE_PILL_VARIANT: Record<EncounterState, TournamentStatusVariant> = {
+  Live: "live",
+  Upcoming: "upcoming",
+  Final: "finished",
+  Pending: "upcoming",
+  Open: "open"
 };
 
 type ColumnHeaderKey =
@@ -438,12 +443,12 @@ export function EncountersDataTable({
         const upset = state === "Final" && isUpset(encounter);
         return (
           <td key={column} className="c">
-            <span
-              className={cn(styles.statusPill, upset ? styles.statusUpset : STATE_PILL_CLASS[state])}
+            <TournamentStatusPill
+              status={upset ? "upset" : STATE_PILL_VARIANT[state]}
+              className="px-[7px] py-0.5"
             >
-              {state === "Live" ? <span className="m-live-dot" aria-hidden /> : null}
               {upset ? t("encounters.state.upset") : t(STATE_LABEL_KEY[state])}
-            </span>
+            </TournamentStatusPill>
           </td>
         );
       }
@@ -455,7 +460,9 @@ export function EncountersDataTable({
             <div className="m-when items-end">
               <span className="day">{when.day}</span>
               <span className={cn("time tabular-nums", when.live && "live")}>
-                {when.live ? <span className="m-live-dot mr-1" aria-hidden /> : null}
+                {when.live ? (
+                  <StatusDot className="mr-1 size-[7px] text-[color:var(--aqt-status-live)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--aqt-status-live)_18%,transparent)] [animation:aqtPulse_2s_ease-in-out_infinite] motion-reduce:animate-none" />
+                ) : null}
                 {when.time}
               </span>
             </div>

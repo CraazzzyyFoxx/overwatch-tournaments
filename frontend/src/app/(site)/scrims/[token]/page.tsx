@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { notFound, useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Eye, LoaderCircle, Swords } from "lucide-react";
+import { Eye, Swords } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import scrimService from "@/services/scrim.service";
 import type { ScrimRoom } from "@/types/scrim.types";
 
 import { PregameRoom } from "@/app/(site)/tournaments/[slug]/pregame/[encounterId]/_components/PregameRoom";
+import { Spinner } from "@/components/ui/spinner";
 
 /** Where a scrim room hands the viewer back when it is done with them. */
 const SCRIM_RETURN_TO = "/scrims";
@@ -49,7 +50,7 @@ function ClaimGate({
         <p className="text-sm">{t("prompt", { team: openSide.name })}</p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button onClick={onClaim} disabled={isClaiming}>
-            {isClaiming ? <LoaderCircle aria-hidden className="size-4 animate-spin" /> : null}
+            {isClaiming ? <Spinner /> : null}
             {t("claim", { team: openSide.name })}
           </Button>
           <Button variant="outline" onClick={onWatch} disabled={isClaiming}>

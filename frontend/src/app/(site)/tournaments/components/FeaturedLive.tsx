@@ -1,17 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { ArrowRight, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { TeamFormation } from "@/types/tournament.types";
-import {
-  type LiveTournamentGroup,
-  currentMapName,
-  relativeTime,
-} from "./tournaments-helpers";
+import { type LiveTournamentGroup, currentMapName } from "./tournaments-helpers";
 
 const FeaturedTournamentCard = ({
   group,
@@ -21,7 +18,7 @@ const FeaturedTournamentCard = ({
   small?: boolean;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const { tournament, current, encounters } = group;
 
   const stageName = current.stage?.name ?? null;
@@ -54,10 +51,9 @@ const FeaturedTournamentCard = ({
             </Link>
           </h3>
         </div>
-        <span className="status-pill live">
-          <span aria-hidden className="dot" />
+        <TournamentStatusPill status="live">
           {stageName ? `${t("common.live")} · ${stageName}` : t("common.live")}
-        </span>
+        </TournamentStatusPill>
       </div>
 
       <div className="feat-meta">
@@ -131,7 +127,7 @@ const FeaturedTournamentCard = ({
         <div className="left">
           <span className="lead-team">
             {t("tournamentsList.featured.started", {
-              time: relativeTime(current.started_at, t, locale)
+              time: current.started_at ? format.relativeTime(new Date(current.started_at)) : "—"
             })}
           </span>
         </div>

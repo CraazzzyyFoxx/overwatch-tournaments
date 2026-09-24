@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Shuffle } from "lucide-react";
+import { Shuffle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -17,6 +17,7 @@ import {
 import { notify } from "@/lib/notify";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind } from "@/types/tournament.types";
+import { Spinner } from "@/components/ui/spinner";
 import type { PickBanSide } from "./pick-ban-model";
 
 interface ElectOpenerDialogProps {
@@ -80,7 +81,7 @@ export function ElectOpenerDialog({ kind, encounterId, open, homeName, awayName,
               if (choice != null) mutation.mutate(choice);
             }}
           >
-            {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+            {mutation.isPending ? <Spinner className="mr-2" /> : null}
             {mutation.isPending ? t("electOpener.sending") : t("electOpener.confirm")}
           </Button>
         </AlertDialogFooter>

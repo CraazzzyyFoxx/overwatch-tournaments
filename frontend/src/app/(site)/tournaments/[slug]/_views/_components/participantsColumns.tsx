@@ -665,7 +665,6 @@ export function buildParticipantColumns(
             value={reg.answers?.[field.key] ?? null}
             kind={field.kind}
             labels={{ yes: t("common.yes"), no: t("common.no") }}
-            locale={locale}
           />
         ),
         searchValue: (reg) => answerSearchText(reg.answers?.[field.key]),

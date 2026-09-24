@@ -17,16 +17,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SearchField } from "@/components/ui/search-field";
 import {
   isFilterActive,
-  type AdminFilters,
+  type FilterState,
   type FilterDef,
   type FilterOption,
   type FilterValue
-} from "@/components/kit/useAdminFilters";
+} from "@/components/kit/useFilters";
 import { cn } from "@/lib/utils";
 
-export interface AdminFilterBarProps {
+export interface FilterBarProps {
   defs: FilterDef[];
-  filters: AdminFilters;
+  filters: FilterState;
   search?: { placeholder: string; value: string; onChange: (value: string) => void };
   /** Chips the screen owns and the user cannot remove — the tournament inside a hub. */
   pinned?: { key: string; label: string }[];
@@ -58,14 +58,14 @@ function optionLabel(def: FilterDef, value: string): string {
  * screen has exactly one place where "narrow this list" lives, and that place
  * writes the URL.
  */
-export function AdminFilterBar({
+export function FilterBar({
   defs,
   filters,
   search,
   pinned,
   presets,
   trailing
-}: Readonly<AdminFilterBarProps>) {
+}: Readonly<FilterBarProps>) {
   const [open, setOpen] = useState(false);
   const [pickerKey, setPickerKey] = useState<string | null>(null);
   const [entityQuery, setEntityQuery] = useState("");

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 
 import { useOpenMissCount } from "./miss-queue";
 
@@ -33,7 +33,7 @@ export default function GameContentLayout({ children }: Readonly<{ children: Rea
   const activeKey = pathname.split("/")[3] ?? TABS[0].key;
   const openMisses = useOpenMissCount();
 
-  const items: AdminTabItem[] = TABS.map((tab) => ({
+  const items: LinkTabItem[] = TABS.map((tab) => ({
     key: tab.key,
     label: tab.label,
     href: `/admin/content/${tab.key}`,
@@ -47,7 +47,7 @@ export default function GameContentLayout({ children }: Readonly<{ children: Rea
         title="Game content"
         description="Heroes, maps and gamemodes used by the log parser and analytics."
       />
-      <AdminTabs items={items} activeKey={activeKey} level={1} ariaLabel="Game content sections" />
+      <LinkTabs items={items} activeKey={activeKey} level={1} ariaLabel="Game content sections" />
       {children}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import type { Tournament } from "@/types/tournament.types";
  * surface the addressed invite mode is invisible and therefore dead.
  */
 export default function MyInviteOffers({ tournament }: Readonly<{ tournament: Tournament }>) {
+  const format = useFormatter();
   const t = useTranslations("registrationTeams");
   const tErrors = useTranslations("registrationTeams.errors");
   // The same translated slot vocabulary the roster panel and the public tab use,
@@ -124,7 +125,7 @@ export default function MyInviteOffers({ tournament }: Readonly<{ tournament: To
             {offer.expires_at && (
               <span className="text-xs text-[color:var(--aqt-fg-muted)]">
                 {t("offers.expires", {
-                  date: new Date(offer.expires_at).toLocaleDateString(),
+                  date: format.dateTime(new Date(offer.expires_at), { dateStyle: "medium" }),
                 })}
               </span>
             )}

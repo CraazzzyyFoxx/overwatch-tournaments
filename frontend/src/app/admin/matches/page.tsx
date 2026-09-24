@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -99,7 +99,7 @@ export default function AdminMatchesPage() {
     if (value) scope.set(key, value);
   }
 
-  const items: AdminTabItem[] = VIEWS.map((key) => {
+  const items: LinkTabItem[] = VIEWS.map((key) => {
     const query = new URLSearchParams(scope);
     query.set("view", key);
     return { key, label: VIEW_LABELS[key], href: `/admin/matches?${query.toString()}` };
@@ -127,7 +127,7 @@ export default function AdminMatchesPage() {
         description="Encounters, standings, captain reports, parsed maps and logs across the workspace."
       />
 
-      <AdminTabs items={items} activeKey={view} ariaLabel="Matches views" />
+      <LinkTabs items={items} activeKey={view} ariaLabel="Matches views" />
 
       {view === "encounters" ? (
         <EncountersBrowser tournamentId={null} workspaceId={workspaceId} />

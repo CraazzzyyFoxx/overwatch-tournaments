@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { CalendarClock, Loader2 } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -28,6 +28,7 @@ import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import adminService from "@/services/admin.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Stage } from "@/types/tournament.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { useHubEncountersQuery } from "../../hubQueries";
 
@@ -271,7 +272,7 @@ export function RoundScheduleSection({
                         }}
                       >
                         {applyMutation.isPending ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden />
+                          <Spinner />
                         ) : null}
                         {t("apply")}
                       </Button>

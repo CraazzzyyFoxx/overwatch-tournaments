@@ -8,10 +8,10 @@ import { Plus, Trash2, Users } from "lucide-react";
 import TeamName from "@/components/TeamName";
 import { AdminDataTable, createKebabColumn } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { TeamCreateDialog } from "@/components/admin/teams/TeamCreateDialog";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import {
@@ -164,7 +164,7 @@ export default function TeamsPage() {
     [tournamentsQuery.data]
   );
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const selectedTournamentId = parseTournamentQueryParam(
     String(filters.values[TOURNAMENT_QUERY_PARAM] ?? "") || null
   );
@@ -288,7 +288,7 @@ export default function TeamsPage() {
             inspectorId={openId}
             getRowId={(row) => String(row.id)}
             toolbar={
-              <AdminFilterBar
+              <FilterBar
                 defs={defs}
                 filters={filters}
                 trailing={
@@ -358,7 +358,7 @@ export default function TeamsPage() {
           />
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={openRow ? openId : null}
           onClose={() => setParams({ id: null })}
           title={openRow?.name ?? ""}
@@ -374,7 +374,7 @@ export default function TeamsPage() {
           }
         >
           {openRow ? <RosterSummary team={openRow} /> : null}
-        </AdminInspector>
+        </Inspector>
       </div>
 
       {selectedTournamentId != null ? (

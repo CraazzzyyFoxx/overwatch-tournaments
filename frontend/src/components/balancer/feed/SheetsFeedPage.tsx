@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 import { SaveBar } from "@/components/kit/SaveBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -13,6 +13,7 @@ import type {
   AdminGoogleSheetFeedUpsertInput,
   MappingPreviewResponseV2
 } from "@/types/balancer-admin.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { ColumnMappingTab } from "./_components/ColumnMappingTab";
 import { PreviewTab } from "./_components/PreviewTab";
@@ -230,7 +231,7 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
   if (catalogQuery.isLoading || feedQuery.isLoading || !catalogQuery.data || !mapping.isHydrated) {
     return (
       <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 size-4 animate-spin" />
+        <Spinner className="mr-2" />
         Loading mapping…
       </div>
     );

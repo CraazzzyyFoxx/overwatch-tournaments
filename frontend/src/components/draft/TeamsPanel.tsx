@@ -123,26 +123,20 @@ export function TeamsPanel({
         }}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 px-4 pb-3 pt-3.5">
-          <h2 id={headingId} className="font-onest text-base font-semibold leading-[1.3]">
-            {t("teams.title")}
-          </h2>
-          <TabsList
-            aria-label={t("teams.tabsLabel")}
-            className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-card-2)] p-[3px]"
-          >
+        <div className="flex flex-col gap-2 px-4 pb-3 pt-3.5">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
+            <h2 id={headingId} className="font-onest text-base font-semibold leading-[1.3]">
+              {t("teams.title")}
+            </h2>
+            <span className="ml-auto whitespace-nowrap text-[13px] text-[color:var(--aqt-fg-dim)]">{caption}</span>
+          </div>
+          <TabsList aria-label={t("teams.tabsLabel")}>
             {tabs.map((entry) => (
-              <TabsTrigger
-                key={entry.value}
-                value={entry.value}
-                className="h-[30px] gap-1.5 rounded-lg px-[11px] text-[13px] font-medium text-[color:var(--aqt-fg-muted)] focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 data-[state=active]:bg-[color:var(--aqt-card)] data-[state=active]:text-[color:var(--aqt-fg)] data-[state=active]:shadow-none max-sm:h-11"
-              >
+              <TabsTrigger key={entry.value} value={entry.value} badge={entry.count} className="max-sm:h-11">
                 {entry.label}
-                <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{entry.count}</span>
               </TabsTrigger>
             ))}
           </TabsList>
-          <span className="ml-auto whitespace-nowrap text-[13px] text-[color:var(--aqt-fg-dim)]">{caption}</span>
         </div>
 
         <TabsContent value="rosters" className="mt-0 flex min-h-0 flex-1 flex-col focus-visible:ring-inset">

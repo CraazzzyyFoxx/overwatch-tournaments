@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { History, Inbox } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,7 @@ export default function InviteHistorySection({
   open,
   onOpenChange
 }: Readonly<InviteHistorySectionProps>) {
+  const format = useFormatter();
   const t = useTranslations("registrationTeams");
   const tErrors = useTranslations("registrationTeams.errors");
 
@@ -107,7 +108,7 @@ export default function InviteHistorySection({
             {history.cap_reset_at && (
               <p className="text-xs text-[color:var(--aqt-fg-muted)]">
                 {t("history.capReset", {
-                  date: new Date(history.cap_reset_at).toLocaleDateString()
+                  date: format.dateTime(new Date(history.cap_reset_at), { dateStyle: "medium" })
                 })}
               </p>
             )}
@@ -169,14 +170,14 @@ export default function InviteHistorySection({
                       {entry.invited_at && (
                         <span>
                           {t("history.issued", {
-                            date: new Date(entry.invited_at).toLocaleDateString()
+                            date: format.dateTime(new Date(entry.invited_at), { dateStyle: "medium" })
                           })}
                         </span>
                       )}
                       {entry.answered_at && (
                         <span>
                           {t("history.answered", {
-                            date: new Date(entry.answered_at).toLocaleDateString()
+                            date: format.dateTime(new Date(entry.answered_at), { dateStyle: "medium" })
                           })}
                         </span>
                       )}

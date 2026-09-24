@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Loader2, Pin, Save, Trash2, TrendingUp } from "lucide-react";
+import { Bookmark, Pin, Save, Trash2, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDebounce } from "use-debounce";
@@ -25,17 +25,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { SearchField } from "@/components/ui/search-field";
+import { StatusDot } from "@/components/ui/status-dot";
 import { EncountersDataTable, FULL_ENCOUNTER_COLUMNS } from "@/components/EncountersTable";
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
@@ -60,6 +51,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { getEncounterState, getEncounterWinner } from "@/lib/encounter/status";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 import {
   applyBuiltInView,
   BUILT_IN_VIEWS,
@@ -199,6 +191,7 @@ export default function EncountersRedesignClient({
   const [page, setPage] = useState(initialPage);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [viewToDelete, setViewToDelete] = useState<EncounterSavedView | null>(null);
   const previousUrlRef = useRef({ page: initialPage, filters: initialFilters });
   const effectiveFilters = useMemo(
     () => ({ ...filters, query: debouncedSearch }),
@@ -298,6 +291,7 @@ export default function EncountersRedesignClient({
       queryClient.invalidateQueries({
         queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
       });
+      setViewToDelete(null);
       notify.success(t("encounters.savedView.deleted"));
     }
   });
@@ -453,34 +447,35 @@ export default function EncountersRedesignClient({
                 <Bookmark aria-hidden className="h-3 w-3" />
                 <span>{view.name}</span>
               </button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button
-                    type="button"
-                    className={styles.savedViewDelete}
-                    aria-label={t("encounters.savedView.deleteAria", { name: view.name })}
-                    disabled={deleteViewMutation.isPending}
-                  >
-                    <Trash2 aria-hidden className="h-3 w-3" />
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>{t("encounters.savedView.deleteTitle")}</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("encounters.savedView.confirmDelete", { name: view.name })}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => deleteViewMutation.mutate({ id: view.id })}>
-                      {t("common.delete")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <button
+                type="button"
+                className={styles.savedViewDelete}
+                aria-label={t("encounters.savedView.deleteAria", { name: view.name })}
+                disabled={deleteViewMutation.isPending}
+                onClick={() => setViewToDelete(view)}
+              >
+                <Trash2 aria-hidden className="h-3 w-3" />
+              </button>
             </div>
           ))}
+          <ConfirmDialog
+            open={viewToDelete != null}
+            onOpenChange={(open) => {
+              if (!open) setViewToDelete(null);
+            }}
+            intent={{
+              title: t("encounters.savedView.deleteTitle"),
+              description: t("encounters.savedView.confirmDelete", {
+                name: viewToDelete?.name ?? ""
+              }),
+              confirmLabel: t("common.delete"),
+              tone: "danger"
+            }}
+            pending={deleteViewMutation.isPending}
+            onConfirm={() => {
+              if (viewToDelete) deleteViewMutation.mutate({ id: viewToDelete.id });
+            }}
+          />
           <span className={styles.viewsSpacer} />
           <button
             type="button"
@@ -489,7 +484,7 @@ export default function EncountersRedesignClient({
             disabled={saveViewMutation.isPending}
           >
             {saveViewMutation.isPending ? (
-              <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+              <Spinner className="size-3" />
             ) : (
               <Save aria-hidden className="h-3 w-3" />
             )}
@@ -1119,12 +1114,14 @@ function FeaturedPanel({
                 <div>
                   <div className={styles.matchup}>
                     {isLive ? (
-                      <span className={cn(styles.statusDot, styles.statusLive)}>
+                      <span className={cn(styles.statusTag, styles.statusLive)}>
+                        <StatusDot className="shadow-[0_0_0_3px_color-mix(in_srgb,currentColor_20%,transparent)]" />
                         {t("encounters.state.live")}
                       </span>
                     ) : null}
                     {isUpcoming ? (
-                      <span className={cn(styles.statusDot, styles.statusUpcoming)}>
+                      <span className={cn(styles.statusTag, styles.statusUpcoming)}>
+                        <StatusDot />
                         {t("encounters.state.soon")}
                       </span>
                     ) : null}

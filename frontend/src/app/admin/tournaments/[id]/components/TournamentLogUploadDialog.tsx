@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { FileUp, Loader2 } from "lucide-react";
+import { FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,7 @@ import {
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Encounter } from "@/types/encounter.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface TournamentLogUploadDialogProps {
   tournamentId: number;
@@ -166,7 +167,7 @@ export function TournamentLogUploadDialog({
           </Button>
           <Button type="button" onClick={() => uploadMutation.mutate()} disabled={!canSubmit}>
             {uploadMutation.isPending ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
+              <Spinner className="mr-2" />
             ) : (
               <FileUp className="mr-2 size-4" />
             )}

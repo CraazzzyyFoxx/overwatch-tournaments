@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, BadgeInfo, Loader2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeInfo, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import SchemaForm, { schemaSteps, type SchemaFormFooterState } from "@/components/forms/SchemaForm";
@@ -37,6 +37,7 @@ import type {
   RoleInput
 } from "@/types/registration.types";
 import type { User } from "@/types/user.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import FieldLabel from "./FieldLabel";
 import TextField, { fieldControlClass } from "./FormField";
@@ -668,7 +669,7 @@ export default function RegistrationSchemaForm({
             disabled={submitPending || (state.isLast && subscriptionBlocked)}
             className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--aqt-teal)] px-4 py-2 text-sm font-medium text-[color:var(--aqt-bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
           >
-            {submitPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+            {submitPending && <Spinner />}
             {state.isLast ? (
               isAdmin ? (
                 initial ? (

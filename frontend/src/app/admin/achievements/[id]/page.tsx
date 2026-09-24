@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFormatter } from "next-intl";
 import {
   ArrowDown,
   ArrowLeft,
@@ -192,6 +193,7 @@ function buildAchievementFormData(rule: AchievementRule): AchievementRuleUpdateI
 }
 
 export default function AchievementDetailPage() {
+  const format = useFormatter();
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -716,7 +718,7 @@ export default function AchievementDetailPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {row.first_qualified
-                        ? new Date(row.first_qualified).toLocaleDateString()
+                        ? format.dateTime(new Date(row.first_qualified), { dateStyle: "medium" })
                         : "-"}
                     </TableCell>
                   </TableRow>
@@ -777,7 +779,7 @@ export default function AchievementDetailPage() {
                     <TableCell className="max-w-48 truncate">{ov.reason}</TableCell>
                     <TableCell>{ov.tournament_id ?? "-"}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(ov.created_at).toLocaleDateString()}
+                      {format.dateTime(new Date(ov.created_at), { dateStyle: "medium" })}
                     </TableCell>
                     <TableCell>
                       <Button

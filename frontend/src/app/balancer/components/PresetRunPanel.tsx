@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import {
   Download,
   FolderInput,
-  Loader2,
   SlidersHorizontal,
   Sparkles,
   type LucideIcon
@@ -33,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
 import { PANEL_CLASS, PRESET_LABELS, TOOLBAR_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
+import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceCounter } from "./WorkspaceCounter";
 
 type CounterItem = {
@@ -151,7 +151,7 @@ export function PresetRunPanel({
         className="h-8 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
       >
         {isRunPending ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Spinner className="mr-1.5 size-3.5" />
         ) : (
           <Sparkles className="mr-1.5 h-3.5 w-3.5" />
         )}
@@ -177,7 +177,7 @@ export function PresetRunPanel({
         className={TOOLBAR_BUTTON_CLASS}
       >
         {isImportPending ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Spinner className="mr-1.5 size-3.5" />
         ) : (
           <FolderInput className="mr-1.5 h-3.5 w-3.5" />
         )}
@@ -194,7 +194,7 @@ export function PresetRunPanel({
             title="Export players"
           >
             {isExportPlayersPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1.5" />
+              <Spinner className="size-3.5 sm:mr-1.5" />
             ) : (
               <Download className="h-3.5 w-3.5 sm:mr-1.5" />
             )}

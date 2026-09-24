@@ -18,6 +18,9 @@ const getAdminMatch = vi.fn();
 vi.mock("@/services/admin.service", () => ({
   default: { getAdminMatch: (...args: unknown[]) => getAdminMatch(...args) }
 }));
+vi.mock("next-intl", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
+}));
 
 async function mount(node: ReactNode) {
   const container = document.createElement("div");

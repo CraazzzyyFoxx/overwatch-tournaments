@@ -13,8 +13,8 @@ import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { createAliasesColumn } from "@/components/admin/catalog-table-columns";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -124,7 +124,7 @@ export default function MapsAdminPage() {
     ],
     [gamemodesData]
   );
-  const filters = useAdminFilters(filterDefs);
+  const filters = useFilters(filterDefs);
   const gamemodeFilter = String(filters.values.gamemode_id ?? "");
   const competitiveFilter = String(filters.values.in_competitive ?? "");
 
@@ -234,7 +234,7 @@ export default function MapsAdminPage() {
         columns={columns}
         searchPlaceholder="Search maps…"
         filterKey={filters.filterKey}
-        toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
+        toolbar={<FilterBar defs={filterDefs} filters={filters} />}
         emptyMessage="No maps yet. Use “Create map” to add the first one."
         onRowDoubleClick={isSuperuser ? (row) => openEdit(row.original) : undefined}
         actions={

@@ -6,9 +6,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Check, ChevronsUpDown, Trash2, UserPlus, Wand2 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminDataTable, createKebabColumn } from "@/components/data-table";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { rbacService } from "@/services/rbac.service";
 import workspaceService from "@/services/workspace.service";
@@ -57,11 +57,6 @@ const SYSTEM_ROLE_LABEL: Record<WorkspaceSystemRole, string> = {
 
 function isSystemRoleName(name: string): name is WorkspaceSystemRole {
   return (SYSTEM_ROLES as string[]).includes(name);
-}
-
-function initials(member: WorkspaceMember): string {
-  const source = member.username || member.email || `#${member.auth_user_id}`;
-  return source.slice(0, 2).toUpperCase();
 }
 
 /** Best human-readable handle for a member, used in control names and confirmations. */
@@ -141,7 +136,7 @@ export default function WorkspaceMembersPage() {
     ],
     [scopedRoles]
   );
-  const filters = useAdminFilters(filterDefs);
+  const filters = useFilters(filterDefs);
   const roleFilter = String(filters.values.role ?? "");
 
   const invalidateMembers = useCallback(() => {
@@ -224,7 +219,7 @@ export default function WorkspaceMembersPage() {
             <div className="flex items-center gap-3 min-w-0">
               <Avatar className="size-8 shrink-0">
                 {member.avatar_url ? <AvatarImage src={member.avatar_url} alt="" /> : null}
-                <AvatarFallback className="text-xs">{initials(member)}</AvatarFallback>
+                <AvatarFallback className="text-xs">{initials(memberLabel(member))}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
@@ -431,7 +426,7 @@ export default function WorkspaceMembersPage() {
         searchPlaceholder="Search by name or email…"
         filterKey={filters.filterKey}
         getRowId={(row) => String(row.auth_user_id)}
-        toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
+        toolbar={<FilterBar defs={filterDefs} filters={filters} />}
         emptyMessage="No members yet. Add staff and administrators here — players who register for a tournament are added automatically."
         actions={tableActions}
       />

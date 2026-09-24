@@ -12,10 +12,10 @@ import { AuthUserSearchCombobox } from "@/components/kit/AuthUserSearchCombobox"
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { PlayerProfileDialog } from "@/components/admin/PlayerProfileDialog";
 import { UserMergeDialog } from "@/components/admin/UserMergeDialog";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { TOURNAMENT_QUERY_PARAM } from "@/components/admin/tournament-filter";
 import { SocialAccountList } from "@/components/social/SocialAccountList";
@@ -28,7 +28,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import { rbacService } from "@/services/rbac.service";
 import tournamentService from "@/services/tournament.service";
@@ -37,18 +37,6 @@ import type { AuthAdminUser } from "@/types/rbac.types";
 import type { User } from "@/types/user.types";
 
 const PAGE_SIZE = 20;
-
-/** Two initials for the avatar fallback: "Karnage#22778" -> "K2". */
-function initialsOf(name: string): string {
-  return (
-    name
-      .split(/[#\s]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || "?"
-  );
-}
 
 function accessAccountsHref(name: string): string {
   return `/admin/access/accounts?q=${encodeURIComponent(name.split("#")[0] || name)}`;
@@ -146,7 +134,7 @@ export default function PeoplePage() {
     [tournamentsQuery.data]
   );
 
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
   const tournamentFilter = String(filters.values[TOURNAMENT_QUERY_PARAM] ?? "");
   const hasAccountFilter = filters.values["has-account"] === true;
   const unlinkedFilter = filters.values.unlinked === true;
@@ -226,7 +214,7 @@ export default function PeoplePage() {
             <Avatar className="size-7 text-xs">
               <AvatarImage src={row.original.avatar_url ?? undefined} alt="" />
               <AvatarFallback className="bg-muted/60 font-medium text-muted-foreground">
-                {initialsOf(row.original.name)}
+                {initials(row.original.name)}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
@@ -378,7 +366,7 @@ export default function PeoplePage() {
             inspectorId={openId}
             getRowId={(person) => String(person.id)}
             toolbar={
-              <AdminFilterBar
+              <FilterBar
                 defs={defs}
                 filters={filters}
                 trailing={
@@ -408,7 +396,7 @@ export default function PeoplePage() {
           />
         </div>
 
-        <AdminInspector
+        <Inspector
           openId={openRow ? openId : null}
           onClose={() => setParams({ id: null })}
           title={openRow?.name ?? ""}
@@ -447,7 +435,7 @@ export default function PeoplePage() {
                 <Avatar className="size-12">
                   <AvatarImage src={openRow.avatar_url ?? undefined} alt="" />
                   <AvatarFallback className="bg-muted/60 text-muted-foreground">
-                    {initialsOf(openRow.name)}
+                    {initials(openRow.name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
@@ -499,7 +487,7 @@ export default function PeoplePage() {
               </div>
             </div>
           ) : null}
-        </AdminInspector>
+        </Inspector>
       </div>
 
       <EntityFormDialog

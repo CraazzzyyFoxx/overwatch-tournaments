@@ -10,6 +10,7 @@ import { useToolContext } from "@/app/balancer/useToolContext";
 import { Footer } from "@/components/Footer";
 import Header from "@/components/Header";
 import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import { adminEntryPermissions } from "@/lib/auth/admin-permissions";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -17,8 +18,8 @@ function LoadingState() {
   return (
     <div className="flex h-screen w-full items-center justify-center">
       <div className="text-center">
-        <div className="inline-block size-8 animate-spin rounded-full border-4 border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-        <p className="mt-4 text-muted-foreground">Loading...</p>
+        <Spinner className="size-8" />
+        <p className="mt-4 text-muted-foreground">Loading…</p>
       </div>
     </div>
   );

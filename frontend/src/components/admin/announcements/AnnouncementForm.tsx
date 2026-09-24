@@ -112,7 +112,7 @@ export function AnnouncementForm({
             <TabsTrigger key={locale} value={locale} data-field={`locale-tab-${locale}`}>
               {t(`notifications.admin.locales.${locale}`)}
               {filled.includes(locale) ? null : (
-                <span className="ml-1.5 text-xs text-muted-foreground">
+                <span className="text-label font-normal text-muted-foreground">
                   {t("notifications.admin.form.localeEmpty")}
                 </span>
               )}
@@ -120,7 +120,7 @@ export function AnnouncementForm({
           ))}
         </TabsList>
         {ANNOUNCEMENT_LOCALES.map((locale) => (
-          <TabsContent key={locale} value={locale} className="flex flex-col gap-4 pt-4">
+          <TabsContent key={locale} value={locale} className="flex flex-col gap-4">
             <div>
               <Label htmlFor={`announcement-title-${locale}`}>
                 {t("notifications.admin.form.titleField")}

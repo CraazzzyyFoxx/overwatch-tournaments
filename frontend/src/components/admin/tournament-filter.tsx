@@ -3,7 +3,7 @@
  * scoped to one tournament (encounters, standings, parsed maps, reports,
  * teams, people).
  *
- * The chip that writes it is `kit/AdminFilterBar`; this file is only the name
+ * The chip that writes it is `kit/FilterBar`; this file is only the name
  * of the param and its parser, so the chip, the table's filter engine and the
  * page's own query all agree on one spelling.
  */

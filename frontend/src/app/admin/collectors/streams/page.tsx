@@ -3,7 +3,7 @@
 import { StreamHealthDashboard } from "@/components/admin/collectors/stream-health";
 import { StreamSettingsPanel } from "@/components/admin/collectors/stream-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/kit/AdminTabs";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -48,7 +48,7 @@ export default function StreamCollectorPage() {
   return (
     <div className="space-y-4">
       {items.length > 1 && (
-        <AdminTabs
+        <LinkTabs
           items={items}
           activeKey={activeKey}
           level={2}

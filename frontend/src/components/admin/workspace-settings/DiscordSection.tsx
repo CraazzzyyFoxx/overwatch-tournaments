@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle, LoaderCircle, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle, Users } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
@@ -16,11 +16,12 @@ import { DISCORD_CLIENT_ID } from "@/config/site";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type { DiscordGuildInfo } from "@/types/discord.types";
 import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types";
+import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 
@@ -78,14 +79,6 @@ function botInviteUrl(guildId: string): string | null {
     disable_guild_select: "true"
   });
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase();
-  }
-  return (name.trim().slice(0, 2) || "?").toUpperCase();
 }
 
 function GuildMark({
@@ -397,10 +390,7 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
 
                 {guildsQuery.isLoading ? (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <LoaderCircle
-                      aria-hidden
-                      className="size-4 animate-spin motion-reduce:animate-none"
-                    />
+                    <Spinner />
                     Asking Discord which servers you administer…
                   </p>
                 ) : null}
@@ -464,10 +454,7 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
                               onClick={() => bind.mutate(guild.guild_id)}
                             >
                               {bind.isPending && bind.variables === guild.guild_id ? (
-                                <LoaderCircle
-                                  aria-hidden
-                                  className="size-4 animate-spin motion-reduce:animate-none"
-                                />
+                                <Spinner />
                               ) : null}
                               {boundId ? "Link this instead" : "Link this server"}
                             </Button>

@@ -114,6 +114,9 @@ before writing markup:
 | Placement medal             | `components/ui/place-badge.tsx` — `--aqt-medal-*` tokens                                                                                                                 |
 | Role / division marker      | `components/PlayerRoleIcon.tsx`, `components/DivisionIcon.tsx` — icon+label only in a Role split; icon-only (name in `title`/`aria-label`) elsewhere on display surfaces |
 | MVP pill                    | `components/match/MvpMatchPill.tsx`                                                                                                                                      |
+| Status dot                  | `components/ui/status-dot.tsx` — `<StatusDot tone pulse>`; always `aria-hidden`, fill is `currentColor`, so a hue with no `Tone` is set with `className`/`style`, not a new tone      |
+| Lifecycle status pill       | `components/tournaments/StatusPill.tsx` — `<TournamentStatusPill status>` for tournaments, encounters and streams; `live` carries the pulsing dot on its own, the label is always the caller's copy |
+| Loading spinner             | `components/ui/spinner.tsx` — `<Spinner className label>`; decorative by default, `label` only where nothing else says "loading"                                           |
 | Hero avatar / stack         | `components/hero/HeroImage.tsx` (`HeroStrip` for the collapsing stack)                                                                                                   |
 | Platform totals             | `components/stats/PlatformStatsGrid.tsx`                                                                                                                                 |
 | Filter/sort/page in the URL | `hooks/useQueryParams.ts`                                                                                                                                                |
@@ -122,7 +125,15 @@ before writing markup:
 
 ### Tabs, Button, and other primitives
 
-- Tabs: `frontend/src/components/ui/tabs.tsx` (Radix) with visible `focus-visible` rings.
+- Tabs: one look, three jobs — pick by what the control does, never restyle it per call site:
+
+  | Job | Use |
+  | --- | --- |
+  | Switch between panels of different content (state-driven) | `components/ui/tabs.tsx` — Radix `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, `role=tab/tabpanel`, arrow keys. `TabsTrigger` takes `badge` (a count) and `dot` (`{ tone, label }`). Sync to `?tab=` with `useQueryParams` when it should survive a reload. |
+  | Switch between routes (each tab is an address) | `components/kit/LinkTabs.tsx` — real links with `aria-current="page"`, `level={2}` for a sub-tab row. |
+  | Switch the view/mode of the same data (list/table, simple/extended) | `components/ui/toggle-group.tsx` pill (`SegmentedLinks` when each mode is a URL). A mode switch that also owns panels is `<TabsList variant="pill">`. |
+
+  Both tab forms draw from the same classes (`tabsListVariants`/`tabsTriggerVariants` in `ui/tabs.tsx`): an underline row on a hairline, horizontal scroll when narrow, the active tab kept in view. A `className` on `TabsList`/`TabsTrigger` is for layout only (`w-auto`, `flex-1`, a mobile `min-h-11`), never colour, radius or background. A `role="tablist"` written by hand is a bug.
 - Buttons: `frontend/src/components/ui/button.tsx` (CVA) with focus/disabled states. `static={false}` opts a control into a reduced-motion-safe `scale(0.96)` press; the default is no press motion.
 
 Principle: any new primitive must preserve:
@@ -157,9 +168,9 @@ inventing a surface.
 
 ### Rules that hold on every admin screen
 
-- **Row detail has one answer per case.** Up to ~6 editable fields -> `EntityFormDialog`. Read-only investigation -> `AdminInspector`. An entity that is editable _and_ shareable -> its own route. The default for T2 is the Inspector.
-- **One filter surface.** `AdminFilterBar` above the table, nothing in the header and no `<Select>` in the toolbar. A column may still declare `meta.filter` — that is the endpoint/param contract the table applies, not a second control.
-- **One tab implementation.** `AdminTabs` (`level={2}` for sub-tabs). Not Radix `Tabs`, not a `ToggleGroup`, not a hand-rolled pill `<nav>`: nesting breaks their roving tabindex.
+- **Row detail has one answer per case.** Up to ~6 editable fields -> `EntityFormDialog`. Read-only investigation -> `Inspector`. An entity that is editable _and_ shareable -> its own route. The default for T2 is the Inspector.
+- **One filter surface.** `FilterBar` above the table, nothing in the header and no `<Select>` in the toolbar. A column may still declare `meta.filter` — that is the endpoint/param contract the table applies, not a second control.
+- **One tab look.** A routed tab row is `LinkTabs` (`level={2}` for sub-tabs) — not Radix `Tabs`, whose `role=tab` is wrong for a link and whose roving tabindex fights a nested row. Tabs that are not addresses (locales inside a form dialog) are `ui/tabs.tsx`. Both render the same underline; a view switch is a `ToggleGroup`, never a hand-rolled pill `<nav>`.
 - **One row-actions convention.** `createKebabColumn`. An action the reader may not perform is _absent_, never disabled — and the menu is always visible, never revealed on hover.
 - **At most three dialogs per screen**: create/edit (`EntityFormDialog`), one `ConfirmDialog` whose `intent` is swapped per operation, and at most one domain-specific dialog. Six copies of the same confirmation differing only in strings is the anti-pattern this replaced.
 - **All three page states, always.** `PageStateCard` for `empty`, `error` and `filtered-empty`; a query that can fail MUST destructure `isError`.
@@ -169,13 +180,13 @@ inventing a surface.
 
 | Component                 | The job it owns                                                                                                                                                                          |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kit/AdminTabs.tsx`       | Routed tabs and sub-tabs: `next/link` items, `aria-current="page"`, arrow-key movement, horizontal scroll when narrow                                                                    |
-| `kit/AdminFilterBar.tsx`  | The one filter surface: search, removable chips, a "+ Filter" popover, pinned chips and saved presets                                                                                    |
-| `kit/useAdminFilters.ts`  | Filter state, which is the URL: `set`/`setMany`/`clear`, plus `toTableFilters()` and a `filterKey` that resets paging                                                                    |
-| `kit/AdminInspector.tsx`  | The row detail: a right-hand panel at `lg`+, a full sheet below it; `Esc`, up/down between rows, optional "Open page"                                                                    |
+| `kit/LinkTabs.tsx`       | Routed tabs and sub-tabs: `next/link` items, `aria-current="page"`, arrow-key movement, horizontal scroll when narrow; styles shared with `ui/tabs.tsx`                                        |
+| `kit/FilterBar.tsx`  | The one filter surface: search, removable chips, a "+ Filter" popover, pinned chips and saved presets                                                                                    |
+| `kit/useFilters.ts`  | Filter state, which is the URL: `set`/`setMany`/`clear`, plus `toTableFilters()` and a `filterKey` that resets paging                                                                    |
+| `kit/Inspector.tsx`  | The row detail: a right-hand panel at `lg`+, a full sheet below it; `Esc`, up/down between rows, optional "Open page"                                                                    |
 | `kit/kebab-column.tsx`    | The actions column, and the permission gating inside it                                                                                                                                  |
 | `kit/ConfirmDialog.tsx`   | Every confirmation: tone, cascade list, type-to-confirm, one mount per screen                                                                                                            |
-| `kit/AdminSectionNav.tsx` | T5 section navigation: a `<nav>` at `md`+, a `Select` below it                                                                                                                           |
+| `kit/SectionNav.tsx` | T5 section navigation: a `<nav>` at `md`+, a `Select` below it                                                                                                                           |
 | `kit/SaveBar.tsx`         | Save/discard for a dirty form, plus the unsaved-changes guard (turn the anchor half off with `guardNavigation={false}` when the screen's own routed sub-navigation is part of that form) |
 | `kit/useUnsavedGuard.ts`  | The two halves of "do not lose my edits": `beforeunload` and in-app anchor interception. Shared by `SaveBar` and `EntityFormDialog` so there is only one behaviour                       |
 | `kit/WizardShell.tsx`     | T6 frame: step rail with `aria-current="step"`, body, footer, optional aside                                                                                                             |
@@ -235,7 +246,7 @@ Principle: navigation and search stay accessible without hiding content.
 
 User profile tab list is sticky:
 
-- `frontend/src/app/users/components/UserTabsClient.tsx` uses `sticky top-14 z-40`
+- `frontend/src/app/(site)/users/components/tabs/UserTabsClient.tsx` uses `sticky top-[var(--aqt-header-h)] z-40` around the shared `TabsList`
 
 Principle: tab switching should not jump the layout. The active tab syncs to URL query params (`?tab=`), so links are shareable.
 

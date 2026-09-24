@@ -278,6 +278,10 @@
       "connecting": "Connecting",
       "connected": "Live connection",
       "reconnecting": "Reconnecting"
+    },
+    "confirm": {
+      "cascade": "This also removes:",
+      "typeToConfirm": "Type <code>{name}</code> to confirm"
     }
   },
   "registration": {
@@ -903,7 +907,6 @@
       "delete": "Delete account",
       "confirmTitle": "Delete your account?",
       "confirmBody": "Your account, sessions, linked OAuth connections and API keys will be deleted permanently. Your tournament history and player profile are kept, without an owner. You will be signed out right away.",
-      "confirmCancel": "Keep my account",
       "confirmDelete": "Delete permanently"
     },
     "sessions": {
@@ -1670,7 +1673,9 @@
         "onForm": "on form",
         "predShort": "pred {place}",
         "viewList": "List",
-        "viewTable": "Table"
+        "viewTable": "Table",
+        "viewLabel": "Standings view",
+        "sortLabel": "Sort standings by"
       },
       "horizon": {
         "title": "Predicted vs Actual",
@@ -1784,10 +1789,6 @@
       "workspaces": "Workspaces",
       "workspaceListNotLoaded": "Workspace list is not loaded.",
       "selectAtLeastOneWorkspace": "Select at least one workspace.",
-      "relativeJustNow": "just now",
-      "relativeMinutes": "{count}m ago",
-      "relativeHours": "{count}h ago",
-      "relativeDays": "{count}d ago",
       "finishedRelative": "finished {relative}",
       "startedRelative": "started {relative}",
       "createdRelative": "created {relative}"
@@ -1862,16 +1863,6 @@
       "final": "Final",
       "signups": "Sign-ups",
       "setup": "Setup"
-    },
-    "time": {
-      "justNow": "just now",
-      "soon": "soon",
-      "minutesAgo": "{count, plural, one {#m ago} other {#m ago}}",
-      "inMinutes": "{count, plural, one {in #m} other {in #m}}",
-      "hoursAgo": "{count, plural, one {#h ago} other {#h ago}}",
-      "inHours": "{count, plural, one {in #h} other {in #h}}",
-      "daysAgo": "{count, plural, one {#d ago} other {#d ago}}",
-      "inDays": "{count, plural, one {in #d} other {in #d}}"
     }
   },
   "teams": {
@@ -4550,7 +4541,6 @@
     "back": "Back",
     "continue": "Continue",
     "seedDraft": "Seed draft",
-    "keepEditing": "Keep editing",
     "discardSetup": "Discard setup",
     "reseedConfirmTitle": "Replace the current draft seed",
     "reseedConfirmDescription": "Teams, players and upcoming picks will be rebuilt from the reviewed configuration. The draft has not started, so no completed live pick will be changed.",
@@ -4658,8 +4648,7 @@
         "rollback": "Last pick rolled back",
         "cancel": "Draft cancelled",
         "export": "Teams exported"
-      },
-      "dismiss": "Keep as is"
+      }
     },
     "roleConflict": {
       "title": "Add a missing player role",
@@ -6126,7 +6115,6 @@
         "action": "Unpublish",
         "title": "Unpublish this announcement?",
         "description": "It stops being shown from now on. The record and everyone's read marks stay, so who saw it remains answerable — but it cannot be put back on air from this screen.",
-        "cancel": "Keep it up",
         "done": "Announcement unpublished"
       }
     },

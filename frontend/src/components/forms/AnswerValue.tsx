@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Check, ExternalLink, Minus } from "lucide-react";
+import { useFormatter } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -17,18 +18,17 @@ import type { FieldKind } from "@/types/forms.types";
  * document off the same schema, and a second copy of this switch would drift
  * the moment a kind is added.
  *
- * `AnswerValue` is hook-free, with the boolean wording passed in: the
- * public roster sits inside a next-intl provider and the admin table renders
- * plain English, and next-intl's translator type is keyed on the message
- * catalogue so it cannot be widened to a plain `(key: string) => string` here.
+ * The boolean wording is passed in rather than translated here: the admin table
+ * renders plain English while the public roster is localized, and next-intl's
+ * translator type is keyed on the message catalogue so it cannot be widened to
+ * a plain `(key: string) => string`. Dates have no such problem and go through
+ * `useFormatter()`, so every zone prints them in the app's locale.
  */
 export interface AnswerValueProps {
   value: unknown;
   /** The field's kind. Omit for a value whose field is unknown (a stale answer). */
   kind?: FieldKind;
   labels?: { yes: string; no: string };
-  /** BCP-47 tag for `date`. Defaults to the host's locale. */
-  locale?: string;
 }
 
 const EMPTY = <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
@@ -91,8 +91,8 @@ export function AnswerValue({
   value,
   kind,
   labels = { yes: "Yes", no: "No" },
-  locale,
 }: Readonly<AnswerValueProps>): ReactNode {
+  const format = useFormatter();
   if (value === null || value === undefined || value === "") return EMPTY;
   if (Array.isArray(value)) {
     if (value.length === 0) return EMPTY;
@@ -156,7 +156,7 @@ export function AnswerValue({
     const parsed = new Date(String(value));
     const text = Number.isNaN(parsed.getTime())
       ? String(value)
-      : parsed.toLocaleDateString(locale);
+      : format.dateTime(parsed, { dateStyle: "medium" });
     return <span className={MUTED}>{text}</span>;
   }
 

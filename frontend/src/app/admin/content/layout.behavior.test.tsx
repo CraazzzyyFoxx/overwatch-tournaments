@@ -62,7 +62,7 @@ async function mount() {
 }
 
 function tab(container: HTMLElement, key: string) {
-  return container.querySelector<HTMLAnchorElement>(`a[data-admin-tab="${key}"]`);
+  return container.querySelector<HTMLAnchorElement>(`a[data-link-tab="${key}"]`);
 }
 
 beforeEach(() => {
@@ -90,7 +90,7 @@ describe("admin Game content layout", () => {
     const container = await mount();
 
     expect(
-      Array.from(container.querySelectorAll("a[data-admin-tab]")).map((link) =>
+      Array.from(container.querySelectorAll("a[data-link-tab]")).map((link) =>
         link.getAttribute("href")
       )
     ).toEqual([

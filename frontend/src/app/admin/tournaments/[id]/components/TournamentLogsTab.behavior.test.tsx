@@ -29,6 +29,9 @@ vi.mock("@/services/admin.service", () => ({
   }
 }));
 vi.mock("@/hooks/useRealtimeTopic", () => ({ useRealtimeTopic: () => {} }));
+vi.mock("next-intl", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
+}));
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));

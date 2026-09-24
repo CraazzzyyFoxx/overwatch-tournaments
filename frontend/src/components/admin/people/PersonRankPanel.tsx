@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Search } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
+import { useFormatter } from "next-intl";
 
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import type { CurrentRank } from "@/types/rank.types";
 
 import { StatusBadge, formatDate } from "@/components/admin/collectors/rank-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SelectUser {
   (userId: number, label: string): void;
@@ -146,6 +148,7 @@ function CurrentRanksSection({ userId }: Readonly<{ userId: number }>) {
  * WU drops the player lookup.
  */
 export function RankPlayerPanel({ userId }: Readonly<{ userId: number }>) {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   // Scoped server-side to the injected workspace; see `admin.service.ts`.
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -201,7 +204,7 @@ export function RankPlayerPanel({ userId }: Readonly<{ userId: number }>) {
               onClick={() => triggerMutation.mutate(null)}
             >
               {triggerMutation.isPending ? (
-                <Loader2 aria-hidden className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Spinner className="mr-1.5 size-3.5" />
               ) : (
                 <RefreshCw aria-hidden className="mr-1.5 h-3.5 w-3.5" />
               )}
@@ -245,10 +248,10 @@ export function RankPlayerPanel({ userId }: Readonly<{ userId: number }>) {
                     <StatusBadge status={row.status} />
                   </TableCell>
                   <TableCell className="text-sm tabular-nums text-muted-foreground">
-                    {formatDate(row.last_checked_at)}
+                    {formatDate(format, row.last_checked_at)}
                   </TableCell>
                   <TableCell className="text-sm tabular-nums text-muted-foreground">
-                    {formatDate(row.last_success_at)}
+                    {formatDate(format, row.last_success_at)}
                   </TableCell>
                   <TableCell className="text-right text-sm tabular-nums">
                     {row.consecutive_failures || "—"}

@@ -27,7 +27,7 @@ export type FilterDef =
 
 export type FilterValue = string | string[] | boolean;
 
-export interface AdminFilters {
+export interface FilterState {
   /** Every declared key, at its empty default when the filter is off. */
   values: Record<string, FilterValue>;
   set: (key: string, value: FilterValue | null) => void;
@@ -77,7 +77,7 @@ export function isFilterActive(value: FilterValue | undefined): boolean {
  * with row 8812 open otherwise strands the user on a page that no longer
  * exists, or an inspector for a row the new filter excludes.
  */
-export function useAdminFilters(defs: FilterDef[]): AdminFilters {
+export function useFilters(defs: FilterDef[]): FilterState {
   const { searchParams, setParams } = useQueryParams({ resetOnChange: ["page", "id"] });
 
   const search = searchParams?.toString() ?? "";

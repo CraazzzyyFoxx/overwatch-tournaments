@@ -7,9 +7,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import { AdminDataTable, type AdminDataTableGroup, adminColumnMeta, createKebabColumn } from "@/components/data-table";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import {
   EMPTY_STATUS_FORM,
   StatusForm,
@@ -90,7 +90,7 @@ export default function WorkspaceStatusesSettingsPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const { canAccessPermission } = usePermissions();
   const queryClient = useQueryClient();
-  const filters = useAdminFilters(FILTER_DEFS);
+  const filters = useFilters(FILTER_DEFS);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState<BalancerCustomStatus | null>(null);
   const [pendingStatus, setPendingStatus] = useState<BalancerCustomStatus | null>(null);
@@ -406,7 +406,7 @@ export default function WorkspaceStatusesSettingsPage() {
         initialPageSize={25}
         columnsStorageKey="workspace-statuses-table-columns"
         toolbar={
-          <AdminFilterBar
+          <FilterBar
             defs={FILTER_DEFS}
             filters={filters}
             trailing={

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import registrationFormTemplatesService from "@/services/registration-form-templates.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { FormSchema } from "@/types/forms.types";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Saved questionnaires, shared by every tournament of the workspace.
@@ -241,7 +242,7 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
                 onClick={() => createMutation.mutate(newName.trim())}
               >
                 {createMutation.isPending ? (
-                  <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden />
+                  <Spinner className="mr-1 size-3.5" />
                 ) : (
                   <Plus className="mr-1 size-3.5" aria-hidden />
                 )}

@@ -12,7 +12,7 @@ import { act, forwardRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -34,7 +34,7 @@ vi.mock("next/link", () => ({
   })
 }));
 
-const ITEMS: AdminTabItem[] = [
+const ITEMS: LinkTabItem[] = [
   { key: "overview", label: "Overview", href: "/admin/tournaments/1/overview" },
   { key: "registration", label: "Registration", href: "/admin/tournaments/1/registration" },
   { key: "teams", label: "Teams", href: "/admin/tournaments/1/teams", badge: 3 },
@@ -56,12 +56,12 @@ async function render(activeKey = "teams") {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(<AdminTabs items={ITEMS} activeKey={activeKey} ariaLabel="Tournament sections" />);
+    root.render(<LinkTabs items={ITEMS} activeKey={activeKey} ariaLabel="Tournament sections" />);
   });
 }
 
 function links() {
-  return Array.from(container.querySelectorAll<HTMLAnchorElement>("a[data-admin-tab]"));
+  return Array.from(container.querySelectorAll<HTMLAnchorElement>("a[data-link-tab]"));
 }
 
 async function keyDown(key: string) {
@@ -81,7 +81,7 @@ afterEach(async () => {
   container.remove();
 });
 
-describe("AdminTabs", () => {
+describe("LinkTabs", () => {
   it("marks exactly the active tab with aria-current", async () => {
     await render("teams");
 
@@ -93,7 +93,7 @@ describe("AdminTabs", () => {
   it("does not render hidden items", async () => {
     await render();
 
-    expect(links().map((link) => link.dataset.adminTab)).toEqual([
+    expect(links().map((link) => link.dataset.linkTab)).toEqual([
       "overview",
       "registration",
       "teams",
@@ -126,8 +126,8 @@ describe("AdminTabs", () => {
   it("renders a badge only for a non-zero count", async () => {
     await render();
 
-    const teams = links().find((link) => link.dataset.adminTab === "teams");
-    const matches = links().find((link) => link.dataset.adminTab === "matches");
+    const teams = links().find((link) => link.dataset.linkTab === "teams");
+    const matches = links().find((link) => link.dataset.linkTab === "matches");
     expect(teams?.textContent).toContain("3");
     // The dot's sr-only word rides along; what must be absent is a "0" pill.
     expect(matches?.textContent?.trim()).toBe("DegradedMatches");
@@ -137,7 +137,7 @@ describe("AdminTabs", () => {
   it("gives the health dot a word, never colour alone", async () => {
     await render();
 
-    const matches = links().find((link) => link.dataset.adminTab === "matches");
+    const matches = links().find((link) => link.dataset.linkTab === "matches");
     expect(matches?.querySelector("span[aria-hidden]")).not.toBeNull();
     // The design book bans colour-only encoding: the tone always ships with
     // the state spelled out for assistive tech.

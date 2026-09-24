@@ -1,4 +1,4 @@
-import type { AdminSectionNavGroup } from "@/components/kit/AdminSectionNav";
+import type { SectionNavGroup } from "@/components/kit/SectionNav";
 
 /**
  * Every section of the workspace settings hub (T5), in rail order.
@@ -90,7 +90,7 @@ const GROUPS: ReadonlyArray<{ label: string; sections: readonly WorkspaceSetting
 ];
 
 /**
- * Rail groups for `AdminSectionNav`, with `basePath` deciding which shell they
+ * Rail groups for `SectionNav`, with `basePath` deciding which shell they
  * point at.
  *
  * `only` narrows the rail to the sections a shell actually routes: the
@@ -101,7 +101,7 @@ const GROUPS: ReadonlyArray<{ label: string; sections: readonly WorkspaceSetting
 export function workspaceSettingsNavGroups(
   basePath: string,
   only?: readonly WorkspaceSettingsSectionKey[]
-): AdminSectionNavGroup[] {
+): SectionNavGroup[] {
   const allowed = only ? new Set<string>(only) : null;
   return GROUPS.map((group) => ({
     label: group.label,

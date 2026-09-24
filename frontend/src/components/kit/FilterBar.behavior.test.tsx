@@ -14,8 +14,8 @@ import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -60,9 +60,9 @@ function Harness() {
   useEffect(() => {
     rerender = () => force((value) => value + 1);
   }, []);
-  const filters = useAdminFilters(DEFS);
+  const filters = useFilters(DEFS);
   return (
-    <AdminFilterBar
+    <FilterBar
       defs={DEFS}
       filters={filters}
       pinned={[{ key: "tournament", label: "Tournament: Anak Cup #14" }]}
@@ -113,7 +113,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-describe("AdminFilterBar", () => {
+describe("FilterBar", () => {
   it("writes a picked filter into the URL", async () => {
     await render();
 

@@ -10,7 +10,6 @@ import StandingsTable from "@/components/StandingsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedLinks, type SegmentedLinkItem } from "@/components/ui/segmented";
-import { toggleVariants, segmentedFrame } from "@/components/ui/toggle";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { refreshEncounterViews } from "@/components/tournaments/refreshEncounterViews";
@@ -28,7 +27,6 @@ import type { StreamEntry } from "@/types/stream.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
 import { ListOrdered, Network } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { tournamentHref } from "@/lib/tournament/url";
 import { useTranslations } from "next-intl";
 import { TournamentPageState } from "../_components/TournamentPageState";
@@ -55,25 +53,23 @@ const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
 
 /**
  * Standings ⇄ bracket switch, icon-only like the tournaments list's view
- * switch. Both bracket panels draw it, so the frame and the pill live in one
- * place instead of four copies of a 200-character class string.
+ * switch. A mode switch that owns panels, so it is `Tabs` in the pill drawing.
  */
 function ViewTabs({
   hasStandings,
   bracketValue
 }: Readonly<{ hasStandings: boolean; bracketValue: string }>) {
   const t = useTranslations();
-  const item = toggleVariants({ variant: "pill", size: "sm" });
 
   return (
-    <TabsList className={cn(segmentedFrame, "h-8 text-[color:var(--aqt-fg-muted)]")}>
+    <TabsList variant="pill">
       {hasStandings && (
-        <TabsTrigger value="standings" className={item}>
+        <TabsTrigger value="standings">
           <ListOrdered aria-hidden width={14} height={14} />
           <span className="sr-only">{t("common.standings")}</span>
         </TabsTrigger>
       )}
-      <TabsTrigger value={bracketValue} className={item}>
+      <TabsTrigger value={bracketValue}>
         <Network aria-hidden width={14} height={14} />
         <span className="sr-only">{t("common.bracket")}</span>
       </TabsTrigger>

@@ -14,7 +14,7 @@ export interface AdminColumnFilterOption {
  * take typed params, not a generic filter DSL. In client mode the same
  * declaration is how a URL param is matched onto a column's `filterFn`.
  *
- * The control that WRITES it is `kit/AdminFilterBar`, above the table; this
+ * The control that WRITES it is `kit/FilterBar`, above the table; this
  * is only the endpoint contract, so it carries no presentation.
  */
 export interface AdminColumnFilterSpec {

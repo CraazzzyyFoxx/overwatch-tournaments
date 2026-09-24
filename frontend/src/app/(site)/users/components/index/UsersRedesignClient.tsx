@@ -14,10 +14,11 @@ import { HeroStrip } from "@/components/hero/HeroImage";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useCurrentWorkspaceId, useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/divisions/grid";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import userService from "@/services/user.service";
 import { getPlayerSlug } from "@/utils/player";
 import { roleImageSrc } from "@/lib/roster/player-role";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   UserCatalogEntry,
   UserOverviewRoleDivision,
@@ -99,17 +100,6 @@ function splitTag(name: string): { handle: string; tag: string | null } {
     return { handle: name, tag: null };
   }
   return { handle: name.slice(0, idx), tag: name.slice(idx) };
-}
-
-function initials(name: string): string {
-  const trimmed = name.replace(/#.*$/, "").trim();
-  if (!trimmed) return "?";
-  const parts = trimmed.split(/[\s_-]+/).filter(Boolean);
-  if (parts.length === 0) return trimmed.slice(0, 2).toUpperCase();
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 function primaryRoleLabel(roles: UserOverviewRoleDivision[], t: Translate): string {
@@ -443,28 +433,27 @@ const UsersRedesignClient = () => {
 
       {/* ===== View switcher + toolbar ===== */}
       <section className={styles.toolbar}>
-        <div className={styles.viewSwitch} role="tablist" aria-label={t("users.list.a11y.viewMode")}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "analytics"}
-            className={cn(view === "analytics" && styles.viewSwitchActive)}
-            onClick={() => handleViewChange("analytics")}
-          >
+        <ToggleGroup
+          type="single"
+          variant="pill"
+          size="sm"
+          value={view}
+          onValueChange={(next) => next && handleViewChange(next as ViewMode)}
+          aria-label={t("users.list.a11y.viewMode")}
+        >
+          <ToggleGroupItem value="analytics">
             <BarChart3 size={14} aria-hidden /> {t("users.list.view.analytics")}
-            <span className={styles.countBadge}>{t("users.list.view.analyticsBadge")}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "catalog"}
-            className={cn(view === "catalog" && styles.viewSwitchActive)}
-            onClick={() => handleViewChange("catalog")}
-          >
+            <span className="text-muted-foreground">
+              {t("users.list.view.analyticsBadge")}
+            </span>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="catalog">
             <LayoutGrid size={14} aria-hidden /> {t("users.list.view.catalog")}
-            <span className={styles.countBadge}>{t("users.list.view.catalogBadge")}</span>
-          </button>
-        </div>
+            <span className="text-muted-foreground">
+              {t("users.list.view.catalogBadge")}
+            </span>
+          </ToggleGroupItem>
+        </ToggleGroup>
         <div className={styles.toolbarActions}>
           <span className={styles.pill}>
             <Trophy size={11} aria-hidden /> {t("users.list.view.rosterLive")}

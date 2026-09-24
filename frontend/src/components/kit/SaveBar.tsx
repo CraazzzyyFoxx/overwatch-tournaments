@@ -3,11 +3,11 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useUnsavedGuard } from "@/components/kit/useUnsavedGuard";
+import { Spinner } from "@/components/ui/spinner";
 
 export interface SaveBarProps {
   dirty: boolean;
@@ -97,7 +97,7 @@ export function SaveBar({
           {t("discard")}
         </Button>
         <Button type="button" size="sm" onClick={onSave} disabled={saving}>
-          {saving ? <LoaderCircle aria-hidden className="size-4 animate-spin" /> : null}
+          {saving ? <Spinner /> : null}
           {primaryLabel ?? t("save")}
         </Button>
       </div>

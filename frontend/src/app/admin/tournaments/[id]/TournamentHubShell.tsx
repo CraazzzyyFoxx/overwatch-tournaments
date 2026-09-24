@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFormatter } from "next-intl";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";
@@ -60,6 +61,7 @@ export function TournamentHubShell({
   tournamentId: number;
   children: ReactNode;
 }>) {
+  const format = useFormatter();
   const router = useRouter();
   const pathname = usePathname();
   const isValidTournamentId = Number.isFinite(tournamentId) && tournamentId > 0;
@@ -268,7 +270,7 @@ export function TournamentHubShell({
     );
   }
 
-  const tabItems: AdminTabItem[] = TAB_KEYS.map((key) => ({
+  const tabItems: LinkTabItem[] = TAB_KEYS.map((key) => ({
     key,
     label: TAB_LABELS[key],
     href: `${basePath}/${key}`,
@@ -285,7 +287,7 @@ export function TournamentHubShell({
         }}
         meta={[
           <span key="dates" className="tabular-nums">
-            {formatDate(tournament.start_date)} — {formatDate(tournament.end_date)}
+            {formatDate(format, tournament.start_date)} — {formatDate(format, tournament.end_date)}
           </span>,
           tournament.is_league ? "League" : null,
           <span key="teams" className="tabular-nums">
@@ -308,7 +310,7 @@ export function TournamentHubShell({
           />
         }
       />
-      <AdminTabs items={tabItems} activeKey={isLegacySegment ? "" : activeTab} ariaLabel="Tournament sections" />
+      <LinkTabs items={tabItems} activeKey={isLegacySegment ? "" : activeTab} ariaLabel="Tournament sections" />
       {activeTabAllowed ? children : null}
     </div>
   );

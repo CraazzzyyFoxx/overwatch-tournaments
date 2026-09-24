@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Check, Loader2, Scale } from "lucide-react";
+import { Check, Scale } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   type MixBalancerPreferences,
   type MixBalancerPreferencesRead,
 } from "@/services/mix-preferences.service";
+import { Spinner } from "@/components/ui/spinner";
 
 import {
   DEFAULT_COMFORT_TILT,
@@ -141,7 +142,7 @@ export default function MixBalancerSection() {
           >
             {save.isPending || dirty ? (
               <>
-                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                <Spinner className="size-3" />
                 {t("mixBalancer.saving")}
               </>
             ) : save.isSuccess ? (

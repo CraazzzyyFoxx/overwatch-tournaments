@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Save, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ import type {
   SubscriptionRoleTier,
   VerificationMethod,
 } from "@/types/registration.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface MethodOption {
   value: VerificationMethod;
@@ -105,7 +106,7 @@ export default function SubscriptionProvidersCard({ workspaceId }: Readonly<Subs
         {workspaceId ? <DiscordServerStatus workspaceId={workspaceId} className="mb-2" /> : null}
         {isLoading && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-            <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+            <Spinner className="size-3.5" />
             {t("loading")}
           </div>
         )}
@@ -241,10 +242,7 @@ function ProviderEditor({
           onClick={() => save.mutate()}
         >
           {save.isPending && (
-            <Loader2
-              className="mr-1.5 size-3.5 animate-spin motion-reduce:animate-none"
-              aria-hidden
-            />
+            <Spinner className="mr-1.5 size-3.5" />
           )}
           {!save.isPending && <Save className="mr-1.5 size-3.5" aria-hidden />}
           {t("save")}

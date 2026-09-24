@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StatusDot } from "@/components/ui/status-dot";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -1121,11 +1122,7 @@ function DragSidebar({ onAdd }: Readonly<{ onAdd: (item: SidebarItem) => void }>
                 className="flex w-full items-center gap-1.5 px-2 py-1 rounded text-left cursor-grab hover:bg-accent/50 active:cursor-grabbing transition-colors"
               >
                 <GripVertical className="h-3 w-3 text-muted-foreground" aria-hidden />
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: item.color ?? LEAF_COLOR }}
-                  aria-hidden
-                />
+                <StatusDot className="size-2" style={{ color: item.color ?? LEAF_COLOR }} />
                 <span className="truncate">{item.label}</span>
               </button>
             ))}

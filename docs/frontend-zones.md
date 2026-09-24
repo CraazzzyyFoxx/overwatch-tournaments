@@ -68,12 +68,12 @@ Never: a relative `../../admin/…` climb, and never a re-export shim to launder
 
 ## Historical names
 
-`components/kit/` still contains `Admin`-prefixed exports (`AdminFilterBar`, `AdminInspector`,
-`AdminTabs`, `AdminCombobox`, `useAdminFilters`), and `components/data-table/` exports
-`AdminDataTable` / `adminColumnMeta`. They were the admin surface's kit before three other
-zones started using them. The prefix is historical, not a scope claim; the directory is the
-scope. Renaming the symbols is a mechanical pass nobody has needed badly enough to pay the
-review cost for.
+The `Admin` prefix is gone from `components/kit/` (2026-09-24): `LinkTabs`, `Combobox`,
+`FilterBar`, `useFilters`, `Inspector`, `SectionNav`. They were the admin surface's kit before
+other zones started using them; the directory is the scope, not the name.
+`components/data-table/` still exports `AdminDataTable` / `adminColumnMeta`: the plain name
+`DataTable` is taken by `components/ui/data-table.tsx`, and merging the two is its own step
+(`docs/superpowers/specs/2026-09-24-unified-component-library-design.md` §4.4).
 
 ## What a split would still have to solve
 

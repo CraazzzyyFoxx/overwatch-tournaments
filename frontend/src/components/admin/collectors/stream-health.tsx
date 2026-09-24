@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Clock, Gauge, Loader2, Pause, Play, Radio, Trophy } from "lucide-react";
+import { AlertTriangle, Clock, Gauge, Pause, Play, Radio, Trophy } from "lucide-react";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatTileGridSkeleton } from "@/components/admin/StatTileGridSkeleton";
@@ -13,6 +13,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
+import { Spinner } from "@/components/ui/spinner";
 
 import { RUN_STATE_TONES } from "./collector-state";
 import { STREAM_STATUS_META, diagnoseStreamHealth } from "./stream-shared";
@@ -88,7 +89,7 @@ export function StreamHealthDashboard() {
             onClick={() => toggleMutation.mutate()}
           >
             {toggleMutation.isPending ? (
-              <Loader2 aria-hidden className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none" />
+              <Spinner className="mr-1.5" />
             ) : health.enabled ? (
               <Pause aria-hidden className="mr-1.5 h-4 w-4" />
             ) : (

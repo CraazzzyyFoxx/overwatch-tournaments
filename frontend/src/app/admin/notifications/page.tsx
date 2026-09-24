@@ -8,7 +8,7 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { AdminDataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs } from "@/components/kit/AdminTabs";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
@@ -264,7 +264,7 @@ export default function AdminWorkspaceNotificationsPage() {
       {/* Real links, so a filtered view is linkable and survives a reload —
           the same reason the announcement screen's scope is a tab row. */}
       <div data-field="kind">
-        <AdminTabs
+        <LinkTabs
           ariaLabel={t("notifications.workspaceAdmin.kindLabel")}
           activeKey={kind}
           items={[ALL_KINDS, ...KINDS].map((option) => ({

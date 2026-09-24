@@ -13,16 +13,7 @@ import {
   type WizardStep as WizardRailStep
 } from "@/components/kit/WizardShell";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -355,25 +346,21 @@ export default function NewTournamentPage() {
         description="Set up a tournament step by step. Only the basics are required."
       />
 
-      <AlertDialog open={showResumePrompt}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Resume draft?</AlertDialogTitle>
-            <AlertDialogDescription>
-              “{resumable?.name}” is an Unpublished draft you started earlier. Resume it where you
-              left off, or start a new tournament from scratch.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setResumeDismissed(true)}>
-              Start a new tournament
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={() => resumable && resumeDraft(resumable)}>
-              Resume draft
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={showResumePrompt}
+        onOpenChange={(open) => {
+          if (!open) setResumeDismissed(true);
+        }}
+        intent={{
+          title: "Resume draft?",
+          description: `“${resumable?.name}” is an Unpublished draft you started earlier. Resume it where you left off, or start a new tournament from scratch.`,
+          confirmLabel: "Resume draft",
+          tone: "neutral"
+        }}
+        onConfirm={() => {
+          if (resumable) resumeDraft(resumable);
+        }}
+      />
 
       <WizardShell
         steps={rail}

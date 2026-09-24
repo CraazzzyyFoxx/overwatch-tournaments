@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-export interface AdminInspectorProps {
+export interface InspectorProps {
   /** The row currently open, read from `?id=` by the screen. `null` closes. */
   openId: string | null;
   onClose: () => void;
@@ -57,7 +57,7 @@ function isTextEntry(target: EventTarget | null): boolean {
  * `openId` is owned by the caller (it is `?id=` in the URL); this component
  * only renders. That keeps one writer for the query string per screen.
  */
-export function AdminInspector({
+export function Inspector({
   openId,
   onClose,
   title,
@@ -67,7 +67,7 @@ export function AdminInspector({
   onPrev,
   onNext,
   openHref
-}: Readonly<AdminInspectorProps>) {
+}: Readonly<InspectorProps>) {
   const isWide = useIsWideViewport();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const isOpen = openId !== null;

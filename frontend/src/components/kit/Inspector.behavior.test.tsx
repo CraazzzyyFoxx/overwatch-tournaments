@@ -14,7 +14,7 @@ import { act, forwardRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminInspector } from "@/components/kit/AdminInspector";
+import { Inspector } from "@/components/kit/Inspector";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -53,9 +53,9 @@ function mockViewport(wide: boolean) {
   })) as unknown as typeof window.matchMedia;
 }
 
-function inspector(props: Partial<React.ComponentProps<typeof AdminInspector>>) {
+function inspector(props: Partial<React.ComponentProps<typeof Inspector>>) {
   return (
-    <AdminInspector
+    <Inspector
       openId="8812"
       onClose={onClose}
       title="Encounter #8812"
@@ -66,12 +66,12 @@ function inspector(props: Partial<React.ComponentProps<typeof AdminInspector>>) 
     >
       <p>Team C vs Team D</p>
       <input aria-label="Note" />
-    </AdminInspector>
+    </Inspector>
   );
 }
 
 async function render(
-  props: Partial<React.ComponentProps<typeof AdminInspector>> = {},
+  props: Partial<React.ComponentProps<typeof Inspector>> = {},
   wide = true
 ) {
   mockViewport(wide);
@@ -83,7 +83,7 @@ async function render(
   });
 }
 
-async function rerender(props: Partial<React.ComponentProps<typeof AdminInspector>>) {
+async function rerender(props: Partial<React.ComponentProps<typeof Inspector>>) {
   await act(async () => {
     root.render(inspector(props));
   });
@@ -109,7 +109,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-describe("AdminInspector", () => {
+describe("Inspector", () => {
   it("renders nothing when no row is open", async () => {
     await render({ openId: null });
 

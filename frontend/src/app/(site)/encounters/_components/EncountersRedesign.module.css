@@ -643,8 +643,8 @@
   color: var(--enc-dim);
 }
 
-/* Status dot */
-.statusDot {
+/* Status tag: the dot beside the word is `StatusDot`, the colour is inherited. */
+.statusTag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -655,29 +655,12 @@
   letter-spacing: 0.06em;
 }
 
-.statusDot::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--enc-faint);
-}
-
 .statusLive {
   color: var(--enc-emerald);
 }
 
-.statusLive::before {
-  background: var(--enc-emerald);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--enc-emerald) 20%, transparent);
-}
-
 .statusUpcoming {
   color: var(--enc-amber);
-}
-
-.statusUpcoming::before {
-  background: var(--enc-amber);
 }
 
 /* ============ Main grid (table + side rail) ============ */

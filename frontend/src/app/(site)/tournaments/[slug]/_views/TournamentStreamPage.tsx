@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
 import { StreamRow } from "@/components/stream/StreamRow";
 import { StreamTheater } from "@/components/stream/StreamTheater";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import {
@@ -138,10 +139,9 @@ const TournamentStreamPage = ({ tournamentId }: { tournamentId: number }) => {
             </h2>
             <span className="flex shrink-0 items-center gap-2.5">
               {liveCount > 0 ? (
-                <span className="status-pill live">
-                  <span aria-hidden className="dot" />
+                <TournamentStatusPill status="live">
                   {t("stream.page.liveCount", { count: liveCount })}
-                </span>
+                </TournamentStatusPill>
               ) : null}
               {totalViewers > 0 ? (
                 <span className="aqt-tnum text-label tabular-nums text-[color:var(--aqt-fg-muted)]">

@@ -173,12 +173,12 @@ describe("WorkspaceQuotaCard", () => {
   it("marks on the tab which scopes carry a row", async () => {
     await render();
 
-    const tabs = [...document.body.querySelectorAll("a[data-admin-tab]")];
+    const tabs = [...document.body.querySelectorAll("a[data-link-tab]")];
     const marked = tabs
       .filter((link) => link.textContent?.includes(en.quota.state.overridden))
-      .map((link) => link.getAttribute("data-admin-tab"));
+      .map((link) => link.getAttribute("data-link-tab"));
     expect(marked).toEqual(["workspace", "session"]);
-    expect(tabs.map((link) => link.getAttribute("data-admin-tab"))).toEqual([
+    expect(tabs.map((link) => link.getAttribute("data-link-tab"))).toEqual([
       "workspace",
       "key",
       "session"

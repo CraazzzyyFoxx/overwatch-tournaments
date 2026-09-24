@@ -15,6 +15,7 @@ import AnalyticsStandings from "@/app/(site)/tournaments/analytics/components/An
 import MatchQualityCard from "@/app/(site)/tournaments/analytics/components/MatchQualityCard";
 import TeamDetail from "@/app/(site)/tournaments/analytics/components/community/TeamDetail";
 import PlayerDetail from "@/app/(site)/tournaments/analytics/components/community/PlayerDetail";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 interface MasterDetailProps {
@@ -69,30 +70,25 @@ export default function MasterDetail({
     id == null ? null : teams.find((team) => team.id === id) ?? null;
 
   // The list/table view toggle is public — it rides the right edge of each
-  // view's sort-tab row (passed in as `headerEnd`).
+  // view's sort row (passed in as `headerEnd`). `self-end` keeps it off the
+  // full width when that row stacks below 860px.
   const viewToggle = (
-    <div className={styles.cViewToggle} role="tablist">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={view === "list"}
-        data-on={view === "list"}
-        className={styles.cSegBtn}
-        onClick={() => setView("list")}
-      >
+    <ToggleGroup
+      type="single"
+      variant="pill"
+      size="sm"
+      value={view}
+      onValueChange={(next) => next && setView(next as "list" | "table")}
+      aria-label={t("analytics.community.standings.viewLabel")}
+      className="self-end"
+    >
+      <ToggleGroupItem value="list">
         {t("analytics.community.standings.viewList")}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={view === "table"}
-        data-on={view === "table"}
-        className={styles.cSegBtn}
-        onClick={() => setView("table")}
-      >
+      </ToggleGroupItem>
+      <ToggleGroupItem value="table">
         {t("analytics.community.standings.viewTable")}
-      </button>
-    </div>
+      </ToggleGroupItem>
+    </ToggleGroup>
   );
 
   // ── Table view: the dense per-player table (public). Match quality stays

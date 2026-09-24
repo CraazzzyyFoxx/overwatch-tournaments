@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   Clock,
   Crown,
-  Loader2,
   Search,
   ShieldBan,
   X,
@@ -41,7 +40,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { FilterChip } from "@/components/ui/filter-chip";
+import { StatusDot } from "@/components/ui/status-dot";
 import {
   Select,
   SelectContent,
@@ -113,6 +114,7 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { ViewSegment } from "../_components/ViewSegment";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Spinner } from "@/components/ui/spinner";
 import styles from "../TournamentDetail.module.css";
 
 // ---------------------------------------------------------------------------
@@ -287,16 +289,13 @@ function RegistrationStepMarker({ tone }: Readonly<{ tone: RegistrationStepTone 
     case "active":
       return (
         <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[color:color-mix(in_srgb,var(--aqt-amber)_50%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_10%,transparent)]">
-          <span
-            aria-hidden
-            className="size-2 animate-pulse rounded-full bg-[color:var(--aqt-amber)] motion-reduce:animate-none"
-          />
+          <StatusDot pulse className="size-2 text-[color:var(--aqt-amber)]" />
         </span>
       );
     default:
       return (
         <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)]">
-          <span aria-hidden className="size-1.5 rounded-full bg-[color:var(--aqt-fg-dim)]" />
+          <StatusDot className="text-[color:var(--aqt-fg-dim)]" />
         </span>
       );
   }
@@ -713,10 +712,9 @@ function MyRegistrationCard({
                   })}
                   className={QUEUE_CHIP_CLASS}
                 >
-                  <span
-                    aria-hidden
-                    className="mr-1 inline-block size-1.5 rounded-full align-middle"
-                    style={{ background: roleQueue.tint }}
+                  <StatusDot
+                    className="mr-1 inline-block align-middle"
+                    style={{ color: roleQueue.tint }}
                   />
                   {t("registration.myCard.queueRolePosition", {
                     role: roleQueue.label,
@@ -773,7 +771,7 @@ function MyRegistrationCard({
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[color:var(--aqt-emerald)] px-4 py-2 text-sm font-bold text-[color:var(--aqt-bg)] shadow-[0_0_18px_color-mix(in_srgb,var(--aqt-emerald)_40%,transparent)] transition-all hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
             >
               {isCheckingIn ? (
-                <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                <Spinner />
               ) : (
                 <CheckCircle2 className="size-4" aria-hidden />
               )}
@@ -814,10 +812,7 @@ function MyRegistrationCard({
               className="inline-flex items-center justify-center rounded-md border border-[color:color-mix(in_srgb,var(--aqt-rose)_20%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-rose)_5%,transparent)] px-2.5 py-1.5 text-label font-semibold text-[color:var(--aqt-rose)] transition-all hover:border-[color:color-mix(in_srgb,var(--aqt-rose)_40%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-rose)_10%,transparent)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
             >
               {isWithdrawing && (
-                <Loader2
-                  className="mr-1 size-3 animate-spin motion-reduce:animate-none"
-                  aria-hidden
-                />
+                <Spinner className="mr-1 size-3" />
               )}
               {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
             </button>
@@ -1549,29 +1544,20 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("common.withdrawReg")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("common.withdrawDesc")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={withdrawMutation.isPending}>
-              {t("common.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                withdrawMutation.mutate();
-              }}
-              disabled={withdrawMutation.isPending}
-              className="bg-[color:var(--aqt-rose)] text-[color:var(--aqt-bg)] hover:brightness-110"
-            >
-              {withdrawMutation.isPending ? t("common.withdrawing") : t("common.confirmWithdraw")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={isWithdrawDialogOpen}
+        onOpenChange={setIsWithdrawDialogOpen}
+        intent={{
+          title: t("common.withdrawReg"),
+          description: t("common.withdrawDesc"),
+          confirmLabel: withdrawMutation.isPending
+            ? t("common.withdrawing")
+            : t("common.confirmWithdraw"),
+          tone: "danger"
+        }}
+        pending={withdrawMutation.isPending}
+        onConfirm={() => withdrawMutation.mutate()}
+      />
 
       {!listHidden && view === "table" && (
         <p aria-atomic="true" aria-live="polite" className="sr-only">

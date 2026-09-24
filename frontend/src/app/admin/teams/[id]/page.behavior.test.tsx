@@ -21,7 +21,10 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const getTeam = vi.fn();
 const updateTeam = vi.fn();
 
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString().slice(0, 10) })
+}));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "9" }),
   usePathname: () => "/admin/teams/9",

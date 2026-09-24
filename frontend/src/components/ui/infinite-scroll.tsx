@@ -1,10 +1,10 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 interface InfiniteScrollOptions {
   hasNextPage: boolean;
@@ -133,7 +133,7 @@ export function InfiniteScrollFooter({
             disabled={isFetchingNextPage || disabled}
             onClick={() => fetchNextPage()}
           >
-            {isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            {isFetchingNextPage ? <Spinner /> : null}
             {isError ? `Try loading ${unit} again` : (loadMoreLabel ?? `Load more ${unit}`)}
           </Button>
         </>

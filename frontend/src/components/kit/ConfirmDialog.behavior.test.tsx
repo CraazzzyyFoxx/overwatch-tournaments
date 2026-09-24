@@ -7,10 +7,12 @@
 //     and a reopen does not carry the previous answer over;
 //  3. `cascade` lists what else disappears;
 //  4. `pending` disables both buttons so a double-confirm cannot fire twice.
+import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import en from "@/i18n/messages/en.json";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 
 declare global {
@@ -38,13 +40,15 @@ async function render(
   root = createRoot(container);
   await act(async () => {
     root.render(
-      <ConfirmDialog
-        open
-        onOpenChange={() => undefined}
-        intent={DELETE_STAGE}
-        onConfirm={onConfirm}
-        {...props}
-      />
+      <NextIntlClientProvider locale="en" messages={en}>
+        <ConfirmDialog
+          open
+          onOpenChange={() => undefined}
+          intent={DELETE_STAGE}
+          onConfirm={onConfirm}
+          {...props}
+        />
+      </NextIntlClientProvider>
     );
   });
 }
@@ -134,17 +138,19 @@ describe("ConfirmDialog", () => {
 
     await act(async () => {
       root.render(
-        <ConfirmDialog
-          open
-          onOpenChange={() => undefined}
-          intent={{
-            title: "Merge stages",
-            description: "Group stages are merged into one.",
-            confirmLabel: "Merge stages",
-            tone: "warning"
-          }}
-          onConfirm={onConfirm}
-        />
+        <NextIntlClientProvider locale="en" messages={en}>
+          <ConfirmDialog
+            open
+            onOpenChange={() => undefined}
+            intent={{
+              title: "Merge stages",
+              description: "Group stages are merged into one.",
+              confirmLabel: "Merge stages",
+              tone: "warning"
+            }}
+            onConfirm={onConfirm}
+          />
+        </NextIntlClientProvider>
       );
     });
 

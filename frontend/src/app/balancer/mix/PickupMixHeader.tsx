@@ -1,21 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowLeft, Trash2, UserCog, UserPlus } from "lucide-react";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CustomGame } from "@/services/custom-game.service";
@@ -62,6 +53,8 @@ export function PickupMixHeader({
   deleting = false,
   onDeleteMix,
 }: Readonly<PickupMixHeaderProps>) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
   return (
     <div className={cn(PANEL_CLASS, "flex flex-wrap items-center gap-3 px-4 py-3")}>
       <Link
@@ -114,33 +107,34 @@ export function PickupMixHeader({
       ) : null}
 
       {canDelete && onDeleteMix ? (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 shrink-0 text-[color:var(--aqt-fg-muted)] hover:border-[color:color-mix(in_srgb,var(--aqt-rose)_40%,transparent)] hover:text-rose-200"
-              disabled={game == null || deleting}
-              aria-label="Delete mix"
-            >
-              <Trash2 className="size-3.5" aria-hidden="true" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete this mix?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Permanently removes {game?.name ?? "this mix"} and every match it recorded. This
-                cannot be undone -- unlike Close, there is no way back to it afterwards.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep it</AlertDialogCancel>
-              <AlertDialogAction onClick={onDeleteMix}>Delete permanently</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0 text-[color:var(--aqt-fg-muted)] hover:border-[color:color-mix(in_srgb,var(--aqt-rose)_40%,transparent)] hover:text-rose-200"
+            disabled={game == null || deleting}
+            aria-label="Delete mix"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+          </Button>
+          <ConfirmDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            intent={{
+              title: "Delete this mix?",
+              description: `Permanently removes ${game?.name ?? "this mix"} and every match it recorded. This cannot be undone -- unlike Close, there is no way back to it afterwards.`,
+              confirmLabel: "Delete permanently",
+              tone: "danger"
+            }}
+            pending={deleting}
+            onConfirm={() => {
+              setDeleteOpen(false);
+              onDeleteMix?.();
+            }}
+          />
+        </>
       ) : null}
     </div>
   );

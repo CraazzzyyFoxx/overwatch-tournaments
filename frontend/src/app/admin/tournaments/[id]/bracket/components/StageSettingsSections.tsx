@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import {
   type SeedRanking,
   type StageProjection
 } from "@/lib/bracket/projection";
+import { Spinner } from "@/components/ui/spinner";
 import type { StageForm } from "../stageForm";
 import { BracketPreview } from "./BracketPreview";
 
@@ -287,7 +288,7 @@ export function SeedingSection({
               onClick={() => wireMutation.mutate(Number(sourceId))}
             >
               {wireMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
+                <Spinner />
               ) : null}
               Wire
             </Button>
@@ -642,7 +643,7 @@ export function BestOfSection({
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Best-of per round</h3>
         <Button size="sm" variant="ghost" disabled={applying} onClick={onApplyToExisting}>
-          {applying ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          {applying ? <Spinner /> : null}
           Apply to existing matches
         </Button>
       </div>

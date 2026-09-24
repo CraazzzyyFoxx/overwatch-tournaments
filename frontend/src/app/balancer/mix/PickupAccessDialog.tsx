@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { UserCog, X } from "lucide-react";
 
-import { AdminCombobox } from "@/components/kit/AdminCombobox";
+import { Combobox } from "@/components/kit/Combobox";
 import { useSearchComboboxQuery } from "@/components/kit/useSearchComboboxQuery";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
@@ -34,7 +34,7 @@ interface PickupAccessDialogProps {
   onTransfer: (userId: number) => void;
 }
 
-/** One workspace-roster search box, built on the shared `AdminCombobox` shell every other picker in the app uses. */
+/** One workspace-roster search box, built on the shared `Combobox` shell every other picker in the app uses. */
 function MemberSearchCombobox({
   workspaceId,
   excludeIds,
@@ -78,7 +78,7 @@ function MemberSearchCombobox({
   });
 
   return (
-    <AdminCombobox
+    <Combobox
       open={open}
       onOpenChange={setOpen}
       label={placeholder}
@@ -110,7 +110,7 @@ function MemberSearchCombobox({
           );
         })}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }
 

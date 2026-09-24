@@ -2,9 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, HelpCircle } from "lucide-react";
+import { useFormatter } from "next-intl";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "@/components/kit/tone";
+import { formatDate } from "@/components/kit/format-time";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -35,7 +37,7 @@ function Field({ label, value }: Readonly<{ label: string; value: string | numbe
  * answer is either a specific record or an honest "unresolved" — this never
  * guesses.
  *
- * It renders the body only. The surrounding panel-or-sheet is `AdminInspector`,
+ * It renders the body only. The surrounding panel-or-sheet is `Inspector`,
  * which is where every T2 browser puts row detail; this used to own a `Sheet`
  * of its own, which meant the table was covered on a wide screen instead of
  * simply narrowing beside the detail.
@@ -50,6 +52,7 @@ export function ParsedMatchDetail({
   row: AdminMatchRow;
   workspaceId: number | null;
 }>) {
+  const format = useFormatter();
   const detailQuery = useQuery({
     queryKey: ["admin-matches", "detail", row.id, workspaceId],
     queryFn: () => adminService.getAdminMatch(row.id, workspaceId!),
@@ -86,14 +89,8 @@ export function ParsedMatchDetail({
               <Field label="Source" value={record.source ?? "—"} />
               <Field label="Uploader" value={record.uploader_id ?? "—"} />
               <Field label="Attempts" value={record.attempts} />
-              <Field
-                label="Started"
-                value={record.started_at ? new Date(record.started_at).toLocaleString() : "—"}
-              />
-              <Field
-                label="Finished"
-                value={record.finished_at ? new Date(record.finished_at).toLocaleString() : "—"}
-              />
+              <Field label="Started" value={formatDate(format, record.started_at)} />
+              <Field label="Finished" value={formatDate(format, record.finished_at)} />
             </div>
             {record.error_message ? (
               <p

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Link2, Loader2 } from "lucide-react";
+import { ArrowRight, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SubscriptionProviderBadge } from "@/components/status/RegistrationBadges";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { fieldControlClass, fieldInvalidClass } from "./FormField";
 import type { SubscriptionStatus } from "@/types/registration.types";
+import { Spinner } from "@/components/ui/spinner";
 
 interface SubscriptionRowProps {
   provider: string;
@@ -137,7 +138,7 @@ export default function SubscriptionRow({
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] px-3 text-sm font-medium text-[color:var(--aqt-teal)] transition-colors hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-40"
             >
               {pending && (
-                <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                <Spinner className="size-3.5" />
               )}
               {t("common.subscription.codeSubmit")}
             </button>

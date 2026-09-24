@@ -4,17 +4,8 @@ import { useState } from "react";
 import { Ban, Download, RotateCcw, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
 import type { DraftBoard } from "@/types/draft.types";
 import type { DraftLifecycleAction } from "@/hooks/useDraftData";
@@ -102,36 +93,18 @@ export function LifecycleControls({ tournamentId, board }: Readonly<LifecycleCon
         )}
       </div>
 
-      <AlertDialog
+      <ConfirmDialog
         open={confirmedAction != null}
         onOpenChange={(open) => !open && setConfirmedAction(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmedAction ? t(`confirm.${confirmedAction}.title`) : ""}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmedAction ? t(`confirm.${confirmedAction}.description`) : ""}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("dismiss")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={mutations.lifecycle.isPending || mutations.autopick.isPending}
-              className={
-                confirmedAction === "cancel" ? buttonVariants({ variant: "destructive" }) : undefined
-              }
-              onClick={(event) => {
-                event.preventDefault();
-                runConfirmed();
-              }}
-            >
-              {confirmedAction ? t(`actions.${confirmedAction}`) : ""}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        intent={{
+          title: confirmedAction ? t(`confirm.${confirmedAction}.title`) : "",
+          description: confirmedAction ? t(`confirm.${confirmedAction}.description`) : "",
+          confirmLabel: confirmedAction ? t(`actions.${confirmedAction}`) : "",
+          tone: confirmedAction === "cancel" ? "danger" : "warning"
+        }}
+        pending={mutations.lifecycle.isPending || mutations.autopick.isPending}
+        onConfirm={runConfirmed}
+      />
     </>
   );
 }

@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 
 /** Trailing row that resets the selection. Wording differs per domain. */
-interface AdminComboboxClearAction {
+interface ComboboxClearAction {
   /** Row label, e.g. "Clear selection" or "Set as TBD". */
   label: string;
   /** cmdk search value for the row; keep it unique inside the list. */
@@ -25,7 +25,7 @@ interface AdminComboboxClearAction {
   onSelect: () => void;
 }
 
-export interface AdminComboboxProps {
+export interface ComboboxProps {
   /** Forwarded to the trigger so a `<Label htmlFor>` can point at it. */
   id?: string;
   open: boolean;
@@ -59,7 +59,7 @@ export interface AdminComboboxProps {
   emptyMessage: ReactNode;
   /** Pass `false` for server-filtered results so cmdk does not filter them again. */
   shouldFilter?: boolean;
-  clear?: AdminComboboxClearAction;
+  clear?: ComboboxClearAction;
   /** `CommandGroup`s holding the options. */
   children: ReactNode;
 }
@@ -70,7 +70,7 @@ export interface AdminComboboxProps {
  * accessible name on the search field — so the domain comboboxes only have to
  * describe their own options.
  */
-export function AdminCombobox({
+export function Combobox({
   id,
   open,
   onOpenChange,
@@ -87,7 +87,7 @@ export function AdminCombobox({
   shouldFilter,
   clear,
   children
-}: Readonly<AdminComboboxProps>) {
+}: Readonly<ComboboxProps>) {
   // `aria-controls` is supplied by Radix's PopoverTrigger (it points at the
   // content id it also stamps on PopoverContent). Overriding it here would
   // break that link, and cmdk ignores an `id` passed to CommandList.
@@ -151,7 +151,7 @@ export function AdminCombobox({
 }
 
 /** Selection tick for a `CommandItem`; keeps the row height stable when unselected. */
-export function AdminComboboxCheck({ selected }: Readonly<{ selected: boolean }>) {
+export function ComboboxCheck({ selected }: Readonly<{ selected: boolean }>) {
   return (
     <Check
       aria-hidden

@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CheckCircle2,
   History,
-  Loader2,
   Plus,
   Save,
   Sparkles,
@@ -65,6 +64,7 @@ import {
 import { getRegistrationBattleTags } from "@/components/balancer/balancer-page-helpers";
 import { BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import RankHistory from "@/components/RankHistory";
+import { Spinner } from "@/components/ui/spinner";
 import { ROLE_RANK_ACCENTS, RoleRankControls } from "./RoleRankControls";
 
 const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
@@ -80,7 +80,6 @@ const ROLE_DISPLAY: Record<BalancerRoleCode, string> = {
   damage: "Damage",
   support: "Support"
 };
-
 
 function normalizeRoleEntries(entries: BalancerPlayerRoleEntry[]): BalancerPlayerRoleEntry[] {
   const seen = new Set<BalancerRoleCode>();
@@ -169,14 +168,12 @@ function applyHistoryPreviewToRoleEntries(
 
 // getSubtypeLabel has been inline-replaced using dynamic subtypeOptions
 
-
 function resolveRankFromDivisionHelper(
   divisionNumber: number | null,
   grid: DivisionGrid
 ): number | null {
   return resolveRankFromDivisionInGrid(grid, divisionNumber);
 }
-
 
 function buildHistoryChangeText(
   currentEntry: BalancerPlayerRoleEntry | undefined,
@@ -903,7 +900,7 @@ export function PlayerEditModal({
                   disabled={loadingHistory}
                 >
                   {loadingHistory ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    <Spinner className="mr-1 size-3" />
                   ) : (
                     <History className="mr-1 h-3 w-3" />
                   )}

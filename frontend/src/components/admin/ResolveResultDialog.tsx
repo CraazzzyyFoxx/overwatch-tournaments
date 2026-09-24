@@ -2,19 +2,11 @@
 
 import { useId, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronDown, History, Loader2 } from "lucide-react";
+import { ChevronDown, History } from "lucide-react";
+import { useFormatter } from "next-intl";
 
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,6 +24,7 @@ import adminService from "@/services/admin.service";
 import type { EncounterReportsRow, EncounterSetResultInput } from "@/types/admin.types";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * How the score is decided. Mirrors the server's resolution order so what the
@@ -68,6 +61,7 @@ export function ResolveResultDialog({
   onOpenChange,
   onResolved
 }: Readonly<ResolveResultDialogProps>) {
+  const format = useFormatter();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
 
@@ -195,7 +189,11 @@ export function ResolveResultDialog({
                         <span className="font-mono tabular-nums">
                           {entry.home_score_after} &ndash; {entry.away_score_after}
                         </span>{" "}
-                        &middot; {new Date(entry.created_at).toLocaleString()}
+                        &middot;{" "}
+                        {format.dateTime(new Date(entry.created_at), {
+                          dateStyle: "medium",
+                          timeStyle: "short"
+                        })}
                       </li>
                     ))}
                   </ul>
@@ -217,29 +215,19 @@ export function ResolveResultDialog({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={reopenOpen} onOpenChange={setReopenOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reopen this result?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The encounter leaves the confirmed state and stops counting toward standings until it
-              is confirmed again. Any bracket progression it drove is reset.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={reopenMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                reopenMutation.mutate();
-              }}
-            >
-              Reopen
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={reopenOpen}
+        onOpenChange={setReopenOpen}
+        intent={{
+          title: "Reopen this result?",
+          description:
+            "The encounter leaves the confirmed state and stops counting toward standings until it is confirmed again. Any bracket progression it drove is reset.",
+          confirmLabel: "Reopen",
+          tone: "warning"
+        }}
+        pending={reopenMutation.isPending}
+        onConfirm={() => reopenMutation.mutate()}
+      />
     </>
   );
 }
@@ -445,7 +433,7 @@ function ResolveForm({
           disabled={preview == null || drawBlocked || closenessInvalid || pending}
           onClick={submit}
         >
-          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          {pending ? <Spinner /> : null}
           Confirm result
         </Button>
       </DialogFooter>

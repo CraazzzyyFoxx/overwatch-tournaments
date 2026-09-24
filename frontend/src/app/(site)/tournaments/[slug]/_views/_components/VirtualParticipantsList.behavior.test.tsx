@@ -80,6 +80,7 @@ const originalWindowResizeObserver = Object.getOwnPropertyDescriptor(
 
 mock.module("next-intl", () => ({
   useLocale: () => "en",
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
   useTranslations: () => (key: string) => key
 }));
 mock.module("@/components/RankHistory", () => ({

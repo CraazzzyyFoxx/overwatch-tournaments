@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Crown, Heart, Loader2, WifiOff, X } from "lucide-react";
+import { Crown, Heart, WifiOff, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
@@ -31,6 +31,7 @@ import type { DraftAutopickPreview, DraftBoard, DraftPlayer, DraftRole } from "@
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 import { formatSubRoleLabel, getPlayerSlug } from "@/utils/player";
+import { Spinner } from "@/components/ui/spinner";
 
 import { CareerStats, CareerTables } from "./island/PlayerCareer";
 import { RegistrationSection } from "./island/RegistrationSection";
@@ -63,8 +64,6 @@ interface PickIslandProps {
 
 const ICON_BUTTON =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] outline-none hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
-const VIEW_TAB =
-  "min-h-11 gap-1.5 rounded-lg px-[11px] py-0 text-caption font-medium text-[color:var(--aqt-fg-muted)] ring-offset-0 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 data-[state=active]:bg-[color:var(--aqt-card-2)] data-[state=active]:text-[color:var(--aqt-fg)] data-[state=active]:shadow-none sm:min-h-[30px]";
 const VIEW_PANEL =
   "mt-0 ring-offset-0 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0";
 
@@ -267,25 +266,23 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
           onValueChange={(value) => setView(value as CardView)}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="px-3.5 pb-2.5">
-            <TabsList
-              aria-label={t("island.view.label")}
-              className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-overlay-3)] p-[3px]"
-            >
-              <TabsTrigger value="info" className={VIEW_TAB}>
+          <div className="px-3.5">
+            <TabsList aria-label={t("island.view.label")}>
+              <TabsTrigger
+                value="info"
+                badge={(player.custom_fields?.length ?? 0) + (player.notes?.trim() ? 1 : 0)}
+                className="max-sm:h-11"
+              >
                 {t("island.view.info")}
-                <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">
-                  {(player.custom_fields?.length ?? 0) + (player.notes?.trim() ? 1 : 0)}
-                </span>
               </TabsTrigger>
-              <TabsTrigger value="stats" className={VIEW_TAB}>
+              <TabsTrigger value="stats" className="max-sm:h-11">
                 {t("island.view.stats")}
               </TabsTrigger>
             </TabsList>
           </div>
           {/* Pinned above the scroll: the switch never scrolls away. Both views
               open on the role tiles, the pick surface. */}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[color:var(--aqt-border)]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <TabsContent value="info" className={VIEW_PANEL}>
               {tiles}
               <div className="border-t border-[color:var(--aqt-border)]">
@@ -471,7 +468,7 @@ function IslandFooter({
               onClick={applyOverride}
             >
               {overridePending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                <Spinner className="mr-2" />
               )}
               {actionLabel("override")}
             </Button>
@@ -487,7 +484,7 @@ function IslandFooter({
             disabled={!canConfirm || pickPending || !chosen}
             onClick={confirm}
           >
-            {pickPending && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />}
+            {pickPending && <Spinner className="mr-2" />}
             {actionLabel("pick")}
           </Button>
         ) : (

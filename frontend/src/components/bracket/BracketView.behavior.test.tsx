@@ -193,10 +193,11 @@ describe("BracketView live-stream indicator", () => {
     expect(indicator.hasAttribute("href")).toBe(false);
     expect(indicator.hasAttribute("tabindex")).toBe(false);
     expect(indicator.querySelector("a")).toBeNull();
-    // The site's single liveness language, reused rather than re-styled.
-    expect(indicator.className).toContain("status-pill");
-    expect(indicator.className).toContain("live");
-    expect(indicator.querySelector(".dot")?.getAttribute("aria-hidden")).toBe("true");
+    // The site's single liveness language: the shared pulsing dot, decorative
+    // because the indicator's own `aria-label` carries the fact.
+    const dot = indicator.firstElementChild as HTMLElement;
+    expect(dot.getAttribute("aria-hidden")).toBe("true");
+    expect(dot.className).toContain("animate-pulse");
   });
 
   // An unfilled slot has no team, so there is nothing for a stream to belong to

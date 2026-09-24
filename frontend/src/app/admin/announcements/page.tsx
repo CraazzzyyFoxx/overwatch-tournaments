@@ -9,7 +9,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AnnouncementForm } from "@/components/admin/announcements/AnnouncementForm";
 import { AnnouncementsTable } from "@/components/admin/announcements/AnnouncementsTable";
 import type { AnnouncementAudience } from "@/components/admin/announcements/announcement-draft";
-import { AdminTabs } from "@/components/kit/AdminTabs";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,7 +58,7 @@ export default function AdminAnnouncementsPage() {
     ...(isSuperuser ? (["global"] as const) : []),
   ];
   // The scope lives in the URL, not in component state: these are the screen's
-  // own tabs, and `AdminTabs` renders real links — which is also what makes a
+  // own tabs, and `LinkTabs` renders real links — which is also what makes a
   // platform-wide feed linkable and survive a reload.
   const requested = searchParams?.get(SCOPE_PARAM);
   const audience =
@@ -170,7 +170,7 @@ export default function AdminAnnouncementsPage() {
           a filter over one. Rendered even at a single tab so the platform
           admin's row does not appear only after they gain the second scope. */}
       <div data-field="audience">
-        <AdminTabs
+        <LinkTabs
           ariaLabel={t("notifications.admin.audienceLabel")}
           activeKey={audience}
           items={audiences.map((option) => ({

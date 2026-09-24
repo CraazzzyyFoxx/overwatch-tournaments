@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -24,6 +24,7 @@ import type {
   RegistrationRankAutofillRequest,
   RegistrationRankAutofillResponse
 } from "@/types/balancer-admin.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { RankAutofillPreviewTables } from "./_components/RankAutofillPreviewTables";
 import { RankAutofillStageList } from "./_components/RankAutofillStageList";
@@ -269,7 +270,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
               </label>
               {previewQuery.isFetching && (
                 <div className="ml-auto flex items-center gap-1.5 text-xs text-[color:var(--aqt-fg-dim)]">
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Spinner className="size-3" />
                   {t("rankAutofill.previewUpdating")}
                 </div>
               )}
@@ -357,7 +358,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
             disabled={applyDisabled}
           >
             {applyMutation.isPending ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              <Spinner className="mr-1.5" />
             ) : (
               <Check className="mr-1.5 h-4 w-4" />
             )}

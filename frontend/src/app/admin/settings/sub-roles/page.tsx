@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { ROLES, ROLE_LABELS, canonicalToRegistrationRole } from "@/lib/roster/ro
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { PlayerSubRole } from "@/types/admin.types";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * Workspace sub-role catalog (`PlayerSubRole`). This used to live inside a
@@ -208,7 +209,7 @@ export default function WorkspaceSubRolesSettingsPage() {
                       onClick={submitCreate}
                     >
                       {createMutation.isPending ? (
-                        <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden />
+                        <Spinner className="mr-1 size-3.5" />
                       ) : (
                         <Plus className="mr-1 size-3.5" aria-hidden />
                       )}

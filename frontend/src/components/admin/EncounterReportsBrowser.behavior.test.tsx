@@ -2,8 +2,10 @@
 import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import en from "@/i18n/messages/en.json";
 import { EncounterReportsBrowser } from "@/components/admin/EncounterReportsBrowser";
 import type {
   AdminCaptainReport,
@@ -106,9 +108,11 @@ async function mount(render: () => ReactNode) {
   const root = createRoot(container);
   await act(async () => {
     root.render(
-      <QueryClientProvider client={client}>
-        <Harness render={render} />
-      </QueryClientProvider>
+      <NextIntlClientProvider locale="en" messages={en}>
+        <QueryClientProvider client={client}>
+          <Harness render={render} />
+        </QueryClientProvider>
+      </NextIntlClientProvider>
     );
   });
   await tick();

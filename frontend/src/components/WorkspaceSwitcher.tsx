@@ -6,10 +6,9 @@ import { ArrowUpRight, Check, ChevronsUpDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Workspace } from "@/types/workspace.types";
-import { workspaceInitials } from "@/components/WorkspaceBrandIcon";
 
 /**
  * Deterministic initials-tile accent. These were raw Tailwind palette classes
@@ -43,7 +42,7 @@ function WorkspaceAvatar({ workspace, size = "sm" }: Readonly<{ workspace: Works
           color: "var(--aqt-bg)",
         }}
       >
-        {workspaceInitials(workspace.name)}
+        {initials(workspace.name)}
       </AvatarFallback>
     </Avatar>
   );

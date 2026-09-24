@@ -12,6 +12,7 @@ import {
   standingsRank,
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import DeltaPill from "@/app/(site)/tournaments/analytics/components/DeltaPill";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 export type StandingsMode = "standings" | "movers" | "watch";
@@ -128,21 +129,20 @@ export default function StandingsList({
   return (
     <div className={styles.cStandings}>
       <div className={styles.cStandingsHead}>
-        <div className={styles.cSeg} role="tablist">
+        <ToggleGroup
+          type="single"
+          variant="pill"
+          size="sm"
+          value={mode}
+          onValueChange={(next) => next && onModeChange(next as StandingsMode)}
+          aria-label={t("analytics.community.standings.sortLabel")}
+        >
           {MODES.map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={mode === value}
-              data-on={mode === value}
-              className={styles.cSegBtn}
-              onClick={() => onModeChange(value)}
-            >
+            <ToggleGroupItem key={value} value={value}>
               {modeLabel[value]}
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
         {headerEnd}
       </div>
 

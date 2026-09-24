@@ -24,7 +24,7 @@ import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Copy, Download, LoaderCircle, Rows3, Rows4, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Copy, Download, Rows3, Rows4, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import {
   Table,
@@ -65,6 +65,7 @@ import { isInteractiveRowTarget, useRowSelectionGestures } from "@/components/da
 import { AdminSavedViews } from "@/components/data-table/SavedViews";
 import { AdminTableSearchContext, HighlightMatch } from "@/components/data-table/HighlightMatch";
 import { downloadCsv } from "@/components/data-table/csv";
+import { Spinner } from "@/components/ui/spinner";
 
 const ADMIN_ACTION_COLUMN_ID = "actions";
 const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
@@ -192,7 +193,7 @@ export interface AdminDataTableProps<TData> {
    * the query in server mode and to the rows in client mode, and mirrors into
    * the URL under each spec's own param name.
    *
-   * Pass both to let `kit/AdminFilterBar` own the state: the chips write the
+   * Pass both to let `kit/FilterBar` own the state: the chips write the
    * URL, this reads it. Uncontrolled otherwise — there is no filter control
    * in the header any more, so the only writers left are a deep link, a
    * back/forward, and the empty state's "Clear filters".
@@ -231,7 +232,7 @@ export interface AdminDataTableProps<TData> {
   actions?: React.ReactNode;
 
   /**
-   * Rendered in its own row above the table: this is where `AdminFilterBar`
+   * Rendered in its own row above the table: this is where `FilterBar`
    * goes. Unlike `actions` (a cluster to the right of the search box) it owns
    * the full width, because a chip row wraps.
    */
@@ -1267,7 +1268,7 @@ export function AdminDataTable<TData>({
 
         {isRefreshing ? (
           <output className="flex shrink-0 items-center text-muted-foreground">
-            <LoaderCircle aria-hidden className="size-3 animate-spin" />
+            <Spinner className="size-3" />
             <span className="sr-only">Refreshing results…</span>
           </output>
         ) : null}

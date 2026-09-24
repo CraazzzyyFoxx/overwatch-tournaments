@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, type DragEvent } from "react";
-import { Camera, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Camera, Pencil, Trash2 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 const DEFAULT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 
@@ -61,18 +62,6 @@ export interface EditableAvatarProps {
     tooLarge?: string;
   };
   className?: string;
-}
-
-function initialsOf(name?: string | null): string {
-  if (!name) return "?";
-  return (
-    name
-      .split(/[#\s]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0]?.toUpperCase() ?? "")
-      .join("") || "?"
-  );
 }
 
 /**
@@ -172,7 +161,7 @@ export function EditableAvatar({
             className="flex h-full w-full items-center justify-center font-medium text-muted-foreground"
             style={{ fontSize: Math.max(12, Math.round(size * 0.3)) }}
           >
-            {initialsOf(name)}
+            {initials(name)}
           </div>
         )}
 
@@ -198,7 +187,7 @@ export function EditableAvatar({
         {/* Busy overlay */}
         {busy && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Spinner className="size-5" />
           </div>
         )}
       </div>

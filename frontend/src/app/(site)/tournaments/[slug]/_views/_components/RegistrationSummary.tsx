@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
+import { StatusDot } from "@/components/ui/status-dot";
 import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/roster/player-role";
 import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster/shape";
 import { cn } from "@/lib/utils";
@@ -25,9 +26,7 @@ export function StatTile({
   return (
     <div className={styles.figure}>
       <div className={cn(styles.figureLabel, "flex items-center gap-1.5")}>
-        {accent ? (
-          <span aria-hidden className="size-1.5 rounded-full" style={{ background: accent }} />
-        ) : null}
+        {accent ? <StatusDot style={{ color: accent }} /> : null}
         {label}
       </div>
       <div className={styles.figureValue}>

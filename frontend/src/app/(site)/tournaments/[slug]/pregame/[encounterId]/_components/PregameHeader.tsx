@@ -16,6 +16,7 @@ import { useTranslations } from "next-intl";
 import { TeamLogo, type TeamNameInput } from "@/components/TeamName";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
+import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
 import type { PickBanSession } from "@/types/tournament.types";
@@ -188,11 +189,7 @@ function StatusMark({ status }: Readonly<{ status: PickBanSession["status"] }>) 
     <span className="inline-flex shrink-0 items-center" title={label}>
       <span className="sr-only">{label}</span>
       {status === "active" ? (
-        <span
-          aria-hidden
-          className="h-2 w-2 animate-pulse rounded-full motion-reduce:animate-none"
-          style={{ background: color, boxShadow: `0 0 8px ${color}` }}
-        />
+        <StatusDot pulse className="size-2 shadow-[0_0_8px_currentColor]" style={{ color }} />
       ) : (
         <Icon aria-hidden className="h-4 w-4" style={{ color }} />
       )}

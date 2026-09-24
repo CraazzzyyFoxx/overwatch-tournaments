@@ -7,6 +7,7 @@ import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 export function DiscordServerStatus({
@@ -24,7 +25,7 @@ export function DiscordServerStatus({
   if (isLoading) {
     return (
       <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", className)}>
-        <RefreshCw aria-hidden className="size-3.5 animate-spin motion-reduce:animate-none" />
+        <Spinner className="size-3.5" />
         <span>{t("checking")}</span>
       </div>
     );

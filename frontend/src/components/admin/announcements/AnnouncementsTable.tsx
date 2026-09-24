@@ -7,16 +7,7 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { announcementText } from "@/lib/notifications/announcement-text";
@@ -158,29 +149,23 @@ export function AnnouncementsTable({
         emptyMessage={t("notifications.admin.empty")}
         initialPageSize={25}
       />
-      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("notifications.admin.retire.title")}</AlertDialogTitle>
-            {/* Says what actually happens: the row and its read marks stay, the
-                announcement simply stops being shown from now on. */}
-            <AlertDialogDescription>
-              {t("notifications.admin.retire.description")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("notifications.admin.retire.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (confirming) onRetire?.(confirming);
-                setConfirming(null);
-              }}
-            >
-              {t("notifications.admin.retire.action")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Says what actually happens: the row and its read marks stay, the
+          announcement simply stops being shown from now on. */}
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        intent={{
+          title: t("notifications.admin.retire.title"),
+          description: t("notifications.admin.retire.description"),
+          confirmLabel: t("notifications.admin.retire.action"),
+          tone: "warning"
+        }}
+        pending={isRetiring}
+        onConfirm={() => {
+          if (confirming) onRetire?.(confirming);
+          setConfirming(null);
+        }}
+      />
     </>
   );
 }

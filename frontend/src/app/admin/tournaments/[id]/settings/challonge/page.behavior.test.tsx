@@ -66,7 +66,8 @@ vi.mock("@/stores/workspace.store", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key
+  useTranslations: () => (key: string) => key,
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 const TOURNAMENT = {

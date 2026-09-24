@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // Column-declared filters on the admin table. The header no longer has a
-// filter control of its own — `kit/AdminFilterBar` owns that surface — so what
+// filter control of its own — `kit/FilterBar` owns that surface — so what
 // is pinned here is the engine underneath it:
 //  1. the header holds sorting only, and no filter popover;
 //  2. a filter handed in refetches with that value and writes it to the URL
@@ -104,7 +104,7 @@ async function render(search = "") {
 
 /**
  * The table with its filters owned from outside, which is how a screen wires
- * `kit/AdminFilterBar` to it: the chips write the URL, this reads it back.
+ * `kit/FilterBar` to it: the chips write the URL, this reads it back.
  * `applyFilters` stands in for a chip being picked.
  */
 async function renderControlled(search = "") {

@@ -3,13 +3,15 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
-import { Check, CheckCircle, EyeOff, LoaderCircle } from "lucide-react";
+import { Check, CheckCircle, EyeOff } from "lucide-react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useFormatter } from "next-intl";
 
 import { AdminDataTable } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import type { DateFormatter } from "@/components/kit/format-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import SearchableImageSelect, {
@@ -19,6 +21,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { CatalogAliasMissRead, CatalogEntityType } from "@/types/admin.types";
+import { Spinner } from "@/components/ui/spinner";
 
 import { MISS_QUEUE_KEY } from "../miss-queue";
 
@@ -43,8 +46,8 @@ const ENTITY_LIST_KEYS: Record<CatalogEntityType, string> = {
 /** One page holds every catalog entity we have — ~45 maps, ~50 heroes, 7 modes. */
 const ENTITY_PAGE_SIZE = 200;
 
-function formatSeenAt(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
+function formatSeenAt(format: DateFormatter, value: string): string {
+  return format.dateTime(new Date(value), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -61,6 +64,7 @@ function formatSeenAt(value: string): string {
  * into a dialog the way an entity edit would.
  */
 export default function UnresolvedNamesAdminPage() {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const { isSuperuser } = usePermissions();
   // Target entity per miss row. Dynamic, per-row keys that come and go with the
@@ -82,7 +86,7 @@ export default function UnresolvedNamesAdminPage() {
     ],
     []
   );
-  const filters = useAdminFilters(filterDefs);
+  const filters = useFilters(filterDefs);
   const entityTypeFilter = String(filters.values.type ?? "") as CatalogEntityType | "";
   const includeResolved = filters.values.resolved === true;
 
@@ -240,9 +244,9 @@ export default function UnresolvedNamesAdminPage() {
       cell: ({ row }) => (
         <span
           className="text-xs tabular-nums text-muted-foreground"
-          title={`First seen ${formatSeenAt(row.original.first_seen_at)}`}
+          title={`First seen ${formatSeenAt(format, row.original.first_seen_at)}`}
         >
-          {formatSeenAt(row.original.last_seen_at)}
+          {formatSeenAt(format, row.original.last_seen_at)}
         </span>
       ),
     },
@@ -305,7 +309,7 @@ export default function UnresolvedNamesAdminPage() {
               onClick={() => attachMutation.mutate({ miss, entityId: entityId! })}
             >
               {busy && attachMutation.isPending ? (
-                <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" />
+                <Spinner />
               ) : (
                 <Check aria-hidden className="h-4 w-4" />
               )}
@@ -359,7 +363,7 @@ export default function UnresolvedNamesAdminPage() {
       }}
       columns={columns}
       searchPlaceholder="Search raw names…"
-      toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
+      toolbar={<FilterBar defs={filterDefs} filters={filters} />}
       emptyMessage={
         includeResolved
           ? "No unresolved names recorded. Every log name so far resolved to a catalog entity."
@@ -372,7 +376,7 @@ export default function UnresolvedNamesAdminPage() {
           </code>
           <p className="truncate text-xs text-muted-foreground">
             {ENTITY_LABELS[row.original.entity_type]} · seen {row.original.occurrences}× · last{" "}
-            {formatSeenAt(row.original.last_seen_at)}
+            {formatSeenAt(format, row.original.last_seen_at)}
           </p>
           {targetPicker(row.original)}
         </div>

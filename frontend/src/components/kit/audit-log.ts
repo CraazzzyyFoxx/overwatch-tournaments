@@ -1,4 +1,4 @@
-import type { AdminDateFormatter } from "@/components/kit/format-time";
+import type { DateFormatter } from "@/components/kit/format-time";
 
 import adminService from "@/services/admin.service";
 import type { AuditLogRead, AuditSource } from "@/types/admin.types";
@@ -284,12 +284,12 @@ export function formatAuditTarget(
   return noun;
 }
 
-export function formatAuditTimestamp(format: AdminDateFormatter, value: string): string {
+export function formatAuditTimestamp(format: DateFormatter, value: string): string {
   return format.dateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** Day only — for "history starts on …", where the clock time says nothing. */
-export function formatAuditDate(format: AdminDateFormatter, value: string): string {
+export function formatAuditDate(format: DateFormatter, value: string): string {
   return format.dateTime(new Date(value), { dateStyle: "medium" });
 }
 

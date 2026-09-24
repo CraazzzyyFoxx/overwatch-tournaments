@@ -94,27 +94,6 @@
   line-height: 1.7;
 }
 
-.statusPill {
-  margin-top: 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--c-line);
-  border-radius: 999px;
-  background: hsl(var(--muted) / 0.36);
-  padding: 6px 10px;
-  color: var(--c-text);
-  font-size: var(--text-label);
-  font-weight: 600;
-}
-
-.statusDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: hsl(146 60% 52%);
-}
-
 .filters {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -906,16 +885,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-@keyframes cDotPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-
 /* ── Picker row (compact, label-less; sits under the KPI cards) ── */
 .cPickerRow {
   display: flex;
@@ -933,40 +902,10 @@
   flex: 0 1 220px;
 }
 
-/* ── Status pill ── */
-.cStatusPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--c-line-2);
-  border-radius: 999px;
-  background: var(--c-surface-2);
-  padding: 6px 11px;
-  font-family: var(--c-mono);
-  font-size: var(--text-label);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-.cStatusDot {
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: currentColor;
-}
-.cStatusDotLive {
-  animation: cDotPulse 2s infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cStatusDotLive {
-    animation: none;
-  }
-}
-
 /* ── Tournament hero ── */
 /* Hero shell, title, id-line and meta layout moved to the shared <PageHero>
-   (Editorial Tactical). Only the status/format pills below remain here. */
+   (Editorial Tactical); the status pill is the shared <TournamentStatusPill>.
+   Only the format pills below remain here. */
 .cMetaPill {
   display: inline-flex;
   align-items: center;
@@ -1214,20 +1153,6 @@
   color: var(--c-text);
 }
 
-/* ── List/table view toggle (rides the sort-tab row) ── */
-.cViewToggle {
-  display: inline-flex;
-  gap: 3px;
-  border: 1px solid var(--c-line);
-  border-radius: 12px;
-  background: var(--c-surface);
-  padding: 3px;
-}
-.cViewToggle .cSegBtn {
-  flex: 0 0 auto;
-  padding: 6px 14px;
-}
-
 /* ── Team detail: predicted→actual summary line + Monte-Carlo ── */
 .cPvaLine {
   display: flex;
@@ -1333,9 +1258,6 @@
     flex-direction: column;
     align-items: stretch;
   }
-  .cStandingsHead .cViewToggle {
-    align-self: flex-end;
-  }
 }
 .cStandingsTitle {
   color: var(--c-muted);
@@ -1349,34 +1271,6 @@
   color: var(--c-faint);
   font-family: var(--c-mono);
   font-size: var(--text-label);
-}
-.cSeg {
-  display: flex;
-  gap: 3px;
-  border: 1px solid var(--c-line);
-  border-radius: 12px;
-  background: var(--c-surface);
-  padding: 3px;
-}
-.cSegBtn {
-  flex: 1;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  padding: 8px 6px;
-  color: var(--c-muted);
-  font-family: inherit;
-  font-size: var(--text-caption);
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-}
-.cSegBtn[data-on="true"] {
-  background: var(--c-surface-3);
-  color: var(--c-text);
 }
 .cTeamRows {
   overflow: hidden;

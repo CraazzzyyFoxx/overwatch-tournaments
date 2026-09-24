@@ -5,18 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { notify } from "@/lib/notify";
@@ -117,8 +108,9 @@ export function DraftSetupWizard({
   const [committedFeasibility, setCommittedFeasibility] = useState<
     DraftSeedResponse["feasibility"] | null
   >(null);
-  const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  // One confirmation surface, two interruptions: re-seeding a board that already
+  // has picks, and throwing the setup away.
+  const [confirming, setConfirming] = useState<"reseed" | "cancel" | null>(null);
 
   // Tournament grid first, workspace default second — the captains list ranks
   // players on the same grid the draft is seeded and balanced on. The hub shell
@@ -137,8 +129,7 @@ export function DraftSetupWizard({
     setCaptains(createEmptyCaptainSetup());
     setPreview(null);
     setCommittedFeasibility(null);
-    setReseedDialogOpen(false);
-    setCancelDialogOpen(false);
+    setConfirming(null);
     setStep("config");
   };
 
@@ -268,7 +259,7 @@ export function DraftSetupWizard({
       setLocalSession(result.session);
       setCommittedFeasibility(result.feasibility);
       setPreview(null);
-      setReseedDialogOpen(false);
+      setConfirming(null);
       setStep("ready");
       notify.success(t("draftSeeded"));
       await invalidate();
@@ -323,6 +314,40 @@ export function DraftSetupWizard({
     cancelMutation.isPending;
   const canCancelSetup = canCancelDraftSetup(step, session?.status ?? null);
 
+  const confirmIntent: ConfirmIntent =
+    confirming === "reseed"
+      ? {
+          title: t("reseedConfirmTitle"),
+          description: (
+            <>
+              {t("reseedConfirmDescription")}
+              {preview && (
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center text-sm tabular-nums">
+                  <div>
+                    {t("teams")}: {preview.diff.teams_before} → {preview.diff.teams_after}
+                  </div>
+                  <div>
+                    {t("players")}: {preview.diff.players_before} → {preview.diff.players_after}
+                  </div>
+                  <div>
+                    {t("picks")}: {preview.diff.picks_before} → {preview.diff.picks_after}
+                  </div>
+                </div>
+              )}
+            </>
+          ),
+          confirmLabel: t("seedDraft"),
+          tone: "warning"
+        }
+      : {
+          title: session ? t("controlRoom.confirm.cancel.title") : t("cancelSetupTitle"),
+          description: session
+            ? t("controlRoom.confirm.cancel.description")
+            : t("cancelSetupDescription"),
+          confirmLabel: session ? t("actions.cancel") : t("discardSetup"),
+          tone: "danger"
+        };
+
   const validationState = {
     pickTimeSeconds: config.pickTimeSeconds,
     captainIds: captains.ids,
@@ -371,7 +396,7 @@ export function DraftSetupWizard({
         notify.warning(t("previewInfeasible"));
         return;
       }
-      if (isReseed) setReseedDialogOpen(true);
+      if (isReseed) setConfirming("reseed");
       else commitMutation.mutate();
     }
   };
@@ -402,7 +427,7 @@ export function DraftSetupWizard({
       variant="outline"
       disabled={pending}
       className="border-[color:var(--aqt-live)]/40 text-[color:var(--aqt-live)] hover:border-[color:var(--aqt-live)] hover:bg-[color:var(--aqt-live)]/10"
-      onClick={() => setCancelDialogOpen(true)}
+      onClick={() => setConfirming("cancel")}
     >
       <XCircle className="mr-2 h-4 w-4" aria-hidden />
       {session ? t("actions.cancel") : t("discardSetup")}
@@ -514,70 +539,19 @@ export function DraftSetupWizard({
         </div>
       </WizardShell>
 
-      <AlertDialog open={reseedDialogOpen} onOpenChange={setReseedDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("reseedConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("reseedConfirmDescription")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          {preview && (
-            <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center text-sm tabular-nums">
-              <div>
-                {t("teams")}: {preview.diff.teams_before} → {preview.diff.teams_after}
-              </div>
-              <div>
-                {t("players")}: {preview.diff.players_before} → {preview.diff.players_after}
-              </div>
-              <div>
-                {t("picks")}: {preview.diff.picks_before} → {preview.diff.picks_after}
-              </div>
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("keepEditing")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={commitMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                commitMutation.mutate();
-              }}
-            >
-              {t("seedDraft")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {session ? t("controlRoom.confirm.cancel.title") : t("cancelSetupTitle")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {session
-                ? t("controlRoom.confirm.cancel.description")
-                : t("cancelSetupDescription")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={cancelMutation.isPending}>
-              {t("keepEditing")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={cancelMutation.isPending}
-              className={buttonVariants({ variant: "destructive" })}
-              onClick={(event) => {
-                event.preventDefault();
-                if (session) cancelMutation.mutate();
-                else resetSetupState();
-              }}
-            >
-              {session ? t("actions.cancel") : t("discardSetup")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={confirming != null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+        intent={confirmIntent}
+        pending={confirming === "reseed" ? commitMutation.isPending : cancelMutation.isPending}
+        onConfirm={() => {
+          if (confirming === "reseed") commitMutation.mutate();
+          else if (session) cancelMutation.mutate();
+          else resetSetupState();
+        }}
+      />
     </div>
   );
 }

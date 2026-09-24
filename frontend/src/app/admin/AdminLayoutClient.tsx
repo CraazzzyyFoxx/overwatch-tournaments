@@ -24,6 +24,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Spinner } from "@/components/ui/spinner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -33,7 +34,7 @@ function LoadingState() {
   return (
     <div className="flex h-screen w-full items-center justify-center">
       <div className="text-center">
-        <div className="inline-block size-8 animate-spin rounded-full border-4 border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+        <Spinner className="size-8" />
         <p className="mt-4 text-muted-foreground">Loading…</p>
       </div>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Pencil, Check, X, Loader2, ArrowRightLeft } from "lucide-react";
+import { Pencil, Check, X, ArrowRightLeft } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { revalidateUser } from "@/app/actions/users";
 import { notify } from "@/lib/notify";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
+import { Spinner } from "@/components/ui/spinner";
 
 // ─── Avatar section ─────────────────────────────────────────────────────────
 
@@ -172,7 +173,7 @@ function NameSection({ user, canEdit, onUserUpdated }: Readonly<NameSectionProps
             aria-label="Save player name"
           >
             {updateMutation.isPending ? (
-              <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+              <Spinner />
             ) : (
               <Check aria-hidden className="h-4 w-4" />
             )}

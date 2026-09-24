@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { Tournament } from "@/types/tournament.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 
 interface TournamentComboboxProps {
@@ -47,7 +47,7 @@ export function TournamentCombobox({
   );
 
   return (
-    <AdminCombobox
+    <Combobox
       id={id}
       open={open}
       onOpenChange={setOpen}
@@ -80,10 +80,10 @@ export function TournamentCombobox({
                 #{tournament.id}
               </span>
             </div>
-            <AdminComboboxCheck selected={value === tournament.id} />
+            <ComboboxCheck selected={value === tournament.id} />
           </CommandItem>
         ))}
       </CommandGroup>
-    </AdminCombobox>
+    </Combobox>
   );
 }

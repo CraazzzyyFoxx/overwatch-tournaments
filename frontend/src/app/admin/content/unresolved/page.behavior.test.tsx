@@ -32,7 +32,10 @@ const getGamemodes = vi.fn();
 
 let superuser = true;
 
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
+}));
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: () => ({ isSuperuser: superuser, isLoaded: true })
 }));

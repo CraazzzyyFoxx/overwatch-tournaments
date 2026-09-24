@@ -3,10 +3,9 @@
 import { useId } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +21,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import type { QuotaScope, QuotaScopePolicy } from "@/types/auth.types";
+import { Spinner } from "@/components/ui/spinner";
 import { hasQuotaOverride } from "./dimensions";
 import { QuotaLimitFields } from "./QuotaLimitFields";
 import { QuotaUsagePanel } from "./QuotaUsagePanel";
@@ -132,7 +132,7 @@ function WorkspaceQuotaScopeCard({
           >
             {save.isPending ? (
               <>
-                <LoaderCircle aria-hidden className="size-4 animate-spin" />
+                <Spinner />
                 {t("saving")}
               </>
             ) : removing ? (
@@ -170,7 +170,7 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
   const policyOf = (scope: QuotaScope) =>
     usageQuery.data?.policy?.find((row) => row.scope === scope) ?? null;
 
-  const tabs: AdminTabItem[] = SCOPES.map((scope) => ({
+  const tabs: LinkTabItem[] = SCOPES.map((scope) => ({
     key: scope,
     label: t(`scopes.${scope}.tab`),
     href: `${pathname}?${SCOPE_PARAM}=${scope}`,
@@ -222,7 +222,7 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
           <Skeleton className="h-72 w-full rounded-xl" />
         ) : usageQuery.data ? (
           <>
-            <AdminTabs items={tabs} activeKey={active} ariaLabel={t("overrideHeading")} />
+            <LinkTabs items={tabs} activeKey={active} ariaLabel={t("overrideHeading")} />
             {/* Every scope stays mounted and the inactive ones are hidden: a
                 half-typed override on another tab is unsaved work, and
                 unmounting it would drop it without a word. */}

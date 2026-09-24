@@ -15,7 +15,7 @@ import {
   isTournamentStatusEnded,
 } from "@/lib/tournament/status";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import { cn, formatDateRange } from "@/lib/utils";
+import { formatDateRange } from "@/lib/utils";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
@@ -30,6 +30,7 @@ import { collapsedRailTitle } from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
 import TournamentShellError from "../TournamentShellError";
 import { PageHero, HeroCoord, HeroStamp } from "@/components/site/PageHero";
+import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { PageStateCard } from "@/components/ui/page-state-card";
 
 type TournamentClientLayoutProps = {
@@ -159,7 +160,6 @@ export default function TournamentClientLayout({
 
   const isEnded = isTournamentStatusEnded(tournament.status);
   const statusVariant = getTournamentStatusMeta(tournament.status).variant;
-  const isLive = statusVariant === "live";
   const overviewHref = `/tournaments/${tournament.slug}`;
   // The draft room is an external route, so it cannot be a rail tab. It appears
   // once registration is over — before that there is no room to open, and
@@ -243,10 +243,9 @@ export default function TournamentClientLayout({
                 />
               ) : null}
               <span className="min-w-0">{tournament.name}</span>
-              <span className={cn("status-pill shrink-0", statusVariant)}>
-                {isLive && <span className="dot" />}
+              <TournamentStatusPill status={statusVariant} className="shrink-0">
                 {t(`common.statusBadge.${tournament.status}`)}
-              </span>
+              </TournamentStatusPill>
             </span>
           }
           stamp={

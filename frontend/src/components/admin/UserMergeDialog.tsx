@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRightLeft, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import adminService from "@/services/admin.service";
@@ -16,6 +16,7 @@ import type {
 } from "@/types/admin.types";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -318,7 +319,7 @@ export function UserMergeDialog({
             >
               {previewMutation.isPending ? (
                 <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  <Spinner className="mr-2" />
                   Loading preview…
                 </>
               ) : (

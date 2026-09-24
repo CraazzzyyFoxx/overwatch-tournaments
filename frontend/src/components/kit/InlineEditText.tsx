@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { Check, Loader2, Pencil, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 interface InlineEditTextProps {
   value: string;
@@ -113,7 +114,7 @@ export function InlineEditText({
         disabled={isSaving}
         onClick={() => void commit()}
       >
-        {isSaving ? <Loader2 aria-hidden className="animate-spin" /> : <Check aria-hidden />}
+        {isSaving ? <Spinner /> : <Check aria-hidden />}
       </Button>
       <Button
         size="icon"

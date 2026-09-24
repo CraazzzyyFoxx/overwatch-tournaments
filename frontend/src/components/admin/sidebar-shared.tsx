@@ -18,12 +18,12 @@ import {
   SidebarMenuItem
 } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { AccountMenuContent, getInitials } from "@/components/UserMenu";
+import { AccountMenuContent } from "@/components/UserMenu";
 import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 
 // Role names come from two RBAC scopes: global roles ("admin",
 // "tournament_organizer", "moderator" — see AppRole in usePermissions) and
@@ -156,7 +156,7 @@ export function SidebarUserDropdown() {
                     alt={user?.username ?? "User"}
                   />
                   <AvatarFallback className="rounded-lg bg-sidebar-accent text-xs font-medium text-sidebar-foreground/60">
-                    {getInitials(user?.username)}
+                    {initials(user?.username)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">

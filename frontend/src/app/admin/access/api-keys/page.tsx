@@ -13,17 +13,18 @@ import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { TONE_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
-import type { AdminDateFormatter } from "@/components/kit/format-time";
+import type { DateFormatter } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   fetchAccountApiKeys,
@@ -61,7 +62,7 @@ const STATUS_META: Record<ApiKeyStatus, { label: string; tone: Tone }> = {
   revoked: { label: "Revoked", tone: "warning" }
 };
 
-function formatTimestamp(format: AdminDateFormatter, value: string | null | undefined): string {
+function formatTimestamp(format: DateFormatter, value: string | null | undefined): string {
   if (!value) return "Never";
 
   return format.dateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" });
@@ -81,7 +82,7 @@ function StatusCell({ status }: Readonly<{ status: ApiKeyStatus }>) {
     <span
       className={cn("inline-flex items-center gap-1.5 text-xs font-medium", TONE_TEXT[meta.tone])}
     >
-      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      <StatusDot />
       {meta.label}
     </span>
   );
@@ -98,7 +99,7 @@ function ScopesCell({ scopes }: Readonly<{ scopes: readonly string[] }>) {
       <span
         className={cn("inline-flex items-center gap-1.5 text-xs font-medium", TONE_TEXT.danger)}
       >
-        <span aria-hidden className="size-1.5 rounded-full bg-current" />
+        <StatusDot />
         No scopes — inert
       </span>
     );
@@ -205,7 +206,7 @@ export default function AccessAdminApiKeysPage() {
     ],
     [manageableWorkspaces]
   );
-  const filters = useAdminFilters(defs);
+  const filters = useFilters(defs);
 
   // A key is always scoped to exactly one workspace, so there is no "all"
   // reading: an absent or unusable chip falls back to the workspace the shell
@@ -428,7 +429,7 @@ export default function AccessAdminApiKeysPage() {
         getRowId={(row) => String(row.id)}
         emptyMessage="No API keys in this workspace yet. Create one to call the balancer public API."
         toolbar={
-          <AdminFilterBar
+          <FilterBar
             defs={defs}
             filters={filters}
             trailing={
