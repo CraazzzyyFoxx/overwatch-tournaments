@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   ci-gateway:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -59,7 +59,7 @@ jobs:
       # -race matters here specifically: the gateway holds the WS hub, the
       # response cache with its singleflight, and the active-user sampler — all
       # shared state touched from many request goroutines at once. It needs cgo,
-      # which ubuntu-latest has by default; on a machine without a C compiler
+      # which the Ubuntu runner has by default; on a machine without a C compiler
       # (a plain Windows checkout) run `go test ./...` instead.
       - name: Test
         run: go test -race ./...
