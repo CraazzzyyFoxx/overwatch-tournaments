@@ -14,7 +14,7 @@ import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-gloss
 import DeltaPill from "@/app/(site)/tournaments/analytics/components/DeltaPill";
 import InfoDot from "@/app/(site)/tournaments/analytics/components/InfoDot";
 import RosterRow from "@/app/(site)/tournaments/analytics/components/community/RosterRow";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface TeamDetailProps {
   team: TeamVM;

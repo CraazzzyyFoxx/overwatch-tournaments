@@ -59,7 +59,7 @@ const MapsView = ({ userId }: Props) => {
   );
 
   const mapsQuery = useQuery({
-    queryKey: ["user-maps-redesign", userId, debouncedSearch, minCount, tournamentId],
+    queryKey: ["user-maps", userId, debouncedSearch, minCount, tournamentId],
     queryFn: () =>
       userService.getUserMaps(userId, {
         page: 1,
@@ -74,7 +74,7 @@ const MapsView = ({ userId }: Props) => {
   });
 
   const summaryQuery = useQuery({
-    queryKey: ["user-maps-summary-redesign", userId, debouncedSearch, minCount, tournamentId],
+    queryKey: ["user-maps-summary", userId, debouncedSearch, minCount, tournamentId],
     queryFn: () =>
       userService.getUserMapsSummary(userId, {
         query: debouncedSearch.trim(),

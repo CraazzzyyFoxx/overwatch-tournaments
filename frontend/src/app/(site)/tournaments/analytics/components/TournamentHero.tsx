@@ -9,7 +9,7 @@ import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface HeroTotals {
   teams: number;

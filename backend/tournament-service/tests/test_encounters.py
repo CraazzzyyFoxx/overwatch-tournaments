@@ -21,7 +21,7 @@ from src import models, schemas  # noqa: E402
 from src.services.encounter import flows, service  # noqa: E402
 
 
-class EncounterRedesignFilterTests(TestCase):
+class EncounterFilterTests(TestCase):
     def test_my_team_scope_joins_auth_linked_player(self) -> None:
         params = schemas.EncounterSearchParams(scope="my_team")
 
@@ -111,7 +111,7 @@ class _FakeSession:
         return _EmptyScalarResult()
 
 
-class EncounterRedesignSerializationTests(IsolatedAsyncioTestCase):
+class EncounterSerializationTests(IsolatedAsyncioTestCase):
     async def test_get_match_applies_workspace_filter(self) -> None:
         session = _FakeSession()
         session.execute = AsyncMock(return_value=_EmptyMatchResult())

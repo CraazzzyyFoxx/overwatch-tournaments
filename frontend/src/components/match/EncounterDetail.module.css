@@ -1,5 +1,5 @@
 /* Encounter (series) detail — Editorial Tactical.
-   Same convention as EncountersRedesign.module.css: alias the global --aqt-*
+   Same convention as Encounters.module.css: alias the global --aqt-*
    tokens into short page-local names once, then never name a raw colour again.
    A tenant workspace repaints --aqt-bg/card/border/fg/teal at runtime, so
    reading through these aliases is what keeps the page on-brand. */
@@ -1055,7 +1055,7 @@
 }
 
 /* ============ Responsive ============
-   Three max-width steps; the first two mirror EncountersRedesign.module.css. */
+   Three max-width steps; the first two mirror Encounters.module.css. */
 @media (max-width: 1280px) {
   .statsGrid,
   .reportGrid {

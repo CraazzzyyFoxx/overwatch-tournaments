@@ -6,7 +6,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { CommunityVerdict, formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import InfoDot from "@/app/(site)/tournaments/analytics/components/InfoDot";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface VerdictBannerProps {
   verdict: CommunityVerdict;

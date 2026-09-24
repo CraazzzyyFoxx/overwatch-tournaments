@@ -43,11 +43,11 @@
 |---|---|---|
 | Табы (разделы, состояние) | `ui/tabs.tsx`: Radix, вид underline по умолчанию, `variant="pill"` для переключателя режима с панелями, `TabsTrigger` с `badge` и `dot`, горизонтальный скролл и удержание активного таба в видимой области | 11 вызовов с собственными стилями (бирюзовая пилюля профиля, серый бокс драфта, shadcn-бокс OWAL/матча) |
 | Табы (маршруты) | `kit/LinkTabs.tsx` (бывший `AdminTabs`) — те же классы из `ui/tabs.tsx` (`tabsListVariants`/`tabsTriggerVariants`, `TabBadge`, `TabDot`, `revealTab`) | — (стиль стал общим источником) |
-| Переключатель вида | `ui/toggle-group.tsx` (pill) | 3 самописных `role="tablist"` с неверной семантикой: `MasterDetail`, `StandingsList`, `UsersRedesignClient` |
+| Переключатель вида | `ui/toggle-group.tsx` (pill) | 3 самописных `role="tablist"` с неверной семантикой: `MasterDetail`, `StandingsList`, `UsersClient` |
 | Подтверждение | `kit/ConfirmDialog.tsx` (i18n вместо захардкоженного английского; одна монтировка с подменой `intent` на экран) | сырые `AlertDialog`-копии в 15 файлах site/admin/tools. Оставлены сознательно: check-in в `TournamentParticipantsPage` (внутри форма) и resume-prompt в `admin/tournaments/page.tsx` (Cancel — навигация, не отказ) |
 | Статус-точка | `ui/status-dot.tsx` (`tone`, `pulse`, `style` для рантайм-цвета) | точки в `StatusPill`, `FilterChip`, табах, `LiveIndicator`, `ConnectionIndicator`, `RoomHeader`, `PregameHeader` и ещё ~12 местах. Легенды графиков и точки с `animate-ping`-соседом — не статус, оставлены |
 | Спиннер | `ui/spinner.tsx` (`label` → `role="status"`) | `Loader2`/`LoaderCircle animate-spin` в ~85 файлах и два одинаковых полноэкранных лоадера. Иконки, которые крутятся как сам смысл кнопки (`RefreshCw`, `Play`), оставлены |
-| Статус турнира/матча | `components/tournaments/StatusPill.tsx` → `TournamentStatusPill` (`live/upcoming/finished/draft/open/upset`, точка у `live` встроена), токены `--aqt-status-*` в `globals.css` | сырой `.status-pill` у вызовов, копии в `EncountersTable.module.css` и `AnalyticsRedesign.module.css`. `.tn-status` (безрамочный вариант в таблице турниров) — кандидат на слияние |
+| Статус турнира/матча | `components/tournaments/StatusPill.tsx` → `TournamentStatusPill` (`live/upcoming/finished/draft/open/upset`, точка у `live` встроена), токены `--aqt-status-*` в `globals.css` | сырой `.status-pill` у вызовов, копии в `EncountersTable.module.css` и `Analytics.module.css`. `.tn-status` (безрамочный вариант в таблице турниров) — кандидат на слияние |
 | Инициалы, даты | `initials()` в `lib/utils.ts`; `useFormatter()` на сайте/в tools, `kit/format-time.ts` в админке | 8 копий `initials`, голые `toLocale*String()` в ~20 файлах, два самописных `relativeTime` (относительное время теперь `Intl.RelativeTimeFormat`, как в остальном сайте) |
 | Префикс `Admin*` в `kit/` | `LinkTabs`, `Combobox`, `FilterBar`, `Inspector`, `SectionNav`, `useFilters`/`FilterState`, `DateFormatter` | исторические имена (`docs/frontend-zones.md` §Historical names). `AdminDataTable` оставлен до 4.4 — имя `DataTable` занято |
 
@@ -60,8 +60,8 @@ PR с собственной проверкой; пункты 4.1 и 4.2 бло�
 
 **Сейчас.** Для одного и того же понятия используются обе семьи: `text-muted-foreground` (~258 файлов) и
 `text-[color:var(--aqt-fg-muted)]` (~240 файлов), иногда в одном файле (`AnalyticsStandings.tsx`,
-`ForecastChip.tsx`). Плюс пять собственных семей алиасов в CSS-модулях: `--c-*` (`AnalyticsRedesign.module.css`),
-`--u-*` (`UsersRedesign.module.css`), `--enc-*` (`EncountersRedesign.module.css`), `--ed-*`
+`ForecastChip.tsx`). Плюс пять собственных семей алиасов в CSS-модулях: `--c-*` (`Analytics.module.css`),
+`--u-*` (`Users.module.css`), `--enc-*` (`Encounters.module.css`), `--ed-*`
 (`EncounterDetail.module.css`), `--tn-*`.
 
 **Факт, снимающий страх.** `WorkspaceThemeSync` → `lib/workspace/theme.ts` пишет **обе** семьи из одной палитры
@@ -129,7 +129,7 @@ Design book §«Air over boxes»: карточка — только для пл�
 
 **Сейчас.** 26 самописных `<table>` в 24 файлах трёх стилей: utility-классы (14 файлов — `MatchesTable`,
 `HeroStatsTable`, `OverviewTopHeroesTable`, `LobbyLeaderboardModal`…), CSS-модули (6 — `StandingsTable`,
-`EncountersTable`, `AnalyticsStandings`, `UsersRedesignClient`, `EncounterSeriesStats`, `TournamentTeamCard`),
+`EncountersTable`, `AnalyticsStandings`, `UsersClient`, `EncounterSeriesStats`, `TournamentTeamCard`),
 без классов (5). Две параллельные обёртки над TanStack: `ui/data-table.tsx` (почти без потребителей) и
 `data-table/AdminDataTable.tsx` (~1500 строк, реально используется).
 
@@ -179,7 +179,7 @@ shadcn-стандарт и связывает `aria-describedby`/`aria-invalid`.
 **Сейчас.** 146 голых `<button>` в обход `ui/button.tsx`, в основном на сайте: текстовые действия
 (`TOURNAMENT_TEXT_ACTION_CLASS`, `TOURNAMENT_PRIMARY_ACTION_CLASS` в `TournamentRegisterButton.tsx`),
 иконочные (`ACTION_BUTTON` в `MobileBracket.tsx`), сегмент-кнопки с `aria-pressed`
-(`EncountersRedesignClient`, `AnalyticsStandings`, `achievements/page.tsx`), строки-кнопки (законно).
+(`EncountersClient`, `AnalyticsStandings`, `achievements/page.tsx`), строки-кнопки (законно).
 
 **Канон.** `ui/button.tsx` с вариантами сайта в том же `cva` (не второй компонент): существующие
 `default/outline/ghost/link` + размеры `icon-sm`. Сегмент-кнопки с `aria-pressed` — это фильтр-пресеты →
@@ -226,7 +226,7 @@ rail, а не ряд табов).
 
 - Пилюли-тоны в `EncounterDetail.module.css` (`.pill/.pillAccent/.pillWarn/.pillDanger/.pillGood`) →
   `Badge tone=`.
-- Фильтр-чипы в `UsersRedesign.module.css`, `EncountersRedesign.module.css`, `docs.module.css` → `FilterChip`;
+- Фильтр-чипы в `Users.module.css`, `Encounters.module.css`, `docs.module.css` → `FilterChip`;
   `AdminFilterBar`/`RadarAxisPicker`, применяющие сырой класс `aqt-filter-chip`, → `<FilterChip>`.
 - W/L/D-чип (`users/.../shared/atoms.tsx` `FormStreak`) → `kit/ResultChip` при появлении второго DOM-потребителя
   (канвас-версия в `SharePlayerCard.tsx` законно отдельна).

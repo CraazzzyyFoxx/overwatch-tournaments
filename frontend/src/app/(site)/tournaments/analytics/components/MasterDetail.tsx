@@ -16,7 +16,7 @@ import MatchQualityCard from "@/app/(site)/tournaments/analytics/components/Matc
 import TeamDetail from "@/app/(site)/tournaments/analytics/components/community/TeamDetail";
 import PlayerDetail from "@/app/(site)/tournaments/analytics/components/community/PlayerDetail";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface MasterDetailProps {
   tournamentId: number;

@@ -4,7 +4,7 @@
 import { useTranslations } from "next-intl";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface InfoDotProps {
   term: GlossaryTerm;

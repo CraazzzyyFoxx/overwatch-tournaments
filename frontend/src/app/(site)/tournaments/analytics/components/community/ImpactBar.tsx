@@ -1,7 +1,7 @@
 "use client";
 
 
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface ImpactBarProps {
   /** 0–100 impact / percentile. */

@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import styles from "./AnalyticsRedesign.module.css";
+import styles from "./Analytics.module.css";
 
 type SortMode = "standings" | "predicted" | "shift";
 

@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 
-import UsersRedesignClient from "./components/index/UsersRedesignClient";
+import UsersClient from "./components/index/UsersClient";
 
 const UsersPage = () => {
   return (
     <Suspense fallback={null}>
-      <UsersRedesignClient />
+      <UsersClient />
     </Suspense>
   );
 };

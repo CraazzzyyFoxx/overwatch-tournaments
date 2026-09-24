@@ -8,7 +8,7 @@ import {
   filtersToSearchParams,
   formatDuration,
   normalizeEncounterFilters,
-} from "./encounters-redesign.helpers";
+} from "./encounters.helpers";
 
 function encounter(overrides: Partial<Encounter>): Encounter {
   return {
@@ -44,7 +44,7 @@ function encounter(overrides: Partial<Encounter>): Encounter {
   };
 }
 
-describe("encounters redesign helpers", () => {
+describe("encounters helpers", () => {
   it("normalizes URL filters with stable defaults", () => {
     expect(
       normalizeEncounterFilters({

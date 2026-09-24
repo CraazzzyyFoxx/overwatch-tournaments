@@ -65,8 +65,8 @@ import {
   formatPercent,
   getSeriesDuration,
   type TeamColor
-} from "./encounters-redesign.helpers";
-import styles from "./EncountersRedesign.module.css";
+} from "./encounters.helpers";
+import styles from "./Encounters.module.css";
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // module-level helpers can accept `t` straight through (strictFunctionTypes-safe).
@@ -76,7 +76,7 @@ type Translate = ReturnType<typeof useTranslations<never>>;
 // formatter instead of pinning a locale of their own.
 type NumberFormatter = Pick<ReturnType<typeof useFormatter>, "number">;
 
-type EncountersRedesignClientProps = {
+type EncountersClientProps = {
   initialData: PaginatedResponse<Encounter>;
   initialOverview: EncounterOverview;
   initialFilters: EncounterFilterState;
@@ -170,13 +170,13 @@ function donutSegments(stages: EncounterStageSplit[]) {
   return { segments, total, circumference, radius };
 }
 
-export default function EncountersRedesignClient({
+export default function EncountersClient({
   initialData,
   initialOverview,
   initialFilters,
   initialPage,
   initialError
-}: Readonly<EncountersRedesignClientProps>) {
+}: Readonly<EncountersClientProps>) {
   const t = useTranslations();
   const format = useFormatter();
   const pathname = usePathname();
@@ -215,7 +215,7 @@ export default function EncountersRedesignClient({
 
   const apiFilters = useMemo(() => filtersToApiFilters(effectiveFilters), [effectiveFilters]);
   const listQuery = useQuery({
-    queryKey: ["encounters-redesign", page, apiFilters, effectiveFilters.query],
+    queryKey: ["encounters-list", page, apiFilters, effectiveFilters.query],
     queryFn: () =>
       encounterService.getAll(
         page,

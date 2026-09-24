@@ -13,7 +13,7 @@ import {
 } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import DeltaPill from "@/app/(site)/tournaments/analytics/components/DeltaPill";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
+import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 export type StandingsMode = "standings" | "movers" | "watch";
 

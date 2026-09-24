@@ -47,7 +47,7 @@ import {
   type Translate
 } from "@/app/(site)/users/components/shared/list-utils";
 
-import styles from "./UsersRedesign.module.css";
+import styles from "./Users.module.css";
 
 type SortValue = "name" | "tournaments_count" | "achievements_count" | "avg_placement";
 type OrderValue = "asc" | "desc";
@@ -170,7 +170,7 @@ const DivisionHex = ({ role, division, title, size = 36 }: DivisionHexProps) => 
 };
 
 
-const UsersRedesignClient = () => {
+const UsersClient = () => {
   const { searchParams, setParams } = useQueryParams();
   const divisionGrid = useDivisionGrid();
   const workspaceId = useCurrentWorkspaceId();
@@ -1062,4 +1062,4 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
   );
 };
 
-export default UsersRedesignClient;
+export default UsersClient;
