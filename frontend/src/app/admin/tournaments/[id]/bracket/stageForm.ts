@@ -42,6 +42,11 @@ export interface StageForm {
   scoringLoss: string;
   swissByePoints: string;
   bestOf: StageBestOfConfig;
+  /** FFA leagues: what place `i + 1` pays, `[]` for a score-only lobby. */
+  ffaPlacementPoints: number[];
+  ffaScorePoints: number;
+  /** The organizer's word for the score column; empty keeps the default. */
+  ffaScoreLabel: string;
 }
 
 export function stageFormFromStage(stage: Stage): StageForm {
@@ -68,7 +73,10 @@ export function stageFormFromStage(stage: Stage): StageForm {
     scoringDraw: settings.scoring?.draw != null ? String(settings.scoring.draw) : "",
     scoringLoss: settings.scoring?.loss != null ? String(settings.scoring.loss) : "",
     swissByePoints: settings.swiss_bye_points != null ? String(settings.swiss_bye_points) : "",
-    bestOf: parseStageBestOf(settings)
+    bestOf: parseStageBestOf(settings),
+    ffaPlacementPoints: settings.ffa_scoring?.placement_points ?? [],
+    ffaScorePoints: settings.ffa_scoring?.score_points ?? 1,
+    ffaScoreLabel: settings.ffa_scoring?.score_label ?? ""
   };
 }
 
@@ -113,6 +121,18 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
   if (bestOf) settings.best_of = bestOf;
   else delete settings.best_of;
 
+  // Only an FFA league is scored by place and raw score; on any other type the
+  // block is a rule the engine would read for a format that cannot produce it.
+  if (form.stageType === "ffa_league") {
+    settings.ffa_scoring = {
+      placement_points: form.ffaPlacementPoints,
+      score_points: form.ffaScorePoints,
+      score_label: form.ffaScoreLabel.trim() || null
+    };
+  } else {
+    delete settings.ffa_scoring;
+  }
+
   return {
     name: form.name.trim() || stage.name,
     order: form.order,
@@ -145,7 +165,10 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   scoringDraw: "Draw points",
   scoringLoss: "Loss points",
   swissByePoints: "Swiss bye points",
-  bestOf: "Best-of"
+  bestOf: "Best-of",
+  ffaPlacementPoints: "Points per place",
+  ffaScorePoints: "Points per score unit",
+  ffaScoreLabel: "Score label"
 };
 
 export function stageFormChanges(stage: Stage, form: StageForm): string[] {

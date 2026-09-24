@@ -12,6 +12,7 @@
  */
 import type { Tone } from "@/components/kit/tone";
 import { resolveBestOf, stageBestOfRoundSections } from "@/lib/tournament/best-of";
+import type { FfaScoringSettings } from "@/lib/ffa/scoring-presets";
 import { bracketRoundLabelEn } from "@/lib/bracket/round-name";
 import type { StageBestOfConfig } from "@/types/admin.types";
 import type {
@@ -113,6 +114,8 @@ export interface StageSettings {
   de_grand_final_type?: "no_reset" | "with_reset";
   best_of?: StageBestOfConfig;
   seed_ranking?: SeedRanking;
+  /** FFA leagues only: what a place and a point of raw score are worth. */
+  ffa_scoring?: FfaScoringSettings;
   [key: string]: unknown;
 }
 
@@ -121,6 +124,12 @@ export const RANKING_PRESETS = [
   { value: "challonge_swiss", label: "Challonge Swiss (Buchholz first)" },
   { value: "challonge_round_robin", label: "Challonge Round Robin" },
   { value: "bracket_default", label: "Default bracket" }
+] as const;
+
+/** The FFA catalogue: the duel presets order metrics a lobby cannot compute. */
+export const FFA_RANKING_PRESETS = [
+  { value: "default", label: "System default (based on type)" },
+  { value: "ffa_default", label: "FFA default (game wins, then score)" }
 ] as const;
 
 /** The tiebreak order a stage type falls back to with no preset chosen. */

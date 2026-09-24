@@ -17,8 +17,12 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { ALL_TIEBREAKERS } from "@/lib/tournament/tiebreakers";
-import { BEST_OF_OPTIONS, stageBestOfRoundSections } from "@/lib/tournament/best-of";
+import { tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
+import {
+  BEST_OF_OPTIONS,
+  DEFAULT_BEST_OF,
+  stageBestOfRoundSections
+} from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { StageBestOfConfig } from "@/types/admin.types";
@@ -27,6 +31,9 @@ import type { Stage, StageItem, StageType } from "@/types/tournament.types";
 
 import {
   BRACKET_STAGE_TYPES,
+  defaultTiebreakOrder,
+  FFA_RANKING_PRESETS,
+  FFA_STAGE_TYPES,
   GROUP_STAGE_TYPES,
   normalizeMaxRounds,
   RANKING_PRESETS,
@@ -107,7 +114,26 @@ export function GeneralSection({
           <Label htmlFor={`${ids}-type`}>Format</Label>
           <Select
             value={form.stageType}
-            onValueChange={(value) => onChange({ stageType: value as StageType })}
+            onValueChange={(value) => {
+              const stageType = value as StageType;
+              // The metric catalogues are disjoint across families: an FFA
+              // order on a duel stage (or the other way round) is one the
+              // engine silently drops, so the new format's default replaces it
+              // rather than being saved as an order nothing evaluates.
+              const catalogue = tiebreakersForStageType(stageType).map((metric) => metric.id);
+              const runnable = form.tiebreakOrder.every((metricId) =>
+                (catalogue as string[]).includes(metricId)
+              );
+              onChange(
+                runnable
+                  ? { stageType }
+                  : {
+                      stageType,
+                      rankingPreset: "default",
+                      tiebreakOrder: defaultTiebreakOrder(stageType)
+                    }
+              );
+            }}
             disabled={!isSuperuser}
           >
             <SelectTrigger id={`${ids}-type`}>
@@ -382,7 +408,6 @@ export function SeedingSection({
 }
 
 export function TiebreakersSection({
-  stage,
   form,
   onChange,
   winPointsDefault,
@@ -394,6 +419,10 @@ export function TiebreakersSection({
   lossPointsDefault: number;
 }) {
   const ids = useId();
+  // Which metrics the engine can compute here at all: a lobby has no opponent
+  // pairing (no head-to-head, no Buchholz), a duel has no placement or score.
+  const catalogue = tiebreakersForStageType(form.stageType);
+  const isGroups = GROUP_STAGE_TYPES.includes(form.stageType);
 
   // `points` and `manual_override` are not tiebreakers an organizer chooses:
   // `points` is the ranking metric every other step only separates ties on, and
@@ -404,7 +433,7 @@ export function TiebreakersSection({
   // free to reorder, and free to switch off: a metric that is absent from
   // `tiebreak_order` is simply not evaluated.
   const active = form.tiebreakOrder.filter((metricId) => metricId !== MANUAL_OVERRIDE);
-  const inactive = ALL_TIEBREAKERS.filter(
+  const inactive = catalogue.filter(
     (metric) => metric.id !== MANUAL_OVERRIDE && !form.tiebreakOrder.includes(metric.id)
   );
 
@@ -440,7 +469,7 @@ export function TiebreakersSection({
             onValueChange={(value) =>
               onChange({
                 rankingPreset: value,
-                tiebreakOrder: tiebreakOrderForPreset(value, stage.stage_type)
+                tiebreakOrder: tiebreakOrderForPreset(value, form.stageType)
               })
             }
           >
@@ -448,7 +477,10 @@ export function TiebreakersSection({
               <SelectValue placeholder="System default" />
             </SelectTrigger>
             <SelectContent>
-              {RANKING_PRESETS.map((preset) => (
+              {(FFA_STAGE_TYPES.includes(form.stageType)
+                ? FFA_RANKING_PRESETS
+                : RANKING_PRESETS
+              ).map((preset) => (
                 <SelectItem key={preset.value} value={preset.value}>
                   {preset.label}
                 </SelectItem>
@@ -472,35 +504,39 @@ export function TiebreakersSection({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${ids}-win`}>Win points override</Label>
-          <NumberInput
-            id={`${ids}-win`}
-            placeholder={String(winPointsDefault)}
-            value={form.scoringWin === "" ? null : Number(form.scoringWin)}
-            onValueChange={(next) => onChange({ scoringWin: next == null ? "" : String(next) })}
-          />
+      {/* Points for beating an opponent. An FFA lobby has none to beat: its
+          points come from the place and the score of each game. */}
+      {isGroups ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${ids}-win`}>Win points override</Label>
+            <NumberInput
+              id={`${ids}-win`}
+              placeholder={String(winPointsDefault)}
+              value={form.scoringWin === "" ? null : Number(form.scoringWin)}
+              onValueChange={(next) => onChange({ scoringWin: next == null ? "" : String(next) })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${ids}-draw`}>Draw points override</Label>
+            <NumberInput
+              id={`${ids}-draw`}
+              placeholder={String(drawPointsDefault)}
+              value={form.scoringDraw === "" ? null : Number(form.scoringDraw)}
+              onValueChange={(next) => onChange({ scoringDraw: next == null ? "" : String(next) })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${ids}-loss`}>Loss points override</Label>
+            <NumberInput
+              id={`${ids}-loss`}
+              placeholder={String(lossPointsDefault)}
+              value={form.scoringLoss === "" ? null : Number(form.scoringLoss)}
+              onValueChange={(next) => onChange({ scoringLoss: next == null ? "" : String(next) })}
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${ids}-draw`}>Draw points override</Label>
-          <NumberInput
-            id={`${ids}-draw`}
-            placeholder={String(drawPointsDefault)}
-            value={form.scoringDraw === "" ? null : Number(form.scoringDraw)}
-            onValueChange={(next) => onChange({ scoringDraw: next == null ? "" : String(next) })}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${ids}-loss`}>Loss points override</Label>
-          <NumberInput
-            id={`${ids}-loss`}
-            placeholder={String(lossPointsDefault)}
-            value={form.scoringLoss === "" ? null : Number(form.scoringLoss)}
-            onValueChange={(next) => onChange({ scoringLoss: next == null ? "" : String(next) })}
-          />
-        </div>
-      </div>
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
@@ -511,7 +547,7 @@ export function TiebreakersSection({
             className="h-auto p-0 text-xs text-primary"
             onClick={() =>
               onChange({
-                tiebreakOrder: tiebreakOrderForPreset(form.rankingPreset, stage.stage_type)
+                tiebreakOrder: tiebreakOrderForPreset(form.rankingPreset, form.stageType)
               })
             }
           >
@@ -521,7 +557,7 @@ export function TiebreakersSection({
         <ol className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2">
           {active.map((metricId, index) => {
             const metricLabel =
-              ALL_TIEBREAKERS.find((metric) => metric.id === metricId)?.label ?? metricId;
+              catalogue.find((metric) => metric.id === metricId)?.label ?? metricId;
             const isRankingMetric = metricId === "points";
             return (
               <li
@@ -619,6 +655,10 @@ export function BestOfSection({
 }) {
   const ids = useId();
   const isDoubleElimination = form.stageType === "double_elimination";
+  // An FFA lobby plays games, not a series: `best_of` is how many games it
+  // plans (`FfaEncounterService.create_lobby`), resolved from round 1 alone.
+  // "Bo5" and a final override would both be reading it as a duel.
+  const isFfa = FFA_STAGE_TYPES.includes(form.stageType);
 
   const patchBestOf = (patch: Partial<StageBestOfConfig>) =>
     onChange({ bestOf: { ...form.bestOf, ...patch } });
@@ -630,34 +670,38 @@ export function BestOfSection({
     onChange({ bestOf: { ...form.bestOf, by_round: byRound } });
   };
 
-  const sections = stageBestOfRoundSections({
-    stageType: form.stageType,
-    maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
-    bracketTeamCount,
-    splitLowerBracket: form.stageType === "double_elimination" && form.splitLowerBracket,
-    configuredRounds: Object.keys(form.bestOf.by_round ?? {}).map(Number)
-  });
+  // A lobby has one round, and the generator reads round 1 only: a per-round
+  // grid here would offer keys no lobby carries.
+  const sections = isFfa
+    ? []
+    : stageBestOfRoundSections({
+        stageType: form.stageType,
+        maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
+        bracketTeamCount,
+        splitLowerBracket: form.stageType === "double_elimination" && form.splitLowerBracket,
+        configuredRounds: Object.keys(form.bestOf.by_round ?? {}).map(Number)
+      });
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-foreground">Best-of per round</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          {isFfa ? "Lobby length" : "Best-of per round"}
+        </h3>
         <Button size="sm" variant="ghost" disabled={applying} onClick={onApplyToExisting}>
           {applying ? <Spinner /> : null}
           Apply to existing matches
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Baked into matches on (re)generation. Use &quot;Apply to existing matches&quot; to backfill
-        without regenerating.
-        {isDoubleElimination
-          ? " Upper and lower bracket rounds are configured separately."
-          : ""}
+        Baked into {isFfa ? "lobbies" : "matches"} on (re)generation. Use &quot;Apply to existing
+        matches&quot; to backfill without regenerating.
+        {isDoubleElimination ? " Upper and lower bracket rounds are configured separately." : ""}
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className={isFfa ? "grid gap-3" : "grid grid-cols-2 gap-3"}>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${ids}-default`}>Default</Label>
+          <Label htmlFor={`${ids}-default`}>{isFfa ? "Games per lobby" : "Default"}</Label>
           <Select
             value={form.bestOf.default != null ? String(form.bestOf.default) : "inherit"}
             onValueChange={(value) =>
@@ -668,34 +712,40 @@ export function BestOfSection({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inherit">Default (Bo3)</SelectItem>
-              {BEST_OF_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>{`Bo${n}`}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${ids}-final`}>{isDoubleElimination ? "Grand Final" : "Final"}</Label>
-          <Select
-            value={form.bestOf.final != null ? String(form.bestOf.final) : "none"}
-            onValueChange={(value) =>
-              patchBestOf({ final: value === "none" ? undefined : Number(value) })
-            }
-          >
-            <SelectTrigger id={`${ids}-final`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">
-                {isDoubleElimination ? "Same as upper bracket" : "Same as rounds"}
+              <SelectItem value="inherit">
+                {isFfa ? `Default (${DEFAULT_BEST_OF} games)` : `Default (Bo${DEFAULT_BEST_OF})`}
               </SelectItem>
               {BEST_OF_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>{`Bo${n}`}</SelectItem>
+                <SelectItem key={n} value={String(n)}>
+                  {isFfa ? `${n} games` : `Bo${n}`}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+        {isFfa ? null : (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${ids}-final`}>{isDoubleElimination ? "Grand Final" : "Final"}</Label>
+            <Select
+              value={form.bestOf.final != null ? String(form.bestOf.final) : "none"}
+              onValueChange={(value) =>
+                patchBestOf({ final: value === "none" ? undefined : Number(value) })
+              }
+            >
+              <SelectTrigger id={`${ids}-final`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  {isDoubleElimination ? "Same as upper bracket" : "Same as rounds"}
+                </SelectItem>
+                {BEST_OF_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>{`Bo${n}`}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {sections.map((section) => (
