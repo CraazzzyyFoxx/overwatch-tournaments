@@ -334,7 +334,7 @@ flowchart LR
 #### Задача 1. Перечисления, миграция, модели, репозитории
 
 **Files:**
-- Modify: `backend/shared/core/enums.py:385-390` (StageType), рядом — новый `EncounterFormat`
+- Modify: `backend/shared/core/enums.py:385-390` — рядом со `StageType` новый `EncounterFormat`
 - Create: `backend/migrations/versions/ffa0001_encounter_format_participants.py`
 - Modify: `backend/shared/models/tournament/encounter.py:41-145`
 - Modify: `backend/shared/models/tournament/encounter_game.py:36-82`
@@ -346,7 +346,7 @@ flowchart LR
 - Test: `backend/tournament-service/tests/test_ffa_schema_integration.py`
 
 **Interfaces — Produces:**
-- `enums.EncounterFormat.DUEL/FFA`, `enums.StageType.FFA_LEAGUE`
+- `enums.EncounterFormat.DUEL/FFA`
 - `models.EncounterParticipant(encounter_id, team_id, slot)`, `models.EncounterGameResult(game_id, encounter_id, team_id, placement, score)`
 - `Encounter.format: Mapped[str]`, `Encounter.participants`, `EncounterGame.format: Mapped[str]`, `EncounterResultAudit.ffa_results_json`
 - `EncounterParticipantRepository.list_for_encounter(session, encounter_id) -> Sequence[EncounterParticipant]`
@@ -358,17 +358,12 @@ flowchart LR
   (`backend/migrations/versions/draftq01_draft_team_pick_queue.py`). Перед работой найти файл, чья `revision`
   не встречается ни в одном `down_revision`, и поставить её в `down_revision` новой ревизии.
 
-- [ ] **Шаг 2. Перечисления** (`backend/shared/core/enums.py`):
+- [ ] **Шаг 2. Перечисления** (`backend/shared/core/enums.py`). `StageType` не трогаем: метку
+  `ffa_league` добавляет миграция (шаг 3), а член перечисления появится только в задаче 5, вместе
+  со своим генератором. Пока генератора нет, `StageCreate` обязан отвечать 422 на `ffa_league`, а не
+  пускать стадию в `generate_encounters` → движок сетки → голый `ValueError` (неструктурированный 500):
 
 ```python
-class StageType(StrEnum):
-    ROUND_ROBIN = "round_robin"
-    SINGLE_ELIMINATION = "single_elimination"
-    DOUBLE_ELIMINATION = "double_elimination"
-    SWISS = "swiss"
-    FFA_LEAGUE = "ffa_league"
-
-
 class EncounterFormat(StrEnum):
     """How many sides an encounter has. Fixed at creation.
 
@@ -1386,6 +1381,7 @@ def team_totals(
 #### Задача 5. Настройки стадии и тай-брейки
 
 **Files:**
+- Modify: `backend/shared/core/enums.py:385-390` (`StageType` — член `FFA_LEAGUE`)
 - Modify: `backend/tournament-service/src/schemas/admin/stage.py:20-44` (новый `FfaScoring`, поле в `StageSettings`)
 - Modify: `backend/tournament-service/src/services/standings/service.py:27-95,178-186,254-278`
 - Modify: `frontend/src/lib/tournament/tiebreakers.ts:7-36` (идентификаторы — задача 10, здесь только backend)
@@ -1423,6 +1419,15 @@ class FfaScoring(BaseModel):
 ```
 
   В `StageSettings`: `ffa_scoring: FfaScoring | None = None`.
+
+```python
+# shared/core/enums.py — член перечисления появляется здесь, а не в задаче 1:
+# метку в БД миграция ffa0001 уже добавила, а до этого места у типа стадии не было
+# ни правил подсчёта, ни генератора, и API обязан был отвечать 422.
+class StageType(StrEnum):
+    ...
+    FFA_LEAGUE = "ffa_league"
+```
 
 ```python
 # standings/service.py

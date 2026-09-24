@@ -387,7 +387,12 @@ class StageType(StrEnum):
     SINGLE_ELIMINATION = "single_elimination"
     DOUBLE_ELIMINATION = "double_elimination"
     SWISS = "swiss"
-    FFA_LEAGUE = "ffa_league"
+    # NB: the PG type ``tournament.stagetype`` also carries the label
+    # ``ffa_league`` (added by migration ffa0001), deliberately with no member
+    # here until its generator lands: a stage type with no generator reaches
+    # ``generate_encounters`` -> the bracket engine -> a bare ``ValueError``
+    # (an unstructured 500). Without the member the create-stage schema rejects
+    # it with 422, which is the honest answer until then.
 
 
 class EncounterFormat(StrEnum):

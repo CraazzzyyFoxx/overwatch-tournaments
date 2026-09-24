@@ -44466,8 +44466,7 @@
         "round_robin",
         "single_elimination",
         "double_elimination",
-        "swiss",
-        "ffa_league"
+        "swiss"
       ],
       "title": "StageType",
       "type": "string"
