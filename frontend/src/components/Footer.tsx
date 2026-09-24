@@ -78,9 +78,6 @@ export function Footer() {
             <FooterLink href="/users" className={FOOTER_LINK_CLASS}>
               {t("nav.items.users.title")}
             </FooterLink>
-            <FooterLink href="/matches" className={FOOTER_LINK_CLASS}>
-              {t("nav.items.matches.title")}
-            </FooterLink>
             <FooterLink href="/achievements" className={FOOTER_LINK_CLASS}>
               {t("nav.items.achievements.title")}
             </FooterLink>

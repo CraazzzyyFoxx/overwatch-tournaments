@@ -1886,8 +1886,6 @@
   },
   "matches": {
     "col": {
-      "map": "Map",
-      "match": "Match",
       "score": "Score",
       "division": "Division",
       "prs": "PRS",
@@ -2001,9 +1999,6 @@
       "shotsHit": "Shots Hit",
       "shotsMissed": "Shots Missed"
     },
-    "matchesTotal": "{count, plural, one {# match total} other {# matches total}}",
-    "allTournaments": "All tournaments",
-    "noMatchesFound": "No matches found.",
     "round": "Round {round}",
     "gamemode": "Gamemode",
     "playtime": "Playtime",
@@ -2011,7 +2006,6 @@
     "allMatch": "All Match",
     "teamLabel": "Team {name}",
     "meta": {
-      "description": "View matches on {siteName}.",
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Overview for {home} vs {away} on {siteName}."
     }
@@ -4280,10 +4274,6 @@
       "encounters": {
         "title": "Encounters",
         "desc": "Every series across all tournaments"
-      },
-      "matches": {
-        "title": "Matches",
-        "desc": "Every match played on the platform"
       },
       "scrims": {
         "title": "Scrims",

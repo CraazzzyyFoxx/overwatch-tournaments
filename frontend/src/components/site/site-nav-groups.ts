@@ -44,9 +44,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     key: "matches",
     items: [
       { key: "encounters", href: "/encounters" },
-      { key: "matches", href: "/matches" },
       // Ad-hoc pre-game rooms (docs/plans/2026-08-12-scrim-rooms.md). Sits with
-      // encounters/matches rather than under tournaments: a scrim belongs to no
+      // encounters rather than under tournaments: a scrim belongs to no
       // tournament, and this is where a captain already looks for "a series".
       { key: "scrims", href: "/scrims" },
       // Mix lobbies balanced from a workspace roster. Viewing one is public

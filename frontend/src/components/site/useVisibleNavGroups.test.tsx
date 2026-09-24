@@ -91,7 +91,6 @@ describe("useVisibleNavGroups", () => {
     // now, so the entry survives even a grant-free profile.
     expect(viewer.navKeys).toContain("matches/mixes");
     expect(viewer.navKeys).toContain("matches/encounters");
-    expect(viewer.navKeys).toContain("matches/matches");
     expect(viewer.navKeys).toContain("tournaments/tournaments");
     expect(viewer.navKeys).toContain("tournaments/analytics");
   });

@@ -1886,8 +1886,6 @@
   },
   "matches": {
     "col": {
-      "map": "Карта",
-      "match": "Матч",
       "score": "Счёт",
       "division": "Дивизион",
       "prs": "PRS",
@@ -2001,9 +1999,6 @@
       "shotsHit": "Попаданий",
       "shotsMissed": "Промахов"
     },
-    "matchesTotal": "{count, plural, one {# матч всего} few {# матча всего} many {# матчей всего} other {# матчей всего}}",
-    "allTournaments": "Все турниры",
-    "noMatchesFound": "Матчи не найдены.",
     "round": "Раунд {round}",
     "gamemode": "Режим игры",
     "playtime": "Игровое время",
@@ -2011,7 +2006,6 @@
     "allMatch": "Весь матч",
     "teamLabel": "Команда {name}",
     "meta": {
-      "description": "Просмотр матчей на {siteName}.",
       "matchTitle": "{home} vs {away}",
       "matchDescription": "Обзор матча {home} vs {away} на {siteName}."
     }
@@ -4280,10 +4274,6 @@
       "encounters": {
         "title": "Встречи",
         "desc": "Все серии встреч со всех турниров"
-      },
-      "matches": {
-        "title": "Матчи",
-        "desc": "Все матчи, сыгранные на платформе"
       },
       "scrims": {
         "title": "Скримы",
