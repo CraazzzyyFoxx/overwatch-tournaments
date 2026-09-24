@@ -148,7 +148,7 @@ jobs:
             dockerfile: prod.Dockerfile
     steps:
       - name: Checkout ${{ needs.meta.outputs.tag }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.meta.outputs.tag }}
 
@@ -201,7 +201,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout ${{ needs.meta.outputs.tag }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.meta.outputs.tag }}
 
@@ -250,7 +250,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Notes are rendered from the commits since the previous tag, so the
           # whole history and every tag have to be here.
