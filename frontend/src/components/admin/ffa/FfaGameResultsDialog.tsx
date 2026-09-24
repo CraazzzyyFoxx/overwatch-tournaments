@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -83,16 +84,17 @@ export function FfaGameResultsDialog({
   const paysForPlacement = lobby.rules.placement_points.length > 0;
   const scoreLabel = lobby.rules.score_label?.trim() || "Score";
 
-  const [draft, setDraft] = useState<Record<number, { placement: string; score: string }>>(() =>
-    Object.fromEntries(
-      rows.map((row) => [
-        row.team_id,
-        {
-          placement: cells.get(row.team_id)?.placement?.toString() ?? "",
-          score: cells.get(row.team_id)?.score?.toString() ?? ""
-        }
-      ])
-    )
+  const [draft, setDraft] = useState<Record<number, { placement: number | null; score: number | null }>>(
+    () =>
+      Object.fromEntries(
+        rows.map((row) => [
+          row.team_id,
+          {
+            placement: cells.get(row.team_id)?.placement ?? null,
+            score: cells.get(row.team_id)?.score ?? null
+          }
+        ])
+      )
   );
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -117,10 +119,13 @@ export function FfaGameResultsDialog({
     onError: (failure: unknown) => setError(describeError(failure))
   });
 
-  const setField = (teamId: number, field: "placement" | "score", value: string) =>
+  const setField = (teamId: number, field: "placement" | "score", value: number | null) =>
     setDraft((current) => ({ ...current, [teamId]: { ...current[teamId], [field]: value } }));
 
-  const blanks = rows.filter((row) => draft[row.team_id].score.trim() === "");
+  const lines = rows.map((row) => ({ team_id: row.team_id, ...draft[row.team_id] }));
+  const scored = lines.filter(
+    (line): line is typeof line & { score: number } => line.score !== null
+  );
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -132,7 +137,7 @@ export function FfaGameResultsDialog({
       setError(t("ffa.errors.ffa_reason_required"));
       return;
     }
-    if (blanks.length > 0) {
+    if (scored.length < lines.length) {
       // A blank is NOT a zero. Sending it as one would record "played, scored
       // nothing" for a team the organizer simply had not got to yet — and the
       // server's own `ffa_result_missing_team` guard can never catch that,
@@ -145,17 +150,7 @@ export function FfaGameResultsDialog({
     }
     setBlanksFlagged(false);
     setError(null);
-    mutation.mutate({
-      results: rows.map((row) => {
-        const entry = draft[row.team_id];
-        return {
-          team_id: row.team_id,
-          placement: entry.placement.trim() === "" ? null : Number(entry.placement),
-          score: Number(entry.score)
-        };
-      }),
-      reason: trimmed || null
-    });
+    mutation.mutate({ results: scored, reason: trimmed || null });
   };
 
   return (
@@ -180,7 +175,7 @@ export function FfaGameResultsDialog({
             placement={draft[row.team_id].placement}
             score={draft[row.team_id].score}
             scoreLabel={scoreLabel}
-            scoreMissing={blanksFlagged && draft[row.team_id].score.trim() === ""}
+            scoreMissing={blanksFlagged && draft[row.team_id].score === null}
             onPlacement={(value) => setField(row.team_id, "placement", value)}
             onScore={(value) => setField(row.team_id, "score", value)}
           />
@@ -224,33 +219,31 @@ function FieldRow({
   onScore
 }: Readonly<{
   name: string;
-  placement: string;
-  score: string;
+  placement: number | null;
+  score: number | null;
   scoreLabel: string;
   scoreMissing: boolean;
-  onPlacement: (value: string) => void;
-  onScore: (value: string) => void;
+  onPlacement: (value: number | null) => void;
+  onScore: (value: number | null) => void;
 }>) {
   return (
     <>
       <span className="truncate text-sm text-foreground">{name}</span>
-      <Input
-        type="number"
+      <NumberInput
+        integer
         min={1}
-        inputMode="numeric"
         aria-label={`Place for ${name}`}
         value={placement}
-        onChange={(event) => onPlacement(event.target.value)}
+        onValueChange={onPlacement}
       />
-      <Input
-        type="number"
+      <NumberInput
+        integer
         min={0}
-        inputMode="numeric"
         aria-label={`${scoreLabel} for ${name}`}
         aria-invalid={scoreMissing || undefined}
         className="aria-invalid:border-destructive"
         value={score}
-        onChange={(event) => onScore(event.target.value)}
+        onValueChange={onScore}
       />
     </>
   );

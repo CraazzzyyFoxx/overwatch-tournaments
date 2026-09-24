@@ -12,6 +12,7 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { notify } from "@/lib/notify";
@@ -179,7 +180,7 @@ function LobbyCard({ lobby }: Readonly<{ lobby: FfaLobby }>) {
 function GamesCountForm({ lobby }: Readonly<{ lobby: FfaLobby }>) {
   const queryClient = useQueryClient();
   const describeError = useFfaErrorMessage();
-  const [games, setGames] = useState(String(lobby.best_of));
+  const [games, setGames] = useState<number | null>(lobby.best_of);
 
   const mutation = useMutation({
     mutationFn: (value: number) => ffaService.setGamesCount(lobby.encounter_id, value),
@@ -195,31 +196,29 @@ function GamesCountForm({ lobby }: Readonly<{ lobby: FfaLobby }>) {
 
   // The server takes 1..50 (`FfaGamesCountInput`); cutting below the games
   // already played is the one bound only it can judge, so that stays a 422.
-  const parsed = Number(games);
-  const valid =
-    Number.isInteger(parsed) && parsed >= 1 && parsed <= 50 && parsed !== lobby.best_of;
+  const valid = games != null && games >= 1 && games <= 50 && games !== lobby.best_of;
 
   return (
     <div className="flex items-center gap-2">
       <label className={EYEBROW_CLASS} htmlFor={`ffa-games-${lobby.encounter_id}`}>
         Games
       </label>
-      <Input
+      <NumberInput
         id={`ffa-games-${lobby.encounter_id}`}
         aria-label={`Games in ${lobby.name}`}
-        type="number"
+        integer
         min={1}
         max={50}
         className="w-20"
         value={games}
-        onChange={(event) => setGames(event.target.value)}
+        onValueChange={setGames}
       />
       <Button
         type="button"
         size="sm"
         variant="outline"
         disabled={!valid || mutation.isPending}
-        onClick={() => mutation.mutate(parsed)}
+        onClick={() => games != null && mutation.mutate(games)}
       >
         Save
       </Button>
