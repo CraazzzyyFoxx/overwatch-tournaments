@@ -3,7 +3,7 @@
 import React from "react";
 import { Hero } from "@/types/hero.types";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarImage, AvatarFallback, AvatarStack } from "@/components/ui/avatar";
+import { AvatarStack } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { heroInitials } from "@/components/hero/heroRole";
 import { heroVariantFromRole } from "@/lib/roster/player-role";
@@ -43,30 +43,56 @@ interface HeroImageProps {
 
 /**
  * Canonical single-hero renderer. Hero icons across the app MUST go through
- * this component (Avatar-based: image with an initials fallback). Attach
+ * this component (portrait image with an initials fallback). Attach
  * stats via `popover` — see HeroUserStatsPopover and the Maps tab for the pattern.
+ *
+ * Deliberately a plain `<img loading="lazy">`, not Radix `AvatarImage`: Radix
+ * preloads the src with `new window.Image()` regardless of `loading`, and a
+ * single screen can carry dozens of portraits (a user profile renders 33, the
+ * players table three per row). `next/image` is out for the same reason in
+ * reverse — the optimizer shares the one Node process the site runs on.
  */
 const HeroImage = ({ hero, size = "md", className, title, rounded = "full", popover }: HeroImageProps) => {
   const px = resolveHeroPx(size);
   const variant = heroVariantFromRole(hero.type ?? hero.role);
   const radiusClass = rounded === "full" ? "rounded-full" : "rounded-md";
+  // Keyed by src so a row recycled onto another hero re-tries its portrait.
+  const [brokenSrc, setBrokenSrc] = React.useState<string | null>(null);
+  const showImage = Boolean(hero.image_path) && brokenSrc !== hero.image_path;
 
   const avatar = (
-    <Avatar className={cn(radiusClass, "border border-[color:var(--aqt-border-2)]", className)} style={{ width: px, height: px }} title={title ?? hero.name}>
-      {hero.image_path ? <AvatarImage src={hero.image_path} alt={hero.name} className={radiusClass} /> : null}
-      <AvatarFallback
-        className={cn("aqt-display font-extrabold", radiusClass)}
-        style={{
-          // Initials stand in for the portrait, so they hold the 11px floor
-          // rather than scaling below it on the smallest avatars.
-          fontSize: Math.max(11, Math.round(px * 0.4)),
-          color: "var(--aqt-bg)",
-          background: `var(--aqt-${variant})`
-        }}
-      >
-        {heroInitials(hero.name)}
-      </AvatarFallback>
-    </Avatar>
+    <span
+      className={cn("relative flex shrink-0 overflow-hidden", radiusClass, "border border-[color:var(--aqt-border-2)]", className)}
+      style={{ width: px, height: px }}
+      title={title ?? hero.name}
+    >
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={hero.image_path}
+          alt={hero.name}
+          width={px}
+          height={px}
+          loading="lazy"
+          decoding="async"
+          onError={() => setBrokenSrc(hero.image_path)}
+          className={cn("h-full w-full select-none object-contain", radiusClass)}
+        />
+      ) : (
+        <span
+          className={cn("aqt-display flex h-full w-full items-center justify-center font-extrabold", radiusClass)}
+          style={{
+            // Initials stand in for the portrait, so they hold the 11px floor
+            // rather than scaling below it on the smallest avatars.
+            fontSize: Math.max(11, Math.round(px * 0.4)),
+            color: "var(--aqt-bg)",
+            background: `var(--aqt-${variant})`
+          }}
+        >
+          {heroInitials(hero.name)}
+        </span>
+      )}
+    </span>
   );
 
   if (!popover) return avatar;
