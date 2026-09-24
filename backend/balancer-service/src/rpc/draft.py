@@ -26,11 +26,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftStatus, HeroClass
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.balancer.draft import DraftAuditEvent, DraftPick, DraftSession
+from shared.models.balancer.draft import DraftPick, DraftSession, DraftTeam
 from shared.repository.draft import (
-    DraftAuditEventRepository,
     DraftPickRepository,
     DraftSessionRepository,
+    DraftTeamRepository,
 )
 from shared.repository.identity import UserRepository
 from shared.rpc.common import optional_actor
@@ -61,7 +61,9 @@ from src.services.draft.board import board_service
 from src.services.draft.chat_access import draft_chat_service
 from src.services.draft.export import export_service
 from src.services.draft.feasibility import feasibility_service
+from src.services.draft.journal import JOURNAL_LIMIT_DEFAULT, journal_service
 from src.services.draft.lifecycle import lifecycle_service
+from src.services.draft.queue import queue_service
 from src.services.draft.role_edit import role_edit_service
 from src.services.draft.selection import selection_service
 
@@ -69,7 +71,7 @@ _SF = db.async_session_maker
 
 _sessions_repo = DraftSessionRepository()
 _picks_repo = DraftPickRepository()
-_audit_repo = DraftAuditEventRepository()
+_teams_repo = DraftTeamRepository()
 _users_repo = UserRepository()
 
 # A single worker-lifetime client (asyncio redis is safe for concurrent use via
@@ -148,25 +150,23 @@ def _pick_event_payload(draft: DraftSession, pick: DraftPick) -> dict:
     }
 
 
-def _override_audit_event(
-    *,
-    session_id: int,
-    pick_id: int,
-    actor_auth_user_id: int,
-    reason: str | None,
-    before: dict[str, Any],
-    after: dict[str, Any],
-) -> DraftAuditEvent:
-    return DraftAuditEvent(
-        session_id=session_id,
-        actor_auth_user_id=actor_auth_user_id,
-        action="pick_overridden",
-        entity_type="draft_pick",
-        entity_id=pick_id,
-        reason=(reason or "").strip() or "Admin override",
-        before_json=before,
-        after_json=after,
-    )
+async def _load_team(session: AsyncSession, draft: DraftSession, team_id: int) -> DraftTeam:
+    team = await _teams_repo.get(session, team_id)
+    if team is None or team.session_id != draft.id:
+        raise HTTPException(status_code=404, detail="Draft team not found")
+    return team
+
+
+def _require_team_actor(data: dict, user: Any, draft: DraftSession, team: DraftTeam, action: str) -> None:
+    """A team's own captain, else a workspace permission.
+
+    Team-scoped data (the fit column, the pick queue) belongs to the captain
+    sitting in that seat; an organizer reaches it through the workspace RBAC
+    they already hold. Nobody else, which is why this is not the public board.
+    """
+    if team.captain_auth_user_id is not None and team.captain_auth_user_id == user.id:
+        return
+    c.require_workspace_permission(data, user, draft.workspace_id, "team", action)
 
 
 def _player_updated_payload(
@@ -277,15 +277,26 @@ async def _publish_result(
 
 
 async def _lifecycle_action(
-    session, redis, session_id, action, event_type, user, **action_kwargs
+    session, redis, session_id, action, event_type, user, *, audit_action: str, **action_kwargs
 ) -> schemas.DraftSessionRead:
     draft = await _load_session(session, session_id)
     await action(session, draft, **action_kwargs)
+    current = await _picks_repo.get(session, draft.current_pick_id) if draft.current_pick_id else None
     extra: dict = {"session_id": draft.id, "status": draft.status}
-    if event_type == "draft.pick_started" and draft.current_pick_id:
-        current = await _picks_repo.get(session, draft.current_pick_id)
+    if event_type == "draft.pick_started" and current is not None:
         extra["pick_id"] = current.id
         extra["clock_expires_at"] = current.clock_expires_at.isoformat() if current.clock_expires_at else None
+    # Journalled inside the transition's own transaction: the organizer's log
+    # cannot show a move the board never made, nor miss one it did.
+    await journal_service.record_lifecycle(
+        session,
+        draft,
+        action=audit_action,
+        actor_auth_user_id=user.id,
+        after=None
+        if current is None
+        else {"pick_id": current.id, "overall_no": current.overall_no, "team_id": current.draft_team_id},
+    )
     await draft_rt.publish_draft_event(
         session, draft_session=draft, event_type=event_type, payload=extra, actor_user_id=user.id
     )
@@ -430,6 +441,63 @@ def register(broker: Any, logger: Any) -> None:
             )
 
         return await c.envelope(logger, "draft.suggestions", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.team_fit")
+    async def _team_fit(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            draft = await _load_session(session, c.require_id(data))
+            team = await _load_team(session, draft, c.path_int(data, "team_id"))
+            _require_team_actor(data, user, draft, team, "read")
+            scores = await feasibility_service.team_fit_scores(session, draft, team_id=team.id)
+            return schemas.DraftTeamFitResponse(
+                session_id=draft.id,
+                team_id=team.id,
+                scores=[schemas.DraftTeamFitScore.model_validate(score) for score in scores],
+            )
+
+        return await c.envelope(logger, "draft.team_fit", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.queue_get")
+    async def _queue_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            draft = await _load_session(session, c.require_id(data))
+            team = await _load_team(session, draft, c.path_int(data, "team_id"))
+            _require_team_actor(data, user, draft, team, "create")
+            return await queue_service.read(session, draft, team)
+
+        return await c.envelope(logger, "draft.queue_get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.queue_set")
+    async def _queue_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            draft = await _load_session(session, c.require_id(data))
+            team = await _load_team(session, draft, c.path_int(data, "team_id"))
+            _require_team_actor(data, user, draft, team, "create")
+            payload = schemas.DraftTeamQueueRequest.model_validate(c.payload(data))
+            response = await queue_service.write(session, draft, team, payload.player_ids)
+            # No realtime event: a queue is viewer-scoped, and the broadcast
+            # topic is read by the whole room including the other captains.
+            await session.commit()
+            return response
+
+        return await c.envelope(logger, "draft.queue_set", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.journal")
+    async def _journal(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            session_id = c.require_id(data)
+            ws_id = await _get_draft_session_workspace_id(session, session_id)
+            c.require_workspace_permission(data, user, ws_id, "team", "create")
+            draft = await _load_session(session, session_id)
+            return await journal_service.list_entries(
+                session, draft, limit=c.q1(data, "limit", int, JOURNAL_LIMIT_DEFAULT)
+            )
+
+        return await c.envelope(logger, "draft.journal", op, session_factory=_SF)
 
     # --- admin lifecycle (keyed by tournament_id) ---------------------------
     @broker.subscriber("rpc.balancer.draft.session_create")
@@ -580,7 +648,9 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "draft.session_patch", op, session_factory=_SF)
 
-    def _make_lifecycle(subject: str, action, event_type: str, *, superuser_forces: bool = False) -> None:
+    def _make_lifecycle(
+        subject: str, action, event_type: str, audit_action: str, *, superuser_forces: bool = False
+    ) -> None:
         @broker.subscriber(subject)
         async def _handler(data: dict, msg: RabbitMessage) -> dict:
             async def op(session: Any) -> Any:
@@ -591,15 +661,30 @@ def register(broker: Any, logger: Any) -> None:
                 c.require_workspace_permission(data, user, ws_id, "team", "create")
                 # Only ``start`` has a phase gate, and only a superuser may skip it.
                 extra = {"force": bool(user.is_superuser)} if superuser_forces else {}
-                return await _lifecycle_action(session, _redis(logger), session_id, action, event_type, user, **extra)
+                return await _lifecycle_action(
+                    session,
+                    _redis(logger),
+                    session_id,
+                    action,
+                    event_type,
+                    user,
+                    audit_action=audit_action,
+                    **extra,
+                )
 
             return await c.envelope(logger, subject, op, session_factory=_SF)
 
-    _make_lifecycle("rpc.balancer.draft.start", lifecycle_service.start, "draft.pick_started", superuser_forces=True)
-    _make_lifecycle("rpc.balancer.draft.pause", lifecycle_service.pause, "draft.paused")
-    _make_lifecycle("rpc.balancer.draft.resume", lifecycle_service.resume, "draft.resumed")
-    _make_lifecycle("rpc.balancer.draft.cancel", lifecycle_service.cancel, "draft.cancelled")
-    _make_lifecycle("rpc.balancer.draft.rollback", lifecycle_service.rollback, "draft.rollback")
+    _make_lifecycle(
+        "rpc.balancer.draft.start",
+        lifecycle_service.start,
+        "draft.pick_started",
+        "started",
+        superuser_forces=True,
+    )
+    _make_lifecycle("rpc.balancer.draft.pause", lifecycle_service.pause, "draft.paused", "paused")
+    _make_lifecycle("rpc.balancer.draft.resume", lifecycle_service.resume, "draft.resumed", "resumed")
+    _make_lifecycle("rpc.balancer.draft.cancel", lifecycle_service.cancel, "draft.cancelled", "cancelled")
+    _make_lifecycle("rpc.balancer.draft.rollback", lifecycle_service.rollback, "draft.rollback", "rollback")
 
     @broker.subscriber("rpc.balancer.draft.session_list")
     async def _session_list(data: dict, msg: RabbitMessage) -> dict:
@@ -730,7 +815,17 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             payload = schemas.DraftPickAutopickRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
-            result = await selection_service.autopick(session, draft, pick, expected_version=payload.expected_version)
+            result = await selection_service.autopick(
+                session,
+                draft,
+                pick,
+                expected_version=payload.expected_version,
+                actor_auth_user_id=user.id,
+                # The cause is a property of the path, not of the body: this
+                # subject IS the admin's "autopick now" button, the clock's own
+                # call is the one that reports ``expiry``.
+                reason="admin",
+            )
             await _publish_result(session, draft, result, made_event="draft.autopicked", actor_user_id=None)
             await session.commit()
             return await board_service.session_read(session, draft)
@@ -749,21 +844,21 @@ def register(broker: Any, logger: Any) -> None:
             await lifecycle_service.extend_pick(
                 session, draft, pick, seconds=payload.seconds, expected_version=payload.expected_version
             )
-            await _audit_repo.create(
+            await journal_service.record(
                 session,
-                DraftAuditEvent(
-                    session_id=draft.id,
-                    actor_auth_user_id=user.id,
-                    action="pick_extended",
-                    entity_type="draft_pick",
-                    entity_id=pick.id,
-                    reason="Admin extended the pick clock",
-                    before_json={"version": payload.expected_version},
-                    after_json={
-                        "seconds": payload.seconds,
-                        "clock_expires_at": pick.clock_expires_at.isoformat() if pick.clock_expires_at else None,
-                    },
-                ),
+                draft.id,
+                action="pick_extended",
+                entity_type="draft_pick",
+                entity_id=pick.id,
+                actor_auth_user_id=user.id,
+                before={"version": payload.expected_version},
+                after={
+                    "pick_id": pick.id,
+                    "overall_no": pick.overall_no,
+                    "team_id": pick.draft_team_id,
+                    "seconds": payload.seconds,
+                    "clock_expires_at": pick.clock_expires_at.isoformat() if pick.clock_expires_at else None,
+                },
             )
             await draft_rt.publish_draft_event(
                 session,
@@ -796,6 +891,8 @@ def register(broker: Any, logger: Any) -> None:
             payload = schemas.DraftPickOverrideRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
             before = {
+                "pick_id": pick.id,
+                "overall_no": pick.overall_no,
                 "player_id": pick.picked_player_id,
                 "team_id": pick.draft_team_id,
                 "role": pick.target_role,
@@ -812,22 +909,24 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=public_user_id,
                 target_role=_to_role(payload.target_role),
             )
-            await _audit_repo.create(
+            await journal_service.record(
                 session,
-                _override_audit_event(
-                    session_id=draft.id,
-                    pick_id=pick.id,
-                    actor_auth_user_id=user.id,
-                    reason=payload.note,
-                    before=before,
-                    after={
-                        "player_id": pick.picked_player_id,
-                        "team_id": pick.draft_team_id,
-                        "role": pick.target_role,
-                        "rank_value": pick.target_rank_value,
-                        "version": pick.version,
-                    },
-                ),
+                draft.id,
+                action="pick_overridden",
+                entity_type="draft_pick",
+                entity_id=pick.id,
+                actor_auth_user_id=user.id,
+                reason=payload.note,
+                before=before,
+                after={
+                    "pick_id": pick.id,
+                    "overall_no": pick.overall_no,
+                    "player_id": pick.picked_player_id,
+                    "team_id": pick.draft_team_id,
+                    "role": pick.target_role,
+                    "rank_value": pick.target_rank_value,
+                    "version": pick.version,
+                },
             )
             await _publish_result(session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id)
             await session.commit()

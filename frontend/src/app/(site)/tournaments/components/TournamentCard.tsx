@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { cn, formatDateRange } from "@/lib/utils";
-import type { Tournament } from "@/types/tournament.types";
+import type { TeamFormation, Tournament } from "@/types/tournament.types";
 
 import { stageProgress } from "./tournaments-helpers";
 
@@ -137,7 +137,7 @@ const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
               <>
                 <span aria-hidden className="text-[color:var(--aqt-fg-faint)]">/</span>
                 <span className="text-[color:var(--aqt-fg-muted)]">
-                  {tournament.team_formation === "draft" ? t("common.draft") : t("common.balancer")}
+                  {t(`common.${tournament.team_formation as TeamFormation}`)}
                 </span>
               </>
             )}

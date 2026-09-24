@@ -63,8 +63,10 @@ class Tournament(db.TimeStampIntegerMixin):
     is_hidden: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false", nullable=False, index=True
     )
-    # How teams are formed for this tournament: "balancer" (auto-balance) or
-    # "draft" (live draft). Stored as text (not a PG enum) to stay flexible.
+    # How teams are formed for this tournament: "balancer" (auto-balance),
+    # "draft" (live draft), "registration" (teams register as a unit) or "solo"
+    # (nominal: players register one by one for FFA, no team is formed).
+    # Stored as text (not a PG enum) to stay flexible.
     team_formation: Mapped[str] = mapped_column(String(), default="balancer", server_default="balancer", nullable=False)
     # No ``server_default``: the only writer is SQLAlchemy, which always sends
     # this column, and a DB-side default could only ever answer a raw INSERT

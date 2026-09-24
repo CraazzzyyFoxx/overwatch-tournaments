@@ -15,7 +15,6 @@ from ._scope import (
     _compare_user_scope_exists,
     _hero_compare_stat_visibility_condition,
 )
-from .overview import OVERVIEW_HERO_METRICS
 
 DEFAULT_HERO_COMPARE_STATS: tuple[enums.LogStatsName, ...] = tuple(
     stat for stat in enums.LogStatsName if stat != enums.LogStatsName.HeroTimePlayed
@@ -323,70 +322,76 @@ class UserCompareQueries:
             )
         achievements = achievements_query.group_by(effective_achievements.c.user_id).cte("compare_achievement_counts")
 
-        eligible_hero_time = (
-            sa.select(
-                models.MatchStatistics.match_id,
-                models.MatchStatistics.user_id,
-                models.MatchStatistics.hero_id,
-            )
-            .where(
-                models.MatchStatistics.round == 0,
-                models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
-                models.MatchStatistics.hero_id.isnot(None),
-                models.MatchStatistics.value > 60,
-                models.MatchStatistics.user_id.in_(sa.select(candidates.c.id)),
-            )
-            .distinct()
-            .cte("compare_eligible_hero_time")
+        # One pass over the per-hero stat rows: each (match, user, hero) is grouped
+        # once and kept only if that hero was played for more than a minute, then
+        # `match` is joined per group for its duration. Joining a separate
+        # "eligible hero time" set back into `statistics` row by row is what timed
+        # the global compare out (OWT-TOURNAMENTS-21T): the planner expects ~10 rows
+        # from that join, gets ~500k, and nested-loops ~115k index probes.
+        per_10_metrics = (
+            (enums.LogStatsName.Eliminations, "eliminations_avg_10"),
+            (enums.LogStatsName.FinalBlows, "final_blows_avg_10"),
+            (enums.LogStatsName.HeroDamageDealt, "hero_damage_dealt_avg_10"),
+            (enums.LogStatsName.HealingDealt, "healing_dealt_avg_10"),
         )
-        per_10_stats = (
+        stat = models.MatchStatistics
+        hero_match_stats = (
             sa.select(
-                models.MatchStatistics.user_id,
+                stat.user_id,
+                stat.match_id,
                 *[
-                    (
-                        sa.func.sum(models.MatchStatistics.value).filter(models.MatchStatistics.name == stat)
-                        / sa.func.nullif(sa.func.sum(models.Match.time).filter(models.MatchStatistics.name == stat), 0)
-                        * 600
-                    ).label(label)
-                    for stat, label in (
-                        (enums.LogStatsName.Eliminations, "eliminations_avg_10"),
-                        (enums.LogStatsName.FinalBlows, "final_blows_avg_10"),
-                        (enums.LogStatsName.HeroDamageDealt, "hero_damage_dealt_avg_10"),
-                        (enums.LogStatsName.HealingDealt, "healing_dealt_avg_10"),
+                    column
+                    for name, label in per_10_metrics
+                    for column in (
+                        sa.func.sum(stat.value).filter(stat.name == name).label(f"{label}_value"),
+                        # Rows, not seconds: `match.time` is applied once per stat row
+                        # below, exactly as summing it over the joined rows did.
+                        sa.func.count().filter(stat.name == name).label(f"{label}_rows"),
                     )
                 ],
             )
-            .select_from(models.MatchStatistics)
-            .join(
-                eligible_hero_time,
-                sa.and_(
-                    eligible_hero_time.c.match_id == models.MatchStatistics.match_id,
-                    eligible_hero_time.c.user_id == models.MatchStatistics.user_id,
-                    eligible_hero_time.c.hero_id == models.MatchStatistics.hero_id,
-                ),
-            )
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(candidates, candidates.c.id == models.MatchStatistics.user_id)
+            .select_from(stat)
             .where(
-                models.MatchStatistics.round == 0,
-                models.MatchStatistics.hero_id.isnot(None),
-                models.MatchStatistics.name.in_(OVERVIEW_HERO_METRICS),
+                stat.round == 0,
+                stat.hero_id.isnot(None),
+                stat.name.in_([*(name for name, _label in per_10_metrics), enums.LogStatsName.HeroTimePlayed]),
+                stat.user_id.in_(sa.select(candidates.c.id)),
             )
         )
         if role is not None or div_min is not None or div_max is not None:
-            per_10_stats = per_10_stats.join(
+            hero_match_stats = hero_match_stats.join(
                 stat_scoped_players,
                 sa.and_(
-                    stat_scoped_players.c.user_id == models.MatchStatistics.user_id,
-                    stat_scoped_players.c.team_id == models.MatchStatistics.team_id,
+                    stat_scoped_players.c.user_id == stat.user_id,
+                    stat_scoped_players.c.team_id == stat.team_id,
                 ),
             )
+        hero_match_stats = (
+            hero_match_stats.group_by(stat.match_id, stat.user_id, stat.hero_id)
+            .having(sa.func.bool_or(sa.and_(stat.name == enums.LogStatsName.HeroTimePlayed, stat.value > 60)))
+            .cte("compare_hero_match_stats")
+        )
+        per_10_stats = (
+            sa.select(
+                hero_match_stats.c.user_id,
+                *[
+                    (
+                        sa.func.sum(hero_match_stats.c[f"{label}_value"])
+                        / sa.func.nullif(sa.func.sum(models.Match.time * hero_match_stats.c[f"{label}_rows"]), 0)
+                        * 600
+                    ).label(label)
+                    for _name, label in per_10_metrics
+                ],
+            )
+            .select_from(hero_match_stats)
+            .join(models.Match, models.Match.id == hero_match_stats.c.match_id)
+        )
         if tournament_id is not None:
             per_10_stats = per_10_stats.join(
                 models.Encounter,
                 models.Encounter.id == models.Match.encounter_id,
             ).where(models.Encounter.tournament_id == tournament_id)
-        per_10_stats = per_10_stats.group_by(models.MatchStatistics.user_id).cte("compare_match_stats")
+        per_10_stats = per_10_stats.group_by(hero_match_stats.c.user_id).cte("compare_match_stats")
 
         # MVP placement spans two LogStatsName columns: ImpactRank when the
         # impact-scoring pipeline computed it for a match, legacy Performance

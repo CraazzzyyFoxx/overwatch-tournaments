@@ -174,6 +174,7 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
                   <SelectItem value="balancer">Auto-balance (Balancer)</SelectItem>
                   <SelectItem value="draft">Live draft</SelectItem>
                   <SelectItem value="registration">Team registration</SelectItem>
+                  <SelectItem value="solo">Solo registration (FFA)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="mt-1.5 text-xs text-muted-foreground">

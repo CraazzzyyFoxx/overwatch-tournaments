@@ -23,13 +23,11 @@ interface OverlayBarProps {
 /**
  * Fixed bottom-center overlay shell for a page's primary "act now" control
  * surface -- centered, width-capped, backdrop-blurred, safe-area-aware.
- * Extracted from the draft room's `PickCommandBar` (which now composes this)
- * so any other room anchoring a live turn/command bar the same way (e.g. the
- * pick-ban pregame room) shares the positioning and chrome instead of
- * duplicating it.
+ * Shared so any room anchoring a live turn/command bar (e.g. the pick-ban
+ * pregame room) gets the same positioning and chrome instead of duplicating it.
  *
- * Pair with bottom padding on the page's scroll container (draft uses
- * `pb-36 sm:pb-32`) so the fixed bar never overlaps trailing content.
+ * Pair with bottom padding on the page's scroll container so the fixed bar
+ * never overlaps trailing content.
  */
 export function OverlayBar({ tone = "neutral", ariaLabel, className, children }: Readonly<OverlayBarProps>) {
   return (

@@ -268,3 +268,20 @@ class DraftPickRepository(BaseRepository[models.DraftPick]):
 class DraftAuditEventRepository(BaseRepository[models.DraftAuditEvent]):
     def __init__(self) -> None:
         super().__init__(models.DraftAuditEvent)
+
+    async def list_with_actor(
+        self, session: AsyncSession, session_id: int, *, limit: int
+    ) -> Sequence[tuple[models.DraftAuditEvent, str | None]]:
+        """The organizer journal: newest first, each row with its actor's name.
+
+        LEFT OUTER, never INNER: a system/clock action has no actor at all, and a
+        deleted account must not erase the row that says what it did.
+        """
+        result = await session.execute(
+            sa.select(self.model, models.AuthUser.username)
+            .outerjoin(models.AuthUser, models.AuthUser.id == self.model.actor_auth_user_id)
+            .where(self.model.session_id == session_id)
+            .order_by(self.model.created_at.desc(), self.model.id.desc())
+            .limit(limit)
+        )
+        return result.tuples().all()

@@ -1,9 +1,11 @@
+import datetime
 import typing
 from dataclasses import dataclass, field
 
 import sqlalchemy as sa
 from pydantic import BaseModel, Field
 
+from shared.domain.roster_shape import RegistrationRoleCode
 from src import schemas
 from src.core import enums, pagination
 from src.schemas.base import Score
@@ -11,6 +13,10 @@ from src.schemas.division_grid import DivisionGridVersionRead
 
 __all__ = (
     "UserProfile",
+    "UserDraftCard",
+    "UserDraftCardHero",
+    "UserDraftCardRole",
+    "UserDraftCardTournament",
     "UserRole",
     "UserTournamentWithStats",
     "UserTournament",
@@ -372,6 +378,64 @@ class UserProfile(BaseModel):
     roles: list[UserRole]
     tournaments: list[UserTournamentSummary]
     hero_statistics: list[schemas.HeroPlaytime]
+
+
+class UserDraftCardRole(BaseModel):
+    """One role's map record on the draft-room player card."""
+
+    role: RegistrationRoleCode
+    maps: int
+    maps_won: int
+
+
+class UserDraftCardHero(BaseModel):
+    """One of the player's signature heroes on the draft-room player card."""
+
+    hero: schemas.HeroRead
+    role: RegistrationRoleCode
+    maps: int
+    maps_won: int
+
+
+class UserDraftCardTournament(BaseModel):
+    """One recent tournament row on the draft-room player card."""
+
+    id: int
+    name: str
+    date: datetime.date | None = None
+    role: RegistrationRoleCode | None = None
+    #: The player's raw rank on that tournament's roster (never a resolved
+    #: division — the draft room resolves it against the tournament's own grid).
+    rank: int | None = None
+    placement: int | None = None
+    teams_count: int
+
+
+class UserDraftCard(BaseModel):
+    """Career summary rendered on the draft room's player island.
+
+    Leagues are excluded throughout (no placement, no bracket) so every number
+    on the card counts the same set of events. A player with no history is a
+    valid card of zeros and empty lists, never a 404.
+    """
+
+    tournaments: int
+    tournaments_won: int
+    maps: int
+    maps_won: int
+    maps_lost: int
+    #: Maps the player finished first on the lobby's MVP placement
+    #: (``COALESCE(ImpactRank, Performance) == 1``); ``None`` only if that
+    #: placement can never be computed.
+    mvp_maps: int | None = None
+    best_placement: int | None = None
+    avg_placement: float | None = None
+    roles: list[UserDraftCardRole] = Field(default_factory=list)
+    #: Every hero played, most-played first: the table shows the top five, the
+    #: role tiles look up the heroes the player declared.
+    heroes: list[UserDraftCardHero] = Field(default_factory=list)
+    #: Newest first, at most 5.
+    recent_tournaments: list[UserDraftCardTournament] = Field(default_factory=list)
 
 
 class HeroStatBest(BaseModel):

@@ -31,7 +31,12 @@ import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Team } from "@/types/team.types";
-import type { StageSummary, Standings, TournamentStatus } from "@/types/tournament.types";
+import type {
+  StageSummary,
+  Standings,
+  TeamFormation,
+  TournamentStatus
+} from "@/types/tournament.types";
 
 import { MatchCard } from "../_components/MatchCard";
 import { MatchRow } from "../_components/MatchRow";
@@ -653,7 +658,7 @@ export default function TournamentOverviewPage({
         ) : null}
         <KeyValue term={t("common.teamFormation")}>
           {t(
-            `common.${(tournament.team_formation ?? "balancer") as "balancer" | "draft" | "registration"}`
+            `common.${(tournament.team_formation ?? "balancer") as TeamFormation}`
           )}
           {rosterSlots.length > 0 ? (
             <span className="ml-2 inline-flex items-center gap-2 align-middle">

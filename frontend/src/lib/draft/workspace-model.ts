@@ -7,35 +7,40 @@ import type {
   DraftRole
 } from "@/types/draft.types";
 
-export type DraftPoolRoleFilter = DraftRole | "all";
+/** `need`: players the ACTING team can still seat on at least one of their roles. */
+export type DraftPoolRoleFilter = DraftRole | "all" | "need";
 export type DraftPoolSort = "rank" | "name";
-export const DRAFT_MOBILE_VIEWS = ["pool", "team", "order"] as const;
+/** Below the wide breakpoint the room is two tabs; the teams panel holds queue and order itself. */
+export const DRAFT_MOBILE_VIEWS = ["pool", "teams"] as const;
 export type DraftMobileView = (typeof DRAFT_MOBILE_VIEWS)[number];
-/** Which list of the board the pool column is showing. */
-export const DRAFT_POOL_TABS = ["available", "shortlist", "drafted"] as const;
+/** Which list of the board the pool panel is showing. `shortlist` is the captain's server-side queue. */
+export const DRAFT_POOL_TABS = ["available", "shortlist", "all"] as const;
 export type DraftPoolTab = (typeof DRAFT_POOL_TABS)[number];
+export const DRAFT_TEAMS_TABS = ["rosters", "queue", "order"] as const;
+export type DraftTeamsTab = (typeof DRAFT_TEAMS_TABS)[number];
 
 export interface DraftViewParams {
   role: DraftPoolRoleFilter;
   sort: DraftPoolSort;
   view: DraftMobileView;
   pool: DraftPoolTab;
+  teams: DraftTeamsTab;
   query: string;
 }
 
 export function parseDraftViewParams(params: URLSearchParams): DraftViewParams {
   const roleValue = params.get("role");
-  const sortValue = params.get("sort");
-  const viewValue = params.get("view");
   const poolValue = params.get("pool");
+  const teamsValue = params.get("teams");
   return {
     role:
-      roleValue === "tank" || roleValue === "damage" || roleValue === "support"
+      roleValue === "tank" || roleValue === "damage" || roleValue === "support" || roleValue === "need"
         ? roleValue
         : "all",
-    sort: sortValue === "name" ? "name" : "rank",
-    view: viewValue === "team" || viewValue === "order" ? viewValue : "pool",
-    pool: poolValue === "shortlist" || poolValue === "drafted" ? poolValue : "available",
+    sort: params.get("sort") === "name" ? "name" : "rank",
+    view: params.get("view") === "teams" ? "teams" : "pool",
+    pool: poolValue === "shortlist" || poolValue === "all" ? poolValue : "available",
+    teams: teamsValue === "queue" || teamsValue === "order" ? teamsValue : "rosters",
     query: params.get("q")?.trim() ?? ""
   };
 }
@@ -46,67 +51,91 @@ const ROLE_LABELS: Record<DraftRole, string[]> = {
   support: ["support", "sup", "heal"],
 };
 
+/**
+ * `needRoles` answers the `need` filter: the roles the acting team can still
+ * seat. Without an acting team (a spectator) `need` narrows nothing.
+ */
 export function filterDraftPlayers(
   players: DraftPlayer[],
-  filters: Pick<DraftViewParams, "role" | "sort" | "query">
+  filters: Pick<DraftViewParams, "role" | "sort" | "query">,
+  needRoles: ReadonlySet<DraftRole> | null = null,
+  { sorted = true }: { sorted?: boolean } = {}
 ): DraftPlayer[] {
   const query = filters.query.toLocaleLowerCase();
-  return players
-    .filter((player) => {
-      const roles = playerRoles(player);
-      const haystack = [
-        player.battle_tag ?? `#${player.id}`,
-        player.sub_role ?? "",
-        ...roles.flatMap((r) => ROLE_LABELS[r] ?? [r]),
-      ].join(" ").toLocaleLowerCase();
-      return (filters.role === "all" || roles.includes(filters.role)) && (!query || haystack.includes(query));
-    })
-    .sort((left, right) => {
-      if (filters.sort === "name") {
-        return (left.battle_tag ?? "").localeCompare(right.battle_tag ?? "");
-      }
-      return (right.effective_rank ?? -1) - (left.effective_rank ?? -1) || left.id - right.id;
-    });
+  const matches = players.filter((player) => {
+    const roles = playerRoles(player);
+    const haystack = [
+      player.battle_tag ?? `#${player.id}`,
+      player.sub_role ?? "",
+      ...Object.values(player.role_sub_roles ?? {}),
+      ...roles.flatMap((r) => ROLE_LABELS[r] ?? [r]),
+    ].join(" ").toLocaleLowerCase();
+    const roleOk =
+      filters.role === "all" ||
+      (filters.role === "need"
+        ? needRoles == null || roles.some((role) => needRoles.has(role))
+        : roles.includes(filters.role));
+    return roleOk && (!query || haystack.includes(query));
+  });
+  if (!sorted) return matches;
+  const role = filters.role;
+  return matches.sort((left, right) => {
+    if (filters.sort === "name") {
+      return (left.battle_tag ?? "").localeCompare(right.battle_tag ?? "");
+    }
+    // Filtered to one role, the rank ON that role is the one being compared.
+    const rankOf = (player: DraftPlayer) =>
+      (role !== "all" && role !== "need" ? player.role_ranks?.[role] : undefined) ?? player.effective_rank ?? -1;
+    return rankOf(right) - rankOf(left) || left.id - right.id;
+  });
 }
 
 export interface DraftPoolView {
   /** Still pickable, unfiltered — the denominator every role count is about. */
   available: DraftPlayer[];
-  /** Already on a roster, with `drafted_by_team_id` set. */
-  drafted: DraftPlayer[];
-  /** The caller's shortlist, narrowed to players still available. */
+  /** Everyone still in the draft: available and already rostered (removed players excluded). */
+  all: DraftPlayer[];
+  /** The captain's queue, in queue order, narrowed to players still available. */
   shortlist: DraftPlayer[];
-  /** Whichever of the three `pool` names, with role/query/sort applied. */
+  /** Whichever of the three `pool` names, with role/query applied; sorted except the queue. */
   filtered: DraftPlayer[];
   roleCounts: Record<DraftRole, number>;
+  /** Available players the acting team can seat; `null` without an acting team. */
+  needCount: number | null;
 }
 
-const NO_SHORTLIST: ReadonlySet<number> = new Set();
+const NO_QUEUE: readonly number[] = [];
 
 /**
- * The three lists the pool column can show, plus the filtered one it renders.
+ * The three lists the pool panel can show, plus the filtered one it renders.
  *
  * `roleCounts` deliberately stays on AVAILABLE whichever tab is open: "who is
- * left per role" is the question the role chips answer, and counting the
- * shortlist or the drafted there would answer a question nobody asked.
+ * left per role" is the question the role chips answer. The queue keeps its
+ * own order — it IS the autopick priority, so re-sorting it would lie.
  */
 export function draftPoolView(
   players: DraftPlayer[],
   filters: Pick<DraftViewParams, "role" | "sort" | "query" | "pool">,
-  shortlistIds: ReadonlySet<number> = NO_SHORTLIST
+  queueIds: readonly number[] = NO_QUEUE,
+  needRoles: ReadonlySet<DraftRole> | null = null
 ): DraftPoolView {
   const available = players.filter((player) => player.status === "available");
-  const drafted = players.filter((player) => player.status === "picked");
-  const shortlist = available.filter((player) => shortlistIds.has(player.id));
+  const all = players.filter((player) => player.status !== "removed");
+  const byId = new Map(available.map((player) => [player.id, player]));
+  const shortlist = queueIds.flatMap((id) => byId.get(id) ?? []);
   const roleCounts: Record<DraftRole, number> = { tank: 0, damage: 0, support: 0 };
   for (const player of available) {
     for (const role of playerRoles(player)) {
       roleCounts[role] += 1;
     }
   }
-  const source =
-    filters.pool === "drafted" ? drafted : filters.pool === "shortlist" ? shortlist : available;
-  return { available, drafted, shortlist, filtered: filterDraftPlayers(source, filters), roleCounts };
+  const needCount =
+    needRoles == null
+      ? null
+      : available.filter((player) => playerRoles(player).some((role) => needRoles.has(role))).length;
+  const source = filters.pool === "all" ? all : filters.pool === "shortlist" ? shortlist : available;
+  const filtered = filterDraftPlayers(source, filters, needRoles, { sorted: filters.pool !== "shortlist" });
+  return { available, all, shortlist, filtered, roleCounts, needCount };
 }
 
 export function optionForSelection(
@@ -173,26 +202,6 @@ export function allPlayerHeroes(player: DraftPlayer): { slug: string; imagePath:
   return [...seen].map(([slug, imagePath]) => ({ slug, imagePath }));
 }
 
-export interface DraftRoundGroup {
-  round: number;
-  picks: DraftPick[];
-}
-
-export function groupPicksByRound(picks: DraftPick[]): DraftRoundGroup[] {
-  const byRound = new Map<number, DraftPick[]>();
-  for (const pick of picks) {
-    const list = byRound.get(pick.round_no) ?? [];
-    list.push(pick);
-    byRound.set(pick.round_no, list);
-  }
-  return [...byRound.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([round, list]) => ({
-      round,
-      picks: [...list].sort((l, r) => l.pick_in_round - r.pick_in_round || l.overall_no - r.overall_no),
-    }));
-}
-
 export function rosterRoleForPlayer(player: DraftPlayer, picks: DraftPick[]): DraftRole | null {
   const pick = picks.find((p) => p.picked_player_id === player.id && p.target_role != null);
   return (pick?.target_role as DraftRole | undefined) ?? player.primary_role;
@@ -215,17 +224,4 @@ export function slotRankForPlayer(
     return Object.keys(player.role_ranks ?? {}).length > 0 ? (player.effective_rank ?? null) : null;
   }
   return player.role_ranks?.[role] ?? null;
-}
-
-/**
- * How many picks a team still has to wait before it is on the clock, or `null`
- * when it is already on the clock or has no pick left. Shared by the spectator
- * board and the captain command bar so both count the same way.
- */
-export function picksUntilTeamTurn(picks: DraftPick[], teamId: number): number | null {
-  const upcoming = picks
-    .filter((pick) => pick.status === "upcoming" || pick.status === "on_clock")
-    .sort((left, right) => left.overall_no - right.overall_no);
-  const index = upcoming.findIndex((pick) => pick.draft_team_id === teamId);
-  return index > 0 ? index : null;
 }

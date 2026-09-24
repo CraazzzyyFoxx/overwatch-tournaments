@@ -5,9 +5,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DraftGating } from "@/lib/draft/logic";
 import type { DraftBoard, DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 import type { DraftMutations } from "@/hooks/useDraftData";
+import type { Tournament } from "@/types/tournament.types";
 
 mock.module("next-intl", () => ({
   useLocale: () => "en",
+  useFormatter: () => ({
+    dateTime: () => "",
+    number: (value: number) => String(value),
+    relativeTime: () => ""
+  }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key
 }));
@@ -43,6 +49,7 @@ const player = (id: number, overrides: Partial<DraftPlayer> = {}): DraftPlayer =
   role_ranks: { support: 3000, damage: 2800 },
   role_sources: {},
   role_top_heroes: {},
+  role_sub_roles: {},
   notes: null,
   custom_fields: [],
   version: 1,
@@ -69,7 +76,7 @@ const onClockPick: DraftPick = {
   version: 2
 };
 
-function board(overrides: Partial<DraftBoard> = {}): DraftBoard {
+function board(overrides: Partial<DraftBoard> = {}, session: Partial<DraftBoard["session"]> = {}): DraftBoard {
   return {
     session: {
       id: 1,
@@ -98,10 +105,11 @@ function board(overrides: Partial<DraftBoard> = {}): DraftBoard {
       export_status: null,
       settings_json: {},
       version: 0,
-      created_at: null
+      created_at: null,
+      ...session
     },
     teams: [team(10, 1), team(11, 2)],
-    picks: [onClockPick, { ...onClockPick, id: 2, overall_no: 2, draft_team_id: 11, status: "upcoming" }],
+    picks: [onClockPick, { ...onClockPick, id: 2, overall_no: 2, pick_in_round: 2, draft_team_id: 11, status: "upcoming" }],
     players: [player(50), player(51)],
     current_pick: onClockPick,
     server_time: "2026-06-05T00:00:00Z",
@@ -120,6 +128,8 @@ const mutations = {
   extendClock: { mutate: noop, isPending: false }
 } as unknown as DraftMutations;
 
+const tournament = { id: 5, name: "Cup #41", workspace_id: 2 } as unknown as Tournament;
+
 const gating = (overrides: Partial<DraftGating>): DraftGating => ({
   myTeamId: null,
   isCaptain: false,
@@ -129,80 +139,125 @@ const gating = (overrides: Partial<DraftGating>): DraftGating => ({
   ...overrides
 });
 
-function render(seat: DraftGating, boardOverrides: Partial<DraftBoard> = {}) {
+const spectator = gating({ isSpectator: true });
+const captainOnClock = gating({ isCaptain: true, isMyPick: true, myTeamId: 10 });
+const admin = gating({ isAdmin: true });
+
+// Quotes unescaped so assertions can name the translation payloads as written.
+function render(seat: DraftGating, snapshot: DraftBoard = board()) {
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <DraftWorkspace
-        board={board(boardOverrides)}
+        tournament={tournament}
+        board={snapshot}
         gating={seat}
+        presence={{ users: {}, anonymous_viewer_count: 3 }}
         options={null}
         optionsLoading={false}
         onRetryOptions={noop}
         connectionState="connected"
-        viewParams={{ role: "all", sort: "rank", view: "pool", pool: "available", query: "" }}
+        viewParams={{ role: "all", sort: "rank", view: "pool", pool: "available", teams: "rosters", query: "" }}
         onViewParamsChange={noop}
         mutations={mutations}
         divisionGrid={{ tiers: [] }}
+        onlineCaptainIds={new Set()}
       />
     </QueryClientProvider>
-  );
+  ).replaceAll("&quot;", '"');
 }
 
 describe("DraftWorkspace seats", () => {
-  test("a spectator gets the board and the clock, and nothing to press", () => {
-    const html = render(gating({ isSpectator: true }));
+  test("a spectator reads the clock, and gets no organizer strip", () => {
+    const html = render(spectator);
 
-    expect(html).not.toContain("pickAs:");
-    expect(html).not.toContain("confirmPick");
-    expect(html).not.toContain("admin.pause");
-    // The bar is still there: the clock and who is on it are public.
     expect(html).toContain('role="timer"');
-    expect(html).toContain("spectatorReadOnly");
+    expect(html).toContain("shell.seat.spectator");
+    expect(html).toContain("shell.strip.picking");
+    expect(html).not.toContain("shell.admin.label");
+    expect(html).not.toContain("admin.pause");
   });
 
-  test("a captain on the clock confirms straight from the bar", () => {
-    const html = render(gating({ isCaptain: true, isMyPick: true, myTeamId: 10 }));
+  test("a captain on the clock is told it is their turn", () => {
+    const html = render(captainOnClock);
 
-    expect(html).toContain("confirmPick");
-    // One click, not a review dialog restating the selection beside it.
-    expect(html).not.toContain("confirmPickTitle");
-    expect(html).toContain("pickAs:");
-    // My own open role slots double as pool filters.
-    expect(html).toContain("filterBySlot:");
+    expect(html).toContain('shell.seat.captain:{"team":"Team 10"}');
+    expect(html).toContain("shell.strip.myTurn");
+    expect(html).not.toContain("shell.admin.label");
   });
 
-  test("an admin gets the dock, a captain does not", () => {
-    const adminHtml = render(gating({ isAdmin: true }));
+  test("a captain waiting for their turn sees how far away it is", () => {
+    const html = render(gating({ isCaptain: true, myTeamId: 11 }));
+
+    expect(html).toContain('shell.strip.myTurnIn:{"count":1}');
+    expect(html).not.toContain("shell.strip.myTurn<");
+  });
+
+  test("an admin gets the organizer strip, a captain does not", () => {
+    const adminHtml = render(admin);
     const captainHtml = render(gating({ isCaptain: true, myTeamId: 10 }));
 
+    expect(adminHtml).toContain("shell.seat.admin");
     expect(adminHtml).toContain("admin.pause");
-    expect(adminHtml).toContain("admin.rollback");
+    expect(adminHtml).toContain("shell.admin.autopickNow");
+    expect(adminHtml).toContain('shell.admin.captainsOnline:{"online":0,"total":2}');
     expect(captainHtml).not.toContain("admin.pause");
   });
 
   test("an admin who also captains keeps both affordances", () => {
     const html = render(gating({ isAdmin: true, isCaptain: true, isMyPick: true, myTeamId: 10 }));
 
+    expect(html).toContain('shell.seat.captain_admin:{"team":"Team 10"}');
     expect(html).toContain("admin.pause");
-    expect(html).toContain("confirmPick");
+    expect(html).toContain("shell.strip.myTurn");
   });
 
-  test("the mobile and desktop trees each own their heading ids", () => {
-    // Both are mounted at once, so a shared id would make every
-    // aria-labelledby in the room resolve to the first match.
-    const html = render(gating({ isSpectator: true }));
+  test("rollback names the pick it would undo", () => {
+    const done: DraftPick = { ...onClockPick, status: "completed", picked_player_id: 50 };
+    const next: DraftPick = { ...onClockPick, id: 2, overall_no: 2, pick_in_round: 2, draft_team_id: 11 };
+    const html = render(admin, board({ picks: [done, next], current_pick: next }));
 
-    expect(html).toContain('id="player-pool-mobile-heading"');
-    expect(html).toContain('id="player-pool-desktop-heading"');
-    // Radix mounts only the active tab panel, so the order rail's own pair is
-    // covered by the desktop rail plus the mobile one the tab renders when open.
-    expect(html).toContain('id="draft-order-desktop-heading"');
+    expect(html).toContain('shell.admin.rollbackPick:{"pick":1}');
   });
 
-  test("overtime is announced on the bar, not only on the ring", () => {
+  test("the header links back to the tournament and counts the room", () => {
+    const html = render(spectator);
+
+    expect(html).toContain('href="/tournaments/5"');
+    expect(html).toContain("Cup #41");
+    expect(html).toContain('shell.viewers:{"count":3}');
+    expect(html).toContain("shell.formatLine:");
+  });
+});
+
+describe("DraftWorkspace banner", () => {
+  test("a pause reads differently to the captain waiting on it than to a spectator", () => {
+    const paused = board({}, { status: "paused" });
+
+    expect(render(gating({ isCaptain: true, myTeamId: 10 }), paused)).toContain("shell.banner.pausedCaptain");
+    expect(render(spectator, paused)).toContain("shell.banner.pausedSpectator");
+  });
+
+  test("a blocked draft links the organizer to the fix, nobody else", () => {
+    const blocked = board({}, { status: "paused", blocked_reason: "role_shortage" });
+    const link = 'href="/admin/tournaments/5/teams/draft"';
+
+    expect(render(admin, blocked)).toContain("shell.banner.blocked.role_shortage");
+    expect(render(admin, blocked)).toContain(link);
+    expect(render(spectator, blocked)).not.toContain(link);
+  });
+
+  test("overtime of another team names that team", () => {
     const pick = { ...onClockPick, overtime_started_at: "2026-06-05T00:00:45Z" };
-    const html = render(gating({ isSpectator: true }), { current_pick: pick, picks: [pick] });
+    const html = render(spectator, board({ current_pick: pick, picks: [pick] }));
 
-    expect(html).toContain(">overtime<");
+    expect(html).toContain("shell.banner.overtimeOther:");
+    expect(html).toContain('"team":"Team 10"');
+  });
+
+  test("a finished draft says so, and the strip stops naming a team on the clock", () => {
+    const html = render(spectator, board({ current_pick: null }, { status: "completed" }));
+
+    expect(html).toContain("shell.banner.finished:");
+    expect(html).toContain("shell.strip.completed");
   });
 });

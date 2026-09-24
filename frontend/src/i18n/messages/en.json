@@ -36,8 +36,10 @@
     "profile": "Profile",
     "subscriptionColumn": "Subscription",
     "accountSettings": "Account settings",
-    "logout": "Logout",
+    "logout": "Sign out",
+    "linkPlayer": "Link your player",
     "language": "Language",
+    "notificationSettings": "Notification settings",
     "noTeams": "No teams to show.",
     "noParticipants": "No participants found.",
     "noStandings": "No standings available yet.",
@@ -270,6 +272,7 @@
       "remove": "Remove from favorites"
     },
     "registration": "Team registration",
+    "solo": "Solo registration (FFA)",
     "connection": {
       "idle": "Realtime idle",
       "connecting": "Connecting",
@@ -4283,7 +4286,7 @@
     }
   },
   "nav": {
-    "login": "Login",
+    "login": "Sign in",
     "toggleMenu": "Toggle navigation menu",
     "groups": {
       "tournaments": "Tournaments",
@@ -4725,39 +4728,11 @@
   },
   "draftRedesign": {
     "room": {
-      "back": "Back to tournament",
-      "backShort": "Back",
-      "coordinate": "Draft room / public",
-      "loadingName": "Loading tournament",
-      "publicBoard": "Public board"
+      "back": "Back to tournament"
     },
-    "status": {
-      "setup": "Setup",
-      "ready": "Ready",
-      "live": "Live",
-      "paused": "Paused",
-      "completed": "Completed",
-      "cancelled": "Cancelled"
-    },
-    "onClockLabel": "On the clock",
-    "anonymousViewers": "Viewers: {count}",
-    "captainOnline": "Online",
-    "captainOffline": "Offline",
     "yourTurn": "Your turn",
-    "pickMeta": "Pick {pick} of {total}",
-    "pickWaiting": "Waiting for {team}",
-    "yourTurnInPicks": "You pick in {n, plural, one {# pick} other {# picks}}",
-    "draftOrder": "Draft order",
-    "round": "Round {n}",
-    "pending": "Pending",
-    "pickDone": "Pick made",
     "unknownTeam": "Unknown team",
     "myTeam": "My team",
-    "teamRosters": "Team rosters",
-    "emptyRoster": "No selections yet",
-    "teamAverage": "Avg",
-    "openSlot": "Open slot",
-    "onTheClock": "On the clock",
     "roles": {
       "tank": "Tank",
       "damage": "Damage",
@@ -4765,32 +4740,16 @@
       "flex": "Flex"
     },
     "flex": "Flex",
-    "availablePool": "Player pool",
-    "searchPlayers": "Search players",
-    "filterRole": "Filter by role",
-    "allRoles": "All roles",
-    "sortPool": "Sort players",
-    "sortRank": "Rank",
-    "sortName": "Name",
-    "noFilterResults": "No players match these filters.",
-    "noFilterResultsHint": "Clear the search or broaden the selected role.",
     "resetFilters": "Reset filters",
-    "poolExhausted": "Every player has already been drafted.",
     "heroFilter": "Heroes",
     "heroFilterClear": "Clear",
     "heroFilterCount": "{count, plural, one {# hero} other {# heroes}}",
     "unsafeOption": "Unavailable for this pick",
-    "safeOption": "Safe pick",
-    "unsafePlayerReason": "This player has no role that keeps every remaining roster feasible.",
-    "removeShortlist": "Remove from shortlist",
-    "addShortlist": "Add to shortlist",
     "captain": "Captain",
-    "secondaryRoles": "Secondary roles",
     "note": "Note",
     "customFieldYes": "Yes",
     "customFieldNo": "No",
     "role": "Role",
-    "primaryRole": "Primary role",
     "noRole": "No role",
     "noRoleHint": "This player has no ranked role, so there is nothing to pick them on. Add a rank in the balancer.",
     "rankSource": {
@@ -4810,70 +4769,31 @@
       "slot_filled": "This roster slot is already filled.",
       "role_shortage": "Choosing this option would leave another required role impossible to fill."
     },
-    "shortlistEmpty": "Save players here while you compare options. This list is private to this browser.",
-    "pickCommand": "Pick command",
-    "selectionFor": "Selection for {team}",
-    "noSelection": "Select a player and an available role to review the pick.",
     "waitingFreshData": "Confirmation waits for a live connection and options matching the current pick version.",
-    "enterHint": "Enter",
-    "confirmPick": "Confirm pick",
     "pickSuccess": "{player} was picked successfully.",
     "checkingSafeOptions": "Checking every player-role option against the remaining draft…",
     "safeOptionsUnavailable": "The safe-pick check could not be loaded, so no player is marked safe or blocked here.",
     "mobileViews": "Draft workspace sections",
-    "mobileView": {
-      "players": "Players",
-      "rosters": "Rosters",
-      "order": "Order"
-    },
-    "spectatorCompleted": "The draft is complete. These are the final rosters and recorded selections.",
-    "spectatorReadOnly": "This public board updates live. Selection controls are shown only to registered captains.",
     "loadingTitle": "Loading the draft room",
-    "loadingHint": "Fetching the latest order, rosters and connection state.",
     "loadErrorTitle": "The draft room could not be loaded",
     "loadErrorHint": "The server did not return a current board. Retry without losing your page context.",
     "retry": "Retry",
     "emptyTitle": "Draft is not configured yet",
     "emptyHint": "The organizer needs to create and validate the draft before the public room becomes available.",
     "profile": {
-      "tabRegistration": "Registration",
-      "tabStats": "Statistics",
-      "draftedBy": "Drafted by {team}",
-      "available": "Still in the pool",
       "removed": "Removed from the pool",
-      "rolesHeading": "Roles",
       "answersHeading": "Registration answers",
       "noAnswers": "This player answered none of the public questions.",
       "stats": {
         "loading": "Loading statistics",
         "error": "Could not load this player's statistics.",
-        "retry": "Try again",
-        "tournaments": "Tournaments",
-        "won": "Won",
-        "winrate": "Map winrate",
-        "avgPlacement": "Avg. placement",
-        "roles": "Roles played",
-        "topHeroes": "Most played heroes",
-        "recentTournaments": "Recent tournaments",
-        "maps": "{won}/{maps} maps",
-        "league": "League",
-        "empty": "No tournament history yet."
+        "retry": "Try again"
       }
     },
     "openProfile": "Open {player}'s profile",
     "pickAs": "Pick {player} as {role}",
-    "filterPool": "Which players to show",
-    "poolTab": {
-      "available": "Available ({count})",
-      "shortlist": "Shortlist ({count})",
-      "drafted": "Drafted ({count})"
-    },
-    "draftedEmpty": "Nobody has been drafted yet.",
     "filterBySlot": "Show {role} players",
     "selectionTaken": "{player} was just drafted by another team, so your selection was cleared.",
-    "overtime": "Overtime",
-    "overrideNote": "Why you are overriding this pick",
-    "applyOverride": "Apply override",
     "overrideDisabled": "Admin overrides are disabled for this draft.",
     "overrideSuccess": "{player} was assigned by override.",
     "badge": {
@@ -4886,14 +4806,12 @@
       "pause": "Pause",
       "resume": "Resume",
       "addSeconds": "+{seconds}s",
-      "autopick": "Autopick",
       "rollback": "Roll back",
       "autopickTitle": "Autopick this turn?",
       "autopickDescription": "The server picks the best remaining fit for the team on the clock and the draft moves on.",
       "rollbackTitle": "Roll the last pick back?",
       "rollbackDescription": "The last completed pick returns to the pool and that team goes back on the clock.",
       "cancel": "Cancel",
-      "captainsOnline": "Captains {online}/{total}",
       "feasible": "Feasible",
       "infeasible": "Not feasible — fix roles",
       "done": {
@@ -4902,6 +4820,393 @@
         "rollback": "The last pick was rolled back.",
         "extend": "Added {seconds} seconds to the clock.",
         "autopick": "The pick was made automatically."
+      }
+    },
+    "shell": {
+      "title": "Draft",
+      "status": {
+        "live": "Live",
+        "paused": "Paused",
+        "completed": "Finished",
+        "notStarted": "Not started",
+        "cancelled": "Cancelled",
+        "blocked": "Stopped"
+      },
+      "formatName": {
+        "snake": "Snake",
+        "linear": "Linear",
+        "custom": "Custom order"
+      },
+      "formatLine": "{format} · {teams, plural, one {# team} other {# teams}} · {rounds, plural, one {# round} other {# rounds}} · {seconds}s per pick",
+      "viewers": "{count, plural, one {# viewer} other {# viewers}}",
+      "seat": {
+        "captain": "You captain {team}",
+        "captain_admin": "Captain of {team} and organizer",
+        "admin": "Organizer",
+        "spectator": "Spectator"
+      },
+      "strip": {
+        "myTurn": "Your turn",
+        "picking": "Picking now",
+        "firstPick": "Picks first",
+        "completed": "Draft finished",
+        "cancelled": "Draft cancelled",
+        "picksMade": "{count, plural, one {# pick} other {# picks}}",
+        "captainOnline": "Captain is in the room",
+        "captainOffline": "Captain is not in the room",
+        "pick": "Pick {pick} of {total}",
+        "round": "Round {round} of {rounds} · {direction}",
+        "direction": {
+          "forward": "forward order",
+          "reverse": "reverse order",
+          "custom": "custom order"
+        },
+        "allRounds": "All rounds",
+        "track": "Round {round} · {done} / {total}",
+        "tick": "P{pick} · {team}",
+        "tickPlayer": "P{pick} · {team} — {player}",
+        "myTurnIn": "Your turn in {count}",
+        "next": "Next: {teams}",
+        "nextMine": "{team} (you)",
+        "finalPick": "Final pick",
+        "lastPick": "Last pick:",
+        "autoTitle": "The captain ran out of time — the pick was made automatically"
+      },
+      "admin": {
+        "label": "Organizer",
+        "autopickNow": "Autopick now",
+        "rollbackPick": "Roll back P{pick}",
+        "captainsOnline": "Captains in the room: {online} of {total}",
+        "journal": "Journal",
+        "journalCount": "Journal · {count}",
+        "journalHide": "Hide journal"
+      },
+      "journal": {
+        "label": "Draft journal",
+        "loading": "Loading the journal…",
+        "empty": "Nothing has happened yet.",
+        "error": "The journal did not load.",
+        "system": "system",
+        "unknownTeam": "a team",
+        "unknownPlayer": "a player",
+        "action": {
+          "pick_made": "P{pick} · {team} — {player}, {role}",
+          "pick_autopicked": "P{pick} · {team} — {player}, {role} · autopick",
+          "pick_overridden": "P{pick} · {team} — {player}, {role} · override: “{reason}”",
+          "pick_extended": "+{seconds}s for {team} (P{pick})",
+          "paused": "Paused",
+          "resumed": "Draft resumed",
+          "rollback": "Rolled back P{pick}: {player} returned to the pool",
+          "started": "Draft started",
+          "completed": "Draft finished",
+          "cancelled": "Draft cancelled",
+          "player_role_added": "{player}: role {role} added",
+          "unknown": "{action}"
+        }
+      },
+      "banner": {
+        "pausedCaptain": "The draft is paused. Your selection is kept — the clock continues when the organizer resumes.",
+        "pausedSpectator": "The draft is paused. Waiting for the organizer to resume.",
+        "blocked": {
+          "role_shortage": "The draft stopped: the remaining players can no longer fill every roster. The organizer has to add a missing role.",
+          "order_recalculated": "The pick order of this round was recalculated. The draft continues once the organizer resumes it.",
+          "other": "The draft stopped and is waiting for the organizer."
+        },
+        "blockedAdminLink": "Open draft setup",
+        "overtimeQueue": "Main time is up. In {time} the autopick takes {player} from your list.",
+        "overtimeFit": "Main time is up. In {time} the autopick takes {player} — the best fit for an open role.",
+        "overtimeMine": "Main time is up. In {time} the autopick fires.",
+        "overtimeOther": "Overtime for {team}: the autopick fires in {time}.",
+        "finished": "Draft finished: {picks, plural, one {# pick} other {# picks}}, {teams, plural, one {# team} other {# teams}} assembled. The summary is above the player list.",
+        "notStarted": "The draft has not started yet. The organizer starts it once everyone is ready.",
+        "cancelled": "The organizer cancelled this draft."
+      },
+      "tabs": {
+        "pool": "Players",
+        "teams": "Teams"
+      }
+    },
+    "pool": {
+      "title": "Players",
+      "tabsLabel": "Player list",
+      "tab": {
+        "available": "Available",
+        "shortlist": "My list",
+        "all": "All"
+      },
+      "search": "Search by tag",
+      "roleFilter": "Filter by role",
+      "chip": {
+        "need": "{team} needs",
+        "all": "All",
+        "aria": "{label}: {count}"
+      },
+      "sortLabel": "Sort",
+      "sort": {
+        "rank": "Rank",
+        "name": "Tag"
+      },
+      "heroEmpty": "No heroes found.",
+      "market": {
+        "label": "Open slots and supply per role",
+        "slots": "{role} · {count, plural, one {# slot} other {# slots}}",
+        "supply": "{primary} {total, plural, one {player} other {players}}",
+        "supplyWithSecondary": "{primary} +{secondary} {total, plural, one {player} other {players}}",
+        "title": "Open “{role}” slots across all teams: {open}. In the pool: {primary} with it as their main role and {secondary} more as a secondary one.",
+        "deficit": "Fewer players than slots — someone will play off-role."
+      },
+      "summary": {
+        "title": "Draft results",
+        "spread": "Team spread",
+        "spreadSub": "between the extremes by average rank",
+        "offRole": "Off-role",
+        "offRoleSub": "players in rosters",
+        "autopicks": "Autopicks",
+        "autopicksSub": "of {total, plural, one {# pick} other {# picks}}",
+        "overrides": "Overrides",
+        "overridesSub": "by the organizer"
+      },
+      "col": {
+        "player": "Player",
+        "fit": "Fit",
+        "demand": "Demand"
+      },
+      "row": {
+        "select": "Select on the best open role",
+        "open": "Open the player card"
+      },
+      "note": {
+        "noSlot": "No open slot: {roles}",
+        "full": "{team} roster is complete",
+        "taken": "Already on {team}"
+      },
+      "reason": {
+        "noSlot": "{team} has no open slot for {role}"
+      },
+      "cell": {
+        "primary": "Main",
+        "second": "Second",
+        "third": "Third",
+        "primaryMark": "main",
+        "priority": "Priority {n} of {total}",
+        "noSubRole": "no sub-role"
+      },
+      "right": {
+        "captain": "captain",
+        "offRole": "off-role"
+      },
+      "fitTitle": "Fit for {team} on {role}",
+      "fitTitleAny": "Fit for {team}",
+      "demand": "wanted {count}",
+      "demandTitle": "How many teams can still take this player on one of their roles",
+      "queueAdd": "Add to my list",
+      "queueRemove": "Remove from my list",
+      "moveUp": "Move up the list",
+      "moveDown": "Move down the list",
+      "empty": {
+        "filteredTitle": "Filters excluded everyone",
+        "filteredText": "Nobody matches the role, heroes and search at once.",
+        "shortlistTitle": "The list is empty",
+        "shortlistText": "Mark players with the heart — the list order becomes your autopick priority.",
+        "noneTitle": "Nobody here yet",
+        "noneText": "Every player is already on a roster."
+      }
+    },
+    "teams": {
+      "title": "Teams",
+      "tabsLabel": "Teams view",
+      "tabs": {
+        "rosters": "Rosters",
+        "queue": "Queue",
+        "order": "Order",
+        "orderCount": "{count} rd"
+      },
+      "caption": {
+        "order": "{kind, select, snake {Snake} linear {Straight order} other {Custom order}} · {count, plural, one {# pick} other {# picks}}",
+        "queue": "P{pick} of {total}",
+        "rosters": "{count, plural, one {# team} other {# teams}}",
+        "rostersFiltered": "{shown} of {total}"
+      },
+      "chips": {
+        "label": "Filter teams",
+        "all": "All",
+        "allAria": "All teams: {count}",
+        "follow": "Following",
+        "followAria": "Teams I follow: {count}",
+        "need": "Needs",
+        "needAria": "Needs {role, select, tank {a tank} damage {damage} support {a support} other {a player}}: {count}"
+      },
+      "sort": {
+        "label": "Sort teams",
+        "order": "Order",
+        "next": "Picks soon",
+        "avg": "Rating"
+      },
+      "col": {
+        "team": "Team",
+        "avg": "Avg",
+        "avgTitle": "Average rating of filled slots"
+      },
+      "listLabel": "Team rosters",
+      "sub": {
+        "full": "complete",
+        "myTurn": "you · your pick",
+        "picking": "picking now",
+        "first": "picks first",
+        "in": "picks in {n}",
+        "mine": "you · {status}"
+      },
+      "follow": "Follow {team}",
+      "unfollow": "Unfollow {team}",
+      "followTitle": "Follow this team",
+      "captainOnline": "Captain is in the room",
+      "captainOffline": "Captain is not in the room",
+      "avgEmpty": "No slots filled",
+      "empty": {
+        "follow": "Star teams and they will gather here.",
+        "role": "No team needs this role anymore."
+      },
+      "cell": {
+        "open": "Open: {role}",
+        "openFilter": "Open: {role} — show players for this role",
+        "offRole": "off-role"
+      },
+      "anyRole": "any role",
+      "pickNo": "P{n}",
+      "mineName": "{name} · you",
+      "queue": {
+        "upcoming": "Up next",
+        "empty": "Every pick is made.",
+        "sub": "Round {round} · needs: {needs}",
+        "now": "now",
+        "first": "first",
+        "in": "in {n}"
+      },
+      "history": {
+        "title": "History",
+        "empty": "No picks yet",
+        "autoTitle": "The captain ran out of time — autopick",
+        "overrideTitle": "Replaced by the organizer",
+        "overtimeTitle": "Made in overtime",
+        "collapse": "Collapse",
+        "showAll": "Show all {count}"
+      },
+      "order": {
+        "note": {
+          "linear": "Straight order: every round runs from the 1st seat to the last.",
+          "snake": "Snake: rounds alternate direction. Whoever picked last in a round picks first in the next one.",
+          "custom": "Custom order: the organizer set the sequence of each round. The arrow shows a round's direction; the shuffle icon marks a round in its own order."
+        },
+        "roundTitle": "Round {n} · {direction, select, forward {straight order} reverse {reverse order} other {custom order}}",
+        "roundShort": "R{n}",
+        "now": "now",
+        "skipped": "skipped",
+        "in": "in {n}",
+        "cellTitle": "Round {round}, pick {n}"
+      }
+    },
+    "island": {
+      "aria": "Player {player}",
+      "close": "Close",
+      "status": {
+        "available": "Available",
+        "picked": "Drafted · {team}",
+        "captain": "Captain · {team}"
+      },
+      "rolePriority": "Role priority:",
+      "rolePriorityItem": "{n}. {role}",
+      "rolePriorityItemSub": "{n}. {role} ({subRole})",
+      "targets": {
+        "label": "Which team you are picking for",
+        "mine": "{team} · my pick",
+        "clock": "{team} · override"
+      },
+      "queue": {
+        "add": "Add to my list",
+        "remove": "Remove from my list"
+      },
+      "firstTournament": "First tournament on the platform — no match history yet.",
+      "noAccount": "No account on the platform — no match history to show.",
+      "stats": {
+        "tournaments": "Tournaments",
+        "tournamentsTitle": "Tournaments played on the platform",
+        "wins": "{n, plural, =0 {no wins} one {# win} other {# wins}}",
+        "maps": "Maps",
+        "mapsTitle": "Maps played across all tournaments",
+        "mvp": "MVP on {n, plural, one {# map} other {# maps}}",
+        "winrate": "Map winrate",
+        "winrateTitle": "Maps won and lost",
+        "winrateLow": "fewer than 10 maps",
+        "winrateHidden": "Winrate hidden: fewer than 10 maps",
+        "lowSample": "Few games",
+        "best": "Best place",
+        "avg": "avg #{place}",
+        "bestTitle": "Best and average final placement",
+        "trend": "Trend",
+        "trendOver": "over {n, plural, one {# tournament} other {# tournaments}}",
+        "trendSingle": "one tournament",
+        "trendTitle": "Rank change between the oldest and the newest tournament shown"
+      },
+      "rolesGroup": "Player roles",
+      "priority": {
+        "primary": "Primary",
+        "second": "Second",
+        "third": "Third"
+      },
+      "priorityTitle": "Priority {n} of {total}",
+      "tile": {
+        "select": "Pick {player} as {role}",
+        "noSlot": "{team} has no slot for this role",
+        "maps": "{n, plural, one {# map} other {# maps}}",
+        "noMaps": "no maps",
+        "wrTitle": "Winrate on the role",
+        "wrHidden": "Winrate hidden: fewer than 10 maps on the role"
+      },
+      "heroes": {
+        "heading": "Heroes",
+        "maps": "Maps",
+        "winrate": "Winrate",
+        "winrateTitle": "Winrate on the hero"
+      },
+      "recent": {
+        "heading": "Recent tournaments",
+        "rank": "Rank",
+        "place": "Place"
+      },
+      "view": {
+        "label": "Player card view",
+        "info": "Information",
+        "stats": "Statistics"
+      },
+      "hint": {
+        "noPicksLeft": "Your team has no picks left.",
+        "confirm": "Enter — confirm.",
+        "confirmAutopick": "Enter — confirm. If the clock runs out, the autopick takes {player}.",
+        "autopickQueue": "If you don't pick, the autopick takes {player} — the first available player on your list.",
+        "autopickFit": "If you don't pick, the autopick takes {player} — the best fit for an open role.",
+        "chooseRole": "Choose one of the player's roles to pick them.",
+        "prepare": "You can prepare your pick in advance. If the player is taken first, the selection resets.",
+        "prepareQueue": "You can prepare your pick in advance. If the player is taken first, the selection resets. The order of My list is the autopick priority.",
+        "override": "The pick is taken away from captain {captain}. A reason is required and goes to the journal."
+      },
+      "action": {
+        "pickEmpty": "Pick",
+        "pickPlayer": "Pick {player}",
+        "pickRole": "Pick {player} as {role, select, tank {tank} damage {damage} support {support} other {flex}}",
+        "wait": "Waiting for your turn",
+        "overrideEmpty": "Override",
+        "overridePlayer": "Override with {player}",
+        "overrideRole": "Override with {player} as {role, select, tank {tank} damage {damage} support {support} other {flex}}"
+      },
+      "overrideNotePlaceholder": "Override reason — goes to the journal",
+      "overrideNoteLabel": "Override reason",
+      "pill": {
+        "turn": "{team} is picking",
+        "turnMineIn": "{team} is picking · yours in {n}",
+        "override": "Pick override · {team}",
+        "hintOverride": "Click a player to pick for the team",
+        "hintMine": "Click a player to open their card with roles",
+        "hintPrepare": "You can prepare your pick in advance"
       }
     }
   },
@@ -6080,7 +6385,7 @@
   },
   "docs": {
     "title": "Documentation",
-    "lead": "Guides for players and organizers: how tournaments work, how to take part and how to run them.",
+    "lead": "Guides for players, organizers and developers: how tournaments work, how to take part, how to run them and how to build on the platform.",
     "sections": {
       "players": {
         "title": "For players",
@@ -6092,7 +6397,7 @@
       },
       "dev": {
         "title": "For developers",
-        "description": "Platform architecture, HTTP API and database schema. Available in Russian only."
+        "description": "How the platform is built, the HTTP API, realtime and the data model."
       }
     },
     "search": {
@@ -6104,6 +6409,23 @@
       "audience": "Who it's for",
       "label": "Documentation pages",
       "select": "Documentation page"
+    },
+    "schema": {
+      "title": "Database schema",
+      "lead": "Generated from the models on every change: {tables, plural, one {# table} other {# tables}} in {packages, plural, one {# package} other {# packages}}, Alembic head {head}.",
+      "erd": "How to read the diagrams, the domain map and the change history are in the full document:",
+      "searchLabel": "Search tables",
+      "searchPlaceholder": "Table, schema or package…",
+      "empty": "No table matches “{query}”.",
+      "tables": "{count, plural, one {# table} other {# tables}}",
+      "showDiagram": "Show diagram",
+      "hideDiagram": "Hide diagram",
+      "uniques": "Composite unique keys",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom",
+      "rendering": "Rendering the diagram…",
+      "renderError": "The diagram failed to render: {message}"
     }
   }
 }

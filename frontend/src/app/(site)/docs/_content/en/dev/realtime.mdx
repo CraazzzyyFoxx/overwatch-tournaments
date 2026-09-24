@@ -1,0 +1,176 @@
+Live updates travel over a single WebSocket: the client subscribes to topics, the server pushes events, and it can replay what was missed while the connection was down. This page covers the socket address, the ways to authenticate it, the frame format, the topic catalogue with its access rules, and the limits the gateway actually enforces.
+
+## Connecting
+
+The canonical address is `/api/v1/realtime/ws`. The historical spellings `/api/realtime/ws` and `/ws` are registered on the same handler and still work, but new code should use the canonical one. The socket lives on the same host as the HTTP API: on the platform domain, on a community subdomain and on a verified custom domain it is the same relative path.
+
+```bash
+wscat -c "wss://owt.craazzzyyfoxx.me/api/v1/realtime/ws?token=<JWT>"
+```
+
+The credential is read from three places, in this order: the `token` query parameter, the `Authorization: Bearer` header, and the `owt_access_token` cookie (with the legacy `aqt_access_token` as a fallback). A browser cannot set headers on a WebSocket handshake, so there you use the cookie or `token`; a server-side client can use the header.
+
+Both credentials described in [Authentication and API keys](/docs/dev/identity) work:
+
+- **Session JWT.** The gateway verifies the signature locally and takes `sub` and `is_superuser` from the token. The connection lives no longer than the token's `exp`: when it passes, the socket closes and the client reconnects with the current session.
+- **API key.** It authenticates the socket only if the key holds at least one grant in its workspace; a key with no scopes connects anonymously. The owner's superuser flag is never carried onto the socket, and a key has no `exp`, so revoking one does not tear down an already open connection — only the next handshake is refused.
+- **No credential.** Anonymous connections are allowed: the handshake needs no token, and access is decided separately on every subscription.
+
+For browser clients the `Origin` header is checked. By default the platform apex and its subdomains are allowed; a workspace's own domain is accepted only once it is verified. An Origin equal to the request's own `Host` is always allowed, so a community site on its own domain connects with no extra configuration.
+
+## Client frames
+
+Each frame is a separate JSON message with an `op` field.
+
+| `op` | Required fields | What it does |
+| --- | --- | --- |
+| `subscribe` | `topic`, optional `after_event_id` | Subscribes to a topic, with replay when a cursor is supplied |
+| `unsubscribe` | `topic` | Drops the subscription, no reply |
+| `ping` | — | Liveness check |
+| `publish` | `topic`, `event_type`, `data` | Ephemeral broadcast to the topic's other subscribers |
+
+```json
+{"op": "subscribe", "topic": "tournament:42:bracket", "after_event_id": 1180}
+```
+
+## Server frames
+
+| `op` | Fields | When it arrives |
+| --- | --- | --- |
+| `subscribed` | `topic`, `cursor` | Subscription accepted; `cursor` is the topic's last persisted `event_id` |
+| `event` | `topic`, `event` | A topic event (live or replayed) |
+| `error` | `code`, `message`, `topic` (may be `null`) | A frame was rejected or a subscription failed |
+| `pong` | — | Reply to `ping` |
+
+The `event` payload is an envelope with fixed fields:
+
+```json
+{
+  "op": "event",
+  "topic": "tournament:42:bracket",
+  "event": {
+    "event_id": 1181,
+    "event_type": "cache.invalidated",
+    "schema_version": 1,
+    "occurred_at": "2026-09-20T18:04:11.902374Z",
+    "actor_user_id": 17,
+    "data": {"resources": ["tournament.encounters", "tournament.standings"]}
+  }
+}
+```
+
+`event_id` is zero for ephemeral events: they are not persisted and never move the replay cursor. `actor_user_id` is the account whose action produced the event, or `null` for system events.
+
+## Topic catalogue
+
+A topic name is always `<kind>:<id>:<domain>`; the domain may itself contain a colon (`pick-ban:hero`). The kinds are `tournament`, `workspace`, `user`, `encounter` and `draft`.
+
+| Topic | Content | Who may subscribe |
+| --- | --- | --- |
+| `tournament:{id}:invalidation` | Names of the tournament resources that went stale | Same as viewing the tournament |
+| `tournament:{id}:bracket` | Tournament bracket | Same as viewing the tournament |
+| `tournament:{id}:draft` | Live draft, plus presence | Same as viewing the tournament |
+| `tournament:{id}:streams` | Stream live statuses | Same as viewing the tournament |
+| `tournament:{id}:balancer` | Balancer jobs and roster edits, plus presence | Member of the tournament's workspace; superuser |
+| `encounter:{id}:map-veto` | The encounter's map ban and pick | Same as viewing the encounter's tournament |
+| `encounter:{id}:pick-ban:hero` | The encounter's hero ban and pick | Same as viewing the encounter's tournament |
+| `encounter:{id}:chat` | Pre-game room chat | Room participant, or a spectator while reading is open |
+| `draft:{session_id}:chat` | Draft room chat | Room participant, or a spectator while reading is open |
+| `workspace:{id}:invalidation` | Names of the workspace resources that went stale | Workspace member; superuser |
+| `workspace:{id}:logs` | Match-log processing | Workspace member; superuser |
+| `workspace:{id}:pickup_mix` | Mixes (custom games) | Workspace member; superuser |
+| `workspace:{id}:subscriptions` | Subscription checks | Workspace member; superuser |
+| `workspace:{id}:analytics_jobs` | Analytics jobs | Workspace member; superuser |
+| `user:{id}:invalidation` | Stale personal resources | That user only |
+| `user:{id}:notifications` | "A notification arrived" signal | That user only |
+
+Rules are evaluated in order and the first match decides; `workspace:{id}:*` covers every workspace domain at once. A topic that matches no rule is denied — an unknown name cannot simply be subscribed to.
+
+"Same as viewing the tournament" means: an ordinary tournament is public, anonymous clients included; a hidden one requires a logged-in insider — a superuser, a member of the organizing workspace, or an account on the preview allowlist. A tournament (or encounter, or draft session) that does not exist is always denied, so a subscription cannot be used as an existence probe.
+
+Personal topics have no exception at all: `user:{id}:notifications` and `user:{id}:invalidation` are readable only by the account with that `id`, and a superuser does not bypass them.
+
+## Cache invalidation
+
+The `*:invalidation` topics carry no data — only the names of the resources that went stale, in `data.resources`, sometimes alongside a narrowing `data.entity_ids`. The resource vocabulary is fixed: `tournament.detail`, `tournament.stages`, `tournament.encounters`, `tournament.standings`, `tournament.teams`, `tournament.structure`, `tournament.registrations`, `tournament.registration_form`, `tournament.streams`, `workspace.logs`, `workspace.pickup_mix`, `workspace.subscriptions`, `workspace.analytics_jobs`, `user.notifications`. The event type is always `cache.invalidated`.
+
+There is deliberately no global invalidation topic: which tournaments exist and when they change is itself information, so invalidation is gated exactly like the domain topics of the same kind.
+
+## Durable and ephemeral topics, and replay
+
+A durable event is written to the event log and gets a non-zero `event_id`; an ephemeral one is published to the bus only and lives until the next frame. Durable: invalidation, draft moves, map and hero ban-pick, roster changes and balancer job transitions. Ephemeral: presence, job progress ticks, chat, notifications, stream statuses, mixes, log processing and subscription checks — everything a reconnecting client refetches with an ordinary request anyway.
+
+Replay works like this:
+
+1. `subscribe` carries `after_event_id` — the last `event_id` the client already processed for that topic.
+2. The server first sends the missed `event` frames in ascending `event_id` order, and only then `subscribed` with the current cursor.
+3. Without `after_event_id` the subscription is live-only: no history at all. That is deliberate for a first subscription — otherwise a fresh page would receive the topic's whole backlog.
+4. If more events were missed than may be replayed (500 by default), a `replay_gap_too_large` error arrives and **no subscription is created**. Refetch the state with an ordinary request and subscribe again without `after_event_id`.
+
+The cursor from `subscribed` and the `event_id` of every incoming event are what the client must store and hand back on the next subscribe.
+
+The log is not infinite: persisted invalidation events are deleted after seven days, so a client offline for longer cannot catch up by cursor and must refetch its state with a request.
+
+## Room chat
+
+The pre-game room chat and the draft room chat run on their own topics (`encounter:{id}:chat`, `draft:{session_id}:chat`) with the events `chat.message`, `chat.message_deleted`, `chat.muted`, `chat.unmuted` and `chat.visibility_changed`. All of them are ephemeral: history lives in the message table and is read with ordinary requests — `GET /api/v1/encounters/{encounter_id}/chat` and `GET /api/v1/balancer/draft/sessions/{session_id}/chat` with an `after_id` parameter. Posting, deleting, mutes and settings are HTTP too, not the socket; the socket only delivers.
+
+Access: a captain of either side and the organizing workspace's staff always get in, and so does a superuser. Everyone else is a spectator, admitted only while the room has spectator reading switched on. A draft room has it on by default, a pre-game room off. The hidden-tournament rule still applies on top: an open chat never makes a hidden tournament visible.
+
+<Callout type="warning">
+When an organizer switches spectator reading off, the gateway does not wait for a resubscribe: it re-checks every live subscriber of the room, drops the subscription for those who no longer qualify, and sends them an `error` frame with code `forbidden`. A client must handle losing a subscription at any moment, not only in response to `subscribe`.
+</Callout>
+
+## Publishing from a client
+
+`publish` exists for exactly one scenario — live drag-and-drop of players in the balancer. A frame is accepted only when all of it holds: the connection is authenticated, the client is already subscribed to that topic, and `event_type` equals `balancer.drag`. The server stamps `actor_user_id` itself, leaves `event_id` at zero, and fans the frame out to the topic's other subscribers, excluding the sender. Otherwise an `error` comes back: `forbidden`, `not_subscribed` or `forbidden_event`.
+
+## Presence
+
+Topics ending in `:balancer` and `:draft` broadcast presence: on every subscribe and unsubscribe all of their subscribers receive an ephemeral `balancer.presence` or `draft.presence` event with `user_ids` (sorted ids of the authenticated subscribers) and `anonymous_viewer_count`.
+
+## Errors
+
+| `code` | Cause |
+| --- | --- |
+| `invalid_json` | The frame does not parse as JSON |
+| `invalid_frame` | Unknown `op`, or fields missing for that `op` |
+| `frame_too_large` | The frame exceeds the maximum size |
+| `too_many_topics` | The per-connection subscription budget is used up |
+| `auth_required` | Denied to an anonymous client: logging in may grant access |
+| `forbidden` | Denied to an authenticated client, or the subscription was revoked |
+| `not_subscribed` | `publish` to a topic without a subscription |
+| `forbidden_event` | Clients may not publish this `event_type` |
+| `replay_gap_too_large` | More events were missed than may be replayed |
+| `internal_error` | The authorization check or the log read failed |
+
+An error rejects one frame, it does not drop the connection: the socket stays open and the other subscriptions keep working.
+
+## Limits
+
+Enforced by the gateway; the ones marked "default" are configured at deployment time.
+
+| Limit | Value |
+| --- | --- |
+| Inbound frame size | 8192 bytes (anything larger is rejected with `frame_too_large`) |
+| Topic name length | 255 characters |
+| `event_type` length on `publish` | 1–64 characters |
+| Top-level fields in `data` on `publish` | 32 |
+| `publish` rate | 60 frames per second per connection, the excess is dropped silently |
+| Subscriptions per connection | 24 anonymous, 128 authenticated (default) |
+| Anonymous connections per IP | 64 (default); beyond that the handshake answers 429 |
+| Idle connection | 60 seconds without an inbound frame (default) and the server closes the socket |
+| Replay depth | 500 events (default) |
+
+## Reconnecting
+
+Because of the idle limit a silent client will be disconnected, so the socket has to be kept alive. The site's reference client sends `ping` every 25 seconds, waits at most 10 seconds for the `pong` and otherwise closes the socket itself, then reconnects with exponential backoff from 1 to 30 seconds.
+
+Recovery after a drop: open the socket again, resubscribe to the same topics passing the last processed `event_id` as `after_event_id` for each, and be ready for `replay_gap_too_large` — in which case refetch the state with a request and subscribe without a cursor. The socket also closes when a session token expires, so reconnecting is a normal code path, not only a reaction to a network failure.
+
+## See also
+
+- [Authentication and API keys](/docs/dev/identity) — sessions, keys, scopes.
+- [HTTP API](/docs/dev/api) — versions, error format, response caching.
+- [Workspaces and permissions](/docs/dev/workspaces) — the membership the workspace topics depend on.
+- [Balancer, draft and mixes](/docs/dev/balancer) — what happens behind the draft and job events.

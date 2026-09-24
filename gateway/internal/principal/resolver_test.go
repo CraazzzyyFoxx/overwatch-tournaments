@@ -244,7 +244,7 @@ func TestResolver_ConcurrentMissesSingleflight(t *testing.T) {
 }
 
 // apiKeyReply is the shape identity-svc's validate_token returns for an
-// aqt_sk_ credential: the owner's user id, credential_type=api_key, the key's
+// owt_sk_ credential: the owner's user id, credential_type=api_key, the key's
 // own limits, and exactly one workspace entry carrying the scope intersection.
 const apiKeyReply = `{"ok":true,"data":{
 	"sub":42,"credential_type":"api_key","is_superuser":false,
@@ -264,7 +264,7 @@ func TestResolver_PrincipalTypedView(t *testing.T) {
 	s := &stubCaller{reply: []byte(apiKeyReply)}
 	r := New(s)
 
-	info, ok, err := r.Principal(reqWithToken("aqt_sk_pub7_secret"))
+	info, ok, err := r.Principal(reqWithToken("owt_sk_pub7_secret"))
 	if err != nil || !ok {
 		t.Fatalf("principal failed: ok=%v err=%v", ok, err)
 	}
@@ -285,7 +285,7 @@ func TestResolver_PrincipalTypedView(t *testing.T) {
 	}
 
 	// Resolve for the same token is served from the entry Principal populated.
-	payload, ok, err := r.Resolve(reqWithToken("aqt_sk_pub7_secret"))
+	payload, ok, err := r.Resolve(reqWithToken("owt_sk_pub7_secret"))
 	if err != nil || !ok || payload["credential_type"] != "api_key" {
 		t.Fatalf("resolve after principal: ok=%v err=%v payload=%v", ok, err, payload)
 	}
@@ -325,7 +325,7 @@ func TestResolver_APIKeyCachedShorterThanSession(t *testing.T) {
 	now := time.Now()
 	r.now = func() time.Time { return now }
 
-	if _, ok, _ := r.Principal(reqWithToken("aqt_sk_pub7_secret")); !ok {
+	if _, ok, _ := r.Principal(reqWithToken("owt_sk_pub7_secret")); !ok {
 		t.Fatal("first api-key resolve failed")
 	}
 	if _, ok, _ := r.Resolve(reqWithToken("session.jwt.token")); !ok {
@@ -338,7 +338,7 @@ func TestResolver_APIKeyCachedShorterThanSession(t *testing.T) {
 	// Past the api-key TTL but well inside the session TTL: the key is
 	// re-validated, the session is not.
 	now = now.Add(apiKeyCacheTTL + time.Second)
-	if _, ok, _ := r.Principal(reqWithToken("aqt_sk_pub7_secret")); !ok {
+	if _, ok, _ := r.Principal(reqWithToken("owt_sk_pub7_secret")); !ok {
 		t.Fatal("api-key re-resolve failed")
 	}
 	if s.calls != 3 {
@@ -363,7 +363,7 @@ func TestResolver_APIKeyCachedShorterThanSession(t *testing.T) {
 
 // TestResolver_APIKeyQuota_SkipsNonKeyTraffic is the cost guarantee behind
 // wrapping the whole API mux with the per-key limiter: anything that is not an
-// aqt_sk_ credential is answered from the local prefix test alone, with no
+// API-key credential is answered from the local prefix test alone, with no
 // validate_token call added to session or anonymous traffic.
 func TestResolver_APIKeyQuota_SkipsNonKeyTraffic(t *testing.T) {
 	s := &stubCaller{reply: []byte(apiKeyReply)}
@@ -378,9 +378,13 @@ func TestResolver_APIKeyQuota_SkipsNonKeyTraffic(t *testing.T) {
 		t.Fatalf("non-key traffic must cost no rpc, got %d calls", s.calls)
 	}
 
-	key, rpm, ok := r.APIKeyQuota(reqWithToken("aqt_sk_pub7_secret"))
+	key, rpm, ok := r.APIKeyQuota(reqWithToken("owt_sk_pub7_secret"))
 	if !ok || key != "7" || rpm != 25 {
 		t.Fatalf("want bucket 7 with the key's own 25/min, got %q/%d ok=%v", key, rpm, ok)
+	}
+	// Keys minted before the rebrand are metered the same way.
+	if key, _, ok := r.APIKeyQuota(reqWithToken("aqt_sk_pub7_secret")); !ok || key != "7" {
+		t.Fatalf("a legacy aqt_sk_ key must be metered too, got %q ok=%v", key, ok)
 	}
 }
 
@@ -390,7 +394,7 @@ func TestResolver_APIKeyQuota_SkipsNonKeyTraffic(t *testing.T) {
 func TestResolver_APIKeyQuota_BackendDownDoesNotThrottle(t *testing.T) {
 	s := &stubCaller{err: rpc.ErrOverloaded}
 	r := New(s)
-	if _, _, ok := r.APIKeyQuota(reqWithToken("aqt_sk_pub7_secret")); ok {
+	if _, _, ok := r.APIKeyQuota(reqWithToken("owt_sk_pub7_secret")); ok {
 		t.Fatal("a resolver error must report ok=false, not a throttling verdict")
 	}
 }

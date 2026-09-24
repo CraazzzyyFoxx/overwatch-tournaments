@@ -28,8 +28,12 @@ from src.domain.draft.ranks import slot_rank
 from src.schemas.base import BaseRead
 
 __all__ = (
+    "QUEUE_MAX_PLAYERS",
+    "DraftAutopickPreview",
     "DraftBoardSnapshot",
     "DraftFeasibilityResponse",
+    "DraftJournalEntry",
+    "DraftJournalResponse",
     "DraftOrderEntry",
     "DraftOrderRequest",
     "DraftPickAutopickRequest",
@@ -53,6 +57,10 @@ __all__ = (
     "DraftSessionRead",
     "DraftSuggestion",
     "DraftSuggestionsResponse",
+    "DraftTeamFitResponse",
+    "DraftTeamFitScore",
+    "DraftTeamQueueRequest",
+    "DraftTeamQueueResponse",
     "DraftTeamRead",
 )
 
@@ -305,6 +313,10 @@ class DraftPlayerRead(BaseRead):
     #: ``{slot_code: registration|workspace|ow}`` -- which layer that rank came
     #: from, so an organizer can see why a number is what it is.
     role_sources: dict[str, str] = Field(default_factory=dict)
+    #: ``{slot_code: sub_role}`` over playable roles that declare one -- the
+    #: per-role twin of ``sub_role``, which only ever answers for the lead role.
+    #: A role without a sub-role is absent, never empty-string.
+    role_sub_roles: dict[str, str] = Field(default_factory=dict)
     role_top_heroes: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     #: The registration's ``public_notes``: captains read them in the Player
     #: Inspector. The wire name stays ``notes`` -- clients depend on it, and the
@@ -348,6 +360,7 @@ class DraftPlayerRead(BaseRead):
             secondary_roles=[role.slot_code for role in roster.secondary_roles] if roster is not None else [],
             role_ranks=roster.role_ranks if roster is not None else {},
             role_sources=roster.role_sources if roster is not None else {},
+            role_sub_roles=roster.role_sub_roles if roster is not None else {},
             role_top_heroes=roster.role_top_heroes if roster is not None else {},
             notes=roster.public_notes if roster is not None else None,
             # The player's OWN role under role slots -- a support main is not
@@ -485,7 +498,6 @@ class DraftPickOptionRead(BaseModel):
     reason_code: str | None = None
     unmatched_slots: list[DraftSlotRead] = Field(default_factory=list)
     blocking_player_ids: list[int] = Field(default_factory=list)
-    suggestion_score: float | None = None
 
 
 class DraftPickOptionsResponse(BaseModel):
@@ -520,3 +532,80 @@ class DraftSeedResponse(BaseModel):
     preview_only: bool
     diff: DraftSeedDiff
     feasibility: DraftFeasibilityResponse
+
+
+# --------------------------------------------------------------------------- #
+# Team fit, captain queue, organizer journal
+# --------------------------------------------------------------------------- #
+#: A captain's list is a shortlist, not a second pool: past this it stops being
+#: a priority and starts being the board again.
+QUEUE_MAX_PLAYERS = 60
+
+
+class DraftTeamFitScore(BaseModel):
+    """How well one player fits one role this team can still seat."""
+
+    model_config = _ReadConfig
+
+    player_id: int
+    #: ``None`` under a role-less (all-flex) shape, where no seat has a role and
+    #: a player therefore has exactly one entry.
+    role: DraftRoleRead | None = None
+    #: 1..99, min-max normalized across THIS response; 50 when every candidate
+    #: scores the same. Raw fit is an unbounded heuristic, so only the ordering
+    #: within one answer means anything.
+    score: int
+
+
+class DraftTeamFitResponse(BaseModel):
+    session_id: int
+    team_id: int
+    scores: list[DraftTeamFitScore] = Field(default_factory=list)
+
+
+class DraftTeamQueueRequest(BaseModel):
+    """The captain's autopick priority ("My list"), in their own order."""
+
+    player_ids: list[int] = Field(default_factory=list, max_length=QUEUE_MAX_PLAYERS)
+
+
+class DraftAutopickPreview(BaseModel):
+    """Exactly what ``DraftSelectionService.autopick`` would take right now.
+
+    Computed by the same call autopick makes, so a captain watching the clock
+    run out is never shown a different player than the one it takes.
+    """
+
+    player_id: int
+    #: ``None`` under a role-less (all-flex) shape.
+    role: DraftRoleRead | None = None
+    source: Literal["queue", "fit"]
+
+
+class DraftTeamQueueResponse(BaseModel):
+    team_id: int
+    #: Stored order, filtered to players still available.
+    player_ids: list[int] = Field(default_factory=list)
+    #: Non-null ONLY while this team is on the clock.
+    autopick_preview: DraftAutopickPreview | None = None
+
+
+class DraftJournalEntry(BaseModel):
+    id: int
+    created_at: datetime
+    action: str
+    actor_auth_user_id: int | None = None
+    #: Display name of the acting account; ``None`` for the clock and every
+    #: other system action.
+    actor_name: str | None = None
+    reason: str
+    pick_no: int | None = None
+    team_id: int | None = None
+    player_id: int | None = None
+    role: DraftRoleRead | None = None
+    seconds: int | None = None
+
+
+class DraftJournalResponse(BaseModel):
+    session_id: int
+    entries: list[DraftJournalEntry] = Field(default_factory=list)

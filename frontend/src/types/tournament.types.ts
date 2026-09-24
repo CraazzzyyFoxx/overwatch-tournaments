@@ -81,6 +81,13 @@ export interface Stage extends StageSummary {
 
 // ─── Tournament ─────────────────────────────────────────────────────────────
 
+/**
+ * How a tournament forms its teams; each value has a `common.*` label.
+ * `solo` is nominal: players register one by one for an FFA tournament and no
+ * team is formed, so it has no flow of its own.
+ */
+export type TeamFormation = "balancer" | "draft" | "registration" | "solo";
+
 interface TournamentPhaseSchedule {
   status: TournamentStatus;
   starts_at: string;
@@ -111,6 +118,7 @@ export interface Tournament {
   is_league: boolean;
   is_finished: boolean;
   is_hidden: boolean;
+  /** Free string on the backend; the known values are `TeamFormation`. */
   team_formation: string;
   status: TournamentStatus;
   auto_transitions_enabled: boolean;

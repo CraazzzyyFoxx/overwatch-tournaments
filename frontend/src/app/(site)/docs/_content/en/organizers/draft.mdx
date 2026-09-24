@@ -60,6 +60,8 @@ If a captain runs out of time, the server picks for them. The strategy is set on
 
 Whatever the strategy, it only ever chooses from safe options: a pick that would leave some required role in another team impossible to fill is never made.
 
+The strategy only applies when the captain's **My list** is empty. Captains build that list in the draft room, and its order is the autopick priority: the server takes the first listed player who can still be picked safely, on that player's strongest fitting role. Only the captain sees their list.
+
 ### Review and seeding
 
 On **Review** the server runs a dry run and checks that every role is reachable. It verifies that there are enough eligible players, that the captain count matches the team count, that all final role slots are reachable, that every captain has a linked account, that the captain order is complete, that the pick timer is valid and that private registration notes stay hidden. Seeding is unavailable until this passes.
@@ -84,7 +86,8 @@ While the draft runs, **Teams → Draft** becomes a control room. It shows the s
 
 The actions:
 
-- **Pause** and **Resume** control the flow. Both, plus adding seconds to the clock and the manual pick override, are also in the organizer dock inside the draft room, where you can see the board.
+- **Pause** and **Resume** control the flow. Both, plus adding seconds to the clock, the autopick and rolling the last pick back, are also in the **Organizer** strip inside the draft room, where you can see the board. The strip also opens the **Journal**: every pick, pause, extension, rollback and override with its time and author.
+- **Overriding a pick** happens in the draft room: select a player for the team on the clock, give a reason and press **Override**. The reason is mandatory and goes into the journal.
 - **Run autopick** — the server picks the highest-ranked safe option for the current captain and closes the pick at once. The captain cannot undo it.
 - **Roll back last pick** — the picked player returns to the pool, the pick is handed back to that team's captain, and the draft stays paused until you resume it manually.
 - **Cancel draft** — available in **Ready**, **Live** and **Paused**.

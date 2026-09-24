@@ -146,6 +146,14 @@ var DraftRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/suggestions", Queue: "rpc.balancer.draft.suggestions", IDParam: "session_id", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/feasibility", Queue: "rpc.balancer.draft.feasibility", IDParam: "session_id", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/options", Queue: "rpc.balancer.draft.pick_options", IDParam: "pick_id", Auth: edge.AuthRequired},
+	// Team-scoped draft reads: the fit column and the captain's private pick
+	// queue. The worker gates each on "this team's captain OR a workspace
+	// permission", so neither is on the public board. The organizer journal is
+	// session-scoped and workspace-gated.
+	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/teams/{team_id}/fit", Queue: "rpc.balancer.draft.team_fit", IDParam: "session_id", Path: []string{"team_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/teams/{team_id}/queue", Queue: "rpc.balancer.draft.queue_get", IDParam: "session_id", Path: []string{"team_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "PUT", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/teams/{team_id}/queue", Queue: "rpc.balancer.draft.queue_set", IDParam: "session_id", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/journal", Queue: "rpc.balancer.draft.journal", IDParam: "session_id", Query: []string{"limit"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/players/{player_id}/roles", Queue: "rpc.balancer.draft.player_role_edit", IDParam: "player_id", Path: []string{"session_id"}, Body: true, Auth: edge.AuthRequired},
 	// lifecycle
 	{Method: "GET", Pattern: "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions", Queue: "rpc.balancer.draft.session_list", IDParam: "tournament_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},

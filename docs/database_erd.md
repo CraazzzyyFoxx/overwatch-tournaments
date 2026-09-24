@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`discdm01`** (79 revisions in `backend/migrations/versions/`).
+Alembic head: **`draftq01`** (80 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1774,6 +1774,7 @@ erDiagram
         varchar(255) name
         int draft_position
         bigint exported_team_id FK "nullable"
+        jsonb pick_queue
     }
     BALANCER_TEAM {
         bigint id PK

@@ -25,7 +25,7 @@ from shared.core.enums import (  # noqa: E402
     HeroClass,
 )
 from shared.domain.roster_shape import DEFAULT_ROSTER_SHAPE, parse_roster_slots  # noqa: E402
-from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession  # noqa: E402
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam  # noqa: E402
 from src import (  # noqa: E402
     openapi_docs,
     openapi_schemas,
@@ -34,8 +34,9 @@ from src import (  # noqa: E402
 from src.domain.draft import rules  # noqa: E402
 from src.domain.draft.entities import DraftPickOption  # noqa: E402
 from src.rpc import draft as draft_rpc  # noqa: E402
-from src.services.draft import board, lifecycle  # noqa: E402
+from src.services.draft import board, journal, lifecycle  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
+from src.services.draft.journal import journal_service  # noqa: E402
 from tests.factories import roster  # noqa: E402
 
 
@@ -54,6 +55,19 @@ class _FakeBroker:
 
 class _FakeLogger:
     def warning(self, *args, **kwargs) -> None:
+        return None
+
+
+class _RecordingSession:
+    """``session.add`` + ``flush`` and nothing else -- what a journal write needs."""
+
+    def __init__(self) -> None:
+        self.added: list = []
+
+    def add(self, instance) -> None:
+        self.added.append(instance)
+
+    async def flush(self) -> None:
         return None
 
 
@@ -79,7 +93,6 @@ def test_feasibility_and_pick_options_have_typed_public_contracts() -> None:
                 "reason_code": "role_shortage",
                 "unmatched_slots": feasibility.unmatched_slots,
                 "blocking_player_ids": [],
-                "suggestion_score": None,
             }
         ],
     )
@@ -209,9 +222,42 @@ def test_player_read_of_a_seat_with_no_roster_states_no_role_instead_of_guessing
     assert read.role_ranks == {}
     assert read.role_sources == {}
     assert read.role_top_heroes == {}
+    assert read.role_sub_roles == {}
     assert read.notes is None
     assert read.effective_rank is None
     assert read.custom_fields == []
+
+
+def test_player_read_carries_a_sub_role_per_playable_role_not_just_the_lead_one() -> None:
+    # ``sub_role`` only ever answered for the lead role, so a damage main who
+    # flexes support rendered as a hitscan on both cards. A role without a
+    # sub-role stays ABSENT -- clients must show nothing there, not "".
+    read = schemas.DraftPlayerRead.from_seat(
+        DraftPlayer(id=20, session_id=1, registration_id=120, status="available", is_captain=False, version=1),
+        roster(
+            120,
+            ranks={"damage": 3600, "support": 2900, "tank": 3100},
+            primary="damage",
+            subroles={"damage": "hitscan", "support": "flex_support"},
+        ),
+        shape=DEFAULT_ROSTER_SHAPE,
+        custom_fields=[],
+    )
+
+    assert read.sub_role == "hitscan"
+    assert read.role_sub_roles == {"damage": "hitscan", "support": "flex_support"}
+
+
+def test_the_public_board_never_carries_a_captains_pick_queue() -> None:
+    # The queue is the one part of a team that is not public: the board is read
+    # by spectators and by the other captains, and a shortlist on it is a
+    # scouting report. It reaches its owner only through queue_get.
+    team = DraftTeam(id=10, session_id=1, name="Alpha", draft_position=1, pick_queue=[55, 56])
+
+    read = schemas.DraftTeamRead.model_validate(team)
+
+    assert "pick_queue" not in schemas.DraftTeamRead.model_fields
+    assert "55" not in read.model_dump_json()
 
 
 def test_pick_event_payload_contains_resolved_role_rank_and_version() -> None:
@@ -278,6 +324,10 @@ def test_rpc_registers_feasibility_options_and_role_edit_subjects() -> None:
         "rpc.balancer.draft.player_role_edit",
         "rpc.balancer.draft.session_list",
         "rpc.balancer.draft.session_delete",
+        "rpc.balancer.draft.team_fit",
+        "rpc.balancer.draft.queue_get",
+        "rpc.balancer.draft.queue_set",
+        "rpc.balancer.draft.journal",
     } <= broker.subjects
 
 
@@ -299,16 +349,24 @@ def test_player_updated_event_does_not_expose_private_reason() -> None:
     }
 
 
-def test_admin_override_builds_private_audit_event() -> None:
-    event = draft_rpc._override_audit_event(
-        session_id=7,
-        pick_id=9,
-        actor_auth_user_id=11,
-        reason=" Captain disconnected ",
-        before={"player_id": None, "role": None},
-        after={"player_id": 22, "role": "support"},
+def test_admin_override_journal_row_trims_the_note_and_keeps_both_sides() -> None:
+    session = _RecordingSession()
+
+    event = asyncio.run(
+        journal_service.record(
+            session,
+            7,
+            action="pick_overridden",
+            entity_type="draft_pick",
+            entity_id=9,
+            actor_auth_user_id=11,
+            reason=" Captain disconnected ",
+            before={"player_id": None, "role": None},
+            after={"player_id": 22, "role": "support"},
+        )
     )
 
+    assert session.added == [event]
     assert event.session_id == 7
     assert event.entity_id == 9
     assert event.actor_auth_user_id == 11
@@ -317,11 +375,35 @@ def test_admin_override_builds_private_audit_event() -> None:
     assert event.after_json == {"player_id": 22, "role": "support"}
 
 
+def test_journal_row_names_itself_when_the_action_has_no_human_reason() -> None:
+    # ``reason`` is NOT NULL, and a pause has nobody to quote. An empty string
+    # used to be accepted and rendered as a blank line in the organizer journal.
+    event = asyncio.run(
+        journal_service.record(
+            _RecordingSession(),
+            7,
+            action="paused",
+            entity_type="draft_session",
+            entity_id=7,
+            actor_auth_user_id=11,
+            reason="   ",
+        )
+    )
+
+    assert event.reason == journal.DEFAULT_REASONS["paused"]
+    assert event.before_json == {}
+
+
 def test_openapi_maps_all_new_draft_contracts() -> None:
     expected = {
         "rpc.balancer.draft.feasibility": (None, schemas.DraftFeasibilityResponse),
         "rpc.balancer.draft.pick_options": (None, schemas.DraftPickOptionsResponse),
         "rpc.balancer.draft.player_role_edit": (schemas.DraftRoleEditRequest, schemas.DraftRoleEditResponse),
+        # Missing here => generic `object` in gateway/internal/openapi/schemas.json.
+        "rpc.balancer.draft.team_fit": (None, schemas.DraftTeamFitResponse),
+        "rpc.balancer.draft.queue_get": (None, schemas.DraftTeamQueueResponse),
+        "rpc.balancer.draft.queue_set": (schemas.DraftTeamQueueRequest, schemas.DraftTeamQueueResponse),
+        "rpc.balancer.draft.journal": (None, schemas.DraftJournalResponse),
     }
 
     for subject, (request, response) in expected.items():

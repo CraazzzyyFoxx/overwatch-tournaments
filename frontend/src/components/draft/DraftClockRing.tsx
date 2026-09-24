@@ -1,61 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { isUrgent, remainingMs } from "@/lib/draft/logic";
-import { accentToken, type DraftAccent } from "@/lib/draft/visual";
+import { usePickCountdown } from "@/hooks/usePickCountdown";
+import { isUrgent } from "@/lib/draft/logic";
+import { cn } from "@/lib/utils";
+import type { DraftPick } from "@/types/draft.types";
 
 interface DraftClockRingProps {
-  expiresAt: string | null;
+  pick: DraftPick | null;
   paused: boolean;
   totalSeconds: number;
-  accent: DraftAccent;
   /**
-   * Set once the main clock expired: `expiresAt` then holds the OVERTIME
-   * deadline, so the ring has to measure the arc against `overtimeSeconds`
-   * instead of the session's pick time.
+   * Once the main clock expired (`pick.overtime_started_at`), `clock_expires_at`
+   * holds the OVERTIME deadline, so the arc is measured against this instead.
    */
-  overtimeStartedAt?: string | null;
   overtimeSeconds?: number;
+  /** Arc and digits while the clock runs normally; urgency, overtime and pause override it. */
+  color?: string;
+  /** `md`: 88px standalone ring; `sm`: the 52px ring of the clock strip. */
+  size?: "md" | "sm";
 }
 
-const SIZE = 88;
-const STROKE = 6;
-const R = (SIZE - STROKE) / 2;
-const C = 2 * Math.PI * R;
+const GEOMETRY = {
+  md: { size: 88, stroke: 6 },
+  sm: { size: 52, stroke: 3.5 }
+} as const;
 /** Seconds at which the clock announces itself. A 250ms live region is unusable. */
 const ANNOUNCE_AT = [30, 10, 5];
 
 export function DraftClockRing({
-  expiresAt,
+  pick,
   paused,
   totalSeconds,
-  accent,
-  overtimeStartedAt = null,
-  overtimeSeconds = 0
+  overtimeSeconds = 0,
+  color = "var(--aqt-teal)",
+  size = "md"
 }: Readonly<DraftClockRingProps>) {
   const t = useTranslations();
-  const [now, setNow] = useState<number | null>(null);
-  const overtime = overtimeStartedAt != null;
+  // `ms` stays null for the first render, so SSR and hydration agree on "--".
+  const { ms, overtime, text } = usePickCountdown(pick, paused);
+  const { size: box, stroke } = GEOMETRY[size];
+  const radius = (box - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
   // Its own region, and derived: the text flips exactly when the phase does,
   // and React skips identical writes, so screen readers hear "overtime" once
   // per flip instead of after every 30/10/5s tick of the threshold region.
   const phaseAnnouncement = overtime ? t("draft.clock.overtime") : "";
 
-  useEffect(() => {
-    const initialId = window.setTimeout(() => setNow(Date.now()), 0);
-    const intervalId = !paused && expiresAt
-      ? window.setInterval(() => setNow(Date.now()), 250)
-      : null;
-
-    return () => {
-      window.clearTimeout(initialId);
-      if (intervalId != null) window.clearInterval(intervalId);
-    };
-  }, [paused, expiresAt]);
-
-  const ms = expiresAt && now != null ? remainingMs(expiresAt, now) : null;
   const seconds = ms == null ? null : Math.ceil(ms / 1000);
   // In overtime the arc measures the grace period, not the pick time it already
   // spent — against `pick_time_seconds` a 15s overtime would render as a sliver.
@@ -64,11 +56,7 @@ export function DraftClockRing({
   const urgent = ms != null && isUrgent(ms);
   // Colour, not only the pulse: under prefers-reduced-motion the animation is
   // suppressed, so motion alone would leave no urgency cue at all.
-  const color = paused
-    ? "var(--aqt-amber)"
-    : overtime || urgent
-      ? "var(--aqt-live)"
-      : accentToken(accent);
+  const tone = paused ? "var(--aqt-amber)" : overtime || urgent ? "var(--aqt-live)" : color;
   const label = paused
     ? t("draft.clock.paused")
     : seconds == null
@@ -86,26 +74,43 @@ export function DraftClockRing({
       : "";
 
   return (
-    <div className="relative grid place-items-center" style={{ width: SIZE, height: SIZE }}>
-      <svg width={SIZE} height={SIZE} className="-rotate-90" aria-hidden>
-        <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke="var(--aqt-border)" strokeWidth={STROKE} />
+    <div className="relative grid shrink-0 place-items-center" style={{ width: box, height: box }}>
+      <svg width={box} height={box} className="-rotate-90" aria-hidden>
         <circle
-          cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke={color} strokeWidth={STROKE}
-          strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - frac)}
+          cx={box / 2}
+          cy={box / 2}
+          r={radius}
+          fill="none"
+          stroke="var(--aqt-border-2)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={box / 2}
+          cy={box / 2}
+          r={radius}
+          fill="none"
+          stroke={tone}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - frac)}
           className="transition-[stroke-dashoffset] duration-200 motion-reduce:transition-none"
         />
       </svg>
       <span
         role="timer"
         aria-label={label}
-        className={`absolute flex flex-col items-center font-onest text-xl font-semibold tabular-nums ${urgent ? "animate-pulse motion-reduce:animate-none" : ""}`}
-        style={{ color }}
+        className={cn(
+          "absolute flex flex-col items-center font-semibold tabular-nums",
+          size === "md" ? "font-onest text-xl" : "text-sm font-bold",
+          urgent && "animate-pulse motion-reduce:animate-none"
+        )}
+        style={{ color: tone }}
       >
-        {paused ? t("draft.clock.pauseCompact") : seconds == null ? "--" : `${seconds}`}
-        {overtime && !paused && (
-          <span className="text-label font-bold uppercase tracking-label">
-            {t("draft.clock.overtime")}
-          </span>
+        {/* 52px holds no word: the small ring stays digits; amber and the label say "paused". */}
+        {paused && size === "md" ? t("draft.clock.pauseCompact") : (text ?? "--")}
+        {overtime && !paused && size === "md" && (
+          <span className="text-label font-bold uppercase tracking-label">{t("draft.clock.overtime")}</span>
         )}
       </span>
       <span className="sr-only" aria-live="polite">

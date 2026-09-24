@@ -1,0 +1,119 @@
+Teams can be built in two ways: hand the pool to a solver, or run a live captain draft. A tournament picks one. Beside them live mixes — workspace custom games with their own, simpler engine. This page covers what each of them optimizes, what states exist and how all of it looks from outside; the full route list is in the [endpoint reference](/api/docs).
+
+## Team formation
+
+`tournament.team_formation` is a string defaulting to `balancer`. Two values are used in the code:
+
+| Value | What happens |
+| --- | --- |
+| `balancer` | The pool goes to the solver; an organizer accepts one variant and exports it into tournament teams |
+| `draft` | Captains pick through the pool live, and the export comes from the finished draft session |
+
+Teams that captains assembled during registration are a third, separate export path into tournament teams; they are covered in [Registration and rosters](/docs/dev/registration). Changing `team_formation` or the roster shape while a draft session is active is refused with 400, naming the status of the session in the way.
+
+## The balancer
+
+### Shared preparation
+
+Before either engine runs, the pool goes through the same preparation.
+
+- Players who cannot play any needed role are dropped. If some role of the roster shape has no capable player at all, the run errors.
+- Team count is the pool size divided by the team size, floored, and then clamped by the engine's own ceiling.
+- A remainder no longer blocks the run — the leftover players simply sit out. Players flagged `must_play` are never among them: they are moved to the front before the tail is cut, and only if there are more of them than slots exist does the request fail. Within the rest, `rotation_priority` ascending decides who is trimmed first.
+- With captains enabled, the top-rated players are marked captains and pinned to a role: the first one from their own preferences they can play, otherwise the first available one. Captain ranking is deterministic — by descending maximum rating, ties broken by player identifier.
+- Then a backtracking search finds a feasible role assignment that never evicts a captain. No assignment means an error naming which roles are short.
+
+### The tournament engine
+
+The tournament solver is a multi-objective evolutionary search in Rust that builds an arbitrary number of teams and optimizes **two objectives at once**:
+
+- **balance** — the spread of total team strength, the worst gap between teams, the spread of averages, skew across role lines, the spread inside a team and a separately computed tank balance (the gap between adjacent-strength tanks and the spread of the tank line), plus a penalty for pairs of low-ranked players landing on the same roster;
+- **comfort** — role discomfort: zero for a flex player on any role they can play, a rising cost for a role below their priority, a distinctly larger one for a playable but unwanted role and larger still for an unplayable one. The worst pain in the tournament, the per-team maximum pain averaged across teams and sub-role collisions inside one roster belong here too.
+
+The result is a set of non-dominated variants for the organizer to choose from. Every run has a hard wall-clock budget (`time_limit_ms`, 600000 ms by default and at most): once spent, evolution and polishing stop and the best result found so far is returned. That is a deliberate trade of same-seed reproducibility for latency — ordinary runs converge long before the limit.
+
+### The mix engine
+
+The mix engine is a vendored C++ core that enumerates **every** legal split by bitmask with early pruning, and works on exactly **two equal-size teams**. It is built for Linux only; where the extension is unavailable, a mix balance silently falls back to the tournament engine.
+
+The `mix_comfort_tilt` knob tilts quality between "even strength" and "more preferred roles"; the midpoint reproduces the engine's own weights. The candidate pruning threshold is not a requirement: if even the best split scores above it the engine errors, and the request is retried without the threshold. Since the enumeration is already finished by the time results are trimmed, a mix is handed a deep list of options rather than a top ten.
+
+### Calling it
+
+A tournament pool is assembled server-side: the request body carries no players at all, so a browser cannot hand the algorithm a different set of ranks than the draft sees.
+
+```http
+POST /api/v1/balancer/tournaments/42/balance HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <session token or API key>
+Content-Type: application/json
+
+{}
+```
+
+The answer is 202 with a `job_id` plus `status_url` / `result_url`; status reads `queued`, `running`, `succeeded` or `failed`. There is also a synchronous twin for integrations — `POST /api/v1/balancer/balance?workspace_id=1`, where the whole pool travels in `player_data`, the roster shape in `role_mask`, and the teams come back in the same response. It reads nothing from the workspace, its solver budget is clamped to 60 seconds, and a pool that will not settle in time answers 504 and belongs on the asynchronous job API.
+
+## The live draft
+
+### The session
+
+Session states: `setup → ready → live ⇄ paused → completed | cancelled`.
+
+Formats are `snake`, `linear` and `custom`. Under `custom`, each round carries its own rule: `linear`, `reverse`, `weakest_first`, `strongest_first`, `team_avg_asc`, `team_avg_desc`. Captain order is configured separately: `manual` (selection order), `weakest_first`, `strongest_first` or `random` — a deterministic Mulberry32 shuffle seeded from the settings, so a preview and its commit always agree. The autopick strategy is `best_fit` (default), `best_available` or `role_need`.
+
+The round count is never submitted: it is derived from the roster shape as `team_size - 1`. A shape that leaves no rounds is refused.
+
+### Clock and concurrency
+
+The clock is server-authoritative. A supervisor runs it, ownership of a session's clock is held by a distributed lock with a 10-second TTL renewed every 3 seconds, and the client only renders the deadline it is sent.
+
+A manual pick and an autopick are the same conditional `UPDATE`, guarded by both the on-clock state and the optimistic `version` token. Exactly one writer updates the row; the loser gets **409 `pick_already_resolved`**.
+
+```http
+POST /api/v1/balancer/draft/picks/981/select HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <session token>
+Content-Type: application/json
+
+{ "player_id": 314, "expected_version": 17, "target_role": "damage" }
+```
+
+Autopick takes the same `expected_version`. Separately, `draft_session_stale` (409) guards session setup: once the seed has been rebuilt, a stale preview cannot be committed.
+
+### Autopick and pauses
+
+Autopick only chooses from player-role pairs proven **safe**. Safety is a bipartite matching between the remaining slots and the available players, and a hypothetical pick is tested **before** it is applied, so it cannot starve another team's slot. When no safe choice exists the draft does **not** force a pick: it pauses with reason `role_shortage`.
+
+The second pause reason is `order_recalculated`. The `team_avg_asc` and `team_avg_desc` rules re-seat their round by live averages when it starts, so the order can move on that round's first pick and the draft stops so everyone sees it.
+
+Candidates come from the same roster engine the balance run reads: a player is scored at the rank of the role they would actually fill, and a player the balancer can rank on no role is not a candidate at all rather than a rank-zero last resort. The fit formula is deliberately simpler than the balancer's — autopick and suggestions have to answer synchronously and deterministically.
+
+## Mixes and custom games
+
+Custom game statuses are `draft`, `balanced`, `completed`, `cancelled`. A player's participation in the pool is `must_play`, `pool` or `benched`; roles are taken either from every ranked role (`all_ranked`) or from an explicit list (`explicit`).
+
+Caps: at most 8 teams and at most 16 co-hosts per game. Permissions come from a dedicated workspace system role, **host**: everything an ordinary member has plus full authorship over the `custom_game` resource — workspace membership alone is not enough to run a mix. Only the host writes the pool; some actions are open to co-hosts as well.
+
+The rotation recommendation for the next map ranks the pool on one key, checked in order: longest current sit-out streak, then shortest current played-in-a-row streak, then fewest maps played this game, then input order for determinism. Pinned `must_play` members always keep a seat and rank ahead of everyone. If the seats cover the whole pool, or none of the unpinned members has any history yet, everyone comes back `neutral` — sort stability must not be dressed up as a fairness verdict.
+
+## Realtime
+
+Draft state and balancer state travel on different topics.
+
+| Topic | What it carries |
+| --- | --- |
+| `tournament:{id}:draft` | Draft events: `draft.pick_started`, `draft.paused`, `draft.resumed`, `draft.blocked`, `draft.completed`, `draft.cancelled`, `draft.session_updated`, `draft.player_updated` |
+| `tournament:{id}:balancer` | Data edits (`balancer.registrations_changed`, `balancer.balance_saved`, `balancer.teams_changed`, `balancer.config_changed`) and job lifecycle (`balancer_job.queued` / `running` / `progress` / `succeeded` / `failed`) |
+| `draft:{session_id}:chat` | The draft room chat — its own topic with its own permissions; re-seeding a session creates a new room |
+| `workspace:{id}:pickup_mix` | A workspace's mix events |
+
+Job progress ticks are not persisted — a late joiner takes a snapshot from the job status read instead. Also ephemeral are `balancer.presence`, synthesized by the gateway from live connections, and `balancer.drag`, the only event type the gateway accepts from a client.
+
+A team export announces staleness separately, as an invalidation of tournament resources: draft events themselves invalidate nothing, because a pick writes only to draft tables.
+
+## See also
+
+- [Registration and rosters](/docs/dev/registration) — where the pool, the ranks and the roster shape come from.
+- [Realtime (WebSocket)](/docs/dev/realtime) — handshake, subscriptions and event replay.
+- [Tournaments, stages and brackets](/docs/dev/tournaments) — where the finished teams end up.
+- [Endpoint reference](/api/docs) — the full route list.

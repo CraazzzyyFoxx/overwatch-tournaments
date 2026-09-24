@@ -148,6 +148,13 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "users.get_profile", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.app.users.draft_card")
+    async def _draft_card(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            return await user_service.get_draft_card(session, c.require_id(data), workspace_id=_ws_id(data))
+
+        return await c.envelope(logger, "users.draft_card", op, session_factory=_SF)
+
     @broker.subscriber("rpc.app.users.tournaments")
     async def _tournaments(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:

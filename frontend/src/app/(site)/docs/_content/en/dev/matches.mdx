@@ -1,0 +1,123 @@
+A result in OWT lives on three levels, and confusing them is expensive: an encounter is the series, an encounter game is one position of it and the only carrier of result authority, and a match is the parsed log of one map and the carrier of statistics. This article covers all three, plus captain reports, pick-ban, scrims and log ingestion.
+
+## The three levels
+
+| Object | What it is | What is authoritative on it |
+| --- | --- | --- |
+| Encounter (`encounter`) | a best-of series between two teams | the final series score and bracket advancement |
+| Encounter game (`encounter_game`) | one position of the series: its map and its result | the accepted map score and `result_source` |
+| Match (`matches.match`) | the parsed log of one played map | statistics, kill feed, events |
+
+The key point: **a match does not decide the result**. It records what a log *observed*; an encounter game records what the tournament *decided*. Captain reports no longer write `matches.match` rows — a match row comes from a parsed log. A match's `source` may be `log_parser` or `captain_report`, but only `log_parser` is written today; `captain_report` survives on historical rows. An encounter's `has_logs` flag is computed as "a match with `source = log_parser` exists", so captain confirmations alone never light it up.
+
+## Encounter games
+
+A game carries `position` (1-based), `map_id`, `state`, the accepted score and its provenance:
+
+- `state`: `planned` (the position exists, no map chosen yet), `awaiting_result` (map known, waiting for both sides' claims), `disputed` (the claims disagree), `confirmed` (a score was accepted), `cancelled` (kept as history after an undo or reset; never revived).
+- `accepted_home_score` / `accepted_away_score`, `result_source` (`captain_agreement`, `admin`, `admin_log`), `confirmed_at`.
+- `result_version` is bumped on every accepted-result write (confirmation, correction) and never decreases — clients and events use it to tell a fresh result from a stale one.
+
+The database enforces two invariants: among non-cancelled games there is at most one game per position of an encounter, and the `confirmed` state requires the full shape — both accepted scores, `result_source` and `confirmed_at`.
+
+## Map reports
+
+Each side files its own claim against a specific **game**, never against a map: a series may play the same map twice, and only the position tells the two plays apart.
+
+```http
+POST /api/v1/encounters/512/games/1841/report HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "home_score": 2, "away_score": 1 }
+```
+
+There is at most one claim per game per side (`home` or `away`), and the score is always in the encounter's orientation, not the reporter's. Then:
+
+- **The claims match** — the game becomes `confirmed` with `result_source = captain_agreement`, the series score is recomputed, and the next map opens (for progressive pick-ban rounds this is the "that map just finished" signal).
+- **The claims disagree** — the game becomes `disputed`, both claims stand, and the organizer is notified.
+- **The game is already `confirmed`** — the claim is rejected with the code `result_locked`.
+- **The stage bracket is a preview** — the write is rejected with 409: captains do not report against an unpublished bracket.
+
+Only an admin can change a confirmed result: `POST /api/v1/admin/encounters/{encounter_id}/games/{game_id}/result`, and the correction must carry a reason, which goes into the journal. The correction is dependency-aware: position N's outcome is what opened map N+1's bans, so flipping who won N makes the round that followed it wrong — it was opened by the losing side. That round is rebuilt on the new outcome, but only while it is untouched: once anyone has banned in it, or a later position has a claim, the correction is refused with `downstream_started` rather than deleting real history. A correction that leaves the outcome alone (2:1 to 3:1) changes no round at all.
+
+The result journal is read from `GET /api/v1/admin/encounters/{encounter_id}/result-audit`. Its actions are `confirm`, `reopen`, `auto_confirm`, `auto_dispute`, `import`, `cascade_reset`, plus the three per-game ones: `game_confirm`, `game_correct`, `game_cancel`.
+
+## The series score
+
+The series score is the number of confirmed, non-cancelled games each side won. While the encounter is live, it is materialised onto the encounter's `home_score` / `away_score` on every accepted result. Once the encounter is `completed`, the official finalize is the sole writer of that score — the single path taken by captain auto-confirmation, an admin decision and a Challonge import alike. Finalize is also what triggers bracket advancement (see [Tournaments, stages and brackets](/docs/dev/tournaments)).
+
+## The series report
+
+Besides per-map claims there is a report on the whole series, one per encounter and team. It carries `home_score`/`away_score` (again in the encounter's orientation), an optional `closeness` rating from 1 to 10, a comment, the organizer's custom text fields, and per-map replay codes.
+
+Two reports with the same score auto-confirm the encounter: `result_status` becomes `confirmed`, the encounter's `closeness` becomes the average of the two ratings divided by 10 (so 0…1), and advancement runs. Differing scores produce `disputed`. While only one report exists, `result_status` is `pending_confirmation`. After `confirmed`, only an admin can change the result (`POST /api/v1/admin/encounters/{encounter_id}/result`, and `.../result/reopen` to un-confirm it).
+
+The form is configured per tournament: the built-in fields `closeness`, `map_codes` and `comment` are individually enabled and made required, plus custom text fields. Disabled fields are **dropped** from a submitted body rather than rejected with 422.
+
+- `GET /api/v1/encounters/{encounter_id}/my-role` — which side the current user is on.
+- `POST /api/v1/encounters/{encounter_id}/report` — submit a series report.
+- `GET /api/v1/encounters/{encounter_id}/reports` — read the reports.
+
+## Pick-ban
+
+One engine serves two kinds: `map` and `hero` (`kind` travels as a path segment). Configuration is resolved through a **tournament → stage → round** cascade, separately per kind: a map config and a hero config can sit side by side at the same level. A level with an empty pool is a rules template, not a room — no session opens from it.
+
+Modes are `pool` (one shared pool) and `slots` (one slot per map of the series, each with at least two candidates and an optional reserve map for a draw; `preset = "custom"` is forbidden in slot mode at the database level). Steps are written as side-agnostic tokens `ban_first`, `ban_second`, `pick_first`, `pick_second`, `protect_first`, `protect_second` and `decider`, resolved to `home`/`away` when a round starts. Hero sequences are always custom; a map config on the bracket preset builds its sequence from `best_of` and the pool size.
+
+A session only opens when everything lines up at once: both teams are known, the stage is published, a config is found and its pool is non-empty, slot mode has enough slots for `best_of` and each of them is filled, both sides pressed ready (`POST /api/v1/encounters/{encounter_id}/ready` — one confirmation covers both kinds), and for hero round N map N is already settled. When there is no session, the state reports why: `teams_unknown`, `bracket_preview`, `not_configured`, `slot_count_mismatch`, `slot_underfilled`, `not_ready`, `waiting_map`.
+
+Rounds can be progressive: slot mode and every hero config grow one round per map, so round 2 cannot start before map 1 has been played. A flat map config is the classic veto that settles the whole series' map order up front.
+
+Further rules:
+
+- `no_repeat_scope` is the cross-round ban memory: `none`, `encounter` (anything banned by either side earlier in the series is excluded from every later round) or `encounter_same_side` (excluded only for the side that banned it). Protects are never written to the ledger at all.
+- `unique_attribute_per_side_per_round` rejects a second action by the same side in the same round sharing that attribute's value; only `"role"` for heroes is implemented today.
+- The first pick is decided by the `higher_seed` rule. First-ban rotation is `fixed`, `alternate`, `result_winner_first`, `result_loser_first` or `result_loser_choice`. The last one parks the session on `awaiting_choice`: only the side named in `pending_loser_side` may pick the opener, through `elect-opener`.
+- Undoing the last action is a two-sided consent: one side asks (`undo_requested_by` and `undo_target_index` are recorded), and the opponent's matching call applies it. Any new action clears the request, and an undo is refused once the round has been played or a later round has opened. Admins have their own `pick-ban-act`, `pick-ban-elect-opener` and session reset.
+
+The room is read and driven through `GET /api/v1/encounters/{encounter_id}/pick-ban/{kind}/state` and `POST .../act`, `.../elect-opener`, `.../undo`; a tournament's configs through `GET /api/v1/tournaments/{tournament_id}/pick-ban-configs`. Live updates go to `encounter:{id}:map-veto` (maps) and `encounter:{id}:pick-ban:hero` (heroes) — two topics rather than one, because their audiences and permissions differ; the room's chat is `encounter:{id}:chat`.
+
+## Scrims
+
+A scrim is the same pipeline cut down to a single encounter. A room is one stage, two rosterless teams and one encounter, published immediately: the stage is created with `is_published = true`, so a room has no preview state.
+
+The creator takes the `home` side; `away` stays unclaimed and is claimed with the token from the link — an address, not an access secret: any workspace member can read the room. The viewer's side is resolved server-side from the team's captain, never from a client parameter. One person cannot captain both sides. The number of open rooms per user and the maximum `best_of` are capped by a platform setting; closing one frees the slot while the room itself stays readable.
+
+```http
+POST /api/v1/scrims/{token}/claim HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <token>
+```
+
+The routes are `POST /api/v1/scrims`, `GET /api/v1/scrims`, `GET /api/v1/scrims/{token}`, `POST /api/v1/scrims/{token}/claim` and `POST /api/v1/scrims/{token}/close`. Every room of a workspace lives in one hidden container tournament, and standings recalculation is skipped on it: by construction the container has no bracket, no standings and no rosters.
+
+## Match logs
+
+**Ingestion.** Three paths: an organizer's multipart upload (`POST /api/v1/admin/logs/upload` with `tournament_id`, an optional `encounter_id` and one or more `files[]`), the Discord bot's queue-borne ingest, and a manual processing request (`POST /api/v1/logs/{id}`). The source is recorded on the record as `upload`, `discord` or `manual`. The filename is checked for path traversal, the content must be valid UTF-8, and the file lands in object storage before the database row is written.
+
+**Deduplication.** A SHA-256 is taken over the file's bytes. If a record in state `done` with the same hash already exists for the same tournament and filename, the file is not reprocessed. An existing `pending` or `failed` record for the same filename is reused, with the attempt counter reset to zero: the content may have changed, so the retry budget starts over.
+
+**Record states** are `pending`, `processing`, `done`, `failed`; a record also carries `error_message`, `started_at`, `finished_at`, `attempts`, `content_hash` and an optional encounter attachment. The queue and history are read by admins at `/api/v1/admin/logs/queue-status`, `/api/v1/admin/logs/history` and `/api/v1/admin/logs/stats`, with `POST /api/v1/admin/logs/{id}/retry` to retry. Progress reaches subscribers as the `workspace.logs` resource going stale.
+
+**What parsing produces.** One `matches.match` row per map with `source = log_parser`, a duration, the log filename and a link to the processing record; player statistics as name-and-value rows, per round and again as a whole-match total (round `0`), broken down by hero where the metric is hero-specific; a kill feed with time, round, fight number, killer, victim, heroes, damage and the critical-hit and environmental flags; and events — assists, ultimates, hero swaps, resurrections. These are read from `GET /api/v1/matches`, `GET /api/v1/matches/{id}` and `GET /api/v1/matches/{id}/kill-feed`.
+
+**Impact and MVP.** A player's contribution is scored on top of the parsed match. The kill feed is cut into fights: a new fight starts on a round change or after a lull longer than fifteen seconds between kills, and fight boundaries give first picks and first deaths. A player is attributed a dominant role by hero time; their statistics are compared against baselines — one per role, one per role and rank — weighted by their share of played time, with outliers trimmed. Flex rows and very short appearances are not scored. The result is stored as two metrics: `impact_points` (role baseline) and `overperformance_score` (role and rank baseline); the latter is the basis of MVP achievements.
+
+## Who consumes this
+
+**Achievements.** An achievement rule is a declarative JSON condition tree evaluated against match data, standings and bracket path; a player's effective set is the evaluation plus manual grants minus manual revokes. Recalculation runs by itself after a log parses successfully, or manually (`POST /api/v1/achievement/calculate`, `POST /api/v1/achievement/calculate/{tournament_id}`); public reads are `GET /api/v1/achievements/user/{user_id}` and `GET /api/v1/achievements/{id}/users`.
+
+**Analytics.** Ratings and forecasts are built from the same encounters and matches: an analytics run replays encounters in chronological order, and match quality (competitiveness, predictability, skill balance) is scored separately from series scores and pre-encounter team ratings. Reads are `/api/v1/analytics`, `/api/v1/analytics/match-quality`, `/api/v1/analytics/performance` and neighbouring routes; a workspace may have only one active computation job at a time. The tables behind all of this are described in [Data model](/docs/dev/data-model) and drawn on the [Database schema](/docs/dev/schema) page.
+
+<Callout type="warning">
+Correcting a game's result is destructive to whatever was built on the old outcome: unplayed pick-ban rounds are rebuilt, and if they have already been touched the correction is refused outright. Do not design an integration that assumes an already-opened round is stable.
+</Callout>
+
+## See also
+
+- [Tournaments, stages and brackets](/docs/dev/tournaments) — phases, stages, bracket edges, standings.
+- [Realtime (WebSocket)](/docs/dev/realtime) — subscribing to room topics and invalidation.
+- [HTTP API](/docs/dev/api) — versions, errors, pagination, caching.
+- [Endpoint reference](/api/docs) — the full route list.

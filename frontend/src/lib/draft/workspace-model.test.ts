@@ -7,7 +7,6 @@ import {
   draftPoolView,
   filterDraftPlayers,
   normalizeTopHeroes,
-  groupPicksByRound,
   rosterRoleForPlayer,
   slotRankForPlayer,
   optionForSelection,
@@ -27,8 +26,8 @@ describe("draft workspace model", () => {
       pick_version: 3,
       draft_team_id: 5,
       options: [
-        { player_id: 2, role: "tank", is_safe: true, reason_code: null, unmatched_slots: [], blocking_player_ids: [], suggestion_score: 2 },
-        { player_id: 2, role: "damage", is_safe: false, reason_code: "role_shortage", unmatched_slots: [], blocking_player_ids: [1], suggestion_score: null }
+        { player_id: 2, role: "tank", is_safe: true, reason_code: null, unmatched_slots: [], blocking_player_ids: [] },
+        { player_id: 2, role: "damage", is_safe: false, reason_code: "role_shortage", unmatched_slots: [], blocking_player_ids: [1] }
       ]
     };
     expect(optionForSelection(response, 2, "tank")?.is_safe).toBe(true);
@@ -39,11 +38,12 @@ describe("draft workspace model", () => {
   it("filters and sorts the public pool with URL-safe values", () => {
     expect(filterDraftPlayers(players, { role: "all", sort: "name", query: "a" }).map((player) => player.id)).toEqual([2, 1]);
     expect(filterDraftPlayers(players, { role: "damage", sort: "rank", query: "" }).map((player) => player.id)).toEqual([2]);
-    expect(parseDraftViewParams(new URLSearchParams("role=oops&sort=name&view=team&pool=drafted&q=abc"))).toEqual({
+    expect(parseDraftViewParams(new URLSearchParams("role=oops&sort=name&view=teams&pool=all&teams=order&q=abc"))).toEqual({
       role: "all",
       sort: "name",
-      view: "team",
-      pool: "drafted",
+      view: "teams",
+      pool: "all",
+      teams: "order",
       query: "abc"
     });
     // An unknown pool name falls back to the one everybody starts on.
@@ -60,24 +60,35 @@ describe("draft workspace model", () => {
     expect(rosters.has(0)).toBe(false);
   });
 
-  it("splits the board into the three lists the pool column can show", () => {
+  it("splits the board into the three lists the pool panel can show", () => {
     const pool = [
       { ...players[0], id: 1, status: "available" },
-      { ...players[1], id: 2, status: "picked", drafted_by_team_id: 5 }
+      { ...players[1], id: 2, status: "picked", drafted_by_team_id: 5 },
+      { ...players[1], id: 3, status: "available" },
+      { ...players[1], id: 4, status: "removed" }
     ] as DraftPlayer[];
     const base = { role: "all", sort: "rank", query: "" } as const;
 
-    const available = draftPoolView(pool, { ...base, pool: "available" }, new Set([1]));
-    expect(available.filtered.map((entry) => entry.id)).toEqual([1]);
-    expect(available.drafted.map((entry) => entry.id)).toEqual([2]);
+    const available = draftPoolView(pool, { ...base, pool: "available" }, [1]);
+    expect(available.filtered.map((entry) => entry.id)).toEqual([3, 1]);
+    // "All" is everyone still in the draft: rostered included, removed not.
+    expect(available.all.map((entry) => entry.id)).toEqual([1, 2, 3]);
     // The role chips keep counting who is LEFT whichever tab is open.
     expect(available.roleCounts.support).toBe(1);
-    expect(available.roleCounts.tank).toBe(0);
+    expect(available.roleCounts.tank).toBe(1);
 
-    expect(draftPoolView(pool, { ...base, pool: "drafted" }, new Set([1])).filtered.map((e) => e.id)).toEqual([2]);
-    expect(draftPoolView(pool, { ...base, pool: "shortlist" }, new Set([1])).filtered.map((e) => e.id)).toEqual([1]);
-    // A shortlisted player who got drafted drops out of the shortlist tab.
-    expect(draftPoolView(pool, { ...base, pool: "shortlist" }, new Set([2])).filtered).toEqual([]);
+    // The queue keeps its own order — it is the autopick priority — and drops
+    // players another team took.
+    expect(draftPoolView(pool, { ...base, pool: "shortlist" }, [1, 2, 3]).filtered.map((e) => e.id)).toEqual([1, 3]);
+    expect(draftPoolView(pool, { ...base, pool: "shortlist" }, [3, 1]).filtered.map((e) => e.id)).toEqual([3, 1]);
+  });
+
+  it("narrows `need` to the roles the acting team can seat, and to nothing without one", () => {
+    const pool = players.map((player) => ({ ...player, status: "available" })) as DraftPlayer[];
+    const need = { role: "need", sort: "rank", query: "", pool: "available" } as const;
+    expect(draftPoolView(pool, need, [], new Set(["tank"])).filtered.map((e) => e.id)).toEqual([2]);
+    expect(draftPoolView(pool, need, [], new Set(["tank"])).needCount).toBe(1);
+    expect(draftPoolView(pool, need, [], null).filtered).toHaveLength(2);
   });
 });
 
@@ -85,7 +96,7 @@ const mkPlayer = (p: Partial<DraftPlayer>): DraftPlayer => ({
   id: 1, session_id: 1, registration_id: 10, user_id: null, battle_tag: "Ana#1",
   primary_role: "support", sub_role: null, is_flex: false, effective_rank: 3000,
   status: "available", is_captain: false, drafted_by_team_id: null,
-  secondary_roles: [], role_ranks: {}, role_sources: {}, role_top_heroes: {}, notes: null,
+  secondary_roles: [], role_ranks: {}, role_sources: {}, role_top_heroes: {}, role_sub_roles: {}, notes: null,
   custom_fields: [], version: 1, ...p,
 });
 
@@ -132,19 +143,6 @@ describe("normalizeTopHeroes", () => {
   });
   it("handles undefined", () => {
     expect(normalizeTopHeroes(undefined)).toEqual([]);
-  });
-});
-
-describe("groupPicksByRound", () => {
-  it("groups and sorts by round then pick_in_round", () => {
-    const picks = [
-      { id: 3, round_no: 2, pick_in_round: 1, overall_no: 3 },
-      { id: 1, round_no: 1, pick_in_round: 1, overall_no: 1 },
-      { id: 2, round_no: 1, pick_in_round: 2, overall_no: 2 },
-    ] as DraftPick[];
-    const groups = groupPicksByRound(picks);
-    expect(groups.map((g) => g.round)).toEqual([1, 2]);
-    expect(groups[0].picks.map((p) => p.id)).toEqual([1, 2]);
   });
 });
 

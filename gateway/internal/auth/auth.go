@@ -41,15 +41,23 @@ func cookiePrefix() string {
 }
 
 // APIKeyPrefix marks an opaque workspace-scoped API key
-// ("aqt_sk_<public_id>_<secret>" — identity-service's ApiKeyService.PREFIX).
+// ("owt_sk_<public_id>_<secret>" — identity-service's ApiKeyService.PREFIX).
 // Such a credential is not a JWT at all: it carries no claims and can only be
 // judged by identity-svc, so parseToken must never be handed one.
-const APIKeyPrefix = "aqt_sk_"
+const APIKeyPrefix = "owt_sk_"
+
+// legacyAPIKeyPrefix is what keys minted before the owt rebrand still carry.
+// identity-svc keeps validating them (ApiKeyService._LEGACY_PREFIXES), so this
+// test has to keep recognising them: a key it misses is parsed as a JWT, which
+// makes the socket anonymous and skips the per-key limiter.
+const legacyAPIKeyPrefix = "aqt_sk_"
 
 // IsAPIKey reports whether token is an opaque API key rather than a signed
 // access token. It is a purely local prefix test, and that is what lets every
 // surface skip the identity RPC for ordinary session traffic.
-func IsAPIKey(token string) bool { return strings.HasPrefix(token, APIKeyPrefix) }
+func IsAPIKey(token string) bool {
+	return strings.HasPrefix(token, APIKeyPrefix) || strings.HasPrefix(token, legacyAPIKeyPrefix)
+}
 
 // APIKeyResolver judges an opaque API key against identity-svc and returns the
 // principal it authenticates, or nil when the key is invalid or carries no

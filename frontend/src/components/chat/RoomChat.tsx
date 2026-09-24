@@ -97,7 +97,14 @@ function initial(name: string): string {
  * spectator switch — comes from the `viewer` the same envelope carries, so
  * there is no second round trip and no guess about what this account may do.
  */
-export function RoomChat({ room }: Readonly<{ room: ChatRoomDescriptor }>) {
+export function RoomChat({
+  room,
+  defaultOpen = true
+}: Readonly<{
+  room: ChatRoomDescriptor;
+  /** Open on arrival. A room whose own layout fills the viewport passes `false`. */
+  defaultOpen?: boolean;
+}>) {
   const t = useTranslations("chat");
   const format = useFormatter();
   const { user } = useAuthProfile();
@@ -154,10 +161,11 @@ export function RoomChat({ room }: Readonly<{ room: ChatRoomDescriptor }>) {
       title={t("title")}
       icon={<MessageCircle className="size-4" aria-hidden />}
       hideLabel={t("hide")}
-      // Open on arrival, unlike the broadcast dock: everyone this room lets
-      // read is IN the room, and a captain who has to find the chat before the
-      // opponent's "ready?" reaches them is worse off than before it floated.
-      defaultOpen
+      // Open on arrival by default, unlike the broadcast dock: everyone this
+      // room lets read is IN the room, and a captain who has to find the chat
+      // before the opponent's "ready?" reaches them is worse off than before
+      // it floated.
+      defaultOpen={defaultOpen}
       // Only an organizer sees the switch, and only they can act on it: the
       // server re-authorizes every live subscriber when it flips.
       actions={

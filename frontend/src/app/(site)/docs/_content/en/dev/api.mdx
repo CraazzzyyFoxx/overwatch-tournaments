@@ -1,0 +1,185 @@
+All of the platform's HTTP is one gateway and one path shape. This page covers how versions work, what success and failure look like, where a request's workspace comes from, how lists are paged, and which limits apply at the edge.
+
+## Path shape and versions
+
+Every route looks like `/api/v{n}/<domain>/...`: the version is always the second segment, and nothing else sits beside it. The gateway normalises the inbound path onto that shape before routing, so the route tables, the specs and the response cache only ever see canonical paths.
+
+| Path | What it is |
+| --- | --- |
+| `/api/v1/...` | the contract: plain, unwrapped JSON |
+| `/api/v2/...` | the same paths, handlers and HTTP statuses; the body is wrapped in an envelope |
+| `/api/docs`, `/api/openapi.json`, `/api/openapi.v2.json` | the reference and the specs — outside the version, because they describe the versions |
+| `/api/health` | a probe, proxied to the frontend container |
+| `/bff/...` | the site's own internal endpoints, authorized by cookie; not the public API |
+
+v2 is not a different set of endpoints. `/api/v2/X` is rewritten to `/api/v1/X` and reaches the same handler with the same status; only the body differs. Moving from v1 to v2 changes no path, no parameter and no status code.
+
+### A complete v1 exchange
+
+```http
+GET /api/v1/workspaces/by-host?host=owt.craazzzyyfoxx.me HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Accept: application/json
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: private, no-store
+
+{"workspace_id": 1, "slug": "anak"}
+```
+
+### The same request on v2
+
+```http
+GET /api/v2/workspaces/by-host?host=owt.craazzzyyfoxx.me HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Accept: application/json
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: private, no-store
+
+{"ok": true, "data": {"workspace_id": 1, "slug": "anak"}}
+```
+
+A successful v2 body is always `{"ok": true, "data": ...}`, sometimes with an extra `warnings` array. An empty body (`204 No Content`) stays empty in both versions, and `data` may be a literal `null`.
+
+## Errors
+
+A v1 error is a flat object: a human `detail`, a machine `code`, and any structured detail the service reported, at the top level:
+
+```json
+{
+  "detail": "workspace_id query parameter is required",
+  "code": "bad_request"
+}
+```
+
+The same error on v2:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "bad_request",
+    "message": "workspace_id query parameter is required"
+  }
+}
+```
+
+Branch on `code` (v1) or `error.code` (v2); `detail` and `message` are text for a human, not something to parse. Structured detail arrives as `fields` (a list of `field`, `msg`, `code` plus whatever the service added) and `retry_after`; on v2 both sit inside `error.details`.
+
+| `code` | HTTP | When |
+| --- | --- | --- |
+| `bad_request` | 400 | a parameter is missing or unparseable |
+| `unauthorized` | 401 | no credential, or one that no longer works |
+| `forbidden` | 403 | the credential is recognised, the action is not allowed |
+| `not_found` | 404 | no such object, or it belongs to another workspace |
+| `conflict` | 409 | the current state refuses: a duplicate, a race, a taken slot |
+| `gone` | 410 | the object existed and is no longer available |
+| `payload_too_large` | 413 | the body is over the cap |
+| `unprocessable` | 422 | the JSON parsed but a schema or rule did not hold — read `fields` |
+| `rate_limited` | 429 | a rate limit or a quota; read `Retry-After` |
+| `unavailable` | 503 | a dependency the service needs is down, retry shortly |
+| `internal` | 500 | everything else |
+
+The gateway's own failures — the ones that never reach a service — may arrive without a `code` on v1, for example `404 {"detail": "Not Found"}` on an unmatched `/api/v1/...` path, or `503 {"detail": "service unavailable"}`. On v2 the code is derived from the status there, so it is always present.
+
+## Legacy prefixes
+
+`auth`, `analytics`, `balancer`, `streams`, `notifications` and `announcements` used to sit beside the version: `/api/auth/me`. Those spellings are still answered — the gateway rewrites them onto the canonical path (`/api/v1/auth/me`), matching segment-wise, so `/api/authx` is not a match. Every such response carries three headers:
+
+```http
+Deprecation: true
+Sunset: Thu, 01 Apr 2027 00:00:00 GMT
+Link: </api/v1/auth/me>; rel="successor-version"
+```
+
+The move is the prefix and nothing else: bodies, statuses and parameters are unchanged.
+
+## The workspace of a request
+
+A workspace is the unit of tenancy, and the API names it explicitly with the `workspace_id` parameter. The request host selects the community for the **site** (a platform subdomain or a verified custom domain), but it does not imply tenancy for the API: a community's own domain answers the same `/api/...` paths as the platform host, and domain reads there still expect `workspace_id`. The host-to-workspace mapping is a public endpoint, `GET /api/v1/workspaces/by-host?host=...` — the one in the example above; an unknown or unverified host resolves to `null`.
+
+Resolution works like this:
+
+1. An explicit `workspace_id` in the request always wins.
+2. With no parameter, if the presented credential is pinned to exactly one workspace (always true for an API key, true for a session when the member belongs to one community), the gateway fills it in. That is why a key does not have to repeat in the query string what its own credential already says.
+3. If the credential holds several workspaces, or there is none, the gateway does not guess: a domain read without `workspace_id` answers `400 bad_request`.
+
+Filling it in never widens authority: the gateway can only name a workspace the credential already carries, and the service still runs its own permission check.
+
+## Pagination
+
+Lists are paged by page number: `page` (1-based) and `per_page`. The response is a four-key envelope:
+
+```json
+{"page": 1, "per_page": 10, "total": 137, "results": []}
+```
+
+Defaults and the `per_page` ceiling depend on the endpoint (10, 20, 25, 30 and 50 all occur, with maximums between 100 and 500), so check the [endpoint reference](/api/docs). One special value: `per_page=-1` means "everything", with a hard guard at 10 000 rows. Many lists also accept `sort` and `order` (`asc` or `desc`), and searchable ones take `query`.
+
+Two places work differently, and the response fields show it:
+
+- **Notifications** page by cursor: the response carries `next_cursor` (`null` on the last page), which you send back as `cursor`.
+- **Room chat history** (pick/ban, draft) is extended with `after_id`, the id of the last message you already have.
+
+## The public response cache
+
+The gateway keeps some public reads in an in-memory cache. The rules are strict and worth knowing:
+
+- Only `GET`, and only v1 — a v2 request always bypasses it.
+- By default only anonymous requests are eligible: the presence of an `Authorization` header disables it. The exception is a handful of reads that are provably viewer-independent (the tournament page, its stages and standings, the encounter and team lists), where a signed-in reader shares the same entry.
+- Only `200` responses are stored. Errors, and the `404` an anonymous viewer gets for a hidden tournament, are never cached.
+- An entry lives 30 seconds by default, but the TTL is only a backstop: a tournament's entries are dropped by an event as soon as a worker changes it.
+
+The outcome shows up in the `X-Cache` header: `HIT` is served from the cache, `MISS` went upstream, and `COALESCED` means the request waited on somebody else's upstream call for the same key (concurrent misses on one key collapse into a single call).
+
+The cache key is the path plus a sorted query string, so `?a=1&b=2` and `?b=2&a=1` are one entry, and different `workspace_id` values are kept apart automatically.
+
+Do not cache API responses outside: when a service sets no header of its own, the gateway stamps `Cache-Control: private, no-store` on everything under `/api/` and `/bff/`. The payloads are viewer-dependent, and a shared cache would hand one viewer another's body.
+
+## Limits at the edge
+
+- **Authentication endpoints** are metered per IP: register, login, the OAuth callback and the SSO ticket exchange default to 10 requests per 60 seconds. Session refresh counts failed attempts only, so one shared exit IP cannot log out everybody behind it.
+- **API keys** are metered per key rather than per IP, against the key's own `requests_per_minute` (60 per minute when it carries none). Every such response, refused or not, carries `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds to reset) — pace yourself with those instead of discovering the wall.
+- **Anonymous traffic** can be capped per IP with a blanket budget; that one is turned on by deployment configuration.
+
+A refusal looks the same from every layer: `429`, a `Retry-After` header and a body whose `code` is `rate_limited`.
+
+```json
+{"retry_after": 60, "detail": "Too many requests", "code": "rate_limited"}
+```
+
+Edge limits are not the same thing as the workspace, key and session quotas — those also count heavy operations and report `quota_exceeded` in `fields`. See [Authentication and API keys](/docs/dev/identity).
+
+## Timeouts and gateway failures
+
+Every call reaches its domain service with a time budget (120 seconds by default, less for cheap reads). From the outside that surfaces as:
+
+| Response | What happened |
+| --- | --- |
+| `503`, `Retry-After: 1` | the service or the identity backend is unavailable and the call never started — retry |
+| `504` | the service did not answer inside the budget |
+| `502` | the service's answer could not be parsed |
+| `404` | a path under `/api/v1/` matched no route |
+
+A JSON request body is read up to 12 MiB; anything larger is truncated and answers `400`. A quota may impose its own, smaller body cap — that one answers `413`.
+
+## Where the full endpoint list lives
+
+The articles describe the model and the rules; the list of routes is generated from the gateway's own tables:
+
+- [`/api/docs`](/api/docs) — the interactive reference with a v1/v2 switch.
+- `/api/openapi.json` for the v1 spec, `/api/openapi.v2.json` for v2.
+
+## See also
+
+- [Authentication and API keys](/docs/dev/identity) — credentials, scopes, quotas, 401 versus 403.
+- [Workspaces and permissions](/docs/dev/workspaces) — where `workspace_id` comes from and what it bounds.
+- [Realtime (WebSocket)](/docs/dev/realtime) — how to receive changes without polling the API.
+- [Overview](/docs/dev/overview) — how the platform fits together.

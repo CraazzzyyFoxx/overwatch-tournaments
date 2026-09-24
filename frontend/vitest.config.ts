@@ -264,7 +264,7 @@ export default defineConfig({
       // File-level, not `src/components/draft/**`: that folder also holds
       // `bun:test` files (`DraftRoomSkeleton.test.ts`), which fail on the
       // import the moment vitest collects them.
-      "src/components/draft/PlayerProfileDialog.behavior.test.tsx"
+      "src/components/draft/PickIsland.behavior.test.tsx"
     ]
   }
 });

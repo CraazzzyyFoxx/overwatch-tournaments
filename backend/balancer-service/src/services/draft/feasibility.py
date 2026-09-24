@@ -13,7 +13,7 @@ import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import DraftAutopickStrategy, HeroClass
+from shared.core.enums import DraftAutopickStrategy, DraftPlayerStatus, DraftStatus
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.roster_shape import RosterShape
 from shared.models.balancer.draft import DraftPick, DraftSession
@@ -28,8 +28,8 @@ from src.domain.draft.entities import (
     DraftPickOption,
     DraftSnapshot,
     FitConfig,
-    FitPlayer,
     FitResult,
+    TeamFitScore,
 )
 from src.domain.draft.feasibility import (
     analyze_draft_feasibility,
@@ -192,19 +192,7 @@ class DraftFeasibilityService:
         capacity = rules.role_openings(shape, counts)
         # Same construction as autopick's, from the same snapshot rosters, so
         # a suggestion and the autopick that follows it cannot disagree.
-        fit_players = [
-            FitPlayer(
-                player_id=p.id,
-                rank_value=roster.best_rank or 0,
-                playable_roles=roster.playable_roles,
-                preference_order=((lead.role,) if (lead := roster.primary) is not None else ()),
-                is_flex=roster.is_full_flex,
-                user_id=p.user_id,
-                rank_by_role={HeroClass.from_slot_code(code): rank for code, rank in roster.role_ranks.items()},
-            )
-            for p in available
-            if (roster := snapshot.roster(p.id)) is not None and roster.is_draftable
-        ]
+        fit_players = sug.fit_players(available, snapshot.rosters)
         options = await self.evaluate_session_pick_options(
             session,
             draft_session,
@@ -221,6 +209,49 @@ class DraftFeasibilityService:
             allowed_options=safe_options,
         )
         return current, ranked
+
+    async def team_fit_scores(
+        self,
+        session: AsyncSession,
+        draft_session: DraftSession,
+        *,
+        team_id: int,
+    ) -> list[TeamFitScore]:
+        """Fit for every (available player x role this team can still seat), 1..99.
+
+        NOT the autopick answer: no global-safety filter and no captain queue --
+        this is the "how well would they fit us" column a captain reads while the
+        board is still open, so it covers every choice they could make, not only
+        the one the clock would take. Same candidate list and same ``player_fit``
+        as autopick, so the two numbers cannot come from different rosters.
+        """
+        if draft_session.status in (DraftStatus.COMPLETED.value, DraftStatus.CANCELLED.value):
+            return []
+        snapshot = await self.load_snapshot(session, draft_session)
+        shape = await self.resolve_shape(session, draft_session)
+        counts = rules.team_slot_counts(snapshot.players, snapshot.picks, team_id, shape, snapshot.rosters)
+        capacity = rules.role_openings(shape, counts)
+        if not any(opening > 0 for opening in capacity.values()):
+            return []  # this team's roster is full
+        available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
+        players = sug.fit_players(available, snapshot.rosters)
+        results = sug.candidates(players, capacity, FitConfig(), DraftAutopickStrategy(draft_session.autopick_strategy))
+        by_id = {player.player_id: player for player in players}
+        ordered = sorted(results, key=lambda result: sug.sort_key(result, by_id))
+        if not shape.has_role_slots:
+            # No seat carries a role, so a player is one entry: their best one.
+            best: dict[int, FitResult] = {}
+            for result in ordered:
+                best.setdefault(result.player_id, result)
+            ordered = list(best.values())
+        return [
+            TeamFitScore(
+                player_id=result.player_id,
+                role=result.role if shape.has_role_slots else None,
+                score=score,
+            )
+            for result, score in zip(ordered, sug.normalized_scores(ordered), strict=True)
+        ]
 
 
 feasibility_service = DraftFeasibilityService()

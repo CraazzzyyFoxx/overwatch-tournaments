@@ -20,11 +20,19 @@ export default async function GuideIndexPage({
         <section key={group.label}>
           <h2>{group.label}</h2>
           <div className={styles.cards}>
-            {group.items.map((item) => (
-              <Link key={item.href} href={item.href} className={styles.card}>
-                <span className={styles.cardTitle}>{item.title}</span>
-              </Link>
-            ))}
+            {group.items.map((item) => {
+              const title = <span className={styles.cardTitle}>{item.title}</span>;
+              // `/api/docs` is the gateway's page, not a Next route.
+              return item.bypassNext ? (
+                <a key={item.href} href={item.href} className={styles.card}>
+                  {title}
+                </a>
+              ) : (
+                <Link key={item.href} href={item.href} className={styles.card}>
+                  {title}
+                </Link>
+              );
+            })}
           </div>
         </section>
       ))}

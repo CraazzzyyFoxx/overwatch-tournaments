@@ -26,7 +26,6 @@ import {
 import { computeGating } from "@/lib/draft/logic";
 import { draftChatRoom } from "@/lib/realtime/chat-rooms";
 import { parseDraftViewParams, type DraftViewParams } from "@/lib/draft/workspace-model";
-import { DraftPageHero } from "./DraftPageHero";
 import { DraftWorkspace } from "./DraftWorkspace";
 
 interface DraftBoardProps {
@@ -85,6 +84,7 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
     setOptionalParam(next, "sort", values.sort, "rank");
     setOptionalParam(next, "view", values.view, "pool");
     setOptionalParam(next, "pool", values.pool, "available");
+    setOptionalParam(next, "teams", values.teams, "rosters");
     setOptionalParam(next, "q", values.query.trim(), "");
 
     const query = next.toString();
@@ -129,16 +129,12 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[min(2000px,96vw)] space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
-      <DraftPageHero
+    <div className="w-full pb-[env(safe-area-inset-bottom)]">
+      <DraftWorkspace
         tournament={tournament}
         board={board}
-        presence={presence}
-        connectionState={connectionState}
-      />
-      <DraftWorkspace
-        board={board}
         gating={gating}
+        presence={presence}
         options={optionsQuery.data ?? null}
         optionsLoading={optionsQuery.isFetching}
         onRetryOptions={() => void optionsQuery.refetch()}
@@ -151,8 +147,9 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
       />
       {/* Docked over the page, not a column of the board: the board wants
           every pixel of width it can get. Keyed by the SESSION — a re-seed is
-          a different draft and deserves its own conversation. */}
-      <RoomChat room={draftChatRoom(board.session.id)} />
+          a different draft and deserves its own conversation. Collapsed on
+          arrival: open, it covers the teams panel (the whole room on a phone). */}
+      <RoomChat room={draftChatRoom(board.session.id)} defaultOpen={false} />
     </div>
   );
 }
@@ -179,13 +176,15 @@ function DraftStateFrame({
   action?: ReactNode;
 }>) {
   return (
-    <HeroFrame>
-      <div className="flex min-h-64 flex-col items-start justify-center gap-3 px-6 py-12 md:px-10">
-        {icon}
-        <h1 className="font-onest text-2xl font-semibold text-[color:var(--aqt-fg)]">{title}</h1>
-        <p className="max-w-xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{hint}</p>
-        {action ? <div className="mt-2">{action}</div> : null}
-      </div>
-    </HeroFrame>
+    <div className="mx-auto max-w-[1720px] px-4 py-5 sm:px-6">
+      <HeroFrame>
+        <div className="flex min-h-64 flex-col items-start justify-center gap-3 px-6 py-12 md:px-10">
+          {icon}
+          <h1 className="font-onest text-2xl font-semibold text-[color:var(--aqt-fg)]">{title}</h1>
+          <p className="max-w-xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{hint}</p>
+          {action ? <div className="mt-2">{action}</div> : null}
+        </div>
+      </HeroFrame>
+    </div>
   );
 }

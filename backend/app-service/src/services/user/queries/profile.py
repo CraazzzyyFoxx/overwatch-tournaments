@@ -253,7 +253,7 @@ class UserProfileQueries:
         return teams, result_total.scalar_one()
 
     async def get_roles(
-        self, session: AsyncSession, user_id: int, workspace_id: int | None = None, *, grid: DivisionGrid
+        self, session: AsyncSession, user_id: int, workspace_id: int | None = None
     ) -> typing.Sequence[tuple[enums.HeroClass, int, int, list[dict]]]:
         """Per-role ``(role, maps won, maps lost, tournament entries)`` rows for a user.
 

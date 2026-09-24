@@ -79,9 +79,16 @@ export const tournamentQueryKeys = {
   draftBoard: (tournamentId: number) => ["draft", tournamentId, "board"] as const,
   draftSessions: (tournamentId: number) => ["draft", tournamentId, "sessions"] as const,
   draftSession: (sessionId: number) => ["draft", "session", sessionId] as const,
-  draftSuggestions: (sessionId: number) =>
-    ["draft", "session", sessionId, "suggestions"] as const,
   draftFeasibility: (sessionId: number) =>
     ["draft", "session", sessionId, "feasibility"] as const,
   draftPickOptions: (pickId: number) => ["draft", "pick", pickId, "options"] as const,
+  /** Every team's fit shares this prefix, so one invalidation refreshes them all. */
+  draftTeamFits: (sessionId: number) => ["draft", "session", sessionId, "fit"] as const,
+  draftTeamFit: (sessionId: number, teamId: number) =>
+    ["draft", "session", sessionId, "fit", teamId] as const,
+  draftTeamQueues: (sessionId: number) => ["draft", "session", sessionId, "queue"] as const,
+  draftTeamQueue: (sessionId: number, teamId: number) =>
+    ["draft", "session", sessionId, "queue", teamId] as const,
+  draftJournal: (sessionId: number) => ["draft", "session", sessionId, "journal"] as const,
+  draftPlayerCard: (userId: number) => ["draft", "player-card", userId] as const,
 };

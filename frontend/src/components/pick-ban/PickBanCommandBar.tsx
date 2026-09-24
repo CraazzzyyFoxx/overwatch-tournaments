@@ -35,8 +35,7 @@ interface PickBanCommandBarProps {
 
 /**
  * Fixed bottom overlay for the pregame room, anchored via the shared
- * `OverlayBar` shell the draft room's `PickCommandBar` also composes.
- * Sibling of that component: always shows the turn/countdown status (every
+ * `OverlayBar` shell. Always shows the turn/countdown status (every
  * viewer), and additionally the two-step ban/pick/protect confirmation when
  * the viewer is the captain on the clock. Replaces the room's previous
  * inline turn banner + `CaptainActionBar` section.

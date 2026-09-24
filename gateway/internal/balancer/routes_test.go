@@ -42,6 +42,76 @@ func TestDraftSafetyRoutes(t *testing.T) {
 	}
 }
 
+// TestDraftRoomRoutes pins the Draft Room's team-scoped and organizer surfaces.
+// The two /queue routes share one pattern and differ only by method, so a wrong
+// Method here turns a captain's read into a write; team_id must be forwarded as
+// a Path param or the worker gates the wrong team.
+func TestDraftRoomRoutes(t *testing.T) {
+	type want struct {
+		method string
+		body   bool
+		path   []string
+		query  []string
+	}
+	expected := map[string]want{
+		"rpc.balancer.draft.team_fit": {
+			method: "GET",
+			path:   []string{"team_id"},
+		},
+		"rpc.balancer.draft.queue_get": {
+			method: "GET",
+			path:   []string{"team_id"},
+		},
+		"rpc.balancer.draft.queue_set": {
+			method: "PUT",
+			body:   true,
+			path:   []string{"team_id"},
+		},
+		"rpc.balancer.draft.journal": {
+			method: "GET",
+			query:  []string{"limit"},
+		},
+	}
+	patterns := map[string]string{
+		"rpc.balancer.draft.team_fit":  "/api/v1/balancer/draft/sessions/{session_id}/teams/{team_id}/fit",
+		"rpc.balancer.draft.queue_get": "/api/v1/balancer/draft/sessions/{session_id}/teams/{team_id}/queue",
+		"rpc.balancer.draft.queue_set": "/api/v1/balancer/draft/sessions/{session_id}/teams/{team_id}/queue",
+		"rpc.balancer.draft.journal":   "/api/v1/balancer/draft/sessions/{session_id}/journal",
+	}
+
+	for _, route := range DraftRoutes {
+		w, ok := expected[route.Queue]
+		if !ok {
+			continue
+		}
+		if route.Method != w.method {
+			t.Fatalf("%s: method %q, want %q", route.Queue, route.Method, w.method)
+		}
+		if route.Pattern != patterns[route.Queue] {
+			t.Fatalf("%s: pattern %q, want %q", route.Queue, route.Pattern, patterns[route.Queue])
+		}
+		if route.IDParam != "session_id" {
+			t.Fatalf("%s: IDParam %q, want session_id", route.Queue, route.IDParam)
+		}
+		if route.Auth != edge.AuthRequired {
+			t.Fatalf("%s: must be AuthRequired, got %v", route.Queue, route.Auth)
+		}
+		if route.Body != w.body {
+			t.Fatalf("%s: Body %v, want %v", route.Queue, route.Body, w.body)
+		}
+		if strings.Join(route.Path, ",") != strings.Join(w.path, ",") {
+			t.Fatalf("%s: Path %#v, want %#v", route.Queue, route.Path, w.path)
+		}
+		if strings.Join(route.Query, ",") != strings.Join(w.query, ",") {
+			t.Fatalf("%s: Query %#v, want %#v", route.Queue, route.Query, w.query)
+		}
+		delete(expected, route.Queue)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing draft room routes: %#v", expected)
+	}
+}
+
 // TestDraftSessionHistoryRoutes pins the admin draft-history surface: listing a
 // tournament's sessions and erasing one. The DELETE shares its pattern with the
 // PATCH (session_patch), so a wrong Method here silently reroutes an erase.

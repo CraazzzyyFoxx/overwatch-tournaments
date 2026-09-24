@@ -135,7 +135,7 @@ func run() error {
 
 	authn := auth.New(cfg.JWTSecret)
 	// WebSocket authenticator: the same local JWT fast path, PLUS opaque
-	// aqt_sk_ API keys resolved through identity-svc (ws.APIKeyAuth). Kept as a
+	// owt_sk_ API keys resolved through identity-svc (ws.APIKeyAuth). Kept as a
 	// separate value from authn because httplog and metrics call
 	// UserFromRequest after the response is already written — resolving a key
 	// there would put the identity backend on the access-log path.
@@ -481,7 +481,7 @@ func run() error {
 	// metered, access-logged and given a Cache-Control. The window is fixed at a
 	// minute: the budget it spends is the key's own requests_per_minute, and only
 	// cfg.APIKeyRateLimit's default applies to a key that carries none.
-	// resolver.APIKeyQuota short-circuits on the aqt_sk_ prefix, so session and
+	// resolver.APIKeyQuota short-circuits on the API-key prefix, so session and
 	// anonymous traffic reach the mux without any added identity lookup.
 	//
 	// Metered in Redis over the realtime bus's client (no second pool), on the

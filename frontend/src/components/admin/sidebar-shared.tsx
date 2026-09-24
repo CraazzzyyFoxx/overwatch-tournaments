@@ -2,12 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, Check, ChevronsUpDown, LogOut } from "lucide-react";
+import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -19,9 +18,7 @@ import {
   SidebarMenuItem
 } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { useAuthProfileStore } from "@/stores/auth-profile.store";
-import { getAuthProfileHref } from "@/lib/auth/profile-links";
-import { logout } from "@/lib/auth/logout";
+import { AccountMenuContent, getInitials } from "@/components/UserMenu";
 import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
@@ -54,11 +51,6 @@ function getRoleLabel({
   if (workspaceRoles.includes("member")) return "Member";
   if (workspaceRoles.includes("player")) return "Player";
   return "Operator";
-}
-
-function getInitials(username?: string | null) {
-  if (!username) return "AQ";
-  return username.slice(0, 2).toUpperCase();
 }
 
 export function SidebarWorkspaceLogoItem({ href }: Readonly<{ href: string }>) {
@@ -138,7 +130,6 @@ export function SidebarUserDropdown() {
     currentWorkspaceId,
     setCurrentWorkspace
   } = useWorkspaceStore();
-  const clearAuthProfile = useAuthProfileStore((s) => s.clear);
 
   const workspaces = filterAccessibleWorkspaces(allWorkspaces, status, user);
   const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
@@ -147,14 +138,6 @@ export function SidebarUserDropdown() {
     globalRoles: user?.roles ?? [],
     workspaceRoles: user?.workspaces.flatMap((ws) => ws.roles) ?? []
   });
-  const profileHref = getAuthProfileHref(user);
-
-  // Same contract as the public UserMenu: drop the cached profile, then POST to
-  // the logout route so the auth cookies are cleared server-side.
-  const handleSignOut = () => {
-    clearAuthProfile();
-    void logout();
-  };
 
   return (
     <div className="mt-1">
@@ -192,62 +175,32 @@ export function SidebarUserDropdown() {
               </SidebarMenuButton>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="start" side="top" className="w-64 p-1.5">
-              <div className="flex items-center gap-2.5 px-2 py-2">
-                <Avatar className="size-9 rounded-lg ring-1 ring-border/60">
-                  <AvatarImage src={user?.avatarUrl ?? undefined} />
-                  <AvatarFallback className="rounded-lg text-xs">
-                    {getInitials(user?.username)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{user?.username ?? "User"}</span>
-                  <span className="text-xs text-muted-foreground">{roleLabel}</span>
-                </div>
-              </div>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem asChild className="h-8 rounded-md text-sm">
-                <Link href={profileHref}>
-                  <ArrowUpRight aria-hidden className="size-3.5 text-muted-foreground" />
-                  View profile
-                </Link>
-              </DropdownMenuItem>
-
-              {workspaces.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className={cn(EYEBROW_CLASS, "px-2 py-1")}>
-                    Workspace
-                  </DropdownMenuLabel>
-                  {workspaces.map((ws) => (
-                    <DropdownMenuItem
-                      key={ws.id}
-                      onClick={() => setCurrentWorkspace(ws.id)}
-                      aria-current={ws.id === currentWorkspaceId ? "true" : undefined}
-                      className="flex items-center gap-2 h-8 rounded-md text-sm"
-                    >
-                      <WorkspaceAvatar workspace={ws} size="sm" />
-                      <span className="flex-1 truncate">{ws.name}</span>
-                      {ws.id === currentWorkspaceId && (
-                        <Check aria-hidden className="size-3.5 text-sidebar-primary" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                onClick={handleSignOut}
-                className="h-8 rounded-md text-sm text-muted-foreground hover:text-foreground"
-              >
-                <LogOut aria-hidden className="size-3.5" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+            {user && (
+              <AccountMenuContent user={user} align="start" side="top">
+                {workspaces.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className={cn(EYEBROW_CLASS, "px-2 py-1")}>
+                      Workspace
+                    </DropdownMenuLabel>
+                    {workspaces.map((ws) => (
+                      <DropdownMenuItem
+                        key={ws.id}
+                        onClick={() => setCurrentWorkspace(ws.id)}
+                        aria-current={ws.id === currentWorkspaceId ? "true" : undefined}
+                        className="flex items-center gap-2 h-8 rounded-md text-sm"
+                      >
+                        <WorkspaceAvatar workspace={ws} size="sm" />
+                        <span className="flex-1 truncate">{ws.name}</span>
+                        {ws.id === currentWorkspaceId && (
+                          <Check aria-hidden className="size-3.5 text-sidebar-primary" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+              </AccountMenuContent>
+            )}
           </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>

@@ -137,7 +137,7 @@ const authNote = "\n\n## Authentication\n\n" +
 	"A **session JWT** is the browser credential: short-lived, minted by `POST /api/v1/auth/login` " +
 	"and refreshed via `POST /api/v1/auth/refresh`, carrying the caller's full RBAC — global roles " +
 	"and permissions plus every workspace they belong to.\n\n" +
-	"A **workspace-scoped API key** (`aqt_sk_<public_id>_<secret>`) is the machine credential: " +
+	"A **workspace-scoped API key** (`owt_sk_<public_id>_<secret>`) is the machine credential: " +
 	"long-lived, created by `POST /api/v1/auth/api-keys` and shown once. Its authorization is the " +
 	"intersection of the scopes granted to the key with what the key's owner actually holds in " +
 	"that one workspace, so a key can never outrank its owner and never reaches a second " +
@@ -545,8 +545,8 @@ func (b *builder) components() map[string]any {
 			"apiKeyAuth": map[string]any{
 				"type":         "http",
 				"scheme":       "bearer",
-				"bearerFormat": "aqt_sk_<public_id>_<secret>",
-				"description":  "Workspace-scoped API key, issued by `POST /api/v1/auth/api-keys` and shown once at creation. Sent as `Authorization: Bearer aqt_sk_...` — the same header as the session JWT. A key's scopes are RBAC permission names (`team.create`, `registration.approve`, `admin.*`) from the permission catalog, and its effective authorization is those scopes intersected with what the key's owner holds in that single workspace: a key can never exceed its owner's rights and never reaches another workspace.",
+				"bearerFormat": "owt_sk_<public_id>_<secret>",
+				"description":  "Workspace-scoped API key, issued by `POST /api/v1/auth/api-keys` and shown once at creation. Sent as `Authorization: Bearer owt_sk_...` — the same header as the session JWT. Keys issued before the rename start with `aqt_sk_` and still work. A key's scopes are RBAC permission names (`team.create`, `registration.approve`, `admin.*`) from the permission catalog, and its effective authorization is those scopes intersected with what the key's owner holds in that single workspace: a key can never exceed its owner's rights and never reaches another workspace.",
 			},
 		},
 		"schemas": schemas,

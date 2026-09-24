@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
+import userService from "@/services/user.service";
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
 import { applyResourcePatch, registerRealtimeResource } from "@/services/realtime-patch";
@@ -15,7 +16,8 @@ import type {
   DraftEventData,
   DraftPresenceState,
   DraftRole,
-  DraftRoleEditRequest
+  DraftRoleEditRequest,
+  DraftTeamQueueResponse
 } from "@/types/draft.types";
 import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
@@ -80,6 +82,95 @@ export function useDraftPickOptionsQuery(pickId: number | null, enabled = true) 
   });
 }
 
+/**
+ * The server's fit for one team. Only the seats that act for a team read it
+ * (a captain for their own, an admin for the team on the clock), so it stays
+ * disabled until the caller knows which team that is.
+ */
+export function useDraftTeamFitQuery(sessionId: number | null, teamId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: tournamentQueryKeys.draftTeamFit(sessionId ?? 0, teamId ?? 0),
+    queryFn: () => draftService.getTeamFit(sessionId!, teamId!),
+    enabled: enabled && sessionId != null && teamId != null
+  });
+}
+
+/**
+ * A captain's private pick queue ("My list"). The order is the autopick's
+ * priority, so edits are optimistic: the list moves under the pointer and the
+ * server's answer (which also re-derives the autopick preview) replaces it.
+ */
+export function useDraftTeamQueue(sessionId: number | null, teamId: number | null) {
+  const queryClient = useQueryClient();
+  const queryKey = tournamentQueryKeys.draftTeamQueue(sessionId ?? 0, teamId ?? 0);
+  const query = useQuery({
+    queryKey,
+    queryFn: () => draftService.getTeamQueue(sessionId!, teamId!),
+    enabled: sessionId != null && teamId != null
+  });
+  const setQueue = useMutation({
+    mutationFn: (playerIds: number[]) => draftService.setTeamQueue(sessionId!, teamId!, playerIds),
+    onMutate: async (playerIds) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<DraftTeamQueueResponse>(queryKey);
+      queryClient.setQueryData<DraftTeamQueueResponse>(queryKey, (current) => ({
+        team_id: teamId!,
+        autopick_preview: current?.autopick_preview ?? null,
+        player_ids: playerIds
+      }));
+      return { previous };
+    },
+    onError: (_error, _playerIds, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
+    },
+    onSuccess: (response) => queryClient.setQueryData(queryKey, response)
+  });
+  return { query, playerIds: query.data?.player_ids ?? EMPTY_QUEUE, setQueue };
+}
+
+const EMPTY_QUEUE: number[] = [];
+
+/** Organizer journal; fetched only while the organizer has it open. */
+export function useDraftJournalQuery(sessionId: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: tournamentQueryKeys.draftJournal(sessionId ?? 0),
+    queryFn: () => draftService.getJournal(sessionId!),
+    enabled: enabled && sessionId != null
+  });
+}
+
+const draftPlayerCard = (userId: number) =>
+  queryOptions({
+    queryKey: tournamentQueryKeys.draftPlayerCard(userId),
+    queryFn: () => userService.getDraftCard(userId),
+    staleTime: 5 * 60_000
+  });
+
+/** Career stats for the player card; keyed by the domain user id, cached across sessions. */
+export function useDraftPlayerCardQuery(userId: number | null) {
+  return useQuery({ ...draftPlayerCard(userId ?? 0), enabled: userId != null });
+}
+
+/**
+ * Warms the card of the row the pointer rests on: the card is bottom-anchored,
+ * so data that lands after it opens grows it upwards and the header jumps. The
+ * delay keeps a pointer sweeping across the list from fetching every row it
+ * crosses. `null` cancels the pending warm-up.
+ */
+export function useDraftPlayerCardPrefetch() {
+  const client = useQueryClient();
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return useCallback(
+    (userId: number | null) => {
+      window.clearTimeout(timer.current);
+      if (userId == null) return;
+      timer.current = window.setTimeout(() => void client.prefetchQuery(draftPlayerCard(userId)), 120);
+    },
+    [client]
+  );
+}
+
 export function useDraftRealtime(
   tournamentId: number,
   board: DraftBoard | null
@@ -142,6 +233,11 @@ export function useDraftRealtime(
       const sessionId = cachedBoard.session?.id;
       if (sessionId != null) {
         void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftFeasibility(sessionId) });
+        // Fit, the autopick preview and the journal are server derivations of
+        // the board, so any board event can move them.
+        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftTeamFits(sessionId) });
+        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftTeamQueues(sessionId) });
+        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftJournal(sessionId) });
       }
       const affectedPickId = event.data.pick_id ?? cachedBoard.current_pick?.id;
       if (affectedPickId != null) {
