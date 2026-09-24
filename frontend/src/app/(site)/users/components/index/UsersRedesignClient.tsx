@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useFormatter, useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +9,7 @@ import { useDebounce } from "use-debounce";
 import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, Search, Trophy } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
+import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useCurrentWorkspaceId, useDivisionGrid } from "@/hooks/useCurrentWorkspace";
@@ -206,7 +206,7 @@ const UsersRedesignClient = () => {
     setParams({ query: normalizedInput || undefined });
   }, [debouncedSearch, query, setParams]);
 
-  const { data, isLoading, isFetching, isError, error } = useQuery({
+  const { data, isPending, isFetching, isError, error } = useQuery({
     queryKey: ["users-overview", workspaceId, page, perPage, query, sort, order, role, divMin, divMax],
     queryFn: () =>
       userService.getUsersOverview({
@@ -358,7 +358,10 @@ const UsersRedesignClient = () => {
       role: t(ROLE_LABEL_KEY[roleType]),
       tier: getDivisionLabel(divisionGrid, division) ?? t("common.divisionWithId", { id: String(division) })
     });
-  const showLoadingRows = isLoading && !data;
+  // `isPending`, not `isLoading`: the server never fetches, so there `isLoading`
+  // is false and SSR used to paint the "no players" row, which the skeleton then
+  // pushed down. Pending holds on both sides until the first page lands.
+  const showLoadingRows = isPending;
   const availableLetters = useMemo(
     () => new Set(catalogQuery.data?.available_letters ?? []),
     [catalogQuery.data]
@@ -370,9 +373,9 @@ const UsersRedesignClient = () => {
       <PageHero
         eyebrow={
           <HeroCoord>
-            <Link href="/" className="transition-colors hover:text-[color:var(--aqt-teal)]">
+            <HoverPrefetchLink href="/" className="transition-colors hover:text-[color:var(--aqt-teal)]">
               {t("users.list.hero.eyebrowRoster")}
-            </Link>{" "}
+            </HoverPrefetchLink>{" "}
             · {t("users.list.hero.eyebrowCurrent")}
           </HeroCoord>
         }
@@ -642,7 +645,7 @@ const UsersRedesignClient = () => {
                   </thead>
                   <tbody>
                     {showLoadingRows ? (
-                      Array.from({ length: 8 }).map((_, idx) => (
+                      Array.from({ length: perPage }).map((_, idx) => (
                         <tr key={`skel-${idx}`}>
                           <td colSpan={7} className={styles.skelRow} />
                         </tr>
@@ -667,14 +670,14 @@ const UsersRedesignClient = () => {
                                     {initials(user.name)}
                                   </div>
                                   <div className={styles.playerInfo}>
-                                    <Link
+                                    <HoverPrefetchLink
                                       className={styles.playerName}
                                       href={`/users/${getPlayerSlug(user.name)}`}
                                       title={user.name}
                                     >
                                       {handle}
                                       {tag ? <span className="tag">{tag}</span> : null}
-                                    </Link>
+                                    </HoverPrefetchLink>
                                     <span className={styles.playerSub}>
                                       {primaryRoleLabel(user.roles, t)}
                                     </span>
@@ -954,7 +957,7 @@ const UsersRedesignClient = () => {
                 </span>
               </div>
             </>
-          ) : catalogQuery.isLoading ? (
+          ) : catalogQuery.isPending ? (
             <div className={styles.catSection}>
               <div className={styles.catGrid}>
                 {Array.from({ length: 8 }).map((_, idx) => (
@@ -986,7 +989,7 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
   const topHeroes = user.top_heroes.slice(0, 3);
 
   return (
-    <Link href={`/users/${getPlayerSlug(user.name)}`} className={styles.catCard}>
+    <HoverPrefetchLink href={`/users/${getPlayerSlug(user.name)}`} className={styles.catCard}>
       <div className={styles.catCardTop}>
         <div className={styles.catCardAvatar} aria-hidden>
           {initials(user.name)}
@@ -1055,7 +1058,7 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
           <span className={styles.catStatValue}>{formatOptional(user.avg_placement)}</span>
         </div>
       </div>
-    </Link>
+    </HoverPrefetchLink>
   );
 };
 

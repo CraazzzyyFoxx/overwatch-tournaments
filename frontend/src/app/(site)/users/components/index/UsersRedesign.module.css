@@ -667,7 +667,8 @@
 }
 
 .skelRow {
-  height: 56px;
+  /* Mean rendered row: 57–66px depending on the hero strip / tag line. */
+  height: 62px;
   background: linear-gradient(
     90deg,
     hsl(0 0% 100% / 0.02) 0%,
