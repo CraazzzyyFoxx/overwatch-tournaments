@@ -51,6 +51,7 @@ from shared.repository import (
     EncounterParticipantRepository,
     EncounterRepository,
     EncounterResultAuditRepository,
+    StageRepository,
 )
 from src import models
 from src.schemas.ffa import (
@@ -102,12 +103,14 @@ class FfaEncounterService:
         game_repo: EncounterGameRepository = EncounterGameRepository(),
         result_repo: EncounterGameResultRepository = EncounterGameResultRepository(),
         audit_repo: EncounterResultAuditRepository = EncounterResultAuditRepository(),
+        stage_repo: StageRepository = StageRepository(),
     ) -> None:
         self.encounter_repo = encounter_repo
         self.participant_repo = participant_repo
         self.game_repo = game_repo
         self.result_repo = result_repo
         self.audit_repo = audit_repo
+        self.stage_repo = stage_repo
 
     async def create_lobby(
         self,
@@ -146,8 +149,9 @@ class FfaEncounterService:
         lobby.participants = [
             EncounterParticipant(team_id=team_id, slot=slot) for slot, team_id in enumerate(team_ids, 1)
         ]
-        session.add(lobby)
-        await session.flush()
+        # ``create`` adds and flushes; the participants ride the relationship
+        # cascade, which is what keeps a lobby and its seats one write.
+        await self.encounter_repo.create(session, lobby)
         return lobby
 
     # -- commands ----------------------------------------------------------
@@ -283,7 +287,11 @@ class FfaEncounterService:
                 detail=[
                     ApiExc(
                         code="ffa_games_below_played",
-                        msg=f"This lobby has already played {confirmed} games",
+                        msg=(
+                            f"This lobby has already played {confirmed} games"
+                            if confirmed
+                            else "A lobby plays at least one game"
+                        ),
                     )
                 ],
             )
@@ -382,14 +390,14 @@ class FfaEncounterService:
         404 for an unknown encounter, 409 for a duel -- a lobby table cannot be
         drawn from a series.
         """
-        lobby = await session.get(models.Encounter, encounter_id)
+        lobby = await self.encounter_repo.get(session, encounter_id)
         if lobby is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=[ApiExc(code="encounter_not_found", msg=f"Encounter {encounter_id} not found")],
             )
         ensure_format(lobby, EncounterFormat.FFA)
-        stage = await session.get(models.Stage, lobby.stage_id) if lobby.stage_id else None
+        stage = await self.stage_repo.get(session, lobby.stage_id) if lobby.stage_id else None
         return (await self._read_lobbies(session, [lobby], stage))[0]
 
     async def load_stage_lobbies(
@@ -401,7 +409,7 @@ class FfaEncounterService:
         another tournament reads as absent, or a hidden tournament's lobbies
         would be reachable through a public tournament's path.
         """
-        stage = await session.get(models.Stage, stage_id)
+        stage = await self.stage_repo.get(session, stage_id)
         if stage is None or stage.tournament_id != tournament_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -649,7 +657,7 @@ class FfaEncounterService:
         )
 
     async def _rules(self, session: AsyncSession, lobby: models.Encounter) -> FfaRules:
-        stage = await session.get(models.Stage, lobby.stage_id) if lobby.stage_id else None
+        stage = await self.stage_repo.get(session, lobby.stage_id) if lobby.stage_id else None
         return parse_ffa_rules(stage.settings_json if stage else None)
 
     async def _snapshot(self, session: AsyncSession, game: models.EncounterGame) -> list[dict]:

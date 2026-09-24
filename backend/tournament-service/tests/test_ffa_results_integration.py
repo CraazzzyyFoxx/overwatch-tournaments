@@ -460,6 +460,29 @@ def test_the_games_count_can_never_drop_below_what_was_played(db_session) -> Non
     assert shrunk == (2, enums.EncounterStatus.COMPLETED, enums.EncounterResultStatus.CONFIRMED)
 
 
+def test_a_lobby_always_plays_at_least_one_game(db_session) -> None:
+    """Zero would make an untouched lobby instantly "complete" with no result."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session)
+        try:
+            with pytest.raises(BaseAPIException) as raised:
+                await ffa_encounter_service.set_games_count(db_session, seeded.lobby_id, 0, actor_user_id=None)
+            await db_session.rollback()
+            lobby = await _reload(db_session, seeded.lobby_id)
+            return (
+                raised.value.status_code,
+                [item.code for item in raised.value.detail],
+                (lobby.best_of, lobby.status),
+            )
+        finally:
+            await _drop(db_session, seeded)
+
+    status_code, codes, unchanged = asyncio.run(_run())
+    assert (status_code, codes) == (422, ["ffa_games_below_played"])
+    assert unchanged == (2, enums.EncounterStatus.OPEN)
+
+
 def test_shrinking_the_stage_best_of_completes_a_lobby_that_already_played_enough(db_session) -> None:
     """Ruling R10: the stage-wide apply-best-of must settle lobbies, not just rewrite a number."""
 
