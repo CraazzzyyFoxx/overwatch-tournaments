@@ -146,6 +146,17 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
         dispatch.assert_not_awaited()
         session.commit.assert_awaited_once()
 
+    def test_failure_message_is_the_refusal_not_a_traceback(self) -> None:
+        refusal = jobs.BaseAPIException(400, "Need at least 2 teams to generate a bracket")
+        upstream = jobs.BaseAPIException(
+            409, {"code": "upstream_stages_not_completed", "message": "Finish them first.", "pending_stage_ids": [1]}
+        )
+
+        self.assertEqual("Need at least 2 teams to generate a bracket", jobs.failure_message(refusal))
+        # The admin client turns this substring into the force-activate prompt.
+        self.assertEqual("upstream_stages_not_completed: Finish them first.", jobs.failure_message(upstream))
+        self.assertEqual("RuntimeError: boom", jobs.failure_message(RuntimeError("boom")))
+
     async def test_dead_letter_queue_is_declared_and_bound(self) -> None:
         declared_queue = SimpleNamespace(bind=AsyncMock())
         exchange = SimpleNamespace()

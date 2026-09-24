@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import traceback
-
 import sqlalchemy as sa
 from faststream.exceptions import RejectMessage
 from loguru import logger
@@ -9,7 +7,7 @@ from loguru import logger
 from src import models
 from src.core import db
 from src.services.admin.stage import stage_service
-from src.services.computation.jobs import jobs_service
+from src.services.computation.jobs import failure_message, jobs_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
 from src.services.tournament.events import STRUCTURE_RESOURCES, publish_tournament_invalidation
 
@@ -44,7 +42,7 @@ async def process_bracket_job(job_id: int) -> None:
     except Exception as exc:
         logger.exception("Bracket computation job failed", job_id=job_id)
         async with db.async_session_maker() as session:
-            disposition = await jobs_service.mark_job_failed(session, job_id, f"{exc}\n{traceback.format_exc()}")
+            disposition = await jobs_service.mark_job_failed(session, job_id, failure_message(exc))
         if disposition == "failed":
             raise RejectMessage() from exc
 

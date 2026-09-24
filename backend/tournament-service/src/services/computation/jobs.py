@@ -5,11 +5,13 @@ from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.errors import BaseAPIException
 from shared.jobs import JobService, Retry, Status, Unlimited
 from shared.repository import (
     TournamentComputationJobRepository,
     TournamentRecalculationStateRepository,
 )
+from shared.rpc.common import http_error
 from shared.services.tournament.computation import (
     ACTIVE_STATUSES,
     create_job,
@@ -23,6 +25,22 @@ FailureDisposition = Literal["retry", "failed", "ignored"]
 
 TERMINAL_STATUSES = ("succeeded", "failed", "superseded")
 MAX_ATTEMPTS = 3
+
+
+def failure_message(exc: Exception) -> str:
+    """``job.error`` text; the admin UI shows it verbatim as the failure toast.
+
+    A domain refusal is a sentence meant for the admin; anything else is a bug,
+    named by type. The traceback stays in the log (``logger.exception``).
+    """
+    if not isinstance(exc, BaseAPIException):
+        return f"{type(exc).__name__}: {exc}"
+    detail = exc.detail
+    if isinstance(detail, dict) and detail.get("code") and detail.get("message"):
+        # The admin client branches on this code substring (upstream_stages_not_completed).
+        return f"{detail['code']}: {detail['message']}"
+    message, _ = http_error(exc)
+    return message
 
 
 class _ComputationJobStore:
