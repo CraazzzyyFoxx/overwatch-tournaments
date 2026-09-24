@@ -44,9 +44,9 @@ export interface StageRounds {
  *
  * An FFA stage is fixed at one round and needs neither derivation nor a server
  * prediction: its lobbies all sit in round 1, and `best_of` sizes the series
- * inside a lobby rather than adding rounds. Without that, the schedule editor
- * offered a stage with lobbies no round at all, so their kickoff time was
- * unauthorable.
+ * inside a lobby rather than adding rounds. Without that, the pre-game scope
+ * tree offered a stage with lobbies no round at all, so its map pool and
+ * best-of were unauthorable.
  *
  * Shared by the scope tree and the stage editor: both need the same rounds, and
  * one query key means the second one costs nothing.
@@ -66,8 +66,9 @@ export function useStageRounds(
     if (stage == null) return EMPTY_ROUNDS;
     // An FFA stage plays ONE round: every lobby of a group is round 1, and
     // `best_of` sizes the series inside a lobby rather than adding rounds. So
-    // the schedule editor offers a single `RoundScheduleSection` — the lobbies'
-    // kickoff — instead of a row per game nobody plays in sequence.
+    // the pre-game scope tree offers a single round to hang a map pool on,
+    // instead of a row per game nobody plays in sequence. (The lobbies' kickoff
+    // is a different screen: `RoundScheduleSection` reads them itself.)
     if (FFA_STAGE_TYPES.includes(stage.stage_type)) return FFA_ROUNDS;
     if (!GROUP_STAGE_TYPES.includes(stage.stage_type)) return EMPTY_ROUNDS;
     const derived =

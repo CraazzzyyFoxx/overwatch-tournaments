@@ -35,6 +35,8 @@ export const tournamentQueryKeys = {
     ["ffa", tournamentId, "stage", stageId] as const,
   ffaLobby: (tournamentId: number, encounterId: number) =>
     ["ffa", tournamentId, "lobby", encounterId] as const,
+  /** That shared prefix, for the writes that move every lobby of a tournament. */
+  ffaAll: (tournamentId: number) => ["ffa", tournamentId] as const,
   encountersOverview: (workspaceId?: number | null) =>
     workspaceId == null
       ? (["encounters", "overview"] as const)

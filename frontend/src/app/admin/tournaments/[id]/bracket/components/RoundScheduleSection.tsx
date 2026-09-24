@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -22,11 +22,13 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import adminService from "@/services/admin.service";
-import type { Encounter } from "@/types/encounter.types";
+import ffaService from "@/services/ffa.service";
 import type { Stage } from "@/types/tournament.types";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -42,11 +44,22 @@ interface RoundScheduleSectionProps {
   onChanged: () => void;
 }
 
+/**
+ * All the schedule editor reads off one played thing: its id, to PATCH, and the
+ * time it currently carries. A duel encounter and an FFA lobby both answer that
+ * pair, so one row model covers both rather than a second copy of this section.
+ */
+interface ScheduledEncounter {
+  id: number;
+  /** `Encounter` types this as `string | Date | null`; `new Date` takes either. */
+  scheduled_at: string | Date | null;
+}
+
 /** One editable row: a round of this stage and the matches it holds. */
 interface RoundRow {
   round: number;
   label: string;
-  encounters: Encounter[];
+  encounters: ScheduledEncounter[];
   /**
    * The time this round was last applied at, as an ISO instant — the most
    * common `scheduled_at` among its matches, `""` when none carries one. This
@@ -55,7 +68,7 @@ interface RoundRow {
    */
   baseIso: string;
   /** Matches whose own time differs from `baseIso` — moved one by one, in the match editor. */
-  overrides: Encounter[];
+  overrides: ScheduledEncounter[];
 }
 
 /**
@@ -63,7 +76,7 @@ interface RoundRow {
  * scheduled in one click carries one instant on every match, so the mode IS
  * that applied time; ties resolve to the earliest so the answer is stable.
  */
-function modeInstant(encounters: Encounter[]): string {
+function modeInstant(encounters: ScheduledEncounter[]): string {
   const counts = new Map<number, number>();
   for (const encounter of encounters) {
     if (encounter.scheduled_at == null) continue;
@@ -78,6 +91,23 @@ function modeInstant(encounters: Encounter[]): string {
     }
   }
   return best ? new Date(best.ts).toISOString() : "";
+}
+
+/** One row from the matches it covers: the applied time, and what differs from it. */
+function scheduleRow(round: number, label: string, encounters: ScheduledEncounter[]): RoundRow {
+  const baseIso = modeInstant(encounters);
+  const baseTs = baseIso ? new Date(baseIso).getTime() : null;
+  return {
+    round,
+    label,
+    encounters,
+    baseIso,
+    overrides: encounters.filter((encounter) => {
+      if (encounter.scheduled_at == null) return false;
+      const ts = new Date(encounter.scheduled_at).getTime();
+      return !Number.isNaN(ts) && ts !== baseTs;
+    })
+  };
 }
 
 /**
@@ -100,6 +130,17 @@ export function RoundScheduleSection({
   const t = useTranslations("admin.roundSchedule");
   const styles = getAdminDetailTableStyles("compact");
   const encountersQuery = useHubEncountersQuery(stage.tournament_id);
+  // An FFA stage's lobbies are NOT in that list — `encounterService.getAll`
+  // answers duels — so the section read an empty stage and offered no row at
+  // all. They come from the stage's own FFA endpoint instead, the same one the
+  // public panel reads, so both screens share one cache entry.
+  const isFfa = FFA_STAGE_TYPES.includes(stage.stage_type);
+  const lobbiesQuery = useQuery({
+    queryKey: tournamentQueryKeys.ffaStage(stage.tournament_id, stage.id),
+    queryFn: () => ffaService.getStage(stage.tournament_id, stage.id),
+    enabled: isFfa
+  });
+  const queryClient = useQueryClient();
 
   // The viewer's own wall clock: the picker's value carries no zone, and the
   // organizer schedules by the time they read on their own clock.
@@ -115,7 +156,22 @@ export function RoundScheduleSection({
   );
 
   const rows = useMemo<RoundRow[]>(() => {
-    const byRound = new Map<number, Encounter[]>();
+    // An FFA stage plays exactly one round: every lobby of it is round 1 and
+    // they all start together, so the section offers a single row covering all
+    // of them rather than a row per group.
+    if (isFfa) {
+      const lobbies = lobbiesQuery.data ?? [];
+      if (lobbies.length === 0) return [];
+      return [
+        scheduleRow(
+          1,
+          t("lobbiesRound"),
+          lobbies.map((lobby) => ({ id: lobby.encounter_id, scheduled_at: lobby.scheduled_at }))
+        )
+      ];
+    }
+
+    const byRound = new Map<number, ScheduledEncounter[]>();
     for (const encounter of stageEncounters) {
       const list = byRound.get(encounter.round);
       if (list) list.push(encounter);
@@ -137,32 +193,20 @@ export function RoundScheduleSection({
 
     return offered
       .filter((option) => byRound.has(option.round))
-      .map((option) => {
-        const encounters = byRound.get(option.round)!;
-        const baseIso = modeInstant(encounters);
-        const baseTs = baseIso ? new Date(baseIso).getTime() : null;
-        return {
-          round: option.round,
-          label: option.label,
-          encounters,
-          baseIso,
-          overrides: encounters.filter((encounter) => {
-            if (encounter.scheduled_at == null) return false;
-            const ts = new Date(encounter.scheduled_at).getTime();
-            return !Number.isNaN(ts) && ts !== baseTs;
-          })
-        };
-      });
+      .map((option) => scheduleRow(option.round, option.label, byRound.get(option.round)!));
   }, [
+    isFfa,
+    lobbiesQuery.data,
     stageEncounters,
     stage.stage_type,
     stage.max_rounds,
     stage.split_lower_bracket,
-    bracketTeamCount
+    bracketTeamCount,
+    t
   ]);
 
   const applyMutation = useMutation({
-    mutationFn: ({ encounters, iso }: { encounters: Encounter[]; iso: string | null }) =>
+    mutationFn: ({ encounters, iso }: { encounters: ScheduledEncounter[]; iso: string | null }) =>
       Promise.all(
         encounters.map((encounter) =>
           adminService.updateEncounter(encounter.id, { scheduled_at: iso })
@@ -174,11 +218,18 @@ export function RoundScheduleSection({
       // Refreshes the hub's encounters query along with the public bracket and
       // matches views — those times are what they now render.
       onChanged();
+      // The lobby reads sit outside that workspace bundle, so the FFA panel and
+      // the lobby page would keep printing the old kickoff without this.
+      if (isFfa) {
+        void queryClient.invalidateQueries({
+          queryKey: tournamentQueryKeys.ffaAll(stage.tournament_id)
+        });
+      }
     },
     onError: (error) => notify.apiError(error, { title: t("applyError") })
   });
 
-  const apply = (encounters: Encounter[], iso: string | null) => {
+  const apply = (encounters: ScheduledEncounter[], iso: string | null) => {
     setPending(null);
     if (encounters.length === 0) return;
     applyMutation.mutate({ encounters, iso });
@@ -196,20 +247,29 @@ export function RoundScheduleSection({
       }
     : { title: "", description: "", confirmLabel: t("confirmLabel"), tone: "neutral" };
 
+  // Whichever read actually feeds this stage. The other one is disabled, and a
+  // disabled query reports `isPending` forever.
+  const source = isFfa
+    ? { isPending: lobbiesQuery.isPending, isError: lobbiesQuery.isError }
+    : { isPending: encountersQuery.isPending, isError: encountersQuery.isError };
+
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-sm font-semibold text-foreground">{t("title")}</h3>
       <p className="text-xs text-muted-foreground">{t("description")}</p>
 
-      {encountersQuery.isPending ? (
+      {source.isPending ? (
         <Skeleton className="h-40 w-full rounded-lg" />
-      ) : encountersQuery.isError ? (
+      ) : source.isError ? (
         <EmptyNote tone="danger" title={t("errorTitle")} icon={CalendarClock}>
           {t("errorBody")}
         </EmptyNote>
       ) : rows.length === 0 ? (
-        <EmptyNote title={t("emptyTitle")} icon={CalendarClock}>
-          {t("emptyBody")}
+        <EmptyNote
+          title={isFfa ? t("emptyTitleLobbies") : t("emptyTitle")}
+          icon={CalendarClock}
+        >
+          {isFfa ? t("emptyBodyLobbies") : t("emptyBody")}
         </EmptyNote>
       ) : (
         <AdminDetailTableShell variant="compact">
@@ -218,7 +278,9 @@ export function RoundScheduleSection({
               <TableRow className={styles.headerRow}>
                 <TableHead className={styles.head}>{t("roundColumn")}</TableHead>
                 <TableHead className={styles.head}>{t("timeColumn")}</TableHead>
-                <TableHead className={styles.head}>{t("matchesColumn")}</TableHead>
+                <TableHead className={styles.head}>
+                  {isFfa ? t("lobbiesColumn") : t("matchesColumn")}
+                </TableHead>
                 <TableHead className={styles.head}>
                   <span className="sr-only">{t("actionsColumn")}</span>
                 </TableHead>
