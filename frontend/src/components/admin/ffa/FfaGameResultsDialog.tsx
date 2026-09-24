@@ -138,9 +138,9 @@ export function FfaGameResultsDialog({
       // server's own `ffa_result_missing_team` guard can never catch that,
       // because the line was there.
       setBlanksFlagged(true);
-      setError(
-        `Every team needs a ${scoreLabel.toLowerCase()} — type 0 for a team that scored nothing.`
-      );
+      // The label is whatever the organizer named the column ("Kills", "Points"),
+      // so it is quoted as written rather than bent into a sentence around it.
+      setError(`Enter ${scoreLabel} for every team — type 0 for a team that scored nothing.`);
       return;
     }
     setBlanksFlagged(false);
@@ -248,6 +248,7 @@ function FieldRow({
         inputMode="numeric"
         aria-label={`${scoreLabel} for ${name}`}
         aria-invalid={scoreMissing || undefined}
+        className="aria-invalid:border-destructive"
         value={score}
         onChange={(event) => onScore(event.target.value)}
       />
