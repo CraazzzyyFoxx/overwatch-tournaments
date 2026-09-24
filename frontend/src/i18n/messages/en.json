@@ -4243,54 +4243,19 @@
     "groups": {
       "tournaments": "Tournaments",
       "users": "Players",
-      "matches": "Matches",
-      "organization": "Organization"
+      "play": "Play"
     },
     "items": {
-      "tournaments": {
-        "title": "Tournaments",
-        "desc": "Every tournament run on the platform"
-      },
-      "analytics": {
-        "title": "Analytics",
-        "desc": "Tournament analytics, forecasts and standings"
-      },
-      "users": {
-        "title": "Players",
-        "desc": "Every competitor across every tournament"
-      },
-      "compare": {
-        "title": "Compare",
-        "desc": "Compare two players head-to-head"
-      },
-      "heroesLeaderboard": {
-        "title": "Heroes Leaderboard",
-        "desc": "Per-hero performance ranking across all players"
-      },
-      "achievements": {
-        "title": "Achievements",
-        "desc": "All achievements and how to earn them"
-      },
-      "encounters": {
-        "title": "Encounters",
-        "desc": "Every series across all tournaments"
-      },
-      "scrims": {
-        "title": "Scrims",
-        "desc": "Ad-hoc pre-game rooms for practice matches"
-      },
-      "balancer": {
-        "title": "Balancer",
-        "desc": "Balance teams by player roles and ratings"
-      },
-      "mixes": {
-        "title": "Mixes",
-        "desc": "Pickup lobbies balanced from your workspace roster"
-      },
-      "admin": {
-        "title": "Admin",
-        "desc": "Manage tournaments, access and operations"
-      }
+      "tournaments": { "title": "Tournaments" },
+      "encounters": { "title": "Encounters" },
+      "analytics": { "title": "Analytics" },
+      "users": { "title": "Players" },
+      "compare": { "title": "Compare" },
+      "heroesLeaderboard": { "title": "Heroes leaderboard" },
+      "achievements": { "title": "Achievements" },
+      "scrims": { "title": "Scrims" },
+      "mixes": { "title": "Mixes" },
+      "admin": { "title": "Admin" }
     },
     "workspaces": "Workspaces",
     "switchWorkspace": "Switch workspace",
@@ -4312,7 +4277,7 @@
       "clearHistory": "Clear history",
       "removeFromHistory": "Remove from history"
     },
-    "mobileMenuTitle": "Site navigation"
+    "label": "Site navigation"
   },
   "draftAdmin": {
     "title": "Draft administration",

@@ -1,189 +1,164 @@
 "use client";
 
-import React from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from "@/components/ui/accordion";
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger
-} from "@/components/ui/navigation-menu";
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { cn } from "@/lib/utils";
-import { isNavGroupActive } from "./site-nav-groups";
-import { useVisibleNavGroups } from "./useVisibleNavGroups";
+import { NAV_GROUPS, currentNavHref, sectionPageGroup } from "./site-nav-groups";
+import { useCanAccessAdminEntry } from "./useCanAccessAdminEntry";
 
-// Redesign nav-link look (flat, teal-active) — overrides the shared
-// navigationMenuTriggerStyle() via twMerge conflict resolution.
-const navTriggerClass =
-  "h-8 rounded-lg bg-transparent px-3 text-caption font-medium text-[color:var(--aqt-fg-muted)] " +
+const sectionLinkClass =
+  "inline-flex h-8 items-center whitespace-nowrap rounded-lg px-3 text-caption font-medium " +
+  "text-[color:var(--aqt-fg-muted)] transition-colors " +
   "hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] " +
-  "focus:bg-[color:var(--aqt-overlay-3)] focus:text-[color:var(--aqt-fg)] " +
-  "data-[state=open]:bg-[color:var(--aqt-overlay-3)] data-[state=open]:text-[color:var(--aqt-fg)]";
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-const navTriggerActiveClass =
+const sectionLinkActiveClass =
   "bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)] " +
-  "hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] hover:text-[color:var(--aqt-teal)] " +
-  "focus:bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] focus:text-[color:var(--aqt-teal)] " +
-  "data-[state=open]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] data-[state=open]:text-[color:var(--aqt-teal)]";
+  "hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] hover:text-[color:var(--aqt-teal)]";
 
-const ListItem = React.forwardRef<React.ElementRef<"a">, React.ComponentPropsWithoutRef<"a">>(
-  ({ className, title, children, ...props }, ref) => {
-    return (
-      <li>
-        <NavigationMenuLink asChild>
-          <a
-            ref={ref}
-            className={cn(
-              "block select-none space-y-1 rounded-md p-3 leading-none no-underline transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              className
-            )}
-            {...props}
-          >
-            <div className="text-sm font-medium leading-none">{title}</div>
-            <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">{children}</p>
-          </a>
-        </NavigationMenuLink>
-      </li>
-    );
-  }
-);
-ListItem.displayName = "ListItem";
+const sheetLinkClass =
+  "flex items-center py-2 text-base font-medium text-foreground transition-colors hover:text-[color:var(--aqt-teal)]";
 
 interface SiteNavProps {
-  /** `desktop` renders the click-to-open NavigationMenu; `mobile` the sheet Accordion. */
+  /** `desktop` is the header's section links; `mobile` the sheet's full list. */
   variant: "desktop" | "mobile";
   className?: string;
 }
 
 /**
- * The public site navigation. Both surfaces render the same tree from
- * `useVisibleNavGroups()` and the same `nav.*` message lookups — the header
- * previously carried two hand-maintained copies, so any nav change had to be
- * made twice.
+ * The public site navigation, from the one `NAV_GROUPS` tree and the same
+ * `nav.*` lookups on both surfaces.
  *
- * A group holding a single item renders as a direct link, not a disclosure:
- * a dropdown that opens onto one row makes the reader pay an extra click and a
- * guess for nothing. The link is labelled with the ITEM's title, because that
- * is where it actually goes — "Organization" promises a section, "Admin" names
- * the destination. This is a rule about arity, not about a specific group, so
- * adding a second item turns the disclosure back on by itself.
+ * Desktop names the sections only, each linking to its first page; the pages
+ * of the section you are in are `SectionTabs` under the header. No
+ * disclosures: a dropdown opening onto two to four rows cost a click and a
+ * guess on every visit. The mobile sheet has room for the whole tree, so it
+ * lists every page, groups separated by a rule.
  */
 export function SiteNav({ variant, className }: Readonly<SiteNavProps>) {
   const t = useTranslations();
   const pathname = usePathname() ?? "";
-  const groups = useVisibleNavGroups();
+  const current = currentNavHref(pathname);
 
-  const titleOf = (key: string) => t(`nav.items.${key}.title` as Parameters<typeof t>[0]);
+  // `page` only on the page itself; anywhere deeper the link marks the current
+  // location, not the current page.
+  const ariaCurrentOf = (href: string, active: boolean) =>
+    active ? (href === pathname ? "page" : "true") : undefined;
 
   if (variant === "mobile") {
     return (
-      <Accordion type="single" collapsible className={cn("w-full", className)}>
-        {groups.map((group) => {
-          const [only] = group.items;
-          if (group.items.length === 1) {
-            return (
-              <HoverPrefetchLink
-                key={group.key}
-                href={only.href}
-                aria-current={isNavGroupActive(group.items, pathname) ? "page" : undefined}
-                className={cn(
-                  "flex items-center border-b py-4 text-base font-medium transition-colors hover:underline",
-                  isNavGroupActive(group.items, pathname)
-                    ? "text-[color:var(--aqt-teal)]"
-                    : "text-foreground"
-                )}
-              >
-                {titleOf(only.key)}
-              </HoverPrefetchLink>
-            );
-          }
-
-          return (
-            <AccordionItem key={group.key} value={group.key}>
-              <AccordionTrigger className="text-base hover:text-foreground">
-                {t(`nav.groups.${group.key}`)}
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid gap-4 pl-4">
-                  {group.items.map((item) => (
-                    <HoverPrefetchLink
-                      key={item.key}
-                      href={item.href}
-                      className="text-sm text-muted-foreground hover:text-foreground"
-                    >
-                      {titleOf(item.key)}
-                    </HoverPrefetchLink>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
+      <div className={cn("grid", className)}>
+        {NAV_GROUPS.map((group) => (
+          <ul
+            key={group.key}
+            aria-label={t(`nav.groups.${group.key}`)}
+            className="grid border-b py-2 first:pt-0"
+          >
+            {group.items.map((item) => (
+              <li key={item.key}>
+                <HoverPrefetchLink
+                  href={item.href}
+                  aria-current={ariaCurrentOf(item.href, item.href === current)}
+                  className={cn(
+                    sheetLinkClass,
+                    item.href === current && "text-[color:var(--aqt-teal)]"
+                  )}
+                >
+                  {t(`nav.items.${item.key}.title` as Parameters<typeof t>[0])}
+                </HoverPrefetchLink>
+              </li>
+            ))}
+          </ul>
+        ))}
+        <SiteAdminLink variant="mobile" />
+      </div>
     );
   }
 
   return (
-    <NavigationMenu className={cn("hidden lg:flex", className)}>
-      {/* One list, not one per group: N single-item <ul>s told assistive
-          technology the header held N separate navigations. */}
-      <NavigationMenuList>
-        {groups.map((group) => {
-          const isActive = isNavGroupActive(group.items, pathname);
-          const [only] = group.items;
-
-          if (group.items.length === 1) {
-            return (
-              <NavigationMenuItem key={group.key}>
-                <NavigationMenuLink asChild>
-                  <HoverPrefetchLink
-                    href={only.href}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cn(
-                      "inline-flex w-max items-center justify-center transition-colors focus:outline-none",
-                      navTriggerClass,
-                      isActive && navTriggerActiveClass
-                    )}
-                  >
-                    {titleOf(only.key)}
-                  </HoverPrefetchLink>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-            );
-          }
-
+    <nav aria-label={t("nav.label")} className={cn("hidden lg:block", className)}>
+      <ul className="flex items-center gap-0.5">
+        {NAV_GROUPS.map((group) => {
+          const [landing] = group.items;
+          const isActive = group.items.some((item) => item.href === current);
           return (
-            <NavigationMenuItem key={group.key}>
-              <NavigationMenuTrigger
-                className={cn(navTriggerClass, isActive && navTriggerActiveClass)}
+            <li key={group.key}>
+              <HoverPrefetchLink
+                href={landing.href}
+                aria-current={ariaCurrentOf(landing.href, isActive)}
+                className={cn(sectionLinkClass, isActive && sectionLinkActiveClass)}
               >
                 {t(`nav.groups.${group.key}`)}
-              </NavigationMenuTrigger>
-              <NavigationMenuContent>
-                <ul className="grid w-100 gap-3 p-4 md:w-125 md:grid-cols-2 lg:w-150">
-                  {group.items.map((item) => (
-                    <ListItem key={item.key} title={titleOf(item.key)} href={item.href}>
-                      {t(`nav.items.${item.key}.desc` as Parameters<typeof t>[0])}
-                    </ListItem>
-                  ))}
-                </ul>
-              </NavigationMenuContent>
-            </NavigationMenuItem>
+              </HoverPrefetchLink>
+            </li>
           );
         })}
-      </NavigationMenuList>
-    </NavigationMenu>
+      </ul>
+    </nav>
+  );
+}
+
+/**
+ * The pages of the current section as a tab row under the header.
+ *
+ * Only on a page of the tree itself. A detail page (a tournament, a player)
+ * already carries its own tab row, and stacking a second one above it reads as
+ * two competing navigations; there the header's section link alone says where
+ * you are.
+ *
+ * The row and the header read as one block: the header drops its bottom rule
+ * while this row shows (`Header`), and this row draws the header's rule —
+ * full-width and in the header's tint — under the tabs instead of the tab
+ * list's own inset baseline.
+ */
+export function SectionTabs() {
+  const t = useTranslations();
+  const pathname = usePathname() ?? "";
+  const group = sectionPageGroup(pathname);
+  if (!group) return null;
+
+  return (
+    // The inset is the header's gutter minus a tab's padding, so the first
+    // label lines up with the logo above it.
+    <div className="px-1 shadow-[inset_0_-1px_0_hsl(var(--border)/0.7)] md:px-3">
+      <LinkTabs
+        level={2}
+        ariaLabel={t(`nav.groups.${group.key}`)}
+        activeKey={pathname}
+        items={group.items.map((item) => ({
+          key: item.href,
+          label: t(`nav.items.${item.key}.title` as Parameters<typeof t>[0]),
+          href: item.href
+        }))}
+      />
+    </div>
+  );
+}
+
+/**
+ * The admin entry, for viewers who have one. It is a personal tool rather than
+ * a section of the site, so on desktop it sits with the account controls; in
+ * the mobile sheet it closes the list.
+ */
+export function SiteAdminLink({ variant }: Readonly<{ variant: "header" | "mobile" }>) {
+  const t = useTranslations();
+  const canAccess = useCanAccessAdminEntry();
+  if (!canAccess) return null;
+
+  return (
+    <HoverPrefetchLink
+      href="/admin"
+      className={
+        variant === "header"
+          ? cn(sectionLinkClass, "hidden lg:inline-flex")
+          : cn(sheetLinkClass, "pt-4")
+      }
+    >
+      {t("nav.items.admin.title")}
+    </HoverPrefetchLink>
   );
 }
 

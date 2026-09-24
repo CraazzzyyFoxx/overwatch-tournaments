@@ -21,18 +21,19 @@ vi.mock("@/stores/auth-profile.store", () => ({
 
 // Must follow the hoisted vi.mock calls above.
 import { usePermissions } from "@/hooks/usePermissions";
-import { useVisibleNavGroups } from "./useVisibleNavGroups";
+import { useCanAccessAdminEntry } from "./useCanAccessAdminEntry";
 
 interface Viewer {
-  navKeys: string[];
+  adminEntry: boolean;
   isWorkspaceAdmin: boolean;
   canManageAnyWorkspace: boolean;
 }
 
 /**
- * The nav tree and the admin-panel predicates as one viewer sees them. Both are
- * read in a single render so a future regression that ties them back together
- * (a mix grant that opens the admin entry) fails loudly in one probe.
+ * The header's admin entry and the admin-panel predicates as one viewer sees
+ * them. Both are read in a single render so a future regression that ties them
+ * back together (a mix grant that opens the admin entry) fails loudly in one
+ * probe.
  *
  * The probe *renders* its reading rather than assigning it to a closure
  * variable: writing to an outer binding during render is the side effect
@@ -48,10 +49,10 @@ function viewerWith(workspacePermissions: string[]): Viewer {
   state.user = profile;
 
   function Probe() {
-    const groups = useVisibleNavGroups();
+    const adminEntry = useCanAccessAdminEntry();
     const { isWorkspaceAdmin, canManageAnyWorkspace } = usePermissions();
     const seen: Viewer = {
-      navKeys: groups.flatMap((group) => group.items.map((item) => `${group.key}/${item.key}`)),
+      adminEntry,
       isWorkspaceAdmin: isWorkspaceAdmin(WORKSPACE_ID),
       canManageAnyWorkspace: canManageAnyWorkspace()
     };
@@ -59,39 +60,31 @@ function viewerWith(workspacePermissions: string[]): Viewer {
   }
 
   const markup = renderToStaticMarkup(<Probe />);
-  const payload = markup.replace(/^<script type="application\/json">/, "").replace(/<\/script>$/, "");
+  const payload = markup
+    .replace(/^<script type="application\/json">/, "")
+    .replace(/<\/script>$/, "");
   return JSON.parse(payload) as Viewer;
 }
 
-describe("useVisibleNavGroups", () => {
-  it("shows Mixes under Matches to a member holding only custom_game.create, without admin access", () => {
+describe("useCanAccessAdminEntry", () => {
+  it("keeps the admin entry closed to a member holding only custom_game.create", () => {
     const viewer = viewerWith(["custom_game.create"]);
 
-    expect(viewer.navKeys).toContain("matches/mixes");
     // Hosting a mix is member-level: it must not imply the admin panel.
-    expect(viewer.navKeys).not.toContain("organization/admin");
+    expect(viewer.adminEntry).toBe(false);
     expect(viewer.isWorkspaceAdmin).toBe(false);
     expect(viewer.canManageAnyWorkspace).toBe(false);
   });
 
-  it("still opens the admin entry for a real management permission", () => {
+  it("opens the admin entry for a real management permission", () => {
     const viewer = viewerWith(["team.update"]);
 
-    expect(viewer.navKeys).toContain("organization/admin");
+    expect(viewer.adminEntry).toBe(true);
     expect(viewer.isWorkspaceAdmin).toBe(true);
     expect(viewer.canManageAnyWorkspace).toBe(true);
-    // Viewing mixes needs no grant of its own, so it stays visible regardless.
-    expect(viewer.navKeys).toContain("matches/mixes");
   });
 
-  it("shows Mixes to a viewer with no workspace permissions at all", () => {
-    const viewer = viewerWith([]);
-
-    // Reading a mix used to need `custom_game.read`; it is open to everyone
-    // now, so the entry survives even a grant-free profile.
-    expect(viewer.navKeys).toContain("matches/mixes");
-    expect(viewer.navKeys).toContain("matches/encounters");
-    expect(viewer.navKeys).toContain("tournaments/tournaments");
-    expect(viewer.navKeys).toContain("tournaments/analytics");
+  it("keeps the admin entry closed to a viewer with no workspace permissions", () => {
+    expect(viewerWith([]).adminEntry).toBe(false);
   });
 });
