@@ -8,7 +8,7 @@ See docs/plans/2026-09-20-pregame-results-statistics-separation.md §5.1.
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, Integer, text
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -48,18 +48,30 @@ class EncounterGame(db.TimeStampIntegerMixin):
         CheckConstraint("position >= 1", name="ck_encounter_game_position"),
         CheckConstraint("accepted_home_score IS NULL OR accepted_home_score >= 0", name="ck_encounter_game_home_score"),
         CheckConstraint("accepted_away_score IS NULL OR accepted_away_score >= 0", name="ck_encounter_game_away_score"),
-        # confirmed => the whole accepted shape is present. Cancelled rows keep
-        # whatever they had, which is why this is one-directional.
+        CheckConstraint("format IN ('duel', 'ffa')", name="ck_encounter_game_format"),
+        # confirmed => the whole accepted shape is present, and for a duel that
+        # includes both scores. Cancelled rows keep whatever they had, which is
+        # why this is one-directional.
         CheckConstraint(
-            "state != 'confirmed' OR (accepted_home_score IS NOT NULL AND accepted_away_score IS NOT NULL "
-            "AND result_source IS NOT NULL AND confirmed_at IS NOT NULL)",
+            "state != 'confirmed' OR (result_source IS NOT NULL AND confirmed_at IS NOT NULL AND (format = 'ffa' "
+            "OR (accepted_home_score IS NOT NULL AND accepted_away_score IS NOT NULL)))",
             name="ck_encounter_game_confirmed_shape",
+        ),
+        # A lobby game's result lives in ``encounter_game_result``, one row per
+        # participant; the duel pair would be a second, contradictory truth.
+        CheckConstraint(
+            "format = 'duel' OR (accepted_home_score IS NULL AND accepted_away_score IS NULL)",
+            name="ck_encounter_game_ffa_has_no_scores",
         ),
         {"schema": "tournament"},
     )
 
     encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"), index=True)
     position: Mapped[int] = mapped_column(Integer())
+    #: Copy of ``encounter.format``, set by the game's creator and never changed.
+    #: It is what lets the CHECKs keep "a confirmed duel game has both scores"
+    #: while forbidding a duel score on a lobby game.
+    format: Mapped[str] = mapped_column(String(8), default="duel", server_default="duel")
     # RESTRICT, not CASCADE: deleting a catalog map must not silently erase a
     # played position's identity (spec §5.1).
     map_id: Mapped[int | None] = mapped_column(ForeignKey(Map.id, ondelete="RESTRICT"), nullable=True, index=True)

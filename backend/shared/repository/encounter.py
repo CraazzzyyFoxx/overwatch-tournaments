@@ -102,6 +102,85 @@ class EncounterGameRepository(BaseRepository[models.EncounterGame]):
         return result.scalars().first()
 
 
+class EncounterParticipantRepository(BaseRepository[models.EncounterParticipant]):
+    """``encounter_participant`` — the teams seated in an FFA lobby."""
+
+    def __init__(self) -> None:
+        super().__init__(models.EncounterParticipant)
+
+    async def list_for_encounter(
+        self, session: AsyncSession, encounter_id: int
+    ) -> Sequence[models.EncounterParticipant]:
+        result = await session.execute(
+            self.select()
+            .where(models.EncounterParticipant.encounter_id == encounter_id)
+            .order_by(models.EncounterParticipant.slot)
+        )
+        return result.scalars().all()
+
+    async def list_for_stage(self, session: AsyncSession, stage_id: int) -> list[sa.Row]:
+        """``(stage_item_id, encounter_id, team_id, slot)`` for every lobby of a stage."""
+        result = await session.execute(
+            sa.select(
+                models.Encounter.stage_item_id,
+                models.EncounterParticipant.encounter_id,
+                models.EncounterParticipant.team_id,
+                models.EncounterParticipant.slot,
+            )
+            .join(models.Encounter, models.Encounter.id == models.EncounterParticipant.encounter_id)
+            .where(models.Encounter.stage_id == stage_id)
+            .order_by(
+                models.Encounter.stage_item_id,
+                models.EncounterParticipant.encounter_id,
+                models.EncounterParticipant.slot,
+            )
+        )
+        return list(result.all())
+
+
+class EncounterGameResultRepository(BaseRepository[models.EncounterGameResult]):
+    """``encounter_game_result`` — one row per participant per FFA game."""
+
+    def __init__(self) -> None:
+        super().__init__(models.EncounterGameResult)
+
+    async def list_for_games(
+        self, session: AsyncSession, game_ids: Sequence[int]
+    ) -> Sequence[models.EncounterGameResult]:
+        if not game_ids:
+            return []
+        result = await session.execute(self.select().where(models.EncounterGameResult.game_id.in_(list(game_ids))))
+        return result.scalars().all()
+
+    async def list_confirmed_for_stage(self, session: AsyncSession, stage_id: int) -> list[sa.Row]:
+        """Every confirmed FFA result of a stage, oldest game first within each group."""
+        result = await session.execute(
+            sa.select(
+                models.Encounter.stage_item_id,
+                models.Encounter.round,
+                models.Encounter.id.label("encounter_id"),
+                models.EncounterGame.position,
+                models.EncounterGameResult.team_id,
+                models.EncounterGameResult.placement,
+                models.EncounterGameResult.score,
+            )
+            .join(models.EncounterGame, models.EncounterGame.id == models.EncounterGameResult.game_id)
+            .join(models.Encounter, models.Encounter.id == models.EncounterGameResult.encounter_id)
+            .where(
+                models.Encounter.stage_id == stage_id,
+                models.Encounter.format == enums.EncounterFormat.FFA,
+                models.EncounterGame.state == enums.EncounterGameState.CONFIRMED,
+            )
+            .order_by(
+                models.Encounter.stage_item_id,
+                models.Encounter.round,
+                models.Encounter.id,
+                models.EncounterGame.position,
+            )
+        )
+        return list(result.all())
+
+
 class EncounterMapReportRepository(BaseRepository[models.EncounterMapReport]):
     def __init__(self) -> None:
         super().__init__(models.EncounterMapReport)
@@ -215,9 +294,11 @@ class EncounterLinkRepository(BaseRepository[models.EncounterLink]):
 __all__ = (
     "EncounterCaptainReportRepository",
     "EncounterGameRepository",
+    "EncounterGameResultRepository",
     "EncounterLinkRepository",
     "EncounterMapCodeRepository",
     "EncounterMapReportRepository",
+    "EncounterParticipantRepository",
     "EncounterReportFormRepository",
     "EncounterResultAuditRepository",
     "EncounterSavedViewRepository",
