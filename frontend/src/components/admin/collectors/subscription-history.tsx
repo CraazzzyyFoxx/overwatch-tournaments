@@ -7,6 +7,7 @@ import { useFormatter } from "next-intl";
 import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SocialIcon } from "@/components/social/SocialIcon";
 import {
   Select,
   SelectContent,
@@ -93,7 +94,14 @@ export function SubscriptionTaskHistory() {
             <SelectContent>
               {PROVIDER_FILTERS.map((value) => (
                 <SelectItem key={value} value={value} className="text-xs">
-                  {value === "all" ? "All providers" : (PROVIDER_LABELS[value] ?? value)}
+                  {value === "all" ? (
+                    "All providers"
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <SocialIcon provider={value} size={12} decorative />
+                      <span>{PROVIDER_LABELS[value] ?? value}</span>
+                    </span>
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -148,7 +156,10 @@ export function SubscriptionTaskHistory() {
                       </TableCell>
                       <ClickableLogCell href={href} label={label} />
                       <TableCell className="text-sm">
-                        {PROVIDER_LABELS[row.provider] ?? row.provider}
+                        <span className="flex items-center gap-2">
+                          <SocialIcon provider={row.provider} size={14} decorative />
+                          <span>{PROVIDER_LABELS[row.provider] ?? row.provider}</span>
+                        </span>
                       </TableCell>
                       <TableCell>
                         <StateBadge state={row.state} />

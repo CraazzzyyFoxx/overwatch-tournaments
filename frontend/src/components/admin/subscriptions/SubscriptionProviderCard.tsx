@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DiscordRoleSelect } from "@/components/discord/DiscordRoleSelect";
 import { DiscordServerStatus } from "@/components/discord/DiscordServerStatus";
+import { SocialIcon } from "@/components/social/SocialIcon";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { PROVIDER_LABELS } from "@/lib/registration/subscription-requirement";
@@ -227,7 +228,11 @@ function ProviderEditor({
             checked={enabled}
             onCheckedChange={(checked) => setEnabled(checked === true)}
           />
-          <Label htmlFor={`enabled-${config.provider}`} className="font-semibold text-sm cursor-pointer">
+          <Label
+            htmlFor={`enabled-${config.provider}`}
+            className="flex cursor-pointer items-center gap-1.5 text-sm font-semibold"
+          >
+            <SocialIcon provider={config.provider} size={16} decorative />
             {label}
           </Label>
           <Badge tone={enabled ? "success" : "neutral"} className="text-xs uppercase font-mono">

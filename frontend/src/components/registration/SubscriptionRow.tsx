@@ -87,6 +87,7 @@ export default function SubscriptionRow({
   return (
     <div className="grid gap-1.5">
       <SubscriptionProviderBadge
+        provider={provider}
         providerLabel={providerLabel}
         verdict={verdict}
         className="justify-self-start"

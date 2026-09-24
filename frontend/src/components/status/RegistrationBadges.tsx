@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
+import { SocialIcon } from "@/components/social/SocialIcon";
 import {
   STATUS_TONE_PILL,
   StatusIconBadge,
@@ -275,6 +276,7 @@ export function SubscriptionStatusBadge({ outcome, className }: Readonly<Subscri
 }
 
 interface SubscriptionProviderBadgeProps {
+  provider: string;
   providerLabel: string;
   verdict: SubscriptionProviderVerdict | undefined;
   className?: string;
@@ -293,6 +295,7 @@ interface SubscriptionProviderBadgeProps {
  * imply they are comparable.
  */
 export function SubscriptionProviderBadge({
+  provider,
   providerLabel,
   verdict,
   className
@@ -322,6 +325,7 @@ export function SubscriptionProviderBadge({
       )}
     >
       <Icon className="size-3.5 shrink-0" aria-hidden />
+      <SocialIcon provider={provider} size={12} className="shrink-0" decorative />
       {`${providerLabel}: ${detail}`}
     </span>
   );

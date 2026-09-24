@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="Boosty">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Boosty">
   <title>Boosty</title>
-  <path d="M11.02 2h6.7l-3.2 7.63h3.1l-8.32 12.37 2.03-8.02H8.2z" fill="#F15F2C"/>
-  <path d="M9.32 2H6.5L2.6 13.08a5.7 5.7 0 0 0-.34 1.86A3.2 3.2 0 0 0 5.5 18.2h.72l1.06-4.19H6.1z" fill="#F15F2C" opacity=".65"/>
+  <!-- Boosty logo from Simple Icons (CC0), brand colour #F15F2C. -->
+  <path fill="#F15F2C" d="M2.661 14.337 6.801 0h6.362L11.88 4.444l-.038.077-3.378 11.733h3.15c-1.321 3.289-2.35 5.867-3.086 7.733-5.816-.063-7.442-4.228-6.02-9.155M8.554 24l7.67-11.035h-3.25l2.83-7.073c4.852.508 7.137 4.33 5.791 8.952C20.16 19.81 14.344 24 8.68 24h-.127z"/>
 </svg>
