@@ -1866,12 +1866,6 @@
     }
   },
   "teams": {
-    "subtitle": "Browse balanced teams, jump to a team, and adjust sorting.",
-    "tournamentsLoadError": "Failed to load tournaments",
-    "loadingTournaments": "Loading tournaments...",
-    "selectTournament": "Select a tournament",
-    "findTeam": "Find team",
-    "sortValue": "{field} — {order}",
     "groupLabel": "Group {name}",
     "roster": {
       "role": "Role",
@@ -1880,15 +1874,6 @@
       "newcomer": "New",
       "newcomerRole": "New role",
       "avgSr": "Avg. SR"
-    },
-    "sortAvgSr": "Avg. SR",
-    "sortPlacement": "Placement",
-    "sortGroup": "Group",
-    "selectTournamentToView": "Select a tournament to view teams.",
-    "teamsLoadError": "Failed to load teams.",
-    "noTeamsFound": "No teams found for this tournament.",
-    "meta": {
-      "description": "View teams on {siteName}."
     }
   },
   "matches": {
@@ -4263,10 +4248,6 @@
       "tournaments": {
         "title": "Tournaments",
         "desc": "Every tournament run on the platform"
-      },
-      "teams": {
-        "title": "Teams",
-        "desc": "Balanced team rosters across tournaments"
       },
       "analytics": {
         "title": "Analytics",

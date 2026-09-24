@@ -456,8 +456,8 @@ const TeamListRow = ({
             {t("tournamentDetail.teams.teamMatches")}
           </Link>
           {/* Wireframe §5 ④ offers "Team profile" only when a team route exists.
-              The public site has no `/teams/[id]` page — `(site)/teams` is the
-              index — so the button is absent rather than dead. */}
+              The public site has no team page, so the button is absent rather
+              than dead. */}
         </div>
       </div>
     </details>

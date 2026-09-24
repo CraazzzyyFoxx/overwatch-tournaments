@@ -3143,9 +3143,9 @@
 
 /* ═══════════════════════════════════════════════════════════════════════
    Team roster card (TournamentTeamCard / TournamentTeamTable).
-   GLOBAL (not .aqt-tn-scoped) — reused on the tournament Teams page, the
-   global /teams catalog, and user profiles, which are not all under the
-   tournament shell. References the global --aqt-* token layer.
+   GLOBAL (not .aqt-tn-scoped) — reused on the tournament Teams page and
+   user profiles, which are not all under the tournament shell. References
+   the global --aqt-* token layer.
    ═══════════════════════════════════════════════════════════════════════ */
 .team-card {
   background: var(--aqt-overlay-1);

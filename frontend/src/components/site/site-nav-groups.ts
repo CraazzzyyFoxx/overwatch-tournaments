@@ -28,7 +28,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     key: "tournaments",
     items: [
       { key: "tournaments", href: "/tournaments" },
-      { key: "teams", href: "/teams" },
       { key: "analytics", href: "/tournaments/analytics" }
     ]
   },

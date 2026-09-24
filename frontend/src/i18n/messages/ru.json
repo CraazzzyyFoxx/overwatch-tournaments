@@ -1866,12 +1866,6 @@
     }
   },
   "teams": {
-    "subtitle": "Просматривайте сбалансированные команды, переходите к нужной и настраивайте сортировку.",
-    "tournamentsLoadError": "Не удалось загрузить турниры",
-    "loadingTournaments": "Загрузка турниров…",
-    "selectTournament": "Выберите турнир",
-    "findTeam": "Найти команду",
-    "sortValue": "{field} — {order}",
     "groupLabel": "Группа {name}",
     "roster": {
       "role": "Роль",
@@ -1880,15 +1874,6 @@
       "newcomer": "Новичок",
       "newcomerRole": "Новая роль",
       "avgSr": "Средний SR"
-    },
-    "sortAvgSr": "Средний SR",
-    "sortPlacement": "Место",
-    "sortGroup": "Группа",
-    "selectTournamentToView": "Выберите турнир, чтобы посмотреть команды.",
-    "teamsLoadError": "Не удалось загрузить команды.",
-    "noTeamsFound": "Для этого турнира команды не найдены.",
-    "meta": {
-      "description": "Команды на {siteName}."
     }
   },
   "matches": {
@@ -4263,10 +4248,6 @@
       "tournaments": {
         "title": "Турниры",
         "desc": "Все турниры, проведённые на платформе"
-      },
-      "teams": {
-        "title": "Команды",
-        "desc": "Сбалансированные составы команд с турниров"
       },
       "analytics": {
         "title": "Аналитика",
