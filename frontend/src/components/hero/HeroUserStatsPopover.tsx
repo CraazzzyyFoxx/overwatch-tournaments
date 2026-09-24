@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Hero, HeroStat } from "@/types/hero.types";
+import { Hero } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
 import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import HeroImage from "@/components/hero/HeroImage";
@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { formatPercent, formatSeconds } from "@/lib/format";
 import { getWinrateColor } from "@/utils/colors";
 import type { UserMapHeroStats } from "@/types/user.types";
+import type { HeroPopoverStat } from "@/lib/hero/popover-stats";
 
 // Localized role name (reuses the shared role labels).
 const ROLE_LABEL_KEY: Record<AqtRoleKey, string> = {
@@ -38,7 +39,7 @@ const toFraction = (value: number | null | undefined): number | null => {
 };
 
 
-const avg10 = (stats: HeroStat[] | undefined, name: LogStatsName): number | null => {
+const avg10 = (stats: HeroPopoverStat[] | undefined, name: LogStatsName): number | null => {
   const stat = stats?.find((s) => s.name === name);
   return stat && Number.isFinite(stat.avg_10) ? stat.avg_10 : null;
 };
@@ -56,10 +57,11 @@ interface Cell {
 
 interface Props {
   hero: HeroLike;
-  /** Per-hero aggregate stats (HeroWithUserStats.stats). Optional — sources
-   *  without per-hero win/kda (e.g. the playtime-only "Most played" list) omit
-   *  it and the popover degrades to just the hero identity + playtime share. */
-  stats?: HeroStat[];
+  /** Per-hero aggregate stats, narrowed by `heroPopoverStats` to the three
+   *  stats this popover reads. Optional — sources without per-hero win/kda
+   *  (e.g. the playtime-only "Most played" list) omit it and the popover
+   *  degrades to just the hero identity + playtime share. */
+  stats?: HeroPopoverStat[];
   /** Normalized playtime share in [0, 1], shown when stats aren't available. */
   playtimeShare?: number | null;
   /**
