@@ -36,6 +36,7 @@ from shared.schemas.events import DiscordCommandEvent
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER
 from src.core import db
+from src.domain.balancer.result_serializer import as_lobby_document
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
 from src.services.custom_game import custom_game_service
@@ -234,10 +235,10 @@ def _dump_game(
         "roster_shape": roster_shape,
     }
     if roster is not None:
-        # Detail-only, like the roster: the solver document is megabytes once a
-        # mix is balanced (one entry per option), and no list row renders it --
+        # Detail-only, like the roster: the solver document grows with every
+        # stored option (``lobby_document``), and no list row renders it --
         # shipping it per row made the list the heaviest read of the service.
-        out["balance_result"] = game.balance_result_json
+        out["balance_result"] = as_lobby_document(game.balance_result_json)
         by_id = members or {}
         by_player = roles_by_player or {}
         out["players"] = [

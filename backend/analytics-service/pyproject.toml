@@ -22,7 +22,10 @@ dependencies = [
     # install them; not consumed by parser-service.
     "scikit-learn>=1.5",
     "lightgbm>=4.3",
-    "xgboost>=2.1",
+    # CPU-only build: same `xgboost` module, a 5.6 MiB wheel instead of the
+    # 125 MiB CUDA one plus its ~290 MiB nvidia-nccl dependency. Production is
+    # GPU-less; analytics-worker.gpu.Dockerfile swaps the CUDA build back in.
+    "xgboost-cpu>=3.2",
     "scipy>=1.13",
     "shap>=0.46",
     # Transitive dep of shap; numba<0.67 lacks a Python 3.14 build (its own

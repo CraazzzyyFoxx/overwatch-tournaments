@@ -287,10 +287,11 @@ class MixBalanceFallbackTests(unittest.IsolatedAsyncioTestCase):
         with patch("src.services.balancer.solver.balance_teams") as balance:
             balance.side_effect = [
                 RuntimeError("mix_balancer requires the 'mix-balancer' package"),
-                [{"ok": True}],
+                [{"teams": [], "statistics": {"total_teams": 2}, "benched_players": []}],
             ]
             result = await run_mix_balance({}, None, None, None)
-        self.assertEqual(result, {"variants": [{"ok": True}]})
+        # The fallback's options are the ones stored, in the same lobby form.
+        self.assertEqual([{"teams": [], "statistics": {"total_teams": 2}, "benched": []}], result["variants"])
         self.assertEqual("mix_balancer", balance.call_args_list[0].kwargs["algorithm"])
         self.assertEqual("tournament_balancer", balance.call_args_list[1].kwargs["algorithm"])
 

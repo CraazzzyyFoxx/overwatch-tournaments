@@ -140,8 +140,9 @@ class UserMixPreferencesBoundsTests(TestCase):
             )
 
     def test_result_variants_above_the_solver_ceiling_are_rejected(self) -> None:
+        self._validate(max_result_variants=100)
         with self.assertRaises(ValidationError):
-            self._validate(max_result_variants=501)
+            self._validate(max_result_variants=101)
 
     def test_a_tilt_outside_the_zero_to_one_trade_off_is_rejected(self) -> None:
         with self.assertRaises(ValidationError):

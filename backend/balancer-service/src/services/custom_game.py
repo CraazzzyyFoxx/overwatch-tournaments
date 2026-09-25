@@ -43,6 +43,7 @@ from shared.services.workspace_roster import (
     list_roster,
     workspace_member_user_ids,
 )
+from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.mix_discord import build_lineup_embed
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
@@ -157,25 +158,20 @@ def _normalize_team_names(raw: Mapping[str, Any]) -> dict[str, str | None]:
 
 def _apply_balance_result(roster: Sequence[models.CustomGamePlayer], result: Any) -> None:
     """Bench only the overflow rows explicitly returned by the solver."""
-    payload = result
-    if isinstance(result, dict):
-        variants = result.get("variants")
-        if isinstance(variants, list) and variants:
-            payload = variants[0]
-    if not isinstance(payload, dict):
+    variants = result.get("variants") if isinstance(result, dict) else None
+    if not isinstance(variants, list) or not variants or not isinstance(variants[0], dict):
         return
-
     by_uuid = {str(row.workspace_member_id): row for row in roster}
-    benched = payload.get("benched_players")
-    if not isinstance(benched, list):
-        return
-    for player in benched:
-        if not isinstance(player, dict):
-            continue
-        uuid = player.get("uuid")
-        row = by_uuid.get(str(uuid)) if uuid is not None else None
+    for uuid in variants[0].get("benched") or []:
+        row = by_uuid.get(str(uuid))
         if row is not None:
             row.participation = MixParticipation.BENCHED
+
+
+def _lobby_players(result: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The ``players`` map of a stored ``lobby_document``: each seat's uuid resolves here."""
+    players = result.get("players")
+    return players if isinstance(players, Mapping) else {}
 
 
 def _locate_seat(teams: Sequence[Mapping[str, Any]], uuid: str) -> tuple[int, str, int] | None:
@@ -188,7 +184,7 @@ def _locate_seat(teams: Sequence[Mapping[str, Any]], uuid: str) -> tuple[int, st
             if not isinstance(entries, list):
                 continue
             for position, entry in enumerate(entries):
-                if isinstance(entry, Mapping) and str(entry.get("uuid")) == uuid:
+                if str(entry) == uuid:
                     return team_index, role, position
     return None
 
@@ -205,7 +201,7 @@ _SOLVER_SCORED_STAT_KEYS = (
 )
 
 
-def _recompute_variant_stats(variant: dict[str, Any]) -> None:
+def _recompute_variant_stats(variant: dict[str, Any], players: Mapping[str, Any]) -> None:
     """Re-derive the read-only verdict from a manually edited roster.
 
     Mirrors the solver's own arithmetic for the three metrics that are pure
@@ -239,14 +235,13 @@ def _recompute_variant_stats(variant: dict[str, Any]) -> None:
             for role, entries in roster.items():
                 if not isinstance(entries, list):
                     continue
-                for entry in entries:
-                    if not isinstance(entry, Mapping):
+                for uuid in entries:
+                    player = players.get(str(uuid))
+                    if not isinstance(player, Mapping):
                         continue
-                    rating = entry.get("assigned_rating")
-                    if isinstance(rating, int | float):
-                        ratings.append(float(rating))
-                    preferences = entry.get("role_preferences") or []
-                    is_flex = entry.get("is_flex") is True
+                    ratings.append(float(seat_rating(player, role)))
+                    preferences = player.get("role_preferences") or []
+                    is_flex = player.get("is_flex") is True
                     if not is_flex and preferences and preferences[0] != role:
                         off_role_count += 1
         total = sum(ratings)
@@ -890,7 +885,7 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
+        result = as_lobby_document(game.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -954,7 +949,7 @@ class CustomGameService:
         channel_id = await self.workspace_discord_channel_id(session, workspace_id)
         if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
-        result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
+        result = as_lobby_document(game.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -981,6 +976,7 @@ class CustomGameService:
             mix_name=game.name,
             match_number=matches_count + 1,
             variant=variant,
+            players=_lobby_players(result),
             team_names=team_names,
             next_map=next_map,
             # The host's knob, resolved: the footer promises what recording this
@@ -1113,7 +1109,7 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        result = copy.deepcopy(game.balance_result_json) if isinstance(game.balance_result_json, dict) else None
+        result = copy.deepcopy(as_lobby_document(game.balance_result_json))
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1142,7 +1138,7 @@ class CustomGameService:
         first_bucket = teams[first_team]["roster"][first_role]
         second_bucket = teams[second_team]["roster"][second_role]
         first_bucket[first_pos], second_bucket[second_pos] = second_bucket[second_pos], first_bucket[first_pos]
-        _recompute_variant_stats(variant)
+        _recompute_variant_stats(variant, _lobby_players(result))
 
         game.balance_result_json = result
         await session.flush()
@@ -1223,7 +1219,7 @@ class CustomGameService:
         elif await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
-        result = game.balance_result_json if isinstance(game.balance_result_json, dict) else {}
+        result = as_lobby_document(game.balance_result_json) or {}
         variants = result.get("variants")
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1264,6 +1260,7 @@ class CustomGameService:
         # collected alongside the frozen snapshot so the points delta reuses the
         # exact same walk instead of re-parsing ``teams``.
         team_players: list[list[tuple[int, str, int]]] = [[], []]
+        players = _lobby_players(result)
         for team_index, (team, casual_team) in enumerate(zip(teams, casual_teams, strict=True)):
             roster = team.get("roster") if isinstance(team, dict) else None
             if not isinstance(roster, dict):
@@ -1273,11 +1270,12 @@ class CustomGameService:
                     continue
                 slot_code = role_slot_code(bucket_name)
                 role = HeroClass.from_slot_code(slot_code)
-                for seat in seats:
-                    if not isinstance(seat, dict) or seat.get("uuid") is None:
+                for uuid in seats:
+                    player = players.get(str(uuid))
+                    if not isinstance(player, Mapping):
                         continue
-                    member_id = int(seat["uuid"])
-                    rating = int(seat["assigned_rating"])
+                    member_id = int(uuid)
+                    rating = int(seat_rating(player, bucket_name))
                     await self.casual_players.create(
                         session,
                         models.CasualPlayer(
@@ -1286,7 +1284,7 @@ class CustomGameService:
                             # The name as it stood when the match was played --
                             # a later rename or a member leaving the workspace
                             # must not rewrite history.
-                            display_name_snapshot=str(seat.get("name") or f"#{member_id}"),
+                            display_name_snapshot=str(player.get("name") or f"#{member_id}"),
                             role=role,
                             rank=rating,
                         ),

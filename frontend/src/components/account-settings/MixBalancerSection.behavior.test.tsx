@@ -4,7 +4,7 @@
 // which puts three things on the line that are cheap to get wrong —
 //
 //  1. a knob left where the engine would have put it anyway must travel as
-//     `null`; storing an explicit 0.5 or 500 would make "never touched"
+//     `null`; storing an explicit 0.5 or 100 would make "never touched"
 //     indistinguishable from "deliberately set to the default", and would put
 //     a row on every account that ever opened this tab;
 //  2. a burst of edits (or a slider dragged across the track) must collapse
@@ -132,7 +132,7 @@ describe("MixBalancerSection", () => {
     const scope = await mount();
 
     await typeInto(field(scope, "mix-role-weight-tank"), "2.5");
-    await typeInto(field(scope, "mix-result-variants"), "200");
+    await typeInto(field(scope, "mix-result-variants"), "40");
     await typeInto(field(scope, "mix-points-per-win"), "50");
     await settle();
 
@@ -141,7 +141,7 @@ describe("MixBalancerSection", () => {
       // Untouched slider and shape: nothing stored, the defaults apply.
       mix_comfort_tilt: null,
       mix_role_weights: { tank: 2.5 },
-      max_result_variants: 200,
+      max_result_variants: 40,
       role_mask: null,
       points_per_win: 50,
     });
@@ -151,12 +151,13 @@ describe("MixBalancerSection", () => {
     getPreferences.mockResolvedValue({
       ...UNSET,
       mix_role_weights: { tank: 2.5 },
-      max_result_variants: 200,
+      max_result_variants: 40,
       points_per_win: 50,
     });
     const scope = await mount();
 
     await typeInto(field(scope, "mix-role-weight-tank"), "1");
+    // Past the ceiling is the ceiling, and the ceiling is the default.
     await typeInto(field(scope, "mix-result-variants"), "500");
     await typeInto(field(scope, "mix-points-per-win"), "0");
     await settle();

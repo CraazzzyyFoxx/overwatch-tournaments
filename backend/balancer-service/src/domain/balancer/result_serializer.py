@@ -8,7 +8,7 @@ from shared.domain.roster_shape import FLEX_SLOT_CODE
 from src.domain.balancer.backends.base import BalanceMetrics
 from src.domain.balancer.entities import Player, Team
 from src.domain.balancer.feasibility_analyzer import FeasibilityReport
-from src.services.balancer.config.defaults import AlgorithmConfig
+from src.services.balancer.config.defaults import MAX_RESULT_VARIANTS, AlgorithmConfig
 from src.services.balancer.config.public_contract import serialize_algorithm_config
 
 
@@ -174,3 +174,102 @@ def _build_response_payload(
     if has_applied_overrides:
         response_payload["applied_config"] = serialize_algorithm_config(config)
     return response_payload
+
+
+def lobby_document(payloads: typing.Iterable[typing.Any]) -> dict[str, typing.Any]:
+    """Many ``_build_response_payload`` results of ONE run -> the lobby form.
+
+    Every option of a run seats the same lobby, so the per-player facts that
+    ``teams_to_json`` repeats in every seat of every option (name, ratings,
+    preferences, flags) are written once under ``players``, and an option keeps
+    only which uuid sits in which role bucket of which team plus its own
+    numbers. A seat's rating is ``seat_rating(players[uuid], bucket)`` --
+    exactly ``Player.get_rating``, so nothing is lost by not storing it.
+
+    Dropped as run-level or unread: ``feasibility`` is hoisted to the root (one
+    lobby, one structural floor); ``applied_config`` and the per-seat/per-team
+    discomfort detail have no reader of the stored document.
+
+    Tolerant of malformed entries because :func:`as_lobby_document` also feeds
+    it documents stored by older code: a seat without a uuid is skipped, as the
+    readers always did.
+    """
+    players: dict[str, dict[str, typing.Any]] = {}
+    feasibility: typing.Any = None
+
+    def seat(entry: typing.Any, role: str | None = None) -> str | None:
+        if not isinstance(entry, typing.Mapping) or entry.get("uuid") is None:
+            return None
+        uuid = str(entry["uuid"])
+        player = players.get(uuid)
+        if player is None:
+            player = players[uuid] = {
+                "name": entry.get("name"),
+                "is_captain": entry.get("is_captain") is True,
+                "is_flex": entry.get("is_flex") is True,
+                "role_preferences": list(entry.get("role_preferences") or []),
+                "ratings": dict(entry.get("all_ratings") or {}),
+            }
+        if role is not None:
+            # The seat's own rating fills a bucket the snapshot lacks (a document
+            # older than ``all_ratings``); everywhere else the two already agree.
+            rating = entry.get("assigned_rating")
+            if role not in player["ratings"] and isinstance(rating, int | float):
+                player["ratings"][role] = rating
+            if entry.get("sub_role"):
+                player.setdefault("sub_roles", {})[role] = entry["sub_role"]
+        return uuid
+
+    def seats(entries: typing.Any, role: str | None = None) -> list[str]:
+        return (
+            [uuid for entry in entries if (uuid := seat(entry, role)) is not None] if isinstance(entries, list) else []
+        )
+
+    variants = []
+    for payload in payloads:
+        if not isinstance(payload, typing.Mapping) or not isinstance(payload.get("teams"), list):
+            continue
+        stats = dict(payload.get("statistics") or {})
+        feasibility = stats.pop("feasibility", feasibility)
+        teams = []
+        for team in payload["teams"]:
+            if not isinstance(team, typing.Mapping):
+                continue
+            roster = team.get("roster")
+            teams.append(
+                {
+                    "id": team.get("id"),
+                    "average_mmr": team.get("average_mmr"),
+                    "total_rating": team.get("total_rating"),
+                    "roster": (
+                        {role: seats(entries, role) for role, entries in roster.items()}
+                        if isinstance(roster, typing.Mapping)
+                        else {}
+                    ),
+                }
+            )
+        variants.append({"teams": teams, "statistics": stats, "benched": seats(payload.get("benched_players"))})
+    return {"players": players, "feasibility": feasibility, "variants": variants}
+
+
+def as_lobby_document(stored: typing.Any) -> dict[str, typing.Any] | None:
+    """A mix's stored solver document in the lobby form, whichever form it was written in.
+
+    Mixes balanced before :func:`lobby_document` hold ``{"variants": [payload, ...]}``
+    (or one bare payload) and are upgraded here, on read, trimmed to the cap like
+    a fresh run. Not by a migration: a release migrates while the previous
+    containers are still serving, and those cannot read the lobby form.
+    """
+    if not isinstance(stored, typing.Mapping):
+        return None
+    if "players" in stored:
+        return dict(stored)
+    variants = stored.get("variants")
+    payloads = variants if isinstance(variants, list) else [stored]
+    return lobby_document(payloads[:MAX_RESULT_VARIANTS])
+
+
+def seat_rating(player: typing.Mapping[str, typing.Any], bucket: str) -> int:
+    """The rating a ``lobby_document`` player sits at in role ``bucket``."""
+    ratings = player.get("ratings")
+    return ratings.get(bucket, 0) if isinstance(ratings, typing.Mapping) else 0

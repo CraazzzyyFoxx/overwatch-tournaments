@@ -23,10 +23,11 @@ export const MAX_ROLE_WEIGHT = 100;
 
 /**
  * What one mix run hands back when nobody asked for a number -- the server's
- * own `solver.MIX_RESULT_VARIANTS`, and the ceiling it accepts.
+ * own `solver.MIX_RESULT_VARIANTS`, which is also the ceiling it accepts
+ * (`AlgorithmConfig.max_result_variants`).
  */
-export const DEFAULT_RESULT_VARIANTS = 500;
-export const MAX_RESULT_VARIANTS = 500;
+export const DEFAULT_RESULT_VARIANTS = 100;
+export const MAX_RESULT_VARIANTS = DEFAULT_RESULT_VARIANTS;
 
 /** Ceiling the server enforces on the rank-adjustment-per-win. */
 export const MAX_POINTS_PER_WIN = 1000;
@@ -131,13 +132,13 @@ export function preferencesPayload(draft: MixPrefsDraft): MixBalancerPreferences
   const weighted = Object.fromEntries(
     Object.entries(draft.weights).filter(([, weight]) => weight !== DEFAULT_ROLE_WEIGHT),
   );
+  // Clamped before the default check: the default IS the ceiling, so anything
+  // typed past it means "the default", not a pinned copy of it.
+  const variants = Math.min(MAX_RESULT_VARIANTS, Math.max(1, Math.round(draft.variants)));
   return {
     mix_comfort_tilt: draft.tilt === DEFAULT_COMFORT_TILT ? null : draft.tilt,
     mix_role_weights: Object.keys(weighted).length > 0 ? weighted : null,
-    max_result_variants:
-      draft.variants === DEFAULT_RESULT_VARIANTS
-        ? null
-        : Math.min(MAX_RESULT_VARIANTS, Math.max(1, Math.round(draft.variants))),
+    max_result_variants: variants === DEFAULT_RESULT_VARIANTS ? null : variants,
     role_mask: draft.roleMask,
     points_per_win:
       draft.pointsPerWin == null || draft.pointsPerWin <= 0

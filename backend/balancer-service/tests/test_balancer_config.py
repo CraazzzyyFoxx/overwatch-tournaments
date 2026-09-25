@@ -40,7 +40,7 @@ def test_config_payload_exposes_complete_editable_field_metadata() -> None:
     fields_by_key = {field["key"]: field for field in fields}
     assert fields_by_key["population_size"]["limits"] == {"min": 10, "max": 1000}
     assert fields_by_key["mutation_strength"]["limits"] == {"min": 1, "max": 10}
-    assert fields_by_key["max_result_variants"]["limits"] == {"min": 1, "max": 500}
+    assert fields_by_key["max_result_variants"]["limits"] == {"min": 1, "max": 100}
     assert fields_by_key["sub_role_collision_weight"]["limits"] == {"min": 0.0, "max": 10000.0}
     assert fields_by_key["internal_role_spread_weight"]["limits"] == {"min": 0.0, "max": 10000.0}
     assert fields_by_key["tank_impact_weight"]["limits"] == {"min": 0.0, "max": 10000.0}
