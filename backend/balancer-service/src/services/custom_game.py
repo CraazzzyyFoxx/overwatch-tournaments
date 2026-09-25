@@ -340,8 +340,15 @@ class CustomGameService:
             return {}
         return await self.load_hosts(session, workspace_id=workspace_id, user_ids=ids)
 
-    async def get(self, session: AsyncSession, *, workspace_id: int, custom_game_id: int) -> models.CustomGame:
-        game = await self.games.get(session, custom_game_id)
+    async def get(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        options: Sequence[Any] = (),
+    ) -> models.CustomGame:
+        game = await self.games.get(session, custom_game_id, options=options)
         if game is None or game.workspace_id != workspace_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
         return game
@@ -1393,7 +1400,12 @@ class CustomGameService:
         any workspace member, same as :meth:`get` (no host gate: watching the
         history is not writing it).
         """
-        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
+        game = await self.get(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
+        )
         return list(await self.casual_matches.list_for_custom_game(session, game.id))
 
     async def mix_stats(
@@ -1490,7 +1502,12 @@ class CustomGameService:
         Read-only, no roster row is touched -- the host applies the verdict
         through the same ``participation`` field.
         """
-        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
+        game = await self.get(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
+        )
         roster = list(await self.roster.list_for_game(session, game.id))
         if not roster:
             return []

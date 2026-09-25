@@ -4,18 +4,29 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from shared import models
 from shared.repository.base import BaseRepository
 
 
 class CustomGameRepository(BaseRepository[models.CustomGame]):
+    #: Leaves the solver document in the database. It is the one heavy column a
+    #: mix has -- an entry per balance option, megabytes once balanced -- and only
+    #: the detail read and the writes that edit it look at it. ``raiseload`` turns
+    #: a stray read into an error instead of an implicit async lazy load.
+    WITHOUT_BALANCE_RESULT = (defer(models.CustomGame.balance_result_json, raiseload=True),)
+
     def __init__(self) -> None:
         super().__init__(models.CustomGame)
 
     async def list_for_workspace(self, session: AsyncSession, workspace_id: int) -> Sequence[models.CustomGame]:
+        """Every mix of the workspace, newest first, without ``balance_result_json``."""
         result = await session.scalars(
-            self.select().where(self.model.workspace_id == workspace_id).order_by(self.model.id.desc())
+            self.select()
+            .where(self.model.workspace_id == workspace_id)
+            .options(*self.WITHOUT_BALANCE_RESULT)
+            .order_by(self.model.id.desc())
         )
         return result.all()
 
@@ -111,6 +122,27 @@ class CustomGameTeamNameRepository:
             )
         )
         return dict(result.all())
+
+    async def mapping_for_games(
+        self, session: AsyncSession, custom_game_ids: Sequence[int]
+    ) -> dict[int, dict[int, str]]:
+        """``custom_game_id -> {team_index: name}`` for a whole mix list in one query.
+
+        A mix with no custom names is absent from the result.
+        """
+        if not custom_game_ids:
+            return {}
+        result = await session.execute(
+            sa.select(
+                models.CustomGameTeamName.custom_game_id,
+                models.CustomGameTeamName.team_index,
+                models.CustomGameTeamName.name,
+            ).where(models.CustomGameTeamName.custom_game_id.in_(custom_game_ids))
+        )
+        grouped: dict[int, dict[int, str]] = {}
+        for custom_game_id, team_index, name in result.all():
+            grouped.setdefault(custom_game_id, {})[team_index] = name
+        return grouped
 
     async def set(
         self,

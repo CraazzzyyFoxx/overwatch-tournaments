@@ -219,7 +219,6 @@ def _dump_game(
         "name": game.name,
         "status": game.status,
         "settings": settings,
-        "balance_result": game.balance_result_json,
         # Which of those options the mix is *showing*: the host's pager, read by
         # every client, so a viewer never studies a matchup nobody is calling.
         "selected_variant_index": game.selected_variant_index,
@@ -235,6 +234,10 @@ def _dump_game(
         "roster_shape": roster_shape,
     }
     if roster is not None:
+        # Detail-only, like the roster: the solver document is megabytes once a
+        # mix is balanced (one entry per option), and no list row renders it --
+        # shipping it per row made the list the heaviest read of the service.
+        out["balance_result"] = game.balance_result_json
         by_id = members or {}
         by_player = roles_by_player or {}
         out["players"] = [
@@ -253,11 +256,8 @@ def _dump_game(
 async def _game_settings(
     session: Any, game: Any, workspace_channel_id: int | None, points_per_win: int
 ) -> dict[str, Any]:
-    """The mix's settings. The workspace channel and the host's points knob are
-    passed in, not read here: the channel is one value for every mix in the list
-    and the points come from the host's account row, which several mixes in the
-    same list routinely share. Reading either per row would widen this reader's
-    existing per-mix queries by a third for values it already holds."""
+    """One mix's settings. The list builds the same dict from grouped reads
+    (``_list``); this is the single-mix path."""
     return _dump_settings(
         await custom_game_service.team_names.mapping_for_game(session, game.id),
         points_per_win,
@@ -445,22 +445,25 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             workspace_id = _int(data, "workspace_id")
             rows = await custom_game_service.list(session, workspace_id=workspace_id)
+            game_ids = [row.id for row in rows]
             host_names = await custom_game_service.hosts(session, workspace_id, [row.host_user_id for row in rows])
-            # One grouped read for the whole list: the activity column would
-            # otherwise cost a query per mix.
-            activity = await custom_game_service.casual_matches.activity_for_games(session, [row.id for row in rows])
+            # One grouped read per per-row column (activity, team names, points
+            # knob) instead of a query per mix.
+            activity = await custom_game_service.casual_matches.activity_for_games(session, game_ids)
+            team_names = await custom_game_service.team_names.mapping_for_games(session, game_ids)
             workspace_channel_id = await custom_game_service.workspace_discord_channel_id(session, workspace_id)
-            # Same reason as the activity read above: every row dumps its host's
-            # points knob, and a workspace's mixes are typically run by a handful
-            # of people, so one grouped read beats a per-row lookup of the same
-            # few account rows. Absent = knob off = 0.
+            # A workspace's mixes are typically run by a handful of people, so one
+            # grouped read beats a per-row lookup of the same few account rows.
+            # Absent = knob off = 0.
             points_by_host = await custom_game_service.host_prefs.points_per_win_by_user(
                 session, [row.host_user_id for row in rows]
             )
             return [
                 _dump_game(
                     row,
-                    await _game_settings(session, row, workspace_channel_id, points_by_host.get(row.host_user_id, 0)),
+                    _dump_settings(
+                        team_names.get(row.id, {}), points_by_host.get(row.host_user_id, 0), workspace_channel_id
+                    ),
                     host_display_name=host_names.get(row.host_user_id),
                     activity=activity.get(row.id),
                 )
