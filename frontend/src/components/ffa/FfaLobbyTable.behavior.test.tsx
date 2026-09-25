@@ -159,6 +159,23 @@ describe("ffa lobby ties", () => {
 
     expect(container.querySelector("tbody tr[data-tie]")).toBeNull();
   });
+
+  it("claims no ranks, ties or verdicts before the first game counts", async () => {
+    // What the engine answers for a fresh lobby: every team level on every
+    // tiebreaker, one cluster headed at 1, straddling the line. Printed as-is it
+    // said "all 1st" and "the assigned order decides who advances".
+    const unplayed = { games_played: 0, points: 0, tie_group: 1, games: [] };
+    await mount(lobby([1, 2, 3, 4].map((slot) => row(slot, unplayed))));
+
+    expect(
+      [...container.querySelectorAll("tbody [data-ffa-rank]")].map((node) => node.textContent)
+    ).toEqual(["—", "—", "—", "—"]);
+    expect(container.querySelector("tbody tr[data-tie]")).toBeNull();
+    expect(container.querySelector("tbody tr[data-advancing]")).toBeNull();
+    expect(container.querySelector("[data-ffa-status]")).toBeNull();
+    // The rule is known before any result is: the line still says who goes on.
+    expect(cutAfterRow()).toBe(2);
+  });
 });
 
 describe("ffa lobby game cells", () => {
