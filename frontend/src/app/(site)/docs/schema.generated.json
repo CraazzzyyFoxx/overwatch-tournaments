@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "ffa0001",
+  "alembic_head": "varcap01",
   "packages": [
     {
       "key": "achievements",

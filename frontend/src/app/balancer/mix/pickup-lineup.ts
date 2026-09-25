@@ -333,7 +333,7 @@ export function teamNamesByIndex(settings: CustomGameSettings | undefined): Reco
   return out;
 }
 
-function parseSeats(roster: Record<string, unknown>): PickupSeat[] {
+function parseSeats(roster: Record<string, unknown>, players: Record<string, unknown>): PickupSeat[] {
   const seats: PickupSeat[] = [];
   for (const [name, group] of Object.entries(roster)) {
     // The solver keys buckets by its own role vocabulary (`Tank`/`Damage`/…
@@ -343,22 +343,25 @@ function parseSeats(roster: Record<string, unknown>): PickupSeat[] {
       continue;
     }
     for (const entry of group) {
-      const player = asRecord(entry);
-      if (player?.uuid == null) {
+      const uuid = typeof entry === "string" || typeof entry === "number" ? String(entry) : null;
+      const player = uuid == null ? null : asRecord(players[uuid]);
+      if (uuid == null || player == null) {
         continue;
       }
       const preferences = Array.isArray(player.role_preferences) ? player.role_preferences : [];
       const isFlex = player.is_flex === true;
+      const subRole = asRecord(player.sub_roles)?.[name];
       seats.push({
-        uuid: String(player.uuid),
-        name: typeof player.name === "string" ? player.name : String(player.uuid),
+        uuid,
+        name: typeof player.name === "string" ? player.name : uuid,
         role,
-        rating: asNumber(player.assigned_rating),
+        // The server's `seat_rating`: the rating for the bucket they sit in, 0 without one.
+        rating: asNumber(asRecord(player.ratings)?.[name]) ?? 0,
         // A flex player is never off-role: any seat is their first choice.
         offRole: !isFlex && preferences.length > 0 && preferences[0] !== name,
         isFlex,
         isCaptain: player.is_captain === true,
-        subRole: typeof player.sub_role === "string" ? player.sub_role : null,
+        subRole: typeof subRole === "string" ? subRole : null,
       });
     }
   }
@@ -369,26 +372,29 @@ function parseSeats(roster: Record<string, unknown>): PickupSeat[] {
 /**
  * Every balance option the solver returned, richest-first as it stored them.
  *
- * `run_balance` wraps its output as `{variants: [...]}`, and each variant is a
- * `teams_to_json` payload. An unrecognised shape yields an empty list rather
- * than throwing, so a result written by an older solver degrades to "no teams
- * to show" instead of blanking the screen.
+ * The mix carries the solver's lobby document (`lobby_document` server-side):
+ * each player once under `players`, and each option only as role buckets of
+ * player uuids plus its own numbers -- the seats are rebuilt against that map
+ * here. An unrecognised shape yields an empty list rather than throwing, so a
+ * malformed result degrades to "no teams to show" instead of blanking the screen.
  */
 export function parseVariants(resultJson: unknown, teamNames: Record<number, string> = {}): PickupVariant[] {
   const root = asRecord(resultJson);
-  if (root == null) {
+  if (root == null || !Array.isArray(root.variants)) {
     return [];
   }
-  const payloads = Array.isArray(root.variants) ? root.variants : [root];
+  const players = asRecord(root.players) ?? {};
+  // One pool, one floor: the server hoists it out of the per-option numbers.
+  const offRoleFloor = asNumber(asRecord(root.feasibility)?.structural_min_off_role);
   const out: PickupVariant[] = [];
-  for (const payload of payloads) {
+  for (const payload of root.variants) {
     const variant = asRecord(payload);
     const teams = variant == null ? null : variant.teams;
     if (!Array.isArray(teams)) {
       continue;
     }
     const statistics = asRecord(variant?.statistics) ?? {};
-    const benchedRows = Array.isArray(variant?.benched_players) ? variant.benched_players : [];
+    const benched = Array.isArray(variant?.benched) ? variant.benched : [];
     out.push({
       teams: teams
         .flatMap((entry) => {
@@ -397,7 +403,7 @@ export function parseVariants(resultJson: unknown, teamNames: Record<number, str
           if (team == null || roster == null) {
             return [];
           }
-          return [{ id: asNumber(team.id), averageRank: asNumber(team.average_mmr), seats: parseSeats(roster) }];
+          return [{ id: asNumber(team.id), averageRank: asNumber(team.average_mmr), seats: parseSeats(roster, players) }];
         })
         // Named by final render position, not the raw payload index: a
         // malformed entry dropped above must not shift every name after it.
@@ -419,13 +425,13 @@ export function parseVariants(resultJson: unknown, teamNames: Record<number, str
         lineGap: asNumber(statistics.mix_balancer_role_fairness),
         offRoleCount: asNumber(statistics.off_role_count),
         offRoleAboveMinimum: asNumber(statistics.off_role_above_minimum),
-        offRoleFloor: asNumber(asRecord(statistics.feasibility)?.structural_min_off_role),
+        offRoleFloor,
         subRoleCollisions: asNumber(statistics.sub_role_collision_count),
-        benchedCount: benchedRows.length,
+        benchedCount: benched.length,
       },
-      benched: benchedRows.flatMap((entry) => {
-        const player = asRecord(entry);
-        return player?.name == null ? [] : [String(player.name)];
+      benched: benched.flatMap((entry) => {
+        const name = asRecord(players[String(entry)])?.name;
+        return typeof name === "string" ? [name] : [];
       }),
     });
   }

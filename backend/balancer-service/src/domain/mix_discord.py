@@ -23,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from src.domain.balancer.result_serializer import seat_rating
 from src.services.balancer.role_naming import role_slot_code
 
 __all__ = ("build_lineup_embed",)
@@ -49,9 +50,9 @@ def _rating(value: Any) -> str:
     return str(int(value))
 
 
-def _seat_line(bucket: str, seat: Mapping[str, Any]) -> str:
-    name = seat.get("name") or f"#{seat.get('uuid')}"
-    return f"{_role_label(bucket)} · {name} · {_rating(seat.get('assigned_rating'))}"
+def _seat_line(bucket: str, uuid: str, player: Mapping[str, Any]) -> str:
+    name = player.get("name") or f"#{uuid}"
+    return f"{_role_label(bucket)} · {name} · {_rating(seat_rating(player, bucket))}"
 
 
 def _field_value(lines: list[str]) -> str:
@@ -79,17 +80,16 @@ def _field_value(lines: list[str]) -> str:
     return "\n".join([*kept, _TRUNCATED])
 
 
-def _seat_lines(team: Mapping[str, Any]) -> list[str]:
+def _seat_lines(team: Mapping[str, Any], players: Mapping[str, Any]) -> list[str]:
     """One line per seat, in the order the roster stores its buckets."""
     roster = team.get("roster")
     if not isinstance(roster, Mapping):
         return []
     return [
-        _seat_line(bucket, seat)
+        _seat_line(bucket, str(uuid), players.get(str(uuid)) or {})
         for bucket, seats in roster.items()
         if isinstance(seats, list)
-        for seat in seats
-        if isinstance(seat, Mapping)
+        for uuid in seats
     ]
 
 
@@ -98,11 +98,15 @@ def build_lineup_embed(
     mix_name: str,
     match_number: int,
     variant: Mapping[str, Any],
+    players: Mapping[str, Any],
     team_names: Mapping[int, str],
     next_map: tuple[str, str | None] | None,
     points_per_win: int | None,
 ) -> dict[str, Any]:
     """One embed dict describing the teams of ``variant`` and the map they play.
+
+    ``variant`` is one option of a stored ``lobby_document`` and ``players`` that
+    document's player map, which its seat uuids resolve against.
 
     ``next_map`` is ``(map name, gamemode name)`` or ``None`` when nobody has
     rolled one yet -- a mix that posts its lineup before the roll is normal, so
@@ -119,7 +123,7 @@ def build_lineup_embed(
     fields = [
         {
             "name": team_names.get(index) or f"Team {index + 1}",
-            "value": _field_value(_seat_lines(team)),
+            "value": _field_value(_seat_lines(team, players)),
             "inline": True,
         }
         for index, team in enumerate(teams if isinstance(teams, list) else [])

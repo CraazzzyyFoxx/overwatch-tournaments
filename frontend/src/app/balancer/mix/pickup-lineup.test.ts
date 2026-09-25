@@ -283,35 +283,24 @@ describe("sortLineup", () => {
 
 describe("parseVariants", () => {
   const payload = {
+    players: {
+      "7": { name: "karin", ratings: { Tank: 2900 }, role_preferences: ["Tank"] },
+      "8": {
+        name: "DemonDimon",
+        ratings: { Tank: 3900, Damage: 4100 },
+        is_flex: false,
+        role_preferences: ["Tank", "Damage"],
+        sub_roles: { Damage: "hitscan" },
+      },
+      "9": { name: "Tolgrn" },
+      "10": { name: "Egor", ratings: { Support: 2500 } },
+    },
+    feasibility: { structural_min_off_role: 1 },
     variants: [
       {
         teams: [
-          {
-            id: 1,
-            name: "karin",
-            average_mmr: 3000,
-            total_rating: 15000,
-            roster: {
-              Damage: [
-                {
-                  uuid: "8",
-                  name: "DemonDimon",
-                  assigned_rating: 4100,
-                  is_flex: false,
-                  role_preferences: ["Tank", "Damage"],
-                },
-              ],
-              Tank: [
-                { uuid: "7", name: "karin", assigned_rating: 2900, role_preferences: ["Tank"] },
-              ],
-            },
-          },
-          {
-            id: 2,
-            name: "Tolgrn",
-            average_mmr: 2950,
-            roster: { Support: [{ uuid: "9", name: "Tolgrn" }] },
-          },
+          { id: 1, average_mmr: 3000, total_rating: 15000, roster: { Damage: ["8"], Tank: ["7"] } },
+          { id: 2, average_mmr: 2950, roster: { Support: ["9"] } },
         ],
         statistics: {
           mix_balancer_quality_total: 41.5,
@@ -322,9 +311,8 @@ describe("parseVariants", () => {
           off_role_count: 1,
           off_role_above_minimum: 0,
           sub_role_collision_count: 2,
-          feasibility: { structural_min_off_role: 1 },
         },
-        benched_players: [{ uuid: "10", name: "Egor" }],
+        benched: ["10"],
       },
       { teams: [] },
     ],
@@ -340,8 +328,17 @@ describe("parseVariants", () => {
       ["tank", "karin"],
       ["damage", "DemonDimon"],
     ]);
-    expect(first.teams[0].seats[0].rating).toBe(2900);
     expect(first.teams[0].averageRank).toBe(3000);
+  });
+
+  it("seats a player at the rating and sub-role of the bucket they sit in", () => {
+    const [first] = parseVariants(payload);
+    const [karin, demon] = first.teams[0].seats;
+    expect(karin.rating).toBe(2900);
+    // Rated for tank too, but seated at damage: the damage rating, not the best one.
+    expect(demon.rating).toBe(4100);
+    expect(demon.subRole).toBe("hitscan");
+    expect(karin.subRole).toBeNull();
   });
 
   it("marks a seat off-role only when it is not the player's first choice", () => {
@@ -353,13 +350,8 @@ describe("parseVariants", () => {
 
   it("never marks a flex player off-role", () => {
     const [variant] = parseVariants({
-      teams: [
-        {
-          roster: {
-            Support: [{ uuid: "1", name: "Flexy", is_flex: true, role_preferences: ["Tank"] }],
-          },
-        },
-      ],
+      players: { "1": { name: "Flexy", is_flex: true, role_preferences: ["Tank"] } },
+      variants: [{ teams: [{ roster: { Support: ["1"] } }] }],
     });
     expect(variant.teams[0].seats[0].offRole).toBe(false);
     expect(variant.teams[0].seats[0].isFlex).toBe(true);
@@ -386,8 +378,8 @@ describe("parseVariants", () => {
     // then falls back to `tournament_balancer`, which scores with
     // `composite_score` instead. One pill, whichever engine ran.
     const [variant] = parseVariants({
-      teams: [{ roster: { tank: [{ uuid: "7", name: "karin" }] } }],
-      statistics: { composite_score: 0.87 },
+      players: { "7": { name: "karin" } },
+      variants: [{ teams: [{ roster: { tank: ["7"] } }], statistics: { composite_score: 0.87 } }],
     });
     expect(variant.stats.qualityScore).toBe(0.87);
   });
@@ -396,32 +388,31 @@ describe("parseVariants", () => {
     // `_recompute_variant_stats` nulls every solver-scored key after a seat
     // swap; a null must read as absent, never as a genuine 0.
     const [variant] = parseVariants({
-      teams: [{ roster: { tank: [{ uuid: "7", name: "karin" }] } }],
-      statistics: {
-        composite_score: null,
-        mix_balancer_quality_total: null,
-        mix_balancer_role_fairness: null,
-        off_role_count: 2,
-      },
+      players: { "7": { name: "karin" } },
+      variants: [
+        {
+          teams: [{ roster: { tank: ["7"] } }],
+          statistics: {
+            composite_score: null,
+            mix_balancer_quality_total: null,
+            mix_balancer_role_fairness: null,
+            off_role_count: 2,
+          },
+        },
+      ],
     });
     expect(variant.stats.qualityScore).toBeNull();
     expect(variant.stats.lineGap).toBeNull();
     expect(variant.stats.offRoleCount).toBe(2);
   });
 
-  it("reads a payload stored without a variants wrapper", () => {
-    const variants = parseVariants({
-      teams: [{ roster: { tank: [{ uuid: "7", name: "karin" }] } }],
-    });
-    expect(variants).toHaveLength(1);
-    expect(variants[0].teams[0].seats[0].role).toBe("tank");
-  });
-
   it("degrades to an empty list instead of throwing on an unknown shape", () => {
     expect(parseVariants(null)).toEqual([]);
-    expect(parseVariants({ teams: "nope" })).toEqual([]);
+    expect(parseVariants({ variants: "nope" })).toEqual([]);
+    expect(parseVariants({ variants: [{ teams: [{ roster: ["7"] }] }] })[0].teams).toEqual([]);
+    // A seat whose uuid the players map does not know is dropped, not invented.
     expect(
-      parseVariants({ variants: [{ teams: [{ roster: [{ uuid: "7" }] }] }] })[0].teams,
+      parseVariants({ players: {}, variants: [{ teams: [{ roster: { tank: ["ghost"] } }] }] })[0].teams[0].seats,
     ).toEqual([]);
   });
 });

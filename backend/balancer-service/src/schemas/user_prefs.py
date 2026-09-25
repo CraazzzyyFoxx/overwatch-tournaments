@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from shared.domain.roster_shape import RosterSlotCode
 from shared.schemas.roster_slots import RosterShapeRead
+from src.services.balancer.config.defaults import MAX_RESULT_VARIANTS
 
 __all__ = (
     "MAX_POINTS_PER_WIN",
@@ -69,7 +70,7 @@ class UserMixPreferencesRead(BaseModel):
 
     mix_comfort_tilt: float | None = Field(default=None, ge=0.0, le=1.0, description=_TILT_DOC)
     mix_role_weights: _RoleWeights | None = Field(default=None, description=_WEIGHTS_DOC)
-    max_result_variants: int | None = Field(default=None, ge=1, le=500, description=_VARIANTS_DOC)
+    max_result_variants: int | None = Field(default=None, ge=1, le=MAX_RESULT_VARIANTS, description=_VARIANTS_DOC)
     role_mask: _RoleMask = Field(default=None, description=_MASK_DOC)
     points_per_win: int | None = Field(default=None, ge=0, le=MAX_POINTS_PER_WIN, description=_POINTS_DOC)
     roster_shape: RosterShapeRead = Field(description=_SHAPE_DOC)
@@ -82,6 +83,6 @@ class UserMixPreferencesUpsert(BaseModel):
 
     mix_comfort_tilt: float | None = Field(ge=0.0, le=1.0, description=_TILT_DOC)
     mix_role_weights: _RoleWeights | None = Field(description=_WEIGHTS_DOC)
-    max_result_variants: int | None = Field(ge=1, le=500, description=_VARIANTS_DOC)
+    max_result_variants: int | None = Field(ge=1, le=MAX_RESULT_VARIANTS, description=_VARIANTS_DOC)
     role_mask: _RoleMask = Field(description=_MASK_DOC)
     points_per_win: int | None = Field(ge=0, le=MAX_POINTS_PER_WIN, description=_POINTS_DOC)

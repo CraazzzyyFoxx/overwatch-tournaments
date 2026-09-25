@@ -21717,7 +21717,7 @@
         "max_result_variants": {
           "anyOf": [
             {
-              "maximum": 500,
+              "maximum": 100,
               "minimum": 1,
               "type": "integer"
             },
@@ -24857,7 +24857,7 @@
         "max_result_variants": {
           "anyOf": [
             {
-              "maximum": 500,
+              "maximum": 100,
               "minimum": 1,
               "type": "integer"
             },
@@ -24959,7 +24959,7 @@
         "max_result_variants": {
           "anyOf": [
             {
-              "maximum": 500,
+              "maximum": 100,
               "minimum": 1,
               "type": "integer"
             },

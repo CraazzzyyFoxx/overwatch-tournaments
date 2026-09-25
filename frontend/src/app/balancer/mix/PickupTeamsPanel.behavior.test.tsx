@@ -99,28 +99,27 @@ const onSwapSeats = vi.fn();
 const onUndoMatch = vi.fn();
 const onPostToDiscord = vi.fn();
 
-function variant(offset: number) {
+// One lobby, rated once: an option only says who sits where.
+const PLAYERS = {
+  "7": { name: "karin", ratings: { Tank: 2900, Damage: 3100 }, role_preferences: ["Tank"] },
+  "8": { name: "DemonDimon", ratings: { Tank: 3900, Damage: 4100 }, role_preferences: ["Tank", "Damage"] },
+  "9": { name: "Tolgrn", ratings: { Support: 3450 } },
+  "10": { name: "Egor" },
+};
+
+function variant(offset: number, [tank, damage]: [string, string] = ["7", "8"]) {
   return {
     teams: [
-      {
-        id: 1,
-        average_mmr: 3000 + offset,
-        roster: {
-          Tank: [{ uuid: "7", name: "karin", assigned_rating: 2900 + offset, role_preferences: ["Tank"] }],
-          Damage: [
-            { uuid: "8", name: "DemonDimon", assigned_rating: 4100, role_preferences: ["Tank", "Damage"] },
-          ],
-        },
-      },
-      {
-        id: 2,
-        average_mmr: 2950,
-        roster: { Support: [{ uuid: "9", name: "Tolgrn", assigned_rating: 3450 }] },
-      },
+      { id: 1, average_mmr: 3000 + offset, roster: { Tank: [tank], Damage: [damage] } },
+      { id: 2, average_mmr: 2950, roster: { Support: ["9"] } },
     ],
-    statistics: { composite_score: 0.87, mmr_std_dev: 12.34, off_role_count: 1 },
-    benched_players: [{ uuid: "10", name: "Egor" }],
+    statistics: { composite_score: 0.87, mmr_std_dev: 12.34, off_role_count: 1 } as Record<string, unknown>,
+    benched: ["10"],
   };
+}
+
+function lobby(variants: unknown[], feasibility: unknown = null) {
+  return { players: PLAYERS, feasibility, variants };
 }
 
 const SETTINGS = {
@@ -158,7 +157,8 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     name: "Thursday scrim",
     status: "balanced",
     settings: SETTINGS,
-    balance_result: { variants: [variant(0), variant(100), variant(200)] },
+    // The last option seats karin at damage, where she is rated 3100.
+    balance_result: lobby([variant(0), variant(100), variant(200, ["8", "7"])]),
     created_at: null,
     next_map_id: null,
     selected_variant_index: 0,
@@ -342,9 +342,9 @@ describe("PickupTeamsPanel", () => {
       off_role_count: 1,
       off_role_above_minimum: 0,
       sub_role_collision_count: 2,
-      feasibility: { structural_min_off_role: 1 },
-    } as unknown as typeof scored.statistics;
-    const scope = await mount(game({ balance_result: { variants: [scored] } }));
+    };
+    // The floor is the pool's, so the document carries it once, not per option.
+    const scope = await mount(game({ balance_result: lobby([scored], { structural_min_off_role: 1 }) }));
 
     expect(scope.textContent).toContain("QUALITY 41.50");
     expect(scope.textContent).toContain("LINES 119");
@@ -365,8 +365,8 @@ describe("PickupTeamsPanel", () => {
       mix_balancer_role_fairness: null,
       mmr_std_dev: 12.34,
       off_role_count: 1,
-    } as unknown as typeof swapped.statistics;
-    const scope = await mount(game({ balance_result: { variants: [swapped] } }));
+    };
+    const scope = await mount(game({ balance_result: lobby([swapped]) }));
 
     expect(scope.textContent).not.toContain("QUALITY");
     expect(scope.textContent).not.toContain("LINES");
@@ -406,7 +406,7 @@ describe("PickupTeamsPanel", () => {
   });
 
   it("clamps an index left pointing past a shorter result", async () => {
-    const scope = await mount(game({ balance_result: { variants: [variant(0)] } }), { variantIndex: 7 });
+    const scope = await mount(game({ balance_result: lobby([variant(0)]) }), { variantIndex: 7 });
 
     // One option left: the pager is gone and the first option is on screen.
     expect(pagerLabel(scope)).toBeUndefined();

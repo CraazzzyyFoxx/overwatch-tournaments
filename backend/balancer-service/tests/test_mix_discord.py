@@ -14,19 +14,25 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 from src.domain.mix_discord import build_lineup_embed  # noqa: E402
 
 
-def _seat(name: str, rating: int, uuid: str = "1") -> dict:
-    return {"uuid": uuid, "name": name, "assigned_rating": rating}
+def _document(*rosters: dict[str, list[tuple[str, int]]]) -> dict:
+    """A stored lobby document with one option: a team per roster of ``(name, rating)`` seats."""
+    players: dict[str, dict] = {}
+    teams = []
+    for roster in rosters:
+        for bucket, seats in roster.items():
+            for name, rating in seats:
+                players.setdefault(name, {"name": name, "ratings": {}})["ratings"][bucket] = rating
+        teams.append({"roster": {bucket: [name for name, _ in seats] for bucket, seats in roster.items()}})
+    return {"players": players, "variants": [{"teams": teams}]}
 
 
-def _variant(*rosters: dict) -> dict:
-    return {"teams": [{"roster": roster} for roster in rosters]}
-
-
-def _embed(variant: dict | None = None, **overrides) -> dict:
+def _embed(document: dict | None = None, **overrides) -> dict:
+    document = document if document is not None else _document()
     kwargs = {
         "mix_name": "Friday Scrim",
         "match_number": 1,
-        "variant": variant if variant is not None else _variant(),
+        "variant": document["variants"][0],
+        "players": document["players"],
         "team_names": {},
         "next_map": None,
         "points_per_win": None,
@@ -55,26 +61,26 @@ def test_description_says_so_before_anyone_rolled() -> None:
 
 
 def test_one_inline_field_per_team_named_by_the_override_or_its_number() -> None:
-    variant = _variant(
-        {"Tank": [_seat("Ana", 3000)]},
-        {"Tank": [_seat("Bob", 2900)]},
-        {"Tank": [_seat("Cid", 2800)]},
+    document = _document(
+        {"Tank": [("Ana", 3000)]},
+        {"Tank": [("Bob", 2900)]},
+        {"Tank": [("Cid", 2800)]},
     )
-    fields = _embed(variant, team_names={1: "Blue"})["fields"]
+    fields = _embed(document, team_names={1: "Blue"})["fields"]
 
     assert [field["name"] for field in fields] == ["Team 1", "Blue", "Team 3"]
     assert all(field["inline"] is True for field in fields)
 
 
 def test_seat_lines_follow_the_roster_buckets_with_human_role_labels() -> None:
-    variant = _variant(
+    document = _document(
         {
-            "Tank": [_seat("Ana", 3000)],
-            "Damage": [_seat("Bob", 2900), _seat("Cid", 2800)],
-            "Support": [_seat("Dee", 2700)],
+            "Tank": [("Ana", 3000)],
+            "Damage": [("Bob", 2900), ("Cid", 2800)],
+            "Support": [("Dee", 2700)],
         }
     )
-    value = _embed(variant)["fields"][0]["value"]
+    value = _embed(document)["fields"][0]["value"]
 
     assert value.splitlines() == [
         "Tank · Ana · 3000",
@@ -85,7 +91,7 @@ def test_seat_lines_follow_the_roster_buckets_with_human_role_labels() -> None:
 
 
 def test_an_unrecognised_bucket_keeps_its_own_key_as_the_label() -> None:
-    value = _embed(_variant({"Goalie": [_seat("Ana", 3000)]}))["fields"][0]["value"]
+    value = _embed(_document({"Goalie": [("Ana", 3000)]}))["fields"][0]["value"]
     assert value == "Goalie · Ana · 3000"
 
 
@@ -96,8 +102,8 @@ def test_footer_only_appears_when_the_mix_plays_for_points() -> None:
 
 def test_a_lineup_past_the_field_limit_is_cut_short_with_a_marker() -> None:
     """Discord rejects a field value over 1024 characters outright."""
-    seats = [_seat(f"Player {index:02d}", 2500 + index, uuid=str(index)) for index in range(60)]
-    value = _embed(_variant({"Tank": seats}))["fields"][0]["value"]
+    seats = [(f"Player {index:02d}", 2500 + index) for index in range(60)]
+    value = _embed(_document({"Tank": seats}))["fields"][0]["value"]
 
     assert len(value) <= 1024
     assert value.endswith("\n…")

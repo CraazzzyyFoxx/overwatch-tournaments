@@ -25,6 +25,7 @@ from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
+from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
 from src.services.custom_game import _MAX_CO_HOSTS, CustomGameService  # noqa: E402
 
 
@@ -695,8 +696,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.roster.list_for_game.return_value = roster
         self.ranks.resolve.return_value = _ranks(7, 8, 9)
         self.run_balance.return_value = {
-            "teams": [{"roster": {"tank": [{"uuid": "7"}, {"uuid": "8"}]}}],
-            "benched_players": [{"uuid": "9", "name": "P9"}],
+            "players": {"7": {"name": "P7"}, "8": {"name": "P8"}, "9": {"name": "P9"}},
+            "variants": [{"teams": [{"roster": {"tank": ["7", "8"]}}], "statistics": {}, "benched": ["9"]}],
         }
 
         await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=9)
@@ -899,7 +900,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         self.team_names.mapping_for_game.return_value = {0: "Wolves"}
 
         game = await self.service.record_outcome(
@@ -949,7 +950,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         # 7 and 9 took a seat in this match; 8 is pinned for the next one and
         # never played, so its guarantee is still owed.
         pinned_played = _roster_row(1, 7, 0, participation=MixParticipation.MUST_PLAY)
@@ -984,7 +985,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         self.maps.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
 
         await self.service.record_outcome(
@@ -1011,7 +1012,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        game = _game(status="balanced", balance_result_json=result, next_map_id=42)
+        game = _game(status="balanced", balance_result_json=lobby_document(result["variants"]), next_map_id=42)
         self.games.get.return_value = game
 
         await self.service.record_outcome(
@@ -1039,7 +1040,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        game = _game(status="balanced", balance_result_json=result, next_map_id=42)
+        game = _game(status="balanced", balance_result_json=lobby_document(result["variants"]), next_map_id=42)
         self.games.get.return_value = game
         self.maps.get = AsyncMock(return_value=_row(id=5, name="Busan"))
 
@@ -1093,7 +1094,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
 
         await self.service.record_outcome(
             self.session,
@@ -1118,7 +1119,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
 
         await self.service.record_outcome(
             self.session,
@@ -1147,7 +1148,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         # The HOST's knob, off the host's own account row -- not the mix's and
         # not the recording co-host's.
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
@@ -1188,7 +1189,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
 
         await self.service.record_outcome(
@@ -1213,7 +1214,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         self.ranks.list_layer = AsyncMock(return_value={})
 
@@ -1240,7 +1241,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
 
         await self.service.record_outcome(
@@ -1429,7 +1430,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_set_variant_index_pages_the_mix_for_every_viewer(self) -> None:
         result = {"variants": [{"teams": []}, {"teams": []}, {"teams": []}]}
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
 
         game = await self.service.set_variant_index(
             self.session, workspace_id=1, custom_game_id=11, variant_index=2, actor_user_id=9
@@ -1439,7 +1440,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_set_variant_index_past_the_stored_options_404(self) -> None:
         result = {"variants": [{"teams": []}]}
-        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.set_variant_index(
@@ -1500,7 +1501,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 },
             ]
         }
-        self.games.get.return_value = _game(next_map_id=42, balance_result_json=result)
+        self.games.get.return_value = _game(next_map_id=42, balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         self.team_names.mapping_for_game.return_value = {0: "Blue"}
         self.casual_matches.activity_for_games = AsyncMock(return_value={11: (3, datetime(2026, 1, 1, 20, 0))})
@@ -1970,43 +1971,44 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         seat.update(overrides)
         return seat
 
-    def _two_team_result(self) -> dict[str, object]:
+    def _two_team_payload(self) -> dict[str, object]:
+        """One two-team option as the solver emits it (``teams_to_json``)."""
         return {
-            "variants": [
+            "teams": [
                 {
-                    "teams": [
-                        {
-                            "id": 1,
-                            "average_mmr": 3050,
-                            "roster": {
-                                "tank": [self._seat("p1", "Alpha", 3200, "tank")],
-                                "damage": [self._seat("p2", "Bravo", 2900, "damage")],
-                            },
-                        },
-                        {
-                            "id": 2,
-                            "average_mmr": 2800,
-                            "roster": {
-                                "tank": [self._seat("p3", "Charlie", 2600, "tank")],
-                                "damage": [self._seat("p4", "Delta", 3000, "damage")],
-                            },
-                        },
-                    ],
-                    "statistics": {
-                        "composite_score": 0.87,
-                        "mix_balancer_quality_total": 41.5,
-                        "mix_balancer_fairness": 30.0,
-                        "mix_balancer_uniformity": 4.0,
-                        "mix_balancer_role_fairness": 5.5,
-                        "mix_balancer_role_points": 2.0,
-                        "mmr_std_dev": 10.0,
-                        "max_total_rating_gap": 50,
-                        "off_role_count": 0,
+                    "id": 1,
+                    "average_mmr": 3050,
+                    "roster": {
+                        "tank": [self._seat("p1", "Alpha", 3200, "tank")],
+                        "damage": [self._seat("p2", "Bravo", 2900, "damage")],
                     },
-                    "benched_players": [],
-                }
-            ]
+                },
+                {
+                    "id": 2,
+                    "average_mmr": 2800,
+                    "roster": {
+                        "tank": [self._seat("p3", "Charlie", 2600, "tank")],
+                        "damage": [self._seat("p4", "Delta", 3000, "damage")],
+                    },
+                },
+            ],
+            "statistics": {
+                "composite_score": 0.87,
+                "mix_balancer_quality_total": 41.5,
+                "mix_balancer_fairness": 30.0,
+                "mix_balancer_uniformity": 4.0,
+                "mix_balancer_role_fairness": 5.5,
+                "mix_balancer_role_points": 2.0,
+                "mmr_std_dev": 10.0,
+                "max_total_rating_gap": 50,
+                "off_role_count": 0,
+            },
+            "benched_players": [],
         }
+
+    def _two_team_result(self) -> dict[str, object]:
+        """What ``run_mix_balance`` stores for that option."""
+        return lobby_document([self._two_team_payload()])
 
     async def test_swap_seats_swaps_players_and_recomputes_stats(self) -> None:
         self.games.get.return_value = _game(balance_result_json=self._two_team_result())
@@ -2022,8 +2024,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
         teams = game.balance_result_json["variants"][0]["teams"]
-        self.assertEqual(teams[0]["roster"]["tank"][0]["uuid"], "p3")
-        self.assertEqual(teams[1]["roster"]["tank"][0]["uuid"], "p1")
+        self.assertEqual(teams[0]["roster"]["tank"], ["p3"])
+        self.assertEqual(teams[1]["roster"]["tank"], ["p1"])
         # Team 1 is now Charlie(2600)+Bravo(2900) = 5500/2 = 2750; team 2 is
         # now Alpha(3200)+Delta(3000) = 6200/2 = 3100.
         self.assertEqual(teams[0]["average_mmr"], 2750.0)
@@ -2036,6 +2038,26 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         # for that run -- meaningless for a single hand-edited arrangement, so
         # a manual swap clears it rather than leaving a now-fabricated number.
         self.assertIsNone(statistics["composite_score"])
+
+    async def test_swap_seats_upgrades_a_document_stored_in_the_old_form(self) -> None:
+        # A mix balanced before the lobby form stored the solver's payloads
+        # verbatim; a swap on it must work and write back the lobby form.
+        self.games.get.return_value = _game(balance_result_json={"variants": [self._two_team_payload()]})
+
+        game = await self.service.swap_seats(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            variant_index=0,
+            first_uuid="p1",
+            second_uuid="p3",
+            actor_user_id=9,
+        )
+
+        stored = game.balance_result_json
+        self.assertEqual(stored["variants"][0]["teams"][0]["roster"]["tank"], ["p3"])
+        self.assertEqual(stored["players"]["p1"]["ratings"], {"tank": 3200})
+        self.assertEqual(stored["variants"][0]["teams"][1]["total_rating"], 6200.0)
 
     async def test_swap_seats_clears_every_engine_scored_metric(self) -> None:
         # The mix engine's four terms and their total describe the seating it
@@ -2071,7 +2093,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         result = self._two_team_result()
         # Bravo actually prefers tank but was seated at damage -- already off-role
         # before the swap, and moving them must not silently "fix" that count.
-        result["variants"][0]["teams"][0]["roster"]["damage"][0]["role_preferences"] = ["tank", "damage"]
+        result["players"]["p2"]["role_preferences"] = ["tank", "damage"]
         self.games.get.return_value = _game(balance_result_json=result)
 
         game = await self.service.swap_seats(
@@ -2103,7 +2125,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_swap_seats_rejects_the_same_team(self) -> None:
         result = self._two_team_result()
-        result["variants"][0]["teams"][0]["roster"]["tank"].append(self._seat("p5", "Echo", 3100, "tank"))
+        result["variants"][0]["teams"][0]["roster"]["tank"].append("p5")
+        result["players"]["p5"] = {"name": "Echo", "ratings": {"tank": 3100}}
         self.games.get.return_value = _game(balance_result_json=result)
         with self.assertRaises(HTTPException) as ctx:
             await self.service.swap_seats(

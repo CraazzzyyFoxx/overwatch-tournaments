@@ -36,6 +36,10 @@ ConfigControl = typing.Literal["integer", "float", "boolean", "slider"]
 # API happily accepted 1e9 — the bound is now the field's own.
 MAX_WEIGHT = 10000.0
 
+# Most balance options one run hands back, whichever solver. Past a hundred
+# nobody pages further, and every option is shipped and (for a mix) stored.
+MAX_RESULT_VARIANTS = 100
+
 
 def knob(label: str, group: ConfigGroup, control: ConfigControl | None = None) -> dict[str, typing.Any]:
     """Mark a field operator-editable and give it its drawer presentation.
@@ -394,7 +398,7 @@ class AlgorithmConfig(BaseSettings):
     max_result_variants: int = Field(
         default=10,
         ge=1,
-        le=500,
+        le=MAX_RESULT_VARIANTS,
         description="Maximum number of solution variants returned by the selected solver.",
         json_schema_extra=knob("Result variants", "Solver output"),
     )
