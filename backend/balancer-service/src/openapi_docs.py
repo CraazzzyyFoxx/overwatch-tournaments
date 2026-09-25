@@ -438,7 +438,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.players.upsert": {
         "summary": "Upsert workspace player",
-        "description": "Permission: workspace membership (any role); no resource grant is checked. Creates or reuses a workspace member for a BattleTag and returns it shaped exactly like a roster row; 422 when battle_tag is missing or blank.",
+        "description": "Permission: workspace member holding team.create or custom_game.create (a mix host); setting display_name requires team.create. Creates or reuses a workspace member for a BattleTag and returns it shaped exactly like a roster row; 422 when battle_tag is missing or blank.",
     },
     "rpc.balancer.players.set_ranks": {
         "summary": "Set workspace player ranks",
