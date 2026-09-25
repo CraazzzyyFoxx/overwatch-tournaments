@@ -456,7 +456,12 @@ class AuthUserRepository(BaseRepository[models.AuthUser]):
             await session.scalar(
                 sa.select(sa.literal(True))
                 .select_from(models.AuthUser)
-                .where(sa.or_(models.AuthUser.email == email, models.AuthUser.username == username))
+                .where(
+                    sa.or_(
+                        models.AuthUser.email == email,
+                        sa.func.lower(models.AuthUser.username) == username.lower(),
+                    )
+                )
                 .limit(1)
             )
         ) is True
@@ -467,14 +472,28 @@ class AuthUserRepository(BaseRepository[models.AuthUser]):
             query = query.where(models.AuthUser.id != exclude_user_id)
         return (await session.scalar(query)) is True
 
+    async def username_taken(self, session: AsyncSession, username: str, *, exclude_user_id: int) -> bool:
+        """Case-insensitive: ``Anak`` and ``anak`` are the same name to a reader."""
+        query = (
+            sa.select(sa.literal(True))
+            .select_from(models.AuthUser)
+            .where(
+                sa.func.lower(models.AuthUser.username) == username.lower(),
+                models.AuthUser.id != exclude_user_id,
+            )
+            .limit(1)
+        )
+        return (await session.scalar(query)) is True
+
     async def usernames_with_prefix(self, session: AsyncSession, prefix: str) -> set[str]:
-        """Every taken username starting with ``prefix``.
+        """Every taken username starting with ``prefix``, lowercased.
 
         Lets the OAuth signup pick a free ``name``/``name1``/``name2`` suffix in
-        one round trip instead of probing the table once per candidate.
+        one round trip instead of probing the table once per candidate. Matched
+        case-insensitively, like every other username collision check.
         """
         result = await session.execute(
-            sa.select(models.AuthUser.username).where(models.AuthUser.username.like(f"{prefix}%"))
+            sa.select(sa.func.lower(models.AuthUser.username)).where(models.AuthUser.username.ilike(f"{prefix}%"))
         )
         return set(result.scalars().all())
 

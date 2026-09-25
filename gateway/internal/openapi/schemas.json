@@ -5561,7 +5561,7 @@
       "summary": "Update API key"
     },
     "rpc.identity.update_me": {
-      "description": "Permission: authenticated (active) user, session bearer only; self-service. Applies a partial profile update to the active user and returns the updated user.",
+      "description": "Permission: authenticated (active) user, session bearer only; self-service. Applies a partial profile update to the active user and returns the updated user. Changing `username` is refused when the caller carries an `account.rename` deny, and with 400 when another account already holds that name (compared case-insensitively).",
       "request": {
         "array": false,
         "ref": "identity.UserUpdate"
@@ -28001,8 +28001,6 @@
           "type": "string"
         },
         "username": {
-          "maxLength": 50,
-          "minLength": 3,
           "title": "Username",
           "type": "string"
         }
@@ -28098,6 +28096,18 @@
           ],
           "default": null,
           "title": "Last Name"
+        },
+        "username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Username"
         }
       },
       "title": "UserUpdate",

@@ -1018,7 +1018,11 @@ def test_the_lobby_read_refuses_a_duel_and_an_unknown_encounter(db_session) -> N
 
 
 async def _seed_account(session: Any, name: str) -> tuple[int, int, str]:
-    """An auth account with a linked player: ``(auth_user_id, player_id, name)``."""
+    """An auth account with a linked player: ``(auth_user_id, player_id, username)``.
+
+    No BattleTag and no registration, so inside a tournament the account goes
+    by its site name (``tournament_display_name``'s floor).
+    """
     suffix = uuid.uuid4().hex[:12]
     auth_user = AuthUser(email=f"{name}-{suffix}@example.com", username=f"{name}-{suffix}")
     session.add(auth_user)
@@ -1026,7 +1030,7 @@ async def _seed_account(session: Any, name: str) -> tuple[int, int, str]:
     player = User(name=f"{name} {suffix}", auth_user_id=auth_user.id)
     session.add(player)
     await session.flush()
-    return auth_user.id, player.id, player.name
+    return auth_user.id, player.id, auth_user.username
 
 
 async def _caller(session: Any, auth_user_id: int) -> AuthUser:

@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import EncounterFormat
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.repository import UserRepository
 from shared.services.chat import SPECTATOR_ROLE, ChatMembership, ChatRoom, ChatService
+from shared.services.tournament.display_name import tournament_display_name
 from shared.services.tournament.visibility import assert_tournament_viewable
 from src import models
 from src.core import auth
@@ -30,14 +30,6 @@ _SPECTATOR = ChatMembership(role=SPECTATOR_ROLE, display_name="", can_write=Fals
 
 
 class EncounterChatAccess:
-    def __init__(self, *, user_repo: UserRepository = UserRepository()) -> None:
-        self.user_repo = user_repo
-
-    async def _display_name(self, session: AsyncSession, auth_user: models.AuthUser) -> str:
-        player = await self.user_repo.get_by_auth_user_id(session, auth_user.id)
-        # Staff need not be players, so the auth account's own name is the floor.
-        return (player.name if player is not None else None) or auth_user.username
-
     async def resolve(
         self,
         session: AsyncSession,
@@ -74,7 +66,7 @@ class EncounterChatAccess:
         if side:
             return ChatMembership(
                 role=side,
-                display_name=await self._display_name(session, auth_user),
+                display_name=await tournament_display_name(session, auth_user=auth_user, tournament_id=tournament_id),
                 can_write=True,
                 can_moderate=False,
             )
@@ -93,7 +85,7 @@ class EncounterChatAccess:
         if auth_user.has_admin_panel_access(workspace_id):
             return ChatMembership(
                 role="staff",
-                display_name=await self._display_name(session, auth_user),
+                display_name=await tournament_display_name(session, auth_user=auth_user, tournament_id=tournament_id),
                 can_write=True,
                 can_moderate=True,
             )

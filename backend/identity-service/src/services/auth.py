@@ -12,6 +12,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
@@ -297,6 +298,14 @@ class AuthenticationService:
         user: models.AuthUser,
         payload: schemas.UserUpdate,
     ) -> models.AuthUser:
+        if payload.username is not None and payload.username != user.username:
+            if user.is_denied("account", "rename"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="You are not allowed to change your name"
+                )
+            if await self.auth_users_repo.username_taken(session, payload.username, exclude_user_id=user.id):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This name is already taken")
+            user.username = payload.username
         if payload.first_name is not None:
             user.first_name = payload.first_name
         if payload.last_name is not None:
@@ -312,7 +321,14 @@ class AuthenticationService:
             # "swap email -> take over via OAuth" chain.
             user.is_verified = False
 
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            # A concurrent write to the same name (or email) won the unique index.
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="This name or email is already taken"
+            ) from exc
         await session.refresh(user)
         return user
 

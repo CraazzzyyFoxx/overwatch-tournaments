@@ -41,6 +41,12 @@ const RESTRICTABLE: PermissionCatalogEntry[] = [
     description: "Change own avatar"
   },
   {
+    key: "account.rename",
+    resource: "account",
+    action: "rename",
+    description: "Change own name"
+  },
+  {
     key: "account.social",
     resource: "account",
     action: "social",

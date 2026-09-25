@@ -76,7 +76,7 @@ Permissions are a flat catalogue of `resource.action` grants (`tournament.update
 | `member` | `*.read` on the community's domain resources only |
 | `player` | Nothing |
 
-Separate from those are capabilities allowed by default for everyone: `account.avatar`, `account.social`, `registration.self_register`, `workspace.self_create`. They exist not to be granted but so they can be taken away from one account.
+Separate from those are capabilities allowed by default for everyone: `account.avatar`, `account.rename`, `account.social`, `registration.self_register`, `workspace.self_create`. They exist not to be granted but so they can be taken away from one account.
 
 Taking them away is the job of the **deny overlay**: a per-account record saying "this account is denied `resource.action`", either globally or scoped to one workspace. A deny beats every grant, superuser included, but it matches exactly: it is never a wildcard, so denying `tournament.update` leaves `tournament.delete` untouched.
 

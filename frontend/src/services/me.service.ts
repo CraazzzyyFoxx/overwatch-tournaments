@@ -56,6 +56,14 @@ const meService = {
     await apiFetch("/api/v1/auth/me", { method: "DELETE" });
   },
 
+  /** Rename the current account (its site-wide name). 400 when another account
+   *  already holds the name (case-insensitive), 403 under an `account.rename`
+   *  deny. The access token still carries the old name until it is refreshed. */
+  async updateUsername(username: string): Promise<unknown> {
+    const res = await apiFetch("/api/v1/auth/me", { method: "PATCH", body: { username } });
+    return res.json();
+  },
+
   async setAvatar(file: File): Promise<unknown> {
     // The gateway's POST /api/v1/auth/me/avatar handler expects a multipart form
     // with a "file" field — it base64-encodes the upload into the RPC body

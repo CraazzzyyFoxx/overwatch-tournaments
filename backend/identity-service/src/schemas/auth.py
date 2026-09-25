@@ -1,10 +1,15 @@
 import re
+import unicodedata
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 __all__ = (
+    "USERNAME_MAX_LENGTH",
+    "USERNAME_MIN_LENGTH",
+    "normalize_username",
+    "suggest_username",
     "UserRegister",
     "UserLogin",
     "Token",
@@ -22,12 +27,51 @@ __all__ = (
     "WorkspaceMembership",
 )
 
+# The one account-name rule, for every way a name is set: password signup,
+# self-service rename, and the seed an OAuth signup derives from the provider.
+# Any script's letters and digits (Cyrillic battletags and Discord names are
+# the norm here) plus ``_``, ``-`` and ``.``; no spaces, so the name can still
+# be shown as an ``@handle``.
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 32
+_USERNAME_RE = re.compile(r"^[\w.-]+$")
+_USERNAME_JUNK_RE = re.compile(r"[^\w.-]+")
+# BattleTag discriminator: "Name#1234" -> "Name".
+_DISCRIMINATOR_RE = re.compile(r"\s*#\s*\d+\s*$")
+
+
+def normalize_username(value: str) -> str:
+    """Validate an account name and return its stored form (NFKC, trimmed).
+
+    NFKC folds full-width and compatibility look-alikes onto their plain form,
+    so two names that render the same cannot both be taken.
+    """
+    name = unicodedata.normalize("NFKC", value).strip()
+    if not USERNAME_MIN_LENGTH <= len(name) <= USERNAME_MAX_LENGTH:
+        raise ValueError(f"Username must be {USERNAME_MIN_LENGTH}-{USERNAME_MAX_LENGTH} characters long")
+    if not _USERNAME_RE.match(name):
+        raise ValueError("Username can only contain letters, numbers, underscores, hyphens and dots")
+    return name
+
+
+def suggest_username(raw: str | None, fallback: str) -> str:
+    """A valid account name derived from a provider's display name.
+
+    Same rule for every provider: the name people see there, minus provider
+    decoration (the BattleTag ``#1234``), squeezed into ``normalize_username``'s
+    grammar. ``fallback`` (already valid) covers a name with nothing usable left.
+    """
+    text = unicodedata.normalize("NFKC", raw or "")
+    text = _DISCRIMINATOR_RE.sub("", text)
+    text = _USERNAME_JUNK_RE.sub("_", text).strip("_")[:USERNAME_MAX_LENGTH]
+    return text if len(text) >= USERNAME_MIN_LENGTH else fallback
+
 
 class UserRegister(BaseModel):
     """Schema for user registration"""
 
     email: EmailStr
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str
     password: str = Field(..., min_length=8, max_length=100)
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
@@ -35,9 +79,7 @@ class UserRegister(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
-            raise ValueError("Username can only contain letters, numbers, underscores and hyphens")
-        return v
+        return normalize_username(v)
 
     @field_validator("password")
     @classmethod
@@ -270,9 +312,15 @@ class AuthUser(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for user update"""
 
+    username: str | None = None
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
     email: EmailStr | None = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str | None) -> str | None:
+        return None if v is None else normalize_username(v)
 
 
 class ServiceTokenRequest(BaseModel):
