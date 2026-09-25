@@ -265,7 +265,7 @@ export function RoleRankControls({
         >
           {divisionNumber != null ? (
             <>
-              <DivisionIcon division={divisionNumber} width={20} height={20} />
+              <DivisionIcon division={divisionNumber} tournamentGrid={grid} width={20} height={20} />
               <div className="min-w-0">
                 <div className="truncate text-label font-medium text-[color:var(--aqt-fg-muted)]">
                   {divisionName ?? `Division ${divisionNumber}`}

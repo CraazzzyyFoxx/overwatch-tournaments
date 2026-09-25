@@ -34,7 +34,6 @@ globalThis.ResizeObserver ??= class {
 } as unknown as typeof ResizeObserver;
 
 vi.mock("@/components/PlayerRoleIcon", () => ({ default: () => null }));
-vi.mock("@/components/DivisionIcon", () => ({ default: () => null }));
 vi.mock("@/components/RankHistory", () => ({ default: () => null }));
 // Drag itself is not what this pins, and dnd-kit resolves its own React copy
 // under pnpm, so the sortable wrapper and its hook render inertly here.
@@ -231,6 +230,11 @@ describe("PickupPlayerSheet ranks", () => {
 
     expect(scope.textContent).toContain("Diamond 2");
     expect(scope.textContent).not.toContain("Gold");
+    // The crest has to come off the same ladder as the label beside it; it used
+    // to fall back to the workspace grid and show Gold's icon under "Diamond 2".
+    const crests = [...scope.querySelectorAll("img")].map((img) => img.alt);
+    expect(crests).toContain("Diamond 2");
+    expect(crests).not.toContain("Gold");
   });
 });
 
