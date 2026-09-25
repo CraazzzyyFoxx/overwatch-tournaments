@@ -232,12 +232,20 @@ jobs:
           # attaches the container to stdin, and on the first attempt it ate the
           # rest of the script -- the deploy stopped silently after the migration
           # step and still exited 0.
+          #
+          # Keepalives: `docker compose pull --quiet` prints nothing for minutes
+          # while a release's new layers download, and the v1.20.1 deploy lost
+          # the session ("Connection reset by peer") ~5 min into such a silence,
+          # mid-pull. A dropped session kills the remote script wherever it is --
+          # during `prod-up` that is a half-restarted stack.
           {
             printf 'TAG=%q\nPROD_SIZE=%q\nGHCR_USER=%q\nGHCR_TOKEN=%q\n' \
               "$TAG" "$PROD_SIZE" "$GHCR_USER" "$GHCR_TOKEN"
             printf 'export TAG PROD_SIZE GHCR_USER GHCR_TOKEN\n'
             cat ops/deploy/remote-deploy.sh
-          } | ssh -i ~/.ssh/deploy_key -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+          } | ssh -i ~/.ssh/deploy_key -o BatchMode=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
             'set -e; f=$(mktemp /tmp/owt-deploy.XXXXXX.sh); trap "rm -f $f" EXIT; cat > "$f"; bash "$f"'
 
   release:
