@@ -58,7 +58,7 @@ def _auth_user(
 
 class _Ctx:
     """Patch set shared by every case: encounter load, tournament visibility,
-    captain side, workspace and the linked-player name lookup."""
+    captain side, workspace and the in-tournament name lookup."""
 
     def __init__(self, *, captain_side: str | None, viewable: bool = True) -> None:
         side_mock = (
@@ -88,9 +88,15 @@ class _Ctx:
             patch.object(chat_access.captain_service, "resolve_captain_side", side_mock),
             patch.object(chat_access.auth, "get_encounter_workspace_id", AsyncMock(return_value=WORKSPACE_ID)),
             patch.object(
-                chat_access.encounter_chat_service.access,
-                "user_repo",
-                SimpleNamespace(get_by_auth_user_id=AsyncMock(return_value=SimpleNamespace(name="Fox"))),
+                chat_access,
+                "tournament_display_name",
+                # Keyed on the encounter's tournament: a tag from another
+                # tournament's registration must not name you here.
+                AsyncMock(
+                    side_effect=lambda _s, *, auth_user, tournament_id: "Fox#2112"
+                    if tournament_id == TOURNAMENT_ID
+                    else auth_user.username
+                ),
             ),
         ]
 
@@ -112,7 +118,7 @@ class EncounterChatAccessTest(IsolatedAsyncioTestCase):
         with _Ctx(captain_side="home"):
             membership = await _resolve(_auth_user())
         self.assertEqual(membership.role, "home")
-        self.assertEqual(membership.display_name, "Fox")
+        self.assertEqual(membership.display_name, "Fox#2112")
         self.assertTrue(membership.can_write)
         self.assertFalse(membership.can_moderate)
 

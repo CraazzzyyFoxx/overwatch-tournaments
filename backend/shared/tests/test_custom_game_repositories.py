@@ -50,3 +50,13 @@ class CustomGameRepositoryTests(IsolatedAsyncioTestCase):
         result = await custom_game.CustomGameTeamNameRepository().mapping_for_game(session, 11)
 
         self.assertEqual(result, {0: "Wolves", 1: "Bears"})
+
+    async def test_team_names_for_a_mix_list_are_grouped_per_game(self) -> None:
+        session = _session()
+        session.execute.return_value = SimpleNamespace(
+            all=lambda: [(11, 0, "Wolves"), (12, 1, "Ravens"), (11, 1, "Bears")]
+        )
+
+        result = await custom_game.CustomGameTeamNameRepository().mapping_for_games(session, [11, 12, 13])
+
+        self.assertEqual(result, {11: {0: "Wolves", 1: "Bears"}, 12: {1: "Ravens"}})

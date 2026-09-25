@@ -1,10 +1,13 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Eye, EyeOff, Plus, Star, Unlink } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { SocialIcon } from "@/components/social/SocialIcon";
@@ -14,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { usePermissions } from "@/hooks/usePermissions";
 import meService from "@/services/me.service";
+import { refreshAccessToken } from "@/lib/auth/tokens";
 import { revalidateUser } from "@/app/actions/users";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
@@ -29,6 +33,7 @@ export default function MyAccountSection() {
   const fetchMe = useAuthProfileStore((s) => s.fetchMe);
   const { canUseCapability } = usePermissions();
   const canAvatar = canUseCapability("account.avatar");
+  const canRename = canUseCapability("account.rename");
   const canSocial = canUseCapability("account.social");
   const queryClient = useQueryClient();
 
@@ -38,6 +43,16 @@ export default function MyAccountSection() {
     enabled: canSocial,
   });
   const accounts = sortSocialAccounts(socialQuery.data?.social_accounts ?? []);
+
+  const currentName = user?.username ?? "";
+  const [name, setName] = useState(currentName);
+  // Re-seed the field when the profile's name changes (load, save, refetch).
+  const [seededName, setSeededName] = useState(currentName);
+  if (seededName !== currentName) {
+    setSeededName(currentName);
+    setName(currentName);
+  }
+  const trimmedName = name.trim();
 
   // Persist the fresh user into the query cache AND bust the Next Data Cache so
   // the public users/[slug] header / list / search reflect the change at once.
@@ -62,6 +77,20 @@ export default function MyAccountSection() {
       fetchMe({ force: true });
     },
   });
+  const rename = useMutation({
+    mutationFn: (username: string) => meService.updateUsername(username),
+    onSuccess: async () => {
+      // The access token carries the name too (audit labels, chat fallback):
+      // re-issue it so the rest of the platform stops seeing the old one.
+      await refreshAccessToken();
+      fetchMe({ force: true });
+      notify.success(t("name.saved"));
+    },
+  });
+  const submitName = (event: FormEvent) => {
+    event.preventDefault();
+    if (trimmedName && trimmedName !== currentName) rename.mutate(trimmedName);
+  };
   const setPrimary = useMutation({
     mutationFn: (id: number) => meService.setSocialPrimary(id),
     onSuccess: writeSocial,
@@ -90,6 +119,32 @@ export default function MyAccountSection() {
 
   return (
     <div className="space-y-8">
+      <SettingsGroup title={t("name.title")} description={canRename ? t("name.hint") : t("name.disabled")}>
+        <form className="flex max-w-md items-end gap-2" onSubmit={submitName}>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Label htmlFor="account-username" className="sr-only">
+              {t("name.label")}
+            </Label>
+            <Input
+              id="account-username"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={32}
+              autoComplete="nickname"
+              spellCheck={false}
+              disabled={!canRename || rename.isPending}
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={!canRename || rename.isPending || !trimmedName || trimmedName === currentName}
+          >
+            {t("name.save")}
+          </Button>
+        </form>
+        <p className="text-caption text-pretty text-[color:var(--aqt-fg-dim)]">{t("name.rules")}</p>
+      </SettingsGroup>
+
       <SettingsGroup title={t("avatar.title")}>
         <div className="flex items-center gap-4">
           <EditableAvatar

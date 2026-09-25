@@ -59,6 +59,7 @@ type SpecialPermission =
   | "stream.read"
   | "stream.update"
   | "account.avatar"
+  | "account.rename"
   | "account.social"
   | "registration.self_register"
   | "workspace.self_create";

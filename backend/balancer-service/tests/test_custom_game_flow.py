@@ -45,7 +45,7 @@ class _Games:
         self.rows[row.id] = row
         return row
 
-    async def get(self, _session: Any, game_id: int) -> Any:
+    async def get(self, _session: Any, game_id: int, **_options: Any) -> Any:
         return self.rows.get(game_id)
 
     async def list_for_workspace(self, _session: Any, workspace_id: int) -> list[Any]:

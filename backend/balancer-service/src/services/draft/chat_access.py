@@ -19,8 +19,8 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
 from shared.repository.draft import DraftSessionRepository, DraftTeamRepository
-from shared.repository.identity import UserRepository
 from shared.services.chat import SPECTATOR_ROLE, ChatMembership, ChatRoom, ChatService
+from shared.services.tournament.display_name import tournament_display_name
 from shared.services.tournament.visibility import assert_tournament_viewable
 
 __all__ = ("DraftChatAccess", "draft_chat_service")
@@ -36,17 +36,9 @@ class DraftChatAccess:
         *,
         sessions_repo: DraftSessionRepository = DraftSessionRepository(),
         teams_repo: DraftTeamRepository = DraftTeamRepository(),
-        user_repo: UserRepository = UserRepository(),
     ) -> None:
         self.sessions_repo = sessions_repo
         self.teams_repo = teams_repo
-        self.user_repo = user_repo
-
-    async def _display_name(self, session: AsyncSession, auth_user: AuthUser) -> str:
-        player = await self.user_repo.get_by_auth_user_id(session, auth_user.id)
-        # Staff (and a captain seated before they linked a player) need not be
-        # players, so the auth account's own name is the floor.
-        return (player.name if player is not None else None) or auth_user.username
 
     async def resolve(
         self,
@@ -74,7 +66,9 @@ class DraftChatAccess:
         if any(team.captain_auth_user_id == auth_user.id for team in teams):
             return ChatMembership(
                 role="captain",
-                display_name=await self._display_name(session, auth_user),
+                display_name=await tournament_display_name(
+                    session, auth_user=auth_user, tournament_id=draft.tournament_id
+                ),
                 can_write=True,
                 can_moderate=False,
             )
@@ -89,7 +83,9 @@ class DraftChatAccess:
         if auth_user.has_admin_panel_access(draft.workspace_id):
             return ChatMembership(
                 role="staff",
-                display_name=await self._display_name(session, auth_user),
+                display_name=await tournament_display_name(
+                    session, auth_user=auth_user, tournament_id=draft.tournament_id
+                ),
                 can_write=True,
                 can_moderate=True,
             )

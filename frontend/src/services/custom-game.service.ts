@@ -107,8 +107,12 @@ export type CustomGame = {
   name: string;
   status: CustomGameStatus;
   settings: CustomGameSettings;
-  /** The solver's own document for the last balance, or `null` before one. */
-  balance_result: unknown;
+  /**
+   * The solver's own document for the last balance, or `null` before one.
+   * Detail reads and writes only -- `list` rows leave it out (it runs to
+   * megabytes once a mix is balanced).
+   */
+  balance_result?: unknown;
   /**
    * Which option of `balance_result` the mix is showing. Server-held because
    * the host's pager is the lobby's pager: every viewer renders this index,

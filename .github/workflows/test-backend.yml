@@ -13,7 +13,7 @@ on:
 
 jobs:
   test-backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Safety net: DB-integration tests skip when the database is unreachable
     # (connection refused is instant on Linux). If that ever regresses into a
     # hang, fail fast instead of burning a full-length runner slot.
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       # Each service is its own uv-workspace package with its own `src`, so the

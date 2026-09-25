@@ -48,7 +48,7 @@ permissions:
 
 jobs:
   meta:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       tag: ${{ steps.pick.outputs.tag }}
     steps:
@@ -108,7 +108,7 @@ jobs:
       - gate-test-backend
       - gate-ci-frontend
       - gate-ci-gateway
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       # One image per runner: a GitHub-hosted runner has ~14 GB of disk and
       # these images are ~2 GB each, so building all ten in one job runs it out
@@ -193,11 +193,11 @@ jobs:
     needs:
       - meta
       - build
-    # Also ubuntu-latest: the deploy is an ssh session that pulls images and
+    # Also GitHub-hosted: the deploy is an ssh session that pulls images and
     # restarts containers, so it needs no runner on the box and no self-hosted
     # capacity at all.
     if: ${{ always() && needs.meta.result == 'success' && (needs.build.result == 'success' || inputs.skip_build) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     environment: production
     steps:
       - name: Checkout ${{ needs.meta.outputs.tag }}
@@ -247,7 +247,7 @@ jobs:
     # Last, on purpose: the Release entry means "this is what production is
     # running", so it is written after the deploy succeeded and not before.
     if: ${{ needs.deploy.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7

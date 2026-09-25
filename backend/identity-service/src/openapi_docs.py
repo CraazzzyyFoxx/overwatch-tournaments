@@ -69,7 +69,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.identity.update_me": {
         "summary": "Update current user",
-        "description": "Permission: authenticated (active) user, session bearer only; self-service. Applies a partial profile update to the active user and returns the updated user.",
+        "description": "Permission: authenticated (active) user, session bearer only; self-service. Applies a partial profile update to the active user and returns the updated user. Changing `username` is refused when the caller carries an `account.rename` deny, and with 400 when another account already holds that name (compared case-insensitively).",
     },
     "rpc.identity.delete_me": {
         "summary": "Delete current account",

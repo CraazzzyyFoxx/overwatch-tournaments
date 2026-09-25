@@ -340,8 +340,15 @@ class CustomGameService:
             return {}
         return await self.load_hosts(session, workspace_id=workspace_id, user_ids=ids)
 
-    async def get(self, session: AsyncSession, *, workspace_id: int, custom_game_id: int) -> models.CustomGame:
-        game = await self.games.get(session, custom_game_id)
+    async def get(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        options: Sequence[Any] = (),
+    ) -> models.CustomGame:
+        game = await self.games.get(session, custom_game_id, options=options)
         if game is None or game.workspace_id != workspace_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
         return game
@@ -350,10 +357,18 @@ class CustomGameService:
         return list(await self.games.list_for_workspace(session, workspace_id))
 
     async def _writable(
-        self, session: AsyncSession, *, workspace_id: int, custom_game_id: int, actor_user_id: int
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
-        if actor_user_id != game.host_user_id:
+        # A superuser manages every mix as if a co-host. The flag comes from the
+        # token, never a DB read: an API key is minted non-superuser on purpose.
+        if not actor_is_superuser and actor_user_id != game.host_user_id:
             # The caller's workspace membership is already settled at the RPC
             # gate (``_require_mix``), so the grant itself is the only extra
             # fact left to read -- and it is keyed by ``auth.user.id``, the same
@@ -514,6 +529,7 @@ class CustomGameService:
         custom_game_id: int,
         member_ids: Sequence[int],
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Set pool membership, keeping every surviving row's lineup state.
 
@@ -522,7 +538,11 @@ class CustomGameService:
         ``workspace_member_id`` instead of rebuilt from scratch.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         ids = _uniq(member_ids)
         members = await self.members(session, workspace_id, ids)
@@ -557,13 +577,18 @@ class CustomGameService:
         workspace_member_id: int,
         patch: Mapping[str, Any],
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Patch one roster row's participation, role selection and flex mode."""
         unknown = sorted(set(patch) - _PLAYER_PATCH_FIELDS)
         if unknown:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown fields {unknown}")
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         roster = list(await self.roster.list_for_game(session, game.id))
         row = next((item for item in roster if item.workspace_member_id == workspace_member_id), None)
@@ -601,6 +626,7 @@ class CustomGameService:
         custom_game_id: int,
         participation: Mapping[int, MixParticipation],
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Move several roster rows between lineup states atomically.
 
@@ -609,7 +635,11 @@ class CustomGameService:
         saw last, and left the lineup mid-verdict if one call failed.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         rows = {row.workspace_member_id: row for row in await self.roster.list_for_game(session, game.id)}
         if not set(participation) <= set(rows):
@@ -667,9 +697,14 @@ class CustomGameService:
         workspace_id: int,
         custom_game_id: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         roster = list(await self.roster.list_for_game(session, game.id))
         lineup = [row for row in roster if row.participation != MixParticipation.BENCHED]
@@ -770,6 +805,7 @@ class CustomGameService:
         custom_game_id: int,
         team_names: Mapping[str, Any],
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Patch the host's team-name overrides, one team at a time.
 
@@ -785,7 +821,11 @@ class CustomGameService:
         mentioned with an empty value clears back to the computed default.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         patch = _normalize_team_names(team_names)
         for index, value in patch.items():
@@ -801,6 +841,7 @@ class CustomGameService:
         custom_game_id: int,
         map_id: int | None,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Name the map the next match is played on, or ``None`` to clear it.
 
@@ -811,7 +852,11 @@ class CustomGameService:
         history are already there) -- this only stores the verdict.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         if map_id is not None and await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
@@ -827,6 +872,7 @@ class CustomGameService:
         custom_game_id: int,
         variant_index: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Page the mix to one of its stored balance options -- for everybody.
 
@@ -838,7 +884,11 @@ class CustomGameService:
         first. Host-or-co-host only, like every other write here.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
         variants = result.get("variants") if isinstance(result, dict) else None
@@ -877,6 +927,7 @@ class CustomGameService:
         custom_game_id: int,
         variant_index: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> tuple[int, dict[str, Any]]:
         """The channel to post to plus the embed describing one balance option.
 
@@ -889,7 +940,11 @@ class CustomGameService:
         :meth:`swap_seats`: a host who paged to option 2 is posting that one.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         # The workspace's channel, full stop. A mix used to be able to name its
         # own, which meant an admin-only per-lobby override of the workspace's
@@ -942,10 +997,15 @@ class CustomGameService:
         custom_game_id: int,
         new_host_user_id: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Transfer primary ownership to a signed-in member of this workspace."""
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         if new_host_user_id == game.host_user_id:
             return game
@@ -968,10 +1028,15 @@ class CustomGameService:
         custom_game_id: int,
         co_host_user_id: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Grant a signed-in workspace member co-host write access."""
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         if co_host_user_id == game.host_user_id:
             return game
@@ -1000,10 +1065,15 @@ class CustomGameService:
         custom_game_id: int,
         co_host_user_id: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Revoke co-host access, including a co-host removing themselves."""
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         # No membership check on the way out: an account that has since left the
         # workspace must still be revocable, or its grant is stranded forever.
@@ -1022,6 +1092,7 @@ class CustomGameService:
         first_uuid: str,
         second_uuid: str,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Swap two seated players between teams, same role only.
 
@@ -1036,7 +1107,11 @@ class CustomGameService:
         adjusting that one, not silently rewriting option 1.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         result = copy.deepcopy(game.balance_result_json) if isinstance(game.balance_result_json, dict) else None
         variants = result.get("variants") if isinstance(result, dict) else None
@@ -1117,6 +1192,7 @@ class CustomGameService:
         variant_index: int,
         map_id: int | None = None,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Freeze one played match into ``casual.match`` and its two scored sides.
 
@@ -1134,7 +1210,11 @@ class CustomGameService:
         so the following match starts with a fresh roll.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         if winner not in (1, 2, None):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="winner must be 1, 2 or null")
@@ -1249,6 +1329,7 @@ class CustomGameService:
         custom_game_id: int,
         match_id: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Delete the mix's most recent match and give back the ranks it moved.
 
@@ -1269,7 +1350,11 @@ class CustomGameService:
         moved on from -- rotation is the host's call, not an undo side effect.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         match = await self.casual_matches.get_for_game(session, game.id, match_id)
         if match is None:
@@ -1315,7 +1400,12 @@ class CustomGameService:
         any workspace member, same as :meth:`get` (no host gate: watching the
         history is not writing it).
         """
-        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
+        game = await self.get(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
+        )
         return list(await self.casual_matches.list_for_custom_game(session, game.id))
 
     async def mix_stats(
@@ -1412,7 +1502,12 @@ class CustomGameService:
         Read-only, no roster row is touched -- the host applies the verdict
         through the same ``participation`` field.
         """
-        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
+        game = await self.get(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
+        )
         roster = list(await self.roster.list_for_game(session, game.id))
         if not roster:
             return []
@@ -1425,13 +1520,23 @@ class CustomGameService:
         return recommend_rotation(histories, usable_count=usable_count)
 
     async def close(
-        self, session: AsyncSession, *, workspace_id: int, custom_game_id: int, actor_user_id: int
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Ends the mix. No result of its own -- matches already recorded via
         ``record_outcome`` stay recorded; this only stops further writes.
         """
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         game.status = MixStatus.COMPLETED
         await session.flush()
@@ -1444,9 +1549,14 @@ class CustomGameService:
         workspace_id: int,
         custom_game_id: int,
         actor_user_id: int,
+        actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
         )
         game.status = MixStatus.CANCELLED
         await session.flush()

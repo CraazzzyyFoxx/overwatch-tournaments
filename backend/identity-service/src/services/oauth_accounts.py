@@ -29,6 +29,7 @@ from shared.repository import (
 from shared.services.social_identity import SocialHandleConflict
 from shared.services.social_identity import social_identity_service as socials_writer
 from src import models, schemas
+from src.schemas.auth import suggest_username
 from src.services.auth_users import AuthUserService, auth_users
 from src.services.oauth_providers import OAuthProviderRegistry, oauth_providers
 
@@ -367,12 +368,12 @@ class OAuthAccountService:
 
         The taken set is fetched once and the suffix is picked in memory: probing
         the table per candidate cost a query per collision, and a popular handle
-        collides repeatedly.
+        collides repeatedly. Case-insensitive, like every username collision.
         """
         taken = await self.users.usernames_with_prefix(session, base_username)
         username = base_username
         counter = 1
-        while username in taken:
+        while username.lower() in taken:
             username = f"{base_username}{counter}"
             counter += 1
         return username
@@ -442,7 +443,13 @@ class OAuthAccountService:
 
         # Create new user if doesn't exist
         if not auth_user:
-            username = await self._free_username(session, oauth_info.username)
+            # One rule for every provider: the name people see there (Discord
+            # global name, BattleTag without "#1234", Twitch display name), not
+            # whichever raw handle that provider happens to call "username".
+            username = await self._free_username(
+                session,
+                suggest_username(oauth_info.display_name, suggest_username(oauth_info.username, "player")),
+            )
 
             auth_user = models.AuthUser(
                 email=oauth_info.email or f"{oauth_info.provider_user_id}@{oauth_info.provider.value}.oauth",

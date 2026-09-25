@@ -86,6 +86,7 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     # Self-service capabilities: allowed by default for every authenticated user;
     # exist only so an admin can DENY them per user (negative RBAC).
     _permission("account", "avatar", "Change one's own avatar"),
+    _permission("account", "rename", "Change one's own name"),
     _permission("account", "social", "Manage one's own social accounts"),
     _permission("registration", "self_register", "Self-register for a tournament"),
     # Distinct from the workspace-scoped ``workspace.create`` above, which is a

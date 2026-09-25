@@ -122,8 +122,9 @@ export default function BalancerPickupMixPage() {
   const isCoHost =
     game != null && currentUserId != null && game.co_hosts.some((coHost) => coHost.user_id === currentUserId);
   // A completed or cancelled mix is read-only server-side; hide its controls
-  // rather than let a click 409.
-  const canWrite = (isHost || isCoHost) && game != null && !PICKUP_TERMINAL_STATUSES[game.status];
+  // rather than let a click 409. A superuser writes every mix, as `_writable` does.
+  const canWrite =
+    (isHost || isCoHost || isSuperuser) && game != null && !PICKUP_TERMINAL_STATUSES[game.status];
   // Ranks are the host's book -- `author_user_id = game.host_user_id` is the
   // layer this mix resolves against. Anyone else who typed here wrote their own
   // book, got a 200, and watched the number stay put. Not gated on `canWrite`:

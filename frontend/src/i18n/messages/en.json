@@ -796,7 +796,7 @@
     },
     "profile": {
       "title": "Profile",
-      "desc": "Your avatar and linked accounts."
+      "desc": "Your name, avatar and linked accounts."
     },
     "privacy": {
       "title": "Privacy",
@@ -866,6 +866,15 @@
         "placeholder": "Off",
         "hint": "Recording who won bumps every winning player's rank by this many points in your own book, and every losing player's down by the same. Leave empty to record results without touching ranks."
       }
+    },
+    "name": {
+      "title": "Name",
+      "label": "Your name",
+      "hint": "How you appear across the site. In tournaments you are shown by the BattleTag you registered with.",
+      "disabled": "Changing your name has been disabled by an administrator.",
+      "rules": "3–32 characters: letters in any alphabet, digits, and _ - .",
+      "save": "Save",
+      "saved": "Name updated"
     },
     "avatar": {
       "title": "Avatar",

@@ -111,7 +111,10 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
   const applyGame = (game: CustomGame) => {
     queryClient.setQueryData(customGameKeys.one(workspaceId, game.id), game);
     // The list carries name and status, both of which a write can change.
-    void queryClient.invalidateQueries({ queryKey: customGameKeys.list(workspaceId) });
+    // `exact`: the list key is a prefix of every mix key, so a bare invalidate
+    // would also refetch the detail just seeded above -- the heaviest payload
+    // the mix API has. Everything else follows on the realtime echo.
+    void queryClient.invalidateQueries({ queryKey: customGameKeys.list(workspaceId), exact: true });
     // Roster, participation and match history all feed the rotation verdict --
     // any write here can flip it, so it is invalidated alongside the game
     // itself rather than only on the writes that look rotation-specific. The

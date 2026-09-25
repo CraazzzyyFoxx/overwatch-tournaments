@@ -143,7 +143,8 @@ not share a key. The consequences are load-bearing:
   or co-host — the roster payload exposes `auth_user_id` precisely so the picker can exclude them.
 - Write access is not the workspace `custom_game` permission. Only `create` is gated that way (a new
   mix has no per-game grant to check); every other mutation re-loads the game and re-checks
-  host-or-co-host itself, so a co-host holding only the plain `member` role can still write.
+  host-or-co-host itself, so a co-host holding only the plain `member` role can still write. A
+  superuser (token flag, never an API key) writes every mix.
 - Reads stop at workspace membership. Watching a mix requires no grant.
 
 ### Rank layers

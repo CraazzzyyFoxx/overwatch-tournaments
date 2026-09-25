@@ -65,16 +65,17 @@ class _Teams:
         return [SimpleNamespace(captain_auth_user_id=captain_id)]
 
 
-class _Users:
-    async def get_by_auth_user_id(self, _session: Any, auth_user_id: int) -> Any:
-        return SimpleNamespace(name="Pharah") if auth_user_id == CAPTAIN.id else None
+async def _tournament_names(_session: Any, *, auth_user: Any, tournament_id: int) -> str:
+    """The captain registered for THIS draft's tournament (11) as a BattleTag."""
+    if auth_user.id == CAPTAIN.id and tournament_id == 11:
+        return "Pharah#2112"
+    return auth_user.username
 
 
 def _access(*, captained_session: int = SESSION_ID) -> chat_access.DraftChatAccess:
     return chat_access.DraftChatAccess(
         sessions_repo=_Sessions(),
         teams_repo=_Teams(captained_session),
-        user_repo=_Users(),
     )
 
 
@@ -86,9 +87,12 @@ class DraftChatAccessTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # The hidden-tournament gate is shared and tested where it lives; here
         # it is the "this room is viewable at all" precondition.
-        patcher = patch.object(chat_access, "assert_tournament_viewable", _viewable)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for patcher in (
+            patch.object(chat_access, "assert_tournament_viewable", _viewable),
+            patch.object(chat_access, "tournament_display_name", _tournament_names),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.room = ChatRoom.draft(SESSION_ID)
 
     async def test_captain_of_this_session_writes_as_captain(self) -> None:
@@ -97,8 +101,8 @@ class DraftChatAccessTests(IsolatedAsyncioTestCase):
         self.assertEqual(membership.role, "captain")
         self.assertTrue(membership.can_write)
         self.assertFalse(membership.can_moderate)
-        # The linked player's name, not the auth account's login.
-        self.assertEqual(membership.display_name, "Pharah")
+        # The tag registered for the draft's tournament, not the account's site name.
+        self.assertEqual(membership.display_name, "Pharah#2112")
 
     async def test_captain_of_another_session_is_only_a_spectator_here(self) -> None:
         """R3: the room is the session. Captaining a re-seeded draft, or the

@@ -2,7 +2,9 @@
 
 ``rpc.balancer.players.{list, upsert, set_ranks, summary, authors}``.
 Reads require workspace membership. Writes additionally require a grant:
-``upsert`` (creating a roster member) needs workspace ``team.create``; the
+``upsert`` (creating a roster member) needs workspace ``team.create`` or a mix
+host's ``custom_game.create`` -- a host adds whoever is in the lobby right now;
+renaming an existing row (``display_name``) stays ``team.create``. The
 ``workspace`` (canon) layer of ``set_ranks`` needs ``team.update`` -- the same
 grants the sibling roster-shaping writes in ``admin.py``/``binary.py`` require.
 The ``author`` layer is the exception: it is always the caller's own private
@@ -221,7 +223,12 @@ def register(broker: Any, logger: Any) -> None:
             user = c.active_actor(data)
             workspace_id = c.path_int(data, "workspace_id")
             c.require_member(user, workspace_id)
-            ensure_workspace_permission(user, workspace_id, "team", "create")
+            # A mix host (``custom_game.create``) may add a BattleTag nobody
+            # has registered yet: that is the add-players dialog's whole point.
+            # Renaming a shared roster row is still roster management.
+            can_manage_roster = user.has_workspace_permission(workspace_id, "team", "create")
+            if not can_manage_roster:
+                ensure_workspace_permission(user, workspace_id, "custom_game", "create")
             body = c.payload(data)
             battle_tag = body.get("battle_tag", data.get("battle_tag"))
             if not isinstance(battle_tag, str) or not battle_tag.strip():
@@ -231,6 +238,8 @@ def register(broker: Any, logger: Any) -> None:
                 display_name = display_name.strip() or None
             elif display_name is not None:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="display_name is required")
+            if display_name is not None and not can_manage_roster:
+                ensure_workspace_permission(user, workspace_id, "team", "create")
             member = await workspace_roster.ensure_member_for_battle_tag(
                 session,
                 workspace_id=workspace_id,
