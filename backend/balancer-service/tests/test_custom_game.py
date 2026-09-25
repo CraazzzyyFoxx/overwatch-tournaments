@@ -1726,6 +1726,30 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(ctx.exception.status_code, 403)
 
+    async def test_a_superuser_writes_a_mix_they_neither_host_nor_co_host(self) -> None:
+        self.games.get.return_value = _game()
+
+        await self.service.set_team_names(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            team_names={"0": "Wolves"},
+            actor_user_id=99,
+            actor_is_superuser=True,
+        )
+
+        self.team_names.set.assert_awaited_once_with(self.session, 11, 0, "Wolves")
+
+    async def test_a_superuser_still_cannot_write_a_closed_mix_409(self) -> None:
+        self.games.get.return_value = _game(status="completed")
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.close(
+                self.session, workspace_id=1, custom_game_id=11, actor_user_id=99, actor_is_superuser=True
+            )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+
     async def test_remove_co_host_revokes_write_access(self) -> None:
         self.games.get.return_value = _game()
         self.co_hosts.user_ids_for_game.return_value = [21]

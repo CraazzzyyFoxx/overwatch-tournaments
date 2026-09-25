@@ -3867,7 +3867,7 @@
       "summary": "Get balancer config"
     },
     "rpc.balancer.custom.add_co_host": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Grants another signed-in workspace member the same write access as the host. 404 when the target has no linked login account here, and 422 once the mix is at its co-host limit.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Grants another signed-in workspace member the same write access as the host. 404 when the target has no linked login account here, and 422 once the mix is at its co-host limit.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameCoHostPatch"
@@ -3875,11 +3875,11 @@
       "summary": "Add custom game co-host"
     },
     "rpc.balancer.custom.balance": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Balances the non-benched lineup, reading the host's own rank book above the workspace canon, stores the resulting options on the mix and returns it; 422 when the lineup is empty or a seated player has no ranked role.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Balances the non-benched lineup, reading the host's own rank book above the workspace canon, stores the resulting options on the mix and returns it; 422 when the lineup is empty or a seated player has no ranked role.",
       "summary": "Balance custom game"
     },
     "rpc.balancer.custom.close": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Marks the mix completed so no further writes land. Nothing is destroyed -- the mix and every match it recorded stay readable -- so this is the reversible end of a mix.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Marks the mix completed so no further writes land. Nothing is destroyed -- the mix and every match it recorded stay readable -- so this is the reversible end of a mix.",
       "summary": "Close custom game"
     },
     "rpc.balancer.custom.create": {
@@ -3907,7 +3907,7 @@
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePostDiscord"
@@ -3915,7 +3915,7 @@
       "summary": "Post custom game lineup to Discord"
     },
     "rpc.balancer.custom.record_outcome": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Repeatable until the mix is closed.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Repeatable until the mix is closed.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameRecordOutcome"
@@ -3923,7 +3923,7 @@
       "summary": "Record custom game match"
     },
     "rpc.balancer.custom.remove_co_host": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Revokes a co-host grant, including a co-host removing themselves, and returns the refreshed mix. An account that has since left the workspace stays revocable.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Revokes a co-host grant, including a co-host removing themselves, and returns the refreshed mix. An account that has since left the workspace stays revocable.",
       "summary": "Remove custom game co-host"
     },
     "rpc.balancer.custom.rotation": {
@@ -3931,7 +3931,7 @@
       "summary": "Get custom game rotation hints"
     },
     "rpc.balancer.custom.set_next_map": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. 404 when the map is not in the catalogue.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. 404 when the map is not in the catalogue.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameNextMapPatch"
@@ -3939,7 +3939,7 @@
       "summary": "Set custom game next map"
     },
     "rpc.balancer.custom.set_participation": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Moves several seats between must_play, pool and benched in one transaction -- the whole rotation verdict at once -- and returns the refreshed mix; 404 if any member is not on the roster.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Moves several seats between must_play, pool and benched in one transaction -- the whole rotation verdict at once -- and returns the refreshed mix; 404 if any member is not on the roster.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePlayersParticipationPatch"
@@ -3947,7 +3947,7 @@
       "summary": "Set custom game participation"
     },
     "rpc.balancer.custom.set_team_names": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Renames the balanced teams by index and returns the refreshed mix.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Renames the balanced teams by index and returns the refreshed mix.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameTeamNamesPatch"
@@ -3955,7 +3955,7 @@
       "summary": "Set custom game team names"
     },
     "rpc.balancer.custom.set_variant_index": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Pages the mix to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the mix, not about one browser. 404 when the index points past the stored options. Re-balancing resets it to the first option.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages the mix to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the mix, not about one browser. 404 when the index points past the stored options. Re-balancing resets it to the first option.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameVariantIndexPatch"
@@ -3967,7 +3967,7 @@
       "summary": "Get custom game statistics"
     },
     "rpc.balancer.custom.swap_seats": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Swaps two seated players between teams inside one balance option, same role only, and returns the refreshed mix. 404 when the option or either seat is missing, 422 when the seats hold different roles or sit on the same team.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Swaps two seated players between teams inside one balance option, same role only, and returns the refreshed mix. 404 when the option or either seat is missing, 422 when the seats hold different roles or sit on the same team.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameSeatSwap"
@@ -3975,7 +3975,7 @@
       "summary": "Swap custom game seats"
     },
     "rpc.balancer.custom.transfer_host": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Hands primary ownership to another signed-in member of the workspace, dropping their co-host grant if they held one. 404 when the target has no linked login account here, since a host is an auth.user id and not a roster member.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Hands primary ownership to another signed-in member of the workspace, dropping their co-host grant if they held one. 404 when the target has no linked login account here, since a host is an auth.user id and not a roster member.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameHostTransfer"
@@ -3983,11 +3983,11 @@
       "summary": "Transfer custom game host"
     },
     "rpc.balancer.custom.undo_match": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Deletes the mix's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the mix's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
       "summary": "Undo custom game match"
     },
     "rpc.balancer.custom.update_player": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Patches one seat's participation state, role order or flex flag and returns the refreshed mix; 404 when the member is not on this mix's roster.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Patches one seat's participation state, role order or flex flag and returns the refreshed mix; 404 when the member is not on this mix's roster.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePlayerPatch"
@@ -3995,7 +3995,7 @@
       "summary": "Update custom game player"
     },
     "rpc.balancer.custom.update_roster": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host. Replaces the mix lineup with the given workspace_member ids (at most 100) and returns the refreshed mix. A member with no linked login account can be rostered here, unlike the host and co-host grants.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Replaces the mix lineup with the given workspace_member ids (at most 100) and returns the refreshed mix. A member with no linked login account can be rostered here, unlike the host and co-host grants.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameRosterUpdate"

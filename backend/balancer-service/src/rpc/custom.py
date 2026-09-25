@@ -5,7 +5,7 @@ balance,set_team_names,set_next_map,set_variant_index,
 post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
 undo_match,rotation,stats,close,delete,hard_delete}``.
 
-Writes require ``actor`` to be the host or a co-host; the per-mix check lives in
+Writes require ``actor`` to be the host, a co-host or a superuser; the per-mix check lives in
 ``CustomGameService._writable``. The reads (``list``, ``get``, ``stats``,
 ``match_history``, ``rotation``) are public: the gateway forwards no identity
 for them (``AuthNone``) and none of them inspects the caller -- a mix board is
@@ -491,6 +491,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 member_ids=body.member_ids,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
             await session.commit()
@@ -512,6 +513,7 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_member_id=_int(data, "workspace_member_id"),
                 patch=body.model_dump(exclude_unset=True),
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
             await session.commit()
@@ -540,6 +542,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 participation={player.workspace_member_id: player.participation for player in body.players},
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
             await session.commit()
@@ -558,6 +561,7 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="balance", actor_user_id=user.id)
             await session.commit()
@@ -578,6 +582,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 team_names=body.team_names,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="team_names", actor_user_id=user.id)
             await session.commit()
@@ -598,6 +603,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 map_id=body.map_id,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="next_map", actor_user_id=user.id)
             await session.commit()
@@ -621,6 +627,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="variant_index", actor_user_id=user.id)
             await session.commit()
@@ -641,6 +648,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             # Fire and forget: the bot owns delivery, and nothing about the mix
             # changed, so there is no realtime signal and nothing to commit.
@@ -674,6 +682,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 new_host_user_id=body.new_host_user_id,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="host", actor_user_id=user.id)
             await session.commit()
@@ -694,6 +703,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 co_host_user_id=body.co_host_user_id,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="co_hosts", actor_user_id=user.id)
             await session.commit()
@@ -715,6 +725,7 @@ def register(broker: Any, logger: Any) -> None:
                 # DELETE .../co-hosts/{co_host_user_id}.
                 co_host_user_id=_int(data, "co_host_user_id"),
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="co_hosts", actor_user_id=user.id)
             await session.commit()
@@ -737,6 +748,7 @@ def register(broker: Any, logger: Any) -> None:
                 first_uuid=body.first_uuid,
                 second_uuid=body.second_uuid,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="teams", actor_user_id=user.id)
             await session.commit()
@@ -759,6 +771,7 @@ def register(broker: Any, logger: Any) -> None:
                 variant_index=body.variant_index,
                 map_id=body.map_id,
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="outcome", actor_user_id=user.id)
             await session.commit()
@@ -789,6 +802,7 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 match_id=_int(data, "match_id"),
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="outcome", actor_user_id=user.id)
             await session.commit()
@@ -830,6 +844,7 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="close", actor_user_id=user.id)
             await session.commit()
@@ -848,6 +863,7 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
                 actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="delete", actor_user_id=user.id)
             await session.commit()

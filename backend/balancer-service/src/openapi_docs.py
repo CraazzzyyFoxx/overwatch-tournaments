@@ -273,7 +273,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.update_roster": {
         "summary": "Replace custom game roster",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Replaces the mix lineup with the given workspace_member ids (at most 100) and returns "
             "the refreshed mix. A member with no linked login account can be "
             "rostered here, unlike the host and co-host grants."
@@ -281,12 +281,12 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.custom.update_player": {
         "summary": "Update custom game player",
-        "description": "Permission: workspace membership plus being the mix's host or co-host. Patches one seat's participation state, role order or flex flag and returns the refreshed mix; 404 when the member is not on this mix's roster.",
+        "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Patches one seat's participation state, role order or flex flag and returns the refreshed mix; 404 when the member is not on this mix's roster.",
     },
     "rpc.balancer.custom.set_participation": {
         "summary": "Set custom game participation",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Moves several seats between must_play, pool and benched in one transaction -- the whole "
             "rotation verdict at once -- and returns the refreshed mix; 404 if "
             "any member is not on the roster."
@@ -295,7 +295,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.balance": {
         "summary": "Balance custom game",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Balances the non-benched lineup, reading the host's own rank book above the workspace "
             "canon, stores the resulting options on the mix and returns it; "
             "422 when the lineup is empty or a seated player has no ranked role."
@@ -303,12 +303,12 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.custom.set_team_names": {
         "summary": "Set custom game team names",
-        "description": "Permission: workspace membership plus being the mix's host or co-host. Renames the balanced teams by index and returns the refreshed mix.",
+        "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Renames the balanced teams by index and returns the refreshed mix.",
     },
     "rpc.balancer.custom.set_next_map": {
         "summary": "Set custom game next map",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Names the map the mix's next match is played on -- rolled or picked by a host ahead of "
             "the lobby -- or clears it with null. The next recorded match takes this map unless the "
             "outcome names one explicitly, and clears it either way. 404 when "
@@ -318,7 +318,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.set_variant_index": {
         "summary": "Set custom game shown balance option",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Pages the mix to one of the balance options its last run produced, for every viewer at "
             "once -- the option on screen is a fact about the mix, not about one browser. "
             "404 when the index points past the stored options. Re-balancing resets it "
@@ -328,7 +328,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.post_discord": {
         "summary": "Post custom game lineup to Discord",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Queues an embed of one balance option's teams, the next map and the points at stake "
             "to the workspace-wide mix channel and returns immediately -- delivery is the bot's, "
             "and nothing about the mix changes. 409 when the workspace has "
@@ -338,7 +338,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.transfer_host": {
         "summary": "Transfer custom game host",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Hands primary ownership to another signed-in member of the workspace, dropping their "
             "co-host grant if they held one. 404 when the target has no linked "
             "login account here, since a host is an auth.user id and not a roster member."
@@ -347,7 +347,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.add_co_host": {
         "summary": "Add custom game co-host",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Grants another signed-in workspace member the same write access as the host. "
             "404 when the target has no linked login account here, and 422 once the "
             "mix is at its co-host limit."
@@ -355,12 +355,12 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.custom.remove_co_host": {
         "summary": "Remove custom game co-host",
-        "description": "Permission: workspace membership plus being the mix's host or co-host. Revokes a co-host grant, including a co-host removing themselves, and returns the refreshed mix. An account that has since left the workspace stays revocable.",
+        "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Revokes a co-host grant, including a co-host removing themselves, and returns the refreshed mix. An account that has since left the workspace stays revocable.",
     },
     "rpc.balancer.custom.swap_seats": {
         "summary": "Swap custom game seats",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Swaps two seated players between teams inside one balance option, same role only, and "
             "returns the refreshed mix. 404 when the option or either seat is "
             "missing, 422 when the seats hold different roles or sit on the same team."
@@ -369,7 +369,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.record_outcome": {
         "summary": "Record custom game match",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Freezes one played match of a balance option into the mix's history, moving both teams' "
             "ranks in the host's book by points_per_win when a winner is given and redeeming every "
             "seat's must_play pin back to the pool. Repeatable until the "
@@ -383,7 +383,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.undo_match": {
         "summary": "Undo custom game match",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Deletes the mix's most recent match and gives back exactly the rank points it applied, "
             "read from the match itself rather than the mix's current points_per_win. "
             "404 when the match belongs to another mix and 409 when a newer match "
@@ -408,7 +408,7 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.close": {
         "summary": "Close custom game",
         "description": (
-            "Permission: workspace membership plus being the mix's host or co-host. "
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Marks the mix completed so no further writes land. Nothing is destroyed -- the mix and "
             "every match it recorded stay readable -- so this is the reversible end of a mix."
         ),
