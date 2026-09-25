@@ -53,8 +53,18 @@ COPY stream-service/pyproject.toml /app/stream-service/pyproject.toml
 
 COPY ./shared /app/shared
 
+# The lock pins xgboost-cpu (what the shipped CPU image runs); this image needs
+# the CUDA build of the same `xgboost` module instead, so the lock's package is
+# skipped here and in the final sync, and the CUDA wheel (with nvidia-nccl-cu12)
+# is installed on top.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev --package analytics-service
+    uv sync --frozen --no-install-project --no-dev --package analytics-service \
+        --no-install-package xgboost-cpu
+
+ARG XGBOOST_VERSION=3.2.0
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install "xgboost==${XGBOOST_VERSION}"
 
 ARG LIGHTGBM_VERSION=4.6.0
 
@@ -71,8 +81,11 @@ ENV PYTHONPATH=/app/analytics-service:/app
 COPY ./scripts /app/scripts
 COPY ./analytics-service /app/analytics-service
 
+# ``--inexact``: an exact sync would remove the CUDA xgboost installed above,
+# which is not in the lock.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --package analytics-service
+    uv sync --frozen --no-dev --inexact --package analytics-service \
+        --no-install-package xgboost-cpu
 
 WORKDIR /app/analytics-service
 
