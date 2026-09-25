@@ -39,12 +39,16 @@ export function TeamCreateDialog({ open, onOpenChange, tournamentId }: Readonly<
   const queryClient = useQueryClient();
   const [form, setForm] = useState<TeamCreateForm>(EMPTY_FORM);
   const [error, setError] = useState<string | undefined>();
+  // Same convention as the balancer export: a team without its own name is known
+  // by its captain's handle, battletag suffix dropped.
+  const captainHandle = form.captainName.split("#")[0];
+  const teamName = form.name.trim() || captainHandle;
 
   const createTeam = useMutation({
     meta: { suppressErrorToast: true },
     mutationFn: () =>
       adminService.createTeam({
-        name: form.name.trim(),
+        name: teamName,
         tournament_id: tournamentId,
         captain_id: form.captainId
       }),
@@ -64,12 +68,12 @@ export function TeamCreateDialog({ open, onOpenChange, tournamentId }: Readonly<
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
 
-    if (!form.name.trim()) {
-      setError("Enter a team name.");
-      return;
-    }
     if (form.captainId <= 0) {
       setError("Pick the captain.");
+      return;
+    }
+    if (!teamName) {
+      setError("Enter a team name.");
       return;
     }
 
@@ -102,9 +106,12 @@ export function TeamCreateDialog({ open, onOpenChange, tournamentId }: Readonly<
           <Input
             id="team-create-name"
             value={form.name}
-            placeholder="Team name"
+            placeholder={captainHandle || "Team name"}
             onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
           />
+          <p className="text-xs text-muted-foreground">
+            Leave empty to name the team after its captain.
+          </p>
         </div>
 
         <div className="space-y-2">
