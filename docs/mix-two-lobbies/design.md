@@ -1,6 +1,7 @@
 # Два лобби в одном миксе
+**Status:** design approved
 
-**Status:** draft
+Companion implementation plan: [`plan.md`](./plan.md). Реализуется после [самозаписи](../mix-self-signup-discord/design.md).
 
 **Goal:** Один микс (кастомка) ведёт два матча одновременно: общий пул, хост, кохосты, запись и лидерборд, но у
 каждого лобби свои команды, карта, результат и темп. Лобби живут независимо — быстрое не ждёт медленное, — а когда
@@ -133,7 +134,7 @@ def split_into_lobbies(candidates: Sequence[SplitCandidate], *, mask: Mapping[st
 Алгоритм (детерминированный, без RNG):
 1. **Кто играет.** `seats = 2 * sum(mask)` на лобби. Порядок: `must_play` → `rotation_priority` ↑ → входной порядок;
    берём первые `2 * seats`, остальные — `waiting`. Играбельных меньше `2 * seats` → 422
-   `not_enough_for_two_lobbies`.
+   `not_enough_for_two_lobbies`; `must_play` больше `2 * seats` → 422 `too_many_must_play`.
 2. **Пины.** Закреплённые ставятся в своё лобби; больше `seats` в одном лобби → 422 `too_many_pinned`.
 3. **Жадное деление.** Остальные по `strength` ↓ идут в лобби с меньшей суммой `strength` среди лобби со
    свободными местами — если после хода роли **обоих** лобби ещё заполнимы (двудольное сопоставление
@@ -167,7 +168,7 @@ def split_into_lobbies(candidates: Sequence[SplitCandidate], *, mask: Mapping[st
 | RPC | Маршрут (`…/custom-games/{game_id}`) | Что |
 |---|---|---|
 | `custom.set_lobby_count` | `PUT …/lobbies` `{lobby_count: 1\|2}` | `_writable`; 1→2 создаёт пустое лобби B; 2→1 удаляет строку B (баланс B теряется, матчи B остаются в истории) и обнуляет все `lobby_pin` |
-| — | `PUT …/players/{member_id}` | `CustomGamePlayerPatch.lobby_pin: 0\|1\|null`; при `lobby_count = 1` → 422; в самостоятельной правке игрока (план `2026-09-25-mix-self-signup-discord`) поля нет |
+| — | `PUT …/players/{member_id}` | `CustomGamePlayerPatch.lobby_pin: 0\|1\|null`; при `lobby_count = 1` → 422; в самостоятельной правке игрока ([самозапись](../mix-self-signup-discord/design.md)) поля нет |
 
 Клон (`clone_from_game_id`) копирует `lobby_count` и `lobby_pin`; баланс, карты и историю — нет, как сейчас.
 
@@ -200,13 +201,14 @@ played=tuple(
     {"lobby_index": 1, "balance_result": null, "selected_variant_index": 0,
      "next_map_id": null, "balanced_at": null, "lineup_recorded": true, "matches_count": 3}
   ],
-  "roster": [{"workspace_member_id": 7, "current_lobby": 0, "lobby_pin": null, "…": "…"}],
+  "players": [{"workspace_member_id": 7, "current_lobby": 0, "lobby_pin": null, "…": "…"}],
   "settings": {"team_names": {"0": "…", "2": "…"}}
 }
 ```
 
-Поля `balance_result`, `selected_variant_index`, `next_map_id` верхнего уровня удаляются (clean cutover). Матч в
-истории получает `lobby_index`.
+Поля `balance_result`, `selected_variant_index`, `next_map_id` верхнего уровня удаляются (clean cutover). Как и
+сегодня, `balance_result` и `players` есть только в детальном ответе (`custom.get`); `lineup_recorded`, `matches_count`
+лобби и `current_lobby` — тоже только там. Матч в истории получает `lobby_index`.
 
 ## Frontend
 
@@ -244,7 +246,7 @@ played=tuple(
   он станет «ждёт», A возьмёт при своём балансе.
 - **Пейджер A выбрал вариант с игроком, которого B уже посадил** — 409 `seat_conflict`; UI показывает, кто конфликтует.
 - **`must_play` при балансе одного лобби** — обязателен для этого лобби, если не сидит в другом и не закреплён за ним;
-  `must_play` больше мест → прежняя ошибка.
+  `must_play` больше мест → прежняя ошибка; при `scope: "all"` — 422 `too_many_must_play`.
 - **2→1** — строка B удаляется, пины сбрасываются, матчи B остаются в истории и статистике.
 - **Двойная запись одного лобби / одновременная запись A и B двумя кохостами** — разные лобби пишут разные строки; повтор
   в одном лобби ведёт себя как сейчас.
@@ -263,11 +265,11 @@ played=tuple(
 5. **Docs.** §Mix в `docs/business-logic-inventory.md` (лобби, правило ротации), `docs/database_erd.md`, термин
    «Лобби (микса)» в `docs/glossary.md`.
 
-Миграция независима от `mixself01` (план самозаписи); какая придёт второй — перевешивает `down_revision`.
+Миграция `mixlobby01` идёт после `mixself01`: самозапись реализуется первой, `down_revision = "mixself01"`.
 
 ## Verification
 
-- `tests/test_mix_lobby_split.py`: пины соблюдены; `too_many_pinned`; `not_enough_for_two_lobbies`; `roles_infeasible`
+- `tests/test_mix_lobby_split.py`: пины соблюдены; `too_many_pinned`; `too_many_must_play`; `not_enough_for_two_lobbies`; `roles_infeasible`
   (5 игроков с рангом только на танка при 4 танковых слотах); `must_play` всегда играет; `waiting` — самые «недолжные» по
   `rotation_priority`; разрыв после улучшения не больше, чем после жадного шага; детерминизм.
 - `test_custom_game.py`:
