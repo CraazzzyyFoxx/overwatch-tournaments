@@ -8,7 +8,7 @@ what rating does a player bring to a slot that has no role?
 Answer: the best rating he actually has. It is the same "ready to play
 anything" policy the roster engine applies for every-role tournaments
 (``PlayerRoster.best_rank``, pinned by ``test_forced_flex_parity.py`` against
-``docs/superpowers/fixtures/forced-flex-eff-rank.json``), so both halves of the
+``tests/fixtures/forced-flex-eff-rank.json``), so both halves of the
 product agree on what a flex player is worth.
 
 Without the synthesis every player is dropped (no role line resolves into a

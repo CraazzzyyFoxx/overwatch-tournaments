@@ -101,8 +101,8 @@ Postgres access is **read-only** apart from one write: `public.audit_log`, via
 `tournament.tournament`, `tournament.tournament_link`, `tournament.team`,
 `tournament.player`, `balancer.registration`, `players.user`, `players.social_account`,
 `players.social_account_visibility`, `public.workspace_member`, and `public.settings` for
-the `stream.collection` config. The boundary rule is
-[`../docs/tournament-service-write-path-inventory.md`](../docs/tournament-service-write-path-inventory.md);
+the `stream.collection` config. The boundary rule — read freely through `shared`, write only
+what your service owns — is in [`../shared/README.md`](../shared/README.md);
 those tables are documented in
 [`../../docs/database_erd.md`](../../docs/database_erd.md) under **tournament**,
 **identity**, **registration** and **tenancy**.

@@ -83,9 +83,8 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    WebSocket upgrades, caps body size at 12 MB (60 MB for match-log upload paths), and
    `proxy_pass`es to `gateway:8080` with runtime DNS re-resolution. It emits a JSON access log
    (`$uri` only — the WS token must never be logged) carrying `$limit_req_status`, which
-   promtail turns into both Loki streams and Prometheus rejection counters. The limits ship in
-   `limit_req_dry_run` mode pending calibration — see
-   [`docs/superpowers/specs/2026-08-06-nginx-dos-hardening-design.md`](superpowers/specs/2026-08-06-nginx-dos-hardening-design.md).
+   promtail turns into both Loki streams and Prometheus rejection counters. The limits are
+   enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
    HTTP/2 attack surface belongs to Traefik (nginx only ever speaks HTTP/1.1 here) and
    L3/L4 to the hosting provider.
 3. The **gateway** (`gateway/cmd/gateway/main.go`):
@@ -183,8 +182,7 @@ All services share **one PostgreSQL database** with **one SQLAlchemy metadata** 
   are validated server-side in one place and stored typed: built-in fields in their own
   registration columns and `balancer.registration_identity` rows, organizer-defined fields
   in `registration.custom_fields_json`. Every field declares its visibility, which is what
-  keeps organizer-only answers off the public roster. Design record:
-  [`docs/registration-form-schema/design.md`](./registration-form-schema/design.md).
+  keeps organizer-only answers off the public roster.
 - **RBAC.** Grant-only permission catalog + workspace system roles, with a
   `user_permission_deny` overlay. Bootstrapped from `backend/shared/rbac/`.
 - **Migrations.** A single Alembic project under `backend/migrations/`. `make migrate` runs

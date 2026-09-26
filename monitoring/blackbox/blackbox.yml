@@ -1,0 +1,16 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+
+  # TCP connect is not enough: on 2026-09-26 Moscow accepted connections on :22
+  # while sshd never sent its banner. Require the banner itself.
+  ssh_banner:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      query_response:
+        - expect: "^SSH-2.0-"

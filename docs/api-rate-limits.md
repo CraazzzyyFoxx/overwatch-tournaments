@@ -1,9 +1,7 @@
 # API rate limits and quotas
 
 What an API client is allowed to spend, how a refusal looks, and how to read your own remaining
-budget. This is the client-facing contract; the design behind it is
-[`docs/plans/2026-09-17-api-key-rate-limits.md`](./plans/2026-09-17-api-key-rate-limits.md), and the
-enforcement code is `backend/shared/quota/`.
+budget. This is the client-facing contract; the enforcement code is `backend/shared/quota/`.
 
 **Related documents**
 

@@ -1,10 +1,8 @@
 # Workspace Subdomains & Custom Domains: Ops Runbook
 
-**Date:** 2026-07-06 (Phase 1) / 2026-07-07 (Phase 2 addendum)
 **Platform Zone:** `owt.craazzzyyfoxx.me`
-**Phase:** 1 (subdomains, single OAuth callback) + 2 (customer-owned custom domains, on-demand TLS)
 
-This document describes the out-of-repo operational steps required to enable workspace multi-domain support. Sections 1-4 cover Phase 1 (platform-zone subdomains, wildcard DNS-01 TLS). **Section 5 adds Phase 2 (customer-owned custom domains, on-demand HTTP-01 TLS)** — read Section 2 first, since Section 5 builds on the same external Traefik instance rather than re-explaining it.
+This document describes the out-of-repo operational steps required to enable workspace multi-domain support. Sections 1-4 cover platform-zone subdomains (wildcard DNS-01 TLS). **Section 5 covers customer-owned custom domains (on-demand HTTP-01 TLS)** — read Section 2 first, since Section 5 builds on the same external Traefik instance rather than re-explaining it.
 
 ---
 
@@ -294,7 +292,7 @@ If all checks pass:
 
 ---
 
-## 5. Custom Domains (Phase 2)
+## 5. Custom Domains
 
 Custom domains let a workspace serve on a domain the *customer* owns and controls DNS for (e.g. `tourney.example.com`), instead of (or alongside) a `*.owt.craazzzyyfoxx.me` subdomain. Because we don't control the customer's DNS, this is a materially different ops story from Section 2's wildcard: verification is DNS-TXT-based ownership proof, and TLS is issued **on demand per domain via HTTP-01**, not the shared DNS-01 wildcard.
 
@@ -302,7 +300,7 @@ All record names, token formats, and gates below are quoted from the actual impl
 
 ### 5.1 What the code actually does (source of truth)
 
-- **Verification token generation** — `backend/app-service/src/services/workspace/service.py:38,93`:
+- **Verification token generation** — `backend/app-service/src/services/workspace/service.py`:
   ```python
   _CUSTOM_DOMAIN_TOKEN_PREFIX = "owt-verify-"
   ...
@@ -310,17 +308,17 @@ All record names, token formats, and gates below are quoted from the actual impl
   ```
   The stored token is always `owt-verify-<url-safe-random-string>` — copy it byte-for-byte from the admin UI; there is no way to recover/regenerate the same token without calling `set_custom_domain` again (which also resets `custom_domain_verified_at` to unverified).
 
-- **DNS TXT record checked** — `verify_custom_domain`, `service.py:120-135`:
+- **DNS TXT record checked** — `verify_custom_domain`, `service.py`:
   ```python
   ok = await _dns_txt_contains(
       f"_owt-verify.{workspace.custom_domain}", workspace.custom_domain_verification_token
   )
   ```
-  The record queried is **`_owt-verify.<custom_domain>`** (a dedicated subrecord under the customer's domain) — **not** a TXT on the apex of the customer's domain. `_dns_txt_contains` (`service.py:62-78`) does a live `dns.asyncresolver.resolve(name, "TXT")` lookup and fails closed (any DNS error → not verified, never a 500).
+  The record queried is **`_owt-verify.<custom_domain>`** (a dedicated subrecord under the customer's domain) — **not** a TXT on the apex of the customer's domain. `_dns_txt_contains` (`service.py`) does a live `dns.asyncresolver.resolve(name, "TXT")` lookup and fails closed (any DNS error → not verified, never a 500).
 
-- **Domain normalization/guardrails** — `backend/shared/tenancy/hostnames.py:66-81` (`normalize_custom_domain`): lowercases, strips port/trailing dot, requires a valid multi-label FQDN, and explicitly rejects anything under the platform zone (`owt.craazzzyyfoxx.me` or a subdomain of it) — a customer cannot claim a domain that collides with Phase 1.
+- **Domain normalization/guardrails** — `backend/shared/tenancy/hostnames.py` (`normalize_custom_domain`): lowercases, strips port/trailing dot, requires a valid multi-label FQDN, and explicitly rejects anything under the platform zone (`owt.craazzzyyfoxx.me` or a subdomain of it) — a customer cannot claim a domain that collides with a workspace subdomain.
 
-- **Resolver fail-closed** — `get_by_verified_custom_domain` (`backend/shared/repository/workspace.py:32-43`) only matches rows where `custom_domain_verified_at IS NOT NULL`. A domain that is set-but-unverified never resolves to a workspace, in `by_host`, in the gateway's WS origin check, or anywhere else.
+- **Resolver fail-closed** — `get_by_verified_custom_domain` (`backend/shared/repository/workspace.py`) only matches rows where `custom_domain_verified_at IS NOT NULL`. A domain that is set-but-unverified never resolves to a workspace, in `by_host`, in the gateway's WS origin check, or anywhere else.
 
 ### 5.2 Customer DNS records
 
@@ -331,7 +329,7 @@ Two records, two different purposes — give the customer **both**, but understa
 | TXT | `_owt-verify.<custom-domain>` | The exact token shown in admin, e.g. `owt-verify-<random>` | **Ownership verification only.** Read once by "Verify"; not consulted again after `custom_domain_verified_at` is set. Can be removed after verification if the customer wants (re-verification, e.g. after `clear_custom_domain` + re-`set_custom_domain`, would need it added back). |
 | CNAME (or A, if the domain is an apex and the registrar doesn't allow CNAME-at-apex) | `<custom-domain>` | `owt.craazzzyyfoxx.me` (CNAME) or the ingress IP (A record — same IP as Section 1's wildcard `A` record) | **Serving traffic + TLS issuance.** Must resolve to the ingress before Traefik's HTTP-01 challenge (Section 5.3) can succeed, and before real visitors reach the site. |
 
-Both records are exactly what the admin UI (`frontend/src/app/admin/workspaces/page.tsx:729-753`) displays to the organiser once a custom domain is saved (unverified):
+Both records are exactly what the admin UI (`frontend/src/app/admin/workspaces/page.tsx`) displays to the organiser once a custom domain is saved (unverified):
 
 ```
 TXT   _owt-verify.tourney.example.com   owt-verify-<random-token>
@@ -381,7 +379,7 @@ http:
 
 ### 5.4 Organiser steps (Admin UI)
 
-1. Navigate to `/admin/workspaces` (gated: visible to `isSuperuser` or `isWorkspaceAdmin(workspace_id)` in the UI; **authoritatively enforced server-side** on every RPC by `ensure_workspace_permission(user, workspace_id, "workspace", "update")` — `backend/app-service/src/rpc/workspaces.py:347,367,383` — i.e. workspace owner/admin roles or a platform superuser).
+1. Navigate to `/admin/workspaces` (gated: visible to `isSuperuser` or `isWorkspaceAdmin(workspace_id)` in the UI; **authoritatively enforced server-side** on every RPC by `ensure_workspace_permission(user, workspace_id, "workspace", "update")` in `backend/app-service/src/rpc/workspaces.py` — i.e. workspace owner/admin roles or a platform superuser).
 2. Click **Edit** on the target workspace → scroll to **Domain & SEO** → **Custom domain** field.
 3. Enter the domain (e.g. `tourney.example.com`) → click **Save**. This calls `POST /api/v1/workspaces/{workspace_id}/custom-domain` (`rpc.app.workspaces.set_custom_domain`), which stores the normalized domain plus a fresh `owt-verify-...` token and resets `custom_domain_verified_at` to unset. The UI flips to a **"Pending verification"** badge and shows the TXT + CNAME records to add (Section 5.2).
 4. Give the customer the two DNS records; they add them at their registrar/DNS provider.
@@ -404,20 +402,20 @@ Run these in order — each is independently checkable, and later steps assume e
    curl "https://owt.craazzzyyfoxx.me/api/v1/workspaces/by-host?host=tourney.example.com"
    # expect: {"data": {"workspace_id": <id>, "slug": "..."}, ...}
    ```
-   Note the frontend (`frontend/src/middleware.ts:6`) and this RPC both cache host→workspace lookups for up to 60 seconds (`CACHE_TTL_MS = 60_000`); allow up to a minute after verification before this check is guaranteed fresh.
+   Note the frontend (`frontend/src/proxy.ts`) and this RPC both cache host→workspace lookups for up to 60 seconds (`CACHE_TTL_MS = 60_000`); allow up to a minute after verification before this check is guaranteed fresh.
 5. **OAuth login round-trips.** From `https://tourney.example.com`, click Login. Confirm:
-   - The browser is bounced to `https://owt.craazzzyyfoxx.me/auth/<provider>/login?origin=https://tourney.example.com&guard_hash=...` (`frontend/src/lib/oauth-login.ts`'s `onCustomDomain` branch) — a host-only `owt_xdomain_guard` cookie is set on `tourney.example.com` *before* this bounce, carrying no `domain` attribute.
+   - The browser is bounced to `https://owt.craazzzyyfoxx.me/auth/<provider>/login?origin=https://tourney.example.com&guard_hash=...` (`frontend/src/lib/auth/oauth-login.ts`'s `onCustomDomain` branch) — a host-only `owt_xdomain_guard` cookie is set on `tourney.example.com` *before* this bounce, carrying no `domain` attribute.
    - After provider consent, the apex callback redirects back to `https://tourney.example.com/auth/sso?ticket=...&next=...`.
-   - `frontend/src/app/(site)/auth/sso/route.ts` redeems the ticket (requires the `owt_xdomain_guard` cookie set in the first bullet — fails closed with `invalid_state` if missing), sets `owt_access_token`/`owt_refresh_token` **host-only** (no `domain` attribute — these are NOT the `.owt.craazzzyyfoxx.me`-scoped cookies from Phase 1) on `tourney.example.com`, and clears the guard cookie.
+   - `frontend/src/app/(site)/auth/sso/route.ts` redeems the ticket (requires the `owt_xdomain_guard` cookie set in the first bullet — fails closed with `invalid_state` if missing), sets `owt_access_token`/`owt_refresh_token` **host-only** (no `domain` attribute — these are NOT the `.owt.craazzzyyfoxx.me`-scoped subdomain cookies) on `tourney.example.com`, and clears the guard cookie.
 6. **Account linking works.** From an *already-logged-in* session on `tourney.example.com`, use the "Link account" flow; confirm `/auth/link/complete` redeems the link ticket against the live local session (it requires an existing session on that exact host — `getAccessToken`/`loginRedirect` in `frontend/src/app/(site)/auth/link/complete/route.ts` — and never establishes a new session from the ticket itself).
 7. **WS connects.** Open DevTools → Network → WS while on `tourney.example.com`; confirm the WebSocket handshake succeeds. The gateway's dynamic origin check (`gateway/internal/ws/handler.go`, backed by `gateway/internal/workspace/workspace.go`'s `IsVerifiedCustomDomain`) queries `custom_domain = $1 AND custom_domain_verified_at IS NOT NULL` and caches the result (verified or not) for 60 seconds (`customDomainCacheTTL`) per origin host.
-8. **Apex + subdomains unaffected.** Re-run the Section 4 checklist against `https://owt.craazzzyyfoxx.me` and an existing `*.owt.craazzzyyfoxx.me` workspace — both must still resolve, serve TLS, and connect WS exactly as before (regression check; Phase 2 additions are purely additive in the resolver and origin-allowlist code paths).
+8. **Apex + subdomains unaffected.** Re-run the Section 4 checklist against `https://owt.craazzzyyfoxx.me` and an existing `*.owt.craazzzyyfoxx.me` workspace — both must still resolve, serve TLS, and connect WS exactly as before.
 9. **Unknown/unverified host → 404 / no workspace.** Hit a domain that was never `set_custom_domain`'d, and (separately) a domain that is `set_custom_domain`'d but not yet verified. Both must fail closed: `by_host` returns `data: null`, no white-label chrome loads, and the WS handshake from that origin is rejected — never silently mapped to any workspace.
 
 ### 5.6 Rollback / Clear
 
 - **Unset a custom domain entirely:** `clear_custom_domain` (`DELETE /api/v1/workspaces/{workspace_id}/custom-domain`) wipes `custom_domain`, `custom_domain_verification_token`, and `custom_domain_verified_at` together. In the admin UI, the **Remove** button only appears once the domain is *verified*. For a domain that is still pending (saved but not yet verified), the UI's only exposed action is overwriting it via **Save** with a new value (which mints a fresh token and keeps the workspace unverified) — there's no dedicated "cancel" button for a pending, not-yet-verified domain. To fully clear a pending domain without replacing it, call the same endpoint directly: `DELETE /api/v1/workspaces/{workspace_id}/custom-domain` with a bearer token that has `workspace.update` for that workspace.
-- **Propagation delay after any change:** both the gateway's WS-origin cache (`customDomainCacheTTL = 60 * time.Second`, `gateway/internal/workspace/workspace.go:35`) and the frontend's `by_host` middleware cache (`CACHE_TTL_MS = 60_000`, `frontend/src/middleware.ts:6`) mean a `set_custom_domain`, `verify_custom_domain`, or `clear_custom_domain` change can take **up to ~60 seconds** to take full effect for WS connections and page routing, even though the admin UI reflects the change immediately (it re-fetches the workspace directly, bypassing both caches).
+- **Propagation delay after any change:** both the gateway's WS-origin cache (`customDomainCacheTTL = 60 * time.Second`, `gateway/internal/workspace/workspace.go`) and the frontend's `by_host` middleware cache (`CACHE_TTL_MS = 60_000`, `frontend/src/proxy.ts`) mean a `set_custom_domain`, `verify_custom_domain`, or `clear_custom_domain` change can take **up to ~60 seconds** to take full effect for WS connections and page routing, even though the admin UI reflects the change immediately (it re-fetches the workspace directly, bypassing both caches).
 - **Re-verifying after `clear_custom_domain` + re-`set_custom_domain`:** the token is regenerated every time `set_custom_domain` runs, so the customer must re-add the TXT record with the *new* token value — the old TXT value will no longer match.
 
 ---
@@ -453,4 +451,4 @@ If DNS changes don't resolve immediately:
 - **Traefik ACME & HTTP-01** (Section 5): https://doc.traefik.io/traefik/https/acme/#httpchallenge
 - **Let's Encrypt Rate Limits:** https://letsencrypt.org/docs/rate-limits/
 - **OAuth 2.0 Redirect URI Security:** https://oauth.net/2/redirect-uris/
-- **Custom-domain source of truth:** `backend/app-service/src/services/workspace/service.py` (`set_custom_domain`, `verify_custom_domain`, `_dns_txt_contains`), `backend/app-service/src/rpc/workspaces.py` (RPC gates), `backend/shared/tenancy/hostnames.py` (`normalize_custom_domain`), `gateway/internal/workspace/workspace.go` (`IsVerifiedCustomDomain`), `gateway/internal/ws/handler.go` (dynamic WS origin check), `frontend/src/app/admin/workspaces/page.tsx` (organiser UI), `frontend/src/lib/oauth-login.ts` / `frontend/src/app/(site)/auth/sso/route.ts` / `frontend/src/app/(site)/auth/link/complete/route.ts` (OAuth apex-bounce + ticket handoff)
+- **Custom-domain source of truth:** `backend/app-service/src/services/workspace/service.py` (`set_custom_domain`, `verify_custom_domain`, `_dns_txt_contains`), `backend/app-service/src/rpc/workspaces.py` (RPC gates), `backend/shared/tenancy/hostnames.py` (`normalize_custom_domain`), `gateway/internal/workspace/workspace.go` (`IsVerifiedCustomDomain`), `gateway/internal/ws/handler.go` (dynamic WS origin check), `frontend/src/app/admin/workspaces/page.tsx` (organiser UI), `frontend/src/lib/auth/oauth-login.ts` / `frontend/src/app/(site)/auth/sso/route.ts` / `frontend/src/app/(site)/auth/link/complete/route.ts` (OAuth apex-bounce + ticket handoff)

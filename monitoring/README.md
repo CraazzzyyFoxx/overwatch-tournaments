@@ -1,29 +1,125 @@
-# Monitoring Deployment
+# Monitoring
 
-This document explains how the system monitoring stack is deployed for OWT.
+Production monitoring is split across two hosts on purpose. The production host (Moscow,
+`217.149.19.31`) runs only a telemetry agent; storage, dashboards and alerting run on
+**home** (`91.135.214.75`). On 2026-09-26 Moscow hung twice on a stalled virtual disk, and
+the monitoring stack that lived on it went silent with it — no alert fired. With the stack
+on home, "Moscow is hung" is itself an alert.
 
-Monitoring runs as its **own** Docker Compose project (`owt-monitoring`) defined in
-the repository-root file `docker-compose.monitoring.yml`, using configs stored in `monitoring/`.
-It is intentionally separate from the application stack (`docker-compose.production.yml`,
-project `owt`) so telemetry can be started, updated, and restarted
-independently of the app.
+## Where things run
 
-Services:
+| Host | What | Where it is defined |
+|---|---|---|
+| Moscow | `alloy` — scrapes the stack, tails `./logs`, receives OTLP, pushes everything to home | `docker-compose.production.yml`, profile `telemetry`; config `monitoring/alloy/moscow.alloy` |
+| Moscow | `nginx-exporter` — nginx `stub_status` (Alloy has no embedded nginx exporter) | `docker-compose.production.yml`, profile `telemetry` |
+| home | `owt-monitoring`: Prometheus, Alertmanager, Grafana, Loki, Tempo, blackbox-exporter | `docker-compose.monitoring.yml`, checkout of `master` in `~/owt-monitoring` |
 
-- Prometheus — metrics collection and alerting rules (remote-write receiver enabled
-  for Tempo's span-metrics / service-graph series)
-- Alertmanager — alert routing to Discord
-- Grafana — dashboards for metrics, logs, and traces
-- Loki — log storage
-- Promtail — log shipping
-- Tempo — distributed tracing backend (metrics_generator pushes span-metrics into Prometheus)
-- OpenTelemetry Collector — trace ingestion (OTLP), fanned out to **both** Tempo
-  and Sentry (Sentry Exporter, see "Sentry tracing" below)
-- Redis Exporter — Redis metrics
-- RabbitMQ Exporter — RabbitMQ metrics (management API)
-- Node Exporter — host CPU / memory / disk / network
-- cAdvisor — per-container CPU / memory / restarts
-- Postgres Exporter — PostgreSQL metrics
+The profile keeps the agent production-only: production sets `COMPOSE_PROFILES=telemetry` in
+the root `.env`; the dev site on home runs the same `docker-compose.production.yml` without
+it (`docs/dev-site.md`), so dev telemetry never reaches production monitoring.
+
+`make monitoring-*` belongs on home. On Moscow it would start the home stack next to the app.
+
+**Local development** is separate: `docker-compose.yml` runs its own small stack from
+`monitoring/prometheus/prometheus.yml`, `monitoring/promtail/promtail.yml` and
+`monitoring/otel/otel-collector.yml`. Those three files are dev-only; production uses
+`moscow.alloy` and `prometheus.home.yml`. When a log pipeline changes, change it in both
+`promtail.yml` and `moscow.alloy`.
+
+## Data flow
+
+```
+Moscow (app-network)                         home
+  services ──OTLP──► alloy:4317 ─┐
+  scrape targets ───► alloy ─────┼─HTTPS──► Traefik  ingest.owt.craazzzyyfoxx.me
+  ./logs ───────────► alloy ─────┘            │  allowlist 217.149.19.31/32 + basic auth
+                         └──OTLP──► Sentry    ├─ /api/v1/write      → prometheus 127.0.0.1:19090
+                                              ├─ /loki/api/v1/push  → loki       127.0.0.1:13101
+                                              └─ /v1/traces         → tempo      127.0.0.1:14318
+                                             grafana.owt.craazzzyyfoxx.me → grafana 127.0.0.1:13002
+                                             blackbox-exporter ──probes──► https://owt…/health, 217.149.19.31:22
+```
+
+- **Metrics.** Alloy scrapes the same targets the old Prometheus did (docker-DNS names,
+  `job` = `instance` = service name), RabbitMQ's built-in `rabbitmq_prometheus` plugin
+  (`rabbitmq:15692/metrics/per-object`, filtered to the four metrics rules and dashboards use,
+  plus `up`), and embedded exporters with the old `job` labels: `node` (with the textfile
+  collector for `owt_backup.prom`), `cadvisor`, `redis`, `postgres`. It also scrapes itself
+  (`job="alloy"`): that is where the `nginx_limit_*` counters derived from the nginx access
+  log live. Everything goes out through `remote_write`.
+- **Logs.** `./logs/**/*.log`, three pipelines (`app_services`, `gateway`, `nginx`). The first
+  start reads from the end of each file; positions persist in the `alloy-data` volume.
+- **Traces.** Services export OTLP to `alloy:4317` (`OTLP_ENDPOINT` in
+  `docker-compose.production.yml`, sampling 10%). Alloy sends one copy to Tempo and one to
+  Sentry's native OTLP ingest. The SDKs send no transactions of their own
+  (`SENTRY_TRACES_SAMPLE_RATE=0`), so Sentry sees one trace per request, not one per process.
+
+Nothing on Moscow listens outside `app-network`. Alloy's UI stays on `127.0.0.1:12345` inside
+its container. Every port on home binds `127.0.0.1`; Traefik on the host is the only way in.
+
+## Secrets and configuration
+
+| Where | Key | Purpose |
+|---|---|---|
+| Moscow root `.env` | `COMPOSE_PROFILES=telemetry` | starts `alloy` and `nginx-exporter` |
+| Moscow root `.env` | `TELEMETRY_INGEST_USER`, `TELEMETRY_INGEST_PASSWORD` | basic auth on `ingest.owt` (user `moscow-alloy`) |
+| Moscow root `.env` | `SENTRY_OTLP_PUBLIC_KEY` | public key of `SENTRY_DSN`, header `x-sentry-auth` |
+| Moscow root `.env` | `POSTGRES_EXPORTER_DSN` | Postgres **:5432**, not pgBouncer :6432 (transaction pooling breaks the exporter) |
+| home `~/owt-monitoring/.env` | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_ROOT_URL` | Grafana |
+| home `monitoring/secrets/` | `discord_webhook_url` | Alertmanager → Discord |
+| home `/etc/traefik/dynamic.yml` | routers `owt-ingest-{metrics,logs,traces}`, `owt-grafana`; middlewares `owt-ingest-allow`, `owt-ingest-auth` (bcrypt of the ingest password) | the only way into the stack |
+
+The secret files are gitignored. Alertmanager runs as `nobody`: make them readable by it
+(`chmod 644`, or `chown 65534:65534` + `chmod 400`), or notifications fail with
+"permission denied" even though the config loads.
+
+DNS (Timeweb zone): `ingest.owt` and `grafana.owt` are A records to home. They win over the
+`*.owt` wildcard, which points at Moscow. If home's address changes, both records change.
+
+Images come through `dockerhub.timeweb.cloud/<repo>:<tag>`: Docker Hub's CDN does not answer
+from either host (manifests do, layer downloads time out).
+
+## Running it
+
+On home:
+
+```bash
+cd ~/owt-monitoring && git pull
+make monitoring-up                               # docker compose -f docker-compose.monitoring.yml up -d
+curl -s -XPOST 127.0.0.1:19090/-/reload          # after changing rules or prometheus.home.yml
+```
+
+On Moscow the agent ships with every release: `ops/deploy/remote-deploy.sh` checks out the
+tag and `make prod-up` recreates `alloy` when its image or definition changes. A change to
+`moscow.alloy` alone does not recreate it:
+
+```bash
+docker compose -f docker-compose.production.yml restart alloy
+```
+
+Retention: Prometheus 14 days / 2 GB, Loki 7 days (`loki/loki.yml`), Tempo 48 hours
+(`tempo/tempo.yml`). While home is unreachable, Alloy keeps metrics in its WAL (about two
+hours), resumes logs from the saved file positions, and holds traces only in memory.
+
+## Alerts
+
+Rules live in `monitoring/prometheus/rules/` and are evaluated on home. Routing
+(`alertmanager/alertmanager.yml`): everything to Discord, `critical` repeats hourly.
+
+`prod_reachability.yml` holds the rules that must work while Moscow itself is down:
+
+| Alert | Fires when |
+|---|---|
+| `ProdTelemetryAbsent` | no sample from Moscow for 3 minutes (`absent_over_time(up{job="node"}[3m])`) — host hung or the Moscow → home path broken |
+| `ProdHttpDown` | the blackbox probe of `https://owt.craazzzyyfoxx.me/health` fails for 2 minutes |
+| `ProdSshUnresponsive` | `217.149.19.31:22` sends no `SSH-2.0-` banner for 2 minutes — TCP accepting while userspace is stalled, the 2026-09-26 signature |
+
+There is no dead man's switch for home itself: if home (or its Alertmanager) is down, nothing
+alerts. healthchecks.io, the usual answer, rejects every Russian IP
+(`blog.healthchecks.io/2022/12/ru-ip-block`) — home and Moscow both get 403.
+
+`HostIOPressureHigh` (`infrastructure.yml`) is the early warning: tasks fully stalled on I/O
+more than 30% of the time.
 
 ## Dashboards
 
@@ -38,289 +134,52 @@ Provisioned into the `OWT` folder (deleting a JSON file under
 | Tracing | `tracing-overview` | RED per service from Tempo span-metrics, service graph, TraceQL slow/error traces, logs-with-trace links |
 | Infrastructure | `infrastructure` | Host CPU/RAM/disk (+7d disk forecast), per-container resources, PostgreSQL, Redis |
 
-All monitoring services have CPU/memory limits set via `deploy.resources` so they cannot
-starve the host.
-
-## How networking works
-
-The monitoring stack attaches to the application stack's network as an **external** network:
-
-```yaml
-networks:
-  app-network:
-    external: true
-    name: owt_app-network
-```
-
-This means scrape targets such as `gateway:9110`, `redis:6379`, and `rabbitmq:15672` resolve
-by service name across the shared network — but it also means the **application stack must be
-running first**, because it is what creates `owt_app-network`.
-
-## Prerequisites
-
-1. Docker and Docker Compose are installed on the host.
-2. The application stack is already running (`make prod-up`) so the shared network exists.
-3. The host log directories exist under `logs/`, because Promtail reads logs from there.
-
-Application logs are mounted from `./logs` into Promtail as `/var/log/app`.
-
-> **Note on data:** the monitoring project uses its own fresh named volumes
-> (`prometheus_data`, `loki_data`, `tempo_data`, `grafana_data`, `alertmanager_data`).
-> Historical metrics/logs/traces start empty on first run. Grafana datasources and
-> dashboards are provisioned from files in `monitoring/grafana/provisioning/`, so they
-> are restored automatically.
-
-## What the stack exposes
-
-Only Grafana is published to the host. Prometheus, Loki, Tempo, Alertmanager, and the
-exporters are reachable internally over the shared Docker network and are browsed through
-Grafana (Explore / datasources):
-
-- Grafana: `http://localhost:3001`
-
-## 1. Prepare environment variables
-
-The monitoring stack can start with defaults, but production deployment should set explicit
-credentials.
-
-```bash
-export GRAFANA_ADMIN_USER=admin
-export GRAFANA_ADMIN_PASSWORD='change-me'
-export GRAFANA_PORT=3001
-export GRAFANA_ROOT_URL='http://localhost:3001'
-export TEMPO_URL='http://tempo:3200'
-```
-
-### Sentry tracing
-
-The collector forwards the same OTLP trace stream to Sentry, so a distributed
-trace (gateway -> RabbitMQ -> service -> SQL) shows up in Sentry Tracing next to
-the Issues it caused, not only in Tempo. Sentry routes by resource attribute; the
-collector stamps a constant `sentry.project` so a newly added service cannot
-silently lose its spans:
-
-```bash
-export SENTRY_ORG_SLUG='craazzzyyfoxx'          # default
-export SENTRY_OTEL_PROJECT='owt-tournaments'    # default; same project as the SDK DSN
-export SENTRY_OTEL_AUTH_TOKEN='sntrys_...'      # REQUIRED, no usable default
-```
-
-The token is a Sentry **Internal Integration** token (Settings -> Developer
-Settings -> Custom Integrations -> Internal Integration) with `org:read` and
-`project:read`. Put it in the repository-root `.env` so `make monitoring-up`
-picks it up.
-
-Without it the collector still starts and Tempo keeps working — the compose
-fallback (`unset`) is non-empty on purpose, because the exporter rejects an empty
-token at config validation and would crash-loop the whole collector. Only the
-Sentry branch degrades, with `Failed to pre-populate project cache` in the logs.
-
-The application SDKs deliberately send **no** transactions of their own
-(`SENTRY_TRACES_SAMPLE_RATE=0` in `backend/env/*.env`); they only link errors and
-logs to the OTel trace. Turning SDK tracing back on bills a second, disconnected
-copy of every request.
-
-The RabbitMQ exporter reads `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` — the **same
-variables the broker itself uses** — so with a repository-root `.env` no extra export is
-needed. Note that RabbitMQ restricts the default `guest` user to loopback connections:
-production must run the broker with non-guest credentials or the exporter (a separate
-container) will get 401s. (Dev compose mounts `monitoring/rabbitmq/dev-loopback.conf` to
-lift the restriction locally.)
-
-The Postgres exporter needs a DSN pointing **directly at PostgreSQL (port 5432), NOT at
-pgBouncer (:6432)** — transaction pooling breaks the exporter's session-level queries:
-
-```bash
-export POSTGRES_EXPORTER_DSN='postgresql://user:pass@host.docker.internal:5432/anak_dev?sslmode=disable'
-```
-
-(Put it in the repository-root `.env` so `make monitoring-up` picks it up.)
-
-For Discord alert delivery, create a local secret file that is not committed to git:
-
-```bash
-cp monitoring/secrets/discord_webhook_url.example monitoring/secrets/discord_webhook_url
-```
-
-Then replace the example value with the real Discord webhook URL.
-
-## 2. Start monitoring
-
-Make sure the application stack is up first:
-
-```bash
-make prod-up
-```
-
-Validate and start monitoring (from the repository root):
-
-```bash
-docker compose -f docker-compose.monitoring.yml config   # validate
-make monitoring-up                                        # start
-make monitoring-ps                                        # status
-```
-
-`make monitoring-up` is equivalent to `docker compose -f docker-compose.monitoring.yml up -d`.
-
-### Tiers: metrics always, logs and traces on demand
-
-Metrics (prometheus, alertmanager, grafana, every exporter) always start. Log
-storage (`loki` + `promtail`) and traces (`tempo` + `otel-collector`) sit behind
-the compose profiles `logs` and `traces`, because together they cost ~470M of
-RSS plus page cache — on a 4 CPU / 8G box that memory belongs to PostgreSQL,
-whose working set is several GB:
-
-```bash
-make monitoring-up                                   # metrics only (default)
-make monitoring-up MONITORING_PROFILES="logs traces" # everything
-```
-
-Grafana keeps its Loki and Tempo datasources either way — they resolve lazily,
-so with the profiles off those datasources simply return errors and the
-`Application Logs` / tracing dashboards stay empty. Prometheus does not scrape
-`promtail`, `tempo` or `otel-collector`, so a metrics-only host raises no
-`TargetDown` alert for them.
-
-## 3. Verify the deployment
-
-Follow logs if any service is restarting or unhealthy:
-
-```bash
-make monitoring-logs
-```
-
-### Grafana
-
-Open `http://localhost:3001` and log in with `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`.
-
-Provisioned datasources:
-
-- Prometheus -> `http://prometheus:9090`
-- Loki -> `http://loki:3100`
-- Tempo -> `${TEMPO_URL}` (default `http://tempo:3200`)
-
-Dashboards are provisioned into the `OWT` folder; the default home dashboard
-is `Infrastructure` (`Application Logs` needs the `logs` profile).
-
-### Prometheus targets
-
-Browse Prometheus through Grafana, or temporarily publish port `9090` if you need the raw
-targets UI. At minimum `redis-exporter:9121` and `rabbitmq-exporter:9419` should be `UP`.
-Application targets become healthy only if the scrape hostnames match the real service names
-on the shared network.
-
-### Loki and Promtail
-
-Use Grafana Explore to query Loki. Promtail reads log files from `logs/**/*.log`. If no logs
-appear, confirm the application is writing JSON logs into the repository `logs/` directory.
-
-## 4. Stop or restart monitoring
-
-```bash
-make monitoring-down                                          # stop + remove monitoring containers
-docker compose -f docker-compose.monitoring.yml restart prometheus   # restart one service after a config change
-```
-
-Stopping monitoring does **not** affect the application stack — they are separate projects,
-and the shared network is external (Compose will not remove it).
-
-## Verify resource limits
-
-```bash
-docker stats            # MEM USAGE / LIMIT and CPU % columns
-docker inspect <container> --format '{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}'
-```
-
-Both application and monitoring containers now report non-zero memory/CPU limits.
-
-## Alerting setup note
-
-Alertmanager reads the Discord webhook from `monitoring/secrets/discord_webhook_url` through
-the mounted path `/run/secrets/discord_webhook_url`, keeping the real webhook out of git.
-
 ## Troubleshooting
 
-### `make monitoring-up` fails with a network error
-
-Cause: the external network `owt_app-network` does not exist yet.
-
-Fix: start the application stack first with `make prod-up`, then retry.
-
-### Prometheus shows app targets as DOWN
-
-Cause: target hostnames in `monitoring/prometheus/prometheus.yml` do not match the real Docker
-service names, or the app services are not on the shared network.
-
-Fix: compare the targets with service names in `docker-compose.production.yml`, update
-`monitoring/prometheus/prometheus.yml`, and restart Prometheus.
-
-### RabbitMQ exporter is UP but returns no useful data (`rabbitmq_up 0`)
-
-Cause: wrong RabbitMQ credentials, or the broker runs as `guest`/`guest` (RabbitMQ rejects
-`guest` on non-loopback connections, and the exporter is a separate container).
-
-Fix: make sure `RABBITMQ_DEFAULT_USER` / `RABBITMQ_DEFAULT_PASS` in the root `.env` match the
-broker's real (non-guest) credentials and restart `rabbitmq-exporter`.
-
-### Postgres exporter shows `pg_up 0`
-
-Cause: `POSTGRES_EXPORTER_DSN` is missing, points at pgBouncer (:6432), or the host address
-is wrong from inside the container.
-
-Fix: set a DSN that reaches PostgreSQL directly on 5432 (use `host.docker.internal` for a
-DB on the Docker host) and restart `postgres-exporter`.
-
-### Tracing dashboard is empty / service graph shows nothing
-
-Cause: Tempo's metrics_generator series are not reaching Prometheus.
-
-Fix: confirm Prometheus runs with `--web.enable-remote-write-receiver` and Tempo's
-`metrics_generator.storage.remote_write` targets `http://prometheus:9090/api/v1/write`;
-check `traces_spanmetrics_calls_total` in Prometheus after some sampled traffic
-(sampling is 10%, so quiet environments need a few requests).
-
-### Traces reach Tempo but not Sentry
-
-Cause: missing/expired `SENTRY_OTEL_AUTH_TOKEN`, or the project slug in
-`SENTRY_OTEL_PROJECT` does not exist in the org (`auto_create_projects` is off on
-purpose).
-
-Fix: check the collector logs for `Failed to pre-populate project cache` or
-`project not found`, then confirm the counters diverge:
+**Is Alloy healthy?** Its image has no shell tools; ask from a container in its network
+namespace:
 
 ```bash
-docker exec owt-monitoring-prometheus-1 \
-  wget -qO- http://otel-collector:8888/metrics | grep -E 'sent_spans|send_failed_spans'
+docker run --rm --network container:owt-alloy-1 dockerhub.timeweb.cloud/curlimages/curl:8.16.0 \
+  -s http://127.0.0.1:12345/-/ready
+docker run --rm --network container:owt-alloy-1 dockerhub.timeweb.cloud/curlimages/curl:8.16.0 \
+  -s http://127.0.0.1:12345/api/v0/web/components   # every component: health.state
+docker logs owt-alloy-1 --since 10m | grep -i error
 ```
 
-`otelcol_exporter_sent_spans{exporter="sentry"}` climbing means ingestion works;
-`otelcol_exporter_send_failed_spans{exporter="sentry"}` climbing is an auth or
-routing problem. Sentry-side lag is under a minute, and app sampling is 10%, so a
-quiet environment needs a few requests before anything shows up.
-
-### Alertmanager restarts in a loop / Discord alerts are not delivered
-
-Cause: `monitoring/secrets/discord_webhook_url` is missing, empty, or invalid. The file
-is gitignored, so a fresh checkout never has it and `alertmanager` crash-loops with
-`Loading configuration file failed ... no discord webhook URL provided`.
-
-Fix: create it from the `.example` file, put in the real webhook, recreate the container:
+**Ingest returns 401 / 403.** 403: the request did not come from `217.149.19.31`. 401: the
+password in Moscow's `.env` does not match the bcrypt hash in home's Traefik config. Rebuild the
+hash from the `.env` value without printing it:
 
 ```bash
-printf '%s' 'https://discord.com/api/webhooks/<id>/<token>' \
-  > monitoring/secrets/discord_webhook_url
-# The image runs as nobody; a root-owned 600 file yields "permission denied"
-# at notify time even though the config loads fine.
-chown 65534:65534 monitoring/secrets/discord_webhook_url
-chmod 400 monitoring/secrets/discord_webhook_url
-docker compose -f docker-compose.monitoring.yml up -d alertmanager
+ssh Moscow "grep '^TELEMETRY_INGEST_PASSWORD=' /root/overwatch-tournaments/.env | cut -d= -f2- | tr -d '\n'" \
+  | ssh home "htpasswd -niB moscow-alloy"
 ```
 
-The same log line on an image older than `v0.28.0` is a different bug: those versions
-read `webhook_url_file` but still require `webhook_url`, so the secret file alone never
-satisfies them. Keep the pinned `prom/alertmanager:v0.28.1` or newer.
+**No per-container metrics (`container_*` missing).** The Docker host uses the containerd
+snapshotter; cAdvisor's docker factory needs `/run/containerd/containerd.sock`, which the
+`alloy` service mounts. Without it Alloy logs "Registration of the docker container factory
+failed".
 
-Verify delivery end to end by posting a synthetic alert:
+**`pg_up 0`.** `POSTGRES_EXPORTER_DSN` is missing, points at pgBouncer (:6432), or cannot
+resolve `host.docker.internal` (the `alloy` service maps it to the host gateway).
+
+**RabbitMQ panels or rules empty.** The plugin's per-object endpoint is filtered in
+`moscow.alloy` (`prometheus.relabel "rabbitmq"`); a new rule or panel on another RabbitMQ
+metric needs that metric added to the keep regex.
+
+**`nginx_limit_*` rejection counters missing.** They come from `loki.process "nginx"`
+(`stage.metrics` with `prefix = ""`) and reach Prometheus only through Alloy scraping itself
+(`job="alloy"`). No rejections yet also means no series.
+
+**Traces reach Tempo but not Sentry.** Sentry's OTLP ingest is in open beta and drops span
+events. Check `docker logs owt-alloy-1 | grep -i sentry` and `SENTRY_OTLP_PUBLIC_KEY`. To stop
+sending to Sentry (quota), remove `otelcol.exporter.otlphttp.sentry.input` from
+`otelcol.processor.batch "traces"` and restart Alloy; Tempo keeps working.
+
+**Alertmanager restarts in a loop / nothing reaches Discord.** `monitoring/secrets/` is
+missing a file or `nobody` cannot read it (see "Secrets"). Post a synthetic alert to test
+delivery end to end:
 
 ```bash
 docker exec owt-monitoring-alertmanager-1 wget -qO- \
@@ -329,44 +188,14 @@ docker exec owt-monitoring-alertmanager-1 wget -qO- \
   http://localhost:9093/api/v2/alerts
 ```
 
-### Loki is healthy but no logs appear in Grafana
+## Files
 
-Cause: Promtail does not see files in `logs/`.
-
-Fix: confirm fresh `.log` files exist under `logs/`, that `promtail` is running, and check
-`make monitoring-logs`.
-
-## Updating a running deployment
-
-After pulling monitoring/gateway changes on the production host
-(`/root/overwatch-tournaments`):
-
-```bash
-git pull
-# 1) .env sanity: RABBITMQ_DEFAULT_USER/PASS set (non-guest), POSTGRES_EXPORTER_DSN
-#    added, and SENTRY_OTEL_AUTH_TOKEN added (else traces stop at Tempo).
-# 2) Gateway (tracing needs a rebuild):
-docker compose -f docker-compose.production.yml build gateway
-docker compose -f docker-compose.production.yml up -d gateway
-docker compose -f docker-compose.production.yml restart nginx   # REQUIRED, else 502
-# 3) Monitoring stack:
-make monitoring-down && make monitoring-up
-```
-
-Then verify: Grafana shows exactly 5 dashboards in `OWT` (stale ones are
-auto-removed), Prometheus targets are UP (incl. app-svc/identity-svc/analytics-svc/
-analytics-worker/node/cadvisor/postgres), the RabbitMQ panels on Workers & Queues
-have data, and `otelcol_exporter_sent_spans{exporter="sentry"}` is climbing (see
-"Traces reach Tempo but not Sentry").
-
-## Files involved in deployment
-
-- `docker-compose.monitoring.yml` - monitoring stack (project `owt-monitoring`)
-- `docker-compose.production.yml` - application stack (project `owt`)
-- `monitoring/prometheus/prometheus.yml` - Prometheus scrape jobs and alertmanager target
-- `monitoring/prometheus/rules/` - alert rules
-- `monitoring/alertmanager/alertmanager.yml` - alert routing
-- `monitoring/secrets/discord_webhook_url.example` - example Discord webhook secret file
-- `monitoring/loki/loki.yml`, `monitoring/tempo/tempo.yml`, `monitoring/otel/otel-collector.yml` - backends
-- `monitoring/promtail/promtail.yml` - log collection
-- `monitoring/grafana/provisioning/` - Grafana datasources and dashboards
+- `monitoring/alloy/moscow.alloy` — the production agent
+- `docker-compose.monitoring.yml` — the stack on home (project `owt-monitoring`)
+- `monitoring/prometheus/prometheus.home.yml` — Prometheus on home: blackbox probes and self-monitoring
+- `monitoring/prometheus/rules/` — alert and recording rules (shared with the dev stack)
+- `monitoring/blackbox/blackbox.yml` — probe modules `http_2xx`, `ssh_banner`
+- `monitoring/alertmanager/alertmanager.yml` — routing, Discord receiver
+- `monitoring/loki/loki.yml`, `monitoring/tempo/tempo.yml` — backends (shared with the dev stack)
+- `monitoring/grafana/provisioning/`, `monitoring/grafana/dashboards/` — Grafana
+- `monitoring/prometheus/prometheus.yml`, `monitoring/promtail/promtail.yml`, `monitoring/otel/otel-collector.yml` — local dev stack only

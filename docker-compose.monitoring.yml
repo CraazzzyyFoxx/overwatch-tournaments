@@ -1,21 +1,18 @@
 name: owt-monitoring
 
 # ==============================================================================
-# System monitoring stack: Prometheus + Alertmanager + Loki + Promtail +
-# Tempo + OpenTelemetry Collector + Grafana + exporters.
+# Monitoring stack for production, running on home (not on the production
+# host): Prometheus + Alertmanager + Grafana + Loki + Tempo + blackbox.
 #
-# Runs as its own Compose project (`owt-monitoring`) and attaches to the
-# production stack's network so scrape targets (gateway:9110, redis:6379,
-# rabbitmq:15672, workers, ...) resolve by service name.
+# Telemetry arrives from the Alloy agent on Moscow (monitoring/alloy/moscow.alloy)
+# through Traefik on home: ingest.owt.craazzzyyfoxx.me, allowlisted to Moscow's
+# IP and basic-authed. Every port here binds 127.0.0.1 only; Traefik on the host
+# is the only way in. Topology, secrets and troubleshooting: monitoring/README.md
 #
-# PREREQUISITE: the production stack must be up first so the external network
-# `owt_app-network` exists. Run `make prod-up` before
-# `make monitoring-up`.
+# Images come through dockerhub.timeweb.cloud: Docker Hub's CDN does not answer
+# from home or Moscow.
 # ==============================================================================
 
-# Same host as the production stack, same unbounded json-file logs: cap them
-# here too, or cadvisor/promtail alone keep ops/cleanup/cleanup.sh necessary.
-# 50 MiB x 3 per container, rotated by the daemon (docs/disk-cleanup.md).
 x-logging: &log-rotate
   driver: json-file
   options:
@@ -24,10 +21,7 @@ x-logging: &log-rotate
 
 services:
   prometheus:
-    # 3.13 is the current Prometheus LTS (bugfixes until 2027-07-31); 3.5 LTS
-    # went EOL 2026-07-31. v3 derives GOMEMLIMIT from the container memory
-    # limit below on its own, so the explicit env var v2 needed is gone.
-    image: prom/prometheus:v3.13.3
+    image: dockerhub.timeweb.cloud/prom/prometheus:v3.13.3
     logging: *log-rotate
     restart: unless-stopped
     command:
@@ -37,31 +31,27 @@ services:
       - "--storage.tsdb.retention.size=2GB"
       - "--web.enable-lifecycle"
       - "--web.enable-admin-api"
-      # Tempo's metrics_generator pushes span-metrics / service-graph series here.
+      # Alloy on Moscow and Tempo's metrics_generator both push here.
       - "--web.enable-remote-write-receiver"
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/prometheus.home.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
-    networks:
-      - app-network
-    depends_on:
-      - redis-exporter
-      - rabbitmq-exporter
+    ports:
+      - "127.0.0.1:19090:9090"
     deploy:
       resources:
         limits:
-          cpus: '0.75'
-          memory: 512M
+          cpus: '1.00'
+          memory: 1G
         reservations:
           cpus: '0.10'
-          memory: 192M
+          memory: 256M
 
   alertmanager:
     # v0.28+ is REQUIRED: v0.27.0 parses `webhook_url_file` in discord_configs but
-    # its receiver validation still demands `webhook_url`, so a file-backed Discord
-    # webhook fails config load with "no discord webhook URL provided".
-    image: prom/alertmanager:v0.34.1
+    # its receiver validation still demands `webhook_url`.
+    image: dockerhub.timeweb.cloud/prom/alertmanager:v0.34.1
     logging: *log-rotate
     restart: unless-stopped
     command:
@@ -71,8 +61,6 @@ services:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/secrets:/run/secrets:ro
       - alertmanager_data:/alertmanager
-    networks:
-      - app-network
     deploy:
       resources:
         limits:
@@ -82,166 +70,27 @@ services:
           cpus: '0.05'
           memory: 64M
 
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.91.1
-    logging: *log-rotate
-    restart: unless-stopped
-    environment:
-      REDIS_ADDR: "redis:6379"
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.10'
-          memory: 64M
-        reservations:
-          cpus: '0.05'
-          memory: 32M
-
-  rabbitmq-exporter:
-    # 1.0.0 (2024-03) is the last release; the project is dormant. If it ever
-    # breaks, RabbitMQ's built-in rabbitmq_prometheus plugin replaces it.
-    image: kbudde/rabbitmq-exporter:1.0.0
-    logging: *log-rotate
-    restart: unless-stopped
-    environment:
-      RABBIT_URL: "http://rabbitmq:15672"
-      # Same variable names as the broker in docker-compose.production.yml — one
-      # source of truth in .env. (Previously RABBITMQ_USER/RABBITMQ_PASSWORD,
-      # which nothing set, so the exporter silently fell back to guest/guest.)
-      RABBIT_USER: "${RABBITMQ_DEFAULT_USER:-guest}"
-      RABBIT_PASSWORD: "${RABBITMQ_DEFAULT_PASS:-guest}"
-      RABBIT_CAPABILITIES: "bert,no_sort"
-      PUBLISH_PORT: "9419"
-      OUTPUT_FORMAT: "TTY"
-      SKIP_QUEUES: "^$"
-      INCLUDE_QUEUES: ".*"
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.10'
-          memory: 64M
-        reservations:
-          cpus: '0.05'
-          memory: 32M
-
-  # nginx edge — connection/request counters from the internal stub_status
-  # endpoint (nginx :8081, not published to the host). stub_status carries no
-  # per-status counters, so 429 rates come from the `nginx` job in Loki; this
-  # exporter covers saturation and slowloris signals
-  # (nginx_connections_{active,reading,writing,waiting}).
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.5.3
+  # Probes production from outside, as any visitor would: the site's /health
+  # and the SSH banner on :22 (monitoring/blackbox/blackbox.yml).
+  blackbox-exporter:
+    image: dockerhub.timeweb.cloud/prom/blackbox-exporter:v0.28.0
     logging: *log-rotate
     restart: unless-stopped
     command:
-      - "--nginx.scrape-uri=http://nginx:8081/stub_status"
-    networks:
-      - app-network
+      - "--config.file=/etc/blackbox/blackbox.yml"
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
     deploy:
       resources:
         limits:
           cpus: '0.10'
-          memory: 32M
+          memory: 64M
         reservations:
           cpus: '0.05'
           memory: 16M
 
-  # Host-level metrics (CPU / memory / disk / network). Reads the host via
-  # bind-mounts; no ports published — scraped over the compose network.
-  node-exporter:
-    image: prom/node-exporter:v1.12.1
-    logging: *log-rotate
-    restart: unless-stopped
-    pid: host
-    command:
-      - "--path.rootfs=/host"
-      # Textfile collector: ops/backup/backup.sh writes owt_backup.prom.
-      # Directory is on the already-mounted ro rootfs, path prefixed with /host.
-      - "--collector.textfile.directory=/host/var/lib/node_exporter/textfile"
-    volumes:
-      - /:/host:ro,rslave
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.10'
-          memory: 64M
-        reservations:
-          cpus: '0.05'
-          memory: 32M
-
-  # Per-container CPU / memory / restarts for the whole Docker host.
-  cadvisor:
-    # Upstream moved publishing to ghcr.io at v0.53.0; gcr.io/cadvisor/cadvisor
-    # stops at v0.55.1.
-    image: ghcr.io/google/cadvisor:v0.60.5
-    logging: *log-rotate
-    restart: unless-stopped
-    privileged: true
-    devices:
-      - /dev/kmsg
-    command:
-      - --housekeeping_interval=30s
-      - --docker_only=true
-      - --store_container_labels=false
-      # Only the collectors the dashboards read (container_cpu_usage_seconds_total,
-      # container_memory_working_set_bytes; container_start_time_seconds is a base
-      # metric). v0.60 with the default set walks every container's filesystem —
-      # 15-20s per sweep here — and sat pinned against the 192M limit until
-      # /metrics stopped answering at all.
-      - --enable_metrics=cpu,memory
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      - /dev/disk:/dev/disk:ro
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 192M
-        reservations:
-          cpus: '0.05'
-          memory: 64M
-
-  # PostgreSQL metrics. POSTGRES_EXPORTER_DSN must point DIRECTLY at Postgres
-  # (port 5432), NOT at pgBouncer (:6432) — transaction pooling breaks the
-  # exporter's session-level queries. Example:
-  #   POSTGRES_EXPORTER_DSN=postgresql://user:pass@host.docker.internal:5432/anak_dev?sslmode=disable
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.20.1
-    logging: *log-rotate
-    restart: unless-stopped
-    environment:
-      DATA_SOURCE_NAME: "${POSTGRES_EXPORTER_DSN}"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.10'
-          memory: 64M
-        reservations:
-          cpus: '0.05'
-          memory: 32M
-
-  # Log and trace storage are optional tiers: on a small box (4 CPU / 8G) they
-  # cost ~470M of RSS and page cache that PostgreSQL needs far more than the
-  # site needs 7-day log search. Metrics (prometheus/grafana/exporters) always
-  # run; enable these with `make monitoring-up MONITORING_PROFILES="logs traces"`.
   loki:
-    profiles: ["logs"]
-    image: grafana/loki:3.7.8
+    image: dockerhub.timeweb.cloud/grafana/loki:3.7.8
     logging: *log-rotate
     restart: unless-stopped
     environment:
@@ -250,8 +99,8 @@ services:
     volumes:
       - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
       - loki_data:/loki
-    networks:
-      - app-network
+    ports:
+      - "127.0.0.1:13101:3100"
     deploy:
       resources:
         limits:
@@ -262,11 +111,10 @@ services:
           memory: 128M
 
   tempo:
-    profiles: ["traces"]
     # Pinned to the 2.x line on purpose: Tempo 3.x drops the ingester/compactor
     # config blocks, requires vParquet4 blocks, and its metrics-generator reads
     # from Kafka instead of the distributor — a rewrite, not a bump.
-    image: grafana/tempo:2.10.8
+    image: dockerhub.timeweb.cloud/grafana/tempo:2.10.8
     logging: *log-rotate
     restart: unless-stopped
     environment:
@@ -275,8 +123,9 @@ services:
     volumes:
       - ./monitoring/tempo/tempo.yml:/etc/tempo.yml:ro
       - tempo_data:/var/tempo
-    networks:
-      - app-network
+    # OTLP/HTTP only: Alloy on Moscow exports otlphttp through Traefik.
+    ports:
+      - "127.0.0.1:14318:4318"
     deploy:
       resources:
         limits:
@@ -286,75 +135,15 @@ services:
           cpus: '0.10'
           memory: 128M
 
-  otel-collector:
-    profiles: ["traces"]
-    # 0.145.0 is the first release shipping the Sentry Exporter (alpha) used by
-    # monitoring/otel/otel-collector.yml.
-    image: otel/opentelemetry-collector-contrib:0.161.0
-    logging: *log-rotate
-    restart: unless-stopped
-    command: ["--config=/etc/otel-collector/config.yml"]
-    environment:
-      GOMEMLIMIT: 120MiB
-      # Sentry Exporter target. The token is an Internal Integration token with
-      # org:read + project:read. The "unset" fallback is deliberate: the exporter
-      # requires a non-empty token at config validation, and an empty one would
-      # crash-loop the collector and take Tempo down with it. With a bogus token
-      # the Sentry branch only logs "Failed to pre-populate project cache" and
-      # drops its spans, while the Tempo pipeline keeps running.
-      SENTRY_ORG_SLUG: "${SENTRY_ORG_SLUG:-craazzzyyfoxx}"
-      SENTRY_OTEL_PROJECT: "${SENTRY_OTEL_PROJECT:-owt-tournaments}"
-      SENTRY_OTEL_AUTH_TOKEN: "${SENTRY_OTEL_AUTH_TOKEN:-unset}"
-    volumes:
-      - ./monitoring/otel/otel-collector.yml:/etc/otel-collector/config.yml:ro
-    depends_on:
-      - tempo
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 160M
-        reservations:
-          cpus: '0.05'
-          memory: 64M
-
-  promtail:
-    profiles: ["logs"]
-    # 3.6.x is the end of the line: Promtail is superseded by Grafana Alloy and
-    # gets no 3.7 build. Migrate when this tier is turned on for real.
-    image: grafana/promtail:3.6.11
-    logging: *log-rotate
-    restart: unless-stopped
-    command: -config.file=/etc/promtail/promtail.yml
-    volumes:
-      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
-      - ./logs:/var/log/app:ro
-    networks:
-      - app-network
-    depends_on:
-      - loki
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 128M
-        reservations:
-          cpus: '0.05'
-          memory: 64M
-
   grafana:
-    image: grafana/grafana:13.2.2
+    image: dockerhub.timeweb.cloud/grafana/grafana:13.2.2
     logging: *log-rotate
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-changeme}"
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-http://localhost:3001}"
-      # Metrics are the only tier that always runs; logs.json/tracing.json are
-      # empty unless the "logs"/"traces" profiles are enabled.
+      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-https://grafana.owt.craazzzyyfoxx.me}"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/infrastructure.json"
       TEMPO_URL: "${TEMPO_URL:-http://tempo:3200}"
     volumes:
@@ -362,24 +151,19 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "${GRAFANA_PORT:-3001}:3000"
-    networks:
-      - app-network
-    # Only prometheus: the loki/tempo datasources resolve lazily at query time,
-    # so grafana must not depend on tiers that may be profiled off.
+      - "127.0.0.1:13002:3000"
     depends_on:
       - prometheus
-    # 512M, not the 192M that carried Grafana 11: v13 runs the app-platform
-    # apiserver and unified storage in-process and never finished booting
-    # under the old cap (memory.max hit ~300k times, no "HTTP Server Listen").
+    # v13 runs the app-platform apiserver and unified storage in-process; it sat
+    # at 464 MiB of a 512M cap on Moscow.
     deploy:
       resources:
         limits:
           cpus: '0.75'
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: '0.10'
-          memory: 64M
+          memory: 128M
 
 volumes:
   prometheus_data:
@@ -387,8 +171,3 @@ volumes:
   loki_data:
   grafana_data:
   tempo_data:
-
-networks:
-  app-network:
-    external: true
-    name: owt_app-network

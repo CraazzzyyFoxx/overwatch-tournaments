@@ -71,8 +71,7 @@ uv run locust --worker --processes 4
   measure the Redis cache path. Restart Redis between runs to re-measure cold.
 - `429` responses count as failures. Two limiters can produce them:
   - **nginx** (`req_edge` 40 r/s / burst 80, plus tighter zones on auth, WS and
-    the upload paths — see
-    [the DoS design](../docs/superpowers/specs/2026-08-06-nginx-dos-hardening-design.md)).
+    the upload paths).
     A run from the host against `http://localhost` reaches nginx over the docker
     bridge, i.e. from a private address, which the whitelist exempts — so local
     runs never see these and, by the same token, never exercise the limiter.
