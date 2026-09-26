@@ -56,6 +56,18 @@ groups:
           summary: "Host CPU usage above 90%"
           description: "Average CPU usage across all cores has exceeded 90% for 15 minutes."
 
+      # PSI "full": all non-idle tasks stalled on I/O at once. On 2026-09-26 the
+      # virtual disk stopped completing I/O and the host hung minutes later;
+      # this is the early signal while the host can still push metrics.
+      - alert: HostIOPressureHigh
+        expr: rate(node_pressure_io_stalled_seconds_total[2m]) > 0.3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host I/O pressure above 30%"
+          description: "Tasks were fully stalled on I/O more than 30% of the time for 2 minutes. The disk is degrading; a full hang (ProdTelemetryAbsent) may follow."
+
   - name: postgres
     interval: 30s
     rules:

@@ -1,0 +1,54 @@
+# Production reachability, evaluated on home — the rules that must keep working
+# when the production host itself is hung. On 2026-09-26 Moscow hung twice:
+# the virtual disk stopped completing I/O, TCP still accepted connections, but
+# nothing answered — and the monitoring stack on the same host went silent too.
+
+groups:
+  - name: prod-reachability
+    interval: 30s
+    rules:
+      # Alloy on Moscow pushes every 30s; node is its always-present host job.
+      - alert: ProdTelemetryAbsent
+        expr: absent_over_time(up{job="node"}[3m])
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No telemetry from Moscow for over 3 minutes"
+          description: >-
+            Alloy on the production host has pushed nothing for 3+ minutes. Either
+            the host is hung (disk stall: everything in D-state) or the
+            Moscow -> ingest.owt path is broken. ProdHttpDown / ProdSshUnresponsive
+            tell the two apart.
+
+      - alert: ProdHttpDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is not answering 2xx"
+          description: "The blackbox probe from home has failed for 2 minutes."
+
+      # The 2026-09-26 signature: TCP :22 accepts, the SSH banner never comes.
+      - alert: ProdSshUnresponsive
+        expr: probe_success{job="blackbox-ssh"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No SSH banner from {{ $labels.instance }}"
+          description: >-
+            The blackbox probe from home got no "SSH-2.0-" banner for 2 minutes.
+            If TCP still connects, userspace is stalled (disk or memory), not the
+            network.
+
+      # Dead man's switch: always firing, routed to healthchecks.io by
+      # alertmanager.yml. When the pings stop, healthchecks.io alerts Discord.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Alerting pipeline heartbeat"
+          description: "Always firing. Routed to healthchecks.io; silence there means home or its Alertmanager is down."

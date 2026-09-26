@@ -9,6 +9,16 @@ route:
   receiver: discord
 
   routes:
+    # Dead man's switch: the always-firing Watchdog pings healthchecks.io every
+    # minute; healthchecks.io alerts Discord on its own when the pings stop.
+    # First on purpose, so no other route can swallow it.
+    - matchers:
+        - alertname = Watchdog
+      receiver: healthchecks
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+
     # Critical alerts repeat more frequently
     - matchers:
         - severity = critical
@@ -28,6 +38,11 @@ receivers:
           **Description:** {{ .Annotations.description }}
           **Started:** {{ .StartsAt | since }}
           {{ end }}
+
+  - name: healthchecks
+    webhook_configs:
+      - url_file: /run/secrets/healthchecks_ping_url
+        send_resolved: false
 
 inhibit_rules:
   # Suppress warning-level alerts when a critical alert fires for the same component

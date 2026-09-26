@@ -6,13 +6,13 @@ groups:
       # RabbitMQ broker availability
       # -----------------------------------------------------------------------
       - alert: RabbitMQDown
-        expr: rabbitmq_up == 0
+        expr: up{job="rabbitmq"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "RabbitMQ is down"
-          description: "RabbitMQ exporter cannot reach the broker. No messages are being processed."
+          description: "Alloy cannot scrape the broker's rabbitmq_prometheus endpoint (rabbitmq:15692). No messages are being processed."
 
       # -----------------------------------------------------------------------
       # Dead Letter Queue accumulation
