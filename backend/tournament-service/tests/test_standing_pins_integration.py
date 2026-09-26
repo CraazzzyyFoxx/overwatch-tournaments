@@ -37,8 +37,8 @@ from shared.models.tournament import (  # noqa: E402
     StageItemInput,
     Standing,
     Team,
-    TournamentComputationJob,
     Tournament,
+    TournamentComputationJob,
 )
 from src import schemas  # noqa: E402
 from src.services.admin.standing import standing_service  # noqa: E402
