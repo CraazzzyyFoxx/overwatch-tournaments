@@ -135,7 +135,7 @@ services:
       - ./backend/env/discord.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -222,7 +222,7 @@ services:
       - ./backend/env/parser.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -270,7 +270,7 @@ services:
       - ./backend/env/tournament.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -318,7 +318,7 @@ services:
       - ./backend/env/app.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -369,7 +369,7 @@ services:
       - ./backend/env/balancer.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -420,7 +420,7 @@ services:
       - ./backend/env/analytics.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -471,7 +471,7 @@ services:
       - ./backend/env/analytics.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -522,7 +522,7 @@ services:
       - ./backend/env/stream.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -651,7 +651,7 @@ services:
       - ./backend/env/identity.env
     environment:
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
       # Phase 1: validate tokens via the gateway -> identity-svc (overrides common.env).
@@ -703,10 +703,10 @@ services:
       - UPSTREAM_FRONTEND=http://frontend:3000
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
-      # OpenTelemetry tracing into the shared otel-collector (same block as the
-      # Python services), so gateway spans join the distributed traces in Tempo.
+      # OpenTelemetry tracing into Alloy (same block as the Python services),
+      # so gateway spans join the distributed traces in Tempo and Sentry.
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
-      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OTLP_ENDPOINT=http://alloy:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
     volumes:
@@ -785,10 +785,90 @@ services:
       start_period: 10s
     restart: always
 
+  # ==========================================================================
+  # Telemetry agent (profile `telemetry`). Scrapes this stack, tails ./logs,
+  # receives OTLP from the services and pushes everything to the monitoring
+  # stack on home (monitoring/README.md).
+  #
+  # Production enables the profile with COMPOSE_PROFILES=telemetry in the root
+  # .env. The dev site on home runs this same file and leaves it off, so dev
+  # telemetry never lands in production monitoring.
+  #
+  # Privileged, host PID and the host mounts are what the embedded unix
+  # (node) exporter and cAdvisor need — the same access the standalone
+  # node-exporter and cadvisor containers had. No ports are published; the UI
+  # stays on 127.0.0.1:12345 inside the container.
+  # ==========================================================================
+  alloy:
+    profiles: ["telemetry"]
+    image: dockerhub.timeweb.cloud/grafana/alloy:v1.20.0
+    logging: *log-rotate
+    restart: unless-stopped
+    user: "0"
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      TELEMETRY_INGEST_USER: "${TELEMETRY_INGEST_USER}"
+      TELEMETRY_INGEST_PASSWORD: "${TELEMETRY_INGEST_PASSWORD}"
+      SENTRY_OTLP_PUBLIC_KEY: "${SENTRY_OTLP_PUBLIC_KEY}"
+      POSTGRES_EXPORTER_DSN: "${POSTGRES_EXPORTER_DSN}"
+    volumes:
+      - ./monitoring/alloy/moscow.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      - ./logs:/var/log/app:ro
+      - /:/host/root:ro,rslave
+      - /sys:/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      # The Docker host uses the containerd snapshotter: cAdvisor's docker
+      # factory resolves containers through containerd and registers nothing
+      # without this socket (zero per-container series).
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /dev/disk:/dev/disk:ro
+    pid: host
+    privileged: true
+    devices:
+      - /dev/kmsg
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+
+  # nginx stub_status (internal :8081) -> connection counters. Alloy has no
+  # embedded nginx exporter, so this 16 MB sidecar stays.
+  nginx-exporter:
+    profiles: ["telemetry"]
+    image: dockerhub.timeweb.cloud/nginx/nginx-prometheus-exporter:1.5.3
+    logging: *log-rotate
+    restart: unless-stopped
+    command:
+      - "--nginx.scrape-uri=http://nginx:8081/stub_status"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 32M
+        reservations:
+          cpus: '0.05'
+          memory: 16M
+
 volumes:
   redis-data:
   rabbitmq-data:
   analytics-models:
+  alloy-data:
 
 networks:
   app-network:
