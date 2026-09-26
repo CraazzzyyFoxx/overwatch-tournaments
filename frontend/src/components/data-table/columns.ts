@@ -1,10 +1,19 @@
-import type { ColumnMeta } from "@tanstack/react-table";
+import type { ColumnDef, ColumnMeta } from "@tanstack/react-table";
 
 import type { AdminColumnFilterSpec } from "@/components/data-table/filters";
 import type { KebabAction } from "@/components/data-table/kebab-column";
 
 /** Id of the row-actions column, which always sits last and never moves. */
 export const ADMIN_ACTION_COLUMN_ID = "actions";
+
+/**
+ * The id TanStack will give a column definition, before a table exists to ask.
+ * Accessor columns fall back to their key; anything else must declare an `id`.
+ */
+export function columnDefId<TData>(column: ColumnDef<TData>): string {
+  if (column.id) return column.id;
+  return "accessorKey" in column && typeof column.accessorKey === "string" ? column.accessorKey : "";
+}
 
 /** Breakpoint below which a column is hidden entirely. */
 export type AdminColumnResponsive = "always" | "sm" | "md" | "lg";

@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 
 const componentPath = join(import.meta.dirname, "VirtualParticipantsList.tsx");
 const source = existsSync(componentPath) ? readFileSync(componentPath, "utf8") : "";
-const pageSource = readFileSync(join(import.meta.dirname, "../TournamentParticipantsPage.tsx"), "utf8");
+const pageSource = [
+  readFileSync(join(import.meta.dirname, "../TournamentParticipantsPage.tsx"), "utf8"),
+  readFileSync(join(import.meta.dirname, "TournamentParticipantsView.tsx"), "utf8")
+].join("\n");
 const cssSource = readFileSync(join(import.meta.dirname, "../../TournamentDetail.module.css"), "utf8");
 
 describe("virtual participants collection", () => {

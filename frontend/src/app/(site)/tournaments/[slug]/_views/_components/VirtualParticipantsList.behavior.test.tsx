@@ -5,7 +5,7 @@ import type { Root } from "react-dom/client";
 
 import type { Registration } from "@/types/registration.types";
 
-import type { ColumnDefinition } from "./participantsColumns";
+import type { ColumnDefinition } from "./participantsColumns.model";
 import { readParticipantUrlState } from "./participants-url-state";
 
 const testWindow = new Window({

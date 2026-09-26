@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { CategorizedColumnPicker } from "@/components/ui/categorized-column-picker";
 
-import type { ColumnDefinition } from "./participantsColumns";
+import type { ColumnDefinition } from "./participantsColumns.model";
 import { isMandatoryParticipantColumnId } from "./participants-url-state";
 
 type ParticipantColumnCategory = ColumnDefinition["category"];

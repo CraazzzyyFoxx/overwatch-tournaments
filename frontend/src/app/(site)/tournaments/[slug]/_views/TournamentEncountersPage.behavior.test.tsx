@@ -88,7 +88,14 @@ function stage(id: number, name: string, order: number, stageType: StageType): S
     is_active: false,
     is_published: true,
     is_completed: true,
-    settings_json: null,
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
     challonge_id: null,
     challonge_slug: null
   };

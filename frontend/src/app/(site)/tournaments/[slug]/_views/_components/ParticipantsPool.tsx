@@ -18,7 +18,7 @@ import type { Registration, RegistrationRole } from "@/types/registration.types"
 import type { DivisionGrid } from "@/types/workspace.types";
 import { getPlayerSlug } from "@/utils/player";
 
-import { getRoleLabel } from "./participantsColumns";
+import { getRoleLabel } from "./participantsColumns.model";
 import { TournamentPageState } from "../../_components/TournamentPageState";
 
 /** The one status that means "was in, took themselves out" (§6 ④). */

@@ -82,6 +82,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The whole tree is request-time: tenant resolution is host-based
+  // (`src/proxy.ts` → `x-owt-workspace-id`) and locale / cookie-consent are
+  // cookie-based. Segment `force-dynamic` exports document that, they are not
+  // the switch. Link prefetch is opt-in (`prefetch={false}` / HoverPrefetchLink)
+  // because each prefetch is a full server render.
   const [locale, formatLocale, tenantWorkspace, cookieStore] = await Promise.all([
     getLocale(),
     getFormatLocale(),

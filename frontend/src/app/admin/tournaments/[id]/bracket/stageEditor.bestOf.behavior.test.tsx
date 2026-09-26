@@ -96,7 +96,14 @@ function singleBracketStage(seededTeams = 8): Stage {
     order: 1,
     is_active: true,
     is_completed: false,
-    settings_json: {},
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
     challonge_id: null,
     challonge_slug: null,
     items: [
@@ -279,16 +286,14 @@ describe("Stage editor best-of, double elimination", () => {
     expect(updateStage).toHaveBeenCalledTimes(1);
     const [stageId, payload] = updateStage.mock.calls[0] as [
       number,
-      { settings_json: { best_of: { by_round?: Record<string, number>; final?: number } } }
+      { best_of: { default: number; by_round: Record<string, number>; final: number | null } }
     ];
     expect(stageId).toBe(10);
     // Upper rounds 2 and 3 by number; the grand final via `final`, which the
     // server resolves to the max round and which outranks `by_round`.
-    expect(payload.settings_json.best_of).toEqual({ by_round: { "2": 5, "3": 5 }, final: 5 });
+    expect(payload.best_of).toEqual({ default: 3, by_round: { "2": 5, "3": 5 }, final: 5 });
     // Nothing negative: every lower-bracket round keeps the stage default.
-    expect(
-      Object.keys(payload.settings_json.best_of.by_round ?? {}).filter((key) => Number(key) < 0)
-    ).toEqual([]);
+    expect(Object.keys(payload.best_of.by_round).filter((key) => Number(key) < 0)).toEqual([]);
   });
 
   it("reaches a lower-bracket round, which a positive-only list could not address", async () => {
@@ -300,10 +305,10 @@ describe("Stage editor best-of, double elimination", () => {
 
     const [, payload] = updateStage.mock.calls[0] as [
       number,
-      { settings_json: { best_of: { by_round?: Record<string, number> } } }
+      { best_of: { by_round: Record<string, number> } }
     ];
     // LB Final is round -4 in an 8-team bracket, per `double_elimination.generate`.
-    expect(payload.settings_json.best_of.by_round).toEqual({ "-4": 5 });
+    expect(payload.best_of.by_round).toEqual({ "-4": 5 });
   });
 
   it("offers the bracket it is about to build before any team is seeded", async () => {

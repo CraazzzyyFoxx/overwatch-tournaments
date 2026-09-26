@@ -26,7 +26,8 @@ const SITES = {
     "tournaments",
     "[id]",
     "components",
-    "RegistrationTeamsBrowser.tsx"
+    "registration-teams",
+    "model.ts"
   )
 } as const;
 

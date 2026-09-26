@@ -1,20 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  closestCenter,
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import { AdminTableHead, type AdminTableHeadProps } from "@/components/data-table/AdminTableHead";
 import { ADMIN_ACTION_COLUMN_ID } from "@/components/data-table/columns";
 import { cn } from "@/components/data-table/host";
+import { useDragSensors } from "@/hooks/useDragSensors";
 
 /**
  * Column drag-to-reorder, in its own chunk.
@@ -34,7 +28,7 @@ export function ColumnDndProvider({
   onReorder: (activeId: string, overId: string) => void;
   children: ReactNode;
 }>) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useDragSensors();
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     onReorder(String(active.id), String(over.id));

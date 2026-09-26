@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent
-} from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
@@ -25,6 +16,7 @@ import {
 } from "../rank-autofill-stages";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
+import { useDragSensors } from "@/hooks/useDragSensors";
 import { cn } from "@/lib/utils";
 import type {
   RankAutofillSourceKey,
@@ -131,10 +123,7 @@ export function RankAutofillStageList({
   onToggle,
   onLookbackChange
 }: Readonly<RankAutofillStageListProps>) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useDragSensors({ distance: 4, keyboard: true });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;

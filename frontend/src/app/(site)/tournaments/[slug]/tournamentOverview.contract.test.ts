@@ -148,6 +148,8 @@ describe("tournament overview server contract", () => {
     const layoutSource = sourceFor("layout.tsx");
     const page = parsedSource("page.tsx");
     const pageSource = sourceFor("page.tsx");
+    const prefetch = parsedSource("_prefetch.tsx");
+    const prefetchSource = sourceFor("_prefetch.tsx");
 
     expect(dataSource).not.toMatch(/^[\s\S]*["']use client["']/);
     // getTournamentOverviewState takes the ref as-is -- no parseCanonicalTournamentId
@@ -156,14 +158,14 @@ describe("tournament overview server contract", () => {
     expect(layoutSource).not.toContain("parseCanonicalTournamentId");
     expect(pageSource).not.toContain("parseCanonicalTournamentId");
     expect(importedNames(layout, "./_data")).toContain("getTournamentOverviewState");
-    expect(importedNames(page, "./_data")).toContain("getTournamentOverviewState");
+    expect(importedNames(prefetch, "./_data")).toContain("getTournamentOverviewState");
     expect(layoutSource).toContain("params.slug");
     // The layout keeps a `resolvedParams` object because it hands the segment to
     // two children; the index destructures. What matters either way is that the
     // awaited segment reaches the loader with nothing in between, so pin that
     // rather than the name a local happens to carry.
     expect(pageSource).toMatch(/const\s*\{\s*slug\s*\}\s*=\s*await\s+params/);
-    expect(pageSource).toMatch(/getTournamentOverviewState\(\s*slug\s*\)/);
+    expect(prefetchSource).toMatch(/getTournamentOverviewState\(\s*slug\s*\)/);
     // The state object itself never calls notFound -- only the callers
     // (page.tsx, TournamentOverviewBoundary) act on its "not-found" kind.
     expect(calledIdentifiers(data)).not.toContain("notFound");
@@ -258,9 +260,10 @@ describe("tournament overview server contract", () => {
     const layout = parsedSource("layout.tsx");
     const page = parsedSource("page.tsx");
     const pageSource = sourceFor("page.tsx");
+    const prefetch = parsedSource("_prefetch.tsx");
 
     expect(calledIdentifiers(layout)).toContain("getTournamentOverviewState");
-    expect(calledIdentifiers(page)).toContain("getTournamentOverviewState");
+    expect(calledIdentifiers(prefetch)).toContain("getTournamentOverviewState");
     // `getTournamentOverviewState` is react-`cache`d (asserted above), so both
     // callers in the same request share one read rather than paying for two.
     expect(pageSource).not.toContain("getTournamentStages");
@@ -270,7 +273,7 @@ describe("tournament overview server contract", () => {
     // navigation can land on the wrong screen — so the redirect is gone and
     // the route renders the view in place.
     expect(calledIdentifiers(page)).not.toContain("redirect");
-    expect(jsxElements(page, "TournamentOverviewRoute")).toHaveLength(1);
+    expect(jsxElements(page, "TournamentOverviewPage")).toHaveLength(1);
   });
 
   it("shares the structural shell skeleton with route loading", () => {

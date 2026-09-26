@@ -76,6 +76,16 @@ other zones started using them; the directory is the scope, not the name.
 so the name is free; the rename itself is its own step
 (`docs/superpowers/specs/2026-09-24-unified-component-library-design.md` §4.4).
 
+## Why the tree is dynamic
+
+The root layout reads `cookies()` (locale, cookie-consent) and the proxy injects
+`x-owt-workspace-id` from the request host. That makes every route request-time;
+segment `export const dynamic = "force-dynamic"` is documentation of the same
+fact. Prefetching a link is therefore a full server render — `prefetch={false}`
+on the chrome and `HoverPrefetchLink` on dense surfaces exist because of that,
+not as a style preference. Changing the model means putting tenant (and maybe
+locale) in the path, which is a routing project, not a flag flip.
+
 ## What a split would still have to solve
 
 If a real trigger ever appears (build > 8 min, a second team blocked on deploys, admin on a
