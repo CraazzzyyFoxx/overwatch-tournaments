@@ -197,6 +197,37 @@ func TestMixReadsArePublic(t *testing.T) {
 	}
 }
 
+// TestMixSelfServiceRoutes pins the player's own surface. All four /me verbs
+// share one pattern, so a wrong Method turns a read into a write (or a leave
+// into a join); all of them are AuthRequired because the worker authorizes the
+// clicker, and the host-only switches must not land on /me.
+func TestMixSelfServiceRoutes(t *testing.T) {
+	want := map[string]string{
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":           "rpc.balancer.custom.self_get",
+		"POST /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":          "rpc.balancer.custom.self_join",
+		"DELETE /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":        "rpc.balancer.custom.self_leave",
+		"PATCH /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":         "rpc.balancer.custom.self_update",
+		"PUT /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/self-service": "rpc.balancer.custom.set_self_service",
+	}
+	for _, route := range RosterRoutes {
+		key := route.Method + " " + route.Pattern
+		queue, ok := want[key]
+		if !ok {
+			continue
+		}
+		if route.Queue != queue {
+			t.Fatalf("unexpected queue for %s: %#v", key, route)
+		}
+		if route.Auth != edge.AuthRequired {
+			t.Fatalf("self-service route %s must be authenticated: %#v", key, route)
+		}
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing mix self-service routes: %#v", want)
+	}
+}
+
 // TestRoutesRegisterWithoutConflict guards against ServeMux pattern conflicts,
 // which panic at registration time (runtime), not at build time. It registers
 // the entire balancer route surface — the typed route tables plus the two

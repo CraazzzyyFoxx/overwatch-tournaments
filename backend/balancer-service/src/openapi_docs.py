@@ -292,6 +292,53 @@ DOCS: dict[str, dict] = {
             "any member is not on the roster."
         ),
     },
+    "rpc.balancer.custom.self_get": {
+        "summary": "Get my mix seat",
+        "description": (
+            "Permission: any authenticated account; workspace membership is NOT required. "
+            "Returns the caller's own seat in the mix (participation, role order, the ranks the "
+            "host's book resolves for them) plus what they may do next: join, leave, edit roles, "
+            "and the blocker code for each. `seat` is null when the caller is not on the roster."
+        ),
+    },
+    "rpc.balancer.custom.self_join": {
+        "summary": "Join a mix myself",
+        "description": (
+            "Permission: any authenticated account with both Discord and Battle.net linked and "
+            "`custom_game.self_join` not denied; workspace membership is created on the way in. "
+            "Seats the caller according to the mix's signup mode (pool or bench) and returns the "
+            "same state as the read. Idempotent: an existing row is left untouched, bench included. "
+            "403 for an unlinked account, 409 when signup is closed, the mix is over or the roster "
+            "is full."
+        ),
+    },
+    "rpc.balancer.custom.self_leave": {
+        "summary": "Leave a mix myself",
+        "description": (
+            "Permission: any authenticated account holding a seat in this mix -- the account links "
+            "are deliberately NOT required, so unlinking one cannot trap somebody in a lineup. "
+            "Removes the caller's own roster row; the stored balance is kept until the host "
+            "re-balances. 404 when the caller has no seat, 409 once the mix is over."
+        ),
+    },
+    "rpc.balancer.custom.self_update": {
+        "summary": "Update my mix seat",
+        "description": (
+            "Permission: a seated account, while the host's 'players edit their own roles' switch "
+            "is on. Re-orders the caller's own roles (null = every role they have a rank for) and "
+            "flips their flex flag; participation and ranks stay the host's. The shown balance is "
+            "not recomputed -- the change applies to the next one. 409 when the switch is off, 404 "
+            "when the caller has no seat."
+        ),
+    },
+    "rpc.balancer.custom.set_self_service": {
+        "summary": "Set custom game self-service switches",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Sets whether players may seat themselves (closed, into the pool, or onto the bench) and "
+            "whether a seated player may re-order their own roles, then returns the refreshed mix."
+        ),
+    },
     "rpc.balancer.custom.balance": {
         "summary": "Balance custom game",
         "description": (

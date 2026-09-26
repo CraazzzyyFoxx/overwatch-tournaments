@@ -90,6 +90,17 @@ var RosterRoutes = []edge.RouteSpec{
 	// The pager itself: which balance option the mix shows every viewer.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/variant", Queue: "rpc.balancer.custom.set_variant_index", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// The player's own seat. One pattern, four verbs: read it, take it, drop it,
+	// re-role it. AuthRequired because the worker authorizes the clicker (the bot
+	// forwards the linked account's identity the same way the site does); the
+	// worker, not this table, decides whether signup is open.
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_get", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_join", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_leave", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_update", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Host-only: whether players may seat themselves at all, and whether a
+	// seated one may re-order their own roles.
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/self-service", Queue: "rpc.balancer.custom.set_self_service", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/host", Queue: "rpc.balancer.custom.transfer_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts", Queue: "rpc.balancer.custom.add_co_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts/{co_host_user_id}", Queue: "rpc.balancer.custom.remove_co_host", IDParam: "game_id", Path: []string{"workspace_id", "co_host_user_id"}, Auth: edge.AuthRequired},

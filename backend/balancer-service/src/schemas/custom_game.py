@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
-from shared.core.enums import MixParticipation
+from shared.core.enums import MixParticipation, MixSelfSignup
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
@@ -24,6 +24,8 @@ __all__ = (
     "CustomGameRecordOutcome",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
+    "CustomGameSelfServicePatch",
+    "CustomGameSelfUpdate",
     "CustomGameTeamNamesPatch",
     "CustomGameVariantIndexPatch",
 )
@@ -168,3 +170,38 @@ class CustomGameRecordOutcome(_Request):
     outcome: CustomGameOutcome
     variant_index: int = Field(ge=0)
     map_id: int | None = None
+
+
+class CustomGameSelfUpdate(_Request):
+    """What a PLAYER may change about their own seat.
+
+    ``roles`` absent means "leave my role order alone"; ``roles: null`` means
+    "every role I have a rank for". The two are distinguished by
+    ``model_fields_set``, so a flex toggle cannot silently reset a role order.
+    """
+
+    roles: list[str] | None = None
+    is_flex: StrictBool | None = None
+
+    @field_validator("roles")
+    @classmethod
+    def _roles(cls, roles: list[str] | None) -> list[str] | None:
+        if roles is None:
+            return None
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for raw in roles:
+            role = raw.strip().lower()
+            if role not in REGISTRATION_ROLE_CODES:
+                raise ValueError(f"unknown role {role}")
+            if role not in seen:
+                seen.add(role)
+                normalized.append(role)
+        return normalized
+
+
+class CustomGameSelfServicePatch(_Request):
+    """The host's self-service switches: the signup mode and the role-edit flag."""
+
+    self_signup: MixSelfSignup | None = None
+    self_role_edit: StrictBool | None = None

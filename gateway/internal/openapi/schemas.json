@@ -3930,6 +3930,26 @@
       "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only.",
       "summary": "Get custom game rotation hints"
     },
+    "rpc.balancer.custom.self_get": {
+      "description": "Permission: any authenticated account; workspace membership is NOT required. Returns the caller's own seat in the mix (participation, role order, the ranks the host's book resolves for them) plus what they may do next: join, leave, edit roles, and the blocker code for each. `seat` is null when the caller is not on the roster.",
+      "summary": "Get my mix seat"
+    },
+    "rpc.balancer.custom.self_join": {
+      "description": "Permission: any authenticated account with both Discord and Battle.net linked and `custom_game.self_join` not denied; workspace membership is created on the way in. Seats the caller according to the mix's signup mode (pool or bench) and returns the same state as the read. Idempotent: an existing row is left untouched, bench included. 403 for an unlinked account, 409 when signup is closed, the mix is over or the roster is full.",
+      "summary": "Join a mix myself"
+    },
+    "rpc.balancer.custom.self_leave": {
+      "description": "Permission: any authenticated account holding a seat in this mix -- the account links are deliberately NOT required, so unlinking one cannot trap somebody in a lineup. Removes the caller's own roster row; the stored balance is kept until the host re-balances. 404 when the caller has no seat, 409 once the mix is over.",
+      "summary": "Leave a mix myself"
+    },
+    "rpc.balancer.custom.self_update": {
+      "description": "Permission: a seated account, while the host's 'players edit their own roles' switch is on. Re-orders the caller's own roles (null = every role they have a rank for) and flips their flex flag; participation and ranks stay the host's. The shown balance is not recomputed -- the change applies to the next one. 409 when the switch is off, 404 when the caller has no seat.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameSelfUpdate"
+      },
+      "summary": "Update my mix seat"
+    },
     "rpc.balancer.custom.set_next_map": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. 404 when the map is not in the catalogue.",
       "request": {
@@ -3945,6 +3965,14 @@
         "ref": "balancer.CustomGamePlayersParticipationPatch"
       },
       "summary": "Set custom game participation"
+    },
+    "rpc.balancer.custom.set_self_service": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Sets whether players may seat themselves (closed, into the pool, or onto the bench) and whether a seated player may re-order their own roles, then returns the refreshed mix.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameSelfServicePatch"
+      },
+      "summary": "Set custom game self-service switches"
     },
     "rpc.balancer.custom.set_team_names": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Renames the balanced teams by index and returns the refreshed mix.",
@@ -22416,6 +22444,72 @@
       "title": "CustomGameSeatSwap",
       "type": "object"
     },
+    "balancer.CustomGameSelfServicePatch": {
+      "additionalProperties": false,
+      "description": "The host's self-service switches: the signup mode and the role-edit flag.",
+      "properties": {
+        "self_role_edit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Self Role Edit"
+        },
+        "self_signup": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.MixSelfSignup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CustomGameSelfServicePatch",
+      "type": "object"
+    },
+    "balancer.CustomGameSelfUpdate": {
+      "additionalProperties": false,
+      "description": "What a PLAYER may change about their own seat.\n\n``roles`` absent means \"leave my role order alone\"; ``roles: null`` means\n\"every role I have a rank for\". The two are distinguished by\n``model_fields_set``, so a flex toggle cannot silently reset a role order.",
+      "properties": {
+        "is_flex": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Flex"
+        },
+        "roles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roles"
+        }
+      },
+      "title": "CustomGameSelfUpdate",
+      "type": "object"
+    },
     "balancer.CustomGameTeamNamesPatch": {
       "additionalProperties": false,
       "properties": {
@@ -24371,6 +24465,16 @@
         "benched"
       ],
       "title": "MixParticipation",
+      "type": "string"
+    },
+    "balancer.MixSelfSignup": {
+      "description": "Who may put themselves on a mix roster, and where they land.\n\nOne column, three states: ``closed`` is no self-signup at all, ``pool``\nseats a self-signed player straight into the pool, ``benched`` parks them\nfor the host to promote. A bool plus a destination enum would admit a\nfourth, meaningless pair (\"closed, but onto the bench\").",
+      "enum": [
+        "closed",
+        "pool",
+        "benched"
+      ],
+      "title": "MixSelfSignup",
       "type": "string"
     },
     "balancer.PlayerData": {

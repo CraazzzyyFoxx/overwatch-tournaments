@@ -3,7 +3,8 @@
 ``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,
 balance,set_team_names,set_next_map,set_variant_index,
 post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
-undo_match,rotation,stats,close,delete,hard_delete}``.
+undo_match,rotation,stats,close,delete,hard_delete,
+self_get,self_join,self_leave,self_update,set_self_service}``.
 
 Writes require ``actor`` to be the host, a co-host or a superuser; the per-mix check lives in
 ``CustomGameService._writable``. The reads (``list``, ``get``, ``stats``,
@@ -14,6 +15,12 @@ read out to a lobby, whose players need no account here.
 (``_require_workspace_admin``). Every request body is validated by a
 Pydantic model in ``src.schemas.custom_game`` before it reaches a use case --
 nothing here hand-parses a dict.
+
+The five ``self_*`` subjects are the PLAYER's own surface: they are gated by
+``mix_self_policy`` inside the service rather than by ``_require_mix``, because
+whoever is joining may not be a workspace member yet. ``workspace_id`` is
+optional on them -- the bot knows only a ``custom_game_id`` -- and when present
+must match the mix's own.
 """
 
 from __future__ import annotations
@@ -558,6 +565,96 @@ def register(broker: Any, logger: Any) -> None:
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_participation", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_get")
+    async def _self_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            return await custom_game_service.self_state(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+
+        return await c.envelope(logger, "custom.self_get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_join")
+    async def _self_join(data: dict, msg: RabbitMessage) -> dict:
+        """Seat the caller. Not gated by ``_require_mix``: somebody joining a
+        workspace's mix for the first time is not a member of it yet -- the
+        enrolment is part of what this does."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            state = await custom_game_service.self_join(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+            await session.commit()
+            return state
+
+        return await c.envelope(logger, "custom.self_join", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_leave")
+    async def _self_leave(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            state = await custom_game_service.self_leave(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+            await session.commit()
+            return state
+
+        return await c.envelope(logger, "custom.self_leave", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_update")
+    async def _self_update(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            body = _body(schemas.CustomGameSelfUpdate, data)
+            state = await custom_game_service.self_update(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                # exclude_unset keeps "don't touch my roles" apart from
+                # "roles: null" (= every ranked role).
+                patch=body.model_dump(exclude_unset=True),
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+            await session.commit()
+            return state
+
+        return await c.envelope(logger, "custom.self_update", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.set_self_service")
+    async def _set_self_service(data: dict, msg: RabbitMessage) -> dict:
+        """The host's switches, so this one IS an ordinary mix write: membership
+        plus host-or-co-host in ``_writable``."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameSelfServicePatch, data)
+            game = await custom_game_service.set_self_service(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                patch=body.model_dump(exclude_unset=True),
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_self_service", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.balance")
     async def _balance(data: dict, msg: RabbitMessage) -> dict:
