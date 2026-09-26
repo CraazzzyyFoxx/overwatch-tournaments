@@ -26,7 +26,7 @@ rule_files:
   - /etc/prometheus/rules/backup.yml
   # OverFast rank collection: data freshness and circuit-breaker state.
   - /etc/prometheus/rules/overwatch_rank.yml
-  # Moscow hung / unreachable / home's own alerting down.
+  # Moscow hung or unreachable: must fire while the production host is down.
   - /etc/prometheus/rules/prod_reachability.yml
 
 scrape_configs:

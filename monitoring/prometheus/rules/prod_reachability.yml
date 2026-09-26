@@ -42,13 +42,3 @@ groups:
             The blackbox probe from home got no "SSH-2.0-" banner for 2 minutes.
             If TCP still connects, userspace is stalled (disk or memory), not the
             network.
-
-      # Dead man's switch: always firing, routed to healthchecks.io by
-      # alertmanager.yml. When the pings stop, healthchecks.io alerts Discord.
-      - alert: Watchdog
-        expr: vector(1)
-        labels:
-          severity: none
-        annotations:
-          summary: "Alerting pipeline heartbeat"
-          description: "Always firing. Routed to healthchecks.io; silence there means home or its Alertmanager is down."

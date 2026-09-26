@@ -67,7 +67,6 @@ its container. Every port on home binds `127.0.0.1`; Traefik on the host is the 
 | Moscow root `.env` | `POSTGRES_EXPORTER_DSN` | Postgres **:5432**, not pgBouncer :6432 (transaction pooling breaks the exporter) |
 | home `~/owt-monitoring/.env` | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_ROOT_URL` | Grafana |
 | home `monitoring/secrets/` | `discord_webhook_url` | Alertmanager → Discord |
-| home `monitoring/secrets/` | `healthchecks_ping_url` | Watchdog → healthchecks.io |
 | home `/etc/traefik/dynamic.yml` | routers `owt-ingest-{metrics,logs,traces}`, `owt-grafana`; middlewares `owt-ingest-allow`, `owt-ingest-auth` (bcrypt of the ingest password) | the only way into the stack |
 
 The secret files are gitignored. Alertmanager runs as `nobody`: make them readable by it
@@ -114,7 +113,10 @@ Rules live in `monitoring/prometheus/rules/` and are evaluated on home. Routing
 | `ProdTelemetryAbsent` | no sample from Moscow for 3 minutes (`absent_over_time(up{job="node"}[3m])`) — host hung or the Moscow → home path broken |
 | `ProdHttpDown` | the blackbox probe of `https://owt.craazzzyyfoxx.me/health` fails for 2 minutes |
 | `ProdSshUnresponsive` | `217.149.19.31:22` sends no `SSH-2.0-` banner for 2 minutes — TCP accepting while userspace is stalled, the 2026-09-26 signature |
-| `Watchdog` | always; routed to healthchecks.io every minute. When the pings stop (home or its Alertmanager is down), healthchecks.io posts to Discord itself |
+
+There is no dead man's switch for home itself: if home (or its Alertmanager) is down, nothing
+alerts. healthchecks.io, the usual answer, rejects every Russian IP
+(`blog.healthchecks.io/2022/12/ru-ip-block`) — home and Moscow both get 403.
 
 `HostIOPressureHigh` (`infrastructure.yml`) is the early warning: tasks fully stalled on I/O
 more than 30% of the time.
@@ -193,7 +195,7 @@ docker exec owt-monitoring-alertmanager-1 wget -qO- \
 - `monitoring/prometheus/prometheus.home.yml` — Prometheus on home: blackbox probes and self-monitoring
 - `monitoring/prometheus/rules/` — alert and recording rules (shared with the dev stack)
 - `monitoring/blackbox/blackbox.yml` — probe modules `http_2xx`, `ssh_banner`
-- `monitoring/alertmanager/alertmanager.yml` — routing, Discord and healthchecks.io receivers
+- `monitoring/alertmanager/alertmanager.yml` — routing, Discord receiver
 - `monitoring/loki/loki.yml`, `monitoring/tempo/tempo.yml` — backends (shared with the dev stack)
 - `monitoring/grafana/provisioning/`, `monitoring/grafana/dashboards/` — Grafana
 - `monitoring/prometheus/prometheus.yml`, `monitoring/promtail/promtail.yml`, `monitoring/otel/otel-collector.yml` — local dev stack only
