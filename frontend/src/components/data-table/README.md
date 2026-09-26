@@ -32,8 +32,8 @@ project, satisfy `host.ts`, and it works.
 
 ```ts
 import {
-  AdminDataTable, type AdminDataTableProps, type AdminDataTableGroup,
-  adminColumnMeta, type AdminColumnMeta,          // column meta: filter, category, sticky, align, searchValue…
+  DataTable, type DataTableProps, type DataTableGroup,
+  columnMeta, type AdminColumnMeta,          // column meta: filter, category, sticky, align, searchValue…
   readAdminColumnFilter, type AdminTableFilters,  // filter contract shared with a filter bar
   createKebabColumn, type KebabAction,            // row actions column
   HighlightMatch, useAdminTableSearch,            // for custom cells that want search highlighting
@@ -42,17 +42,17 @@ import {
 } from "@/components/data-table";
 ```
 
-Props are documented on `AdminDataTableProps` in `types.ts`.
+Props are documented on `DataTableProps` in `types.ts`.
 
 ## Inside
 
-`AdminDataTable.tsx` is the orchestrator: it wires the hooks together, owns the
+`DataTable.tsx` is the orchestrator: it wires the hooks together, owns the
 row-level handlers and renders the card. Everything with a seam of its own sits
 next to it.
 
 | File | Responsibility |
 | --- | --- |
-| `types.ts` | `AdminDataTableProps` (the documented contract), `AdminDataTableGroup`, `PaginatedResponse`, `SortDir`. |
+| `types.ts` | `DataTableProps` (the documented contract), `DataTableGroup`, `PaginatedResponse`, `SortDir`. |
 | `useAdminTableState.ts` | Page, search, page size, sort and filters: the state the URL owns, plus the back/forward and page-1-reset rules. |
 | `url-state.ts` | Pure `?page=`/`?search=`/`?sort=`/`?dir=` parsing and writing. |
 | `filters.ts` | The `meta.filter` contract shared with a filter bar, and its query params. |
@@ -86,7 +86,7 @@ the new project's equivalents; nothing else in the folder reaches outside it exc
   `infinite-scroll`;
 - npm: `@tanstack/react-table` 8, `@tanstack/react-query` 5, `@tanstack/react-virtual` 3,
   `use-debounce`, `lucide-react`, plus `@dnd-kit/{core,sortable,utilities}` — those three
-  are imported only by `ColumnDnd.tsx`, which `AdminDataTable` fetches with a dynamic
+  are imported only by `ColumnDnd.tsx`, which `DataTable` fetches with a dynamic
   `import()` when a pointer first reaches the table, so they are not in the chunk a list
   page loads. Drop that file and the header stays plain (`AdminTableHead`) but keeps
   sorting, resizing and everything else;
@@ -94,6 +94,6 @@ the new project's equivalents; nothing else in the folder reaches outside it exc
   `.admin-row` — the row's hover / selected / current tint, which the pinned cells
   repaint over their own opaque base. The classes are written by `column-layout.tsx`,
   `head-cell.tsx`, `body-cells.tsx`, `body-rows.tsx` and `AdminTableHeader.tsx`, so the
-  stylesheet is imported once by `AdminDataTable.tsx`, the entry that renders them all.
+  stylesheet is imported once by `DataTable.tsx`, the entry that renders them all.
 
 Tests are colocated (`*.behavior.test.tsx`, happy-dom) and mock only `next/navigation`.

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import type { DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { UserDraftCard } from "@/types/user.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { formatSubRoleLabel, getHeroIconUrl } from "@/utils/player";
+import { formatSubRoleLabel, getHeroIconUrl } from "@/lib/player";
 
 import { Bar, MIN_WINRATE_MAPS, winrateColor } from "./PlayerCareer";
 

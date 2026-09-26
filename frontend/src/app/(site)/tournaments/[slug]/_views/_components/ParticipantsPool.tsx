@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import type { Registration, RegistrationRole } from "@/types/registration.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 import { getRoleLabel } from "./participantsColumns.model";
 import { TournamentPageState } from "../../_components/TournamentPageState";

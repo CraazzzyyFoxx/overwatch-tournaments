@@ -3,12 +3,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { readAdminColumnMeta } from "@/components/data-table/columns";
+import { readColumnMeta } from "@/components/data-table/columns";
 import type { AdminTableFilters } from "@/components/data-table/filters";
-import type { AdminDataTableProps, PaginatedResponse, SortDir } from "@/components/data-table/types";
+import type { DataTableProps, PaginatedResponse, SortDir } from "@/components/data-table/types";
 
 export interface AdminTableDataOptions<TData>
-  extends Pick<AdminDataTableProps<TData>, "queryKey" | "queryFn" | "rows" | "columns"> {
+  extends Pick<DataTableProps<TData>, "queryKey" | "queryFn" | "rows" | "columns"> {
   isClientMode: boolean;
   isLoading: boolean;
   page: number;
@@ -55,10 +55,10 @@ export function useAdminTableData<TData>({
     if (!rows) return [];
     const needle = search.trim().toLowerCase();
     if (!needle) return rows;
-    const searchableColumns = columns.filter((column) => readAdminColumnMeta<TData>(column.meta).searchValue);
+    const searchableColumns = columns.filter((column) => readColumnMeta<TData>(column.meta).searchValue);
     return rows.filter((row) =>
       searchableColumns.some((column) => {
-        const value = readAdminColumnMeta<TData>(column.meta).searchValue?.(row);
+        const value = readColumnMeta<TData>(column.meta).searchValue?.(row);
         return value ? value.toLowerCase().includes(needle) : false;
       })
     );

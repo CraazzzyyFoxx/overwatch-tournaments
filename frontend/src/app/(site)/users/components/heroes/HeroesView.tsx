@@ -7,7 +7,7 @@ import { Activity } from "lucide-react";
 import { HeroWithUserStats } from "@/types/hero.types";
 import type { UserMapRead } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
-import { getHumanizedStats } from "@/utils/stats";
+import { getHumanizedStats } from "@/lib/stats";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { heroVariantFromRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import { formatPercent } from "@/lib/format";

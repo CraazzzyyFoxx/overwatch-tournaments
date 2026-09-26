@@ -6,7 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Pencil, Plus, Trash2, UserCog } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AuthUserSearchCombobox } from "@/components/kit/AuthUserSearchCombobox";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
@@ -208,7 +208,7 @@ export default function PeoplePage() {
       {
         accessorKey: "name",
         header: "Person",
-        meta: adminColumnMeta<User>({
+        meta: columnMeta<User>({
           sticky: true,
           searchValue: (person) => `${person.name} ${person.id}`
         }),
@@ -336,7 +336,7 @@ export default function PeoplePage() {
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >
         <div className="min-w-0">
-          <AdminDataTable<User>
+          <DataTable<User>
             queryKey={(page, search, pageSize, sortField, sortDir) => [
               "admin",
               "users",

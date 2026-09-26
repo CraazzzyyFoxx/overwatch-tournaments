@@ -8,7 +8,7 @@ import tournamentService from "@/services/tournament.service";
 import userService from "@/services/user.service";
 import { UserRoleType, UserCompareBaselineMode } from "@/types/user.types";
 import { CompareRow } from "@/app/(site)/users/compare/types";
-import { getHumanizedStats } from "@/utils/stats";
+import { getHumanizedStats } from "@/lib/stats";
 import { HERO_COMPARE_STATS } from "@/app/(site)/users/compare/constants";
 import { getMapIconSrc, normalizeNumber, roleLabelKey } from "@/app/(site)/users/compare/utils";
 import {

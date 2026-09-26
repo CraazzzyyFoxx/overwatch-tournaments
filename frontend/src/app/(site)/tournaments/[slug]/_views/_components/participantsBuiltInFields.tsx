@@ -10,7 +10,7 @@ import {
 } from "@/lib/forms/answers";
 import type { Hero } from "@/types/hero.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 import { RolesCell, SmurfTagsCell, TopHeroesCell } from "./participantsCells";
 import type { ColumnDefinition } from "./participantsColumns.model";

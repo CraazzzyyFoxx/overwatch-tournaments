@@ -11,8 +11,8 @@ import {
   withoutDismissedAnnouncements
 } from "@/lib/notifications/announcement-dismissed";
 import { deriveWorkspacePalette } from "@/lib/workspace/theme";
-import { WorkspaceThemeSync } from "@/components/WorkspaceThemeSync";
-import { WorkspaceHostLock } from "@/components/WorkspaceHostLock";
+import { WorkspaceThemeSync } from "@/components/workspace/WorkspaceThemeSync";
+import { WorkspaceHostLock } from "@/components/workspace/WorkspaceHostLock";
 import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
 import type { NotificationItem } from "@/types/notification.types";
 import type { Workspace } from "@/types/workspace.types";

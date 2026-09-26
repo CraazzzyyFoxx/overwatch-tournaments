@@ -15,7 +15,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
+import { DataTable } from "@/components/data-table/DataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -71,7 +71,7 @@ function setViewportWidth(width: number) {
   })) as unknown as typeof window.matchMedia;
 }
 
-async function render(props: Partial<React.ComponentProps<typeof AdminDataTable<Row>>> = {}) {
+async function render(props: Partial<React.ComponentProps<typeof DataTable<Row>>> = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -79,7 +79,7 @@ async function render(props: Partial<React.ComponentProps<typeof AdminDataTable<
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row>
+        <DataTable<Row>
           rows={ROWS}
           columns={columns}
           getRowId={(row) => String(row.id)}
@@ -103,7 +103,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-describe("AdminDataTable row actions and inspector", () => {
+describe("DataTable row actions and inspector", () => {
   it("marks the inspected row with aria-current, never aria-selected", async () => {
     await render({ inspectorId: "8812" });
 

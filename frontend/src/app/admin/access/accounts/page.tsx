@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeCheck, CheckCircle, ShieldAlert, Trash2, UserRound, XCircle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AccountInspector } from "@/components/admin/access/AccountInspector";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -136,7 +136,7 @@ export default function AccessAdminAccountsPage() {
         id: "status",
         header: "Status",
         enableSorting: false,
-        meta: adminColumnMeta<AuthAdminUser>({ align: "center" }),
+        meta: columnMeta<AuthAdminUser>({ align: "center" }),
         cell: ({ row }) => (
           <div className="flex flex-wrap justify-center gap-2">
             {row.original.is_active ? (
@@ -198,7 +198,7 @@ export default function AccessAdminAccountsPage() {
   return (
     <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
       <div className="min-w-0">
-        <AdminDataTable<AuthAdminUser>
+        <DataTable<AuthAdminUser>
           columns={columns}
           initialPageSize={PAGE_SIZE}
           pageSizeOptions={[10, 20, 50, 100]}

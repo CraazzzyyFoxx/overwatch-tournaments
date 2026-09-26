@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { cn, initials } from "@/lib/utils";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserCatalogEntry } from "@/types/user.types";
 

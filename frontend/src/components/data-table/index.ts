@@ -1,13 +1,13 @@
-export { AdminDataTable } from "@/components/data-table/AdminDataTable";
+export { DataTable } from "@/components/data-table/DataTable";
 export type {
-  AdminDataTableProps,
-  AdminDataTableGroup,
+  DataTableProps,
+  DataTableGroup,
   PaginatedResponse,
   SortDir
 } from "@/components/data-table/types";
 export {
-  adminColumnMeta,
-  readAdminColumnMeta,
+  columnMeta,
+  readColumnMeta,
   type AdminColumnMeta,
   type AdminColumnCategory,
   type AdminColumnResponsive

@@ -12,7 +12,8 @@ export default [
       "react/prop-types": "off",
       "react/no-unknown-property": "off",
       "no-redeclare": "off",
-      "react-hooks/exhaustive-deps": "off",
+      // "warn": catch stale closures without failing CI on the existing backlog.
+      "react-hooks/exhaustive-deps": "warn",
       "no-undef": "off",
     },
   },

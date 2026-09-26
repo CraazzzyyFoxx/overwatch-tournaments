@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { ParsedMatchDetail } from "@/components/admin/ParsedMatchDetail";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
@@ -238,7 +238,7 @@ export function ParsedMatchesBrowser({
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >
         <div className="min-w-0">
-          <AdminDataTable<AdminMatchRow>
+          <DataTable<AdminMatchRow>
             columns={columns}
             filterKey={filters.filterKey}
             initialPageSize={PAGE_SIZE}

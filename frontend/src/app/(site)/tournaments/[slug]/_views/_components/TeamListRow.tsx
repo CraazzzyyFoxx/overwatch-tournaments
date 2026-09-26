@@ -16,7 +16,7 @@ import type { Hero } from "@/types/hero.types";
 import type { Registration } from "@/types/registration.types";
 import type { Player, Team } from "@/types/team.types";
 import type { Tournament } from "@/types/tournament.types";
-import { formatSubRoleLabel, getPlayerSlug, sortTeamPlayers } from "@/utils/player";
+import { formatSubRoleLabel, getPlayerSlug, sortTeamPlayers } from "@/lib/player";
 
 import {
   declaredHeroes,

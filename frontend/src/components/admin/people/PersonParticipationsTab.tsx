@@ -6,7 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
@@ -33,7 +33,7 @@ import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import userService from "@/services/user.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { formatSubRoleLabel } from "@/utils/player";
+import { formatSubRoleLabel } from "@/lib/player";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { userQueryKeys } from "@/lib/users/query-keys";
@@ -204,7 +204,7 @@ export function PersonParticipationsTab({
         accessorKey: "name",
         header: "Name",
         size: 200,
-        meta: adminColumnMeta<ParticipationRow>({
+        meta: columnMeta<ParticipationRow>({
           sticky: true,
           searchValue: (row) => row.name
         }),
@@ -214,7 +214,7 @@ export function PersonParticipationsTab({
         accessorKey: "team_name",
         header: "Team",
         enableSorting: false,
-        meta: adminColumnMeta<ParticipationRow>({ searchValue: (row) => row.team_name }),
+        meta: columnMeta<ParticipationRow>({ searchValue: (row) => row.team_name }),
         cell: ({ row }) => (
           <Link
             className="text-sm underline-offset-4 hover:underline"
@@ -228,7 +228,7 @@ export function PersonParticipationsTab({
         accessorKey: "tournament_name",
         header: "Tournament",
         enableSorting: false,
-        meta: adminColumnMeta<ParticipationRow>({ searchValue: (row) => row.tournament_name }),
+        meta: columnMeta<ParticipationRow>({ searchValue: (row) => row.tournament_name }),
         cell: ({ row }) => (
           <Link
             className="text-sm text-muted-foreground underline-offset-4 hover:underline"
@@ -273,7 +273,7 @@ export function PersonParticipationsTab({
         id: "flags",
         header: "Flags",
         enableSorting: false,
-        meta: adminColumnMeta({ align: "center" }),
+        meta: columnMeta({ align: "center" }),
         cell: ({ row }) => (
           <div className="flex justify-center gap-1">
             {row.original.is_newcomer && (
@@ -323,7 +323,7 @@ export function PersonParticipationsTab({
 
   return (
     <div className="space-y-4">
-      <AdminDataTable<ParticipationRow>
+      <DataTable<ParticipationRow>
         rows={rows}
         isLoading={participationsQuery.isLoading}
         columns={columns}

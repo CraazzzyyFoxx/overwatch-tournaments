@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, FolderInput, Pencil, RotateCcw, Unlock, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { adminColumnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";
+import { columnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Badge } from "@/components/ui/badge";
 import { formatShortfall } from "@/lib/registration/team-shortfall";
@@ -116,7 +116,7 @@ export function useRegistrationTeamColumns({
             )}
           </div>
         ),
-        meta: adminColumnMeta<RegistrationTeam>({
+        meta: columnMeta<RegistrationTeam>({
           mandatory: true,
           className: "min-w-[11rem]",
           // The two things an organizer knows a team by.
@@ -138,7 +138,7 @@ export function useRegistrationTeamColumns({
             </StatusPill>
           );
         },
-        meta: adminColumnMeta<RegistrationTeam>({ category: "core" })
+        meta: columnMeta<RegistrationTeam>({ category: "core" })
       },
       {
         id: "admission",
@@ -152,7 +152,7 @@ export function useRegistrationTeamColumns({
             </StatusPill>
           );
         },
-        meta: adminColumnMeta<RegistrationTeam>({ category: "core" })
+        meta: columnMeta<RegistrationTeam>({ category: "core" })
       },
       {
         id: "captain",
@@ -176,7 +176,7 @@ export function useRegistrationTeamColumns({
             </div>
           );
         },
-        meta: adminColumnMeta<RegistrationTeam>({ category: "core" })
+        meta: columnMeta<RegistrationTeam>({ category: "core" })
       },
       {
         id: "roster",
@@ -195,7 +195,7 @@ export function useRegistrationTeamColumns({
             </span>
           );
         },
-        meta: adminColumnMeta<RegistrationTeam>({ category: "core", className: "min-w-[9rem]" })
+        meta: columnMeta<RegistrationTeam>({ category: "core", className: "min-w-[9rem]" })
       },
       {
         // The reason the screen exists, so it is a column and not a badge.
@@ -214,7 +214,7 @@ export function useRegistrationTeamColumns({
             </div>
           );
         },
-        meta: adminColumnMeta<RegistrationTeam>({ category: "core", className: "min-w-[10rem]" })
+        meta: columnMeta<RegistrationTeam>({ category: "core", className: "min-w-[10rem]" })
       },
       createKebabColumn<RegistrationTeam>(rowActions, { rowLabel: (team) => team.name })
     ];

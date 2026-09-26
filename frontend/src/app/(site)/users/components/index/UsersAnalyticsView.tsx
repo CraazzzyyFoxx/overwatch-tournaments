@@ -8,7 +8,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { cn, initials } from "@/lib/utils";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserOverviewRow } from "@/types/user.types";
 

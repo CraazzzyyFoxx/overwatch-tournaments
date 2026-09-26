@@ -21,7 +21,7 @@ import ForecastChip from "@/app/(site)/tournaments/analytics/components/Forecast
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
 import TeamName from "@/components/TeamName";
 import { useTranslations } from "next-intl";
-import { sortTeamPlayers } from "@/utils/player";
+import { sortTeamPlayers } from "@/lib/player";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import analyticsService from "@/services/analytics.service";

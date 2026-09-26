@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LogStatsName } from "@/types/stats.types";
-import { formatStat, resolveMatchMvpPlacement, type StatNumberFormatter } from "@/utils/matchStats";
+import { formatStat, resolveMatchMvpPlacement, type StatNumberFormatter } from "@/lib/match-stats";
 import type { PlayerWithStats } from "@/types/team.types";
 
 const playerWith = (stats: Partial<Record<LogStatsName, number>>): PlayerWithStats =>

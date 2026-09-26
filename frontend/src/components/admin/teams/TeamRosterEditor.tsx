@@ -43,7 +43,7 @@ import adminService from "@/services/admin.service";
 import type { PlayerCreateInput, PlayerUpdateInput } from "@/types/admin.types";
 import type { Player } from "@/types/team.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { formatSubRoleLabel, sortTeamPlayers } from "@/utils/player";
+import { formatSubRoleLabel, sortTeamPlayers } from "@/lib/player";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 

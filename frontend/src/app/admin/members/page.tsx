@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Check, ChevronsUpDown, Trash2, UserPlus, Wand2 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -406,7 +406,7 @@ export default function WorkspaceMembersPage() {
         description={`Manage who has access to ${workspace?.name ?? "this workspace"} and their RBAC roles.`}
       />
 
-      <AdminDataTable<WorkspaceMember>
+      <DataTable<WorkspaceMember>
         queryKey={(page, search, pageSize, sortField, sortDir) => [
           "workspace-members",
           currentWorkspaceId,

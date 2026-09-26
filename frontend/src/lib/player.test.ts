@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decodePlayerSlug, getPlayerSlug } from "@/utils/player";
+import { decodePlayerSlug, getPlayerSlug } from "@/lib/player";
 
 describe("player slug helpers", () => {
   it("decodes percent-encoded battle tags from route slugs", () => {

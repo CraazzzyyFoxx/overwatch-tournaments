@@ -17,7 +17,7 @@ import {
   isTournamentStatusActive,
 } from "@/lib/tournament/status";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
+import { WorkspaceAvatar } from "@/components/workspace/WorkspaceSwitcher";
 import tournamentService from "@/services/tournament.service";
 import { Tournament } from "@/types/tournament.types";
 import { Workspace } from "@/types/workspace.types";

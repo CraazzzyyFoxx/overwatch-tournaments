@@ -12,7 +12,7 @@ import { getRoleIconName } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { UserDraftCard } from "@/types/user.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { getHeroIconUrl } from "@/utils/player";
+import { getHeroIconUrl } from "@/lib/player";
 
 /** Below this many maps a winrate is noise: it is hidden, not shown as a verdict. */
 export const MIN_WINRATE_MAPS = 10;

@@ -18,10 +18,10 @@ import {
 
 import { columnDefId } from "@/components/data-table/columns";
 import { readAdminColumnFilter, type AdminTableFilters } from "@/components/data-table/filters";
-import type { AdminDataTableProps } from "@/components/data-table/types";
+import type { DataTableProps } from "@/components/data-table/types";
 
 export interface AdminTableOptions<TData>
-  extends Pick<AdminDataTableProps<TData>, "columns" | "getRowId" | "enableRowSelection" | "renderExpanded"> {
+  extends Pick<DataTableProps<TData>, "columns" | "getRowId" | "enableRowSelection" | "renderExpanded"> {
   data: TData[];
   isClientMode: boolean;
   /** Client mode `all`: one page big enough to hold every row. */

@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Sticky admin-table columns and row tints (AdminDataTable).
-   Imported by AdminDataTable.tsx. Global, not a CSS module, because the
+   Sticky table columns and row tints (DataTable).
+   Imported by DataTable.tsx. Global, not a CSS module, because the
    selectors reach into shadcn's <Table> markup and repaint whole rows.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Sticky admin-table columns (AdminDataTable, column `meta.sticky`).
+   Sticky table columns (DataTable, column `meta.sticky`).
    A pinned cell sits ON TOP of the columns scrolling past it, so it needs an
    OPAQUE background — the table's own `bg-card/50` is see-through and would
    show two rows of text at once. --admin-sticky-bg is that translucent card

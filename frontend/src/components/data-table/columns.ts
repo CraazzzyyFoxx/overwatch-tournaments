@@ -21,7 +21,7 @@ export type AdminColumnResponsive = "always" | "sm" | "md" | "lg";
 /** Column category, used to group the "Columns" picker. */
 export type AdminColumnCategory = "core" | "meta" | "admin";
 
-/** Column metadata `AdminDataTable` understands. */
+/** Column metadata `DataTable` understands. */
 export interface AdminColumnMeta<TData = unknown> {
   /** Column filter contract for `kit/FilterBar` and the table's engine. */
   filter?: AdminColumnFilterSpec;
@@ -61,10 +61,10 @@ export interface AdminColumnMeta<TData = unknown> {
  * trips the excess-property check. Cast once, here, instead of scattering casts
  * through every admin column definition.
  */
-export const adminColumnMeta = <TData,>(meta: AdminColumnMeta<TData>) =>
+export const columnMeta = <TData,>(meta: AdminColumnMeta<TData>) =>
   meta as ColumnMeta<TData, unknown>;
 
-export function readAdminColumnMeta<TData>(meta: unknown): AdminColumnMeta<TData> {
+export function readColumnMeta<TData>(meta: unknown): AdminColumnMeta<TData> {
   return (meta ?? {}) as AdminColumnMeta<TData>;
 }
 

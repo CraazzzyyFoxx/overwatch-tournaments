@@ -9,7 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { StatusPill } from "@/components/kit/StatusPill";
@@ -613,7 +613,7 @@ export default function DivisionsSettingsPage() {
           ) : null}
         </div>
         {activeVersion ? (
-          <AdminDataTable<Band>
+          <DataTable<Band>
             rows={activeBands}
             columns={columns}
             getRowId={(row) => row.slug}

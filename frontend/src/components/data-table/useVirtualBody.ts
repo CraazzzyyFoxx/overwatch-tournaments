@@ -3,7 +3,7 @@
 import type { Row } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import type { AdminDataTableGroup, AdminDataTableProps } from "@/components/data-table/types";
+import type { DataTableGroup, DataTableProps } from "@/components/data-table/types";
 import type { AdminTableDensity } from "@/components/data-table/useTablePreferences";
 
 /**
@@ -16,11 +16,11 @@ const ROW_HEIGHT_ESTIMATE: Record<AdminTableDensity, number> = { comfortable: 41
 
 /** One flat list of everything the body renders, so the virtualiser can measure group headers and expanded details like any other row. */
 export type BodyItem<TData> =
-  | { kind: "group"; key: string; group: AdminDataTableGroup<TData> }
+  | { kind: "group"; key: string; group: DataTableGroup<TData> }
   | { kind: "row"; key: string; row: Row<TData> }
   | { kind: "detail"; key: string; row: Row<TData> };
 
-export interface VirtualBodyOptions<TData> extends Pick<AdminDataTableProps<TData>, "groupRows"> {
+export interface VirtualBodyOptions<TData> extends Pick<DataTableProps<TData>, "groupRows"> {
   pageRows: Row<TData>[];
   /** `renderExpanded` was given, so an expanded row contributes a detail item. */
   hasExpandedDetail: boolean;

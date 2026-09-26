@@ -71,10 +71,9 @@ Never: a relative `../../admin/…` climb, and never a re-export shim to launder
 The `Admin` prefix is gone from `components/kit/` (2026-09-24): `LinkTabs`, `Combobox`,
 `FilterBar`, `useFilters`, `Inspector`, `SectionNav`. They were the admin surface's kit before
 other zones started using them; the directory is the scope, not the name.
-`components/data-table/` still exports `AdminDataTable` / `adminColumnMeta`. The unused
-`components/ui/data-table.tsx` that held the plain `DataTable` name was deleted (2026-09-26),
-so the name is free; the rename itself is its own step
-(`docs/superpowers/specs/2026-09-24-unified-component-library-design.md` §4.4).
+`components/data-table/` exports `DataTable` / `columnMeta` (renamed from
+`AdminDataTable` / `adminColumnMeta` on 2026-09-26 after deleting the unused
+`components/ui/data-table.tsx` that held the plain name).
 
 ## Why the tree is dynamic
 

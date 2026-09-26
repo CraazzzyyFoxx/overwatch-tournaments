@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { cn } from "@/components/data-table/host";
 import { ariaSortValue } from "@/components/data-table/types";
-import { ADMIN_ACTION_COLUMN_ID, ALIGN_CLASS, ALIGN_FLEX_CLASS, RESPONSIVE_CLASS, readAdminColumnMeta } from "@/components/data-table/columns";
+import { ADMIN_ACTION_COLUMN_ID, ALIGN_CLASS, ALIGN_FLEX_CLASS, RESPONSIVE_CLASS, readColumnMeta } from "@/components/data-table/columns";
 import type { ColumnLayout } from "@/components/data-table/column-layout";
 import type { AdminTableDensity } from "@/components/data-table/useTablePreferences";
 import type { ColumnDndModule } from "@/components/data-table/ColumnDnd";
@@ -32,7 +32,7 @@ export function renderHeadCell<TData>(
   const canSort = header.column.getCanSort();
   const sorted = header.column.getIsSorted();
   const sortIndex = sorting.length > 1 ? header.column.getSortIndex() : -1;
-  const columnMeta = readAdminColumnMeta<TData>(header.column.columnDef.meta);
+  const columnMeta = readColumnMeta<TData>(header.column.columnDef.meta);
   const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
   const sticky = layout.stickyCell(header.column.id, layout.getColumnStyle(header.column));
 

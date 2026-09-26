@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import userService from "@/services/user.service";
-import { decodePlayerSlug, getPlayerImage } from "@/utils/player";
+import { decodePlayerSlug, getPlayerImage } from "@/lib/player";
 import { SITE_NAME, SITE_URL_OBJ } from "@/config/site";
 
 export const size = { width: 1200, height: 630 };

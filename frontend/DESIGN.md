@@ -111,7 +111,7 @@ before writing markup:
 | Search input                | `components/ui/search-field.tsx` — `label` is required (a placeholder is not a label)                                                                                    |
 | Pagination                  | `components/ui/data-pagination.tsx` — windowed, `aria-current`, real chevrons                                                                                            |
 | Empty / error / not-found   | `components/ui/page-state-card.tsx`                                                                                                                                      |
-| Data table                  | `components/data-table/AdminDataTable.tsx` — header scope, scroll region, skeletons, keyboard rows                                                                        |
+| Data table                  | `components/data-table/DataTable.tsx` — header scope, scroll region, skeletons, keyboard rows                                                                        |
 | Placement medal             | `components/ui/place-badge.tsx` — `--aqt-medal-*` tokens                                                                                                                 |
 | Role / division marker      | `components/PlayerRoleIcon.tsx`, `components/DivisionIcon.tsx` — icon+label only in a Role split; icon-only (name in `title`/`aria-label`) elsewhere on display surfaces |
 | MVP pill                    | `components/match/MvpMatchPill.tsx`                                                                                                                                      |
@@ -196,7 +196,7 @@ inventing a surface.
 | `kit/MasterDetail.tsx`    | The T4 split, including the narrow-viewport switch to list-or-detail with a Back button                                                                                                  |
 | `kit/NextActionHero.tsx`  | The single "do this next" call to action on T1 and a hub Overview                                                                                                                        |
 
-Supporting these, outside `kit/`: `components/data-table/AdminDataTable.tsx` is the
+Supporting these, outside `kit/`: `components/data-table/DataTable.tsx` is the
 table engine (server or client mode, paging, sorting, column picker, mobile
 cards, `toolbar` slot for the filter bar); `components/ui/tone.ts` is the
 shared tone map (`TONE_CLASS` / `TONE_TEXT`), re-exported from

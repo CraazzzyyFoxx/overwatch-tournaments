@@ -20,13 +20,13 @@ export function ariaSortValue(direction: "asc" | "desc" | false): "ascending" | 
   return "none";
 }
 
-export interface AdminDataTableGroup<TData> {
+export interface DataTableGroup<TData> {
   key: string;
   label: React.ReactNode;
   rows: Row<TData>[];
 }
 
-export interface AdminDataTableProps<TData> {
+export interface DataTableProps<TData> {
   /**
    * Server mode: one page per request. Mutually exclusive with `rows` — the
    * table pages, sorts and filters on the server and the caller turns the
@@ -115,7 +115,7 @@ export interface AdminDataTableProps<TData> {
    * Splits the current page into labelled groups, each preceded by a header
    * row. Receives the rows in display order and must return all of them.
    */
-  groupRows?: (rows: Row<TData>[]) => AdminDataTableGroup<TData>[];
+  groupRows?: (rows: Row<TData>[]) => DataTableGroup<TData>[];
 
   /**
    * Shows the "Columns" picker and persists visibility under this

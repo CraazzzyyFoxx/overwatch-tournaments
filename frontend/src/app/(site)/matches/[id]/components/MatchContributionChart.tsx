@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
-import { STAT_META, activePlayers, formatStat, playerStat } from "@/utils/matchStats";
+import { STAT_META, activePlayers, formatStat, playerStat } from "@/lib/match-stats";
 
 interface MatchContributionChartProps {
   home: TeamWithStats;

@@ -2,7 +2,7 @@
 
 import type { ColumnDef, Row } from "@tanstack/react-table";
 
-import { adminColumnMeta } from "@/components/data-table";
+import { columnMeta } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import {
   AdmissionStatusBadge,
@@ -77,7 +77,7 @@ export function buildBalancerRegistrationColumns(
           // The old client-side sort had no case for this column.
           enableSorting: false,
           cell: ({ row }) => <SubscriptionStatusBadge outcome={row.original.subscription_outcome} />,
-          meta: adminColumnMeta<AdminRegistration>({
+          meta: columnMeta<AdminRegistration>({
             category: "meta",
             defaultHidden: false,
             responsive: "md",
@@ -106,7 +106,7 @@ export function buildBalancerRegistrationColumns(
     cell: ({ row }) => (
       <AnswerValue value={row.original.answers?.[field.key] ?? null} kind={field.kind} />
     ),
-    meta: adminColumnMeta<AdminRegistration>({
+    meta: columnMeta<AdminRegistration>({
       category: "admin",
       defaultHidden: DEFAULT_VISIBLE_ANSWER_KEYS[field.key] !== true,
       responsive: "lg",
@@ -122,7 +122,7 @@ export function buildBalancerRegistrationColumns(
       accessorFn: (registration) => registration.battle_tag || registration.display_name || "",
       sortingFn: localeTextSort,
       cell: ({ row }) => <ParticipantCell registration={row.original} identityKeys={identityKeys} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "core",
         defaultHidden: false,
         responsive: "always",
@@ -149,7 +149,7 @@ export function buildBalancerRegistrationColumns(
       // way it could ever disagree with the engine.
       accessorFn: (registration) => registration.best_rank ?? 0,
       cell: ({ row }) => <RolesCell roles={row.original.roles} catalog={subroleCatalog} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "core",
         defaultHidden: false,
         responsive: "always",
@@ -174,7 +174,7 @@ export function buildBalancerRegistrationColumns(
       cell: ({ row }) => (
         <RegistrationStatusBadge status={row.original.status} meta={row.original.status_meta} />
       ),
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "core",
         defaultHidden: false,
         responsive: "always",
@@ -218,7 +218,7 @@ export function buildBalancerRegistrationColumns(
           {row.original.answers?.reserve === true ? <ReserveBadge /> : null}
         </div>
       ),
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "core",
         defaultHidden: false,
         responsive: "always",
@@ -242,7 +242,7 @@ export function buildBalancerRegistrationColumns(
       header: "Check-in",
       accessorFn: (registration) => (registration.checked_in ? 1 : 0),
       cell: ({ row }) => <CheckInStatusBadge checkedIn={row.original.checked_in} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "core",
         defaultHidden: false,
         responsive: "always",
@@ -262,7 +262,7 @@ export function buildBalancerRegistrationColumns(
       // that is the accepted cost of a column whose sort matches its contents.
       accessorFn: (registration) => ADMISSION_ORDER[registration.admission.decision],
       cell: ({ row }) => <AdmissionStatusBadge admission={row.original.admission} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "meta",
         defaultHidden: false,
         responsive: "md",
@@ -282,7 +282,7 @@ export function buildBalancerRegistrationColumns(
         primaryAdmissionReason(registration.admission)?.code ?? "",
       sortingFn: localeTextSort,
       cell: ({ row }) => <AdmissionReasonCell registration={row.original} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "meta",
         defaultHidden: false,
         responsive: "lg",
@@ -308,7 +308,7 @@ export function buildBalancerRegistrationColumns(
         ) : (
           <span className="text-[color:var(--aqt-fg-faint)]">—</span>
         ),
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "meta",
         defaultHidden: true,
         responsive: "lg",
@@ -326,7 +326,7 @@ export function buildBalancerRegistrationColumns(
       header: "Submitted",
       accessorFn: (registration) => parseValidDate(registration.submitted_at)?.getTime() ?? 0,
       cell: ({ row }) => <SubmittedCell submittedAt={row.original.submitted_at} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "meta",
         defaultHidden: false,
         responsive: "md",
@@ -341,7 +341,7 @@ export function buildBalancerRegistrationColumns(
       filterFn: (row: Row<AdminRegistration>, _columnId: string, values: string[]) =>
         values.length === 0 || values.includes(row.original.source),
       cell: ({ row }) => <SourceCell source={row.original.source} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "admin",
         defaultHidden: true,
         responsive: "md",
@@ -373,7 +373,7 @@ export function buildBalancerRegistrationColumns(
         ) : (
           <TextBlockCell value={row.original.admin_notes} />
         ),
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "admin",
         defaultHidden: true,
         responsive: "lg",
@@ -386,7 +386,7 @@ export function buildBalancerRegistrationColumns(
       header: "Reviewed",
       accessorFn: (registration) => parseValidDate(registration.reviewed_at)?.getTime() ?? 0,
       cell: ({ row }) => <ReviewedCell registration={row.original} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "admin",
         defaultHidden: true,
         responsive: "lg",
@@ -400,7 +400,7 @@ export function buildBalancerRegistrationColumns(
       header: "Exclusion",
       accessorFn: (registration) => (registration.balancer_status === "excluded" ? 1 : 0),
       cell: ({ row }) => <ExclusionCell registration={row.original} />,
-      meta: adminColumnMeta<AdminRegistration>({
+      meta: columnMeta<AdminRegistration>({
         category: "admin",
         defaultHidden: true,
         responsive: "lg",

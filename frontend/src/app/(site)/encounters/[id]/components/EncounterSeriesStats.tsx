@@ -27,8 +27,8 @@ import {
   playerStat,
   columnMaxima,
   GROUP_COLOR
-} from "@/utils/matchStats";
-import { sortTeamPlayers } from "@/utils/player";
+} from "@/lib/match-stats";
+import { sortTeamPlayers } from "@/lib/player";
 import { aggregateSeriesStats, type SeriesAggregate } from "@/lib/encounter/detail";
 import { Fact, PlayerIdentity } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";

@@ -3,7 +3,7 @@ import type { Column, ColumnDef, ColumnSizingState, Table } from "@tanstack/reac
 
 import { TableCell, TableHead } from "@/components/ui/table";
 import { cn } from "@/components/data-table/host";
-import { ADMIN_ACTION_COLUMN_ID, columnDefId, readAdminColumnMeta } from "@/components/data-table/columns";
+import { ADMIN_ACTION_COLUMN_ID, columnDefId, readColumnMeta } from "@/components/data-table/columns";
 import type { AdminTableDensity } from "@/components/data-table/useTablePreferences";
 
 const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
@@ -56,7 +56,7 @@ export function buildColumnLayout<TData>({
     column.id !== ADMIN_ACTION_COLUMN_ID &&
     columnSizing[column.id] === undefined &&
     !explicitlySizedColumnIds.has(column.id) &&
-    !readAdminColumnMeta<TData>(column.columnDef.meta).sticky;
+    !readColumnMeta<TData>(column.columnDef.meta).sticky;
 
   const getColumnStyle = (column: Column<TData, unknown>) => {
     if (column.id === ADMIN_ACTION_COLUMN_ID) {
@@ -97,7 +97,7 @@ export function buildColumnLayout<TData>({
   const stickyLeft = new Map<string, number>();
   let stickyOffset = hasLeadingColumn ? ADMIN_LEADING_COLUMN_WIDTH : 0;
   for (const column of visibleColumns) {
-    if (!readAdminColumnMeta<TData>(column.columnDef.meta).sticky) break;
+    if (!readColumnMeta<TData>(column.columnDef.meta).sticky) break;
     stickyLeft.set(column.id, stickyOffset);
     const width = getColumnStyle(column)?.width;
     stickyOffset += typeof width === "number" ? width : 0;

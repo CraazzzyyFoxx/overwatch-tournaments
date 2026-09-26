@@ -19,8 +19,8 @@ import {
 import { useRegistrationFilters } from "@/components/balancer/registrations/_hooks/useRegistrationFilters";
 import { useRegistrationMutations } from "@/components/balancer/registrations/_hooks/useRegistrationMutations";
 import {
-  AdminDataTable,
-  type AdminDataTableGroup,
+  DataTable,
+  type DataTableGroup,
   createKebabColumn
 } from "@/components/data-table";
 import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
@@ -248,7 +248,7 @@ export default function RegistrationsTable({
 
   const groupPageRows = (
     pageRows: Row<AdminRegistration>[]
-  ): AdminDataTableGroup<AdminRegistration>[] => {
+  ): DataTableGroup<AdminRegistration>[] => {
     const rowsById = new Map(pageRows.map((row) => [row.original.id, row]));
     return groupRegistrations(
       pageRows.map((row) => row.original),
@@ -295,7 +295,7 @@ export default function RegistrationsTable({
       )}
     >
       <div className="flex min-h-0 min-w-0 flex-col gap-4">
-        <AdminDataTable<AdminRegistration>
+        <DataTable<AdminRegistration>
           rows={visibleRegistrations}
           isLoading={registrationsQuery.isFetching}
           columns={columns}

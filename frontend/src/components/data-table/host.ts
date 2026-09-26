@@ -14,7 +14,7 @@ export { default as Link } from "next/link";
 export { cn } from "@/lib/utils";
 
 // `true` below the `md` breakpoint; rows render as cards there.
-export { useIsMobile } from "@/hooks/use-mobile";
+export { useIsMobile } from "@/hooks/useMobile";
 
 // `useState` persisted under a localStorage key; drives density, widths, order.
 export { useLocalStorageState } from "@/hooks/useLocalStorageState";

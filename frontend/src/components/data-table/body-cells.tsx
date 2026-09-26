@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { TableCell } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/data-table/host";
-import { ADMIN_ACTION_COLUMN_ID, ALIGN_CLASS, ALIGN_FLEX_CLASS, RESPONSIVE_CLASS, readAdminColumnMeta } from "@/components/data-table/columns";
+import { ADMIN_ACTION_COLUMN_ID, ALIGN_CLASS, ALIGN_FLEX_CLASS, RESPONSIVE_CLASS, readColumnMeta } from "@/components/data-table/columns";
 import { HighlightMatch } from "@/components/data-table/HighlightMatch";
 import type { ColumnLayout } from "@/components/data-table/column-layout";
 import type { RowSelectionGestures } from "@/components/data-table/useRowSelectionGestures";
@@ -90,7 +90,7 @@ export function renderBodyCell<TData>(
   const isActionColumn = cell.column.id === ADMIN_ACTION_COLUMN_ID;
   const isFirstColumn = index === 0 && !hasLeadingColumn;
   const isLastColumn = index === count - 1;
-  const columnMeta = readAdminColumnMeta<TData>(cell.column.columnDef.meta);
+  const columnMeta = readColumnMeta<TData>(cell.column.columnDef.meta);
   const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
   const sticky = layout.stickyCell(cell.column.id, layout.getColumnStyle(cell.column));
   const content =

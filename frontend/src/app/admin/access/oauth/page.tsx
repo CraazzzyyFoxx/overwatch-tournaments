@@ -7,7 +7,7 @@ import { CheckCircle, Clock, Trash2, UserCog } from "lucide-react";
 import { useFormatter } from "@/lib/datetime/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { PROVIDER_META, ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -158,7 +158,7 @@ export default function OAuthConnectionsAdminPage() {
         id: "token_status",
         header: "Token",
         enableSorting: false,
-        meta: adminColumnMeta({ align: "center" }),
+        meta: columnMeta({ align: "center" }),
         cell: ({ row }) => {
           const expiresAt = row.original.token_expires_at;
           if (!expiresAt) {
@@ -207,7 +207,7 @@ export default function OAuthConnectionsAdminPage() {
   return (
     <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
       <div className="min-w-0">
-        <AdminDataTable<OAuthConnectionAdmin>
+        <DataTable<OAuthConnectionAdmin>
           columns={columns}
           initialPageSize={PAGE_SIZE}
           pageSizeOptions={[10, 20, 50, 100]}

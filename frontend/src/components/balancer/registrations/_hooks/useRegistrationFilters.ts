@@ -32,7 +32,7 @@ interface UseRegistrationFiltersInput {
 interface RegistrationFilters {
   defs: FilterDef[];
   filters: FilterState;
-  /** The subset the `AdminDataTable` resolves as column filters. */
+  /** The subset the `DataTable` resolves as column filters. */
   tableFilters: AdminTableFilters;
   onTableFiltersChange: (next: AdminTableFilters) => void;
   /** Rows left after the chips the table cannot resolve itself. */

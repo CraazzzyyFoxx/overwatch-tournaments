@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FileCheck2, FileX2, Pencil, Trash2 } from "lucide-react";
 
-import { adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
 import TeamName from "@/components/TeamName";
@@ -86,7 +86,7 @@ export function useEncounterColumns({
         accessorKey: "status",
         header: "Status",
         size: 132,
-        meta: adminColumnMeta<Encounter>({ align: "center" }),
+        meta: columnMeta<Encounter>({ align: "center" }),
         cell: ({ row }) => <EncounterStatusCell status={row.original.status} />
       },
       {
@@ -104,7 +104,7 @@ export function useEncounterColumns({
         accessorKey: "has_logs",
         header: "Logs",
         size: 108,
-        meta: adminColumnMeta<Encounter>({ align: "center" }),
+        meta: columnMeta<Encounter>({ align: "center" }),
         cell: ({ row }) =>
           row.original.has_logs ? (
             <StatusIcon icon={FileCheck2} label="Available" variant="success" />

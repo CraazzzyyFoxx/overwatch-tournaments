@@ -7,7 +7,7 @@ import { Archive } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LinkTabs } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
@@ -282,7 +282,7 @@ export default function AdminWorkspaceNotificationsPage() {
         />
       </div>
 
-      <AdminDataTable
+      <DataTable
         rows={rows}
         isLoading={list.isLoading}
         columns={columns}

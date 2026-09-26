@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
+import { DataTable, columnMeta } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,7 +60,7 @@ export function AchievementsTable({
       accessorKey: "enabled",
       header: "Status",
       size: 80,
-      meta: adminColumnMeta<AchievementRule>({ align: "center" }),
+      meta: columnMeta<AchievementRule>({ align: "center" }),
       cell: ({ row }) =>
         row.original.enabled ? (
           <StatusIcon icon={CheckCircle} label="On" variant="success" />
@@ -164,7 +164,7 @@ export function AchievementsTable({
   ];
 
   return (
-    <AdminDataTable
+    <DataTable
       queryKey={(page, search, pageSize, sf, sd) => [...listKey, page, search, pageSize, sf, sd]}
       queryFn={async (page, search, pageSize, sortField, sortDir) =>
         adminService.getAchievementRules(workspaceId, {

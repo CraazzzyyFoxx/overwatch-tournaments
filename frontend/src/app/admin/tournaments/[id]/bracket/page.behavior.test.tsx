@@ -63,7 +63,7 @@ vi.mock("@/hooks/usePermissions", () => ({
 }));
 
 let isMobile = false;
-vi.mock("@/hooks/use-mobile", () => ({
+vi.mock("@/hooks/useMobile", () => ({
   useIsMobile: () => isMobile
 }));
 

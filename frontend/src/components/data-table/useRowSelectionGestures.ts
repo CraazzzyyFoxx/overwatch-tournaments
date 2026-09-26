@@ -25,7 +25,7 @@ export function isInteractiveRowTarget(target: HTMLElement) {
   return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [role='link'], [data-radix-collection-item]"));
 }
 
-/** The row/checkbox handlers `AdminDataTable` spreads onto its rows. */
+/** The row/checkbox handlers `DataTable` spreads onto its rows. */
 export interface RowSelectionGestures<TData> {
   /** Reports (and clears) whether the click now firing was the tail of a selection gesture. */
   consumeClick: () => boolean;

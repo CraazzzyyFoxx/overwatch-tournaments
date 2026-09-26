@@ -1,7 +1,7 @@
 import type { FilterFn, Row } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 
-import { readAdminColumnMeta, readAdminColumnFilter } from "@/components/data-table";
+import { readColumnMeta, readAdminColumnFilter } from "@/components/data-table";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { StatusMeta } from "@/types/registration.types";
 import type { FormField } from "@/types/forms.types";
@@ -80,7 +80,7 @@ describe("balancer registration column model", () => {
 
   it("reads the stored answer for its own question", () => {
     const vk = column("answer_vk", undefined, false, SCHEMA_FIELDS);
-    const meta = readAdminColumnMeta<AdminRegistration>(vk.meta);
+    const meta = readColumnMeta<AdminRegistration>(vk.meta);
 
     const value = meta.searchValue?.(registration({ answers: { vk: "vk.com/player" } }));
     expect(value).toBe("vk.com/player");
@@ -93,7 +93,7 @@ describe("balancer registration column model", () => {
   });
 
   it("searches the participant by every handle the form collects, boosty included", () => {
-    const meta = readAdminColumnMeta<AdminRegistration>(
+    const meta = readColumnMeta<AdminRegistration>(
       column("participant", undefined, false, SCHEMA_FIELDS).meta,
     );
 

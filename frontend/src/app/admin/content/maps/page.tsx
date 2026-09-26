@@ -5,7 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { Gamepad2, Pencil, Swords, Trash2 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import { CatalogAliasesField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
@@ -141,7 +141,7 @@ export default function MapsAdminPage() {
       id: "image",
       header: "Image",
       size: 96,
-      meta: adminColumnMeta<MapRead>({ align: "center" }),
+      meta: columnMeta<MapRead>({ align: "center" }),
       cell: ({ row }) => {
         const map = row.original;
         return (
@@ -177,7 +177,7 @@ export default function MapsAdminPage() {
       accessorKey: "in_competitive",
       header: "Mode Pool",
       size: 120,
-      meta: adminColumnMeta<MapRead>({ align: "center" }),
+      meta: columnMeta<MapRead>({ align: "center" }),
       cell: ({ row }) => {
         const map = row.original;
         return map.in_competitive !== false ? (
@@ -210,7 +210,7 @@ export default function MapsAdminPage() {
 
   return (
     <>
-      <AdminDataTable
+      <DataTable
         queryKey={(page, search, pageSize, sortField, sortDir) => [
           "admin",
           "maps",

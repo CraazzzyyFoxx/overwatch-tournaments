@@ -4,7 +4,7 @@ import { unstable_cache } from "next/cache";
 import userService from "@/services/user.service";
 import { SortDirection } from "@/types/pagination.types";
 import { resolveSiteMetadata } from "@/lib/site/metadata";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 // This route is fully dynamic: `resolveSiteMetadata()` and the workspace lookup
 // below both read `headers()` so the URLs/entries reflect the current tenant

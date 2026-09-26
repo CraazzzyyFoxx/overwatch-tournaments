@@ -7,7 +7,7 @@ import { Check, CheckCircle, EyeOff } from "lucide-react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -333,7 +333,7 @@ export default function UnresolvedNamesAdminPage() {
   ];
 
   return (
-    <AdminDataTable
+    <DataTable
       filterKey={filters.filterKey}
       queryKey={(page, search, pageSize) => [
         ...MISS_QUEUE_KEY,

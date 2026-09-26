@@ -13,9 +13,9 @@ import { useIsMobile, usePathname } from "@/components/data-table/host";
 import {
   ADMIN_ACTION_COLUMN_ID,
   columnDefId,
-  readAdminColumnMeta
+  readColumnMeta
 } from "@/components/data-table/columns";
-import type { AdminDataTableProps } from "@/components/data-table/types";
+import type { DataTableProps } from "@/components/data-table/types";
 import { useColumnVisibility } from "@/components/data-table/useColumnVisibility";
 import { isInteractiveRowTarget, useRowSelectionGestures } from "@/components/data-table/useRowSelectionGestures";
 import { AdminTableSearchContext } from "@/components/data-table/HighlightMatch";
@@ -46,7 +46,7 @@ const DEFAULT_PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
  * geometry (`column-layout`), the cells (`head-cell`, `body-cells`) and the
  * chrome (`AdminTableToolbar`, `AdminTablePagination`, `AdminTableMobileList`).
  */
-export function AdminDataTable<TData>({
+export function DataTable<TData>({
   queryKey,
   queryFn,
   rows,
@@ -75,7 +75,7 @@ export function AdminDataTable<TData>({
   toolbar,
   inspectorId,
   renderMobileCard,
-}: Readonly<AdminDataTableProps<TData>>) {
+}: Readonly<DataTableProps<TData>>) {
   const isClientMode = rows !== undefined;
   // Server mode has no accumulating query to grow, so it always paginates.
   const isInfinite = isClientMode && paging === "infinite";
@@ -137,7 +137,7 @@ export function AdminDataTable<TData>({
 
   const pickerColumns = columns
     .map((column) => {
-      const meta = readAdminColumnMeta<TData>(column.meta);
+      const meta = readColumnMeta<TData>(column.meta);
       return {
         id: columnDefId(column),
         label: column.header as React.ReactNode,
@@ -300,7 +300,7 @@ export function AdminDataTable<TData>({
   };
 
   // Right-click / long-press menu mirrors the kebab column, when a screen has one.
-  const rowActions = columns.map((column) => readAdminColumnMeta<TData>(column.meta).rowActions).find(Boolean);
+  const rowActions = columns.map((column) => readColumnMeta<TData>(column.meta).rowActions).find(Boolean);
   // Only cells left on TanStack's default renderer get search highlighting;
   // custom cells opt in through `useAdminTableSearch`.
   const customCellIds = new Set(columns.filter((column) => column.cell !== undefined).map(columnDefId));

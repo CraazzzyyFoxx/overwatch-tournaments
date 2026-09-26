@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw } from "lucide-react";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { EncounterForm } from "@/components/admin/EncounterForm";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -190,7 +190,7 @@ export function EncountersBrowser({
       )}
     >
       <div className="min-w-0">
-        <AdminDataTable<Encounter>
+        <DataTable<Encounter>
           columns={columns}
           initialPageSize={PAGE_SIZE}
           searchPlaceholder="Search encounters…"

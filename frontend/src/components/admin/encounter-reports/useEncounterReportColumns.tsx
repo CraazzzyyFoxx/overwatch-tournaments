@@ -3,7 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { adminColumnMeta } from "@/components/data-table";
+import { columnMeta } from "@/components/data-table";
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { TONE_TEXT } from "@/components/kit/tone";
@@ -41,7 +41,7 @@ function sidesColumn(
   id: string,
   header: string,
   read: (report: AdminCaptainReport | null) => string,
-  meta: Parameters<typeof adminColumnMeta<EncounterReportsRow>>[0]
+  meta: Parameters<typeof columnMeta<EncounterReportsRow>>[0]
 ): ColumnDef<EncounterReportsRow> {
   return {
     id,
@@ -58,7 +58,7 @@ function sidesColumn(
         />
       );
     },
-    meta: adminColumnMeta<EncounterReportsRow>(meta)
+    meta: columnMeta<EncounterReportsRow>(meta)
   };
 }
 
@@ -103,7 +103,7 @@ export function useEncounterReportColumns({
         ),
         // The one column that names the row: hiding it would leave a table of
         // anonymous numbers, so the picker renders it checked and disabled.
-        meta: adminColumnMeta<EncounterReportsRow>({ category: "core", mandatory: true })
+        meta: columnMeta<EncounterReportsRow>({ category: "core", mandatory: true })
       },
       {
         id: "teams",
@@ -114,7 +114,7 @@ export function useEncounterReportColumns({
             {row.original.home_team?.name ?? "?"} vs {row.original.away_team?.name ?? "?"}
           </p>
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({ category: "core" })
+        meta: columnMeta<EncounterReportsRow>({ category: "core" })
       },
       {
         id: "reports",
@@ -129,7 +129,7 @@ export function useEncounterReportColumns({
             seriesScoreValid={row.original.series_score_valid}
           />
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({ category: "core" })
+        meta: columnMeta<EncounterReportsRow>({ category: "core" })
       },
       // Match quality decides seeding and prize splits in some formats, so it
       // is on by default rather than buried in the picker: the reason to open
@@ -159,7 +159,7 @@ export function useEncounterReportColumns({
             ) : null}
           </div>
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({ category: "core" })
+        meta: columnMeta<EncounterReportsRow>({ category: "core" })
       },
       {
         id: "reported_count",
@@ -168,7 +168,7 @@ export function useEncounterReportColumns({
         cell: ({ row }) => (
           <span className="text-xs tabular-nums">{row.original.reported_count}/2</span>
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "meta",
           defaultHidden: true,
           align: "center",
@@ -182,7 +182,7 @@ export function useEncounterReportColumns({
         cell: ({ row }) => (
           <span className="text-xs tabular-nums">{fmtDate(format, row.original.scheduled_at)}</span>
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "meta",
           defaultHidden: true,
           responsive: "lg",
@@ -236,14 +236,14 @@ export function useEncounterReportColumns({
               outside BO
             </span>
           ),
-        meta: adminColumnMeta<EncounterReportsRow>({ category: "meta", defaultHidden: true })
+        meta: columnMeta<EncounterReportsRow>({ category: "meta", defaultHidden: true })
       },
       {
         id: "status",
         header: "Encounter status",
         enableSorting: false,
         cell: ({ row }) => <span className="text-xs">{row.original.status}</span>,
-        meta: adminColumnMeta<EncounterReportsRow>({ category: "meta", defaultHidden: true })
+        meta: columnMeta<EncounterReportsRow>({ category: "meta", defaultHidden: true })
       },
       {
         id: "stage",
@@ -252,7 +252,7 @@ export function useEncounterReportColumns({
         cell: ({ row }) => (
           <span className="text-xs">{row.original.stage_name ?? "Unassigned"}</span>
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "meta",
           defaultHidden: true,
           responsive: "lg"
@@ -263,7 +263,7 @@ export function useEncounterReportColumns({
         header: "Round",
         enableSorting: false,
         cell: ({ row }) => <span className="text-xs tabular-nums">{row.original.round}</span>,
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "meta",
           defaultHidden: true,
           align: "center",
@@ -275,7 +275,7 @@ export function useEncounterReportColumns({
         header: "Best of",
         enableSorting: false,
         cell: ({ row }) => <span className="text-xs tabular-nums">{row.original.best_of}</span>,
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "meta",
           defaultHidden: true,
           align: "center",
@@ -289,7 +289,7 @@ export function useEncounterReportColumns({
         cell: ({ row }) => (
           <span className="text-xs">{row.original.tournament_name ?? `#${row.original.tournament_id}`}</span>
         ),
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "meta",
           // The encounter cell already names it whenever the scope is wider
           // than one tournament; as its own column it is a duplicate.
@@ -313,7 +313,7 @@ export function useEncounterReportColumns({
             </div>
           );
         },
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "admin",
           defaultHidden: true,
           responsive: "lg",
@@ -325,7 +325,7 @@ export function useEncounterReportColumns({
         header: "ID",
         enableSorting: false,
         cell: ({ row }) => <span className="text-xs tabular-nums">{row.original.id}</span>,
-        meta: adminColumnMeta<EncounterReportsRow>({
+        meta: columnMeta<EncounterReportsRow>({
           category: "admin",
           defaultHidden: true,
           numeric: true

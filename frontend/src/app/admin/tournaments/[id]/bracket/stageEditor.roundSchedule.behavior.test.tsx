@@ -65,7 +65,7 @@ vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: () => ({ isSuperuser: true })
 }));
 
-vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("@/hooks/useMobile", () => ({ useIsMobile: () => false }));
 
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }

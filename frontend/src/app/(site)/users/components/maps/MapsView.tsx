@@ -15,7 +15,7 @@ import MapRow from "@/app/(site)/users/components/maps/MapRow";
 import MapsFilters from "@/app/(site)/users/components/maps/MapsFilters";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { LayoutGrid } from "lucide-react";
-import { getWinrateColor } from "@/utils/colors";
+import { getWinrateColor } from "@/lib/colors";
 import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface Props {

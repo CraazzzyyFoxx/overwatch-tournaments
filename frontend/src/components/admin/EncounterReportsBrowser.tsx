@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardCheck, Clock3, Gavel, ScrollText } from "lucide-react";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { ResolveResultDialog } from "@/components/admin/ResolveResultDialog";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -150,7 +150,7 @@ export function EncounterReportsBrowser({
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >
         <div className="min-w-0">
-          <AdminDataTable<EncounterReportsRow>
+          <DataTable<EncounterReportsRow>
             columns={columns}
             filterKey={filters.filterKey}
             initialPageSize={PAGE_SIZE}

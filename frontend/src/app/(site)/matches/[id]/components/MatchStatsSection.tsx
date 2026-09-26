@@ -20,7 +20,7 @@ import {
   PresetKey,
   availableRounds,
   columnMaxima
-} from "@/utils/matchStats";
+} from "@/lib/match-stats";
 import MatchTeamTable from "@/app/(site)/matches/[id]/components/MatchTeamTable";
 import MatchTeamComparison from "@/app/(site)/matches/[id]/components/MatchTeamComparison";
 import MatchLeaders from "@/app/(site)/matches/[id]/components/MatchLeaders";

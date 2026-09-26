@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TeamName from "@/components/TeamName";
 import { useTranslations, useLocale } from "next-intl";
-import { sortTeamPlayers } from "@/utils/player";
+import { sortTeamPlayers } from "@/lib/player";
 import { StandingsDistribution } from "@/types/analytics.types";
 import { formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { TeamVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";

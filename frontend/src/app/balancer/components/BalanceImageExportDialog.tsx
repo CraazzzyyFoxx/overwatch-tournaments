@@ -22,7 +22,7 @@ import {
 } from "@/lib/image-capture";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { formatSubRoleLabel } from "@/utils/player";
+import { formatSubRoleLabel } from "@/lib/player";
 import type { InternalBalancePayload, InternalBalanceTeam } from "@/types/balancer-admin.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 

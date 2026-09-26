@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Globe, Lock } from "lucide-react";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AuditFieldDiff } from "@/components/kit/AuditTrail";
 import {
@@ -65,7 +65,7 @@ const ALL_WORKSPACES = "all";
  * settings, which had no trail beyond stdout.
  *
  * Two writers used to share the query string — this page merged its filters onto
- * `window.location.search` by hand while `AdminDataTable` wrote `page`/`search`
+ * `window.location.search` by hand while `DataTable` wrote `page`/`search`
  * through the History API — and a filter change and a page change overwrote each
  * other depending on which landed last. Now the filters are a `useFilters`
  * chip set (one `router.replace` per change, which also drops `page` and `id`)
@@ -418,7 +418,7 @@ export default function AdminAuditPage() {
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >
         <div className="min-w-0">
-          <AdminDataTable<AuditLogRead>
+          <DataTable<AuditLogRead>
             columns={columns}
             initialPageSize={PAGE_SIZE}
             pageSizeOptions={PAGE_SIZE_OPTIONS}

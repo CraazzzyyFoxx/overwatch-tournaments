@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { FolderInput } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { BulkBar } from "@/components/kit/BulkBar";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
@@ -38,7 +38,7 @@ import {
  * question an organizer asks before formation closes — it gets a column of its
  * own rather than hiding behind a status badge.
  *
- * It is a T2 browser (DESIGN.md): `AdminDataTable` rows, `FilterBar` chips
+ * It is a T2 browser (DESIGN.md): `DataTable` rows, `FilterBar` chips
  * that live in the URL, one always-visible kebab per row, and the row detail in
  * `Inspector` at `?id=`. Unlike the public roster it also shows the
  * invites, and it is the only place that can reject a team or materialize the
@@ -223,7 +223,7 @@ export function RegistrationTeamsBrowser({
               </AlertDescription>
             </Alert>
           ) : (
-            <AdminDataTable<RegistrationTeam>
+            <DataTable<RegistrationTeam>
               rows={visibleTeams}
               isLoading={actions.isFetching}
               columns={columns}
