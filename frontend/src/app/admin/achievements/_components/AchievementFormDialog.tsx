@@ -36,13 +36,28 @@ import type { AchievementRuleForm } from "../_hooks/useAchievementRuleForm";
  * not here — it is edited on the rule's own page, where there is room for it.
  */
 export function AchievementFormDialog({ form }: Readonly<{ form: AchievementRuleForm }>) {
-  const { formData, setFormData, editingRule } = form;
+  const {
+    open,
+    editingRule,
+    formData,
+    setFormData,
+    imagePreview,
+    imageError,
+    imageInputRef,
+    isDirty,
+    isSubmitting,
+    error,
+    reset,
+    pickImage,
+    clearImage,
+    submit
+  } = form;
 
   return (
     <EntityFormDialog
-      open={form.open}
-      onOpenChange={(open) => {
-        if (!open) form.reset();
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
       }}
       title={editingRule ? `Edit ${editingRule.slug}` : "Create achievement"}
       description={
@@ -50,11 +65,11 @@ export function AchievementFormDialog({ form }: Readonly<{ form: AchievementRule
           ? "Update the achievement metadata. The condition tree is edited on its detail page."
           : "Define a new achievement. Add its condition tree once it exists."
       }
-      onSubmit={form.submit}
-      isSubmitting={form.isSubmitting}
+      onSubmit={submit}
+      isSubmitting={isSubmitting}
       submittingLabel={editingRule ? "Updating…" : "Creating…"}
-      errorMessage={form.error}
-      isDirty={form.isDirty}
+      errorMessage={error}
+      isDirty={isDirty}
     >
       <ScrollArea className="max-h-[60vh]">
         <div className="space-y-4 pr-4">
@@ -146,9 +161,9 @@ export function AchievementFormDialog({ form }: Readonly<{ form: AchievementRule
           <div className="space-y-2">
             <p className="text-sm font-medium">Image</p>
             <div className="flex items-center gap-4">
-              {(form.imagePreview || formData.image_url) && (
+              {(imagePreview || formData.image_url) && (
                 <Image
-                  src={form.imagePreview ?? (formData.image_url as string) ?? ""}
+                  src={imagePreview ?? (formData.image_url as string) ?? ""}
                   alt={formData.name ? `${formData.name} badge` : "Achievement badge"}
                   width={64}
                   height={64}
@@ -157,30 +172,30 @@ export function AchievementFormDialog({ form }: Readonly<{ form: AchievementRule
               )}
               <div className="flex flex-col gap-2">
                 <input
-                  ref={form.imageInputRef}
+                  ref={imageInputRef}
                   type="file"
                   accept={ACHIEVEMENT_IMAGE_ACCEPT}
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) form.pickImage(file);
+                    if (file) pickImage(file);
                   }}
                 />
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => form.imageInputRef.current?.click()}
+                  onClick={() => imageInputRef.current?.click()}
                 >
                   <Upload className="mr-2 h-4 w-4" aria-hidden />
-                  {form.imagePreview ? "Change image" : "Upload image"}
+                  {imagePreview ? "Change image" : "Upload image"}
                 </Button>
-                {form.imagePreview && (
+                {imagePreview && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={form.clearImage}
+                    onClick={clearImage}
                   >
                     <X className="mr-2 h-4 w-4" aria-hidden />
                     Remove image
@@ -188,7 +203,7 @@ export function AchievementFormDialog({ form }: Readonly<{ form: AchievementRule
                 )}
               </div>
             </div>
-            {form.imageError && <p className="text-sm text-danger">{form.imageError}</p>}
+            {imageError && <p className="text-sm text-danger">{imageError}</p>}
           </div>
         </div>
       </ScrollArea>

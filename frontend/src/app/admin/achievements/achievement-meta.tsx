@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import {
   Crosshair,
   Globe,
@@ -77,17 +78,16 @@ export function grainIcon(grain: string): LucideIcon {
 }
 
 /** Detail-card form: the icon alone, beside a labelled value. */
+const ICON_CLASS = "h-4 w-4 text-muted-foreground";
+
 export function CategoryIcon({ category }: Readonly<{ category: string }>) {
-  const Icon = categoryIcon(category);
-  return <Icon className="h-4 w-4 text-muted-foreground" />;
+  return createElement(categoryIcon(category), { className: ICON_CLASS });
 }
 
 export function ScopeIcon({ scope }: Readonly<{ scope: string }>) {
-  const Icon = scopeIcon(scope);
-  return <Icon className="h-4 w-4 text-muted-foreground" />;
+  return createElement(scopeIcon(scope), { className: ICON_CLASS });
 }
 
 export function GrainIcon({ grain }: Readonly<{ grain: string }>) {
-  const Icon = grainIcon(grain);
-  return <Icon className="h-4 w-4 text-muted-foreground" />;
+  return createElement(grainIcon(grain), { className: ICON_CLASS });
 }
