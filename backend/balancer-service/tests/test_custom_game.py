@@ -119,6 +119,8 @@ def _game(**overrides) -> SimpleNamespace:
         "balance_result_json": None,
         "selected_variant_index": 0,
         "balance_result_version": 1,
+        "self_signup": "closed",
+        "self_role_edit": False,
     }
     fields.update(overrides)
     return _row(**fields)
@@ -392,6 +394,25 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         rows = self.roster.create_many.await_args.args[1]
         self.assertEqual([row.workspace_member_id for row in rows], [7])
+
+    async def test_create_clone_copies_the_role_edit_switch_but_closes_signup(self) -> None:
+        """A clone is a NEW session: whoever the host let edit their own roles
+        keeps that, but the signup window reopens by hand, never by inheritance."""
+        source = _game(id=5, self_signup="pool", self_role_edit=True)
+        self.games.get.return_value = source
+        self.roster.list_for_game.return_value = []
+
+        game = await self.service.create(
+            self.session,
+            workspace_id=1,
+            host_user_id=9,
+            name="Rematch",
+            actor_user_id=9,
+            clone_from_game_id=5,
+        )
+
+        self.assertTrue(game.self_role_edit)
+        self.assertEqual(game.self_signup, "closed")
 
     async def test_create_clone_of_another_workspace_404(self) -> None:
         self.games.get.return_value = _game(id=5, workspace_id=2)

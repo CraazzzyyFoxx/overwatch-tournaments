@@ -35,6 +35,10 @@ class CustomGame(db.TimeStampIntegerMixin):
             "status IN ('draft', 'balanced', 'completed', 'cancelled')",
             name="ck_custom_game_status",
         ),
+        CheckConstraint(
+            "self_signup IN ('closed', 'pool', 'benched')",
+            name="ck_custom_game_self_signup",
+        ),
         # (no per-mix points_per_win check: the knob is the host's, see above)
         {"schema": "balancer"},
     )
@@ -58,6 +62,14 @@ class CustomGame(db.TimeStampIntegerMixin):
     selected_variant_index: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
     balance_result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     balance_result_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
+    # Whether players may seat THEMSELVES here, and where that lands them:
+    # closed | pool | benched. Every existing mix ships closed, so the feature
+    # is opt-in per session rather than a platform-wide change of who writes a
+    # roster.
+    self_signup: Mapped[str] = mapped_column(String(16), nullable=False, default="closed", server_default="closed")
+    # Whether a seated player may re-order their OWN roles and flip flex. The
+    # host's book of ranks stays the host's either way.
+    self_role_edit: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
 
 
 class CustomGameCoHost(db.Base):

@@ -88,6 +88,8 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
             status="balanced",
             selected_variant_index=2,
             next_map_id=None,
+            self_signup="pool",
+            self_role_edit=True,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
         service = MagicMock()
@@ -107,6 +109,8 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         self.assertEqual({"1": "Ravens"}, item["settings"]["team_names"])
         self.assertEqual(25, item["settings"]["points_per_win"])
         self.assertEqual(2, item["selected_variant_index"])
+        self.assertEqual("pool", item["self_signup"])
+        self.assertIs(True, item["self_role_edit"])
 
     async def test_writing_one_still_requires_an_authenticated_actor(self) -> None:
         service = MagicMock()

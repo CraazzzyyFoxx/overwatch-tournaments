@@ -314,6 +314,20 @@ class MixParticipation(StrEnum):
     BENCHED = "benched"
 
 
+class MixSelfSignup(StrEnum):
+    """Who may put themselves on a mix roster, and where they land.
+
+    One column, three states: ``closed`` is no self-signup at all, ``pool``
+    seats a self-signed player straight into the pool, ``benched`` parks them
+    for the host to promote. A bool plus a destination enum would admit a
+    fourth, meaningless pair ("closed, but onto the bench").
+    """
+
+    CLOSED = "closed"
+    POOL = "pool"
+    BENCHED = "benched"
+
+
 class MixRoleSelectionMode(StrEnum):
     ALL_RANKED = "all_ranked"
     EXPLICIT = "explicit"

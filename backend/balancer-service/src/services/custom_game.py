@@ -16,6 +16,7 @@ from shared.core.enums import (
     HeroClass,
     MixParticipation,
     MixRoleSelectionMode,
+    MixSelfSignup,
     MixStatus,
 )
 from shared.core.errors import BaseAPIException as HTTPException
@@ -476,6 +477,10 @@ class CustomGameService:
             host_user_id=host_user_id,
             name=trimmed,
             status=MixStatus.DRAFT,
+            # A clone is a new session: the host's "players edit their own roles"
+            # choice carries over, the open signup window deliberately does not.
+            self_signup=MixSelfSignup.CLOSED,
+            self_role_edit=bool(source.self_role_edit) if source is not None else False,
         )
         await self.games.create(session, game)
 

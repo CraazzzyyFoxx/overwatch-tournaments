@@ -227,6 +227,11 @@ def _dump_game(
         # client resolves name/mode/thumbnail against the catalogue it already
         # holds, so only the id travels.
         "next_map_id": game.next_map_id,
+        # Whether players may seat themselves here (closed | pool | benched) and
+        # whether a seated one may re-order their own roles. Both are read by the
+        # board's host controls and by the player's own panel.
+        "self_signup": game.self_signup,
+        "self_role_edit": game.self_role_edit,
         # How busy this mix has been, so the list can say "3 matches, 20m ago"
         # without fetching every mix's history.
         "matches_count": matches_count,

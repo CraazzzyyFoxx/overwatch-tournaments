@@ -13,6 +13,9 @@ class TestMixEnums:
     def test_role_selection_distinguishes_inherited_and_explicit_roles(self):
         assert {mode.value for mode in enums.MixRoleSelectionMode} == {"all_ranked", "explicit"}
 
+    def test_self_signup_has_exactly_three_modes(self):
+        assert {mode.value for mode in enums.MixSelfSignup} == {"closed", "pool", "benched"}
+
 
 class TestCustomGameModel:
     def test_known_settings_are_not_stored_in_one_config_bag(self):
@@ -22,6 +25,22 @@ class TestCustomGameModel:
         assert "result_json" not in columns
         assert "outcome_json" not in columns
         assert "co_host_user_ids" not in columns
+
+    def test_self_service_switches_are_columns_with_a_closed_default(self):
+        # The signup mode decides *where* a self-signed player lands, so it is
+        # one column with three states rather than a bool plus an enum -- there
+        # is no valid "closed + benched" pair to represent.
+        columns = models.CustomGame.__table__.columns
+        assert columns["self_signup"].server_default.arg == "closed"
+        assert columns["self_role_edit"].server_default.arg == "false"
+        checks = {
+            constraint.name: str(constraint.sqltext)
+            for constraint in models.CustomGame.__table__.constraints
+            if isinstance(constraint, sa.CheckConstraint)
+        }
+        assert "closed" in checks["ck_custom_game_self_signup"]
+        assert "pool" in checks["ck_custom_game_self_signup"]
+        assert "benched" in checks["ck_custom_game_self_signup"]
 
     def test_what_the_host_configures_is_not_on_the_mix(self):
         # The solver knobs, the roster shape and the points knob describe how a

@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`varcap01`** (82 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixself01`** (83 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1928,6 +1928,8 @@ erDiagram
         int selected_variant_index
         jsonb balance_result_json "nullable"
         int balance_result_version
+        varchar(16) self_signup
+        boolean self_role_edit
     }
     BALANCER_CUSTOM_GAME_CO_HOST {
         bigint custom_game_id PK,FK
