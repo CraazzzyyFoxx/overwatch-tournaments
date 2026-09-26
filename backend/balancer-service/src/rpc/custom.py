@@ -794,12 +794,16 @@ def register(broker: Any, logger: Any) -> None:
                 actor_is_superuser=user.is_superuser,
                 board_url_base=config.public_site_url,
             )
-            event = DiscordCommandEvent(action="post_message", channel_id=channel_id, card=card)
-            await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
             # The signup mode is a fact about the mix, so the board refreshes;
             # delivery of the card itself is the bot's problem.
             await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
             await session.commit()
+            # Published only once the open window is durable. A queued card is
+            # unrecallable, so publishing first would let a failed commit leave
+            # a post in the channel whose buttons all answer ``signup_closed``
+            # -- same commit-then-publish order the achievement runner uses.
+            event = DiscordCommandEvent(action="post_message", channel_id=channel_id, card=card)
+            await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_signup", op, session_factory=_SF)
