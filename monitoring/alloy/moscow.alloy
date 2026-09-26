@@ -234,8 +234,9 @@ prometheus.scrape "postgres" {
 }
 
 // ---------------------------------------------------------------------------
-// Logs: ./logs mounted read-only at /var/log/app. Pipelines converted from the
-// retired monitoring/promtail/promtail.yml (`alloy convert`).
+// Logs: ./logs mounted read-only at /var/log/app. Pipelines converted from
+// monitoring/promtail/promtail.yml (`alloy convert`), which only the local dev
+// stack still runs.
 // tail_from_end: the first start must not replay 1.1 GB of old logs.
 // ---------------------------------------------------------------------------
 

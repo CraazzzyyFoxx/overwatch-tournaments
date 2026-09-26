@@ -1,3 +1,5 @@
+# Local dev stack only (docker-compose.yml). Production ships logs with Alloy:
+# the same pipelines live in monitoring/alloy/moscow.alloy — keep them in step.
 server:
   http_listen_port: 9080
   grpc_listen_port: 0

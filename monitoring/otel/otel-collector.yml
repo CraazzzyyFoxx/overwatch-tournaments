@@ -1,3 +1,5 @@
+# Local dev stack only (docker-compose.yml). Production traces go through
+# Alloy (monitoring/alloy/moscow.alloy) to Tempo on home and to Sentry.
 receivers:
   otlp:
     protocols:

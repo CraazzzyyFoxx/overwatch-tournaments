@@ -1,0 +1,74 @@
+# Prometheus on home. Production metrics are NOT scraped here: Alloy on Moscow
+# scrapes them and pushes via remote_write (monitoring/alloy/moscow.alloy).
+# This file only scrapes what lives on home: the blackbox probes of production
+# and the monitoring stack itself.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    environment: production
+    project: owt
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/services.yml
+  - /etc/prometheus/rules/gateway.yml
+  - /etc/prometheus/rules/rabbitmq.yml
+  - /etc/prometheus/rules/redis.yml
+  - /etc/prometheus/rules/infrastructure.yml
+  - /etc/prometheus/rules/nginx.yml
+  # Backups: textfile collector (Alloy's unix exporter on Moscow), ops/backup/backup.sh.
+  - /etc/prometheus/rules/backup.yml
+  # OverFast rank collection: data freshness and circuit-breaker state.
+  - /etc/prometheus/rules/overwatch_rank.yml
+  # Moscow hung / unreachable / home's own alerting down.
+  - /etc/prometheus/rules/prod_reachability.yml
+
+scrape_configs:
+  # --------------------------------------------------------------------------
+  # Production seen from outside (monitoring/blackbox/blackbox.yml).
+  # --------------------------------------------------------------------------
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["https://owt.craazzzyyfoxx.me/health"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-ssh
+    metrics_path: /probe
+    params:
+      module: [ssh_banner]
+    static_configs:
+      - targets: ["217.149.19.31:22"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # --------------------------------------------------------------------------
+  # The stack itself: TargetDown covers a dead Loki/Tempo/Alertmanager here.
+  # --------------------------------------------------------------------------
+  - job_name: monitoring
+    static_configs:
+      - targets:
+          - prometheus:9090
+          - alertmanager:9093
+          - loki:3100
+          - tempo:3200
+          - blackbox-exporter:9115
