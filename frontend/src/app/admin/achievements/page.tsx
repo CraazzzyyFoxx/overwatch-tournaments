@@ -106,6 +106,8 @@ import {
 } from "@/lib/uploads";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { achievementQueryKeys } from "@/lib/achievements/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const CATEGORIES: AchievementCategory[] = ["overall", "hero", "division", "team", "standing", "match"];
 const SCOPES: AchievementScope[] = ["global", "tournament", "match"];
@@ -218,12 +220,12 @@ export default function AchievementsPage() {
   // --- Queries ---
 
   const { data: tournaments } = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
   });
 
   const { data: overrides, refetch: refetchOverrides } = useQuery({
-    queryKey: ["admin", "overrides", workspaceId],
+    queryKey: achievementQueryKeys.overridesAll(workspaceId),
     queryFn: () => adminService.getAchievementOverrides(workspaceId!),
     enabled: !!workspaceId,
   });
@@ -236,13 +238,13 @@ export default function AchievementsPage() {
   const allRules = allRulesPage?.results;
 
   const { data: libraryWorkspaces } = useQuery({
-    queryKey: ["admin", "achievement-library-workspaces", workspaceId],
+    queryKey: achievementQueryKeys.libraryWorkspaces(workspaceId),
     queryFn: () => adminService.getAchievementLibraryWorkspaces(workspaceId!),
     enabled: !!workspaceId && libraryDialogOpen,
   });
 
   const { data: libraryRules } = useQuery({
-    queryKey: ["admin", "achievement-library-rules", workspaceId, librarySourceWorkspaceId],
+    queryKey: achievementQueryKeys.libraryRules(workspaceId, librarySourceWorkspaceId),
     queryFn: () => adminService.getAchievementLibraryRules(workspaceId!, librarySourceWorkspaceId!),
     enabled: !!workspaceId && libraryDialogOpen && !!librarySourceWorkspaceId,
   });
@@ -296,7 +298,7 @@ export default function AchievementsPage() {
     mutationFn: () => adminService.hardResetAchievementRules(workspaceId!),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: cacheKey });
-      queryClient.invalidateQueries({ queryKey: ["admin", "overrides", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: achievementQueryKeys.overridesAll(workspaceId) });
       setEvaluationResult(data.run);
     },
   });

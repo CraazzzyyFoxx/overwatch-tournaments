@@ -1,0 +1,195 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Team roster card (TournamentTeamCard / TournamentTeamTable).
+   Imported by the component itself: it renders on the tournament Teams page
+   AND on user profiles, which are not all under the tournament shell, so
+   these selectors are deliberately unscoped.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Team roster card (TournamentTeamCard / TournamentTeamTable).
+   GLOBAL (not .aqt-tn-scoped) — reused on the tournament Teams page and
+   user profiles, which are not all under the tournament shell. References
+   the global --aqt-* token layer.
+   ═══════════════════════════════════════════════════════════════════════ */
+.team-card {
+  background: var(--aqt-overlay-1);
+  border: 1px solid var(--aqt-overlay-border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: 0.15s;
+}
+
+.team-card:hover {
+  border-color: hsl(0 0% 100% / 0.12);
+  background: var(--aqt-overlay-2);
+}
+
+.team-card .tc-header {
+  padding: 14px 18px 16px;
+}
+
+.team-card .tc-tags {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.group-chip.a {
+  color: var(--aqt-teal);
+  background: color-mix(in srgb, var(--aqt-teal) 10%, transparent);
+  border-color: color-mix(in srgb, var(--aqt-teal) 22%, transparent);
+}
+
+.group-chip.b {
+  color: var(--aqt-amber);
+  background: hsl(38 95% 60% / 0.1);
+  border-color: hsl(38 95% 60% / 0.22);
+}
+
+.group-chip.c {
+  color: var(--aqt-violet);
+  background: hsl(270 70% 65% / 0.1);
+  border-color: hsl(270 70% 65% / 0.22);
+}
+
+.group-chip.d {
+  color: var(--aqt-blue);
+  background: hsl(210 80% 62% / 0.1);
+  border-color: hsl(210 80% 62% / 0.22);
+}
+
+.placement {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-label);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: Inter, sans-serif;
+}
+
+.placement.gold {
+  color: var(--aqt-gold);
+  background: color-mix(in srgb, var(--aqt-gold) 10%, transparent);
+  border-color: color-mix(in srgb, var(--aqt-gold) 30%, transparent);
+}
+
+.placement.silver {
+  color: hsl(0 0% 80%);
+  background: hsl(0 0% 70% / 0.1);
+  border-color: hsl(0 0% 70% / 0.25);
+}
+
+.placement.bronze {
+  color: hsl(28 80% 60%);
+  background: hsl(28 80% 60% / 0.1);
+  border-color: hsl(28 80% 60% / 0.25);
+}
+
+.placement.def {
+  color: hsl(0 0% 65%);
+  background: var(--aqt-overlay-3);
+  border-color: hsl(0 0% 100% / 0.12);
+}
+
+.team-card .tc-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.team-card .tc-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--aqt-fg);
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-card .tc-sr {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.team-card .tc-sr .l {
+  font-size: var(--text-label);
+  color: var(--aqt-fg-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.team-card .tc-sr .v {
+  font-size: var(--text-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: hsl(0 0% 100% / 0.65);
+}
+
+.team-card .tc-divider {
+  border-top: 1px solid var(--aqt-overlay-border);
+}
+
+.roster {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.roster th {
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--aqt-fg-faint);
+  text-align: left;
+  padding: 8px 12px;
+  height: 30px;
+}
+
+.roster th.c {
+  text-align: center;
+}
+
+.roster td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--aqt-overlay-border);
+  font-size: var(--text-caption);
+  vertical-align: middle;
+}
+
+.roster td.c {
+  text-align: center;
+}
+
+.roster tr:hover td {
+  background: var(--aqt-overlay-2);
+}
+
+/* `.roster-scroll` WRAPS `.roster` — the old `.roster .roster-scroll` matched
+   nothing, so `.team-card { overflow: hidden }` clipped the table instead. */
+.roster-scroll {
+  overflow-x: auto;
+}

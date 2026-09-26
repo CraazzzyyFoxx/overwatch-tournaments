@@ -66,6 +66,7 @@ import { BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import RankHistory from "@/components/RankHistory";
 import { Spinner } from "@/components/ui/spinner";
 import { ROLE_RANK_ACCENTS, RoleRankControls } from "./RoleRankControls";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "tank", label: "Tank" },
@@ -542,7 +543,7 @@ export function PlayerEditModal({
 
   const workspaceId = useCurrentWorkspaceId();
   const { data: subRoles } = useQuery({
-    queryKey: ["admin", "player-sub-roles", workspaceId],
+    queryKey: adminQueryKeys.playerSubRoles(workspaceId),
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId! }),
     enabled: Boolean(workspaceId && open)
   });

@@ -36,6 +36,7 @@ import type {
   BalancerCustomStatusUpdateInput
 } from "@/types/balancer-admin.types";
 import type { StatusScope } from "@/types/registration.types";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 const SCOPE_LABELS: Record<StatusScope, string> = {
   registration: "Registration",
@@ -100,14 +101,14 @@ export default function WorkspaceStatusesSettingsPage() {
   const canManageStatuses = canAccessPermission("team.update", workspaceId);
 
   const statusesQuery = useQuery({
-    queryKey: ["balancer-admin", "status-catalog", workspaceId],
+    queryKey: balancerQueryKeys.statusCatalog(workspaceId),
     queryFn: () => balancerAdminService.listStatusCatalog(workspaceId as number),
     enabled: workspaceId !== null
   });
 
   const invalidateStatuses = async () => {
     await queryClient.invalidateQueries({
-      queryKey: ["balancer-admin", "status-catalog", workspaceId]
+      queryKey: balancerQueryKeys.statusCatalog(workspaceId)
     });
   };
 

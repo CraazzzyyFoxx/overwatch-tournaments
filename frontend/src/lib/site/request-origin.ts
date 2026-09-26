@@ -6,7 +6,7 @@
 // the host the browser actually used. Relying on it makes OAuth sign an
 // internal origin into the signed state and makes post-login/logout redirects
 // point at `0.0.0.0:3000`. The real public host arrives as `x-forwarded-host`
-// (the same header `middleware.ts` reads); the scheme as `x-forwarded-proto`.
+// (the same header `proxy.ts` reads); the scheme as `x-forwarded-proto`.
 //
 // Falls back to `request.url` for local/dev where there is no proxy and no
 // forwarded headers.

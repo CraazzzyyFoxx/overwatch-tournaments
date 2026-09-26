@@ -16,6 +16,7 @@ import MapsFilters from "@/app/(site)/users/components/maps/MapsFilters";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { LayoutGrid } from "lucide-react";
 import { getWinrateColor } from "@/utils/colors";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface Props {
   userId: number;
@@ -48,7 +49,7 @@ const MapsView = ({ userId }: Props) => {
   }
 
   const tournamentsQuery = useQuery({
-    queryKey: ["user-tournaments", userId],
+    queryKey: userQueryKeys.tournamentsAll(userId),
     queryFn: () => userService.getUserTournaments(userId),
     staleTime: 5 * 60 * 1000
   });
@@ -59,7 +60,7 @@ const MapsView = ({ userId }: Props) => {
   );
 
   const mapsQuery = useQuery({
-    queryKey: ["user-maps", userId, debouncedSearch, minCount, tournamentId],
+    queryKey: userQueryKeys.maps(userId, debouncedSearch, minCount, tournamentId),
     queryFn: () =>
       userService.getUserMaps(userId, {
         page: 1,
@@ -74,7 +75,7 @@ const MapsView = ({ userId }: Props) => {
   });
 
   const summaryQuery = useQuery({
-    queryKey: ["user-maps-summary", userId, debouncedSearch, minCount, tournamentId],
+    queryKey: userQueryKeys.mapsSummary(userId, debouncedSearch, minCount, tournamentId),
     queryFn: () =>
       userService.getUserMapsSummary(userId, {
         query: debouncedSearch.trim(),

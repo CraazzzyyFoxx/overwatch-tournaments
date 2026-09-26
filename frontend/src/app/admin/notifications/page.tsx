@@ -106,7 +106,7 @@ export default function AdminWorkspaceNotificationsPage() {
       notify.success(t("notifications.workspaceAdmin.retired", { count: result.retired }));
       // Both feeds read the same rows: an expired notification has to leave the
       // operator table *and* the bell of everyone still holding it open.
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list() });
     }
   });
 

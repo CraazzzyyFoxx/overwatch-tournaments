@@ -29,6 +29,7 @@ import {
 } from "@/components/admin/collectors/subscription-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface SelectUser {
   (userId: number, label: string): void;
@@ -52,7 +53,7 @@ export function SubscriptionPlayerSearch({ onSelect }: Readonly<{ onSelect: Sele
   useClickOutside(containerRef, () => setOpen(false));
 
   const searchQuery = useQuery({
-    queryKey: ["admin", "subscriptions", "user-search", debounced],
+    queryKey: adminQueryKeys.subscriptionsUserSearch(debounced),
     queryFn: () => userService.searchUsers(debounced),
     enabled: debounced.length >= 2
   });
@@ -186,7 +187,7 @@ function PlayerCheckTimeline({ userId }: Readonly<{ userId: number }>) {
   // Scoped server-side to the injected workspace; see `admin.service.ts`.
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const query = useQuery({
-    queryKey: ["admin", "subscriptions", "user-history", workspaceId, userId],
+    queryKey: adminQueryKeys.subscriptionsUserHistory(workspaceId, userId),
     queryFn: () => adminService.getSubscriptionCheckLog({ user_id: userId, limit: 100 })
   });
   const rows = query.data ?? [];
@@ -255,7 +256,7 @@ export function SubscriptionPlayerPanel({
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const statusQuery = useQuery({
-    queryKey: ["admin", "subscriptions", "collection", workspaceId, userId],
+    queryKey: adminQueryKeys.subscriptionsCollection(workspaceId, userId),
     queryFn: () => adminService.getSubscriptionCollectionStatus(userId)
   });
   const rows = statusQuery.data ?? [];
@@ -271,7 +272,7 @@ export function SubscriptionPlayerPanel({
             ? "Checked 1 subscription"
             : `Checked ${result.checked} subscriptions`
       );
-      queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.subscriptions() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not re-check the subscription — try again" })

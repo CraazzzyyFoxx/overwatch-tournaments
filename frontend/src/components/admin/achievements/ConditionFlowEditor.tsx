@@ -35,6 +35,7 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { ConditionTypeInfo } from "@/types/admin.types";
+import { achievementQueryKeys } from "@/lib/achievements/query-keys";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1140,7 +1141,7 @@ export function ConditionFlowEditor(props: Readonly<ConditionFlowEditorProps>) {
   // The registry only changes when the engine ships a new node, so it is cached
   // for the session rather than refetched per editor mount.
   const { data: conditionTypes } = useQuery({
-    queryKey: ["admin", "achievement-condition-types", workspaceId],
+    queryKey: achievementQueryKeys.conditionTypes(workspaceId),
     queryFn: () => adminService.getConditionTypes(workspaceId!),
     enabled: !!workspaceId,
     staleTime: Infinity

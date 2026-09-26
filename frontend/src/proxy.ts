@@ -47,20 +47,26 @@ async function resolveWorkspace(origin: string, host: string): Promise<Lookup> {
 }
 
 /**
- * Scoping headers this middleware owns. Every one is deleted before it is set
- * (and deleted outright on the platform host), so a client-supplied value can
- * never survive even if the set logic below changes. The gateway strips the
- * whole `x-owt-*` prefix at the edge as well — `gateway/internal/proxy` —
- * making this the second of two independent barriers, not the only one.
+ * Scoping headers this proxy owns. Every one is set (or deleted outright)
+ * here, so a client-supplied value can never survive even if the set logic
+ * below changes. The gateway strips the whole `x-owt-*` prefix at the edge as
+ * well — `gateway/internal/proxy` — making this the second of two independent
+ * barriers, not the only one.
+ *
+ * `x-owt-pathname` is the request path (with its query), which a server
+ * component otherwise cannot see: layouts get no pathname prop. The admin
+ * layout needs it to send a signed-out visitor to the sign-in modal with a
+ * return path instead of dumping them on `/`.
  */
 function scopedHeaders(request: NextRequest): Headers {
   const headers = new Headers(request.headers);
   headers.delete("x-owt-workspace-id");
   headers.delete("x-owt-host-mode");
+  headers.set("x-owt-pathname", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   return headers;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const rawHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
   const host = rawHost?.split(",")[0]?.trim() ?? null;
   const resolution = resolveHost(host);

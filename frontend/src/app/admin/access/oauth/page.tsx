@@ -22,6 +22,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import type { OAuthConnectionAdmin, OAuthProvider } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 const PAGE_SIZE = 20;
 
@@ -92,7 +93,7 @@ export default function OAuthConnectionsAdminPage() {
     mutationFn: (connectionId: number) => rbacService.deleteOAuthConnection(connectionId),
     onSuccess: async () => {
       const removed = pendingDelete;
-      await queryClient.invalidateQueries({ queryKey: ["access-admin", "oauth-connections"] });
+      await queryClient.invalidateQueries({ queryKey: accessQueryKeys.oauthConnections() });
       setPendingDelete(null);
       if (removed && String(removed.id) === openId) setParams({ id: null });
       notify.success("OAuth connection removed");

@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import ts from "typescript";
 
-const routeDir = import.meta.dir;
+const routeDir = import.meta.dirname;
 
 function sourceFor(relativePath: string): string {
   const path = join(routeDir, relativePath);

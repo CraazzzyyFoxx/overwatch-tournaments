@@ -17,8 +17,6 @@ import { notify } from "@/lib/notify";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
 import captainService from "@/services/captain.service";
 import encounterService from "@/services/encounter.service";
-import heroService from "@/services/hero.service";
-import mapService from "@/services/map.service";
 import pickBanService, { type PickBanActionInput } from "@/services/pickBan.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
@@ -54,6 +52,9 @@ import {
 import { PregameFinalReport } from "./PregameFinalReport";
 import { PregameMapResult } from "./PregameMapResult";
 import { PregameReadiness } from "./PregameReadiness";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 interface PregameRoomProps {
   encounterId: number;
@@ -93,7 +94,7 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
 export function PregameRoom(props: Readonly<PregameRoomProps>) {
   const { encounterId } = props;
   const encounterQuery = useQuery({
-    queryKey: ["encounter-detail", encounterId],
+    queryKey: encounterQueryKeys.detail(encounterId),
     queryFn: () => encounterService.getEncounter(encounterId),
     enabled: Number.isFinite(encounterId) && encounterId > 0
   });
@@ -169,25 +170,17 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
       query.state.data?.session != null && !query.state.data.is_complete ? 4000 : false
   });
   const encounterQuery = useQuery({
-    queryKey: ["encounter-detail", encounterId],
+    queryKey: encounterQueryKeys.detail(encounterId),
     queryFn: () => encounterService.getEncounter(encounterId),
     enabled
   });
-  const mapsQuery = useQuery({
-    queryKey: ["maps-all"],
-    queryFn: () => mapService.getAll({ perPage: -1 }),
-    staleTime: 5 * 60 * 1000
-  });
-  const heroesQuery = useQuery({
-    queryKey: ["heroes-all"],
-    queryFn: () => heroService.getAll({ perPage: -1 }),
-    staleTime: 5 * 60 * 1000
-  });
+  const mapsQuery = useMapsCatalog();
+  const heroesQuery = useHeroesCatalog();
   // `build_unavailable_state` reports `viewer_side: null` regardless of
   // identity (there is no session yet to resolve a side against), so the
   // readiness gate's "you're a captain" check needs its own read.
   const roleQuery = useQuery({
-    queryKey: ["encounter", encounterId, "my-role"],
+    queryKey: encounterQueryKeys.myRole(encounterId),
     queryFn: () => captainService.getMyRole(encounterId),
     enabled,
     retry: false
@@ -206,7 +199,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   const invalidateRoom = () => {
     void queryClient.invalidateQueries({ queryKey: mapKey });
     void queryClient.invalidateQueries({ queryKey: heroKey });
-    void queryClient.invalidateQueries({ queryKey: ["encounter-detail", encounterId] });
+    void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.detail(encounterId) });
   };
   useRealtimeTopic(`encounter:${encounterId}:map-veto`, invalidateRoom);
   useRealtimeTopic(`encounter:${encounterId}:pick-ban:hero`, invalidateRoom);
@@ -222,12 +215,12 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
 
   const mapsById = useMemo(() => {
     const byId: Record<number, PickBanItemLike | undefined> = {};
-    for (const map of mapsQuery.data?.results ?? []) byId[map.id] = map;
+    for (const map of mapsQuery.data ?? []) byId[map.id] = map;
     return byId;
   }, [mapsQuery.data]);
   const heroesById = useMemo(() => {
     const byId: Record<number, PickBanItemLike | undefined> = {};
-    for (const hero of heroesQuery.data?.results ?? []) byId[hero.id] = hero;
+    for (const hero of heroesQuery.data ?? []) byId[hero.id] = hero;
     return byId;
   }, [heroesQuery.data]);
   const itemsByKind: Record<PickBanKind, Record<number, PickBanItemLike | undefined>> = {
@@ -530,7 +523,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           invalidateKeys={[mapKey, heroKey, ["encounter-detail", encounterId]]}
           mapChoices={
             pendingMap == null
-              ? (mapsQuery.data?.results ?? []).map((map) => ({ id: map.id, name: map.name }))
+              ? (mapsQuery.data ?? []).map((map) => ({ id: map.id, name: map.name }))
               : undefined
           }
         />

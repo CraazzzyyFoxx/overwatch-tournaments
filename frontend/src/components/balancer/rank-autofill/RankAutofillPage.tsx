@@ -28,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { RankAutofillPreviewTables } from "./_components/RankAutofillPreviewTables";
 import { RankAutofillStageList } from "./_components/RankAutofillStageList";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -66,7 +67,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
   const debouncedRequest = useDebouncedValue(previewRequest, 300);
 
   const previewQuery = useQuery({
-    queryKey: ["balancer-admin", "rank-autofill-preview", tournamentId, debouncedRequest],
+    queryKey: balancerQueryKeys.rankAutofillPreview(tournamentId, debouncedRequest),
     queryFn: () =>
       balancerAdminService.previewRegistrationRankAutofill(
         tournamentId as number,
@@ -103,7 +104,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registrations", tournamentId]
+        queryKey: balancerQueryKeys.registrations(tournamentId)
       });
       await previewQuery.refetch();
       notify.success(t("rankAutofill.successTitle"), {

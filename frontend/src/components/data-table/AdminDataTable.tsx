@@ -1,5 +1,9 @@
 "use client";
 
+// Sticky-column and row-tint rules, moved out of globals.css and next to their
+// only consumer.
+import "./data-table.css";
+
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   Cell,
@@ -1162,7 +1166,7 @@ export function AdminDataTable<TData>({
         tabIndex={row.id === tabbableRowId ? 0 : -1}
         onFocus={(event) => { if (event.target === event.currentTarget) setFocusedRowId(row.id); }}
         className={cn(
-          // Tints (hover / selected / current) live in `globals.css` under
+          // Tints (hover / selected / current) live in `data-table.css` under
           // `.admin-row`: the pinned cells are opaque and must repaint the very
           // same colour, and two copies of it drifted apart.
           "admin-row group border-b border-border/30",

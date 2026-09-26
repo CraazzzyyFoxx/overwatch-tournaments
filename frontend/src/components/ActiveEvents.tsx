@@ -21,6 +21,7 @@ import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import tournamentService from "@/services/tournament.service";
 import { Tournament } from "@/types/tournament.types";
 import { Workspace } from "@/types/workspace.types";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 interface WorkspaceGroup {
   workspace: Workspace;
@@ -33,7 +34,7 @@ export default function ActiveEvents() {
   const { workspaces } = useWorkspaceStore();
 
   const { data: allTournaments } = useQuery({
-    queryKey: ["tournaments", "all-active"],
+    queryKey: tournamentQueryKeys.allActive(),
     queryFn: () => tournamentService.getActive(),
     staleTime: 60_000,
   });

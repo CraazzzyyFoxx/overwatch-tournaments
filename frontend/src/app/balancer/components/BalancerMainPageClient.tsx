@@ -76,6 +76,7 @@ import {
   getPlayerValidationIssues,
   type BalanceVariant
 } from "@/components/balancer/workspace-helpers";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 const EXPORT_TO_TOURNAMENT_STEPS: BalancerOperationStepDefinition[] = [
   {
@@ -229,13 +230,13 @@ export function BalancerMainPageClient() {
   }, [railPercent, isPoolSidebarCollapsed, isPlayersSidebarCollapsed]);
 
   const balancerConfigQuery = useQuery({
-    queryKey: ["balancer-public", "config"],
+    queryKey: balancerQueryKeys.publicConfig(),
     queryFn: () => balancerService.getConfig(),
     staleTime: Number.POSITIVE_INFINITY
   });
 
   const registrationsQuery = useQuery({
-    queryKey: ["balancer-admin", "registrations", tournamentId],
+    queryKey: balancerQueryKeys.registrations(tournamentId),
     queryFn: () =>
       balancerAdminService.listRegistrations(tournamentId as number, {
         include_deleted: false
@@ -245,27 +246,27 @@ export function BalancerMainPageClient() {
   });
 
   const savedBalanceQuery = useQuery({
-    queryKey: ["balancer-public", "balance", tournamentId],
+    queryKey: balancerQueryKeys.publicBalance(tournamentId),
     queryFn: () => balancerAdminService.getBalance(tournamentId as number),
     enabled: tournamentId !== null,
     refetchOnWindowFocus: false
   });
 
   const tournamentConfigQuery = useQuery({
-    queryKey: ["balancer-admin", "tournament-config", tournamentId],
+    queryKey: balancerQueryKeys.tournamentConfig(tournamentId),
     queryFn: () => balancerAdminService.getTournamentConfig(tournamentId as number),
     enabled: tournamentId !== null,
     refetchOnWindowFocus: false
   });
 
   const customStatusesQuery = useQuery({
-    queryKey: ["balancer-admin", "status-catalog", workspaceId],
+    queryKey: balancerQueryKeys.statusCatalog(workspaceId),
     queryFn: () => balancerAdminService.listStatusCatalog(workspaceId as number),
     enabled: workspaceId !== null
   });
 
   const workspaceBalancerConfigQuery = useQuery({
-    queryKey: ["workspace-balancer-config", workspaceId],
+    queryKey: balancerQueryKeys.workspaceConfig(workspaceId),
     queryFn: () => balancerAdminService.getWorkspaceBalancerConfig(workspaceId as number),
     enabled: workspaceId !== null
   });
@@ -429,7 +430,7 @@ export function BalancerMainPageClient() {
       setDraftConfig(config);
       setSavedTournamentConfig(config);
       await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "tournament-config", tournamentId]
+        queryKey: balancerQueryKeys.tournamentConfig(tournamentId)
       });
       notify.success("Balancer settings saved");
     }
@@ -491,7 +492,7 @@ export function BalancerMainPageClient() {
       setDraftConfig(sanitized);
       setSavedTournamentConfig(sanitized);
       void queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "tournament-config", tournamentId]
+        queryKey: balancerQueryKeys.tournamentConfig(tournamentId)
       });
     },
     [queryClient, tournamentId]

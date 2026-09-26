@@ -11,6 +11,7 @@ import {
 } from "@/lib/bracket/projection";
 import type { Stage } from "@/types/tournament.types";
 import { stageRoundOptions, type PickBanScopeEncounter } from "@/lib/tournament/pick-ban-config";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 export interface StageRounds {
   /** Ascending round numbers; negative ones are lower-bracket rounds. */
@@ -94,7 +95,7 @@ export function useStageRounds(
   }, [generated, planned, stage?.stage_type]);
 
   const predicted = useQuery({
-    queryKey: ["admin", "stage", stageId, "planned-rounds"],
+    queryKey: adminQueryKeys.stagePlannedRounds(stageId),
     queryFn: () => adminService.getStagePlannedRounds(stageId as number),
     enabled: stageId != null && known.length === 0
   });

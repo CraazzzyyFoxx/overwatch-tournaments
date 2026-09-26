@@ -15,6 +15,7 @@ import adminService from "@/services/admin.service";
 import type { Gamemode, GamemodeCreateInput, GamemodeUpdateInput } from "@/types/admin.types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCatalogEntityCrud } from "@/hooks/useCatalogEntityCrud";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 // Key order matters: `hasUnsavedChanges` compares JSON, so the edit form below
 // must list the same fields in the same order or every dialog opens dirty.
@@ -51,7 +52,7 @@ export default function GamemodesAdminPage() {
     deleteMutation,
     syncMutation,
   } = useCatalogEntityCrud<Gamemode, GamemodeCreateInput, GamemodeUpdateInput>({
-    queryKey: ["admin", "gamemodes"],
+    queryKey: adminQueryKeys.contentEntity("gamemodes"),
     emptyForm: emptyGamemodeForm,
     getForm: getGamemodeForm,
     service: {

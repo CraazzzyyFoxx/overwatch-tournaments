@@ -29,8 +29,6 @@ import TournamentsGrid from "./components/TournamentsGrid";
 import TournamentsTable from "./components/TournamentsTable";
 import { groupLiveByTournament } from "./components/tournaments-helpers";
 
-export const dynamic = "force-dynamic";
-
 /** Divides by 2, 3 and 4, so the card grid never ends on a ragged row. */
 const PER_PAGE = 12;
 
@@ -141,7 +139,7 @@ const TournamentsPage = () => {
   } = useInfiniteQuery({
     // Every filter is in the key: a narrowed filter is a different list, so the
     // pages already accumulated for the old one must not carry over.
-    queryKey: ["tournaments", "list", workspaceId, statusFilter, typeFilter, query, sortBy],
+    queryKey: tournamentQueryKeys.listPage(workspaceId, statusFilter, typeFilter, query, sortBy),
     queryFn: ({ pageParam }) =>
       tournamentService.listTournaments({
         ...filterQuery,
@@ -161,7 +159,7 @@ const TournamentsPage = () => {
   });
 
   const { data: facets } = useQuery({
-    queryKey: ["tournaments", "facets", workspaceId, statusFilter, typeFilter, query],
+    queryKey: tournamentQueryKeys.facets(workspaceId, statusFilter, typeFilter, query),
     queryFn: () => tournamentService.getFacets(filterQuery)
   });
 

@@ -44,6 +44,8 @@ import type { PlayerCreateInput, PlayerUpdateInput } from "@/types/admin.types";
 import type { Player } from "@/types/team.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { formatSubRoleLabel, sortTeamPlayers } from "@/utils/player";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 interface TeamRosterEditorProps {
   teamId: number;
@@ -311,7 +313,7 @@ export function TeamRosterEditor({
   const [pendingRemoval, setPendingRemoval] = useState<Player | null>(null);
 
   const { data: playerSubRoles } = useQuery({
-    queryKey: ["admin", "player-sub-roles", workspaceId],
+    queryKey: adminQueryKeys.playerSubRoles(workspaceId),
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId! }),
     enabled: workspaceId != null
   });
@@ -320,9 +322,9 @@ export function TeamRosterEditor({
 
   const refresh = () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["admin", "team", teamId] }),
-      queryClient.invalidateQueries({ queryKey: ["teams"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin", "tournament", tournamentId] })
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.team(teamId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() }),
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournament(tournamentId) })
     ]);
 
   const patchPlayer = useMutation({

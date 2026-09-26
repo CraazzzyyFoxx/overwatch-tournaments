@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 
@@ -20,8 +19,6 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import heroService from "@/services/hero.service";
-import mapService from "@/services/map.service";
 import type { PickBanSequenceToken } from "@/types/tournament.types";
 
 import {
@@ -33,6 +30,8 @@ import {
   type PickBanValidationIssue
 } from "@/lib/tournament/pick-ban-config";
 import { Spinner } from "@/components/ui/spinner";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 /**
  * A room's hand-authored pick-ban rules.
@@ -207,23 +206,13 @@ export function ScrimPoolEditor({
   const t = useTranslations("scrims.pool");
   const ids = useId();
 
-  const mapsQuery = useQuery({
-    queryKey: ["maps", "all", "gamemode"],
-    queryFn: () =>
-      mapService.getAll({ perPage: -1, sort: "name", order: "asc", entities: ["gamemode"] }),
-    staleTime: 5 * 60 * 1000
-  });
+  const mapsQuery = useMapsCatalog({ withGamemode: true });
   // Only fetched once hero bans are switched on: a map-only room never pays for it.
-  const heroesQuery = useQuery({
-    queryKey: ["heroes", "all"],
-    queryFn: () => heroService.getAll({ perPage: -1, sort: "name", order: "asc" }),
-    enabled: pool.hero != null,
-    staleTime: 5 * 60 * 1000
-  });
+  const heroesQuery = useHeroesCatalog({ enabled: pool.hero != null });
 
   const mapOptions = useMemo<ItemOption[]>(
     () =>
-      (mapsQuery.data?.results ?? [])
+      (mapsQuery.data ?? [])
         // Off-rotation maps are not something a scrim vetoes; the organizer's
         // editor holds the same line.
         .filter((map) => map.in_competitive !== false)
@@ -231,7 +220,7 @@ export function ScrimPoolEditor({
     [mapsQuery.data]
   );
   const heroOptions = useMemo<ItemOption[]>(
-    () => (heroesQuery.data?.results ?? []).map((hero) => ({ id: hero.id, name: hero.name })),
+    () => (heroesQuery.data ?? []).map((hero) => ({ id: hero.id, name: hero.name })),
     [heroesQuery.data]
   );
 

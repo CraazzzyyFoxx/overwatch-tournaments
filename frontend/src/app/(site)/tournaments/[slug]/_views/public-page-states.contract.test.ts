@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import type { Stage } from "@/types/tournament.types";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
@@ -50,7 +50,7 @@ const standingsTableModule =
     ) => { enabled: boolean; queryFn: () => Promise<Stage[]> };
   };
 
-const viewsRoot = import.meta.dir;
+const viewsRoot = import.meta.dirname;
 const tournamentRoot = join(viewsRoot, "..");
 const componentsRoot = join(viewsRoot, "../../../../../components");
 

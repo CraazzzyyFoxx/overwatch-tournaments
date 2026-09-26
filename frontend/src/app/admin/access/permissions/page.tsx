@@ -15,6 +15,7 @@ import { useQueryParams } from "@/hooks/useQueryParams";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacPermission } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 const PAGE_SIZE = 20;
 
@@ -32,7 +33,7 @@ export default function AccessAdminPermissionsPage() {
   const openId = searchParams?.get("id") ?? null;
 
   const permissionsQuery = useQuery({
-    queryKey: ["access-admin", "permissions", "inventory"],
+    queryKey: accessQueryKeys.permissionsInventory(),
     queryFn: () => rbacService.listPermissionsAll()
   });
   const permissions = permissionsQuery.data ?? [];

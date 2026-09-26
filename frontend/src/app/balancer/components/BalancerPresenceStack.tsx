@@ -10,6 +10,7 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { WorkspaceMember } from "@/types/workspace.types";
 import { memberDisplayName } from "@/lib/workspace/member";
 import { initials } from "@/lib/utils";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 /** Portal target rendered by {@link BalancerToolTopBar}. */
 const PRESENCE_SLOT_ID = "balancer-presence-slot";
@@ -39,7 +40,7 @@ export function BalancerPresenceStack({ userIds, workspaceId }: BalancerPresence
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const membersQuery = useQuery({
-    queryKey: ["workspace", "members", workspaceId],
+    queryKey: workspaceQueryKeys.members(workspaceId),
     queryFn: () => workspaceService.getMembersAll(workspaceId as number),
     enabled: workspaceId !== null,
     staleTime: 5 * 60 * 1000

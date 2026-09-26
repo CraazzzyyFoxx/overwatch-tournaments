@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { tournamentMapPips } from "@/app/(site)/users/components/overview/map-results";
 import type { EncounterWithUserStats } from "@/types/user.types";

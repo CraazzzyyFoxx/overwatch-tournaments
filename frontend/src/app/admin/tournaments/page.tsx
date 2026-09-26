@@ -29,6 +29,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { paginateResults, sortArray } from "@/lib/api/paginate-results";
 import { formatTournamentStages } from "@/lib/tournament/stages";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 export default function TournamentsPage() {
   const format = useFormatter();
@@ -46,7 +47,7 @@ export default function TournamentsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminService.deleteTournament(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() });
       setDeleteDialogOpen(false);
       setSelectedTournament(null);
       notify.success("Tournament deleted successfully");

@@ -68,6 +68,7 @@ import {
   type TeamColor
 } from "./encounters.helpers";
 import styles from "./Encounters.module.css";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 // Loose translator alias matching next-intl's `useTranslations()` return type so
 // module-level helpers can accept `t` straight through (strictFunctionTypes-safe).
@@ -216,7 +217,7 @@ export default function EncountersClient({
 
   const apiFilters = useMemo(() => filtersToApiFilters(effectiveFilters), [effectiveFilters]);
   const listQuery = useQuery({
-    queryKey: ["encounters-list", page, apiFilters, effectiveFilters.query],
+    queryKey: encounterQueryKeys.list(page, apiFilters, effectiveFilters.query),
     queryFn: () =>
       encounterService.getAll(
         page,
@@ -247,7 +248,7 @@ export default function EncountersClient({
   });
 
   const overviewQuery = useQuery({
-    queryKey: ["encounters-overview", apiFilters, effectiveFilters.query],
+    queryKey: encounterQueryKeys.overview(apiFilters, effectiveFilters.query),
     queryFn: () =>
       encounterService.getOverview(effectiveFilters.query, apiFilters, currentWorkspaceId),
     initialData:
@@ -259,7 +260,7 @@ export default function EncountersClient({
   });
 
   const savedViewsQuery = useQuery({
-    queryKey: ["encounters-saved-views", currentWorkspaceId, userKey],
+    queryKey: encounterQueryKeys.savedViews(currentWorkspaceId, userKey),
     queryFn: () => encounterService.getSavedViews(currentWorkspaceId),
     enabled: Boolean(user && currentWorkspaceId != null),
     placeholderData: (previous) => previous,
@@ -268,7 +269,7 @@ export default function EncountersClient({
   });
 
   const tournamentsLookupQuery = useQuery({
-    queryKey: ["encounters-tournaments-lookup", currentWorkspaceId],
+    queryKey: encounterQueryKeys.tournamentsLookup(currentWorkspaceId),
     queryFn: () => tournamentService.lookup(currentWorkspaceId),
     staleTime: 5 * 60_000,
     retry: 1
@@ -279,7 +280,7 @@ export default function EncountersClient({
       encounterService.saveView(name, effectiveFilters, currentWorkspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
+        queryKey: encounterQueryKeys.savedViews(currentWorkspaceId, userKey)
       });
       setSaveDialogOpen(false);
       notify.success(t("encounters.savedView.saved"));
@@ -290,7 +291,7 @@ export default function EncountersClient({
     mutationFn: ({ id }: { id: number }) => encounterService.deleteView(id, currentWorkspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
+        queryKey: encounterQueryKeys.savedViews(currentWorkspaceId, userKey)
       });
       setViewToDelete(null);
       notify.success(t("encounters.savedView.deleted"));

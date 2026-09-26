@@ -26,6 +26,7 @@ import {
   formatInterval,
   formatRelative
 } from "./subscription-shared";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const SUBSCRIPTION_KEY = "parser.subscription_collection";
 
@@ -76,7 +77,7 @@ export function SubscriptionHealthDashboard() {
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const statsQuery = useQuery({
-    queryKey: ["admin", "subscriptions", "stats", workspaceId],
+    queryKey: adminQueryKeys.subscriptionsStats(workspaceId),
     queryFn: () => adminService.getSubscriptionCollectionStats(),
     refetchInterval: 10000
   });
@@ -89,7 +90,7 @@ export function SubscriptionHealthDashboard() {
       notify.success(
         result.checked === 1 ? "Checked 1 subscription" : `Checked ${result.checked} subscriptions`
       );
-      queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.subscriptions() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not run the subscription sweep — try again" })
@@ -103,7 +104,7 @@ export function SubscriptionHealthDashboard() {
     },
     onSuccess: () => {
       notify.success(stats?.enabled ? "Collection paused" : "Collection resumed");
-      queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions", "stats"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.subscriptionsStatsAll() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not change the collection state — try again" })

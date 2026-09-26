@@ -26,6 +26,7 @@ import { ActiveTournamentCard } from "@/components/admin/dashboard/ActiveTournam
 import { ActiveTournamentReadiness } from "@/components/admin/dashboard/ActiveTournamentReadiness";
 import { IssuesQueue, type IssueItem } from "@/components/admin/dashboard/IssuesQueue";
 import { RecentTournaments } from "@/components/admin/dashboard/RecentTournaments";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface DashboardActiveTournamentStats {
   encounters_total: number;
@@ -83,14 +84,14 @@ export default function AdminDashboard() {
   // injected by apiFetch, so it MUST be part of the key or a workspace switch
   // serves the previous workspace's numbers.
   const statsQuery = useQuery({
-    queryKey: ["admin", "dashboard", "stats", workspaceId],
+    queryKey: adminQueryKeys.dashboardStats(workspaceId),
     queryFn: () =>
       apiFetch("/api/v1/statistics/dashboard").then((r) => r.json() as Promise<DashboardStats>)
   });
 
   // Tournaments still needed for Active Tournament Card & Recent Tournaments display
   const tournamentsQuery = useQuery({
-    queryKey: ["admin", "dashboard", "tournaments", workspaceId],
+    queryKey: adminQueryKeys.dashboardTournaments(workspaceId),
     queryFn: () =>
       canReadTournaments
         ? tournamentService.getAll(null)

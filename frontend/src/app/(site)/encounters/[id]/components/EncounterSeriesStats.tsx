@@ -2,6 +2,7 @@
 
 import { useQueries } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { cn } from "@/lib/utils";
@@ -13,7 +14,7 @@ import TeamName from "@/components/TeamName";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import MatchTeamComparison from "@/app/(site)/matches/[id]/components/MatchTeamComparison";
 import MatchLeaders from "@/app/(site)/matches/[id]/components/MatchLeaders";
-import MatchContributionChart from "@/app/(site)/matches/[id]/components/MatchContributionChart";
+import { Skeleton } from "@/components/ui/skeleton";
 import encounterService from "@/services/encounter.service";
 import type { MatchWithStats } from "@/types/encounter.types";
 import type { PlayerWithStats } from "@/types/team.types";
@@ -31,6 +32,15 @@ import { sortTeamPlayers } from "@/utils/player";
 import { aggregateSeriesStats, type SeriesAggregate } from "@/lib/encounter/detail";
 import { Fact, PlayerIdentity } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+
+// Same chart, same reason as `MatchStatsSection`: recharts only loads once the
+// series stats are on screen. The placeholder holds the chart's minimum height
+// so the stats grid does not reflow under it.
+const MatchContributionChart = dynamic(
+  () => import("@/app/(site)/matches/[id]/components/MatchContributionChart"),
+  { ssr: false, loading: () => <Skeleton className="h-70 w-full rounded-lg" /> }
+);
 
 interface EncounterSeriesStatsProps {
   matchIds: number[];
@@ -61,7 +71,7 @@ export default function EncounterSeriesStats({
 
   const queries = useQueries({
     queries: matchIds.map((id) => ({
-      queryKey: ["match-detail", id],
+      queryKey: encounterQueryKeys.matchDetail(id),
       queryFn: () => encounterService.getMatch(id),
       staleTime: 5 * 60_000
     }))

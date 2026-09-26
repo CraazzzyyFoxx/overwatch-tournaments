@@ -34,6 +34,7 @@ import { refreshEncounterViews } from "@/components/tournaments/refreshEncounter
 import type { EncounterEditableStatus, EncounterUpdateInput } from "@/types/admin.types";
 import { Encounter } from "@/types/encounter.types";
 import { cn } from "@/lib/utils";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterEditDialogProps {
   open: boolean;
@@ -112,7 +113,7 @@ function EncounterEditDialogBody({
   const statusOptions: readonly EncounterStatusOption[] = isCompleted ? [COMPLETED_STATUS] : ENCOUNTER_STATUSES;
 
   const reportsQuery = useQuery({
-    queryKey: ["encounter", encounter.id, "reports"],
+    queryKey: encounterQueryKeys.captainReports(encounter.id),
     queryFn: () => captainService.getReports(encounter.id)
   });
 

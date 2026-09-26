@@ -484,6 +484,10 @@
       "success": "Team created. Invite your players next.",
       "blockedBySolo": "You are registered as an individual player, so you cannot create a team — but a captain can still invite you, and accepting will move your existing registration onto their roster."
     },
+      "meta": {
+        "title": "Team invite",
+        "description": "Accept a team invite on {siteName}."
+      },
     "invite": {
       "action": "Invite a player",
       "actionSlot": "Invite to the {slot} slot",
@@ -4101,6 +4105,9 @@
       }
     },
     "compare": {
+      "meta": {
+        "description": "Compare players side by side on {siteName}."
+      },
       "title": "Users Compare",
       "subtitle": "Compare overall performance on a hero/map.",
       "hero": {
@@ -5746,6 +5753,13 @@
     "locked": "A draft session has already been created, so the roster shape is locked. Complete or cancel it to change the shape."
   },
   "scrims": {
+    "meta": {
+      "description": "Open a scrim room on {siteName} — map veto, hero bans and per-map results without a tournament.",
+      "room": {
+        "title": "Scrim room",
+        "description": "A private scrim room on {siteName}, shared by link."
+      }
+    },
     "hero": {
       "eyebrow": "SCRIMS // PRE-GAME",
       "title": "Scrim rooms",

@@ -23,6 +23,7 @@ import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
 
 import { SettingsGroup } from "./SettingsGroup";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 // Providers a user can OAuth-link (and thereby verify).
 const OAUTH_ADDABLE = ["battlenet", "discord", "twitch"] as const;
@@ -38,7 +39,7 @@ export default function MyAccountSection() {
   const queryClient = useQueryClient();
 
   const socialQuery = useQuery({
-    queryKey: ["me", "social"],
+    queryKey: userQueryKeys.mySocial(),
     queryFn: () => meService.getSocialAccounts(),
     enabled: canSocial,
   });
@@ -58,7 +59,7 @@ export default function MyAccountSection() {
   // the public users/[slug] header / list / search reflect the change at once.
   const writeSocial = (user: User) => {
     void revalidateUser(user.id);
-    queryClient.setQueryData(["me", "social"], user);
+    queryClient.setQueryData(userQueryKeys.mySocial(), user);
   };
 
   // Failures surface via the global MutationCache.onError toast (see providers.tsx),
@@ -107,7 +108,7 @@ export default function MyAccountSection() {
     mutationFn: (provider: string) => meService.unlinkOAuth(provider),
     onSuccess: () => {
       void revalidateUser();
-      void queryClient.invalidateQueries({ queryKey: ["me", "social"] });
+      void queryClient.invalidateQueries({ queryKey: userQueryKeys.mySocial() });
     },
   });
 

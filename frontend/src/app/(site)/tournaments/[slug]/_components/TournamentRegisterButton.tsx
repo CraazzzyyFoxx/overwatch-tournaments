@@ -27,6 +27,7 @@ import type { Tournament } from "@/types/tournament.types";
 import { useTranslations } from "next-intl";
 import RegistrationWizard from "@/components/registration/RegistrationWizard";
 import TeamRegistrationEntry from "@/components/registration/TeamRegistrationEntry";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 type Props = {
   tournament: Tournament;
@@ -48,12 +49,12 @@ export default function TournamentRegisterButton({
   const [showModal, setShowModal] = useState(false);
 
   const formQuery = useQuery({
-    queryKey: ["registration-form", workspaceId, tournamentId],
+    queryKey: tournamentQueryKeys.registrationForm(workspaceId, tournamentId),
     queryFn: () => registrationService.getForm(tournamentId),
   });
 
   const myRegQuery = useQuery({
-    queryKey: ["registration", workspaceId, tournamentId],
+    queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),
     queryFn: () => registrationService.getMyRegistration(tournamentId),
     enabled: isAuthenticated,
   });

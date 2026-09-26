@@ -52,6 +52,9 @@ import {
   type WizardSource,
   type WizardStep
 } from "./wizard-model";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 const STEP_META: Record<WizardStep, { label: string; description: string }> = {
   basics: {
@@ -144,7 +147,7 @@ export default function NewTournamentPage() {
   const [resumeDismissed, setResumeDismissed] = useState(false);
 
   const divisionGridsQuery = useQuery({
-    queryKey: ["admin", "tournaments", "create", "division-grids", currentWorkspaceId],
+    queryKey: adminQueryKeys.tournamentWizardDivisionGrids(currentWorkspaceId),
     queryFn: async () => {
       if (!currentWorkspaceId) return [];
       return workspaceService.getDivisionGrids(currentWorkspaceId);
@@ -160,7 +163,7 @@ export default function NewTournamentPage() {
   // from the workspace rather than from the wizard state. Fetched here, next to the
   // division grids, because that is where this wizard loads its server data.
   const subscriptionRequirementQuery = useQuery({
-    queryKey: ["subscription-requirement", currentWorkspaceId],
+    queryKey: workspaceQueryKeys.subscriptionRequirement(currentWorkspaceId),
     queryFn: () => balancerAdminService.getSubscriptionRequirement(currentWorkspaceId as number),
     enabled: Boolean(currentWorkspaceId)
   });
@@ -168,7 +171,7 @@ export default function NewTournamentPage() {
   // Resume (D4): the latest Unpublished stage-less tournament of this
   // workspace is an abandoned wizard draft — offer to continue it.
   const resumeQuery = useQuery({
-    queryKey: ["admin", "tournaments", "wizard-resume", currentWorkspaceId],
+    queryKey: adminQueryKeys.tournamentWizardResume(currentWorkspaceId),
     queryFn: () => tournamentService.getAll(null, currentWorkspaceId),
     enabled: Boolean(currentWorkspaceId),
     staleTime: Infinity
@@ -241,9 +244,9 @@ export default function NewTournamentPage() {
           created = await adminService.createTournament(buildDraftCreateInput(workspaceId, form));
         }
         adoptDraft(created);
-        void queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() });
         void queryClient.invalidateQueries({
-          queryKey: ["admin", "tournaments", "wizard-resume"]
+          queryKey: adminQueryKeys.tournamentWizardResumeAll()
         });
         return created;
       })().catch((error) => {
@@ -270,8 +273,8 @@ export default function NewTournamentPage() {
       return { id: active.id, publish };
     },
     onSuccess: ({ id, publish }) => {
-      void queryClient.invalidateQueries({ queryKey: ["tournaments"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "tournaments", "wizard-resume"] });
+      void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournamentWizardResumeAll() });
       notify.success(publish ? "Tournament created" : "Draft created", {
         description: publish
           ? undefined

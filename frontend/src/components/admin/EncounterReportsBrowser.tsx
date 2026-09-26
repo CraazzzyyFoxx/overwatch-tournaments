@@ -34,6 +34,9 @@ import type {
 import type { ReportCustomFieldDefinition } from "@/types/encounter.types";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const PAGE_SIZE = 25;
 const DASH = "—";
@@ -245,19 +248,19 @@ export function EncounterReportsBrowser({
   // while the admin narrows the list or looks one encounter up, instead of
   // collapsing to what is on screen.
   const statsQuery = useQuery({
-    queryKey: ["encounter-reports", "stats", scopeParams],
+    queryKey: encounterQueryKeys.reportStats(scopeParams),
     queryFn: () => adminService.getEncounterReportStats(scopeParams!),
     enabled: scopeParams != null
   });
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: workspaceId != null && tournamentId == null
   });
 
   const stagesQuery = useQuery({
-    queryKey: ["admin", "stages", scopeTournamentId],
+    queryKey: adminQueryKeys.stages(scopeTournamentId),
     queryFn: () => adminService.getStages(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
@@ -266,7 +269,7 @@ export function EncounterReportsBrowser({
   // shown under raw storage keys. Per tournament, so it is only asked for once
   // a single tournament is in scope; workspace-wide the keys stand in.
   const reportFormQuery = useQuery({
-    queryKey: ["admin", "report-form", scopeTournamentId],
+    queryKey: adminQueryKeys.reportForm(scopeTournamentId),
     queryFn: () => reportFormService.getReportForm(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
@@ -862,9 +865,9 @@ export function EncounterReportsBrowser({
           // bracket, so the invalidation is wider than this list. Scoped to
           // prefixes rather than exact keys because the list key carries the
           // whole filter object and every variant of it is now stale.
-          void queryClient.invalidateQueries({ queryKey: ["encounter-reports"] });
-          void queryClient.invalidateQueries({ queryKey: ["encounters"] });
-          void queryClient.invalidateQueries({ queryKey: ["admin-matches"] });
+          void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.reportsAll() });
+          void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.all() });
+          void queryClient.invalidateQueries({ queryKey: adminQueryKeys.matches() });
           void queryClient.invalidateQueries({
             queryKey: scopeTournamentId == null ? ["standings"] : ["standings", scopeTournamentId]
           });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { notificationHref } from "@/lib/notifications/href";
 import type { NotificationItem } from "@/types/notification.types";

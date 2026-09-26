@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
@@ -109,7 +109,10 @@ describe("realtime subscribed confirmations", () => {
     unsubscribeWithoutCallback();
   });
 
-  it("notifies again after a reconnect confirmation", async () => {
+  it("notifies again after a reconnect confirmation", () => {
+    // The client schedules its reconnect with a plain `setTimeout`, so the
+    // backoff is driven rather than waited out.
+    vi.useFakeTimers();
     const topic = "tournament:42:bracket";
     let confirmations = 0;
     const unsubscribe = trackCleanup(realtimeClient.subscribe(topic, () => undefined, () => {
@@ -120,13 +123,14 @@ describe("realtime subscribed confirmations", () => {
     firstSocket.receive({ op: "subscribed", topic, cursor: 1 });
 
     firstSocket.close();
-    await Bun.sleep(1_050);
+    vi.advanceTimersByTime(1_050);
     const secondSocket = currentSocket();
     secondSocket.open();
     secondSocket.receive({ op: "subscribed", topic, cursor: 2 });
 
     expect(confirmations).toBe(2);
     unsubscribe();
+    vi.useRealTimers();
   });
 
   it("does not treat an ordinary event as a subscription confirmation", () => {

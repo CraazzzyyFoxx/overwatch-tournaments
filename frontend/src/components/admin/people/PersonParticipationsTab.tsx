@@ -34,6 +34,9 @@ import tournamentService from "@/services/tournament.service";
 import userService from "@/services/user.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { formatSubRoleLabel } from "@/utils/player";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 /** One tournament this person played, flattened to the roster row that is them. */
 interface ParticipationRow {
@@ -79,26 +82,26 @@ export function PersonParticipationsTab({
   const [pendingDelete, setPendingDelete] = useState<ParticipationRow | null>(null);
 
   const participationsQuery = useQuery({
-    queryKey: ["user-tournaments", personId, workspaceId],
+    queryKey: userQueryKeys.tournaments(personId, workspaceId),
     queryFn: () => userService.getUserTournaments(personId, workspaceId)
   });
 
   // Sub-roles are a workspace catalog, and the participation list is already
   // scoped to the active workspace, so one fetch covers every row.
   const subRolesQuery = useQuery({
-    queryKey: ["player-sub-roles", workspaceId],
+    queryKey: adminQueryKeys.playerSubRolesPublic(workspaceId),
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId! }),
     enabled: workspaceId != null
   });
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: canCreate
   });
 
   const teamsQuery = useQuery({
-    queryKey: ["teams", form.tournament_id || null],
+    queryKey: tournamentQueryKeys.teams(form.tournament_id || null),
     queryFn: () => teamService.getAll({ tournamentId: form.tournament_id }),
     enabled: formMode === "create" && form.tournament_id > 0
   });
@@ -130,8 +133,8 @@ export function PersonParticipationsTab({
   );
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["user-tournaments", personId] });
-    void queryClient.invalidateQueries({ queryKey: ["teams"] });
+    void queryClient.invalidateQueries({ queryKey: userQueryKeys.tournamentsAll(personId) });
+    void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() });
   };
 
   const closeForm = () => {

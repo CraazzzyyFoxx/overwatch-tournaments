@@ -61,6 +61,9 @@ import tournamentService from "@/services/tournament.service";
 import type { AdminMatchRow } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const PAGE_SIZE = 15;
 
@@ -173,25 +176,25 @@ export function EncountersBrowser({
   const scopeTournamentId = tournamentId ?? chipTournamentId;
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: tournamentId == null
   });
 
   const tournamentQuery = useQuery({
-    queryKey: ["admin", "tournament", scopeTournamentId],
+    queryKey: adminQueryKeys.tournament(scopeTournamentId),
     queryFn: () => adminService.getTournament(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
 
   const stagesQuery = useQuery({
-    queryKey: ["admin", "stages", scopeTournamentId],
+    queryKey: adminQueryKeys.stages(scopeTournamentId),
     queryFn: () => adminService.getStages(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
 
   const teamsQuery = useQuery({
-    queryKey: ["teams", scopeTournamentId],
+    queryKey: tournamentQueryKeys.teams(scopeTournamentId),
     queryFn: () => teamService.getAll({ tournamentId: scopeTournamentId }),
     enabled: scopeTournamentId != null
   });
@@ -266,7 +269,7 @@ export function EncountersBrowser({
   const openIndex = openRow ? pageRows.indexOf(openRow) : -1;
 
   const reportsQuery = useQuery({
-    queryKey: ["encounter-reports", "encounter", openRow?.id ?? null, workspaceId],
+    queryKey: encounterQueryKeys.reportsByEncounter(openRow?.id ?? null, workspaceId),
     queryFn: () => adminService.listEncounterReports({
       workspace_id: workspaceId!,
       tournament_id: openRow!.tournament_id,
@@ -278,7 +281,7 @@ export function EncountersBrowser({
   const reportRow = reportsQuery.data?.results.find((row) => row.id === openRow?.id) ?? null;
 
   const parsedMapsQuery = useQuery({
-    queryKey: ["admin-matches", "encounter", openRow?.id ?? null, workspaceId],
+    queryKey: adminQueryKeys.matchEncounter(openRow?.id ?? null, workspaceId),
     queryFn: () => adminService.listAdminMatches({
       workspace_id: workspaceId!,
       encounter_id: openRow!.id,
@@ -288,7 +291,7 @@ export function EncountersBrowser({
   });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["encounters"] });
+    void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.all() });
     if (scopeTournamentId != null) {
       invalidateTournamentWorkspace(queryClient, scopeTournamentId, workspaceId);
     }

@@ -12,6 +12,7 @@ import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const COLLECTORS = ["rank", "subscriptions", "streams"] as const;
 
@@ -41,17 +42,17 @@ export default function CollectorsLayout({ children }: Readonly<{ children: Reac
   const canReadStreams = canAccessPermission("stream.read", null);
 
   const rankQuery = useQuery({
-    queryKey: ["admin", "rank", "stats", workspaceId],
+    queryKey: adminQueryKeys.rankStats(workspaceId),
     queryFn: () => adminService.getRankCollectionStats(),
     enabled: canReadRank
   });
   const subscriptionQuery = useQuery({
-    queryKey: ["admin", "subscriptions", "stats", workspaceId],
+    queryKey: adminQueryKeys.subscriptionsStats(workspaceId),
     queryFn: () => adminService.getSubscriptionCollectionStats(),
     enabled: canReadSubscriptions
   });
   const streamQuery = useQuery({
-    queryKey: ["admin", "streams", "health"],
+    queryKey: adminQueryKeys.streamsHealth(),
     queryFn: () => adminService.getStreamPollHealth(),
     enabled: canReadStreams
   });

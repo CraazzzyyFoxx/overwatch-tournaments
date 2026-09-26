@@ -32,6 +32,8 @@ import adminService from "@/services/admin.service";
 import type { Player, Team } from "@/types/team.types";
 import type { Tournament } from "@/types/tournament.types";
 import type { User } from "@/types/user.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 type AdminTeamDetail = Team & {
   captain?: User | null;
@@ -75,7 +77,7 @@ export default function AdminTeamWorkspacePage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const teamQuery = useQuery({
-    queryKey: ["admin", "team", teamId],
+    queryKey: adminQueryKeys.team(teamId),
     queryFn: () => adminService.getTeam(teamId) as Promise<AdminTeamDetail>,
     enabled: Number.isFinite(teamId)
   });
@@ -92,8 +94,8 @@ export default function AdminTeamWorkspacePage() {
 
   const invalidateTeam = () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["admin", "team", teamId] }),
-      queryClient.invalidateQueries({ queryKey: ["teams"] })
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.team(teamId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() })
     ]);
 
   const updateTeam = useMutation({
@@ -123,7 +125,7 @@ export default function AdminTeamWorkspacePage() {
   const deleteTeam = useMutation({
     mutationFn: () => adminService.deleteTeam(teamId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["teams"] });
+      await queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() });
       router.push(
         team?.tournament_id ? `/admin/teams?tournament=${team.tournament_id}` : "/admin/teams"
       );

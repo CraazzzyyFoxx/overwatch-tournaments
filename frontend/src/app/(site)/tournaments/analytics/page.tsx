@@ -33,6 +33,8 @@ import tournamentService from "@/services/tournament.service";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const AnalyticsPage = () => {
   const router = useRouter();
@@ -56,7 +58,7 @@ const AnalyticsPage = () => {
   // current scope (skipWorkspace), then follow it — so a shared analytics link
   // to a tournament in another workspace switches the active workspace to match.
   const { data: selectedTournamentOverview } = useQuery({
-    queryKey: ["tournament-overview", tournamentId],
+    queryKey: tournamentQueryKeys.overview(tournamentId),
     queryFn: () => tournamentService.getPublicOverview(tournamentId!),
     enabled: tournamentId != null,
     staleTime: 5 * 60_000
@@ -69,7 +71,7 @@ const AnalyticsPage = () => {
     isLoading: loadingTournaments,
     isError: isErrorTournaments
   } = useQuery({
-    queryKey: ["tournaments", currentWorkspaceId ?? "global"],
+    queryKey: tournamentQueryKeys.byWorkspace(currentWorkspaceId ?? "global"),
     queryFn: () => tournamentService.getAll(null, currentWorkspaceId)
   });
 
@@ -83,7 +85,7 @@ const AnalyticsPage = () => {
     // letting the default prefer "OpenSkill + ML" only when it is populated.
     // Keep the previous list while refetching on a tournament switch so the
     // algorithm stays "known" (no stale-id analytics flash before has_data lands).
-    queryKey: ["analytics", "algorithms", tournamentId],
+    queryKey: analyticsQueryKeys.algorithms(tournamentId),
     queryFn: () => analyticsService.getAlgorithms(tournamentId),
     placeholderData: (previousData) => previousData
   });
@@ -108,7 +110,7 @@ const AnalyticsPage = () => {
     isError: isErrorAnalytics,
     refetch: refetchAnalytics
   } = useQuery({
-    queryKey: ["analytics", currentWorkspaceId ?? "global", tournamentId, algorithmId],
+    queryKey: analyticsQueryKeys.performance(currentWorkspaceId ?? "global", tournamentId, algorithmId),
     queryFn: () => analyticsService.getAnalytics(tournamentId!, algorithmId!, currentWorkspaceId),
     enabled: canQueryAnalytics
   });
@@ -116,7 +118,7 @@ const AnalyticsPage = () => {
   const {
     data: performanceRows
   } = useQuery({
-    queryKey: ["analytics", "performance-v2", tournamentId],
+    queryKey: analyticsQueryKeys.performanceV2(tournamentId),
     queryFn: () => analyticsService.getPerformanceV2(tournamentId!),
     enabled: tournamentId != null && canReadV2
   });
@@ -132,7 +134,7 @@ const AnalyticsPage = () => {
   // Monte Carlo standings distribution — woven into the team detail (and the
   // organizer table view); gated to analytics.read viewers.
   const { data: standingsRows } = useQuery({
-    queryKey: ["analytics-standings-distribution", tournamentId, undefined],
+    queryKey: analyticsQueryKeys.standingsDistribution(tournamentId),
     queryFn: () => analyticsService.getStandingsDistribution(tournamentId!),
     enabled: tournamentId != null && canReadV2,
     staleTime: 60_000

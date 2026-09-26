@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter } from "@/lib/datetime/client";
 import {
@@ -32,7 +33,6 @@ import {
   X
 } from "lucide-react";
 
-import { ConditionFlowEditor } from "@/components/admin/achievements/ConditionFlowEditor";
 import { notifyEvaluationRun } from "@/components/admin/achievements/EvaluationRunSummary";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
@@ -91,6 +91,22 @@ import {
   MAX_ACHIEVEMENT_IMAGE_BYTES
 } from "@/lib/uploads";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { achievementQueryKeys } from "@/lib/achievements/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+
+// @xyflow/react (plus its stylesheet) is the heaviest thing this route can
+// pull, and the tree is one card on a page that is mostly forms and tables —
+// so it loads on demand. Two entry points because the two call sites settle at
+// different heights (`h-125` editing, `h-75` read-only) and a placeholder that
+// lies about its height is a layout shift.
+const ConditionFlowEditor = dynamic(
+  () => import("@/components/admin/achievements/ConditionFlowEditor").then((m) => m.ConditionFlowEditor),
+  { ssr: false, loading: () => <Skeleton className="h-125 w-full rounded-lg" /> }
+);
+const ConditionFlowViewer = dynamic(
+  () => import("@/components/admin/achievements/ConditionFlowEditor").then((m) => m.ConditionFlowEditor),
+  { ssr: false, loading: () => <Skeleton className="h-75 w-full rounded-lg" /> }
+);
 
 const CATEGORIES: AchievementCategory[] = [
   "overall",
@@ -231,13 +247,13 @@ export default function AchievementDetailPage() {
 
   // --- Queries ---
   const { data: rule, isLoading } = useQuery({
-    queryKey: ["admin", "achievement-rule", workspaceId, ruleId],
+    queryKey: achievementQueryKeys.rule(workspaceId, ruleId),
     queryFn: () => adminService.getAchievementRule(workspaceId!, ruleId),
     enabled: !!workspaceId
   });
 
   const { data: tournaments } = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null)
   });
 
@@ -248,15 +264,7 @@ export default function AchievementDetailPage() {
     isFetchingNextPage,
     isError: usersError
   } = useInfiniteQuery({
-    queryKey: [
-      "admin",
-      "achievement-rule-users",
-      workspaceId,
-      ruleId,
-      usersFilterTournamentId,
-      usersSort,
-      usersSortOrder
-    ],
+    queryKey: achievementQueryKeys.ruleUsersPage(workspaceId, ruleId, usersFilterTournamentId, usersSort, usersSortOrder),
     queryFn: ({ pageParam = 1 }) =>
       adminService.getAchievementRuleUsers(workspaceId!, ruleId, {
         page: pageParam,
@@ -272,7 +280,7 @@ export default function AchievementDetailPage() {
   });
 
   const { data: overrides, refetch: refetchOverrides } = useQuery({
-    queryKey: ["admin", "overrides", workspaceId, ruleId],
+    queryKey: achievementQueryKeys.overrides(workspaceId, ruleId),
     queryFn: async () => {
       const all = await adminService.getAchievementOverrides(workspaceId!);
       return all.filter((o) => o.achievement_rule_id === ruleId);
@@ -300,9 +308,9 @@ export default function AchievementDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["admin", "achievement-rule", workspaceId, ruleId]
+        queryKey: achievementQueryKeys.rule(workspaceId, ruleId)
       });
-      queryClient.invalidateQueries({ queryKey: ["admin", "achievements", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: achievementQueryKeys.adminList(workspaceId) });
       setEditDialogOpen(false);
       setImageFile(null);
       setImagePreview(null);
@@ -314,9 +322,9 @@ export default function AchievementDetailPage() {
       adminService.updateAchievementRule(workspaceId!, ruleId, { condition_tree: conditionTree }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["admin", "achievement-rule", workspaceId, ruleId]
+        queryKey: achievementQueryKeys.rule(workspaceId, ruleId)
       });
-      queryClient.invalidateQueries({ queryKey: ["admin", "achievements", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: achievementQueryKeys.adminList(workspaceId) });
       setEditingTree(false);
     }
   });
@@ -331,7 +339,7 @@ export default function AchievementDetailPage() {
       adminService.updateAchievementRule(workspaceId!, ruleId, { enabled }),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: ["admin", "achievement-rule", workspaceId, ruleId]
+        queryKey: achievementQueryKeys.rule(workspaceId, ruleId)
       })
   });
 
@@ -344,7 +352,7 @@ export default function AchievementDetailPage() {
     onSuccess: (data) => {
       notifyEvaluationRun(data);
       queryClient.invalidateQueries({
-        queryKey: ["admin", "achievement-rule-users", workspaceId, ruleId]
+        queryKey: achievementQueryKeys.ruleUsers(workspaceId, ruleId)
       });
     }
   });
@@ -626,7 +634,7 @@ export default function AchievementDetailPage() {
               </div>
             </div>
           ) : (
-            <ConditionFlowEditor value={rule.condition_tree as Record<string, unknown>} readOnly />
+            <ConditionFlowViewer value={rule.condition_tree as Record<string, unknown>} readOnly />
           )}
         </CardContent>
       </Card>

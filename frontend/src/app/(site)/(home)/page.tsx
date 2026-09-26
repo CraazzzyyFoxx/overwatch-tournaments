@@ -66,7 +66,7 @@ const CARD_LINK_FOCUS =
 export default async function Home() {
   // On a tenant (white-label) host the whole site is locked to one
   // workspace, so the cross-workspace "communities on this platform" list
-  // is hidden. See middleware.ts (Task 6) for the header injection.
+  // is hidden. See proxy.ts (Task 6) for the header injection.
   const tenantMode = await getTenantMode();
   const t = await getTranslations();
 

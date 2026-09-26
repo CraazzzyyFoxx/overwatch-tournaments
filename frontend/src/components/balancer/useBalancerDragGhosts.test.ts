@@ -1,20 +1,11 @@
+import { describe, expect, it } from "vitest";
+
 import {
   applyDragEvent,
   pruneStaleDrags,
   type DragEventData,
   type RemoteDrag,
 } from "@/components/balancer/useBalancerDragGhosts";
-
-type TestFunction = () => void | Promise<void>;
-type Expectation<T> = {
-  toBe: (expected: T) => void;
-  toEqual: (expected: unknown) => void;
-  toBeUndefined: () => void;
-};
-
-declare const describe: (name: string, fn: TestFunction) => void;
-declare const it: (name: string, fn: TestFunction) => void;
-declare const expect: <T>(actual: T) => Expectation<T>;
 
 const startData: DragEventData = {
   phase: "start",

@@ -29,9 +29,10 @@ import { cn } from "@/lib/utils";
 import registrationFormTemplatesService from "@/services/registration-form-templates.service";
 import type { FormSchema } from "@/types/forms.types";
 import { Spinner } from "@/components/ui/spinner";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 export const registrationFormTemplatesKey = (workspaceId: number) =>
-  ["admin", "registration-form-templates", workspaceId] as const;
+  balancerQueryKeys.registrationFormTemplates(workspaceId);
 
 /**
  * Workspace templates, from the tournament's builder.

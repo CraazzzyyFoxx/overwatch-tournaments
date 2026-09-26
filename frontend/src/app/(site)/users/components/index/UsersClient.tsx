@@ -49,6 +49,7 @@ import {
 } from "@/app/(site)/users/components/shared/list-utils";
 
 import styles from "./Users.module.css";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 type SortValue = "name" | "tournaments_count" | "achievements_count" | "avg_placement";
 type OrderValue = "asc" | "desc";
@@ -208,7 +209,7 @@ const UsersClient = () => {
   }, [debouncedSearch, query, setParams]);
 
   const { data, isPending, isFetching, isError, error } = useQuery({
-    queryKey: ["users-overview", workspaceId, page, perPage, query, sort, order, role, divMin, divMax],
+    queryKey: userQueryKeys.overview(workspaceId, page, perPage, query, sort, order, role, divMin, divMax),
     queryFn: () =>
       userService.getUsersOverview({
         page,
@@ -227,7 +228,7 @@ const UsersClient = () => {
   });
 
   const statsQuery = useQuery({
-    queryKey: ["users-overview-stats", workspaceId, query, role, divMin, divMax],
+    queryKey: userQueryKeys.overviewStats(workspaceId, query, role, divMin, divMax),
     queryFn: () =>
       userService.getUsersOverviewStats({
         query: query || undefined,
@@ -241,7 +242,7 @@ const UsersClient = () => {
   });
 
   const catalogQuery = useQuery({
-    queryKey: ["users-overview-catalog", workspaceId, query, role, divMin, divMax, letter],
+    queryKey: userQueryKeys.overviewCatalog(workspaceId, query, role, divMin, divMax, letter),
     queryFn: () =>
       userService.getUsersCatalog({
         query: query || undefined,

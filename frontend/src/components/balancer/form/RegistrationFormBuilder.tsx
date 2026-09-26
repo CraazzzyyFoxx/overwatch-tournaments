@@ -67,6 +67,8 @@ import {
   replaceField,
   sanitizeSchema
 } from "./_components/schemaEdits";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 // ---------------------------------------------------------------------------
 // The editor
@@ -527,7 +529,7 @@ export function SchemaEditor({
  *  the preview renderers want it. */
 export function useSubroleCatalog(workspaceId: number | null) {
   const catalogQuery = useQuery({
-    queryKey: ["admin", "player-sub-roles", workspaceId],
+    queryKey: adminQueryKeys.playerSubRoles(workspaceId),
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId as number }),
     enabled: workspaceId !== null
   });
@@ -579,7 +581,7 @@ export default function RegistrationFormBuilder({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const formQuery = useQuery({
-    queryKey: ["balancer-admin", "registration-form", tournamentId],
+    queryKey: balancerQueryKeys.registrationForm(tournamentId),
     queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
     enabled: tournamentId !== null,
     // This page is a long-lived editor; a background refetch must not clobber
@@ -613,9 +615,9 @@ export default function RegistrationFormBuilder({
       });
     },
     onSuccess: async (updated: AdminRegistrationForm) => {
-      queryClient.setQueryData(["balancer-admin", "registration-form", tournamentId], updated);
+      queryClient.setQueryData(balancerQueryKeys.registrationForm(tournamentId), updated);
       await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registration-form", tournamentId]
+        queryKey: balancerQueryKeys.registrationForm(tournamentId)
       });
       setDraft(null);
       setFieldErrors({});

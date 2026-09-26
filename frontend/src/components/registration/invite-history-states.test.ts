@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 /**
  * The invite ledger renders on two screens — the captain's panel and the
@@ -15,7 +15,7 @@ import { describe, expect, it } from "bun:test";
  * raw wire code on the other, for the same row — and the mismatch is invisible
  * to both mount tests, because each only ever sees its own list.
  */
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = join(import.meta.dirname, "..", "..");
 
 const SITES = {
   captain: join(ROOT, "components", "registration", "InviteHistorySection.tsx"),
@@ -67,8 +67,8 @@ describe("invite history states", () => {
     const ru = JSON.parse(readFileSync(join(ROOT, "i18n", "messages", "ru.json"), "utf8"));
 
     for (const state of historyStates(SITES.captain)) {
-      expect(en.registrationTeams.history.state[state]).toBeString();
-      expect(ru.registrationTeams.history.state[state]).toBeString();
+      expect(en.registrationTeams.history.state[state]).toBeTypeOf("string");
+      expect(ru.registrationTeams.history.state[state]).toBeTypeOf("string");
       // A Russian value identical to the English one is almost always a
       // copy-paste that never got translated.
       expect(ru.registrationTeams.history.state[state]).not.toBe(

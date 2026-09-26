@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Workspace } from "@/types/workspace.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const PAGE_SIZE = 15;
 
@@ -88,7 +89,7 @@ export default function WorkspacesPage() {
     // `["admin-workspaces"]` is the prefix the workspace settings sections
     // invalidate too (`workspace-settings/useWorkspaceSettingsForm.ts`), so a
     // rename made there refreshes this list without a reload.
-    queryClient.invalidateQueries({ queryKey: ["admin-workspaces"] });
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.workspaces() });
     fetchWorkspaces();
   };
 

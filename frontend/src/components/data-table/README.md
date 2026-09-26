@@ -59,8 +59,8 @@ the new project's equivalents; nothing else in the folder reaches outside it exc
   `import()` when a pointer first reaches the table, so they are not in the chunk a list
   page loads. Drop that file and the header stays plain (`AdminTableHead`) but keeps
   sorting, resizing and everything else;
-- three CSS rule groups in the global stylesheet: `.admin-sticky-col*`, `.admin-table-head`
-  and `.admin-row` — the row's hover / selected / current tint, which the pinned cells
-  repaint over their own opaque base (search `globals.css` for `admin-sticky-col`).
+- `data-table.css` next to the component (imported by `AdminDataTable.tsx`): `.admin-sticky-col*`,
+  `.admin-table-head` and `.admin-row` — the row's hover / selected / current tint, which the
+  pinned cells repaint over their own opaque base.
 
 Tests are colocated (`*.behavior.test.tsx`, happy-dom) and mock only `next/navigation`.

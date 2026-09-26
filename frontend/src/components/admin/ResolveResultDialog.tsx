@@ -25,6 +25,7 @@ import type { EncounterReportsRow, EncounterSetResultInput } from "@/types/admin
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 /**
  * How the score is decided. Mirrors the server's resolution order so what the
@@ -68,7 +69,7 @@ export function ResolveResultDialog({
   const isConfirmed = row?.result_status === "confirmed";
 
   const auditQuery = useQuery({
-    queryKey: ["encounter-result-audit", row?.id],
+    queryKey: encounterQueryKeys.resultAudit(row?.id),
     queryFn: () => adminService.getEncounterResultAudit(row!.id),
     enabled: open && historyOpen && row != null
   });

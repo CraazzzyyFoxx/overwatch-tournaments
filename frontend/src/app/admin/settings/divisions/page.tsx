@@ -48,6 +48,7 @@ import {
 } from "./editor/draftReducer";
 import { LadderBar } from "./LadderBar";
 import { VersionHistory } from "./VersionHistory";
+import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 
 const SOURCE_STATUS_TONE = {
   ok: "success",
@@ -112,7 +113,7 @@ export default function DivisionsSettingsPage() {
   const canActivate = permitted("division_grid.update");
 
   const gridsQuery = useQuery({
-    queryKey: ["division-grids", workspaceId],
+    queryKey: divisionGridQueryKeys.grids(workspaceId),
     queryFn: () => workspaceService.getDivisionGrids(workspaceId!),
     enabled: canRead
   });
@@ -127,7 +128,7 @@ export default function DivisionsSettingsPage() {
     null;
 
   const versionsQuery = useQuery({
-    queryKey: ["division-grid-versions", workspaceId, selectedGrid?.id ?? null],
+    queryKey: divisionGridQueryKeys.versions(workspaceId, selectedGrid?.id ?? null),
     queryFn: () => workspaceService.getDivisionGridVersions(workspaceId!, selectedGrid!.id),
     enabled: canRead && selectedGrid !== null
   });
@@ -146,7 +147,7 @@ export default function DivisionsSettingsPage() {
     activeVersion !== null && !grids.some((grid) => grid.id === activeVersion.grid_id);
 
   const readinessQuery = useQuery({
-    queryKey: ["division-grid-readiness", workspaceId, activeVersionId],
+    queryKey: divisionGridQueryKeys.readiness(workspaceId, activeVersionId),
     queryFn: () => workspaceService.getDivisionGridVersionReadiness(workspaceId!, activeVersionId!),
     enabled: canRead && activeVersionId !== null
   });
@@ -172,7 +173,7 @@ export default function DivisionsSettingsPage() {
   );
   const candidateReadiness = useQueries({
     queries: candidates.map((version) => ({
-      queryKey: ["division-grid-readiness", workspaceId, version.id],
+      queryKey: divisionGridQueryKeys.readiness(workspaceId, version.id),
       queryFn: () => workspaceService.getDivisionGridVersionReadiness(workspaceId!, version.id),
       enabled: canRead
     }))
@@ -193,9 +194,9 @@ export default function DivisionsSettingsPage() {
 
   const refresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["division-grids", workspaceId] }),
-      queryClient.invalidateQueries({ queryKey: ["division-grid-versions", workspaceId] }),
-      queryClient.invalidateQueries({ queryKey: ["division-grid-readiness", workspaceId] }),
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.grids(workspaceId) }),
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.versionsByWorkspace(workspaceId) }),
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.readinessByWorkspace(workspaceId) }),
       fetchWorkspaces()
     ]);
   };

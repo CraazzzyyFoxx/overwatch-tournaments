@@ -3,15 +3,15 @@ import { join } from "node:path";
 
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 
 // Module mocks are process-wide in bun: every mock of next-intl in the draft
 // suite exposes the same hooks, or whichever file loads first breaks the rest.
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string) => `draftRedesign.${key}`
 }));
-mock.module("@/lib/datetime/client", () => ({
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" })
 }));
 

@@ -24,6 +24,7 @@ import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import { formatSeriesClock, type SeriesSlot } from "@/lib/encounter/detail";
 import { Pill } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterMapRowProps {
   slot: SeriesSlot;
@@ -67,7 +68,7 @@ export default function EncounterMapRow({
   const accepted = acceptedScore(game);
 
   const matchQuery = useQuery({
-    queryKey: ["match-detail", match?.id],
+    queryKey: encounterQueryKeys.matchDetail(match?.id),
     queryFn: () => encounterService.getMatch(match!.id),
     enabled: open && match != null,
     staleTime: 5 * 60_000

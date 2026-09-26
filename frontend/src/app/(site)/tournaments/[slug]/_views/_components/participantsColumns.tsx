@@ -2,7 +2,6 @@
 
 import { type ReactNode, useMemo } from "react";
 import { Crown } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import {
@@ -30,7 +29,6 @@ import {
 } from "@/lib/forms/answers";
 import { isBuiltinKey } from "@/lib/forms/builtin-keys";
 import type { Hero } from "@/types/hero.types";
-import heroService from "@/services/hero.service";
 import { HeroStrip } from "@/components/hero/HeroImage";
 
 import {
@@ -49,6 +47,7 @@ import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/divisions/
 import type { DivisionGrid } from "@/types/workspace.types";
 import DivisionIcon from "@/components/DivisionIcon";
 import { getPlayerSlug } from "@/utils/player";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -183,17 +182,12 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export function useHeroesMap({ enabled = true }: { enabled?: boolean } = {}): Map<string, Hero> {
-  const { data: heroesData } = useQuery({
-    queryKey: ["heroes-all"],
-    queryFn: () => heroService.getAll({ perPage: -1 }),
-    staleTime: 5 * 60_000,
-    enabled,
-  });
+  const { data: heroesData } = useHeroesCatalog({ enabled });
 
   return useMemo(() => {
     const map = new Map<string, Hero>();
-    if (heroesData?.results) {
-      for (const h of heroesData.results) {
+    if (heroesData) {
+      for (const h of heroesData) {
         map.set(h.slug, h);
       }
     }

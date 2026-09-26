@@ -116,12 +116,12 @@ export function safeRedirectTarget(redirect: string, origin: string): URL {
 // public `sso_exchange`).
 //
 // The only source of truth for "is this a real, resolvable workspace host"
-// is the backend's `by_host` lookup (already used by `middleware.ts`'s
+// is the backend's `by_host` lookup (already used by `proxy.ts`'s
 // `resolveWorkspace`, whose fetch shape/error handling this mirrors) — a
 // numeric `workspace_id` means a registered subdomain or a *verified*
 // custom domain; `null`, a non-OK response, or a thrown/network error must
 // all fail CLOSED (never deliver a ticket to an unverified host). Unlike
-// `middleware.ts`'s lookup, there is no TTL cache here: this runs once per
+// `proxy.ts`'s lookup, there is no TTL cache here: this runs once per
 // login, not on every page request, so there's no hot-path cost to trade
 // staleness for.
 export async function isVerifiedTenantOrigin(origin: string): Promise<boolean> {

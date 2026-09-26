@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PLATFORM_ZONE } from "@/lib/site/host";
 
 // oauth-login.ts's custom-domain apex bounce is the START of the Task 10R
@@ -25,12 +25,10 @@ type GetOAuthUrlCall = {
 const getOAuthUrlCalls: GetOAuthUrlCall[] = [];
 let getOAuthUrlResult = { provider: "discord", url: "https://discord.example/authorize", state: "signed-state" };
 
-// `bun test` shares one module registry across a run, so whichever mock of this
-// module registers first is what every other file sees. Omitting these two took
-// the three auth-route test files down with a SyntaxError at import time —
-// @/lib/auth/oauth-callback imports them — and their tests silently did not run.
-// scripts/test-runner-split.mjs now fails on an incomplete mock.
-mock.module("@/services/auth.service", () => ({
+// Both error classes are re-exported because `@/lib/auth/oauth-callback` — which
+// this module's import graph pulls in — imports them by name; a factory that
+// omits them fails the import with a SyntaxError rather than a failed assertion.
+vi.mock("@/services/auth.service", () => ({
   OAuthLinkAuthRequiredError: class extends Error {},
   OAuthLinkFailedError: class extends Error {},
   authService: {

@@ -78,6 +78,8 @@ import type { RegistrationForm, SubroleCatalog } from "@/types/registration.type
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Spinner } from "@/components/ui/spinner";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 // Minimal fallback used only until the real registration form loads. Its schema
 // is EMPTY on purpose: the questions this tournament asks are the ones the
@@ -198,7 +200,7 @@ export default function RegistrationsTable({
   // honest — it used to be computed over an already status-filtered list, so
   // filtering to "approved" reported zero pending.
   const registrationsQuery = useQuery({
-    queryKey: ["balancer-admin", "registrations", tournamentId],
+    queryKey: balancerQueryKeys.registrations(tournamentId),
     queryFn: () =>
       balancerAdminService.listRegistrations(tournamentId as number, {
         include_deleted: false
@@ -207,13 +209,13 @@ export default function RegistrationsTable({
   });
 
   const formQuery = useQuery({
-    queryKey: ["balancer-admin", "registration-form", tournamentId],
+    queryKey: balancerQueryKeys.registrationForm(tournamentId),
     queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
     enabled: tournamentId !== null
   });
 
   const publicFormQuery = useQuery({
-    queryKey: ["registration-form-public", tournamentId],
+    queryKey: tournamentQueryKeys.registrationFormPublic(tournamentId),
     queryFn: () => registrationService.getForm(tournamentId as number),
     enabled: tournamentId !== null
   });
@@ -244,7 +246,7 @@ export default function RegistrationsTable({
   const schemaLoaded = publicFormQuery.data != null;
 
   const customStatusesQuery = useQuery({
-    queryKey: ["balancer-admin", "status-catalog", workspaceId],
+    queryKey: balancerQueryKeys.statusCatalog(workspaceId),
     queryFn: () => balancerAdminService.listStatusCatalog(workspaceId as number),
     enabled: workspaceId !== null
   });
@@ -443,7 +445,7 @@ export default function RegistrationsTable({
   const patchRegistrationInCache = useCallback(
     (row: AdminRegistration) => {
       queryClient.setQueriesData<AdminRegistration[]>(
-        { queryKey: ["balancer-admin", "registrations", tournamentId] },
+        { queryKey: balancerQueryKeys.registrations(tournamentId) },
         (old) => (old ? old.map((r) => (r.id === row.id ? row : r)) : old)
       );
     },
@@ -452,7 +454,7 @@ export default function RegistrationsTable({
 
   const removeRegistrationFromCache = (registrationId: number) => {
     queryClient.setQueriesData<AdminRegistration[]>(
-      { queryKey: ["balancer-admin", "registrations", tournamentId] },
+      { queryKey: balancerQueryKeys.registrations(tournamentId) },
       (old) => (old ? old.filter((r) => r.id !== registrationId) : old)
     );
   };
@@ -461,7 +463,7 @@ export default function RegistrationsTable({
   // immediately after the mutation itself resolves.
   const revalidateRegistrations = () => {
     void queryClient.invalidateQueries({
-      queryKey: ["balancer-admin", "registrations", tournamentId]
+      queryKey: balancerQueryKeys.registrations(tournamentId)
     });
   };
 

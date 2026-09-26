@@ -23,7 +23,7 @@ export interface InspectorProps {
   openHref?: string;
 }
 
-/** `lg` in `tailwind.config.ts` — the width at which the panel fits beside a table. */
+/** `lg` in `globals.css`'s `@theme` — the width at which the panel fits beside a table. */
 const PANEL_MEDIA_QUERY = "(min-width: 1024px)";
 
 function useIsWideViewport(): boolean {

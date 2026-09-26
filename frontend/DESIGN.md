@@ -40,7 +40,8 @@ Design priorities follow those goals:
 ### Theme and tokens
 
 - Tokens live in `frontend/src/app/globals.css` (CSS variables for background/foreground/card/border/etc).
-- Tailwind maps to those tokens in `frontend/tailwind.config.ts`.
+- Tailwind maps to those tokens in the same file: there is no `tailwind.config.ts`. Tailwind 4 is configured CSS-first, with `@theme` (breakpoints, fonts, animations) and `@theme inline` (colours, radii) at the top of `globals.css`.
+- `globals.css` holds only tokens, base rules and app-wide primitives. Feature stylesheets sit next to the code that renders them and are imported from there: `app/(site)/tournaments/tournaments.css` (`.aqt-tn`), `app/(site)/achievements/achievements.css` (`.aqt-ach-*`, `.aqt-rar-*`), `app/(site)/users/user-profile.css`, `components/TournamentTeamCard.css`, `components/EncountersTable.css` (`.aqt-matches`), `components/data-table/data-table.css` (`.admin-*`).
 - Dark theme is enabled by default (class `dark` on body) in `frontend/src/app/layout.tsx`.
 
 Principle: components should rely on semantic tokens (`bg-background`, `bg-card`, `text-muted-foreground`, `border-border`, ...) instead of inventing new colors.
@@ -110,7 +111,7 @@ before writing markup:
 | Search input                | `components/ui/search-field.tsx` — `label` is required (a placeholder is not a label)                                                                                    |
 | Pagination                  | `components/ui/data-pagination.tsx` — windowed, `aria-current`, real chevrons                                                                                            |
 | Empty / error / not-found   | `components/ui/page-state-card.tsx`                                                                                                                                      |
-| Data table                  | `components/ui/data-table.tsx` — header scope, scroll region, skeletons, keyboard rows                                                                                   |
+| Data table                  | `components/data-table/AdminDataTable.tsx` — header scope, scroll region, skeletons, keyboard rows                                                                        |
 | Placement medal             | `components/ui/place-badge.tsx` — `--aqt-medal-*` tokens                                                                                                                 |
 | Role / division marker      | `components/PlayerRoleIcon.tsx`, `components/DivisionIcon.tsx` — icon+label only in a Role split; icon-only (name in `title`/`aria-label`) elsewhere on display surfaces |
 | MVP pill                    | `components/match/MvpMatchPill.tsx`                                                                                                                                      |
@@ -195,7 +196,7 @@ inventing a surface.
 | `kit/MasterDetail.tsx`    | The T4 split, including the narrow-viewport switch to list-or-detail with a Back button                                                                                                  |
 | `kit/NextActionHero.tsx`  | The single "do this next" call to action on T1 and a hub Overview                                                                                                                        |
 
-Supporting these, outside `kit/`: `components/admin/AdminDataTable.tsx` is the
+Supporting these, outside `kit/`: `components/data-table/AdminDataTable.tsx` is the
 table engine (server or client mode, paging, sorting, column picker, mobile
 cards, `toolbar` slot for the filter bar); `components/ui/tone.ts` is the
 shared tone map (`TONE_CLASS` / `TONE_TEXT`), re-exported from
@@ -228,7 +229,7 @@ Principle: grids must remain stable during loading and error states.
 
 ### Breakpoints
 
-Custom breakpoints (including `xs`) are defined in `frontend/tailwind.config.ts`.
+Custom breakpoints (including `xs`) are the `--breakpoint-*` values in the `@theme` block of `frontend/src/app/globals.css`.
 
 Principle: verify 375px / 768px / 1024px / 1440px. Avoid horizontal scrolling.
 

@@ -10,10 +10,11 @@ import type {
   AdminRegistrationForm,
   AdminRegistrationFormUpsert
 } from "@/types/balancer-admin.types";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 /** Same key the questionnaire builder uses, so the four editors share one read. */
 export const registrationFormQueryKey = (tournamentId: number) =>
-  ["balancer-admin", "registration-form", tournamentId] as const;
+  balancerQueryKeys.registrationForm(tournamentId);
 
 export interface RegistrationFormSection {
   /** The saved form with this section's unsaved edits applied. */

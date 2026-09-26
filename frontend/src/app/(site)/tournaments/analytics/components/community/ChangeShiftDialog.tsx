@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 
 interface ChangeShiftDialogProps {
   player: PlayerAnalytics;
@@ -46,7 +47,7 @@ export default function ChangeShiftDialog({ player, open, onOpenChange }: Readon
     setSaving(true);
     try {
       await analyticsService.patchPlayerShift(player.team_id, player.id, shift);
-      await queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      await queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.all() });
       onOpenChange(false);
     } catch {
       toast.error(t("analytics.page.unavailable"));

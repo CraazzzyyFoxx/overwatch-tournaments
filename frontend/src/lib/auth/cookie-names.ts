@@ -14,7 +14,7 @@
 // production is unchanged; the dev site sets NEXT_PUBLIC_COOKIE_PREFIX=owtdev
 // (the Go gateway reads the same value from SESSION_COOKIE_PREFIX). It must be
 // set as a BUILD ARG as well as a runtime variable: the client bundle inlines
-// it, while SSR, middleware and route handlers read it at runtime.
+// it, while SSR, proxy and route handlers read it at runtime.
 const PREFIX = process.env.NEXT_PUBLIC_COOKIE_PREFIX || "owt";
 
 export const ACCESS_TOKEN_COOKIE = `${PREFIX}_access_token`;

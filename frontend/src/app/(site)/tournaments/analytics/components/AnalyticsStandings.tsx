@@ -39,6 +39,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import styles from "./Analytics.module.css";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 
 type SortMode = "standings" | "predicted" | "shift";
 
@@ -163,7 +164,7 @@ const ChangeDivisionModal = ({
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     await analyticsService.patchPlayerShift(player.team_id, player.id, division);
-    await queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    await queryClient.invalidateQueries({ queryKey: analyticsQueryKeys.all() });
     setOpen(false);
   };
 

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { AuthAdminUser } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 const PAGE_SIZE = 15;
 
@@ -51,7 +52,7 @@ export default function AccessAdminAccountsPage() {
   const [pendingDelete, setPendingDelete] = useState<AuthAdminUser | null>(null);
 
   const rolesQuery = useQuery({
-    queryKey: ["access-admin", "roles", "all"],
+    queryKey: accessQueryKeys.rolesAll(),
     queryFn: () => rbacService.listRolesAll(),
     enabled: canReadRoles
   });
@@ -91,7 +92,7 @@ export default function AccessAdminAccountsPage() {
     mutationFn: (userId: number) => rbacService.deleteUser(userId),
     onSuccess: async () => {
       const removed = pendingDelete;
-      await queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] });
+      await queryClient.invalidateQueries({ queryKey: accessQueryKeys.users() });
       setPendingDelete(null);
       if (removed && String(removed.id) === openId) setParams({ id: null });
       notify.success("Account deleted");

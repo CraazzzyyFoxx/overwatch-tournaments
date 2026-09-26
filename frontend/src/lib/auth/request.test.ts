@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetRefreshStateForTests } from "@/lib/auth/tokens";
 import { retryWithRefreshOnUnauthorized } from "@/lib/auth/request";
@@ -11,7 +11,7 @@ type Globals = { window?: unknown; CustomEvent?: unknown; fetch?: typeof fetch }
 const g = globalThis as unknown as Globals;
 
 const originalFetch = globalThis.fetch;
-const dispatchEvent = mock((_event: unknown) => true);
+const dispatchEvent = vi.fn((_event: unknown) => true);
 
 // Status the mocked POST /auth/refresh returns: 200 => refreshed, 401 => dead
 // session, anything else => transient error.
@@ -31,7 +31,7 @@ beforeEach(() => {
       this.type = type;
     }
   };
-  g.fetch = mock(async () =>
+  g.fetch = vi.fn(async () =>
     new Response(refreshStatus === 200 ? JSON.stringify({ access_token: "T2" }) : null, {
       status: refreshStatus,
     }),
@@ -86,7 +86,7 @@ describe("retryWithRefreshOnUnauthorized", () => {
 
   it("retries once with the new token after a successful refresh", async () => {
     refreshStatus = 200;
-    const runRequest = mock(async (_token?: string) => ok());
+    const runRequest = vi.fn(async (_token?: string) => ok());
     const res = await retryWithRefreshOnUnauthorized({
       response: unauthorized(),
       runRequest,

@@ -22,6 +22,8 @@ import mapService from "@/services/map.service";
 import tournamentService from "@/services/tournament.service";
 import type { AdminMatchRow, LogProcessingStatus } from "@/types/admin.types";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { mapQueryKeys } from "@/lib/maps/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const PAGE_SIZE = 25;
 
@@ -84,14 +86,14 @@ export function ParsedMatchesBrowser({
   // Map options come from the global catalogue, not from the page of rows: the
   // filter has to offer maps that this page happens not to show.
   const mapsQuery = useQuery({
-    queryKey: ["maps-lookup"],
+    queryKey: mapQueryKeys.lookup(),
     queryFn: () => mapService.lookup(),
     staleTime: 5 * 60 * 1000,
     enabled: workspaceId != null
   });
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: workspaceId != null && tournamentId == null
   });

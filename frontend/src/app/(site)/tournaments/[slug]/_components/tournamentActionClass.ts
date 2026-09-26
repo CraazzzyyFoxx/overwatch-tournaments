@@ -8,7 +8,7 @@
  * wandered into the action row — and three drifting copies of the string is how
  * that regression comes back.
  *
- * Deliberately not a `globals.css` rule like `.meta-pill`: these boxes are
+ * Deliberately not a `tournaments.css` rule like `.meta-pill`: these boxes are
  * Tailwind-sized, and a CSS class would express one look in two languages.
  */
 const ACTION_BOX =

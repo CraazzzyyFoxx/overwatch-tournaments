@@ -45,6 +45,7 @@ import {
 } from "./setup-model";
 import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
 import { captainRankSummary, isInDraftPool, poolRegistrationSummary } from "./setup-types";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 interface DraftSetupWizardProps {
   tournamentId: number;
@@ -134,7 +135,7 @@ export function DraftSetupWizard({
   };
 
   const poolQuery = useQuery({
-    queryKey: ["balancer", "draft-setup-pool", tournamentId],
+    queryKey: balancerQueryKeys.draftSetupPool(tournamentId),
     queryFn: () => balancerAdminService.listRegistrations(tournamentId, { include_deleted: true })
   });
   const allRegistrations = poolQuery.data ?? [];

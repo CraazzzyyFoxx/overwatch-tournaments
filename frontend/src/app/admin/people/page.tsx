@@ -35,6 +35,9 @@ import tournamentService from "@/services/tournament.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { AuthAdminUser } from "@/types/rbac.types";
 import type { User } from "@/types/user.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const PAGE_SIZE = 20;
 
@@ -106,13 +109,13 @@ export default function PeoplePage() {
   // The auth side of the "Account" column. Global grant only — without it the
   // column says so rather than pretending every identity is unlinked.
   const authQuery = useQuery({
-    queryKey: ["access-admin", "users", "all"],
+    queryKey: accessQueryKeys.usersAll(),
     queryFn: () => rbacService.listUsersAll(),
     enabled: canRead && canReadAuth
   });
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: canRead
   });
@@ -180,8 +183,8 @@ export default function PeoplePage() {
       }
     },
     onSuccess: ({ linkWarning }) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
+      queryClient.invalidateQueries({ queryKey: accessQueryKeys.users() });
       setCreateOpen(false);
       resetCreateForm();
       if (linkWarning) notify.error(linkWarning);
@@ -193,7 +196,7 @@ export default function PeoplePage() {
     mutationFn: (id: number) => adminService.deleteUser(id),
     onSuccess: () => {
       const removed = pendingDelete;
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       setPendingDelete(null);
       if (removed && String(removed.id) === openId) setParams({ id: null });
       notify.success("Player identity deleted");

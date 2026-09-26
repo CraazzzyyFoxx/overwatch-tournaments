@@ -29,6 +29,7 @@ import type { Hero } from "@/types/hero.types";
 import type { HeroCreateInput, HeroUpdateInput } from "@/types/admin.types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCatalogEntityCrud } from "@/hooks/useCatalogEntityCrud";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const HERO_ROLES = ["Tank", "Damage", "Support"];
 /**
@@ -94,7 +95,7 @@ export default function HeroesAdminPage() {
     deleteMutation,
     syncMutation,
   } = useCatalogEntityCrud<Hero, HeroCreateInput, HeroUpdateInput>({
-    queryKey: ["admin", "heroes"],
+    queryKey: adminQueryKeys.contentEntity("heroes"),
     emptyForm: emptyHeroForm,
     getForm: getHeroForm,
     service: {

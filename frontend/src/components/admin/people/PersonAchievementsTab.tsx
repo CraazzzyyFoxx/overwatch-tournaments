@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import userService from "@/services/user.service";
 import type { AchievementRarity } from "@/types/achievement.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * What this person has earned.
@@ -20,7 +21,7 @@ import type { AchievementRarity } from "@/types/achievement.types";
  */
 export function PersonAchievementsTab({ personId }: Readonly<{ personId: number }>) {
   const achievementsQuery = useQuery({
-    queryKey: ["admin", "person", personId, "achievements"],
+    queryKey: adminQueryKeys.personAchievements(personId),
     queryFn: () => userService.getUserAchievements(personId)
   });
 

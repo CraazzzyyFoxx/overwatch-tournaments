@@ -1,4 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 /**
  * Invalidates every cached view that shows an encounter's score/status —
@@ -7,10 +9,10 @@ import type { QueryClient } from "@tanstack/react-query";
  */
 export async function refreshEncounterViews(qc: QueryClient, tournamentId: number): Promise<void> {
   await Promise.all([
-    qc.invalidateQueries({ queryKey: ["encounters"] }),
-    qc.invalidateQueries({ queryKey: ["standings", tournamentId] }),
-    qc.invalidateQueries({ queryKey: ["tournament"] }),
-    qc.invalidateQueries({ queryKey: ["encounter"] }),
-    qc.invalidateQueries({ queryKey: ["bracket"] })
+    qc.invalidateQueries({ queryKey: encounterQueryKeys.all() }),
+    qc.invalidateQueries({ queryKey: tournamentQueryKeys.standings(tournamentId) }),
+    qc.invalidateQueries({ queryKey: tournamentQueryKeys.detailRoot() }),
+    qc.invalidateQueries({ queryKey: encounterQueryKeys.detailRoot() }),
+    qc.invalidateQueries({ queryKey: encounterQueryKeys.bracket() })
   ]);
 }

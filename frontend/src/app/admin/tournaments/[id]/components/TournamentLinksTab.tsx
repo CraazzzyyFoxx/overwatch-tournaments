@@ -48,6 +48,7 @@ import type {
 } from "@/types/stream.types";
 import { primaryStreamLinkSortOrder } from "./tournamentLinks.helpers";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /** Mirrors `TOURNAMENT_LINK_KINDS` in `backend/shared/models/tournament/link.py`. */
 const LINK_KINDS: ReadonlyArray<{ value: TournamentLinkKind; label: string }> = [
@@ -165,7 +166,7 @@ export function TournamentLinksTab({
   const [formData, setFormData] = useState<LinkForm>({ ...EMPTY_LINK_FORM });
 
   const linksQuery = useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "links"],
+    queryKey: adminQueryKeys.tournamentLinks(tournamentId),
     // Archived rows are included so a soft-deleted link can be restored; the
     // public tournament page only ever reads the active ones.
     queryFn: () => adminService.listTournamentLinks(tournamentId, { activeOnly: false }),
@@ -173,7 +174,7 @@ export function TournamentLinksTab({
   });
 
   const invalidateLinks = () =>
-    queryClient.invalidateQueries({ queryKey: ["admin", "tournament", tournamentId, "links"] });
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournamentLinks(tournamentId) });
 
   const closeForm = () => {
     setCreateDialogOpen(false);

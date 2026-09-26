@@ -9,6 +9,7 @@ import meService from "@/services/me.service";
 import { revalidateUser } from "@/app/actions/users";
 
 import { SettingsGroup } from "./SettingsGroup";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 export default function PrivacySection() {
   const t = useTranslations("accountSettings");
@@ -18,7 +19,7 @@ export default function PrivacySection() {
   // Same query as the profile tab's linked accounts: the flag rides on the
   // social profile, so both tabs read and write one cache entry.
   const socialQuery = useQuery({
-    queryKey: ["me", "social"],
+    queryKey: userQueryKeys.mySocial(),
     queryFn: () => meService.getSocialAccounts(),
     enabled: canUseCapability("account.social"),
   });
@@ -34,7 +35,7 @@ export default function PrivacySection() {
     mutationFn: (visible: boolean) => meService.setStreamVisibility(visible),
     onSuccess: (user) => {
       void revalidateUser(user.id);
-      queryClient.setQueryData(["me", "social"], user);
+      queryClient.setQueryData(userQueryKeys.mySocial(), user);
     },
   });
 

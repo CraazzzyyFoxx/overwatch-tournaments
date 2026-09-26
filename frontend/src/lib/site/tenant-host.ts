@@ -4,7 +4,7 @@ import workspaceService from "@/services/workspace.service";
 /**
  * True when the current request is served on a white-label tenant host — a
  * workspace subdomain or a verified custom domain — per the `x-owt-host-mode`
- * header that `middleware.ts` sets (and strips on the platform apex). Server-only.
+ * header that `proxy.ts` sets (and strips on the platform apex). Server-only.
  *
  * Fail-safe: returns `false` (platform behaviour) if headers are unavailable.
  */
@@ -24,7 +24,7 @@ export interface TenantWorkspaceBranding {
 
 /**
  * The host workspace's branding on a tenant (white-label) host, resolved from
- * the `x-owt-workspace-id` header that `middleware.ts` injects. `null` on the
+ * the `x-owt-workspace-id` header that `proxy.ts` injects. `null` on the
  * platform apex host or on any failure (fail-safe: platform branding).
  * Server-only.
  */

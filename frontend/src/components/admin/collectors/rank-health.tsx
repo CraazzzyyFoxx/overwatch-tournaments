@@ -26,6 +26,7 @@ import {
   formatRelative,
   rankParsingOutage
 } from "./rank-shared";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const RANK_SETTING_KEY = "parser.rank_collection";
 
@@ -76,7 +77,7 @@ export function RankHealthDashboard() {
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const statsQuery = useQuery({
-    queryKey: ["admin", "rank", "stats", workspaceId],
+    queryKey: adminQueryKeys.rankStats(workspaceId),
     queryFn: () => adminService.getRankCollectionStats(),
     refetchInterval: 10000
   });
@@ -86,7 +87,7 @@ export function RankHealthDashboard() {
     mutationFn: () => adminService.reenableDisabledRankCollection(false),
     onSuccess: (result) => {
       notify.success(`Re-enabled ${result.reenabled} disabled battle tag(s)`);
-      queryClient.invalidateQueries({ queryKey: ["admin", "rank"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.rank() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not re-enable the disabled tags — try again" })
@@ -100,7 +101,7 @@ export function RankHealthDashboard() {
     },
     onSuccess: () => {
       notify.success(stats?.enabled ? "Collection paused" : "Collection resumed");
-      queryClient.invalidateQueries({ queryKey: ["admin", "rank", "stats"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.rankStatsAll() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not change the collection state — try again" })

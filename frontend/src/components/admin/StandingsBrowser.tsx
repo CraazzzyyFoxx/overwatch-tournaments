@@ -31,6 +31,8 @@ import type { StandingUpdateInput } from "@/types/admin.types";
 import type { Standings } from "@/types/tournament.types";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 const PAGE_SIZE = 25;
 
 const EMPTY_FORM: StandingUpdateInput = {
@@ -95,13 +97,13 @@ export function StandingsBrowser({
   const scopeTournamentId = tournamentId ?? chipTournamentId;
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: tournamentId == null
   });
 
   const tournamentQuery = useQuery({
-    queryKey: ["admin", "tournament", scopeTournamentId],
+    queryKey: adminQueryKeys.tournament(scopeTournamentId),
     queryFn: () => adminService.getTournament(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
@@ -124,7 +126,7 @@ export function StandingsBrowser({
   const standings = standingsQuery.data ?? [];
 
   const stagesQuery = useQuery({
-    queryKey: ["admin", "stages", scopeTournamentId],
+    queryKey: adminQueryKeys.stages(scopeTournamentId),
     queryFn: () => adminService.getStages(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
@@ -184,7 +186,7 @@ export function StandingsBrowser({
   const tiebreakOrder = rows[0]?.tiebreak_order ?? null;
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["standings"] });
+    void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.standingsAll() });
     if (scopeTournamentId != null) {
       invalidateTournamentWorkspace(queryClient, scopeTournamentId, workspaceId);
     }

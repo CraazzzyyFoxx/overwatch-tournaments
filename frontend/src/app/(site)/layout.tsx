@@ -18,7 +18,7 @@ import type { NotificationItem } from "@/types/notification.types";
 import type { Workspace } from "@/types/workspace.types";
 
 // Resolve the current workspace server-side. On a tenant (white-label) host
-// `middleware.ts` (Task 6) injects `x-owt-workspace-id` — authoritative, host
+// `proxy.ts` (Task 6) injects `x-owt-workspace-id` — authoritative, host
 // beats cookie — so the palette seed and the tenant header logo both follow the
 // host, not a stale cookie. On the apex we fall back to the workspace cookie
 // (legacy `aqt-` as a second fallback). Failures degrade to null.

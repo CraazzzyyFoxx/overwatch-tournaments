@@ -10,7 +10,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  * WorkspaceThemeSync} match the server-side host lock (`x-owt-workspace-id`).
  *
  * `workspaceId` is resolved server-side in the `(site)` layout from the
- * authoritative middleware header; `null` on the apex/platform host clears any
+ * authoritative proxy header; `null` on the apex/platform host clears any
  * lock so normal cookie-driven switching resumes.
  */
 export function WorkspaceHostLock({ workspaceId }: { workspaceId: number | null }) {
