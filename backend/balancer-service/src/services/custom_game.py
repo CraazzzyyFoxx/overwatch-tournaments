@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -22,6 +24,7 @@ from shared.core.enums import (
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.roster_shape import resolve_roster_shape
+from shared.rbac import assign_workspace_system_role
 from shared.repository import (
     CasualMatchRepository,
     CasualPlayerRepository,
@@ -33,8 +36,12 @@ from shared.repository import (
     CustomGameTeamNameRepository,
     MapRepository,
     UserBalancerConfigRepository,
+    UserRepository,
+    WorkspaceMemberRepository,
 )
+from shared.repository.workspace import get_or_create_workspace_member
 from shared.schemas.roster_slots import RosterShapeRead
+from shared.services.account_links import missing_account_links
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER, MemberRankService, member_rank_service
 from shared.services.roster_shape_access import get_workspace_roster_slots
@@ -47,9 +54,11 @@ from shared.services.workspace_roster import (
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.mix_discord import build_lineup_embed
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
+from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
+from src.services.pickup_mix_realtime import emit_pickup_mix_updated
 
 __all__ = ("CustomGameService", "custom_game_service")
 
@@ -64,6 +73,48 @@ _MAX_TEAM_NAME_LEN = 60
 #: A roster row owns only its lineup state. A rank correction goes into the
 #: host's own layer of ``member_rank``, so it outlives the game it was made in.
 _PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex"})
+
+#: What a PLAYER may patch on their own row. Ranks are the host's book and
+#: participation is the host's decision, so neither is here.
+_SELF_PATCH_FIELDS = frozenset({"roles", "is_flex"})
+
+#: HTTP status per admission blocker (``mix_self_policy``). 403 is "fix your
+#: account", 409 "the mix says no", 404 "you are not in this lineup".
+_BLOCKER_STATUS = {
+    "mix_closed": status.HTTP_409_CONFLICT,
+    "discord_not_linked": status.HTTP_403_FORBIDDEN,
+    "battlenet_not_linked": status.HTTP_403_FORBIDDEN,
+    "player_not_linked": status.HTTP_403_FORBIDDEN,
+    "self_join_denied": status.HTTP_403_FORBIDDEN,
+    "signup_closed": status.HTTP_409_CONFLICT,
+    "roster_full": status.HTTP_409_CONFLICT,
+    "role_edit_off": status.HTTP_409_CONFLICT,
+    "not_on_roster": status.HTTP_404_NOT_FOUND,
+}
+
+
+def _blocker(code: str) -> HTTPException:
+    """The refusal for one admission code; ``detail`` IS the code, so a client
+    (site or bot) translates it instead of parsing English."""
+    return HTTPException(status_code=_BLOCKER_STATUS[code], detail=code)
+
+
+def _reject_unknown(patch: Mapping[str, Any], allowed: frozenset[str]) -> None:
+    unknown = sorted(set(patch) - allowed)
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown fields {unknown}")
+
+
+@dataclass(frozen=True, slots=True)
+class _SelfContext:
+    """Everything one self-service call reads, resolved once."""
+
+    game: models.CustomGame
+    player: Any
+    member: Any
+    roster: list[models.CustomGamePlayer]
+    row: models.CustomGamePlayer | None
+    policy: MixSelfPolicy
 
 
 def _require_host(actor_user_id: int, host_user_id: int | None) -> None:
@@ -287,6 +338,11 @@ class CustomGameService:
         load_hosts=hosts_by_user_id,
         load_member_user_ids=workspace_member_user_ids,
         run_balance=_run_balance,
+        players: UserRepository = UserRepository(),
+        workspace_members: WorkspaceMemberRepository = WorkspaceMemberRepository(),
+        load_missing_links=missing_account_links,
+        enroll_member=get_or_create_workspace_member,
+        grant_player_role=assign_workspace_system_role,
     ) -> None:
         self.games = games
         self.roster = roster
@@ -303,6 +359,11 @@ class CustomGameService:
         self.load_hosts = load_hosts
         self.load_member_user_ids = load_member_user_ids
         self.run_balance = run_balance
+        self.players = players
+        self.workspace_members = workspace_members
+        self.load_missing_links = load_missing_links
+        self.enroll_member = enroll_member
+        self.grant_player_role = grant_player_role
 
     async def members(
         self, session: AsyncSession, workspace_id: int, member_ids: Sequence[int]
@@ -580,9 +641,9 @@ class CustomGameService:
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Patch one roster row's participation, role selection and flex mode."""
-        unknown = sorted(set(patch) - _PLAYER_PATCH_FIELDS)
-        if unknown:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown fields {unknown}")
+        # Before the game read on purpose: an unknown key is a client bug, and
+        # answering 422 for it must not depend on the row existing.
+        _reject_unknown(patch, _PLAYER_PATCH_FIELDS)
         game = await self._writable(
             session,
             workspace_id=workspace_id,
@@ -594,6 +655,26 @@ class CustomGameService:
         row = next((item for item in roster if item.workspace_member_id == workspace_member_id), None)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game player not found")
+        await self._apply_player_patch(session, row, patch, _PLAYER_PATCH_FIELDS)
+        await session.flush()
+        return game
+
+    async def _apply_player_patch(
+        self,
+        session: AsyncSession,
+        row: models.CustomGamePlayer,
+        patch: Mapping[str, Any],
+        allowed: frozenset[str],
+    ) -> None:
+        """Apply a validated lineup patch to one row, within ``allowed`` fields.
+
+        One mutation for two callers: the host patches the whole row
+        (``_PLAYER_PATCH_FIELDS``), a player only their own role order and flex
+        (``_SELF_PATCH_FIELDS``). The difference between them is the gate, not
+        the write -- a self edit that diverged here would be a second, subtly
+        different way to set the same three columns.
+        """
+        _reject_unknown(patch, allowed)
         if "participation" in patch:
             try:
                 row.participation = MixParticipation(patch["participation"])
@@ -615,8 +696,6 @@ class CustomGameService:
                     detail="is_flex must be a boolean",
                 )
             row.is_flex = patch["is_flex"]
-        await session.flush()
-        return game
 
     async def set_participation(
         self,
@@ -646,6 +725,255 @@ class CustomGameService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game player not found")
         for member_id, state in participation.items():
             rows[member_id].participation = state
+        await session.flush()
+        return game
+
+    async def _self_context(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None,
+    ) -> _SelfContext:
+        """The mix, the caller's own seat in it, and the policy over both.
+
+        The workspace comes from the mix row, not the caller: the bot knows a
+        ``custom_game_id`` and nothing else. When a ``workspace_id`` IS supplied
+        (the site's route carries one) it must agree, or this is a 404 -- the same
+        answer a mix of another workspace gets everywhere else.
+        """
+        game = await self.games.get(session, custom_game_id)
+        if game is None or (workspace_id is not None and game.workspace_id != workspace_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
+        player = await self.players.get_by_auth_user_id(session, auth_user.id)
+        member = (
+            None
+            if player is None
+            else await self.workspace_members.get_by_player(
+                session, workspace_id=game.workspace_id, player_id=player.id
+            )
+        )
+        roster = list(await self.roster.list_for_game(session, game.id))
+        row = None if member is None else next((item for item in roster if item.workspace_member_id == member.id), None)
+        policy = mix_self_policy(
+            status=game.status,
+            self_signup=game.self_signup,
+            self_role_edit=game.self_role_edit,
+            on_roster=row is not None,
+            missing_links=await self.load_missing_links(session, auth_user.id),
+            has_player=player is not None,
+            self_join_denied=not auth_user.can_capability("custom_game", "self_join", workspace_id=game.workspace_id),
+            roster_size=len(roster),
+        )
+        return _SelfContext(game=game, player=player, member=member, roster=roster, row=row, policy=policy)
+
+    async def _self_dump(self, session: AsyncSession, ctx: _SelfContext) -> dict[str, Any]:
+        """One player's view of one mix: their seat, and what they may do next.
+
+        ``ranks`` carries all three roles, ``None`` included: the Discord role
+        select labels every option with a number or "no rank", and a sparse dict
+        would make the bot guess. ``unranked_roles`` is the narrower list the
+        warning is built from -- the roles this player actually plays.
+        """
+        seat: dict[str, Any] | None = None
+        unranked: list[str] = []
+        if ctx.row is not None:
+            stored = (await self.player_roles.roles_for_players(session, [ctx.row.id])).get(ctx.row.id, [])
+            explicit = ctx.row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
+            resolved = await self.ranks.resolve(
+                session,
+                workspace_id=ctx.game.workspace_id,
+                members={ctx.row.workspace_member_id: ctx.player.id if ctx.player is not None else None},
+                roles=list(REGISTRATION_ROLE_CODES),
+                order=MIX_ORDER,
+                author_user_id=ctx.game.host_user_id,
+                grid=await get_effective_division_grid(session, None),
+            )
+            ranks: dict[str, int | None] = {}
+            for role in REGISTRATION_ROLE_CODES:
+                rank = resolved.get((ctx.row.workspace_member_id, role))
+                ranks[role] = rank.value if rank is not None else None
+            considered = list(stored) if explicit else list(REGISTRATION_ROLE_CODES)
+            unranked = [role for role in considered if ranks.get(role) is None]
+            seat = {
+                "participation": ctx.row.participation,
+                # ``null`` means all_ranked: every role this player has a number
+                # for plays, which is a different statement from an empty list.
+                "roles": list(stored) if explicit else None,
+                "is_flex": ctx.row.is_flex,
+                "ranks": ranks,
+            }
+        return {
+            "custom_game_id": ctx.game.id,
+            "name": ctx.game.name,
+            "status": ctx.game.status,
+            "self_signup": ctx.game.self_signup,
+            "self_role_edit": ctx.game.self_role_edit,
+            "seat": seat,
+            "unranked_roles": unranked,
+            "policy": {
+                "can_join": ctx.policy.can_join,
+                "can_leave": ctx.policy.can_leave,
+                "can_edit_roles": ctx.policy.can_edit_roles,
+                "join_blocker": ctx.policy.join_blocker,
+                "edit_blocker": ctx.policy.edit_blocker,
+            },
+        }
+
+    async def self_state(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Read-only: what this account's seat is and what it may do."""
+        return await self._self_dump(
+            session,
+            await self._self_context(
+                session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+            ),
+        )
+
+    async def self_join(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Seat this account in the mix, enrolling it in the workspace if needed.
+
+        Idempotent by design: an existing row is left EXACTLY as it is, so a
+        player the host benched cannot walk that back by clicking Join again.
+        """
+        ctx = await self._self_context(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+        if ctx.row is not None:
+            return await self._self_dump(session, ctx)
+        if ctx.policy.join_blocker is not None:
+            raise _blocker(ctx.policy.join_blocker)
+
+        # Same two idempotent steps the tournament self-registration takes
+        # (tournament-service/src/services/registration/service.py): the
+        # membership row anchors the roster row, the baseline RBAC role makes the
+        # account an ordinary workspace player rather than a role-less anchor.
+        member = ctx.member or await self.enroll_member(
+            session, workspace_id=ctx.game.workspace_id, player_id=ctx.player.id
+        )
+        await self.grant_player_role(
+            session, user_id=auth_user.id, workspace_id=ctx.game.workspace_id, role_name="player"
+        )
+        row = _new_roster_row(ctx.game.id, member.id, len(ctx.roster))
+        row.participation = MixParticipation(ctx.game.self_signup)
+        try:
+            async with session.begin_nested():
+                await self.roster.create(session, row)
+        except IntegrityError:
+            # Two clicks raced onto uq_custom_game_player_member. The other one
+            # seated them, so report the state it produced instead of a 500.
+            return await self.self_state(
+                session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+            )
+        await self._seed_host_ranks(session, ctx.game, await self.members(session, ctx.game.workspace_id, [member.id]))
+        await session.flush()
+        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        return await self.self_state(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+
+    async def self_leave(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Drop this account's own row, exactly as the host removing it would.
+
+        Deliberately does not require the account links: somebody who unlinked
+        Battle.net after joining must still be able to get out of the lineup.
+        """
+        ctx = await self._self_context(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+        if not ctx.policy.can_leave or ctx.row is None:
+            # A terminal mix refuses every write; anything else means this
+            # account simply holds no row in this lineup.
+            raise _blocker("mix_closed" if ctx.policy.join_blocker == "mix_closed" else "not_on_roster")
+        await self.roster.delete(session, ctx.row)
+        await session.flush()
+        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        return await self.self_state(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+
+    async def self_update(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        patch: Mapping[str, Any],
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Re-order this account's own roles / flip its flex flag.
+
+        The stored balance is NOT recomputed: it is a snapshot of a search the
+        host ran, and a role change takes effect the next time they balance.
+        """
+        _reject_unknown(patch, _SELF_PATCH_FIELDS)
+        ctx = await self._self_context(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+        if ctx.row is None or not ctx.policy.can_edit_roles:
+            raise _blocker(ctx.policy.edit_blocker or "not_on_roster")
+        await self._apply_player_patch(session, ctx.row, patch, _SELF_PATCH_FIELDS)
+        await session.flush()
+        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        return await self.self_state(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+
+    async def set_self_service(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        patch: Mapping[str, Any],
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """The host's two switches: who may seat themselves, and who may re-role."""
+        _reject_unknown(patch, frozenset({"self_signup", "self_role_edit"}))
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        if "self_signup" in patch:
+            try:
+                game.self_signup = MixSelfSignup(patch["self_signup"]).value
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="invalid self_signup",
+                ) from exc
+        if "self_role_edit" in patch:
+            if not isinstance(patch["self_role_edit"], bool):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="self_role_edit must be a boolean",
+                )
+            game.self_role_edit = patch["self_role_edit"]
         await session.flush()
         return game
 

@@ -15,6 +15,8 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from sqlalchemy.exc import IntegrityError  # noqa: E402
+
 from shared.core.enums import (  # noqa: E402
     CasualTeamSide,
     HeroClass,
@@ -26,6 +28,7 @@ from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
+from src.domain.mix_self_service import MAX_ROSTER  # noqa: E402
 from src.services.custom_game import _MAX_CO_HOSTS, CustomGameService  # noqa: E402
 
 
@@ -160,6 +163,15 @@ def _ranks(*member_ids: int) -> dict[tuple[int, str], ResolvedRank]:
     return out
 
 
+def _auth(user_id: int = 42, *, denied: bool = False) -> SimpleNamespace:
+    """The gateway-rehydrated identity a self-service call carries."""
+    return SimpleNamespace(
+        id=user_id,
+        is_superuser=False,
+        can_capability=lambda _resource, _action, workspace_id=None: not denied,
+    )
+
+
 class CustomGameServiceTests(IsolatedAsyncioTestCase):
     if sys.platform == "win32":
         loop_factory = asyncio.SelectorEventLoop
@@ -212,6 +224,25 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.roster.delete_for_game = AsyncMock()
         self.roster.get_by = AsyncMock(return_value=None)
         self.roster.delete = AsyncMock()
+        # A single-row insert: `self_join` seats one player, unlike the host's
+        # bulk `create_many`, and needs an id for the role child table.
+        self.roster.create = AsyncMock(side_effect=lambda _s, row: row)
+        # The self-service identity chain: auth account -> players.user ->
+        # workspace_member. Linked and enrolled unless a test says otherwise.
+        self.players = MagicMock()
+        self.players.get_by_auth_user_id = AsyncMock(return_value=_row(id=70, auth_user_id=42))
+        self.workspace_members = MagicMock()
+        self.workspace_members.get_by_player = AsyncMock(return_value=None)
+        # Both required OAuth links present unless a test removes one.
+        self.load_missing_links = AsyncMock(return_value=frozenset())
+        self.enroll_member = AsyncMock(
+            side_effect=lambda _s, *, workspace_id, player_id: _row(id=7, player_id=player_id)
+        )
+        self.grant_player_role = AsyncMock()
+        self.emit = AsyncMock()
+        self._emit_patch = patch("src.services.custom_game.emit_pickup_mix_updated", new=self.emit)
+        self._emit_patch.start()
+        self.addCleanup(self._emit_patch.stop)
         # Every requested member exists in this workspace unless a test says otherwise.
         self.load_roster = AsyncMock(side_effect=lambda _s, *, workspace_id, member_ids: _members(*member_ids))
         # No workspace member resolves to a host name unless a test says
@@ -257,6 +288,11 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             load_hosts=self.load_hosts,
             load_member_user_ids=self.load_member_user_ids,
             run_balance=self.run_balance,
+            players=self.players,
+            workspace_members=self.workspace_members,
+            load_missing_links=self.load_missing_links,
+            enroll_member=self.enroll_member,
+            grant_player_role=self.grant_player_role,
         )
         self.session = _session()
 
@@ -661,6 +697,237 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 409)
+
+    async def test_self_join_seats_a_newcomer_in_the_pool(self) -> None:
+        """The signup mode decides where they land; the row is an ordinary
+        roster row, so the board and the host sheet need no second list."""
+        seated: list = []
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.side_effect = lambda _s, _game_id: list(seated)
+        self.roster.create.side_effect = lambda _s, row: seated.append(row) or row
+        self.workspace_members.get_by_player.side_effect = [None, _row(id=7, player_id=70)]
+
+        state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        [created] = seated
+        self.assertEqual(created.workspace_member_id, 7)
+        self.assertEqual(created.participation, MixParticipation.POOL)
+        self.assertEqual(created.role_selection_mode, MixRoleSelectionMode.ALL_RANKED)
+        self.assertEqual(created.sort_order, 0)
+        self.enroll_member.assert_awaited_once()
+        self.grant_player_role.assert_awaited_once_with(self.session, user_id=42, workspace_id=1, role_name="player")
+        self.assertEqual(self.emit.await_args.kwargs["change"], "roster")
+        self.assertEqual(state["seat"]["participation"], MixParticipation.POOL)
+        self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+
+    async def test_self_join_benched_mode_parks_the_newcomer(self) -> None:
+        self.games.get.return_value = _game(self_signup="benched")
+        self.roster.list_for_game.return_value = []
+
+        await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        (_session_arg, created), _kwargs = self.roster.create.await_args
+        self.assertEqual(created.participation, MixParticipation.BENCHED)
+
+    async def test_self_join_is_idempotent_and_never_unbenches(self) -> None:
+        """A host benched them on purpose; clicking Join again must not walk
+        that back, and must not 409 either."""
+        row = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED)
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.roster.create.assert_not_awaited()
+        self.assertEqual(row.participation, MixParticipation.BENCHED)
+        self.assertEqual(state["seat"]["participation"], MixParticipation.BENCHED)
+        self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+
+    async def test_self_join_a_lost_race_answers_with_the_seated_state(self) -> None:
+        """Two clicks land on uq_custom_game_player_member; the loser reports
+        the row the winner wrote instead of a 500."""
+        seated = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.side_effect = [[], [seated], [seated]]
+        self.roster.create.side_effect = IntegrityError("insert", {}, Exception("duplicate key"))
+        self.workspace_members.get_by_player.side_effect = [None, _row(id=7, player_id=70)]
+
+        state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+        self.assertIsNotNone(state["seat"])
+
+    async def test_self_join_without_battlenet_403(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = []
+        self.load_missing_links.return_value = frozenset({"battlenet"})
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "battlenet_not_linked")
+        self.roster.create.assert_not_awaited()
+
+    async def test_self_join_when_the_host_closed_signup_409(self) -> None:
+        self.games.get.return_value = _game(self_signup="closed")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "signup_closed")
+
+    async def test_self_join_on_a_finished_mix_409(self) -> None:
+        self.games.get.return_value = _game(status="completed", self_signup="pool")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "mix_closed")
+
+    async def test_self_join_on_a_full_roster_409(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = [
+            _roster_row(index + 1, index + 100, index) for index in range(MAX_ROSTER)
+        ]
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "roster_full")
+
+    async def test_self_join_denied_for_this_account_403(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(denied=True), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "self_join_denied")
+
+    async def test_self_leave_works_without_account_links(self) -> None:
+        """Unlinking Battle.net must not trap somebody in tonight's lineup."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.side_effect = [[row], []]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.load_missing_links.return_value = frozenset({"discord", "battlenet"})
+
+        state = await self.service.self_leave(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.roster.delete.assert_awaited_once_with(self.session, row)
+        self.assertIsNone(state["seat"])
+        self.assertEqual(self.emit.await_args.kwargs["change"], "roster")
+
+    async def test_self_leave_when_not_on_the_roster_404(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_leave(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertEqual(ctx.exception.detail, "not_on_roster")
+
+    async def test_self_update_reorders_the_players_own_roles(self) -> None:
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=True)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        await self.service.self_update(
+            self.session,
+            custom_game_id=11,
+            auth_user=_auth(),
+            patch={"roles": ["support", "tank"], "is_flex": True},
+            workspace_id=1,
+        )
+
+        self.player_roles.replace_for_player.assert_awaited_once_with(self.session, 1, ["support", "tank"])
+        self.assertEqual(row.role_selection_mode, MixRoleSelectionMode.EXPLICIT)
+        self.assertTrue(row.is_flex)
+
+    async def test_self_update_rejects_participation_422(self) -> None:
+        """Bench and must-play are the host's call, whatever the switch says."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=True)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_update(
+                self.session,
+                custom_game_id=11,
+                auth_user=_auth(),
+                patch={"participation": MixParticipation.MUST_PLAY},
+                workspace_id=1,
+            )
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(row.participation, MixParticipation.POOL)
+
+    async def test_self_update_needs_the_hosts_switch_409(self) -> None:
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=False)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_update(
+                self.session, custom_game_id=11, auth_user=_auth(), patch={"is_flex": True}, workspace_id=1
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "role_edit_off")
+        self.assertFalse(row.is_flex)
+
+    async def test_self_state_reports_every_role_rank_and_the_unranked_ones(self) -> None:
+        """The bot labels all 16 select options, so all three roles carry a
+        number or an explicit null; `unranked_roles` narrows that to what the
+        player actually plays."""
+        row = _roster_row(1, 7, 0, roles=["tank", "support"])
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=True)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.ranks.resolve.return_value = {(7, "tank"): ResolvedRank(3100, "author")}
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(state["seat"]["ranks"], {"tank": 3100, "damage": None, "support": None})
+        self.assertEqual(state["seat"]["roles"], ["tank", "support"])
+        self.assertEqual(state["unranked_roles"], ["support"])
+        self.assertEqual(state["self_signup"], "pool")
+        self.assertIs(state["self_role_edit"], True)
+
+    async def test_self_state_of_a_mix_in_another_workspace_404(self) -> None:
+        self.games.get.return_value = _game(workspace_id=2)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    async def test_set_self_service_writes_both_switches(self) -> None:
+        game = _game()
+        self.games.get.return_value = game
+
+        await self.service.set_self_service(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            patch={"self_signup": "benched", "self_role_edit": True},
+            actor_user_id=9,
+        )
+
+        self.assertEqual(game.self_signup, "benched")
+        self.assertTrue(game.self_role_edit)
+
+    async def test_set_self_service_requires_the_host_403(self) -> None:
+        self.games.get.return_value = _game()
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_self_service(
+                self.session, workspace_id=1, custom_game_id=11, patch={"self_signup": "pool"}, actor_user_id=8
+            )
+        self.assertEqual(ctx.exception.status_code, 403)
 
     async def test_balance_sends_must_play_to_the_solver(self) -> None:
         game = _game()
