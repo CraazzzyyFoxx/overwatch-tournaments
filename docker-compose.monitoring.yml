@@ -25,7 +25,7 @@ services:
     logging: *log-rotate
     restart: unless-stopped
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--config.file=/etc/prometheus/prometheus.home.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=14d"
       - "--storage.tsdb.retention.size=2GB"
@@ -34,8 +34,10 @@ services:
       # Alloy on Moscow and Tempo's metrics_generator both push here.
       - "--web.enable-remote-write-receiver"
     volumes:
-      - ./monitoring/prometheus/prometheus.home.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      # Directory mounts, not file mounts, here and for alertmanager/blackbox:
+      # git pull replaces a file (new inode), which a file bind mount never
+      # sees, so /-/reload would keep re-reading the old config.
+      - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
     ports:
       - "127.0.0.1:19090:9090"
@@ -83,7 +85,7 @@ services:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
     volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
       - ./monitoring/secrets:/run/secrets:ro
       - alertmanager_data:/alertmanager
     # Discord is not reachable from home directly; the discord receiver goes
@@ -108,7 +110,7 @@ services:
     command:
       - "--config.file=/etc/blackbox/blackbox.yml"
     volumes:
-      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+      - ./monitoring/blackbox:/etc/blackbox:ro
     deploy:
       resources:
         limits:
