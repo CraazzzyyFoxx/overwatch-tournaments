@@ -94,8 +94,8 @@ click by `custom_id` (no per-message views, so cards keep working across restart
 1. acknowledge within Discord's 3 s (a deferred message update — nothing flashes in the channel);
 2. `rpc.identity.discord_identity` for `interaction.user.id` — not linked → the clicker is told how to
    link, and **no platform call is made**; deactivated → refused;
-3. the action's own RPC with that identity (`src/interactions/actions.py` is the whole, fixed list:
-   accept/decline a team invite, self check-in, view my registration, switch every Discord DM off);
+3. the action's own RPC with that identity (`src/interactions/actions.py` is the whole, fixed
+   list — see the table below);
 4. an ephemeral reply in the clicker's Discord language, with refusals worded by the service's
    machine code (`invite_expired`, `check_in_closed`, …);
 5. in a DM only, the spent buttons come off the card and a status line takes their place. A channel
@@ -106,6 +106,32 @@ The DM card carries only a small `🔕` (`notifications.menu`, answered by the b
 for the reader alone, a prompt with «turn all off» (`notifications.mute:all` — every DM group false;
 in-app notifications stay) and a notification-settings link. Discord allows ephemeral messages only
 as an answer to a click, hence the trigger rather than a separate DM.
+
+| Action | RPC | Where the component lives |
+|---|---|---|
+| `invite.accept` / `invite.decline` | `rpc.tournament.regteam_accept` / `…regteam_decline` | team-invite DM card |
+| `check_in` | `rpc.tournament.reg_pub_check_in` | tournament DM card |
+| `registration.view` | `rpc.tournament.reg_pub_get_me` | tournament DM card |
+| `notifications.menu` | — (the bot alone) | every DM card |
+| `notifications.mute` | `rpc.app.notification_preferences_update` | the prompt `notifications.menu` opens |
+| `mix.join` | `rpc.balancer.custom.self_join` | mix sign-up post, ephemeral reply |
+| `mix.leave` | `rpc.balancer.custom.self_leave` | mix sign-up post, ephemeral reply |
+| `mix.roles` | `rpc.balancer.custom.self_get` | mix sign-up post |
+| `mix.roles_set` | `rpc.balancer.custom.self_update` | role select on the ephemeral reply |
+| `mix.flex` | `rpc.balancer.custom.self_update` | flex toggle on the ephemeral reply |
+
+**Mix self-signup.** A host opens sign-up for a pickup mix and balancer-service posts one card into
+the mix channel with «Join» / «My roles» / «Leave». Every `mix.*` action answers with the same
+self-state, rendered by `copy.mix_text` into an ephemeral reply that carries the controls the mix's
+policy allows: a role select, a flex toggle, and join/leave. That reply is where the next click
+happens, and it is replaced in place. The select is the only non-button component the bot sends —
+it is built by `cards.select_row` for these replies alone and is not part of the `DiscordCard`
+contract, so a publisher cannot ask for one. Its value carries the *order* (`tank,support`, or
+`all` for «every ranked role»), because Discord does not report the order options were clicked in;
+a value naming anything but the three roles is refused before any platform call. `mix.flex` carries
+the state it sets in its target (`42-on` / `42-off`). Refusals are worded from the mix's own
+blocker codes (`signup_closed`, `roster_full`, `role_edit_off`, …); the three link blockers
+(`discord_not_linked`, `battlenet_not_linked`, `player_not_linked`) add a profile link.
 
 No identity is cached, so an unlink or a deactivation bites on the next click. Every click logs one
 line with `action`, `target`, `status` and `code`.
