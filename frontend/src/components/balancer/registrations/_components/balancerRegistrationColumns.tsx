@@ -1,7 +1,8 @@
 "use client";
 
 import type { ColumnDef, Row, SortingFn } from "@tanstack/react-table";
-import { useFormatter, useTranslations, type DateTimeFormatOptions } from "next-intl";
+import { useTranslations, type DateTimeFormatOptions } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { adminColumnMeta } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";

@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";

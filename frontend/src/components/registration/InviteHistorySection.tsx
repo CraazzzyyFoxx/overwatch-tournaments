@@ -2,7 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { History, Inbox } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Button } from "@/components/ui/button";

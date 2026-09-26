@@ -9,13 +9,15 @@ import type { Tournament } from "@/types/tournament.types";
 
 mock.module("next-intl", () => ({
   useLocale: () => "en",
+  useTranslations: () => (key: string, values?: Record<string, unknown>) =>
+    values ? `${key}:${JSON.stringify(values)}` : key
+}));
+mock.module("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: () => "",
     number: (value: number) => String(value),
     relativeTime: () => ""
-  }),
-  useTranslations: () => (key: string, values?: Record<string, unknown>) =>
-    values ? `${key}:${JSON.stringify(values)}` : key
+  })
 }));
 
 // Dynamic, not static: `mock.module` only applies to modules imported after it

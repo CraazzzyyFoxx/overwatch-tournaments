@@ -33,6 +33,8 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
   // Pinned formatting: the assertions are about which row is on screen, not
   // about the locale, and the real formatter needs an intl provider.
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: (value: Date) => value.toISOString().slice(0, 16).replace("T", " ")
   })

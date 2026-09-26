@@ -16,7 +16,8 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { AdminDataTable, adminColumnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";

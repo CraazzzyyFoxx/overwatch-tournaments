@@ -8,9 +8,11 @@ import type { DraftPick } from "@/types/draft.types";
 // suite exposes the same hooks, or whichever file loads first breaks the rest.
 mock.module("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
-    values ? `${key}:${JSON.stringify(values)}` : key,
+    values ? `${key}:${JSON.stringify(values)}` : key
+}));
+mock.module("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" })
 }));
 
 // Dynamic: `mock.module` only applies to modules imported after it runs.

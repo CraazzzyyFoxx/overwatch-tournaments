@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Trophy, Users } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { formatDateRange } from "@/lib/datetime";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
@@ -201,8 +202,7 @@ export default function AdminTeamWorkspacePage() {
               team.tournament?.name ?? "No linked tournament",
               team.tournament ? (
                 <span className="tabular-nums">
-                  {format.dateTime(new Date(team.tournament.start_date), { dateStyle: "medium" })} –{" "}
-                  {format.dateTime(new Date(team.tournament.end_date), { dateStyle: "medium" })}
+                  {formatDateRange(format, team.tournament.start_date, team.tournament.end_date)}
                 </span>
               ) : null
             ]}

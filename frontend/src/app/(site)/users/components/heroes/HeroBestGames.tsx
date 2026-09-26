@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { Crown, Trophy } from "lucide-react";
 import { LogStatsName } from "@/types/stats.types";
 import type { HeroBestStat, HeroWithUserStats } from "@/types/hero.types";

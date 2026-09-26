@@ -22,9 +22,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 // Message keys, not copy: every assertion is about WHICH fact reaches the screen.
 vi.mock("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 vi.mock("next/link", () => ({

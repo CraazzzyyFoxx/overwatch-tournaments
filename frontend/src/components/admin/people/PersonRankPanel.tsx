@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";

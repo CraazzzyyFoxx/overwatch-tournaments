@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, Search, Trophy } from "lucide-react";

@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart as ChartIcon, Compass, type LucideIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import type { Granularity } from "@/hooks/useRankHistory";
 import { cn } from "@/lib/utils";
@@ -72,7 +73,8 @@ function formatTimestampTick(
     const date = new Date(value);
     if (isNaN(date.getTime())) return String(value);
     if (granularity === "date") {
-      return format.dateTime(date, { dateStyle: "short" });
+      // A daily bucket is the UTC day ("YYYY-MM-DD", UTC midnight): keep it there.
+      return format.dateTime(date, { dateStyle: "short", timeZone: "UTC" });
     }
     return format.dateTime(date, {
       month: "short",

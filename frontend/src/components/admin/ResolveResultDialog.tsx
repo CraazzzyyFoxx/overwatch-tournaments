@@ -3,7 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronDown, History } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";

@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { cn } from "@/lib/utils";
@@ -41,8 +42,8 @@ const STAMP = {
  * Replaces the standalone Schedule tab. Everything about WHICH phases appear
  * and which is current comes from `buildTournamentSchedule`; this component
  * only decides how to draw the same segments in two orientations. Times are the
- * viewer's local time — the zone is named explicitly because next-intl's
- * default zone is the server's.
+ * viewer's local time — the app formatter carries their zone — and the zone is
+ * named in the header so nobody has to guess.
  *
  * Teal marks exactly one thing: the phase happening now. A current phase whose
  * window has closed (registration over, check-in not yet open) is drawn in the
@@ -67,18 +68,23 @@ export function PhaseTimeline({
   const { segments } = buildTournamentSchedule({ tournament, now });
   if (segments.length === 0) return null;
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const zoneLabel = format.dateTime(new Date(now), { timeZoneName: "short", timeZone }).split(" ").pop();
+  const zoneLabel = format.dateTime(new Date(now), { timeZoneName: "short" }).split(" ").pop();
 
   const stamp = (iso: string) => {
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return null;
-    return format.dateTime(date, { ...STAMP, timeZone });
+    return format.dateTime(date, STAMP);
   };
-  const clock24 = (iso: string) => {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return null;
-    return format.dateTime(date, { hour: "2-digit", minute: "2-digit", timeZone });
+  // One range, not "start – end time": a window that ends on another day (a
+  // week of registration) must say so. `formatRange` drops the repeated day
+  // itself when both ends share it.
+  const span = (segment: PhaseSegment) => {
+    const start = new Date(segment.startsAt);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = segment.endsAt === null ? null : new Date(segment.endsAt);
+    return end === null || Number.isNaN(end.getTime())
+      ? format.dateTime(start, STAMP)
+      : format.dateTimeRange(start, end, STAMP);
   };
 
   const countdown = (segment: PhaseSegment) => {
@@ -180,8 +186,7 @@ export function PhaseTimeline({
       >
         {segments.map((segment) => {
           const now = isNow(segment);
-          const startText = stamp(segment.startsAt);
-          const endText = segment.endsAt === null ? null : clock24(segment.endsAt);
+          const spanText = span(segment);
           const countdownText = countdown(segment);
           // How far through its own window the phase is — set by the model
           // only for a current phase whose window has an end. The step bar
@@ -233,8 +238,7 @@ export function PhaseTimeline({
                 {label(segment)}
               </div>
               <div className="aqt-tnum mt-0.5 text-label text-[color:var(--aqt-fg-muted)]">
-                {startText ? <time dateTime={segment.startsAt}>{startText}</time> : null}
-                {endText ? <> – <time dateTime={segment.endsAt ?? undefined}>{endText}</time></> : null}
+                {spanText}
               </div>
               {countdownText ? (
                 <div className="aqt-tnum mt-1 text-caption text-[color:var(--aqt-teal)]">{countdownText}</div>

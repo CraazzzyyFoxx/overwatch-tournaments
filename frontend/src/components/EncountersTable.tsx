@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { usePathname, useRouter } from "next/navigation";
 
 import styles from "./EncountersTable.module.css";

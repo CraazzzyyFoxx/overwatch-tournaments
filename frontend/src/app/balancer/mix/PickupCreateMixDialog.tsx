@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
 import { Button } from "@/components/ui/button";

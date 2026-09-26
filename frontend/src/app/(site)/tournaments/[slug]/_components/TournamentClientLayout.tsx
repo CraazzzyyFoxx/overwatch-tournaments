@@ -15,7 +15,8 @@ import {
   isTournamentStatusEnded,
 } from "@/lib/tournament/status";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import { formatDateRange } from "@/lib/utils";
+import { formatDateRange } from "@/lib/datetime";
+import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
@@ -24,7 +25,7 @@ import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import type { Tournament } from "@/types/tournament.types";
 
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
 import { collapsedRailTitle } from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
@@ -87,7 +88,7 @@ export default function TournamentClientLayout({
   children
 }: Readonly<TournamentClientLayoutProps>) {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const router = useRouter();
   const tournamentQuery = useTournamentQuery(slug);
   const tournament = tournamentQuery.data;
@@ -214,7 +215,7 @@ export default function TournamentClientLayout({
                 {t("common.tournaments")}
               </HoverPrefetchLink>
               <span className="opacity-50">/</span>
-              <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
+              <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
               {tournament.is_league ? (
                 <>
                   <span className="opacity-50">/</span>

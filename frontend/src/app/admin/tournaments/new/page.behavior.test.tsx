@@ -36,7 +36,9 @@ const permissions: Record<string, boolean> = {};
 const warning = vi.fn();
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string) => key
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ dateTime: () => "01 January 2026" })
 }));
 vi.mock("next/navigation", () => ({

@@ -10,6 +10,7 @@ import { formatInterval, formatRelative } from "@/components/kit/format-time";
 import { TONE_CLASS, type Tone } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -27,6 +28,7 @@ const STREAM_KEY = "stream.collection";
 const REFETCH_MS = 30_000;
 
 export function StreamHealthDashboard() {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
   const isSuperuser = user?.isSuperuser ?? false;
@@ -111,7 +113,7 @@ export function StreamHealthDashboard() {
           <p className="text-muted-foreground">{diagnosis.hint}</p>
         ) : (
           <p className="text-muted-foreground">
-            Last tick {formatRelative(health.last_run_at)}. Nothing to do.
+            Last tick {formatRelative(format, health.last_run_at)}. Nothing to do.
           </p>
         )}
       </div>
@@ -119,7 +121,7 @@ export function StreamHealthDashboard() {
       <StatTileGrid>
         <StatTile
           label="Last tick"
-          value={formatRelative(health.last_run_at)}
+          value={formatRelative(format, health.last_run_at)}
           detail={
             health.status === null
               ? "Never run — no outcome recorded yet"

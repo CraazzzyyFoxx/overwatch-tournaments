@@ -9,8 +9,10 @@ import { describe, expect, it, mock } from "bun:test";
 // suite exposes the same hooks, or whichever file loads first breaks the rest.
 mock.module("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" }),
   useTranslations: () => (key: string) => `draftRedesign.${key}`
+}));
+mock.module("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" })
 }));
 
 const componentDir = import.meta.dirname;

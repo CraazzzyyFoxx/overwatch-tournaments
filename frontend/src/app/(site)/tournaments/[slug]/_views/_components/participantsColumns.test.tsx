@@ -136,7 +136,7 @@ describe("participant column model", () => {
     // search only walks visible columns and finding players by team is the
     // point of it.
     const withoutTeams = buildParticipantColumns(form(), t).find((column) => column.id === "team");
-    const withTeams = buildParticipantColumns(form(), t, "ru", null, undefined, true).find(
+    const withTeams = buildParticipantColumns(form(), t, null, undefined, true).find(
       (column) => column.id === "team",
     );
 

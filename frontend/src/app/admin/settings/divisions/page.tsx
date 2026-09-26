@@ -7,7 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowRight, Download, Star, Upload, Wand2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable } from "@/components/data-table";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";

@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardCheck, Clock3, Gavel, ScrollText } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";

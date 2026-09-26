@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {

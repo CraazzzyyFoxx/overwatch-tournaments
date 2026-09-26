@@ -4,7 +4,7 @@ import { useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } fro
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -336,7 +336,7 @@ export function SubscriptionPlayerPanel({
                     className="text-sm tabular-nums text-muted-foreground"
                     title={formatDate(format, row.checked_at)}
                   >
-                    {formatRelative(row.checked_at)}
+                    {formatRelative(format, row.checked_at)}
                   </TableCell>
                   <TableCell className="max-w-40 truncate text-xs text-muted-foreground">
                     {row.reason ? (REASON_LABELS[row.reason] ?? row.reason) : "—"}

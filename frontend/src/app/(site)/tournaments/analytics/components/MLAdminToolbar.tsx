@@ -3,7 +3,8 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircle, Brain, CheckCircle2, PlayCircle } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Button } from "@/components/ui/button";
 import {

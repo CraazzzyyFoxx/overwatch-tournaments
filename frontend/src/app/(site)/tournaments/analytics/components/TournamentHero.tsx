@@ -3,8 +3,9 @@
 import React from "react";
 
 import type { Tournament } from "@/types/tournament.types";
-import { formatDateRange } from "@/lib/utils";
-import { useTranslations, useLocale } from "next-intl";
+import { formatDateRange } from "@/lib/datetime";
+import { useFormatter } from "@/lib/datetime/client";
+import { useTranslations } from "next-intl";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
@@ -40,7 +41,7 @@ export default function TournamentHero({
   controlsSlot,
 }: Readonly<TournamentHeroProps>) {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
 
   if (!tournament) {
     return (
@@ -56,7 +57,7 @@ export default function TournamentHero({
 
   const statusMeta = getTournamentStatusMeta(tournament.status);
   const stage = stageProgress(tournament, tournament.status, t);
-  const dates = formatDateRange(tournament.start_date, tournament.end_date, locale);
+  const dates = formatDateRange(format, tournament.start_date, tournament.end_date);
   const statusLabel = t(`common.statusBadge.${tournament.status}`);
   const statusText = stage?.label ? `${statusLabel} · ${stage.label}` : statusLabel;
 

@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { ArrowRight, Copy, Swords } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";

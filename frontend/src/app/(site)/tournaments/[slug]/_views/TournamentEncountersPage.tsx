@@ -2,7 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { CalendarClock, ListOrdered } from "lucide-react";
 
 import {

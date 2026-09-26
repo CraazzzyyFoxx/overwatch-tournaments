@@ -66,7 +66,9 @@ vi.mock("@/stores/workspace.store", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string) => key
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 

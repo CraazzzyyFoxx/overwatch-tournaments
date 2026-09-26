@@ -1,4 +1,5 @@
-import { getFormatter, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
+import { getFormatter } from "@/lib/datetime/server";
 import { ArrowRight, Swords, TrendingDown, TrendingUp } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroWithUserStats } from "@/types/hero.types";

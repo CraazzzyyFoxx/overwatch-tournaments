@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2, CheckCircle, CircleDot, Crown, EyeOff, Trophy } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
@@ -112,7 +112,8 @@ export default function TournamentsPage() {
       header: "Start date",
       cell: ({ row }) => (
         <span className="tabular-nums">
-          {format.dateTime(new Date(row.getValue("start_date")), { dateStyle: "medium" })}
+          {/* Tournament days are UTC midnights — read in UTC. */}
+          {format.dateTime(new Date(row.getValue("start_date")), { dateStyle: "medium", timeZone: "UTC" })}
         </span>
       )
     },
@@ -121,7 +122,7 @@ export default function TournamentsPage() {
       header: "End date",
       cell: ({ row }) => (
         <span className="tabular-nums">
-          {format.dateTime(new Date(row.getValue("end_date")), { dateStyle: "medium" })}
+          {format.dateTime(new Date(row.getValue("end_date")), { dateStyle: "medium", timeZone: "UTC" })}
         </span>
       )
     },

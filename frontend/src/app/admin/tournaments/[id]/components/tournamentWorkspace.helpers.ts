@@ -49,9 +49,10 @@ export type TournamentFormState = {
 
 export const TOURNAMENT_DETAIL_PREVIEW_LIMIT = 8;
 
+/** A tournament day. Stored as a UTC midnight, so read in UTC — any other zone shifts it. */
 export function formatDate(format: DateFormatter, value?: Date | string | null) {
   if (!value) return "-";
-  return format.dateTime(new Date(value), { dateStyle: "medium" });
+  return format.dateTime(new Date(value), { dateStyle: "medium", timeZone: "UTC" });
 }
 
 /**

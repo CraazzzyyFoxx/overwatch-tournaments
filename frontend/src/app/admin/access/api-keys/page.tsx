@@ -3,7 +3,8 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Check, Clipboard, Gauge, KeyRound, Plus, Trash2, X } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable, createKebabColumn } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";

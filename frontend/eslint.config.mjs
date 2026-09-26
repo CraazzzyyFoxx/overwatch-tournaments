@@ -41,4 +41,34 @@ export default [
       ],
     },
   },
+  {
+    // Every date goes through `@/lib/datetime`: next-intl's own formatter knows
+    // only the UI language, and `toLocale*String` only the host's locale/zone.
+    files: ["**/*.ts", "**/*.tsx"],
+    ignores: ["src/lib/datetime/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next-intl",
+              importNames: ["useFormatter", "createFormatter"],
+              message: "Use useFormatter from @/lib/datetime/client.",
+            },
+            {
+              name: "next-intl/server",
+              importNames: ["getFormatter"],
+              message: "Use getFormatter from @/lib/datetime/server.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        { property: "toLocaleDateString", message: "Format dates with useFormatter from @/lib/datetime/client." },
+        { property: "toLocaleTimeString", message: "Format dates with useFormatter from @/lib/datetime/client." },
+      ],
+    },
+  },
 ];

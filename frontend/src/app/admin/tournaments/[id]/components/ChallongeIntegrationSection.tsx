@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, Users } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
 import type { DateFormatter } from "@/components/kit/format-time";

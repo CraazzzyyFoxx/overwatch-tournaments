@@ -36,11 +36,13 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
   // The Scheduled column formats through next-intl; the assertions below are
   // about WHICH instant a row carries, so the mock defers to plain `Intl`.
+  NextIntlClientProvider: ({ children }: { children: ReactNode }) => children
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: (date: Date, options?: Intl.DateTimeFormatOptions) =>
       new Intl.DateTimeFormat(undefined, options).format(date)
-  }),
-  NextIntlClientProvider: ({ children }: { children: ReactNode }) => children
+  })
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({

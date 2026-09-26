@@ -1,7 +1,8 @@
 "use client";
 
 import { ChevronDown, HelpCircle, LogOut, Monitor, Smartphone } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useNow, useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

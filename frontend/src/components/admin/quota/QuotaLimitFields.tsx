@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";

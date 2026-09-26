@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import {
   ArrowDown,
   ArrowLeft,

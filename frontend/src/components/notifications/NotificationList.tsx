@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Button } from "@/components/ui/button";
 import { PopoverClose } from "@/components/ui/popover";

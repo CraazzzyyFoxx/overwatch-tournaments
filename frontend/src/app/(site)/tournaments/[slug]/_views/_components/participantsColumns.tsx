@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizePlayerRole, playerRoleSlotCode, type PlayerRoleSlotCode } from "@/lib/roster/player-role";
+import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type {
   Registration,
@@ -365,17 +366,12 @@ function SmurfTagsCell({
 // Date formatter
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string | null, locale: string = "ru"): ReactNode {
+function DateCell({ iso }: Readonly<{ iso: string | null }>) {
+  const format = useFormatter();
   if (!iso) return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
-  const d = new Date(iso);
-  const formatLocale = locale.startsWith("ru") ? "ru-RU" : "en-GB";
   return (
     <span className="text-[color:var(--aqt-fg-muted)] tabular-nums text-xs">
-      {d.toLocaleDateString(formatLocale, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })}
+      {format.dateTime(new Date(iso), { day: "2-digit", month: "short", year: "numeric" })}
     </span>
   );
 }
@@ -506,7 +502,6 @@ function asksTopHeroes(field: FormField): boolean {
 export function buildParticipantColumns(
   form: RegistrationForm | null,
   t: Translator,
-  locale: string = "ru",
   grid?: DivisionGrid | null,
   heroesMap?: Map<string, Hero>,
   /** Whether the loaded roster actually carries teams. There is no team flag on
@@ -720,7 +715,7 @@ export function buildParticipantColumns(
     category: "meta",
     defaultVisible: false,
     responsive: "md",
-    render: (reg) => formatDate(reg.submitted_at, locale),
+    render: (reg) => <DateCell iso={reg.submitted_at} />,
   });
 
   // Meta: registration status, plus the schedule's "signed up after the window

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { HeroStamp } from "@/components/site/PageHero";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
@@ -41,14 +42,8 @@ export function NextPhaseChip({
   const next = nextPhaseBoundary({ tournament, now });
   if (!next) return null;
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const at = new Date(next.at);
-  const stamp = format.dateTime(at, {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone
-  });
+  const stamp = format.dateTime(at, { weekday: "short", hour: "2-digit", minute: "2-digit" });
   const relative = format.relativeTime(at, now);
   const phase = t(`common.statusBadge.${next.status}`);
   const label =

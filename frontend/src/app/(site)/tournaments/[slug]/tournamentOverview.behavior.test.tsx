@@ -19,7 +19,9 @@ mock.module("next-intl/server", () => ({
 // (`_components/PhaseTimeline.tsx`, `_components/NextPhaseChip.tsx`).
 mock.module("next-intl", () => ({
   useLocale: () => "en",
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string) => key
+}));
+mock.module("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: () => "",
     relativeTime: () => ""

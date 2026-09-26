@@ -1,9 +1,10 @@
 "use client";
 
 import type { UseQueryResult } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
+import { useFormatter } from "@/lib/datetime/client";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
@@ -210,7 +211,7 @@ export function CareerTables({
   divisionGrid
 }: Readonly<{ card: UserDraftCard | undefined; pending: boolean; divisionGrid: DivisionGrid }>) {
   const t = useTranslations("draftRedesign");
-  const locale = useLocale();
+  const format = useFormatter();
 
   if (pending) {
     return (
@@ -256,7 +257,6 @@ export function CareerTables({
 
   if (!card || card.tournaments === 0) return null;
   if (card.heroes.length === 0 && card.recent_tournaments.length === 0) return null;
-  const dateFormat = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" });
 
   return (
     <div className={TABLES_GRID}>
@@ -331,7 +331,8 @@ export function CareerTables({
                     </span>
                     {entry.date && (
                       <span className="block whitespace-nowrap text-xs text-[color:var(--aqt-fg-faint)]">
-                        {dateFormat.format(new Date(entry.date))}
+                        {/* A tournament's start day, stored as a UTC midnight. */}
+                        {format.dateTime(new Date(entry.date), { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
                       </span>
                     )}
                   </span>

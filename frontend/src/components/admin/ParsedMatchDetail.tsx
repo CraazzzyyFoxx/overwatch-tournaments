@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, HelpCircle } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "@/components/kit/tone";

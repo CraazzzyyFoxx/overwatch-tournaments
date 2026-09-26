@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import {
   CheckCircle,
   CircleAlert,
@@ -87,27 +87,26 @@ function EncounterStatusCell({ status }: Readonly<{ status?: string | null }>) {
 }
 
 /**
- * The planned start time, on the viewer's own clock — the same zone the stage
- * editor's round schedule is typed against. Its own component so the column
- * definitions stay independent of the formatter's identity.
+ * The planned start time, on the viewer's own clock (the app formatter's zone)
+ * — the same zone the stage editor's round schedule is typed against. Its own
+ * component so the column definitions stay independent of the formatter's
+ * identity.
  */
 function ScheduledAtCell({ value }: Readonly<{ value: Encounter["scheduled_at"] }>) {
   const format = useFormatter();
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (value == null) return <span className="text-muted-foreground">—</span>;
   const at = new Date(value);
   return (
     <time
       className="text-sm tabular-nums"
       dateTime={at.toISOString()}
-      title={format.dateTime(at, { dateStyle: "full", timeStyle: "short", timeZone })}
+      title={format.dateTime(at, { dateStyle: "full", timeStyle: "short" })}
     >
       {format.dateTime(at, {
         day: "2-digit",
         month: "2-digit",
         hour: "2-digit",
-        minute: "2-digit",
-        timeZone
+        minute: "2-digit"
       })}
     </time>
   );

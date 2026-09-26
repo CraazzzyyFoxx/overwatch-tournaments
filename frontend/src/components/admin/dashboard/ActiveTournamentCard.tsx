@@ -2,7 +2,7 @@
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ArrowRight, Calendar } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
@@ -13,9 +13,10 @@ import { PermissionHiddenNotice } from "./PermissionHiddenNotice";
 import { tournamentStatus } from "./tournament-status";
 import type { Tournament } from "@/types/tournament.types";
 
+/** A tournament day. Stored as a UTC midnight, so read in UTC — any other zone shifts it. */
 function formatDate(format: DateFormatter, value?: Date | string | null) {
   if (!value) return "-";
-  return format.dateTime(new Date(value), { dateStyle: "medium" });
+  return format.dateTime(new Date(value), { dateStyle: "medium", timeZone: "UTC" });
 }
 
 interface ActiveTournamentCardProps {

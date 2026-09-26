@@ -52,6 +52,8 @@ vi.mock("next-intl", () => ({
   useLocale: () => "en",
   // The schedule section renders DateRangePicker, which formats through
   // next-intl rather than a pinned locale.
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: (value: Date, options?: Intl.DateTimeFormatOptions) =>
       new Intl.DateTimeFormat("en", options).format(value),

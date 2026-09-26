@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
 import { Check, CheckCircle, EyeOff } from "lucide-react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";

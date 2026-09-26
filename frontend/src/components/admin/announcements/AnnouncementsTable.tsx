@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Archive, CircleDot, Clock } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";

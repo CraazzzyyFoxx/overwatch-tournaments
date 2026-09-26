@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import {
   Dialog,
   DialogContent,

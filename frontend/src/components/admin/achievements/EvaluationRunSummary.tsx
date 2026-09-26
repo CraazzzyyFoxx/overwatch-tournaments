@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import {
   AlertTriangle,
   CheckCircle2,

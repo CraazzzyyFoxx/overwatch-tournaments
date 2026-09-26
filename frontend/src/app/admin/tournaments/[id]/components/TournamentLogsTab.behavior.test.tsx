@@ -30,6 +30,8 @@ vi.mock("@/services/admin.service", () => ({
 }));
 vi.mock("@/hooks/useRealtimeTopic", () => ({ useRealtimeTopic: () => {} }));
 vi.mock("next-intl", () => ({
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 vi.mock("@/lib/notify", () => ({

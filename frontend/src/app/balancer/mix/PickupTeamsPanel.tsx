@@ -45,6 +45,7 @@ import { MapCombobox } from "@/components/MapCombobox";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { formatRelative } from "@/components/kit/format-time";
+import { useFormatter } from "@/lib/datetime/client";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -647,6 +648,7 @@ function MatchHistoryRow({
   undoing: boolean;
   onUndoMatch?: (matchId: number) => void;
 }>) {
+  const format = useFormatter();
   const homeAccent = teamAccent(0);
   const awayAccent = teamAccent(1);
   const [undoOpen, setUndoOpen] = useState(false);
@@ -689,7 +691,7 @@ function MatchHistoryRow({
         <div className="mt-0.5 flex items-center gap-1.5 truncate text-label text-[color:var(--aqt-fg-dim)]">
           <span className="truncate">{match.map_name ?? "No map"}</span>
           <span aria-hidden="true">&middot;</span>
-          <span className="shrink-0">{formatRelative(match.recorded_at)}</span>
+          <span className="shrink-0">{formatRelative(format, match.recorded_at)}</span>
         </div>
       </div>
       {canUndo ? (

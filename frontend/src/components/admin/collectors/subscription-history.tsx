@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";

@@ -1,7 +1,8 @@
 "use client";
 
 import { ArrowUp, MessageCircle, MessageCircleDashed, ShieldOff, Trash2 } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { useId, useState, type KeyboardEvent } from "react";
 
 import {

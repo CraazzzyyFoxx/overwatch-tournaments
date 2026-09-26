@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
-import { cn, formatDateRange } from "@/lib/utils";
+import { formatDateRange } from "@/lib/datetime";
+import { useFormatter } from "@/lib/datetime/client";
+import { cn } from "@/lib/utils";
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
 
 import { stageProgress } from "./tournaments-helpers";
@@ -56,7 +58,7 @@ const COVER_FALLBACK = (
  */
 const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const { variant } = getTournamentStatusMeta(tournament.status);
   const stage = stageProgress(tournament, tournament.status, t);
   const players = tournament.participants_count ?? 0;
@@ -126,7 +128,7 @@ const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
             </span>
           </div>
           <p className="aqt-tnum flex flex-wrap items-center gap-x-2 text-label uppercase tracking-[0.06em] text-[color:var(--aqt-fg-dim)]">
-            <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
+            <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
             {tournament.is_league && (
               <>
                 <span aria-hidden className="text-[color:var(--aqt-fg-faint)]">/</span>

@@ -9,9 +9,11 @@ import type { DraftBoard, DraftPickOptionsResponse, DraftPlayer, DraftStatus } f
 mock.module("next-intl", () => ({
   useLocale: () => "en",
   // Shared across bun test files: DraftJournal (loaded by siblings) reads it.
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key
+}));
+mock.module("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 // Dynamic, not static: `mock.module` only applies to modules imported after it

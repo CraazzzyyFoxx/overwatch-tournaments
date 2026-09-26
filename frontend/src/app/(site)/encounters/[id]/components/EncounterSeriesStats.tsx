@@ -1,7 +1,8 @@
 "use client";
 
 import { useQueries } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { cn } from "@/lib/utils";
 import { PageStateCard } from "@/components/ui/page-state-card";

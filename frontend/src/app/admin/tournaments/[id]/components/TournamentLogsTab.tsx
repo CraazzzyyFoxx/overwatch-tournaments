@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { useDebounce } from "use-debounce";
 
 import { StatusPill } from "@/components/kit/StatusPill";

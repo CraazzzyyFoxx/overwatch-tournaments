@@ -11,8 +11,10 @@ const testWindow = new Window({ url: "http://localhost:3000/", width: 720, heigh
 // The role glyph localizes its own label; no provider in a unit render.
 mock.module("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string) => key
+}));
+mock.module("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 // A workspace grid that calls every rank one thing. If the chip reads it, the

@@ -101,7 +101,7 @@ import {
 } from "./_components/participants-url-state";
 import { useParticipantSearchInput } from "./_components/useParticipantSearchInput";
 import VirtualParticipantsList from "./_components/VirtualParticipantsList";
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import MyTeamSection from "@/components/registration/MyTeamSection";
@@ -1035,7 +1035,6 @@ function isCheckInWindowActive(tournament: Tournament) {
 
 function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tournament }>) {
   const t = useTranslations();
-  const locale = useLocale();
   const { user, status: authStatus } = useAuthProfile();
   const queryClient = useQueryClient();
   const pathname = usePathname();
@@ -1156,8 +1155,8 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   const { canAccessPermission } = usePermissions();
   const canReadOrganizerColumns = canAccessPermission("registration.read", tournament.workspace_id);
   const builtColumns = useMemo(
-    () => buildParticipantColumns(form, t, locale, divisionGrid, heroesMap, hasTeams),
-    [form, t, locale, divisionGrid, heroesMap, hasTeams]
+    () => buildParticipantColumns(form, t, divisionGrid, heroesMap, hasTeams),
+    [form, t, divisionGrid, heroesMap, hasTeams]
   );
   const allColumns = useMemo(
     () =>

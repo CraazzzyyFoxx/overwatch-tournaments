@@ -9,6 +9,7 @@ import { TintedBadge } from "@/components/admin/TintedBadge";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -66,6 +67,7 @@ function StateBar({ stats }: Readonly<{ stats: SubscriptionCollectionStats }>) {
 }
 
 export function SubscriptionHealthDashboard() {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
   const isSuperuser = user?.isSuperuser ?? false;
@@ -195,13 +197,13 @@ export function SubscriptionHealthDashboard() {
         <StatTile
           label="Coverage (checked)"
           value={stats.coverage_24h}
-          detail={`${stats.coverage_24h} distinct players in 24h · ${stats.coverage_7d} in 7d · last check ${formatRelative(stats.last_check_at)}`}
+          detail={`${stats.coverage_24h} distinct players in 24h · ${stats.coverage_7d} in 7d · last check ${formatRelative(format, stats.last_check_at)}`}
         />
 
         <StatTile
           label="Checks (24h)"
           value={stats.checks_24h_total ?? 0}
-          detail={`${errRate}% unresolved · active ${activeCount} · inactive ${inactiveCount} · unresolved ${failedCount} · last active ${formatRelative(stats.last_success_at)}`}
+          detail={`${errRate}% unresolved · active ${activeCount} · inactive ${inactiveCount} · unresolved ${failedCount} · last active ${formatRelative(format, stats.last_success_at)}`}
           tone={errRate >= 20 ? "danger" : "neutral"}
           icon={errRate >= 20 ? AlertTriangle : undefined}
         />

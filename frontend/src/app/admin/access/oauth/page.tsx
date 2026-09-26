@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CheckCircle, Clock, Trash2, UserCog } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";

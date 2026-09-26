@@ -5220,7 +5220,7 @@
         },
         "cookies": {
           "title": "Cookies",
-          "body": "{siteName} sets a session cookie to keep you signed in, a cookie recording your active workspace so a custom-domain workspace shows the right branding, and a locale cookie for your language preference. These functional cookies are required for the site to work. Google Analytics and Yandex Metrica cookies, which measure how pages are used, are optional: they load only after you accept them in the cookie notice, and declining keeps them off. You can change that choice at any time from \"Cookie settings\" in the site footer; withdrawing it also deletes the analytics cookies already stored. No advertising cookies are set."
+          "body": "{siteName} sets a session cookie to keep you signed in, a cookie recording your active workspace so a custom-domain workspace shows the right branding, a locale cookie for your language preference, and a time-zone cookie so dates show in your local time. These functional cookies are required for the site to work. Google Analytics and Yandex Metrica cookies, which measure how pages are used, are optional: they load only after you accept them in the cookie notice, and declining keeps them off. You can change that choice at any time from \"Cookie settings\" in the site footer; withdrawing it also deletes the analytics cookies already stored. No advertising cookies are set."
         },
         "sharing": {
           "title": "Who can see your information",

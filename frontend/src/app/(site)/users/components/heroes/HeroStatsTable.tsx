@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { ArrowDown, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogStatsName } from "@/types/stats.types";

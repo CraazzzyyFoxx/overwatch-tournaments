@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Globe, MonitorSmartphone, UserCog } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminDataTable, createKebabColumn } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";

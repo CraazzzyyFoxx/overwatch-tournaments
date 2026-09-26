@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Star } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
