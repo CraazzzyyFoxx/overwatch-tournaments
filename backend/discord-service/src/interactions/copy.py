@@ -8,12 +8,28 @@ client answers in English. Russian for ``ru``, English for everything else.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from itertools import permutations
 from typing import Any, Literal
 
 import discord
 from discord.utils import escape_markdown
 
-__all__ = ("Locale", "error_text", "locale_of", "registration_text", "settle_note", "success_text", "text")
+from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
+
+__all__ = (
+    "LINK_BLOCKERS",
+    "MIX_BLOCKERS",
+    "Locale",
+    "error_text",
+    "locale_of",
+    "mix_blocker_text",
+    "mix_role_options",
+    "mix_text",
+    "registration_text",
+    "settle_note",
+    "success_text",
+    "text",
+)
 
 Locale = Literal["ru", "en"]
 
@@ -38,6 +54,12 @@ _TEXT: dict[Locale, dict[str, str]] = {
             "а включить Discord обратно можно в настройках."
         ),
         "mute_all": "Отключить все",
+        "mix_join": "Записаться",
+        "mix_leave": "Выписаться",
+        "mix_flex_on": "Флекс: включить",
+        "mix_flex_off": "Флекс: выключить",
+        "mix_roles_placeholder": "Порядок ролей",
+        "open_profile": "Открыть профиль",
     },
     "en": {
         "not_linked": "This Discord account isn't linked to an OWT account. Link it in your profile and the buttons will work.",
@@ -54,6 +76,12 @@ _TEXT: dict[Locale, dict[str, str]] = {
             "and you can turn Discord back on in settings."
         ),
         "mute_all": "Turn all off",
+        "mix_join": "Join",
+        "mix_leave": "Leave",
+        "mix_flex_on": "Flex: turn on",
+        "mix_flex_off": "Flex: turn off",
+        "mix_roles_placeholder": "Role order",
+        "open_profile": "Open profile",
     },
 }
 
@@ -172,6 +200,88 @@ _CARD: dict[Locale, dict[str, str]] = {
 }
 
 
+_MIX: dict[Locale, dict[str, str]] = {
+    "ru": {
+        "heading": "Микс «{name}»",
+        "seat_pool": "Вы записаны — в пуле.",
+        "seat_benched": "Вы на скамейке — хост переведёт в пул.",
+        "seat_must_play": "Вы в составе — хост поставил вас играть.",
+        "no_seat": "Вы не записаны на этот микс.",
+        "roles": "Роли",
+        "all_ranked": "все, по которым есть ранг",
+        "all_ranked_option": "Все роли с рангом",
+        "no_roles": "не выбраны",
+        "no_rank": "без ранга",
+        "flex": "Флекс",
+        "flex_on": "вкл",
+        "flex_off": "выкл",
+        "unranked": "Нет ранга: {roles} — хост проставит",
+    },
+    "en": {
+        "heading": "Mix “{name}”",
+        "seat_pool": "You're signed up — in the pool.",
+        "seat_benched": "You're on the bench — the host moves people into the pool.",
+        "seat_must_play": "You're in — the host put you on the floor.",
+        "no_seat": "You're not signed up for this mix.",
+        "roles": "Roles",
+        "all_ranked": "every role you have a rank in",
+        "all_ranked_option": "Every ranked role",
+        "no_roles": "none picked",
+        "no_rank": "no rank",
+        "flex": "Flex",
+        "flex_on": "on",
+        "flex_off": "off",
+        "unranked": "No rank yet: {roles} — the host will fill it in",
+    },
+}
+
+#: Why a mix refused, by the code ``mix_self_policy`` named. ``bad_values`` is
+#: the bot's own: a select value it never minted, refused before any call.
+_MIX_BLOCKERS: dict[Locale, dict[str, str]] = {
+    "ru": {
+        "mix_closed": "Микс уже завершён или отменён.",
+        "discord_not_linked": "Этот Discord не привязан к аккаунту OWT — привяжите его в профиле.",
+        "battlenet_not_linked": "К аккаунту не привязан Battle.net — привяжите его в профиле.",
+        "player_not_linked": "К аккаунту не привязан игрок — привяжите Battle.net в профиле.",
+        "self_join_denied": "Самозапись на миксы для вас закрыта.",
+        "already_joined": "Вы уже записаны на этот микс.",
+        "not_on_roster": "Вы не записаны на этот микс.",
+        "signup_closed": "Запись на этот микс закрыта.",
+        "roster_full": "В миксе уже 100 игроков — свободных мест нет.",
+        "role_edit_off": "Хост не разрешил игрокам менять роли.",
+        "bad_values": "Не удалось разобрать выбор ролей — откройте микс ещё раз.",
+    },
+    "en": {
+        "mix_closed": "This mix is already finished or cancelled.",
+        "discord_not_linked": "This Discord account isn't linked to an OWT account — link it in your profile.",
+        "battlenet_not_linked": "No Battle.net account is linked to yours — link it in your profile.",
+        "player_not_linked": "No player is linked to your account — link Battle.net in your profile.",
+        "self_join_denied": "Signing yourself up for mixes is turned off for you.",
+        "already_joined": "You're already signed up for this mix.",
+        "not_on_roster": "You're not signed up for this mix.",
+        "signup_closed": "Sign-up for this mix is closed.",
+        "roster_full": "This mix already has 100 players — no seats left.",
+        "role_edit_off": "The host hasn't let players change their roles.",
+        "bad_values": "Couldn't read that role pick — open the mix again.",
+    },
+}
+
+#: Every refusal the bot words itself; anything else is the service's message.
+MIX_BLOCKERS: frozenset[str] = frozenset(_MIX_BLOCKERS["ru"])
+#: The refusals a profile link can actually fix.
+LINK_BLOCKERS: frozenset[str] = frozenset({"discord_not_linked", "battlenet_not_linked", "player_not_linked"})
+
+#: Every ordered, non-empty pick of the three roles: 3 + 6 + 6 = 15, and with
+#: "every ranked role" that is 16 options against Discord's limit of 25.
+#: Discord does not report the order options were clicked in, so the order is
+#: the option.
+ROLE_ORDERS: tuple[tuple[str, ...], ...] = tuple(
+    order
+    for size in range(1, len(REGISTRATION_ROLE_CODES) + 1)
+    for order in permutations(REGISTRATION_ROLE_CODES, size)
+)
+
+
 def text(locale: Locale, key: str, **values: str) -> str:
     return _TEXT[locale][key].format(**values)
 
@@ -190,7 +300,10 @@ def error_text(locale: Locale, code: str | None, message: str) -> str:
 
 
 def _role(locale: Locale, code: Any) -> str:
-    return _ROLES[locale].get(str(code), escape_markdown(str(code)))
+    # ``.get(default)`` would escape every known code too, for nothing: the
+    # select alone names roles some fifty times per reply.
+    known = _ROLES[locale].get(str(code))
+    return known if known is not None else escape_markdown(str(code))
 
 
 def registration_text(locale: Locale, registration: Mapping[str, Any]) -> str:
@@ -231,3 +344,67 @@ def registration_text(locale: Locale, registration: Mapping[str, Any]) -> str:
     if isinstance(position, int) and isinstance(total, int):
         lines.append(f"**{card['queue']}:** {position} {card['of']} {total}")
     return "\n".join(lines)
+
+
+def mix_blocker_text(locale: Locale, code: str) -> str:
+    return _MIX_BLOCKERS[locale][code]
+
+
+def mix_text(locale: Locale, state: Mapping[str, Any]) -> str:
+    """The caller's own seat in a mix (the ``self_*`` answer) as a short card."""
+    words = _MIX[locale]
+    lines = [f"### {words['heading'].format(name=escape_markdown(str(state.get('name') or '')))}"]
+    seat = state.get("seat")
+    if not isinstance(seat, Mapping):
+        lines.append(words["no_seat"])
+    else:
+        participation = str(seat.get("participation") or "pool")
+        lines.append(words.get(f"seat_{participation}", words["seat_pool"]))
+        roles = seat.get("roles")
+        if roles is None:
+            order = words["all_ranked"]
+        elif not roles:
+            order = words["no_roles"]
+        else:
+            order = " → ".join(_role(locale, role) for role in roles)
+        lines.append(f"**{words['roles']}:** {order}")
+        lines.append(f"**{words['flex']}:** {words['flex_on'] if seat.get('is_flex') else words['flex_off']}")
+
+    unranked = list(state.get("unranked_roles") or [])
+    if unranked:
+        named = ", ".join(_role(locale, role) for role in unranked)
+        lines.append("-# " + words["unranked"].format(roles=named))
+
+    policy = state.get("policy")
+    blocker = policy.get("edit_blocker") if isinstance(policy, Mapping) else None
+    if blocker == "role_edit_off":
+        lines.append("-# " + _MIX_BLOCKERS[locale]["role_edit_off"])
+    return "\n".join(lines)
+
+
+def mix_role_options(locale: Locale, state: Mapping[str, Any]) -> list[discord.SelectOption]:
+    """The role select: every order, captioned with the host's ranks, current one marked."""
+    words = _MIX[locale]
+    raw_seat = state.get("seat")
+    seat: Mapping[str, Any] = raw_seat if isinstance(raw_seat, Mapping) else {}
+    raw_ranks = seat.get("ranks")
+    ranks: Mapping[str, Any] = raw_ranks if isinstance(raw_ranks, Mapping) else {}
+    chosen = seat.get("roles")
+    current = ",".join(str(role) for role in chosen) if isinstance(chosen, list) else "all"
+
+    options: list[discord.SelectOption] = []
+    for order in ROLE_ORDERS:
+        value = ",".join(order)
+        options.append(
+            discord.SelectOption(
+                label=" → ".join(_role(locale, role) for role in order),
+                value=value,
+                description=" · ".join(
+                    f"{_role(locale, role)} {ranks[role] if ranks.get(role) is not None else words['no_rank']}"
+                    for role in order
+                ),
+                default=value == current,
+            )
+        )
+    options.append(discord.SelectOption(label=words["all_ranked_option"], value="all", default=current == "all"))
+    return options

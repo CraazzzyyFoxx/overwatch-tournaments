@@ -20,6 +20,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.services.notifications import NOTIFICATION_GROUPS
 
 __all__ = ("ACTIONS", "Action", "custom_id", "is_ours", "parse_custom_id")
@@ -45,6 +46,44 @@ def _nothing(target: str, values: Sequence[str]) -> dict[str, Any]:
 
 def _everything(target: str) -> bool:
     return target == "all"
+
+
+def _parse_roles(values: Sequence[str]) -> list[str] | None:
+    """The role order a select carried; ``None`` for "every role I have a rank in".
+
+    Discord does not keep the order the options were clicked in, so the order
+    rides the value itself (``tank,support``). A value naming something that is
+    not one of the three roles, or naming one twice, is not one the bot minted:
+    it is refused here rather than sent on to be answered with a 422.
+    """
+    value = (values[0] if values else "").strip()
+    if value == "all":
+        return None
+    roles = [item.strip().lower() for item in value.split(",") if item.strip()]
+    if not roles or len(set(roles)) != len(roles) or any(role not in REGISTRATION_ROLE_CODES for role in roles):
+        raise ValueError(f"not a role order this bot minted: {value!r}")
+    return roles
+
+
+def _mix(target: str, values: Sequence[str]) -> dict[str, Any]:
+    # ``{game_id}`` is a path parameter, which the gateway copies to the body
+    # by name; the bot knows no workspace, so the mix row supplies it.
+    return {"custom_game_id": int(target)}
+
+
+def _mix_roles(target: str, values: Sequence[str]) -> dict[str, Any]:
+    return {"custom_game_id": int(target), "payload": {"roles": _parse_roles(values)}}
+
+
+def _mix_flex(target: str, values: Sequence[str]) -> dict[str, Any]:
+    # A button carries no values, so the wanted state rides the target: ``42-on``.
+    game_id, _, wanted = target.rpartition("-")
+    return {"custom_game_id": int(game_id), "payload": {"is_flex": wanted == "on"}}
+
+
+def _flex_target(target: str) -> bool:
+    game_id, _, wanted = target.rpartition("-")
+    return wanted in ("on", "off") and game_id.isdigit()
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +128,13 @@ ACTIONS: dict[str, Action] = {
         lambda _all, _values: {"payload": {"discord_dm": dict.fromkeys(NOTIFICATION_GROUPS, False)}},
         accepts=_everything,
     ),
+    # Self-signup for a pickup mix. The gate is the mix's own policy, so a
+    # stale card button answers "signup closed" rather than doing anything.
+    "mix.join": Action("rpc.balancer.custom.self_join", _mix),
+    "mix.leave": Action("rpc.balancer.custom.self_leave", _mix),
+    "mix.roles": Action("rpc.balancer.custom.self_get", _mix),
+    "mix.roles_set": Action("rpc.balancer.custom.self_update", _mix_roles),
+    "mix.flex": Action("rpc.balancer.custom.self_update", _mix_flex, accepts=_flex_target),
 }
 
 

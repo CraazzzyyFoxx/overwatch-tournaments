@@ -25,7 +25,7 @@ from src.cogs.interactions import InteractionsCog  # noqa: E402
 from src.interactions import dispatcher as dispatcher_module  # noqa: E402
 from src.interactions.actions import ACTIONS, parse_custom_id  # noqa: E402
 from src.interactions.cards import card_view, select_row, settle  # noqa: E402
-from src.interactions.dispatcher import IDENTITY_SUBJECT, ActionDispatcher  # noqa: E402
+from src.interactions.dispatcher import IDENTITY_SUBJECT, ActionDispatcher, Outcome  # noqa: E402
 
 SITE = "https://owt.example"
 IDENTITY = {"sub": 77, "username": "kira", "credential_type": "discord", "workspaces": []}
@@ -67,6 +67,33 @@ def _invite_card() -> DiscordCard:
             ],
         ],
     )
+
+
+def _mix_state(**overrides: Any) -> dict[str, Any]:
+    """The ``self_*`` wire answer: a seated player who may reorder their roles."""
+    state: dict[str, Any] = {
+        "custom_game_id": 42,
+        "name": "Пятничный микс",
+        "status": "balanced",
+        "self_signup": "pool",
+        "self_role_edit": True,
+        "seat": {
+            "participation": "pool",
+            "roles": ["tank", "support"],
+            "is_flex": False,
+            "ranks": {"tank": 3100, "damage": None, "support": None},
+        },
+        "unranked_roles": ["support"],
+        "policy": {
+            "can_join": False,
+            "can_leave": True,
+            "can_edit_roles": True,
+            "join_blocker": "already_joined",
+            "edit_blocker": None,
+        },
+    }
+    state.update(overrides)
+    return state
 
 
 def _interaction(*, guild_id: int | None = None, locale: str = "ru", ephemeral: bool = False) -> MagicMock:
@@ -262,3 +289,134 @@ class SelectComponentTests(IsolatedAsyncioTestCase):
             [(option["value"], option["default"]) for option in select["options"]],
             [("tank", True), ("support", False)],
         )
+
+
+class MixSelfSignupTests(IsolatedAsyncioTestCase):
+    """The five mix buttons: what the pick becomes on the wire, and what the clicker gets back."""
+
+    async def test_a_chosen_role_order_reaches_the_platform_in_that_order(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
+        cog = InteractionsCog(MagicMock(action_dispatcher=_dispatcher()))
+        click = _interaction(ephemeral=True)
+        click.type = discord.InteractionType.component
+        click.data = {"custom_id": "owt:mix.roles_set:42", "values": ["tank,support"]}
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await cog.on_interaction(click)
+
+        subject, body = rpc.calls[-1]
+        self.assertEqual(subject, "rpc.balancer.custom.self_update")
+        self.assertEqual(body["custom_game_id"], 42)
+        self.assertEqual(body["payload"], {"roles": ["tank", "support"]})
+
+    async def test_the_all_option_asks_for_every_ranked_role(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await _dispatcher().perform(4242, "mix.roles_set", "42", ("all",))
+
+        self.assertEqual(outcome.status, "ok")
+        self.assertEqual(rpc.calls[-1][1]["payload"], {"roles": None})
+
+    async def test_a_value_the_bot_never_minted_is_refused_before_any_call(self) -> None:
+        rpc = _Rpc({})
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await dispatcher.perform(4242, "mix.roles_set", "42", ("tank,healer",))
+
+        self.assertEqual((outcome.status, outcome.code), ("failed", "bad_values"))
+        self.assertEqual(rpc.calls, [])
+        self.assertIn("разобрать выбор ролей", _reply_text(dispatcher.reply(outcome, "mix.roles_set", "ru")))
+
+    async def test_the_flex_button_carries_the_value_it_sets(self) -> None:
+        self.assertEqual(parse_custom_id("owt:mix.flex:42-off"), ("mix.flex", "42-off"))
+        self.assertIsNone(parse_custom_id("owt:mix.flex:42"))
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await _dispatcher().perform(4242, "mix.flex", "42-off")
+
+        self.assertEqual(outcome.status, "ok")
+        body = rpc.calls[-1][1]
+        self.assertEqual((body["custom_game_id"], body["payload"]), (42, {"is_flex": False}))
+
+    async def test_the_reply_offers_the_role_select_only_while_roles_are_editable(self) -> None:
+        dispatcher = _dispatcher()
+
+        editable = dispatcher.reply(Outcome("ok", _mix_state()), "mix.roles", "ru")
+
+        container, selects, buttons = editable.to_components()
+        (select,) = selects["components"]
+        options = select["options"]
+        self.assertEqual(select["custom_id"], "owt:mix.roles_set:42")
+        self.assertEqual(len(options), 16)
+        self.assertEqual([option["value"] for option in options if option["default"]], ["tank,support"])
+        by_value = {option["value"]: option for option in options}
+        self.assertEqual(by_value["tank,support"]["label"], "Танк → Саппорт")
+        self.assertEqual(by_value["tank,support"]["description"], "Танк 3100 · Саппорт без ранга")
+        self.assertEqual(by_value["all"]["label"], "Все роли с рангом")
+        self.assertEqual(
+            [button["custom_id"] for button in buttons["components"]],
+            ["owt:mix.flex:42-on", "owt:mix.leave:42"],
+        )
+        text = container["components"][0]["content"]
+        self.assertIn("Роли:** Танк → Саппорт", text)
+        self.assertIn("Нет ранга: Саппорт", text)
+
+        locked = dispatcher.reply(
+            Outcome(
+                "ok",
+                _mix_state(
+                    self_role_edit=False,
+                    policy={
+                        "can_join": False,
+                        "can_leave": True,
+                        "can_edit_roles": False,
+                        "join_blocker": "already_joined",
+                        "edit_blocker": "role_edit_off",
+                    },
+                ),
+            ),
+            "mix.roles",
+            "ru",
+        )
+
+        _container, only_row = locked.to_components()
+        self.assertEqual([item["type"] for item in only_row["components"]], [2])
+        self.assertIn("Танк → Саппорт", _reply_text(locked))
+        self.assertIn("не разрешил игрокам менять роли", _reply_text(locked))
+
+    async def test_a_missing_battlenet_link_is_named_and_points_at_the_profile(self) -> None:
+        rpc = _Rpc(
+            {
+                IDENTITY_SUBJECT: rpc_ok(IDENTITY),
+                "rpc.balancer.custom.self_join": rpc_error("forbidden", "battlenet_not_linked"),
+            }
+        )
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await dispatcher.perform(4242, "mix.join", "42")
+
+        self.assertEqual((outcome.status, outcome.message), ("failed", "battlenet_not_linked"))
+        view = dispatcher.reply(outcome, "mix.join", "ru")
+        _container, row = view.to_components()
+        self.assertIn("Battle.net", _reply_text(view))
+        self.assertEqual([button["url"] for button in row["components"]], [f"{SITE}/?settings=profile"])
+
+    async def test_a_closed_signup_is_worded_without_a_profile_link(self) -> None:
+        rpc = _Rpc(
+            {
+                IDENTITY_SUBJECT: rpc_ok(IDENTITY),
+                "rpc.balancer.custom.self_join": rpc_error("conflict", "signup_closed"),
+            }
+        )
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await dispatcher.perform(4242, "mix.join", "42")
+
+        view = dispatcher.reply(outcome, "mix.join", "ru")
+        self.assertEqual(len(view.to_components()), 1)
+        self.assertIn("Запись на этот микс закрыта", _reply_text(view))
