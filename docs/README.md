@@ -27,6 +27,7 @@ The system as it is. These are updated in the same commit as the change they des
 | [`frontend-zones.md`](./frontend-zones.md) | Frontend route zones (`web` / `admin` / `tools`), the three import rules CI enforces, and the per-zone i18n message bundles |
 | [`glossary.md`](./glossary.md) | Domain vocabulary used across code, API and UI |
 | [`business-logic-inventory.md`](./business-logic-inventory.md) | Domain rules and invariants: lifecycle, registration, admission, roster, balancer/draft, brackets, pick-ban, logs, achievements, analytics |
+| [`api-rate-limits.md`](./api-rate-limits.md) | Client-facing API quota contract: what is metered, the refusal shape, reading your remaining budget |
 | [`../frontend/src/app/(site)/docs/_content/`](../frontend/src/app/%28site%29/docs/_content/) | Player, organizer and developer guides served at `/docs`, one MDX file per locale (`ru`, `en`). Titles and order live in `frontend/src/app/(site)/docs/nav.ts`. The `/docs/dev/schema` page renders `schema.generated.json`, written by `backend/scripts/export_erd.py` alongside `database_erd.md` |
 
 ### Per component
@@ -65,7 +66,6 @@ Procedures for an operator. Commands are meant to be run verbatim.
 | [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps to Timeweb S3 (Moscow cron), restore |
 | [`disk-cleanup.md`](./disk-cleanup.md) | Daily Moscow disk cleanup: stale docker images, build cache, compose-level log caps |
 | [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
-| [`challonge_normalization_phase2_runbook.md`](./challonge_normalization_phase2_runbook.md) | Running the gated destructive migration — and the pattern for any future one |
 | [`workspace-domains.md`](./workspace-domains.md) | Workspace subdomains and custom domains: DNS, certificates, verification |
 | [`../backend/analytics-service/docs/runbook-shift-recompute.md`](../backend/analytics-service/docs/runbook-shift-recompute.md) | Recomputing OpenSkill rating shifts |
 

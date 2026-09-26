@@ -76,7 +76,7 @@ cd gateway && go run ./cmd/gateway
 Три файла в репозитории закоммичены, но выведены из кода, и CI падает при расхождении: манифест OpenAPI, из которого шлюз строит спецификации; `frontend/src/lib/divisions/ow-ladder.generated.json`; и диаграммы сущностей в `docs/database_erd.md`. После изменения ORM-модели их перегенерируют командами из таблицы выше. Хуки ставятся один раз — `pre-commit install`, они гоняют ruff и гигиену файлов по застейдженному.
 
 <Callout type="warning">
-Миграция, которая удаляет колонку или таблицу, не должна приезжать обычным `upgrade head`, пока живой код ещё читает удаляемое. Безопасный порядок описан в ранбуке [challonge_normalization_phase2_runbook.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/challonge_normalization_phase2_runbook.md).
+Миграция, которая удаляет колонку или таблицу, не должна приезжать обычным `upgrade head`, пока живой код ещё читает удаляемое. Безопасный порядок описан в [CONTRIBUTING.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/CONTRIBUTING.md#database-changes).
 </Callout>
 
 ## Коммиты

@@ -66,15 +66,6 @@ Two zones need the same thing. In order of preference:
 
 Never: a relative `../../admin/…` climb, and never a re-export shim to launder the direction.
 
-## Historical names
-
-The `Admin` prefix is gone from `components/kit/` (2026-09-24): `LinkTabs`, `Combobox`,
-`FilterBar`, `useFilters`, `Inspector`, `SectionNav`. They were the admin surface's kit before
-other zones started using them; the directory is the scope, not the name.
-`components/data-table/` exports `DataTable` / `columnMeta` (renamed from
-`AdminDataTable` / `adminColumnMeta` on 2026-09-26 after deleting the unused
-`components/ui/data-table.tsx` that held the plain name).
-
 ## Why the tree is dynamic
 
 The root layout reads `cookies()` (locale, cookie-consent) and the proxy injects
@@ -116,8 +107,7 @@ things in this codebase are single-instance today and would need an owner first:
 `NextIntlClientProvider` serialises its `messages` into the RSC payload, and given no
 `messages` prop it serialises the **entire** tree. Every anonymous visitor was therefore
 downloading the admin draft console's strings, the quota editor's, and the registration form
-builder's. Two namespaces (`mapVeto`, `mapVetoAdmin`, 9 kB of `ru`) turned out to be read by
-nothing at all and are gone; each zone ships its own slice of the rest:
+builder's. Each zone ships its own slice:
 
 | Zone | Namespaces | Compact `en` | Compact `ru` |
 | --- | --- | --- | --- |

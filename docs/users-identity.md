@@ -2,7 +2,7 @@
 
 The canonical OWT identity reference: who a "user" is, how `auth.user` differs from `players.user`, what a virtual player and an auth-player are, how a person enters a workspace, and how an account is linked to a game profile.
 
-State: the current code after the identity/workspace refactor and the rank rework (`balancer.member_rank`). This document describes *how it is*; the reasons are in Graphiti (group `anak-tournaments`, the identity/workspace refactor design).
+State: the current code after the identity/workspace refactor and the rank rework (`balancer.member_rank`). This document describes *how it is*; §4 records why.
 
 **Related documents**
 
@@ -205,7 +205,7 @@ The admin member list (`list_by_workspace`) filters on `auth_user_id IS NOT NULL
 
 There is no separate `workspace_player` table any more. The pool the balancer sees is `workspace_roster`: member + BattleTag + `display_name`.
 
-`ensure_member_for_battle_tag` (`backend/shared/services/workspace_roster.py:159`):
+`ensure_member_for_battle_tag` (`backend/shared/services/workspace_roster.py`):
 
 1. Find a `players.user` by battlenet handle.
 2. Otherwise create a virtual `players.user(name=tag)` and an unverified battlenet social account.
@@ -277,7 +277,7 @@ An empty `registration_role.rank_value` **inherits** the canon/OW value. It used
 
 Writing: `MemberRankService.set_ranks(..., author_user_id=)`. `author_user_id=None` writes the canon; anything else writes that account's book. The RPC `players.set_ranks` takes the author **only** from the actor: you cannot rewrite someone else's book over the wire. Reading someone else's book is allowed (`author_user_id` in the query) — it is the "what the host thinks" column.
 
-Tournament entry point: `resolve_registration_ranks` (`backend/tournament-service/src/services/registration/rank_resolution.py`). Without a `workspace_member_id` or without a `workspace_id` only the registration layer answers — guessing the tenant is worse than not inheriting.
+Tournament entry point: `RosterEngine` (`backend/shared/services/roster.py`) calls `MemberRankService.resolve` (`backend/shared/services/member_rank.py`) with `order=TOURNAMENT_ORDER`. Without a `workspace_member_id` or without a `workspace_id` only the registration layer answers — guessing the tenant is worse than not inheriting.
 
 OW is pulled in only where the cheaper layers left a hole. Snapshots collapse into the best rank per role on `players.user`, then (if a grid was passed) are normalized into the DivisionGrid.
 
@@ -388,7 +388,7 @@ Service: `backend/identity-service/src/services/players.py` (`PlayerLinkService`
 
 ### 6.1. Provisioning at account creation
 
-**Password signup** (`AuthUserService.register`, `backend/identity-service/src/services/auth_users.py:116`):
+**Password signup** (`AuthUserService.register`, `backend/identity-service/src/services/auth_users.py`):
 
 1. Create the `auth.user`.
 2. Grant the global role `user` if it exists in this deployment.
@@ -494,10 +494,10 @@ flowchart LR
 
 ### 7.1. Self-service tournament registration
 
-`RegistrationService.create_registration` (`backend/tournament-service/src/services/registration/service.py:526`).
+`RegistrationService.create_registration` (`backend/tournament-service/src/services/registration/service.py`).
 
 1. Capability `registration.self_register` in this workspace. A deny → 403.
-2. Create the `balancer.registration` (the row carries no `auth_user_id` / `workspace_id`; both were dropped in dbarch02).
+2. Create the `balancer.registration` (the row carries no `auth_user_id` / `workspace_id`).
 3. `ensure_player_identity(..., auth_user_id, workspace_id)`:
    - resolves the `players.user`;
    - `get_or_create_workspace_member`;
@@ -510,7 +510,7 @@ Without a battle_tag, `ensure_player_identity` may return `None` (except when an
 
 ### 7.2. An admin adds a member
 
-`WorkspaceService.add_member(workspace_id, auth_user_id)` (`backend/app-service/src/services/workspace/service.py:357`).
+`WorkspaceService.add_member(workspace_id, auth_user_id)` (`backend/app-service/src/services/workspace/service.py`).
 
 The signature still takes an `auth_user_id`. Internally:
 
@@ -535,7 +535,7 @@ The parser and admin player CRUD use `resolve_workspace_member_id(tournament_id,
 
 ### 7.4. `ensure_player_identity` — resolution priority
 
-Source: `backend/tournament-service/src/services/registration/service.py:382`.
+Source: `backend/tournament-service/src/services/registration/service.py`.
 
 ```
 1. registration.workspace_member_id is already set
@@ -555,7 +555,7 @@ Then anchor the workspace_member if it is not the right one yet.
 
 ### 7.5. Registration and the mix roster
 
-Registration no longer creates a separate roster row. The identity already sits on `workspace_member`. The effective rank of a cell comes from `resolve_registration_ranks` under `TOURNAMENT_ORDER`.
+Registration no longer creates a separate roster row. The identity already sits on `workspace_member`. The effective rank of a cell comes from `MemberRankService.resolve` under `TOURNAMENT_ORDER`.
 
 ---
 
@@ -698,7 +698,7 @@ The access token still returns `linked_players` as an array of length 0 or 1 (`L
 | `Cannot unlink … member of workspace(s): X` | Remove `member`/`admin`/`owner` or leave X first. The `player` role is not in the way. |
 | OAuth says "account linked" but the profile is empty | A stale verified subject sits on another player. An explicit link now calls `release_foreign_subject`; older login paths without `claim_subject` can swallow the conflict (`SocialHandleConflict` → rollback, the login itself survives). |
 | A sheet row without a `workspace_member_id` | Most likely main+smurf: two tags resolve to one player and the second live registration is in the same tournament. Check the `ensure_player_identity` warning in the log. |
-| A player with a canon rank dropped out of the tournament pool | An empty `rank_value` is supposed to inherit. Look at `resolve_registration_ranks` / `TOURNAMENT_ORDER`, not at the raw `registration_role`. |
+| A player with a canon rank dropped out of the tournament pool | An empty `rank_value` is supposed to inherit. Look at `MemberRankService.resolve` / `TOURNAMENT_ORDER`, not at the raw `registration_role`. |
 | The host sees a rank other than the canon | A mix reads `author` above `workspace`. The book is only written by that host's own `set_ranks(scope=author)`. |
 | 500 `workspace_member N has no linked auth user` | An admin triggered an RBAC operation on a virtual member. Link player↔auth first, roles after. |
 | Signup 409 "OAuth email already belongs…" | `auth.user.email` is unique and either the synthetic `id@provider.oauth` or the real email is taken. Sign in to the existing account and link the provider. |
@@ -726,16 +726,9 @@ GROUP BY workspace_member_id, role HAVING COUNT(*) > 1;          -- 0 rows
 
 ---
 
-## 12. Evolution history
+## 12. Old names in the code
 
-1. **Before the refactor.** `auth.user_player(auth_user_id, player_id, is_primary)` was a nominal M2M. `workspace_member(auth_user_id, role:str)`. Registrations and rosters mixed `auth_user_id` and `players.user.id`. `players.user` was created lazily on registration.
-2. **Phase A.** The `players.user.auth_user_id` column, signup provisioning, workspace-scoped deny. Non-primary links became virtual players.
-3. **Phase B.** `workspace_member` moved to `player_id`, the `role` column died, the system role `player` and the `self_register` capability appeared.
-4. **Phase C / dbarch02+.** `balancer.registration` and `tournament.player` (plus achievements and draft) anchor on `workspace_member_id`.
-5. **Workspace roster.** The mix pool became `workspace_member` + `workspace_roster`. The `workspace_player` table was removed.
-6. **Ranks (`member_rank`).** One table instead of `workspace_player_rank` / `host_player_rank` / the per-game pin. A resolver with a layer order: mix `author → workspace → ow`, tournament `registration → workspace → ow`. An empty registration cell inherits.
-
-Old names in the code that must not be mistaken for the model:
+Names that must not be mistaken for the model:
 
 | Name | Reality |
 |---|---|
@@ -782,11 +775,11 @@ In code comments and logs a virtual player is often called a `shadow` player. Sa
 | Social | `backend/shared/models/identity/social.py`, `backend/shared/services/social_identity.py` |
 | OAuth connection | `backend/shared/models/identity/oauth.py` |
 | `workspace_member` | `backend/shared/models/tenancy/workspace.py` |
-| `get_or_create_workspace_member` | `backend/shared/repository/workspace.py:425` |
+| `get_or_create_workspace_member` | `backend/shared/repository/workspace.py` |
 | Workspace roster | `backend/shared/services/workspace_roster.py` |
 | Ranks (model) | `backend/shared/models/member_rank/member_rank.py` |
 | Ranks (resolver) | `backend/shared/domain/member_rank.py`, `backend/shared/services/member_rank.py` |
-| Tournament ranks | `backend/tournament-service/src/services/registration/rank_resolution.py` |
+| Tournament ranks | `backend/shared/services/roster.py` (`RosterEngine`) |
 | Player link | `backend/identity-service/src/services/players.py` |
 | Signup + `ensure_player` | `backend/identity-service/src/services/auth_users.py` |
 | OAuth match / link | `backend/identity-service/src/services/oauth_accounts.py` |
@@ -799,7 +792,7 @@ In code comments and logs a virtual player is often called a `shadow` player. Sa
 | OAuth match tests | `backend/identity-service/tests/test_oauth_account_matching.py` |
 | Registration reconciliation tests | `backend/tournament-service/tests/test_ensure_player_identity_reconciliation.py` |
 | Member anchor tests | `backend/shared/tests/test_workspace_member_player_anchor.py` |
-| Rank resolution tests | `backend/balancer-service/tests/test_member_rank_resolve.py`, `backend/tournament-service/tests/test_registration_rank_resolution.py` |
+| Rank resolution tests | `backend/balancer-service/tests/test_member_rank_resolve.py`, `backend/tournament-service/tests/test_registration_rank_layers.py` |
 
 ---
 

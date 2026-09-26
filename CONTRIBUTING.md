@@ -63,9 +63,16 @@ One Alembic project, `backend/migrations/`, over one database shared by every se
    around them does not. CI fails if the two disagree.
 
 **Destructive migrations are gated.** A migration that drops a column or table must not run
-from a plain `upgrade head` while readers still reference it. The 2026-07-05 production
-incident came from exactly that; the pattern for doing it safely is in
-[`docs/challonge_normalization_phase2_runbook.md`](./docs/challonge_normalization_phase2_runbook.md).
+from a plain `upgrade head` while readers still reference it — the 2026-07-05 production
+incident came from exactly that. Ship it in two deploys:
+
+1. **Expand/migrate:** move every reader and writer off the column; keep the column on the DB
+   and the ORM model.
+2. **Contract:** the drop migration is a no-op unless an env flag is set
+   (`OWT_APPLY_<THING>_DROP=1`), and it removes the ORM field in the same deploy. Verify the
+   deployed image, not the checkout, and check data parity before applying. Never run
+   `upgrade head` without the flag first: that stamps the revision as applied and the real
+   drop then needs a fresh migration.
 
 ## Generated artifacts
 

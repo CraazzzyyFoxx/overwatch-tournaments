@@ -83,8 +83,8 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    WebSocket upgrades, caps body size at 12 MB (60 MB for match-log upload paths), and
    `proxy_pass`es to `gateway:8080` with runtime DNS re-resolution. It emits a JSON access log
    (`$uri` only — the WS token must never be logged) carrying `$limit_req_status`, which
-   promtail turns into both Loki streams and Prometheus rejection counters. The limits ship in
-   `limit_req_dry_run` mode pending calibration.
+   promtail turns into both Loki streams and Prometheus rejection counters. The limits are
+   enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
    HTTP/2 attack surface belongs to Traefik (nginx only ever speaks HTTP/1.1 here) and
    L3/L4 to the hosting provider.
 3. The **gateway** (`gateway/cmd/gateway/main.go`):

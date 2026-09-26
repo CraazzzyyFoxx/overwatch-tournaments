@@ -2,7 +2,7 @@
 
 > The single source of truth for the OWT frontend design system.
 > Interactive version: [`/docs/design-book.html`](../frontend/public/docs/design-book.html).
-> Status: **v2 — tokens reconciled** against `frontend/src/app/globals.css` (the real `--aqt-*`, not the prototype `--bg`/`--brand`). Every rule below carries one of three tiers, the same three the interactive version uses: **Verified** — measured against `globals.css` / `tailwind.config.ts`, safe to build on; **Specified** — stated by this book and not implemented upstream, whether a target rule or a token/component API the code expresses only as CSS-class shape and inline literals; **Fixed** — a divergence that was found and has already been repaired upstream, recorded so the fix is not undone by someone reading older code.
+> Tokens are reconciled against `frontend/src/app/globals.css` (the real `--aqt-*`). Every rule below carries one of two tiers: **Verified** — measured against `globals.css`, safe to build on; **Specified** — stated by this book and not implemented upstream, whether a target rule or a token/component API the code expresses only as CSS-class shape and inline literals.
 
 The direction is **Editorial Tactical**: an airy editorial layout (hairline rules, open blocks instead of boxes, large mixed-case headings) plus a tactical/broadcast voice (a barely visible coordinate grid, mono labels, a large grotesque on numbers). Dark-only.
 
@@ -151,34 +151,7 @@ The stack collapses into `+N`; the overlap is −9px; player avatars (as opposed
 
 ## 7. Layout
 
-- Content width: `max-width:1400px` (1180 is too narrow) — **Specified**, not implemented in code. The site's real container is `1720px` (`screen-3xl`, `frontend/tailwind.config.ts`, applied in `(site)/layout.tsx`) with `px-4/md:px-6/xl:px-10` gutters — **Verified**. 1400px remains the target for narrowing the readable column later, not a description of the current layout.
+- Content width: `max-width:1400px` (1180 is too narrow) — **Specified**, not implemented in code. The site's real container is `1720px` (`screen-3xl`, `--container-screen-3xl` in `frontend/src/app/globals.css`, applied in `(site)/layout.tsx`) with `px-4/md:px-6/xl:px-10` gutters — **Verified**. 1400px remains the target for narrowing the readable column later, not a description of the current layout.
 - The profile Overview is two flex columns (`main flex:1` + `sidebar 380px`), and the cards pack tightly without grid gaps; on mobile the columns need `align-items:stretch`.
 - Numeric table columns: `th.num { text-align:right }` must beat `table.tbl th` on specificity.
 - Wide content (tables, brackets) scrolls horizontally inside its own container (`.tblw`); the page body never scrolls sideways.
-
-## 8. Decision changelog (prototype v22 → v48)
-
-| Version | Decision |
-|---|---|
-| v22–25 | Profile tabs, scouting report, percentile language, mobile fixes (`min-width:0` on grid children), a11y pass |
-| v27–35 | Tournaments subpage: real API fields, no invented MVPs or dates; accordions dropped after 5 iterations |
-| v40–42 | **Master-detail** "Event dossier"; roster table: role as an icon, division as an icon, Avg MVP |
-| v43 | Type scale +1px for everything ≤14.5px (the "too small" complaint) |
-| v44 | Match heroes = a 1–3+N stack (OW players use several heroes); the LOG indicator; a modal with all opponents |
-| v45 | `th.num` alignment fix; nested padding normalised |
-| **v46** | **Onest** instead of Space Grotesk (Cyrillic); the `--win/--loss/--draw` + `--good/--mid/--bad` tokens; letters in map results; rings/hollows on trend dots; an Achievements grid with working filters; faceted Matches filters + a clickable "By stage"; fonts inlined into the artifact as data URIs |
-| **v47** | The role-marker rule (icon + text only in Role split); avatars 24→30px; horizontal percentile bars; Closeness; `2d ago`; "View all →"; muted provider chips |
-| **v48** | Lobby leaderboard built from KPI tiles; touch/keyboard popovers; low-sample gate + filter-zero empty state; deep links in the hash; Share → PNG |
-
-## 9. Fixed — found and already repaired upstream
-
-- **The `:root`-vs-`<body>` font trap.** Until a recent pass the stack did not render: `globals.css` aliased the `next/font` variables from `:root`, while `layout.tsx` hung the `.variable` classes on `<body>`. A custom property resolves where it is declared, so the variable simply did not exist on `:root` — and a failed `var()` poisons the whole value, so even a literal fallback next to it did not kick in. All 73 references to `--aqt-mono`/`--aqt-display` in `globals.css` silently rendered in Inter. Fixed by moving the classes onto `<html>` (`app/layout.tsx:109-116`).
-- **Uppercase on display blocks.** `globals.css` once forced `text-transform:uppercase` on the 52px display blocks — a direct violation of §2's "never condensed caps". Both blocks are mixed-case now; `uppercase` survives in the code only on mono labels (the correct use).
-
-## 10. Specified — still ahead of the code (Phase 0+)
-
-- Spacing-scale tokens; consolidating the ~10 metric-tile primitives into a single component.
-- `title` → `aria-label`/`alt` on divisions (in the real build `DivisionIcon` already has an alt).
-- Formalise "verdict" and "Top X%" as design-system components with generation rules and localisation (the Russian templates are authored, not translated).
-- Skeleton states in the system's own aesthetic (mono coordinates + a hairline frame).
-- Narrow the readable column to 1400px (it is 1720px full-width today) — if editorial review decides it is still needed.
