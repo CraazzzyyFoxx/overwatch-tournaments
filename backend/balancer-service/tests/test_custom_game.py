@@ -929,6 +929,60 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(ctx.exception.status_code, 403)
 
+    async def test_signup_post_opens_the_window_and_builds_the_card(self) -> None:
+        game = _game(name="Friday mix")
+        self.games.get.return_value = game
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        self.load_hosts.return_value = {9: "Foxx"}
+
+        channel_id, card = await self.service.signup_post(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            self_signup="benched",
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertEqual(channel_id, 555)
+        self.assertEqual(game.self_signup, "benched")
+        self.assertIn("Friday mix", card.text)
+        [[link]] = card.rows
+        self.assertEqual(link.url, "https://owt.example/balancer/mix/11")
+
+    async def test_signup_post_without_a_workspace_channel_409(self) -> None:
+        """Same refusal as posting a lineup: there is nowhere to post to."""
+        game = _game()
+        self.games.get.return_value = game
+        self.session.scalar = AsyncMock(return_value=None)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.signup_post(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                self_signup="pool",
+                actor_user_id=9,
+                board_url_base="https://owt.example",
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "Discord channel not configured")
+        self.assertEqual(game.self_signup, "closed")
+
+    async def test_signup_post_requires_the_host_403(self) -> None:
+        self.games.get.return_value = _game()
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.signup_post(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                self_signup="pool",
+                actor_user_id=8,
+                board_url_base="https://owt.example",
+            )
+        self.assertEqual(ctx.exception.status_code, 403)
+
     async def test_balance_sends_must_play_to_the_solver(self) -> None:
         game = _game()
         roster = [_roster_row(1, 7, 0, participation=MixParticipation.MUST_PLAY), _roster_row(2, 8, 1)]

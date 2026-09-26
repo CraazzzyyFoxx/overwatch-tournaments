@@ -37,6 +37,12 @@ class Settings(BaseServiceSettings):
     # Access token
     access_token_service: str = ""
 
+    # Absolute base of the public site, used to build the board link a mix's
+    # Discord signup card carries (``PUBLIC_SITE_URL``, the same value
+    # app-service and discord-service read). Platform zone only: a workspace's
+    # own subdomain or custom domain is out of scope for this link.
+    public_site_url: str = "http://localhost:3000"
+
     @field_validator("log_level", mode="before")
     @classmethod
     def validate_log_level(cls, v: str) -> str:

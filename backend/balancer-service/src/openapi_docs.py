@@ -382,6 +382,16 @@ DOCS: dict[str, dict] = {
             "no mix channel configured and 404 when the balance option is missing."
         ),
     },
+    "rpc.balancer.custom.post_signup": {
+        "summary": "Open custom game signup in Discord",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Opens self-signup in the given mode (into the pool or onto the bench) and queues a card "
+            "with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is "
+            "static: every click re-reads the mix, so it refuses correctly once signup closes or the "
+            "mix ends. 409 when the workspace has no mix channel configured."
+        ),
+    },
     "rpc.balancer.custom.transfer_host": {
         "summary": "Transfer custom game host",
         "description": (

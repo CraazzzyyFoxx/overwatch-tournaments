@@ -121,6 +121,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.custom.set_next_map": Op(request=custom_game.CustomGameNextMapPatch),
     "rpc.balancer.custom.set_variant_index": Op(request=custom_game.CustomGameVariantIndexPatch),
     "rpc.balancer.custom.post_discord": Op(request=custom_game.CustomGamePostDiscord),
+    "rpc.balancer.custom.post_signup": Op(request=custom_game.CustomGamePostSignup),
     "rpc.balancer.custom.transfer_host": Op(request=custom_game.CustomGameHostTransfer),
     "rpc.balancer.custom.add_co_host": Op(request=custom_game.CustomGameCoHostPatch),
     "rpc.balancer.custom.swap_seats": Op(request=custom_game.CustomGameSeatSwap),

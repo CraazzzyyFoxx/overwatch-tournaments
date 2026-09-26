@@ -2,7 +2,7 @@
 
 ``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,
 balance,set_team_names,set_next_map,set_variant_index,
-post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
+post_discord,post_signup,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
 undo_match,rotation,stats,close,delete,hard_delete,
 self_get,self_join,self_leave,self_update,set_self_service}``.
 
@@ -43,6 +43,7 @@ from shared.schemas.events import DiscordCommandEvent
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER
 from src.core import db
+from src.core.config import config
 from src.domain.balancer.result_serializer import as_lobby_document
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
@@ -774,6 +775,34 @@ def register(broker: Any, logger: Any) -> None:
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.post_signup")
+    async def _post_signup(data: dict, msg: RabbitMessage) -> dict:
+        """Open signup and post the card that announces it, in one click."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGamePostSignup, data)
+            channel_id, card = await custom_game_service.signup_post(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                self_signup=body.self_signup,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+                board_url_base=config.public_site_url,
+            )
+            event = DiscordCommandEvent(action="post_message", channel_id=channel_id, card=card)
+            await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
+            # The signup mode is a fact about the mix, so the board refreshes;
+            # delivery of the card itself is the bot's problem.
+            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            await session.commit()
+            return {"status": "queued", "channel_id": str(channel_id)}
+
+        return await c.envelope(logger, "custom.post_signup", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.transfer_host")
     async def _transfer_host(data: dict, msg: RabbitMessage) -> dict:

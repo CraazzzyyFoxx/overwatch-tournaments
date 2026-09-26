@@ -3914,6 +3914,14 @@
       },
       "summary": "Post custom game lineup to Discord"
     },
+    "rpc.balancer.custom.post_signup": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. 409 when the workspace has no mix channel configured.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGamePostSignup"
+      },
+      "summary": "Open custom game signup in Discord"
+    },
     "rpc.balancer.custom.record_outcome": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Repeatable until the mix is closed.",
       "request": {
@@ -22366,6 +22374,25 @@
         "variant_index"
       ],
       "title": "CustomGamePostDiscord",
+      "type": "object"
+    },
+    "balancer.CustomGamePostSignup": {
+      "additionalProperties": false,
+      "description": "Which signup mode the posted card opens. ``closed`` is not a choice here:\nposting a card that refuses every click is never the intent.",
+      "properties": {
+        "self_signup": {
+          "enum": [
+            "pool",
+            "benched"
+          ],
+          "title": "Self Signup",
+          "type": "string"
+        }
+      },
+      "required": [
+        "self_signup"
+      ],
+      "title": "CustomGamePostSignup",
       "type": "object"
     },
     "balancer.CustomGameRecordOutcome": {

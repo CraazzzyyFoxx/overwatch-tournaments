@@ -203,11 +203,12 @@ func TestMixReadsArePublic(t *testing.T) {
 // clicker, and the host-only switches must not land on /me.
 func TestMixSelfServiceRoutes(t *testing.T) {
 	want := map[string]string{
-		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":           "rpc.balancer.custom.self_get",
-		"POST /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":          "rpc.balancer.custom.self_join",
-		"DELETE /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":        "rpc.balancer.custom.self_leave",
-		"PATCH /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":         "rpc.balancer.custom.self_update",
-		"PUT /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/self-service": "rpc.balancer.custom.set_self_service",
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":              "rpc.balancer.custom.self_get",
+		"POST /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":             "rpc.balancer.custom.self_join",
+		"DELETE /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":           "rpc.balancer.custom.self_leave",
+		"PATCH /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me":            "rpc.balancer.custom.self_update",
+		"PUT /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/self-service":    "rpc.balancer.custom.set_self_service",
+		"POST /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/signup": "rpc.balancer.custom.post_signup",
 	}
 	for _, route := range RosterRoutes {
 		key := route.Method + " " + route.Pattern

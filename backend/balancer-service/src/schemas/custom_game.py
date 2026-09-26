@@ -21,6 +21,7 @@ __all__ = (
     "CustomGamePlayerParticipationPatch",
     "CustomGamePlayersParticipationPatch",
     "CustomGamePostDiscord",
+    "CustomGamePostSignup",
     "CustomGameRecordOutcome",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
@@ -205,3 +206,10 @@ class CustomGameSelfServicePatch(_Request):
 
     self_signup: MixSelfSignup | None = None
     self_role_edit: StrictBool | None = None
+
+
+class CustomGamePostSignup(_Request):
+    """Which signup mode the posted card opens. ``closed`` is not a choice here:
+    posting a card that refuses every click is never the intent."""
+
+    self_signup: Literal["pool", "benched"]

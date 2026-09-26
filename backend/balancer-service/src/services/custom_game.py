@@ -40,6 +40,7 @@ from shared.repository import (
     WorkspaceMemberRepository,
 )
 from shared.repository.workspace import get_or_create_workspace_member
+from shared.schemas.events import DiscordCard
 from shared.schemas.roster_slots import RosterShapeRead
 from shared.services.account_links import missing_account_links
 from shared.services.division_grid.access import get_effective_division_grid
@@ -52,7 +53,7 @@ from shared.services.workspace_roster import (
     workspace_member_user_ids,
 )
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
-from src.domain.mix_discord import build_lineup_embed
+from src.domain.mix_discord import build_lineup_embed, signup_card
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
@@ -976,6 +977,52 @@ class CustomGameService:
             game.self_role_edit = patch["self_role_edit"]
         await session.flush()
         return game
+
+    async def signup_post(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        self_signup: str,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+        board_url_base: str,
+    ) -> tuple[int, DiscordCard]:
+        """Open signup and build the card that announces it.
+
+        The mode is written HERE rather than left to a separate call: a card in
+        the channel whose buttons answer ``signup_closed`` is the one outcome
+        nobody wants, and the column -- not the card -- is what admits a player.
+
+        Publishing is the RPC layer's job (that is where the broker is), so this
+        returns the channel and the payload, exactly like :meth:`discord_lineup`.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        # Resolved before the write: posting nowhere and silently opening signup
+        # would leave the host believing the channel has a card.
+        channel_id = await self.workspace_discord_channel_id(session, workspace_id)
+        if channel_id is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
+        try:
+            game.self_signup = MixSelfSignup(self_signup).value
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid self_signup") from exc
+        host_names = await self.hosts(session, workspace_id, [game.host_user_id])
+        card = signup_card(
+            mix_name=game.name,
+            host_name=host_names.get(game.host_user_id),
+            board_url=f"{board_url_base.rstrip('/')}/balancer/mix/{game.id}",
+            custom_game_id=game.id,
+        )
+        await session.flush()
+        return channel_id, card
 
     async def _host_config(self, session: AsyncSession, host_user_id: int | None) -> Any:
         """The host's ``balancer.user_config`` row, or ``None`` if they never saved one.
