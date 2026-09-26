@@ -19,6 +19,9 @@ receivers:
   - name: discord
     discord_configs:
       - webhook_url_file: /run/secrets/discord_webhook_url
+        # Home cannot reach discord.com directly (docker-compose.monitoring.yml, `proxy`).
+        http_config:
+          proxy_url: socks5://proxy:1080
         title: |
           {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}
         message: |

@@ -12,7 +12,7 @@ on home, "Moscow is hung" is itself an alert.
 |---|---|---|
 | Moscow | `alloy` — scrapes the stack, tails `./logs`, receives OTLP, pushes everything to home | `docker-compose.production.yml`, profile `telemetry`; config `monitoring/alloy/moscow.alloy` |
 | Moscow | `nginx-exporter` — nginx `stub_status` (Alloy has no embedded nginx exporter) | `docker-compose.production.yml`, profile `telemetry` |
-| home | `owt-monitoring`: Prometheus, Alertmanager, Grafana, Loki, Tempo, blackbox-exporter | `docker-compose.monitoring.yml`, checkout of `master` in `~/owt-monitoring` |
+| home | `owt-monitoring`: Prometheus, Alertmanager, Grafana, Loki, Tempo, blackbox-exporter, `proxy` (xray, for Discord) | `docker-compose.monitoring.yml`, checkout of `master` in `~/owt-monitoring` |
 
 The profile keeps the agent production-only: production sets `COMPOSE_PROFILES=telemetry` in
 the root `.env`; the dev site on home runs the same `docker-compose.production.yml` without
@@ -67,6 +67,7 @@ its container. Every port on home binds `127.0.0.1`; Traefik on the host is the 
 | Moscow root `.env` | `POSTGRES_EXPORTER_DSN` | Postgres **:5432**, not pgBouncer :6432 (transaction pooling breaks the exporter) |
 | home `~/owt-monitoring/.env` | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_ROOT_URL` | Grafana |
 | home `monitoring/secrets/` | `discord_webhook_url` | Alertmanager → Discord |
+| home `~/owt-monitoring/proxy/xray.json` | xray client config (SOCKS5 on `proxy:1080`) | Alertmanager's only way to Discord — home cannot reach discord.com directly. Same file as the dev site's `~/owt-dev/proxy/xray.json` |
 | home `/etc/traefik/dynamic.yml` | routers `owt-ingest-{metrics,logs,traces}`, `owt-grafana`; middlewares `owt-ingest-allow`, `owt-ingest-auth` (bcrypt of the ingest password) | the only way into the stack |
 
 The secret files are gitignored. Alertmanager runs as `nobody`: make them readable by it
@@ -178,8 +179,11 @@ sending to Sentry (quota), remove `otelcol.exporter.otlphttp.sentry.input` from
 `otelcol.processor.batch "traces"` and restart Alloy; Tempo keeps working.
 
 **Alertmanager restarts in a loop / nothing reaches Discord.** `monitoring/secrets/` is
-missing a file or `nobody` cannot read it (see "Secrets"). Post a synthetic alert to test
-delivery end to end:
+missing a file, `nobody` cannot read it (see "Secrets"), or the `proxy` container is down or
+its `proxy/xray.json` stopped working — `alertmanager_notifications_failed_total{integration="discord"}`
+climbing with "Notify attempt failed" in the logs. Alertmanager does not reload its config on
+its own: after editing `alertmanager.yml`, `docker exec owt-monitoring-alertmanager-1 wget -qO- --post-data= http://localhost:9093/-/reload`.
+Post a synthetic alert to test delivery end to end:
 
 ```bash
 docker exec owt-monitoring-alertmanager-1 wget -qO- \

@@ -48,6 +48,31 @@ services:
           cpus: '0.10'
           memory: 256M
 
+  # xray SOCKS5 on proxy:1080, same image and config shape as the production
+  # stack's `proxy`. Home cannot reach discord.com directly, so Alertmanager's
+  # Discord notifications go through it. ./proxy/xray.json is gitignored: copy
+  # the working one from the dev site (~/owt-dev/proxy/xray.json).
+  proxy:
+    image: dockerhub.timeweb.cloud/teddysun/xray:latest
+    logging: *log-rotate
+    restart: unless-stopped
+    command: ["xray", "run", "-c", "/etc/xray/config.json"]
+    volumes:
+      - ./proxy/xray.json:/etc/xray/config.json:ro
+    healthcheck:
+      test: ["CMD", "xray", "run", "-test", "-config", "/etc/xray/config.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.10'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
   alertmanager:
     # v0.28+ is REQUIRED: v0.27.0 parses `webhook_url_file` in discord_configs but
     # its receiver validation still demands `webhook_url`.
@@ -61,6 +86,10 @@ services:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/secrets:/run/secrets:ro
       - alertmanager_data:/alertmanager
+    # Discord is not reachable from home directly; the discord receiver goes
+    # through the `proxy` service (http_config.proxy_url in alertmanager.yml).
+    depends_on:
+      - proxy
     deploy:
       resources:
         limits:
