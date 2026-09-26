@@ -9678,7 +9678,7 @@
       "summary": "Activate and generate stage"
     },
     "rpc.tournament.stage_apply_best_of": {
-      "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from its settings_json best-of config (in place, preserving scores).",
+      "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
       "summary": "Apply best-of to existing matches"
     },
     "rpc.tournament.stage_auto_wire": {
@@ -9752,6 +9752,18 @@
         "ref": "tournament.StageRead"
       },
       "summary": "Wire stage from groups"
+    },
+    "rpc.tournament.standing_pins_set": {
+      "description": "Permission: workspace `standing.update` on the stage's workspace. Replaces every pin of one standings table (the stage plus body `stage_item_id`, null for an elimination stage): a pinned team keeps that place whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins the table. 422 for a team outside the table or a place past its end; 409 when a playoff seeded from the group is under way and the change touches its qualifying places or removes a pin. Schedules the standings-recalculation job that applies them (202 Accepted).",
+      "request": {
+        "array": false,
+        "ref": "tournament.StandingPinsUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.TournamentComputationJobRead"
+      },
+      "summary": "Set standings pins"
     },
     "rpc.tournament.standing_recalculate": {
       "description": "Permission: workspace `standing.update` on the tournament's workspace. Schedules a durable standings-recalculation job (202 Accepted) for the tournament.",
@@ -38715,6 +38727,11 @@
           "title": "Games Played",
           "type": "integer"
         },
+        "is_pinned": {
+          "default": false,
+          "title": "Is Pinned",
+          "type": "boolean"
+        },
         "points": {
           "title": "Points",
           "type": "number"
@@ -38820,6 +38837,41 @@
         "score_label"
       ],
       "title": "FfaRulesRead",
+      "type": "object"
+    },
+    "tournament.FfaScoring": {
+      "additionalProperties": false,
+      "description": "What an ffa_league stage pays for (plan \u00a74.2); inert on any other type.",
+      "properties": {
+        "placement_points": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 100,
+          "title": "Placement Points",
+          "type": "array"
+        },
+        "score_label": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Label"
+        },
+        "score_points": {
+          "default": 1.0,
+          "minimum": 0,
+          "title": "Score Points",
+          "type": "number"
+        }
+      },
+      "title": "FfaScoring",
       "type": "object"
     },
     "tournament.FieldValidation": {
@@ -43953,6 +44005,40 @@
       "title": "SortOrder",
       "type": "string"
     },
+    "tournament.StageBestOf": {
+      "additionalProperties": false,
+      "description": "Series length per encounter: ``final`` (an elimination stage's last round),\nelse the round's own ``by_round`` entry, else ``default``.",
+      "properties": {
+        "by_round": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Round",
+          "type": "object"
+        },
+        "default": {
+          "default": 3,
+          "minimum": 1,
+          "title": "Default",
+          "type": "integer"
+        },
+        "final": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final"
+        }
+      },
+      "title": "StageBestOf",
+      "type": "object"
+    },
     "tournament.StageCreate": {
       "properties": {
         "advance_count": {
@@ -43967,6 +44053,9 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "best_of": {
+          "$ref": "#/components/schemas/tournament.StageBestOf"
         },
         "challonge_id": {
           "anyOf": [
@@ -43992,6 +44081,15 @@
           "default": null,
           "title": "Challonge Slug"
         },
+        "de_grand_final_type": {
+          "default": "no_reset",
+          "enum": [
+            "no_reset",
+            "with_reset"
+          ],
+          "title": "De Grand Final Type",
+          "type": "string"
+        },
         "description": {
           "anyOf": [
             {
@@ -44003,6 +44101,9 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "ffa_scoring": {
+          "$ref": "#/components/schemas/tournament.FfaScoring"
         },
         "max_rounds": {
           "default": 5,
@@ -44019,18 +44120,31 @@
           "title": "Order",
           "type": "integer"
         },
-        "settings_json": {
+        "ranking_preset": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Settings Json"
+          "title": "Ranking Preset"
+        },
+        "scoring": {
+          "$ref": "#/components/schemas/tournament.StageScoring"
+        },
+        "seed_ranking": {
+          "default": "slot",
+          "enum": [
+            "slot",
+            "avg_sr",
+            "total_sr",
+            "random"
+          ],
+          "title": "Seed Ranking",
+          "type": "string"
         },
         "split_lower_bracket": {
           "default": false,
@@ -44039,6 +44153,33 @@
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
+        },
+        "swiss_bye_points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swiss Bye Points"
+        },
+        "tiebreak_order": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tiebreak Order"
         }
       },
       "required": [
@@ -44437,6 +44578,9 @@
           "default": null,
           "title": "Advance Count"
         },
+        "best_of": {
+          "$ref": "#/components/schemas/tournament.StageBestOf"
+        },
         "challonge_id": {
           "anyOf": [
             {
@@ -44461,6 +44605,15 @@
           "default": null,
           "title": "Challonge Slug"
         },
+        "de_grand_final_type": {
+          "default": "no_reset",
+          "enum": [
+            "no_reset",
+            "with_reset"
+          ],
+          "title": "De Grand Final Type",
+          "type": "string"
+        },
         "description": {
           "anyOf": [
             {
@@ -44471,6 +44624,9 @@
             }
           ],
           "title": "Description"
+        },
+        "ffa_scoring": {
+          "$ref": "#/components/schemas/tournament.FfaScoring"
         },
         "id": {
           "title": "Id",
@@ -44510,18 +44666,31 @@
           "title": "Order",
           "type": "integer"
         },
-        "settings_json": {
+        "ranking_preset": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Settings Json"
+          "title": "Ranking Preset"
+        },
+        "scoring": {
+          "$ref": "#/components/schemas/tournament.StageScoring"
+        },
+        "seed_ranking": {
+          "default": "slot",
+          "enum": [
+            "slot",
+            "avg_sr",
+            "total_sr",
+            "random"
+          ],
+          "title": "Seed Ranking",
+          "type": "string"
         },
         "split_lower_bracket": {
           "default": false,
@@ -44530,6 +44699,33 @@
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
+        },
+        "swiss_bye_points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swiss Bye Points"
+        },
+        "tiebreak_order": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tiebreak Order"
         },
         "tournament_id": {
           "title": "Tournament Id",
@@ -44549,6 +44745,50 @@
       "title": "StageRead",
       "type": "object"
     },
+    "tournament.StageScoring": {
+      "additionalProperties": false,
+      "description": "Points per result on this stage. ``None`` = the tournament's points.",
+      "properties": {
+        "draw": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Draw"
+        },
+        "loss": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loss"
+        },
+        "win": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Win"
+        }
+      },
+      "title": "StageScoring",
+      "type": "object"
+    },
     "tournament.StageSummaryRead": {
       "properties": {
         "advance_count": {
@@ -44562,6 +44802,9 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "best_of": {
+          "$ref": "#/components/schemas/tournament.StageBestOf"
         },
         "challonge_id": {
           "anyOf": [
@@ -44587,6 +44830,15 @@
           "default": null,
           "title": "Challonge Slug"
         },
+        "de_grand_final_type": {
+          "default": "no_reset",
+          "enum": [
+            "no_reset",
+            "with_reset"
+          ],
+          "title": "De Grand Final Type",
+          "type": "string"
+        },
         "description": {
           "anyOf": [
             {
@@ -44597,6 +44849,9 @@
             }
           ],
           "title": "Description"
+        },
+        "ffa_scoring": {
+          "$ref": "#/components/schemas/tournament.FfaScoring"
         },
         "id": {
           "title": "Id",
@@ -44628,18 +44883,31 @@
           "title": "Order",
           "type": "integer"
         },
-        "settings_json": {
+        "ranking_preset": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Settings Json"
+          "title": "Ranking Preset"
+        },
+        "scoring": {
+          "$ref": "#/components/schemas/tournament.StageScoring"
+        },
+        "seed_ranking": {
+          "default": "slot",
+          "enum": [
+            "slot",
+            "avg_sr",
+            "total_sr",
+            "random"
+          ],
+          "title": "Seed Ranking",
+          "type": "string"
         },
         "split_lower_bracket": {
           "default": false,
@@ -44648,6 +44916,33 @@
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
+        },
+        "swiss_bye_points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swiss Bye Points"
+        },
+        "tiebreak_order": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tiebreak Order"
         },
         "tournament_id": {
           "title": "Tournament Id",
@@ -44679,6 +44974,7 @@
       "type": "string"
     },
     "tournament.StageUpdate": {
+      "description": "A partial edit: only the fields sent change (the service reads\n``exclude_unset``). ``scoring``, ``best_of`` and ``ffa_scoring`` are each\nreplaced as a whole. The non-nullable regulation fields carry a default only\nso that an explicit ``null`` is refused instead of written.",
       "properties": {
         "advance_count": {
           "anyOf": [
@@ -44693,6 +44989,18 @@
           "default": null,
           "title": "Advance Count"
         },
+        "best_of": {
+          "$ref": "#/components/schemas/tournament.StageBestOf"
+        },
+        "de_grand_final_type": {
+          "default": "no_reset",
+          "enum": [
+            "no_reset",
+            "with_reset"
+          ],
+          "title": "De Grand Final Type",
+          "type": "string"
+        },
         "description": {
           "anyOf": [
             {
@@ -44704,6 +45012,9 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "ffa_scoring": {
+          "$ref": "#/components/schemas/tournament.FfaScoring"
         },
         "max_rounds": {
           "anyOf": [
@@ -44742,18 +45053,31 @@
           "default": null,
           "title": "Order"
         },
-        "settings_json": {
+        "ranking_preset": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Settings Json"
+          "title": "Ranking Preset"
+        },
+        "scoring": {
+          "$ref": "#/components/schemas/tournament.StageScoring"
+        },
+        "seed_ranking": {
+          "default": "slot",
+          "enum": [
+            "slot",
+            "avg_sr",
+            "total_sr",
+            "random"
+          ],
+          "title": "Seed Ranking",
+          "type": "string"
         },
         "split_lower_bracket": {
           "anyOf": [
@@ -44777,9 +45101,81 @@
             }
           ],
           "default": null
+        },
+        "swiss_bye_points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swiss Bye Points"
+        },
+        "tiebreak_order": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tiebreak Order"
         }
       },
       "title": "StageUpdate",
+      "type": "object"
+    },
+    "tournament.StandingPinInput": {
+      "properties": {
+        "position": {
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id",
+        "position"
+      ],
+      "title": "StandingPinInput",
+      "type": "object"
+    },
+    "tournament.StandingPinsUpdate": {
+      "description": "Every pin one standings table should have, replacing what it had.\n\nThe table is the stage from the path plus ``stage_item_id`` (its group; NULL\nfor an elimination stage, whose table spans the whole stage). An empty\n``pins`` list unpins the whole table.",
+      "properties": {
+        "pins": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.StandingPinInput"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "stage_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Item Id"
+        }
+      },
+      "title": "StandingPinsUpdate",
       "type": "object"
     },
     "tournament.StandingRead": {
@@ -44814,6 +45210,11 @@
         "id": {
           "title": "Id",
           "type": "integer"
+        },
+        "is_pinned": {
+          "default": false,
+          "title": "Is Pinned",
+          "type": "boolean"
         },
         "lose": {
           "title": "Lose",

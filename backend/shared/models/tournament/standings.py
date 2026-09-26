@@ -1,4 +1,4 @@
-from sqlalchemy import Float, ForeignKey, Index, Integer
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -6,7 +6,7 @@ from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 
-__all__ = ("Standing",)
+__all__ = ("Standing", "StandingPin")
 
 
 class Standing(db.TimeStampIntegerMixin):
@@ -62,8 +62,52 @@ class Standing(db.TimeStampIntegerMixin):
     # group stage). Persisted so the API can surface an accurate value instead
     # of approximating it. NULL for elimination-stage standings.
     score_differential: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The organizer pinned this row's ``position`` (``StandingPin``); written by
+    #: the engine on every recalculation, like everything else on the row.
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     tournament: Mapped[Tournament] = relationship(back_populates="standings")
     team: Mapped[Team] = relationship(back_populates="standings")
     stage: Mapped[Stage | None] = relationship()
     stage_item: Mapped[StageItem | None] = relationship()
+
+
+class StandingPin(db.TimeStampIntegerMixin):
+    """An organizer's fixed place for one team in one standings table.
+
+    A table is a (stage, stage item) pair -- the scope ``Standing.position`` is
+    counted in. The engine ranks the table as usual, then seats every pinned team
+    at its place and lets the others fill the free places in computed order, so a
+    pin holds whatever results arrive later. Standing rows are rebuilt from
+    scratch on each recalculation, which is why the pin lives here and not on
+    them. ``stage_item_id`` is NULL for an elimination stage, whose table spans
+    the whole stage; NULLs compare equal in both unique indexes.
+    """
+
+    __tablename__ = "standing_pin"
+    __table_args__ = (
+        CheckConstraint("position >= 1", name="ck_standing_pin_position"),
+        Index(
+            "uq_standing_pin_team",
+            "stage_id",
+            "stage_item_id",
+            "team_id",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+        Index(
+            "uq_standing_pin_position",
+            "stage_id",
+            "stage_item_id",
+            "position",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+        {"schema": "tournament"},
+    )
+
+    tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
+    stage_id: Mapped[int] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"))
+    stage_item_id: Mapped[int | None] = mapped_column(ForeignKey(StageItem.id, ondelete="CASCADE"), nullable=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)

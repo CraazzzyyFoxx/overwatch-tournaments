@@ -1,7 +1,7 @@
 """Regression: resolving a Challonge group to its stage must not touch ``tournament.groups``.
 
 ``_stage_for_challonge_group`` links a Challonge group id to a stage through
-``stage.settings_json["challonge_group_id"]``. It used to fall back to the legacy
+``stage.challonge_group_id``. It used to fall back to the legacy
 ``tournament.group`` table (iterating ``tournament.groups`` and matching
 ``group.challonge_id``) when no stage carried the marker. That table and its ORM
 model were dropped, and ``Tournament`` declares no ``groups`` relationship at all,
@@ -27,7 +27,7 @@ from src.core import enums  # noqa: E402
 from src.services.challonge import sync  # noqa: E402
 
 
-def _stage(stage_id: int, settings_json: dict | None) -> models.Stage:
+def _stage(stage_id: int, challonge_group_id: int | None) -> models.Stage:
     return models.Stage(
         id=stage_id,
         created_at=datetime.now(UTC),
@@ -43,7 +43,7 @@ def _stage(stage_id: int, settings_json: dict | None) -> models.Stage:
         is_active=False,
         is_published=False,
         is_completed=False,
-        settings_json=settings_json,
+        challonge_group_id=challonge_group_id,
     )
 
 
@@ -64,8 +64,8 @@ def _tournament(stages: list[models.Stage]) -> models.Tournament:
 
 
 class StageForChallongeGroupTests(TestCase):
-    def test_marker_on_settings_json_resolves_the_stage(self) -> None:
-        wanted = _stage(2, {"challonge_group_id": 555})
+    def test_the_marker_column_resolves_the_stage(self) -> None:
+        wanted = _stage(2, 555)
         tournament = _tournament([_stage(1, None), wanted])
 
         self.assertIs(wanted, sync._stage_for_challonge_group(tournament, 555))
@@ -74,7 +74,7 @@ class StageForChallongeGroupTests(TestCase):
         # The first import of a grouped bracket: no stage carries the marker yet.
         # This must be a plain None so the caller creates the group stage; reaching
         # for the dropped `tournament.groups` raised AttributeError here.
-        tournament = _tournament([_stage(1, {"challonge_group_id": 111})])
+        tournament = _tournament([_stage(1, 111)])
 
         self.assertIsNone(sync._stage_for_challonge_group(tournament, 555))
 

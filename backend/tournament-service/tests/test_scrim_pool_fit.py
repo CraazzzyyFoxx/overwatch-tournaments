@@ -73,6 +73,7 @@ TABLE_NAMES = (
     "players.user",
     "tournament.tournament",
     "tournament.stage",
+    "tournament.stage_round_best_of",
     "tournament.team",
     "tournament.player",
     "tournament.encounter",

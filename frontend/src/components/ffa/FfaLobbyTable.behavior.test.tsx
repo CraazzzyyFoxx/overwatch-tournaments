@@ -47,6 +47,7 @@ function row(slot: number, extra: Partial<FfaLobbyRow> = {}): FfaLobbyRow {
     slot,
     position: slot,
     tie_group: null,
+    is_pinned: false,
     points: 10 - slot,
     games_played: 1,
     wins: 0,

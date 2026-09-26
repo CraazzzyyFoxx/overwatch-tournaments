@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BEST_OF_OPTIONS,
-  DEFAULT_BEST_OF,
   buildSequenceForBestOf,
   hasPerRoundBestOf,
-  parseStageBestOf,
   resolveBestOf,
   stageBestOfRoundSections,
   type BestOfRoundSection
@@ -22,46 +20,13 @@ import {
 const playedMaps = (sequence: string[]) =>
   sequence.filter((token) => !token.startsWith("ban")).length;
 
-describe("parseStageBestOf", () => {
-  it("degrades to an empty config for anything malformed", () => {
-    for (const bad of [null, undefined, {}, { best_of: null }, { best_of: [] }, { best_of: "bo3" }]) {
-      expect(parseStageBestOf(bad)).toEqual({});
-    }
-  });
-
-  it("reads default, by_round and final", () => {
-    expect(parseStageBestOf({ best_of: { default: 3, by_round: { "1": 2, "3": 5 }, final: 7 } })).toEqual(
-      { default: 3, by_round: { "1": 2, "3": 5 }, final: 7 }
-    );
-  });
-
-  it("drops invalid values and non-numeric round keys, like the server", () => {
-    // default 0 is < 1, final true is a bool, "x" is not a round, 2 -> 0 is < 1.
-    expect(
-      parseStageBestOf({
-        best_of: { default: 0, final: true, by_round: { "1": 2, x: 5, "2": 0, "3": true } }
-      })
-    ).toEqual({ by_round: { "1": 2 } });
-  });
-
-  it("keeps negative round keys, which lower-bracket rounds use", () => {
-    // Backend `parse_best_of_config` accepts these; dropping them here makes the
-    // admin editor and the server disagree on an LB round's series length.
-    expect(parseStageBestOf({ best_of: { default: 3, by_round: { "-1": 5, "2": 2 } } })).toEqual({
-      default: 3,
-      by_round: { "-1": 5, "2": 2 }
-    });
-  });
-});
-
 describe("resolveBestOf", () => {
-  it("falls back to the default, then to 3", () => {
-    expect(resolveBestOf({ default: 2 }, 4)).toBe(2);
-    expect(resolveBestOf({}, 4)).toBe(DEFAULT_BEST_OF);
+  it("falls back to the default", () => {
+    expect(resolveBestOf({ default: 2, by_round: {}, final: null }, 4)).toBe(2);
   });
 
   it("prefers a by_round override over the default", () => {
-    const config = { default: 3, by_round: { "1": 2 } };
+    const config = { default: 3, by_round: { "1": 2 }, final: null };
     expect(resolveBestOf(config, 1)).toBe(2);
     expect(resolveBestOf(config, 2)).toBe(3);
   });
@@ -73,15 +38,15 @@ describe("resolveBestOf", () => {
   });
 
   it("ignores an unset final on a final round", () => {
-    expect(resolveBestOf({ default: 3 }, 9, { isFinal: true })).toBe(3);
+    expect(resolveBestOf({ default: 3, by_round: {}, final: null }, 9, { isFinal: true })).toBe(3);
   });
 });
 
 describe("hasPerRoundBestOf", () => {
   it("is true only when some round differs from the default", () => {
-    expect(hasPerRoundBestOf({ default: 3 })).toBe(false);
-    expect(hasPerRoundBestOf({ default: 3, by_round: { "1": 2 } })).toBe(true);
-    expect(hasPerRoundBestOf({ default: 3, final: 5 })).toBe(true);
+    expect(hasPerRoundBestOf({ default: 3, by_round: {}, final: null })).toBe(false);
+    expect(hasPerRoundBestOf({ default: 3, by_round: { "1": 2 }, final: null })).toBe(true);
+    expect(hasPerRoundBestOf({ default: 3, by_round: {}, final: 5 })).toBe(true);
   });
 });
 

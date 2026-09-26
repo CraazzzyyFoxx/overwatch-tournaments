@@ -11,9 +11,8 @@
 //
 // Pinned through the REAL save mutation (`adminService.updateStage`), because
 // the claim is about the payload, not about a checkbox changing colour. Also
-// pinned: the two steps the engine owns rather than the editor — `points` is
-// forced first and cannot be switched off, `manual_override` is forced last and
-// is neither movable nor removable.
+// pinned: the step the engine owns rather than the editor — `points` is forced
+// first and cannot be switched off.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -114,7 +113,14 @@ function roundRobinStage(): Stage {
     order: 0,
     is_active: true,
     is_completed: false,
-    settings_json: {},
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
     challonge_id: null,
     challonge_slug: null,
     items: []
@@ -128,8 +134,7 @@ const RR_DEFAULT = [
   "median_buchholz",
   "match_wins",
   "score_differential",
-  "buchholz",
-  "manual_override"
+  "buchholz"
 ];
 
 let container: HTMLDivElement;
@@ -202,11 +207,8 @@ async function save() {
 }
 
 function savedOrder(): string[] {
-  const [, payload] = updateStage.mock.calls[0] as [
-    number,
-    { settings_json: { tiebreak_order: string[] } }
-  ];
-  return payload.settings_json.tiebreak_order;
+  const [, payload] = updateStage.mock.calls[0] as [number, { tiebreak_order: string[] }];
+  return payload.tiebreak_order;
 }
 
 beforeEach(() => {
@@ -234,8 +236,7 @@ describe("Stage editor tiebreakers, per-metric on/off", () => {
       "match_wins",
       "median_buchholz",
       "score_differential",
-      "buchholz",
-      "manual_override"
+      "buchholz"
     ]);
   });
 
@@ -251,8 +252,7 @@ describe("Stage editor tiebreakers, per-metric on/off", () => {
       "points",
       "head_to_head",
       "median_buchholz",
-      "score_differential",
-      "manual_override"
+      "score_differential"
     ]);
     // Absence is the whole mechanism: no "enabled: false" flag rides along.
     expect(savedOrder()).not.toContain("buchholz");
@@ -276,8 +276,7 @@ describe("Stage editor tiebreakers, per-metric on/off", () => {
       "match_wins",
       "score_differential",
       "buchholz",
-      "median_buchholz",
-      "manual_override"
+      "median_buchholz"
     ]);
     expect([...savedOrder()].sort()).toEqual([...RR_DEFAULT].sort());
   });
@@ -293,18 +292,5 @@ describe("Stage editor tiebreakers, per-metric on/off", () => {
     await click(moveButtons("Match Wins")[0]);
     await save();
     expect(savedOrder()[0]).toBe("points");
-  });
-
-  it("shows manual override as a fixed system step, neither movable nor removable", async () => {
-    await mount();
-
-    expect(moveButtons("Manual Override")).toEqual([]);
-    expect(toggle("Manual Override").hasAttribute("disabled")).toBe(true);
-    // Every other step keeps both arrows.
-    expect(moveButtons("Buchholz")).toHaveLength(2);
-
-    await click(toggle("Buchholz"));
-    await save();
-    expect(savedOrder().at(-1)).toBe("manual_override");
   });
 });

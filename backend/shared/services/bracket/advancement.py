@@ -369,7 +369,7 @@ async def _maybe_create_grand_final_reset(
     stage = await session.get(Stage, gf_encounter.stage_id)
     if stage is None or stage.stage_type != enums.StageType.DOUBLE_ELIMINATION:
         return None, []
-    if (stage.settings_json or {}).get("de_grand_final_type") != "with_reset":
+    if stage.de_grand_final_type != "with_reset":
         return None, []
 
     lb_slot = await session.scalar(

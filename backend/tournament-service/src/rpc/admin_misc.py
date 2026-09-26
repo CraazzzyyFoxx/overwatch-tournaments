@@ -493,6 +493,34 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
+    @broker.subscriber("rpc.tournament.standing_pins_set")
+    async def _standing_pins_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            stage_id = _path_int(data, "stage_id")
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
+            ensure_workspace_permission(user, ws_id, "standing", "update")
+            body = schemas.StandingPinsUpdate.model_validate(_payload(data) or {})
+            stage = await admin_stage_service.get_stage(session, stage_id)
+            before = await standing_service.get_pins(session, stage_id, body.stage_item_id)
+            await record_admin_audit(
+                session,
+                action="standing.pins_set",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="stage",
+                entity_id=stage_id,
+                entity_label=stage.name,
+                before={"stage_item_id": body.stage_item_id, "pins": before},
+                after={"stage_item_id": body.stage_item_id, "pins": {pin.team_id: pin.position for pin in body.pins}},
+            )
+            # set_pins commits (the audit row with it) and returns the recalculation job.
+            job = await standing_service.set_pins(session, stage, body, requested_by_user_id=int(user.id))
+            return _dump(schemas.TournamentComputationJobRead.model_validate(job, from_attributes=True))
+
+        return await _run(logger, op)
+
     # ── computation jobs (read-only) ──────────────────────────────────────
 
     @broker.subscriber("rpc.tournament.job_get")

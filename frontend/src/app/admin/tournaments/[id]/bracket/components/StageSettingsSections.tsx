@@ -18,16 +18,17 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
-import {
-  BEST_OF_OPTIONS,
-  DEFAULT_BEST_OF,
-  stageBestOfRoundSections
-} from "@/lib/tournament/best-of";
+import { BEST_OF_OPTIONS, stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { StageBestOfConfig } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
-import type { Stage, StageItem, StageType } from "@/types/tournament.types";
+import type {
+  SeedRanking,
+  Stage,
+  StageBestOfConfig,
+  StageItem,
+  StageType
+} from "@/types/tournament.types";
 
 import {
   BRACKET_STAGE_TYPES,
@@ -40,7 +41,6 @@ import {
   SEED_RANKING_LABELS,
   STAGE_TYPE_LABELS,
   tiebreakOrderForPreset,
-  type SeedRanking,
   type StageProjection
 } from "@/lib/bracket/projection";
 import { Spinner } from "@/components/ui/spinner";
@@ -61,12 +61,6 @@ type SectionProps = Readonly<{
   form: StageForm;
   onChange: (patch: Partial<StageForm>) => void;
 }>;
-
-/**
- * The engine appends this metric to every `tiebreak_order` it reads, so it is
- * rendered as a fixed system step rather than a step the editor owns.
- */
-const MANUAL_OVERRIDE = "manual_override";
 
 export function GeneralSection({
   stage,
@@ -424,26 +418,14 @@ export function TiebreakersSection({
   const catalogue = tiebreakersForStageType(form.stageType);
   const isGroups = GROUP_STAGE_TYPES.includes(form.stageType);
 
-  // `points` and `manual_override` are not tiebreakers an organizer chooses:
-  // `points` is the ranking metric every other step only separates ties on, and
-  // `manual_override` is the hand-placed position. The engine normalizes every
-  // saved order the same way — `points` forced first, `manual_override` forced
-  // last and always present, unknown or duplicated metrics dropped — so neither
-  // is offered here as a movable or removable step. Everything between them is
-  // free to reorder, and free to switch off: a metric that is absent from
-  // `tiebreak_order` is simply not evaluated.
-  const active = form.tiebreakOrder.filter((metricId) => metricId !== MANUAL_OVERRIDE);
-  const inactive = catalogue.filter(
-    (metric) => metric.id !== MANUAL_OVERRIDE && !form.tiebreakOrder.includes(metric.id)
-  );
-
-  /** Write the movable steps back, keeping `manual_override` pinned to the end. */
-  const setActive = (metrics: string[]) =>
-    onChange({
-      tiebreakOrder: form.tiebreakOrder.includes(MANUAL_OVERRIDE)
-        ? [...metrics, MANUAL_OVERRIDE]
-        : metrics
-    });
+  // `points` is not a tiebreaker an organizer chooses: it is the ranking metric
+  // every other step only separates ties on. The engine normalizes every saved
+  // order the same way — `points` forced first, unknown or duplicated metrics
+  // dropped — so it is not offered here as a movable or removable step.
+  // Everything after it is free to reorder, and free to switch off: a metric
+  // that is absent from `tiebreak_order` is simply not evaluated.
+  const active = form.tiebreakOrder;
+  const inactive = catalogue.filter((metric) => !form.tiebreakOrder.includes(metric.id));
 
   const isPinned = (index: number) => active[index] === "points";
 
@@ -453,11 +435,13 @@ export function TiebreakersSection({
     if (target < 0 || target >= next.length) return;
     if (isPinned(index) || isPinned(target)) return;
     [next[index], next[target]] = [next[target], next[index]];
-    setActive(next);
+    onChange({ tiebreakOrder: next });
   };
 
   const toggleMetric = (metricId: string, enabled: boolean) =>
-    setActive(enabled ? [...active, metricId] : active.filter((id) => id !== metricId));
+    onChange({
+      tiebreakOrder: enabled ? [...active, metricId] : active.filter((id) => id !== metricId)
+    });
 
   return (
     <div className="flex flex-col gap-5">
@@ -606,20 +590,6 @@ export function TiebreakersSection({
               </li>
             );
           })}
-          {/*
-            The system step. It carries no arrows and no switch because the
-            engine appends it to every order it reads: a hand-placed position
-            is the last word, after every metric above has come out level.
-          */}
-          <li className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-3 py-1 text-xs">
-            <span className="flex items-center gap-2 font-medium text-muted-foreground">
-              <Checkbox checked disabled aria-label="Use Manual Override" />
-              <span className="text-foreground">Manual Override</span>
-            </span>
-            <span className="text-label uppercase tracking-wide text-muted-foreground">
-              system step, always last
-            </span>
-          </li>
         </ol>
         {inactive.length > 0 ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-dashed border-border px-3 py-2">
@@ -664,7 +634,7 @@ export function BestOfSection({
     onChange({ bestOf: { ...form.bestOf, ...patch } });
 
   const setRound = (round: number, value: number | undefined) => {
-    const byRound = { ...(form.bestOf.by_round ?? {}) };
+    const byRound = { ...form.bestOf.by_round };
     if (value == null) delete byRound[String(round)];
     else byRound[String(round)] = value;
     onChange({ bestOf: { ...form.bestOf, by_round: byRound } });
@@ -679,7 +649,7 @@ export function BestOfSection({
         maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
         bracketTeamCount,
         splitLowerBracket: form.stageType === "double_elimination" && form.splitLowerBracket,
-        configuredRounds: Object.keys(form.bestOf.by_round ?? {}).map(Number)
+        configuredRounds: Object.keys(form.bestOf.by_round).map(Number)
       });
 
   return (
@@ -705,18 +675,13 @@ export function BestOfSection({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${ids}-default`}>{isFfa ? "Games per lobby" : "Default"}</Label>
           <Select
-            value={form.bestOf.default != null ? String(form.bestOf.default) : "inherit"}
-            onValueChange={(value) =>
-              patchBestOf({ default: value === "inherit" ? undefined : Number(value) })
-            }
+            value={String(form.bestOf.default)}
+            onValueChange={(value) => patchBestOf({ default: Number(value) })}
           >
             <SelectTrigger id={`${ids}-default`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inherit">
-                {isFfa ? `Default (${DEFAULT_BEST_OF} games)` : `Default (Bo${DEFAULT_BEST_OF})`}
-              </SelectItem>
               {BEST_OF_OPTIONS.map((n) => (
                 <SelectItem key={n} value={String(n)}>
                   {isFfa ? `${n} games` : `Bo${n}`}
@@ -731,7 +696,7 @@ export function BestOfSection({
             <Select
               value={form.bestOf.final != null ? String(form.bestOf.final) : "none"}
               onValueChange={(value) =>
-                patchBestOf({ final: value === "none" ? undefined : Number(value) })
+                patchBestOf({ final: value === "none" ? null : Number(value) })
               }
             >
               <SelectTrigger id={`${ids}-final`}>
@@ -761,7 +726,7 @@ export function BestOfSection({
                 <Label htmlFor={`${ids}-round-${round}`}>{label}</Label>
                 <Select
                   value={
-                    form.bestOf.by_round?.[String(round)] != null
+                    form.bestOf.by_round[String(round)] != null
                       ? String(form.bestOf.by_round[String(round)])
                       : "inherit"
                   }

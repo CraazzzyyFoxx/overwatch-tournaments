@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Lock } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -252,6 +253,15 @@ function LobbyRow({
             </span>
             <span className="sr-only">{t("ffa.tieCluster")}</span>
           </>
+        )}
+        {ranked && row.is_pinned && (
+          <span
+            className="ml-1 inline-flex align-[-0.125em] text-[color:var(--aqt-fg-dim)]"
+            title={t("ffa.pinnedPlace")}
+          >
+            <Lock aria-hidden className="size-3" />
+            <span className="sr-only">{t("ffa.pinnedPlace")}</span>
+          </span>
         )}
       </TableCell>
       <TableCell className={cn(STICKY_TEAM, "bg-inherit")}>

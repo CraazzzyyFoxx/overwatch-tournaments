@@ -8,7 +8,7 @@ arithmetic by construction (docs/plans/2026-09-24-ffa-encounters.md §5.2-5.3).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,7 +20,7 @@ __all__ = (
     "FfaTeamTotals",
     "game_points",
     "normalize_game_lines",
-    "parse_ffa_rules",
+    "ffa_rules",
     "team_totals",
 )
 
@@ -49,15 +49,17 @@ class FfaRules:
         return bool(self.placement_points)
 
 
-def parse_ffa_rules(settings: Mapping[str, Any] | None) -> FfaRules:
-    """``Stage.settings_json['ffa_scoring']`` -> rules; absent means score-only.
+def ffa_rules(stage: Any | None) -> FfaRules:
+    """A stage's scoring (``Stage.ffa_placement_points``/``ffa_score_points``).
 
-    The block was validated on write (``FfaScoring``), so this only converts.
+    No stage at all reads as score-only. The columns were validated on write
+    (``FfaScoring``), so this only converts.
     """
-    raw = (settings or {}).get("ffa_scoring") or {}
+    if stage is None:
+        return FfaRules()
     return FfaRules(
-        placement_points=tuple(float(value) for value in raw.get("placement_points", ())),
-        score_points=float(raw.get("score_points", 1.0)),
+        placement_points=tuple(float(value) for value in stage.ffa_placement_points or ()),
+        score_points=float(stage.ffa_score_points),
     )
 
 

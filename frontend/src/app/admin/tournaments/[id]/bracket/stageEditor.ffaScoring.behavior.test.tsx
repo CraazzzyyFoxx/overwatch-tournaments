@@ -3,7 +3,7 @@
 // One claim: an FFA league's points table is editable, and it is saved for an
 // FFA stage ONLY.
 //
-// `settings_json.ffa_scoring` is what the points adder reads
+// The stage's `ffa_scoring` is what the points adder reads
 // (`shared.domain.ffa_scoring.parse_ffa_rules`): points per place, plus points
 // per unit of raw score. A preset is a starting point, not the rule — the
 // organizer's real table ("2nd place is worth 7 here") has to survive the save,
@@ -21,7 +21,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { Stage, StageType } from "@/types/tournament.types";
+import type { StageUpdateInput } from "@/types/admin.types";
+import type { Stage, StageRegulation, StageType } from "@/types/tournament.types";
 
 import BracketTabPage from "./page";
 
@@ -107,7 +108,7 @@ if (!("ResizeObserver" in globalThis)) {
   });
 }
 
-function stage(stageType: StageType, settingsJson: Record<string, unknown> = {}): Stage {
+function stage(stageType: StageType, regulation: Partial<StageRegulation> = {}): Stage {
   return {
     id: 10,
     tournament_id: 84,
@@ -119,12 +120,21 @@ function stage(stageType: StageType, settingsJson: Record<string, unknown> = {})
     split_lower_bracket: false,
     order: 0,
     is_active: true,
+    is_published: false,
     is_completed: false,
-    settings_json: settingsJson,
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
+    ...regulation,
     challonge_id: null,
     challonge_slug: null,
     items: []
-  } as unknown as Stage;
+  };
 }
 
 /** A table left behind by a stage that used to be an FFA league. */
@@ -244,14 +254,8 @@ async function save() {
   await click(button);
 }
 
-function payload(): {
-  stage_type: StageType;
-  settings_json: Record<string, unknown> & { tiebreak_order?: string[] };
-} {
-  const [, sent] = updateStage.mock.calls[0] as [
-    number,
-    { stage_type: StageType; settings_json: Record<string, unknown> }
-  ];
+function payload(): StageUpdateInput {
+  const [, sent] = updateStage.mock.calls[0] as [number, StageUpdateInput];
   return sent;
 }
 
@@ -284,7 +288,7 @@ describe("Stage editor, FFA league scoring", () => {
     await save();
 
     expect(updateStage).toHaveBeenCalledTimes(1);
-    expect(payload().settings_json.ffa_scoring).toEqual({
+    expect(payload().ffa_scoring).toEqual({
       placement_points: [10, 7, 5, 4, 3, 2, 1, 1],
       score_points: 1,
       score_label: "Kills"
@@ -301,7 +305,7 @@ describe("Stage editor, FFA league scoring", () => {
     await type(field("1st place"), "3");
     await save();
 
-    expect(payload().settings_json.ffa_scoring).toEqual({
+    expect(payload().ffa_scoring).toEqual({
       placement_points: [3],
       score_points: 1,
       score_label: null
@@ -309,15 +313,14 @@ describe("Stage editor, FFA league scoring", () => {
   });
 
   it("keeps the block out of a stage that is not an FFA league", async () => {
-    // A round robin that used to be an FFA league still carries the block in
-    // `settings_json`; saving it as a round robin has to drop it, or the points
-    // adder reads a rule this stage no longer plays by.
+    // A round robin that used to be an FFA league still stores its table; the
+    // save of a round robin sends no FFA rule for a format that cannot use it.
     await mount(stage("round_robin", { ffa_scoring: SAVED_SCORING }), "general");
 
     await type(field("Name"), "Groups");
     await save();
 
-    expect(Object.keys(payload().settings_json)).not.toContain("ffa_scoring");
+    expect(payload()).not.toHaveProperty("ffa_scoring");
   });
 
   it("drops the FFA tiebreak order when the format stops being FFA", async () => {
@@ -329,10 +332,10 @@ describe("Stage editor, FFA league scoring", () => {
 
     const sent = payload();
     expect(sent.stage_type).toBe("round_robin");
-    expect(Object.keys(sent.settings_json)).not.toContain("ffa_scoring");
+    expect(sent).not.toHaveProperty("ffa_scoring");
     // A lobby metric on a duel stage is silently dropped by the engine, so the
     // order the editor saves has to be one the new format can actually run.
-    expect(sent.settings_json.tiebreak_order?.filter((id) => id.startsWith("ffa_"))).toEqual([]);
+    expect(sent.tiebreak_order?.filter((id) => id.startsWith("ffa_"))).toEqual([]);
   });
 
   it("offers the lobby tiebreakers, and only those", async () => {
@@ -343,7 +346,6 @@ describe("Stage editor, FFA league scoring", () => {
       "Game Wins",
       "Score",
       "Last Placement",
-      "Manual Override",
       "Best Placement"
     ]);
 
@@ -377,7 +379,7 @@ describe("Stage editor, FFA league scoring", () => {
     await choose("5 games");
     await save();
 
-    expect(payload().settings_json.best_of).toEqual({ default: 5 });
+    expect(payload().best_of).toEqual({ default: 5, by_round: {}, final: null });
   });
 
   it("drops a per-round override the lobby would silently obey", async () => {
@@ -394,6 +396,6 @@ describe("Stage editor, FFA league scoring", () => {
     await choose("7 games");
     await save();
 
-    expect(payload().settings_json.best_of).toEqual({ default: 7 });
+    expect(payload().best_of).toEqual({ default: 7, by_round: {}, final: null });
   });
 });

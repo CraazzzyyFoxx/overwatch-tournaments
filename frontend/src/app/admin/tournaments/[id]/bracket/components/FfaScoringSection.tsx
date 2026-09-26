@@ -26,7 +26,7 @@ import {
 import type { StageForm } from "../stageForm";
 
 /**
- * What an FFA league pays for: `settings_json.ffa_scoring`.
+ * What an FFA league pays for: the stage's `ffa_scoring`.
  *
  * A preset only fills the table in. The points a place is worth are the
  * organizer's, and a league that pays nothing for placement (a score-only

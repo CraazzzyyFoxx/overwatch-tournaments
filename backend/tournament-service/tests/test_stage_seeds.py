@@ -21,16 +21,6 @@ def _team(team_id: int, avg_sr: float = 0.0, total_sr: int = 0) -> SimpleNamespa
     return SimpleNamespace(id=team_id, avg_sr=avg_sr, total_sr=total_sr)
 
 
-class ParseSeedRankingTests(TestCase):
-    def test_missing_and_garbage_fall_back_to_slot(self) -> None:
-        for raw in (None, {}, {"seed_ranking": None}, {"seed_ranking": "elo"}, {"seed_ranking": 1}):
-            self.assertEqual(seeds.parse_seed_ranking(raw), seeds.SeedRanking.SLOT)
-
-    def test_reads_known_values(self) -> None:
-        self.assertEqual(seeds.parse_seed_ranking({"seed_ranking": "avg_sr"}), seeds.SeedRanking.AVG_SR)
-        self.assertEqual(seeds.parse_seed_ranking({"seed_ranking": "random"}), seeds.SeedRanking.RANDOM)
-
-
 class RankTeamIdsTests(TestCase):
     def test_avg_sr_highest_is_seed_one(self) -> None:
         teams = [_team(1, 2200), _team(2, 3100), _team(3, 2800)]

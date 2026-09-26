@@ -1,8 +1,8 @@
-"""``settings_json['ffa_scoring']``: what the regulation blob may not say.
+"""``FfaScoring``: what an ffa_league stage's scoring may not say.
 
-Pure schema tests -- no session, no fixtures. The point is the same as for
-``scoring`` (item 16): a lobby scoring table that only explodes later, inside
-the points adder mid-tournament, must be refused at the edit endpoint instead::
+Pure schema tests -- no session, no fixtures. The point is that a lobby scoring
+table that would only explode later, inside the points adder mid-tournament, is
+refused at the edit endpoint instead::
 
     uv run pytest tournament-service/tests/test_ffa_stage_settings.py -q
 """
@@ -32,32 +32,31 @@ class FfaScoringSchemaTests(TestCase):
     def test_negative_placement_points_are_refused(self) -> None:
         # A negative place reward means finishing higher can cost points.
         with self.assertRaises(pydantic.ValidationError):
-            schemas.StageSettings.model_validate({"ffa_scoring": {"placement_points": [10, -1]}})
+            schemas.FfaScoring(placement_points=[10, -1])
 
     def test_unknown_ffa_scoring_keys_are_refused(self) -> None:
-        # Unlike the surrounding blob, this sub-object is closed: a typo'd key
-        # would otherwise be stored and silently score nothing.
+        # The object is closed: a typo'd key would otherwise be accepted and
+        # silently score nothing.
         with self.assertRaises(pydantic.ValidationError):
-            schemas.StageSettings.model_validate({"ffa_scoring": {"score_points": 1, "extra": 1}})
+            schemas.FfaScoring(score_points=1, extra=1)
 
     def test_a_placement_table_longer_than_a_lobby_is_refused(self) -> None:
-        payload = {"ffa_scoring": {"placement_points": [1.0] * (FFA_MAX_LOBBY_SIZE + 1)}}
         with self.assertRaises(pydantic.ValidationError):
-            schemas.StageSettings.model_validate(payload)
+            schemas.FfaScoring(placement_points=[1.0] * (FFA_MAX_LOBBY_SIZE + 1))
 
     def test_a_full_length_placement_table_is_accepted(self) -> None:
-        payload = {"ffa_scoring": {"placement_points": [1.0] * FFA_MAX_LOBBY_SIZE}}
-        self.assertIsNotNone(schemas.StageSettings.model_validate(payload).ffa_scoring)
+        scoring = schemas.FfaScoring(placement_points=[1.0] * FFA_MAX_LOBBY_SIZE)
+        self.assertEqual(FFA_MAX_LOBBY_SIZE, len(scoring.placement_points))
 
     def test_negative_score_points_are_refused(self) -> None:
         with self.assertRaises(pydantic.ValidationError):
-            schemas.StageSettings.model_validate({"ffa_scoring": {"score_points": -1}})
+            schemas.FfaScoring(score_points=-1)
 
-    def test_a_valid_block_is_stored_verbatim(self) -> None:
-        # Like ``scoring``: the model validates, the caller's dict is what the
-        # stage keeps -- no invented defaults, no dropped keys.
-        payload = {"ffa_scoring": {"placement_points": [10, 7, 5], "score_label": "Kills"}}
-        self.assertEqual(payload, schemas.StageUpdate(settings_json=payload).settings_json)
+    def test_a_stage_edit_carries_the_block_with_its_unsent_defaults(self) -> None:
+        scoring = schemas.StageUpdate(ffa_scoring={"placement_points": [10, 7, 5], "score_label": "Kills"}).ffa_scoring
+        self.assertEqual(
+            ([10.0, 7.0, 5.0], "Kills", 1.0), (scoring.placement_points, scoring.score_label, scoring.score_points)
+        )
 
 
 class FfaStageTypeTests(TestCase):

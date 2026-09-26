@@ -75,8 +75,7 @@
       "ffa_game_wins": "Game wins",
       "ffa_score": "Score",
       "ffa_best_placement": "Best placement",
-      "ffa_last_placement": "Last placement",
-      "manual_override": "Manual override"
+      "ffa_last_placement": "Last placement"
     },
     "combined": "Combined",
     "groupStage": "Group stage",
@@ -484,11 +483,11 @@
       "success": "Team created. Invite your players next.",
       "blockedBySolo": "You are registered as an individual player, so you cannot create a team — but a captain can still invite you, and accepting will move your existing registration onto their roster."
     },
+    "invite": {
       "meta": {
         "title": "Team invite",
         "description": "Accept a team invite on {siteName}."
       },
-    "invite": {
       "action": "Invite a player",
       "actionSlot": "Invite to the {slot} slot",
       "actionBench": "Invite a substitute",
@@ -2549,6 +2548,7 @@
     "priority": "Priority {n}",
     "buchholzMedianFull": "median / full",
     "tieCluster": "Equal on every tiebreaker — order assigned, not earned",
+    "pinnedPlace": "Place set by the organizer",
     "tieStatus": "Tie",
     "tieDecidesAdvance": "Tied on every tiebreaker — the assigned order, not the results, decides whether this team advances",
     "upperBracketCut": "Top {count} → upper bracket",
@@ -6370,6 +6370,7 @@
     "eliminated": "Out",
     "tieStatus": "Tie",
     "tieCluster": "Equal on every tiebreaker — order assigned, not earned",
+    "pinnedPlace": "Place set by the organizer",
     "tieDecidesAdvance": "Tied on every tiebreaker — the assigned order, not the lobby results, decides whether this team advances",
     "gamesPerLobby": "Games per lobby",
     "gamesProgress": "{played} of {total, plural, one {# game} other {# games}} played",

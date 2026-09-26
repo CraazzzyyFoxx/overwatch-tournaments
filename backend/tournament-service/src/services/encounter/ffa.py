@@ -38,9 +38,9 @@ from shared.domain.ffa_scoring import (
     FfaGameLine,
     FfaResultError,
     FfaRules,
+    ffa_rules,
     game_points,
     normalize_game_lines,
-    parse_ffa_rules,
     team_totals,
 )
 from shared.models.tournament.encounter_game_result import EncounterGameResult
@@ -460,13 +460,13 @@ class FfaEncounterService:
         """
         if not lobbies:
             return []
-        rules = parse_ffa_rules(stage.settings_json if stage else None)
+        rules = ffa_rules(stage)
         # ``score_label`` is presentation, not arithmetic, so it never entered
         # ``FfaRules``; the read is the one place that needs it.
         rules_read = FfaRulesRead(
             placement_points=list(rules.placement_points),
             score_points=rules.score_points,
-            score_label=(((stage.settings_json or {}) if stage else {}).get("ffa_scoring") or {}).get("score_label"),
+            score_label=stage.ffa_score_label if stage else None,
         )
 
         lobby_ids = [lobby.id for lobby in lobbies]
@@ -522,6 +522,7 @@ class FfaEncounterService:
                         models.Standing.team_id,
                         models.Standing.position,
                         models.Standing.tie_group,
+                        models.Standing.is_pinned,
                     ).where(models.Standing.stage_item_id.in_(item_ids), models.Standing.team_id.in_(team_ids))
                 )
             ).all()
@@ -584,6 +585,7 @@ class FfaEncounterService:
                     slot=seat.slot,
                     position=standing.position if standing is not None else None,
                     tie_group=standing.tie_group if standing is not None else None,
+                    is_pinned=standing.is_pinned if standing is not None else False,
                     points=total.points,
                     games_played=total.games,
                     wins=total.wins,
@@ -658,7 +660,7 @@ class FfaEncounterService:
 
     async def _rules(self, session: AsyncSession, lobby: models.Encounter) -> FfaRules:
         stage = await self.stage_repo.get(session, lobby.stage_id) if lobby.stage_id else None
-        return parse_ffa_rules(stage.settings_json if stage else None)
+        return ffa_rules(stage)
 
     async def _snapshot(self, session: AsyncSession, game: models.EncounterGame) -> list[dict]:
         """A game's current result rows, in table order. ``[]`` for a fresh position."""

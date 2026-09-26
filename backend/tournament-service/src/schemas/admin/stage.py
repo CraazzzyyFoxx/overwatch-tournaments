@@ -1,14 +1,13 @@
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from shared.core.enums import StageItemInputType, StageItemType, StageType
-from shared.domain.ffa_scoring import FFA_MAX_LOBBY_SIZE
+from src.schemas.stage import FfaScoring, GrandFinalType, SeedRankingValue, StageBestOf, StageScoring
 
 __all__ = (
     "StageCreate",
     "StageUpdate",
-    "StageSettings",
     "StageItemCreate",
     "StageItemUpdate",
     "StageItemInputCreate",
@@ -19,69 +18,6 @@ __all__ = (
 )
 
 
-class StageScoring(BaseModel):
-    """Points per result. Numeric because the standings adder is."""
-
-    model_config = ConfigDict(extra="allow")
-
-    win: float = 3
-    draw: float = 1
-    loss: float = 0
-
-
-class FfaScoring(BaseModel):
-    """``settings_json['ffa_scoring']`` of an ffa_league stage (plan §4.2)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    placement_points: list[float] = Field(default_factory=list, max_length=FFA_MAX_LOBBY_SIZE)
-    score_points: float = Field(default=1.0, ge=0)
-    #: The organizer's word for the score column ("Kills", "Убийства"): each game
-    #: has its own, so it is data, not a translation key.
-    score_label: str | None = Field(default=None, max_length=32)
-
-    @field_validator("placement_points")
-    @classmethod
-    def _non_negative(cls, value: list[float]) -> list[float]:
-        if any(points < 0 for points in value):
-            raise ValueError("placement points cannot be negative")
-        return value
-
-
-class StageSettings(BaseModel):
-    """The known keys of ``Stage.settings_json``.
-
-    Validated, not exhaustive: ``extra="allow"`` keeps best-of config, Challonge
-    hints and the Swiss bookkeeping the engine writes back (``swiss_byes``,
-    ``swiss_stopped_scopes``) passing through untouched. The point is that the
-    keys the regulation actually runs on cannot arrive in a shape that only
-    explodes later, mid-tournament, inside the points adder.
-    """
-
-    model_config = ConfigDict(extra="allow")
-
-    scoring: StageScoring | None = None
-    de_grand_final_type: Literal["no_reset", "with_reset"] | None = None
-    tiebreak_order: list[str] | None = None
-    ffa_scoring: FfaScoring | None = None
-
-
-def _validate_settings_json(value: dict | None) -> dict | None:
-    """Check the known regulation keys; store the blob verbatim.
-
-    Parsing into ``StageSettings`` and dumping it back would rewrite the blob --
-    inventing defaults for keys the stage never set and dropping ``None``s the
-    readers distinguish from absent. So the model is used as a validator and the
-    caller's dict is what gets stored.
-    """
-    if value is not None:
-        StageSettings.model_validate(value)
-    return value
-
-
-SettingsJson = Annotated[dict | None, AfterValidator(_validate_settings_json)]
-
-
 class StageCreate(BaseModel):
     name: str
     description: str | None = None
@@ -90,12 +26,24 @@ class StageCreate(BaseModel):
     advance_count: int | None = Field(default=None, ge=1)
     split_lower_bracket: bool = False
     order: int = 0
-    settings_json: SettingsJson = None
+    ranking_preset: str | None = None
+    tiebreak_order: list[str] | None = None
+    scoring: StageScoring = Field(default_factory=StageScoring)
+    swiss_bye_points: float | None = None
+    de_grand_final_type: GrandFinalType = "no_reset"
+    seed_ranking: SeedRankingValue = "slot"
+    best_of: StageBestOf = Field(default_factory=StageBestOf)
+    ffa_scoring: FfaScoring = Field(default_factory=FfaScoring)
     challonge_id: int | None = None
     challonge_slug: str | None = None
 
 
 class StageUpdate(BaseModel):
+    """A partial edit: only the fields sent change (the service reads
+    ``exclude_unset``). ``scoring``, ``best_of`` and ``ffa_scoring`` are each
+    replaced as a whole. The non-nullable regulation fields carry a default only
+    so that an explicit ``null`` is refused instead of written."""
+
     name: str | None = None
     description: str | None = None
     stage_type: StageType | None = None
@@ -103,7 +51,14 @@ class StageUpdate(BaseModel):
     advance_count: int | None = Field(default=None, ge=1)
     split_lower_bracket: bool | None = None
     order: int | None = None
-    settings_json: SettingsJson = None
+    ranking_preset: str | None = None
+    tiebreak_order: list[str] | None = None
+    scoring: StageScoring = Field(default_factory=StageScoring)
+    swiss_bye_points: float | None = None
+    de_grand_final_type: GrandFinalType = "no_reset"
+    seed_ranking: SeedRankingValue = "slot"
+    best_of: StageBestOf = Field(default_factory=StageBestOf)
+    ffa_scoring: FfaScoring = Field(default_factory=FfaScoring)
 
 
 class StageItemCreate(BaseModel):

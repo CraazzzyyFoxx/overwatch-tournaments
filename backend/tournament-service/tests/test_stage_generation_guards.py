@@ -34,6 +34,8 @@ enums = importlib.import_module("shared.core.enums")
 errors = importlib.import_module("shared.core.errors")
 stage_service = importlib.import_module("src.services.admin.stage")
 
+from tests._stage_regulation import stage_regulation  # noqa: E402
+
 HTTPException = errors.BaseAPIException
 
 
@@ -78,7 +80,9 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
         Group B gets generated, and Group A's existing matches are untouched."""
         item_a, item_b = _item(1, "Group A"), _item(2, "Group B")
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(1, 10)])), flush=AsyncMock())
-        stage = SimpleNamespace(id=77, tournament_id=1, stage_type=enums.StageType.SWISS, items=[item_a, item_b])
+        stage = SimpleNamespace(
+            id=77, tournament_id=1, stage_type=enums.StageType.SWISS, items=[item_a, item_b], **stage_regulation()
+        )
         new_encounter = SimpleNamespace(id=901)
 
         with (
@@ -101,7 +105,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
     async def test_grouped_stage_rejects_when_every_group_already_has_matches(self) -> None:
         item_a, item_b = _item(1, "Group A"), _item(2, "Group B")
-        stage = SimpleNamespace(id=77, stage_type=enums.StageType.SWISS, items=[item_a, item_b])
+        stage = SimpleNamespace(id=77, stage_type=enums.StageType.SWISS, items=[item_a, item_b], **stage_regulation())
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(1, 10), (2, 10)])))
 
         with (
@@ -116,7 +120,9 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
 
     async def test_non_grouped_stage_rejects_regeneration_over_existing_matches(self) -> None:
         item = _item(1, "Bracket")
-        stage = SimpleNamespace(id=88, stage_type=enums.StageType.SINGLE_ELIMINATION, items=[item])
+        stage = SimpleNamespace(
+            id=88, stage_type=enums.StageType.SINGLE_ELIMINATION, items=[item], **stage_regulation()
+        )
         # One existing encounter already recorded against this stage.
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(1, 8)])))
 
@@ -141,7 +147,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[item],
             split_lower_bracket=False,
-            settings_json={},
+            **stage_regulation(),
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])), flush=AsyncMock())
         new_encounters = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
@@ -170,7 +176,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[item],
             split_lower_bracket=False,
-            settings_json={"seed_ranking": "avg_sr"},
+            **stage_regulation(seed_ranking="avg_sr"),
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])), flush=AsyncMock())
         teams = {
@@ -205,7 +211,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
             split_lower_bracket=False,
-            settings_json={},
+            **stage_regulation(),
         )
         source = SimpleNamespace(id=4, advance_count=2, items=[_item(i, order=i) for i in range(4)])
         session = _queued_session([_rows_result([])])
@@ -237,7 +243,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
             split_lower_bracket=False,
-            settings_json={},
+            **stage_regulation(),
         )
         source = SimpleNamespace(id=4, advance_count=2, items=[_item(i, order=i) for i in range(4)])
         source.items[0].advance_count = 3
@@ -264,7 +270,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
             split_lower_bracket=False,
-            settings_json={},
+            **stage_regulation(),
         )
         # The TBD bracket generated earlier: two semifinals and a final.
         existing = [_encounter(1, 10), _encounter(1, 11), _encounter(2, 12)]
@@ -299,7 +305,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
             split_lower_bracket=False,
-            settings_json={},
+            **stage_regulation(),
         )
         existing = [_encounter(1, 10, home_team_id=7), _encounter(1, 11), _encounter(2, 12)]
         session = _queued_session([_rows_result([(1, 3)]), _scalars_result(existing)])
@@ -322,7 +328,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
             split_lower_bracket=False,
-            settings_json={},
+            **stage_regulation(),
         )
         # A 4-team bracket was generated; 8 teams resolved. Reseeding in place
         # would leave half of them out, so it refuses and asks for a rebuild.

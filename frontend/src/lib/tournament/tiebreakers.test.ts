@@ -23,8 +23,7 @@ describe("tiebreakersForStageType", () => {
       "ffa_game_wins",
       "ffa_score",
       "ffa_best_placement",
-      "ffa_last_placement",
-      "manual_override"
+      "ffa_last_placement"
     ]);
     expect(ids).not.toContain("head_to_head");
     expect(ids).not.toContain("buchholz");
@@ -42,8 +41,7 @@ describe("tiebreakersForStageType", () => {
       "median_buchholz",
       "buchholz",
       "match_wins",
-      "score_differential",
-      "manual_override"
+      "score_differential"
     ]);
   });
 

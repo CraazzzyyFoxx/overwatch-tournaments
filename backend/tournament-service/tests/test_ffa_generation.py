@@ -28,6 +28,8 @@ errors = importlib.import_module("shared.core.errors")
 stage_service = importlib.import_module("src.services.admin.stage")
 ffa_module = importlib.import_module("src.services.encounter.ffa")
 
+from tests._stage_regulation import stage_regulation  # noqa: E402
+
 HTTPException = errors.BaseAPIException
 
 
@@ -46,13 +48,13 @@ def _item(item_id: int, name: str, *, order: int = 0, team_ids: list[int] | None
     return SimpleNamespace(id=item_id, name=name, order=order, type=None, inputs=list(reversed(inputs)))
 
 
-def _ffa_stage(items: list[SimpleNamespace], settings_json: dict | None = None) -> SimpleNamespace:
+def _ffa_stage(items: list[SimpleNamespace], **regulation) -> SimpleNamespace:
     return SimpleNamespace(
+        **stage_regulation(**regulation),
         id=77,
         tournament_id=1,
         stage_type=enums.StageType.FFA_LEAGUE,
         items=items,
-        settings_json=settings_json if settings_json is not None else {},
     )
 
 
@@ -70,7 +72,7 @@ class FfaLobbyGenerationTests(IsolatedAsyncioTestCase):
         input-slot order, with the stage's configured ``best_of``."""
         item_a = _item(1, "Group A", order=0, team_ids=[10, 20])
         item_b = _item(2, "Group B", order=1, team_ids=[30, 40, 50])
-        stage = _ffa_stage([item_a, item_b], {"best_of": {"default": 3}})
+        stage = _ffa_stage([item_a, item_b], best_of_default=5)
         session = _session([(1, 1)])
         lobby = SimpleNamespace(id=901)
 
@@ -86,7 +88,7 @@ class FfaLobbyGenerationTests(IsolatedAsyncioTestCase):
         create.assert_awaited_once()
         self.assertIs(item_b, create.await_args.args[2])
         self.assertEqual([30, 40, 50], list(create.await_args.args[3]))
-        self.assertEqual(3, create.await_args.kwargs["games"])
+        self.assertEqual(5, create.await_args.kwargs["games"])
 
     async def test_rejects_when_every_group_already_has_a_lobby(self) -> None:
         stage = _ffa_stage([_item(1, "Group A", team_ids=[10, 20]), _item(2, "Group B", order=1, team_ids=[30, 40])])
