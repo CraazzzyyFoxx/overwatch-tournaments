@@ -2,13 +2,12 @@
 
 The canonical OWT identity reference: who a "user" is, how `auth.user` differs from `players.user`, what a virtual player and an auth-player are, how a person enters a workspace, and how an account is linked to a game profile.
 
-State: the current code after the identity/workspace refactor and the rank rework (`balancer.member_rank`). The historical design spec (`docs/superpowers/specs/2026-07-01-identity-workspace-refactor-design.md`) explains *why* identity looks like this; this document describes *how it is*.
+State: the current code after the identity/workspace refactor and the rank rework (`balancer.member_rank`). This document describes *how it is*; the reasons are in Graphiti (group `anak-tournaments`, the identity/workspace refactor design).
 
 **Related documents**
 
 - System overview: [`docs/architecture.md`](./architecture.md)
 - ERD: [`docs/database_erd.md`](./database_erd.md)
-- Mix roster reference: [`docs/plans/2026-08-24-workspace-players-and-custom-games.md`](./plans/2026-08-24-workspace-players-and-custom-games.md)
 
 **Reading paths**
 

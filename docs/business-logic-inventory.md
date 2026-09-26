@@ -4,8 +4,6 @@ Canonical map of **domain rules**, not HTTP plumbing. Architecture and request f
 
 Authority is the server. The frontend duplicates a few gates for UX and cites the Python symbol it mirrors.
 
-Decoupling the statistical engine from the tournament engine is a separate intention: [`plans/2026-09-13-decouple-stats-from-tournament.md`](./plans/2026-09-13-decouple-stats-from-tournament.md).
-
 ---
 
 ## 0. Where logic lives

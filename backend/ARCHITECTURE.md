@@ -10,7 +10,8 @@ It is not a proposal. It is a description of the pattern `identity-service` has 
 since it was written, that `app-service` (2026-08-20), `balancer-service` (2026-08-21),
 `parser-service` (2026-08-21), `tournament-service` (2026-08-22) and
 `analytics-service` (2026-08-24) were converted to. Every new domain, in every service,
-follows it. Case studies with before/after numbers live in
+follows it. Case studies with before/after numbers are archived (Graphiti, or
+`git show 50b83c88f537:<path>`):
 `docs/plans/2026-08-20-app-service-oop-repositories.md`,
 `docs/plans/2026-08-21-balancer-service-oop-repositories.md`,
 `docs/plans/2026-08-21-parser-service-oop-repositories.md`,

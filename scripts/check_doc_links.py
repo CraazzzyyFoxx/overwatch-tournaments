@@ -5,12 +5,6 @@ Documentation links rot silently: a file gets renamed or deleted and the six
 documents pointing at it keep rendering, just wrong. The only way this stays at
 zero is a gate, so this runs in CI (.github/workflows/ci-docs.yml).
 
-Archived documents are checked but never fail the build. `docs/plans/`,
-`docs/superpowers/` and `docs/reviews/` are a frozen record of past decisions;
-their internal links broke as the code moved and repairing them would mean
-editing history to point at files that no longer mean the same thing. They are
-reported so the count is visible, not enforced.
-
 Only relative links are resolved. External URLs are not fetched -- a network
 call in a lint job buys flakiness, not correctness.
 
@@ -27,9 +21,6 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-
-#: Frozen archives: reported, never enforced.
-ARCHIVE = ("docs/plans/", "docs/superpowers/", "docs/reviews/")
 
 LINK_RE = re.compile(r"\]\(\s*([^)\s]+?)(?:\s+\"[^\"]*\")?\s*\)")
 
@@ -69,28 +60,20 @@ def broken_links(document: str) -> list[str]:
 
 
 def main() -> int:
-    live_failures: dict[str, list[str]] = {}
-    archived = 0
+    failures: dict[str, list[str]] = {}
 
     for document in tracked_markdown():
         found = broken_links(document)
-        if not found:
-            continue
-        if document.startswith(ARCHIVE):
-            archived += len(found)
-        else:
-            live_failures[document] = found
+        if found:
+            failures[document] = found
 
-    total = sum(len(v) for v in live_failures.values())
-    if archived:
-        print(f"note: {archived} broken link(s) inside the frozen archive, not enforced")
-
-    if not live_failures:
-        print("all maintained documents link to files that exist")
+    if not failures:
+        print("all documents link to files that exist")
         return 0
 
-    print(f"\nERROR: {total} broken link(s) in maintained documentation:\n", file=sys.stderr)
-    for document, targets in sorted(live_failures.items()):
+    total = sum(len(v) for v in failures.values())
+    print(f"\nERROR: {total} broken link(s) in documentation:\n", file=sys.stderr)
+    for document, targets in sorted(failures.items()):
         for target in targets:
             print(f"  {document} -> {target}", file=sys.stderr)
     print(

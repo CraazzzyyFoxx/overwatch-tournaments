@@ -123,28 +123,26 @@ so a new test file runs the moment it is written — nothing to register anywher
 
 ## Documentation
 
-Documentation is English. The archive under `docs/plans/`, `docs/superpowers/`,
-`docs/reviews/` and the in-flight project folders are the exception: they are frozen or
-in-flight working documents and are left in whatever language they were written in.
+Documentation is English.
 
-Three kinds of document, three different lifecycles:
+`docs/` holds documentation and nothing else. Two kinds of document, two lifecycles:
 
 | Kind | Where | Rule |
 | --- | --- | --- |
 | Evergreen reference | `docs/*.md`, `backend/docs/`, component `README.md` | Describes the system as it is. Updated in the same commit as the change it describes. |
 | Operational runbook | linked from [`docs/README.md`](./docs/README.md) | A procedure an operator follows under pressure. Commands verbatim, preconditions explicit. |
-| Design / plan | `docs/plans/YYYY-MM-DD-<slug>.md`, or `docs/<slug>/` for a multi-file effort | Point-in-time. When the work ships, anything that must outlive it moves into an evergreen document; the plan is then dead and stops being maintained. |
 
-`docs/plans/` is the one place for new plans. `docs/superpowers/` and `docs/reviews/` are a
-frozen archive from before that rule — read them, never add to them, and expect their internal
-links to have rotted.
+Designs, plans, specs and reviews are not committed. Draft them in gitignored scratch
+(`.claude/`, `.superpowers/`); record the decisions and their reasons in Graphiti, group
+`anak-tournaments`. The documents removed from `docs/` on 2026-09-27 are there as one
+episode each, and in full at `git show 50b83c88f537:<path>` — code comments citing
+`docs/plans/…`, `docs/superpowers/…` or `docs/reviews/…` refer to that commit.
 
 Relative links are gated ([`.github/workflows/ci-docs.yml`](./.github/workflows/ci-docs.yml)):
-a link to a file that does not exist fails the build, except inside the frozen archive, where
-the rot is recorded rather than repaired.
+a link to a file that does not exist fails the build.
 
-Do not add a fact to a plan and nowhere else. A plan is read once, by the person implementing
-it; six months later the only document anyone opens is the evergreen one.
+Do not record a fact only in a plan or a Graphiti episode. A plan is read once, by the person
+implementing it; six months later the only document anyone opens is the evergreen one.
 
 Start from [`docs/README.md`](./docs/README.md) — it is the map, and a new evergreen document
 that is not linked from it does not exist.

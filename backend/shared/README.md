@@ -151,8 +151,7 @@ that cannot silently drift, because it is generated from the same metadata the m
 against.
 
 **What it costs.** Every table change is a change to a package every worker process imports, so they
-redeploy against it together — this is the coupling P3-D proposes to break and which is currently
-on hold ([`../docs/architecture/p3-strategic-refactors.md`](../docs/architecture/p3-strategic-refactors.md)).
+redeploy against it together — this is the coupling P3-D proposed to break, currently on hold.
 Nothing at the database level stops one service writing another's tables; the rule — read freely
 through `shared`, write only what your service owns — is convention, enforced by review, not by
 Postgres. And because service images do not ship Alembic, migrations are deployed separately from
