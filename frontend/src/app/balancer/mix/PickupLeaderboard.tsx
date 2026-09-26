@@ -1,7 +1,8 @@
 "use client";
 
 import { useId } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { PageStateCard } from "@/components/ui/page-state-card";

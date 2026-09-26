@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Spinner } from "@/components/ui/spinner";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 /**
  * Self-service, allow-by-default capabilities an admin can revoke per account
@@ -89,14 +90,14 @@ export function AccountRestrictions({
   const scopeWorkspaceId = scope === "global" ? null : scope;
 
   const deniesQuery = useQuery({
-    queryKey: ["access-admin", "denies", userId],
+    queryKey: accessQueryKeys.denies(userId),
     queryFn: () => rbacService.getUserDenies(userId)
   });
   const permissionsQuery = useQuery({
     // The whole inventory, not a `search` narrowed to one resource: the
     // restrictable capabilities span three resources now, and a row whose
     // permission id is missing here is silently dropped from the picker below.
-    queryKey: ["access-admin", "permissions", "inventory"],
+    queryKey: accessQueryKeys.permissionsInventory(),
     queryFn: () => rbacService.listPermissionsAll()
   });
 
@@ -117,7 +118,7 @@ export function AccountRestrictions({
         ? rbacService.addUserDeny(userId, permissionId, scopeWorkspaceId)
         : rbacService.removeUserDeny(userId, permissionId, scopeWorkspaceId),
     onSuccess: (updated) =>
-      queryClient.setQueryData(["access-admin", "denies", userId], updated),
+      queryClient.setQueryData(accessQueryKeys.denies(userId), updated),
     onError: (error) => notify.apiError(error, { title: "Could not change the restriction" })
   });
 

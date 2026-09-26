@@ -26,6 +26,7 @@ import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacRole } from "@/types/rbac.types";
 import type { MinimizedUser } from "@/types/user.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
@@ -68,19 +69,19 @@ export function AccountInspector({
   const [playerName, setPlayerName] = useState("");
 
   const accountQuery = useQuery({
-    queryKey: ["access-admin", "users", userId],
+    queryKey: accessQueryKeys.userDetail(userId),
     queryFn: () => rbacService.getUser(userId)
   });
 
   const oauthQuery = useQuery({
-    queryKey: ["access-admin", "users", userId, "oauth-connections"],
+    queryKey: accessQueryKeys.userOauthConnections(userId),
     queryFn: () => rbacService.listOAuthConnections({ auth_user_id: userId, per_page: -1 })
   });
 
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] }),
-      queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] })
+      queryClient.invalidateQueries({ queryKey: accessQueryKeys.users() }),
+      queryClient.invalidateQueries({ queryKey: accessQueryKeys.roles() })
     ]);
   };
 

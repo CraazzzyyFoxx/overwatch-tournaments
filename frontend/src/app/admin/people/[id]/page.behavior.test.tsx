@@ -41,8 +41,10 @@ let permitted = true;
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
   NextIntlClientProvider: ({ children }: { children: ReactNode }) => children
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({

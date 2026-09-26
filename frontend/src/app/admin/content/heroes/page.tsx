@@ -4,7 +4,7 @@ import { useId, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import { CatalogAliasesField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
@@ -29,6 +29,7 @@ import type { Hero } from "@/types/hero.types";
 import type { HeroCreateInput, HeroUpdateInput } from "@/types/admin.types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCatalogEntityCrud } from "@/hooks/useCatalogEntityCrud";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const HERO_ROLES = ["Tank", "Damage", "Support"];
 /**
@@ -94,7 +95,7 @@ export default function HeroesAdminPage() {
     deleteMutation,
     syncMutation,
   } = useCatalogEntityCrud<Hero, HeroCreateInput, HeroUpdateInput>({
-    queryKey: ["admin", "heroes"],
+    queryKey: adminQueryKeys.contentEntity("heroes"),
     emptyForm: emptyHeroForm,
     getForm: getHeroForm,
     service: {
@@ -130,7 +131,7 @@ export default function HeroesAdminPage() {
       id: "icon",
       header: "Icon",
       size: 52,
-      meta: adminColumnMeta<Hero>({ align: "center" }),
+      meta: columnMeta<Hero>({ align: "center" }),
       cell: ({ row }) => {
         const hero = row.original;
         return (
@@ -170,7 +171,7 @@ export default function HeroesAdminPage() {
       id: "role",
       header: "Role",
       size: 48,
-      meta: adminColumnMeta<Hero>({ align: "center" }),
+      meta: columnMeta<Hero>({ align: "center" }),
       cell: ({ row }) => {
         const role = getHeroRoleValue(row.original);
         return (
@@ -204,7 +205,7 @@ export default function HeroesAdminPage() {
 
   return (
     <>
-      <AdminDataTable
+      <DataTable
         queryKey={(page, search, pageSize, sortField, sortDir) => ["admin", "heroes", page, search, pageSize, sortField, sortDir, roleFilter]}
         queryFn={(page, search, pageSize, sortField, sortDir) =>
           adminService.getHeroes({

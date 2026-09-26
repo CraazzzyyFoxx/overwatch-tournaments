@@ -4,13 +4,11 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import heroService from "@/services/hero.service";
-import mapService from "@/services/map.service";
 import tournamentService from "@/services/tournament.service";
 import userService from "@/services/user.service";
 import { UserRoleType, UserCompareBaselineMode } from "@/types/user.types";
 import { CompareRow } from "@/app/(site)/users/compare/types";
-import { getHumanizedStats } from "@/utils/stats";
+import { getHumanizedStats } from "@/lib/stats";
 import { HERO_COMPARE_STATS } from "@/app/(site)/users/compare/constants";
 import { getMapIconSrc, normalizeNumber, roleLabelKey } from "@/app/(site)/users/compare/utils";
 import {
@@ -19,6 +17,9 @@ import {
   getCompareActivity,
   shouldLoadHeroCatalogs
 } from "@/app/(site)/users/compare/hooks/compare-query-options";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 interface UseUserCompareDataParams {
   isHeroScope: boolean;
@@ -63,32 +64,11 @@ export const useUserCompareData = ({
     })
   );
 
-  const heroesQuery = useQuery({
-    queryKey: ["heroes-select-options"],
-    queryFn: () =>
-      heroService.getAll({
-        perPage: -1,
-        sort: "name",
-        order: "asc"
-      }),
-    staleTime: 5 * 60 * 1000,
-    enabled: shouldLoadHeroCatalogs(isHeroScope)
-  });
-
-  const mapsQuery = useQuery({
-    queryKey: ["maps-select-options"],
-    queryFn: () =>
-      mapService.getAll({
-        perPage: -1,
-        sort: "name",
-        order: "asc"
-      }),
-    staleTime: 5 * 60 * 1000,
-    enabled: shouldLoadHeroCatalogs(isHeroScope)
-  });
+  const heroesQuery = useHeroesCatalog({ enabled: shouldLoadHeroCatalogs(isHeroScope) });
+  const mapsQuery = useMapsCatalog({ enabled: shouldLoadHeroCatalogs(isHeroScope) });
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments-select-options"],
+    queryKey: tournamentQueryKeys.selectOptions(),
     queryFn: () => tournamentService.getAll(),
     staleTime: 5 * 60 * 1000
   });
@@ -111,8 +91,8 @@ export const useUserCompareData = ({
     })
   );
 
-  const heroes = heroesQuery.data?.results ?? [];
-  const maps = mapsQuery.data?.results ?? [];
+  const heroes = heroesQuery.data ?? [];
+  const maps = mapsQuery.data ?? [];
   const tournaments = tournamentsQuery.data?.results ?? [];
 
   const heroMapById = useMemo(() => new Map(heroes.map((hero) => [hero.id, hero])), [heroes]);

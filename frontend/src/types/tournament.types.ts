@@ -61,7 +61,47 @@ export interface StageItem {
   inputs: StageItemInput[];
 }
 
-export interface StageSummary {
+/** How a bracket stage orders its seeds; `slot` keeps the manual/standings order. */
+export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
+
+/**
+ * A stage's series lengths. Precedence: `final` (an elimination stage's last
+ * round) -> `by_round[round]` -> `default`. `by_round` keys are round numbers;
+ * lower-bracket rounds are negative.
+ */
+export interface StageBestOfConfig {
+  default: number;
+  by_round: Record<string, number>;
+  final: number | null;
+}
+
+/** What an FFA league pays for, mirroring backend `FfaScoring`. */
+export interface StageFfaScoring {
+  /** What place `i + 1` is worth; a shorter list scores the tail at zero. */
+  placement_points: number[];
+  /** What one unit of raw score (a kill, a point) is worth. */
+  score_points: number;
+  /** The organizer's word for the score column ("Kills"); null keeps "Score". */
+  score_label: string | null;
+}
+
+/** The rules a stage is played and ranked by. */
+export interface StageRegulation {
+  /** `null` = the preset the stage type picks. */
+  ranking_preset: string | null;
+  /** `null` = the preset's order. */
+  tiebreak_order: string[] | null;
+  /** A `null` member inherits the tournament's points. */
+  scoring: { win: number | null; draw: number | null; loss: number | null };
+  /** `null` = a bye pays the win points. */
+  swiss_bye_points: number | null;
+  de_grand_final_type: "no_reset" | "with_reset";
+  seed_ranking: SeedRanking;
+  best_of: StageBestOfConfig;
+  ffa_scoring: StageFfaScoring;
+}
+
+export interface StageSummary extends StageRegulation {
   id: number;
   tournament_id: number;
   name: string;
@@ -74,7 +114,6 @@ export interface StageSummary {
   is_active: boolean;
   is_published: boolean;
   is_completed: boolean;
-  settings_json: Record<string, unknown> | null;
   challonge_id: number | null;
   challonge_slug: string | null;
 }
@@ -252,6 +291,9 @@ export interface Standings {
   /** Position of this row's tie-cluster head. Rows sharing a value were equal
    *  on every configured tiebreaker; their order was assigned, not earned. */
   tie_group: number | null;
+  /** The organizer pinned this row's `position`; it holds through any later
+   *  result or recalculation. A pinned row is never part of a `tie_group`. */
+  is_pinned: boolean;
   tb: number | null;
   score_differential: number | null;
   ranking_context: Record<string, string | number | null> | null;

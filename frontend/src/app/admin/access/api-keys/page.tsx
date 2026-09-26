@@ -3,9 +3,10 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Check, Clipboard, Gauge, KeyRound, Plus, Trash2, X } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
@@ -32,7 +33,7 @@ import {
   useRenameAccountApiKey,
   useRevokeAccountApiKey,
   type AccountApiKeyStatusCounts
-} from "@/hooks/use-account-api-keys";
+} from "@/hooks/useAccountApiKeys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -420,7 +421,7 @@ export default function AccessAdminApiKeysPage() {
         </div>
       ) : null}
 
-      <AdminDataTable<AccountApiKey>
+      <DataTable<AccountApiKey>
         columns={columns}
         initialPageSize={PAGE_SIZE}
         pageSizeOptions={[10, 20, 50, 100]}

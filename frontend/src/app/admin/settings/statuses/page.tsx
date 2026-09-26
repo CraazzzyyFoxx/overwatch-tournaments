@@ -6,7 +6,7 @@ import type { ColumnDef, Row } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import { AdminDataTable, type AdminDataTableGroup, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, type DataTableGroup, columnMeta, createKebabColumn } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -36,6 +36,7 @@ import type {
   BalancerCustomStatusUpdateInput
 } from "@/types/balancer-admin.types";
 import type { StatusScope } from "@/types/registration.types";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 const SCOPE_LABELS: Record<StatusScope, string> = {
   registration: "Registration",
@@ -100,14 +101,14 @@ export default function WorkspaceStatusesSettingsPage() {
   const canManageStatuses = canAccessPermission("team.update", workspaceId);
 
   const statusesQuery = useQuery({
-    queryKey: ["balancer-admin", "status-catalog", workspaceId],
+    queryKey: balancerQueryKeys.statusCatalog(workspaceId),
     queryFn: () => balancerAdminService.listStatusCatalog(workspaceId as number),
     enabled: workspaceId !== null
   });
 
   const invalidateStatuses = async () => {
     await queryClient.invalidateQueries({
-      queryKey: ["balancer-admin", "status-catalog", workspaceId]
+      queryKey: balancerQueryKeys.statusCatalog(workspaceId)
     });
   };
 
@@ -212,7 +213,7 @@ export default function WorkspaceStatusesSettingsPage() {
         id: "status",
         accessorFn: (row) => row.name,
         header: "Status",
-        meta: adminColumnMeta<BalancerCustomStatus>({
+        meta: columnMeta<BalancerCustomStatus>({
           category: "core",
           mandatory: true,
           searchValue: (row) => `${row.name} ${row.slug}`
@@ -225,7 +226,7 @@ export default function WorkspaceStatusesSettingsPage() {
         id: "scope",
         accessorFn: (row) => SCOPE_LABELS[row.scope],
         header: "Scope",
-        meta: adminColumnMeta<BalancerCustomStatus>({
+        meta: columnMeta<BalancerCustomStatus>({
           category: "core",
           searchValue: (row) => SCOPE_LABELS[row.scope]
         }),
@@ -237,7 +238,7 @@ export default function WorkspaceStatusesSettingsPage() {
         id: "slug",
         accessorFn: (row) => row.slug,
         header: "Slug",
-        meta: adminColumnMeta<BalancerCustomStatus>({
+        meta: columnMeta<BalancerCustomStatus>({
           category: "meta",
           searchValue: (row) => row.slug
         }),
@@ -248,7 +249,7 @@ export default function WorkspaceStatusesSettingsPage() {
         accessorFn: (row) => row.description ?? "",
         header: "Description",
         enableSorting: false,
-        meta: adminColumnMeta<BalancerCustomStatus>({ category: "core" }),
+        meta: columnMeta<BalancerCustomStatus>({ category: "core" }),
         cell: ({ row }) => (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>{row.original.description ?? "—"}</span>
@@ -296,7 +297,7 @@ export default function WorkspaceStatusesSettingsPage() {
    *  custom status is read against. */
   const groupRows = (
     pageRows: Row<BalancerCustomStatus>[]
-  ): AdminDataTableGroup<BalancerCustomStatus>[] =>
+  ): DataTableGroup<BalancerCustomStatus>[] =>
     [
       { key: "builtin", label: "System", rows: pageRows.filter((r) => r.original.kind === "builtin") },
       { key: "custom", label: "Custom", rows: pageRows.filter((r) => r.original.kind !== "builtin") }
@@ -394,7 +395,7 @@ export default function WorkspaceStatusesSettingsPage() {
 
   return (
     <div className="space-y-4">
-      <AdminDataTable<BalancerCustomStatus>
+      <DataTable<BalancerCustomStatus>
         rows={rows}
         isLoading={statusesQuery.isLoading}
         columns={columns}

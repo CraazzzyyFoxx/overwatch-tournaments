@@ -48,6 +48,7 @@ globalThis.ResizeObserver ??= class {
 } as unknown as typeof ResizeObserver;
 
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("@/lib/datetime/client", () => ({ useFormatter: () => ({ relativeTime: () => "just now" }) }));
 vi.mock("@/components/PlayerRoleIcon", () => ({ default: () => null }));
 vi.mock("@/components/DivisionIcon", () => ({ default: () => null }));
 // Drag itself is not what this pins, and dnd-kit resolves its own React copy
@@ -67,6 +68,7 @@ vi.mock("@dnd-kit/core", () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => children,
   DragOverlay: () => null,
   PointerSensor: class {},
+  KeyboardSensor: class {},
   useSensor: () => null,
   useSensors: () => [],
   useDraggable: dndSpies.useDraggable,

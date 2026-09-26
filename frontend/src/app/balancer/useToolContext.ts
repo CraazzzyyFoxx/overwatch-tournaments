@@ -9,6 +9,7 @@ import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import balancerAdminService from "@/services/balancer-admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { BalancerTournamentSummary } from "@/types/balancer-admin.types";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 export interface ToolContext {
   status: ToolContextStatus;
@@ -29,7 +30,7 @@ export interface ToolContext {
 export function useToolContext(): ToolContext {
   const tournamentId = useBalancerTournamentId();
   const query = useQuery({
-    queryKey: ["balancer", "tournament", tournamentId, "summary"],
+    queryKey: balancerQueryKeys.tournamentSummary(tournamentId),
     queryFn: () => balancerAdminService.getTournamentSummary(tournamentId as number),
     enabled: tournamentId != null,
     // Errors are terminal states (forbidden / pointer screen) — surface them

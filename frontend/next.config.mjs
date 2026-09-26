@@ -10,6 +10,13 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 // `pageExtensions`. Turbopack needs plugins by name, not by reference.
 const withMDX = createMDX({ options: { remarkPlugins: [["remark-gfm", {}]] } });
 
+// Tunnel hosts (cloudpub/ngrok/…) that `next dev` must accept cross-origin
+// requests from. Comma-separated env, so no tunnel name is hardcoded here.
+const allowedDevOrigins = (process.env.NEXT_ALLOWED_DEV_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Pin the Turbopack workspace root to this directory. Otherwise Next infers the
@@ -26,21 +33,15 @@ const nextConfig = {
   experimental: {
     staleTimes: {
       dynamic: 30
-    },
-    // 16.3 defaults this on; 16.2 does not. prod.Dockerfile cache-mounts
-    // .next/cache so subsequent compose builds reuse Turbopack artifacts.
-    turbopackFileSystemCacheForBuild: true
-  },
-  // `bun run typecheck` / CI already gate this. next build on the 8-core
-  // prod box should not pay for a second tsc of the same tree.
-  typescript: {
-    ignoreBuildErrors: true
+    }
   },
   // Only use standalone output in production builds
   ...(process.env.NODE_ENV === "production" && { output: "standalone" }),
   // Enable polling only inside Docker (native fs watcher doesn't work with bind mounts)
   ...(process.env.DOCKER === "1" && { watchOptions: { pollIntervalMs: 1000 } }),
-  allowedDevOrigins: ["exultantly-peaceful-adjutant.cloudpub.ru"],
+  // Extra hosts allowed to reach `next dev` through a tunnel (cloudpub, ngrok,
+  // …). Comma-separated; unset in every normal setup.
+  ...(allowedDevOrigins.length > 0 && { allowedDevOrigins }),
   async rewrites() {
     // Everything is one gateway behind one origin. In production the browser hits
     // nginx and /api/* never reaches Next, so these rewrites are only a fallback

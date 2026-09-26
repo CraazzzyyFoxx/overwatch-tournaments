@@ -269,6 +269,7 @@ export interface StreamPollHealth {
 import type { RosterSlotMap } from "@/lib/roster/shape";
 import type {
   StageItemType,
+  StageRegulation,
   StageType,
   StageItemInputType,
   TournamentStatus
@@ -381,7 +382,8 @@ export interface TournamentReadiness {
 
 // ─── Stage Admin ────────────────────────────────────────────────────────────
 
-export interface StageCreateInput {
+/** Each regulation field is optional; a sent field replaces that field whole. */
+export interface StageCreateInput extends Partial<StageRegulation> {
   name: string;
   description?: string | null;
   stage_type: StageType;
@@ -389,10 +391,9 @@ export interface StageCreateInput {
   advance_count?: number | null;
   split_lower_bracket?: boolean;
   order?: number;
-  settings_json?: Record<string, unknown> | null;
 }
 
-export interface StageUpdateInput {
+export interface StageUpdateInput extends Partial<StageRegulation> {
   name?: string;
   description?: string | null;
   stage_type?: StageType;
@@ -400,13 +401,6 @@ export interface StageUpdateInput {
   advance_count?: number | null;
   split_lower_bracket?: boolean;
   order?: number;
-  settings_json?: Record<string, unknown> | null;
-}
-
-export interface StageBestOfConfig {
-  default?: number;
-  by_round?: Record<string, number>;
-  final?: number | null;
 }
 
 export interface StageItemCreateInput {

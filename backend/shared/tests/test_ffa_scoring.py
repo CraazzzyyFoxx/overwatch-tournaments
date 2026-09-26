@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from shared.domain.ffa_scoring import (
     FfaGameLine,
     FfaResultError,
     FfaRules,
+    ffa_rules,
     game_points,
     normalize_game_lines,
-    parse_ffa_rules,
     team_totals,
 )
 
@@ -79,6 +81,6 @@ def test_totals_seed_every_participant_and_track_placement_metrics() -> None:
     assert totals[4].games == 0 and totals[4].points == 0
 
 
-def test_rules_parse_from_stage_settings_and_default_to_score_only() -> None:
-    assert parse_ffa_rules(None) == SCORE_ONLY
-    assert parse_ffa_rules({"ffa_scoring": {"placement_points": [10, 6, 5], "score_points": 1}}) == BATTLE_ROYALE
+def test_rules_read_the_stage_columns_and_default_to_score_only() -> None:
+    assert ffa_rules(None) == SCORE_ONLY
+    assert ffa_rules(SimpleNamespace(ffa_placement_points=[10, 6, 5], ffa_score_points=1)) == BATTLE_ROYALE

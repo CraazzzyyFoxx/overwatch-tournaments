@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Archive, CircleDot, Clock } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
+import { DataTable, columnMeta } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
@@ -98,7 +99,7 @@ export function AnnouncementsTable({
         header: t("notifications.admin.columns.state"),
         size: 130,
         enableSorting: false,
-        meta: adminColumnMeta({ align: "center" }),
+        meta: columnMeta({ align: "center" }),
         // Read off the two stamps rather than asked of the backend: the reads
         // themselves filter on that window, so a stored flag could disagree
         // with who actually sees the row.
@@ -141,7 +142,7 @@ export function AnnouncementsTable({
 
   return (
     <>
-      <AdminDataTable
+      <DataTable
         rows={rows}
         isLoading={isLoading}
         columns={columns}

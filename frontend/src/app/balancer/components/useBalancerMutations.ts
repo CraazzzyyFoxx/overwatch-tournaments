@@ -27,6 +27,10 @@ import type {
 } from "@/types/balancer-admin.types";
 import type { BalancerConfig, BalancerConfigResponse } from "@/types/balancer.types";
 import { notify } from "@/lib/notify";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 type UseBalancerMutationsOptions = {
   tournamentId: number | null;
@@ -139,7 +143,7 @@ export function useBalancerMutations({
   onJobCreated
 }: UseBalancerMutationsOptions) {
   const invalidateRegistrations = () =>
-    queryClient.invalidateQueries({ queryKey: ["balancer-admin", "registrations", tournamentId] });
+    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.registrations(tournamentId) });
 
   /**
    * Merge a mutation response row into the cached registrations list instead
@@ -311,26 +315,26 @@ export function useBalancerMutations({
     }
 
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["balancer-public", "balance", tournamentId] }),
-      queryClient.invalidateQueries({ queryKey: ["admin", "tournament", tournamentId] }),
-      queryClient.invalidateQueries({ queryKey: ["admin", "tournament", tournamentId, "teams"] }),
+      queryClient.invalidateQueries({ queryKey: balancerQueryKeys.publicBalance(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournament(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournamentTeams(tournamentId) }),
       queryClient.invalidateQueries({
-        queryKey: ["admin", "tournament", tournamentId, "standings"]
+        queryKey: adminQueryKeys.tournamentStandings(tournamentId)
       }),
       queryClient.invalidateQueries({
-        queryKey: ["admin", "tournament", tournamentId, "encounters"]
+        queryKey: adminQueryKeys.tournamentEncounters(tournamentId)
       }),
-      queryClient.invalidateQueries({ queryKey: ["tournaments"] }),
-      queryClient.invalidateQueries({ queryKey: ["teams"] }),
-      queryClient.invalidateQueries({ queryKey: ["standings"] }),
-      queryClient.invalidateQueries({ queryKey: ["encounters"] }),
-      queryClient.invalidateQueries({ queryKey: ["standings", tournamentId] }),
-      queryClient.invalidateQueries({ queryKey: ["encounters", "tournament", tournamentId] }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.standingsAll() }),
+      queryClient.invalidateQueries({ queryKey: encounterQueryKeys.all() }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.standings(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.encounters(tournamentId) }),
       ...(workspaceId != null
         ? [
-            queryClient.invalidateQueries({ queryKey: ["standings", tournamentId, workspaceId] }),
+            queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.standings(tournamentId, workspaceId) }),
             queryClient.invalidateQueries({
-              queryKey: ["encounters", "tournament", tournamentId, workspaceId]
+              queryKey: tournamentQueryKeys.encounters(tournamentId, workspaceId)
             })
           ]
         : [])
@@ -428,7 +432,7 @@ export function useBalancerMutations({
     },
     onSuccess: async (savedBalance) => {
       await queryClient.invalidateQueries({
-        queryKey: ["balancer-public", "balance", tournamentId]
+        queryKey: balancerQueryKeys.publicBalance(tournamentId)
       });
       applySavedBalanceVariant(savedBalance);
       notify.success("Final balance saved");

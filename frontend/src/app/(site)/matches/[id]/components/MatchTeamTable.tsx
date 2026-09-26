@@ -1,10 +1,11 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { PlayerWithStats, TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
 import { TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
-import { sortTeamPlayers } from "@/utils/player";
+import { sortTeamPlayers } from "@/lib/player";
 import PlayerName from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { PerformanceBadge } from "@/components/PerformanceBadge";
@@ -19,7 +20,7 @@ import {
   playerStat,
   activePlayers,
   resolveMatchMvpPlacement
-} from "@/utils/matchStats";
+} from "@/lib/match-stats";
 
 interface MatchTeamTableProps {
   team: TeamWithStats;

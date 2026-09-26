@@ -10,6 +10,7 @@ import tournamentService from "@/services/tournament.service";
 import workspaceService from "@/services/workspace.service";
 import type { DivisionGridEntity, DivisionGridVersion } from "@/types/workspace.types";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * How often the hub refreshes its polled metrics while the tab is in front.
@@ -65,7 +66,7 @@ export function useHubTeamsQuery(tournamentId: number) {
 /** Header metric only — the count endpoint, not the team list. */
 export function useHubTeamsCountQuery(tournamentId: number) {
   return useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "teams", "count"],
+    queryKey: adminQueryKeys.tournamentTeamsCount(tournamentId),
     queryFn: () => teamService.getCount(tournamentId),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
     refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
@@ -86,7 +87,7 @@ export function useHubEncountersQuery(tournamentId: number) {
 /** Header metric only — the count endpoint, not the encounter list. */
 export function useHubEncountersCountQuery(tournamentId: number) {
   return useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "encounters", "count"],
+    queryKey: adminQueryKeys.tournamentEncountersCount(tournamentId),
     queryFn: () => encounterService.getCount(tournamentId),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
     refetchInterval: TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,

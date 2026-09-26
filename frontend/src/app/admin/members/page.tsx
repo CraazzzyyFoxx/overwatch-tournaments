@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Check, ChevronsUpDown, Trash2, UserPlus, Wand2 } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -45,6 +45,7 @@ import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { RbacRole } from "@/types/rbac.types";
 import type { WorkspaceMember, WorkspaceSystemRole } from "@/types/workspace.types";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 const SYSTEM_ROLES: WorkspaceSystemRole[] = ["owner", "admin", "host", "member", "player"];
 const SYSTEM_ROLE_LABEL: Record<WorkspaceSystemRole, string> = {
@@ -104,7 +105,7 @@ export default function WorkspaceMembersPage() {
       canAccessAnyPermission(["workspace_member.delete"], currentWorkspaceId));
 
   const { data: scopedRoles } = useQuery({
-    queryKey: ["workspace-rbac-roles", currentWorkspaceId],
+    queryKey: workspaceQueryKeys.rbacRoles(currentWorkspaceId),
     queryFn: () =>
       currentWorkspaceId
         ? rbacService.listRolesAll({ workspace_id: currentWorkspaceId })
@@ -140,7 +141,7 @@ export default function WorkspaceMembersPage() {
   const roleFilter = String(filters.values.role ?? "");
 
   const invalidateMembers = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["workspace-members", currentWorkspaceId] });
+    queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.memberList(currentWorkspaceId) });
   }, [queryClient, currentWorkspaceId]);
 
   const updateRolesMutation = useMutation({
@@ -405,7 +406,7 @@ export default function WorkspaceMembersPage() {
         description={`Manage who has access to ${workspace?.name ?? "this workspace"} and their RBAC roles.`}
       />
 
-      <AdminDataTable<WorkspaceMember>
+      <DataTable<WorkspaceMember>
         queryKey={(page, search, pageSize, sortField, sortDir) => [
           "workspace-members",
           currentWorkspaceId,
@@ -488,7 +489,7 @@ function AddMemberDialog({
   const effectiveRoleIds = roleIds.length > 0 ? roleIds : defaultRoleId != null ? [defaultRoleId] : [];
 
   const { data: allUsers } = useQuery({
-    queryKey: ["rbac-users", workspaceId, "all"],
+    queryKey: workspaceQueryKeys.rbacUsersAll(workspaceId),
     queryFn: () => rbacService.listUsersAll({ workspace_id: workspaceId }),
     enabled: open
   });

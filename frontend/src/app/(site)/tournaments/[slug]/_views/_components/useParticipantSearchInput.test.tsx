@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import { act } from "react";
 import type { Root } from "react-dom/client";
@@ -92,7 +92,7 @@ function dispatchInput(input: HTMLInputElement, value: string, caret = value.len
 beforeAll(async () => {
   installGlobals();
   ({ createRoot } = await import("react-dom/client"));
-  jest.useFakeTimers();
+  vi.useFakeTimers();
 });
 
 afterEach(() => {
@@ -103,13 +103,13 @@ afterEach(() => {
   } finally {
     mountedRoots.clear();
     document.body.replaceChildren();
-    jest.clearAllTimers();
+    vi.clearAllTimers();
   }
 });
 
 afterAll(async () => {
   try {
-    jest.useRealTimers();
+    vi.useRealTimers();
     await testWindow.close();
   } finally {
     restoreGlobals();
@@ -137,7 +137,7 @@ describe("participant search URL input", () => {
 
     act(() => dispatchInput(input, " foo "));
     expect(input.value).toBe(" foo ");
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
 
     expect(commits).toEqual(["foo"]);
     expect(input.value).toBe("foo");
@@ -167,7 +167,7 @@ describe("participant search URL input", () => {
 
     act(() => dispatchInput(input, "   "));
     expect(input.value).toBe("   ");
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(commits).toEqual([""]);
     expect(input.value).toBe("");
     expect(document.activeElement).toBe(input);
@@ -177,7 +177,7 @@ describe("participant search URL input", () => {
     act(() => dispatchInput(input, "foo bar", 4));
     expect(input.value).toBe("foo bar");
     expect(input.selectionStart).toBe(4);
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(commits).toEqual(["", "foo bar"]);
     expect(input.value).toBe("foo bar");
     expect(input.selectionStart).toBe(4);
@@ -200,28 +200,28 @@ describe("participant search URL input", () => {
     act(() => dispatchInput(input, "\u0000foo", 2));
     expect(input.value).toBe("foo");
     expect(input.selectionStart).toBe(1);
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(input.selectionStart).toBe(1);
 
     act(() => dispatchInput(input, "  foo  ", 1));
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(input.value).toBe("foo");
     expect(input.selectionStart).toBe(0);
 
     act(() => dispatchInput(input, "  foo  ", 3));
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(input.value).toBe("foo");
     expect(input.selectionStart).toBe(1);
 
     act(() => dispatchInput(input, "foo  ", 4));
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(input.value).toBe("foo");
     expect(input.selectionStart).toBe(3);
 
     act(() => dispatchInput(input, "x".repeat(130), 125));
     expect(input.value).toHaveLength(120);
     expect(input.selectionStart).toBe(120);
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(input.value).toHaveLength(120);
     expect(input.selectionStart).toBe(120);
     expect(document.activeElement).toBe(input);
@@ -256,20 +256,20 @@ describe("participant search URL input", () => {
         />
       );
     });
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
 
     expect(commits).toEqual([]);
     expect(input.value).toBe("restored");
     expect(document.activeElement).toBe(input);
 
     act(() => dispatchInput(input, "later"));
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(commits).toEqual(["later"]);
 
     act(() => dispatchInput(input, "unmounted"));
     act(() => root.unmount());
     mountedRoots.delete(root);
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(commits).toEqual(["later"]);
   });
 
@@ -295,7 +295,7 @@ describe("participant search URL input", () => {
     expect(input.maxLength).toBe(120);
     expect(input.value).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
     expect(input.value).toHaveLength(120);
-    act(() => jest.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(250));
     expect(commits).toEqual([input.value]);
 
     act(() => {

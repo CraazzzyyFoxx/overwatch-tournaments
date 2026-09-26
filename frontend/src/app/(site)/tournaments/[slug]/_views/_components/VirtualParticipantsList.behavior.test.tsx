@@ -1,11 +1,11 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import { act, useState, type ReactNode } from "react";
 import type { Root } from "react-dom/client";
 
 import type { Registration } from "@/types/registration.types";
 
-import type { ColumnDefinition } from "./participantsColumns";
+import type { ColumnDefinition } from "./participantsColumns.model";
 import { readParticipantUrlState } from "./participants-url-state";
 
 const testWindow = new Window({
@@ -78,15 +78,17 @@ const originalWindowResizeObserver = Object.getOwnPropertyDescriptor(
   "ResizeObserver"
 );
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
   useTranslations: () => (key: string) => key
 }));
-mock.module("@/components/RankHistory", () => ({
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
+}));
+vi.mock("@/components/RankHistory", () => ({
   default: () => <div data-rank-history="true" />
 }));
-mock.module("@/components/ui/checkbox", () => ({
+vi.mock("@/components/ui/checkbox", () => ({
   Checkbox: ({
     checked,
     disabled,
@@ -105,7 +107,7 @@ mock.module("@/components/ui/checkbox", () => ({
     />
   )
 }));
-mock.module("@/components/ui/popover", () => ({
+vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
@@ -326,7 +328,7 @@ afterAll(async () => {
     } else {
       Reflect.deleteProperty(testWindow, "ResizeObserver");
     }
-    mock.restore();
+    vi.restoreAllMocks();
     await testWindow.close();
   } finally {
     restoreGlobals();

@@ -30,6 +30,8 @@ os.environ["DEBUG"] = "true"
 stage_service = importlib.import_module("src.services.admin.stage")
 enums = importlib.import_module("shared.core.enums")
 
+from tests._stage_regulation import stage_regulation  # noqa: E402
+
 service = stage_service.stage_service
 
 
@@ -57,10 +59,10 @@ def _matches_per_round(matches: list[dict]) -> dict[int, int]:
 class GetBracketPreviewTests(IsolatedAsyncioTestCase):
     async def test_draws_a_seeded_single_elimination_with_names_and_edges(self) -> None:
         stage = SimpleNamespace(
+            **stage_regulation(),
             id=5,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, [_input(team_id, team_id) for team_id in range(1, 9)])],
-            settings_json=None,
         )
         names = {team_id: f"Team {team_id}" for team_id in range(1, 9)}
 
@@ -93,11 +95,11 @@ class GetBracketPreviewTests(IsolatedAsyncioTestCase):
         # from each of 2 groups, split into a 4-team upper bracket and 4 lower
         # seeds -- so the drawn tree is the one that will be generated.
         stage = SimpleNamespace(
+            **stage_regulation(),
             id=5,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             items=[_item(1, [])],
             split_lower_bracket=True,
-            settings_json=None,
         )
         source = SimpleNamespace(id=4, advance_count=4, items=[_item(10, []), _item(11, [])])
 
@@ -120,10 +122,10 @@ class GetBracketPreviewTests(IsolatedAsyncioTestCase):
 
     async def test_a_group_stage_has_no_bracket_to_draw(self) -> None:
         stage = SimpleNamespace(
+            **stage_regulation(),
             id=5,
             stage_type=enums.StageType.SWISS,
             items=[_item(1, [_input(1, 1), _input(2, 2)])],
-            settings_json=None,
         )
 
         with patch.object(service, "get_stage", AsyncMock(return_value=stage)):
@@ -133,10 +135,10 @@ class GetBracketPreviewTests(IsolatedAsyncioTestCase):
 
     async def test_nothing_to_draw_without_seeds_or_an_upstream_group_stage(self) -> None:
         stage = SimpleNamespace(
+            **stage_regulation(),
             id=5,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, [_input(1, 1)])],
-            settings_json=None,
         )
 
         with (

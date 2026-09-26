@@ -22,8 +22,14 @@ const getTeam = vi.fn();
 const updateTeam = vi.fn();
 
 vi.mock("next-intl", () => ({
-  useTranslations: () => (key: string) => key,
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString().slice(0, 10) })
+  useTranslations: () => (key: string) => key
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({
+    dateTime: (value: Date) => value.toISOString().slice(0, 10),
+    dateTimeRange: (start: Date, end: Date) =>
+      `${start.toISOString().slice(0, 10)} – ${end.toISOString().slice(0, 10)}`
+  })
 }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "9" }),

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import {
   SCHEDULABLE_PHASES,
@@ -22,7 +22,7 @@ import {
  * generated artifact — a generator would need a build step in the loop of every
  * backend edit, while this fails in the same suite the change already runs.
  */
-const BACKEND_CORE = join(import.meta.dir, "..", "..", "..", "..", "backend", "shared", "core");
+const BACKEND_CORE = join(import.meta.dirname, "..", "..", "..", "..", "backend", "shared", "core");
 const ENUMS_PY = readFileSync(join(BACKEND_CORE, "enums.py"), "utf8");
 const MACHINE_PY = readFileSync(join(BACKEND_CORE, "tournament_state.py"), "utf8");
 

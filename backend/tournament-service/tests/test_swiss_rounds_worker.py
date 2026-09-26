@@ -109,7 +109,7 @@ class SwissRoundWorkerTests(IsolatedAsyncioTestCase):
 
     async def test_generate_ready_rounds_does_not_enqueue_a_bracket_job(self) -> None:
         item = SimpleNamespace(id=501)
-        stage = SimpleNamespace(id=77, is_active=True, items=[item], max_rounds=5, settings_json={})
+        stage = SimpleNamespace(id=77, is_active=True, items=[item], max_rounds=5)
         generated = [SimpleNamespace(id=101)]
 
         session = SimpleNamespace(

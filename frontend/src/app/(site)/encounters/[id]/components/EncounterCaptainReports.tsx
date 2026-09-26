@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { TriangleAlert } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -9,6 +10,7 @@ import captainService from "@/services/captain.service";
 import type { CaptainReport, MatchReportForm } from "@/types/encounter.types";
 import { Pill, PillFact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterCaptainReportsProps {
   encounterId: number;
@@ -35,7 +37,7 @@ export default function EncounterCaptainReports({
 }: Readonly<EncounterCaptainReportsProps>) {
   const t = useTranslations();
   const reportsQuery = useQuery({
-    queryKey: ["encounter-reports", encounterId],
+    queryKey: encounterQueryKeys.reports(encounterId),
     queryFn: () => captainService.getReports(encounterId),
     retry: false,
     staleTime: 60_000

@@ -47,7 +47,8 @@ type SortableRowsProps<T> = {
   items: readonly T[];
   /** Stable per-item id. Index-based ids are fine for a fixed-length list. */
   getId: (item: T, index: number) => string;
-  onReorder: (nextItems: T[]) => void;
+  /** `moved` is the dragged item — an adjacent swap cannot tell it apart otherwise. */
+  onReorder: (nextItems: T[], moved: T) => void;
   className?: string;
   children: (item: T, index: number) => ReactNode;
 };
@@ -80,7 +81,7 @@ export function SortableRows<T>({
     const to = ids.indexOf(String(over.id));
     if (from === -1 || to === -1) return;
 
-    onReorder(arrayMove([...items], from, to));
+    onReorder(arrayMove([...items], from, to), items[from]);
   };
 
   return (

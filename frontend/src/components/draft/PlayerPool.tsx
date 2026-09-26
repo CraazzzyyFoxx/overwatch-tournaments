@@ -39,7 +39,7 @@ import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftBoard, DraftPickOptionsResponse, DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { getHeroIconUrl } from "@/utils/player";
+import { getHeroIconUrl } from "@/lib/player";
 
 import { POOL_GRID, PoolRow, teal, tint } from "./pool/PoolRow";
 

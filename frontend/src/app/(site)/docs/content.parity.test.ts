@@ -1,10 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { GUIDES, type GuideId } from "./nav";
 
-const CONTENT = join(import.meta.dir, "_content");
+const CONTENT = join(import.meta.dirname, "_content");
 
 describe("docs content", () => {
   // A missing file is not a build error: the article import is runtime-selected,

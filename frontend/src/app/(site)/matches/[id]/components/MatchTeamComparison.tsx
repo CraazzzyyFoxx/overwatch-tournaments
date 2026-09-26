@@ -1,9 +1,10 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
-import { COMPARISON_STATS, STAT_META, formatStat, teamTotal } from "@/utils/matchStats";
+import { COMPARISON_STATS, STAT_META, formatStat, teamTotal } from "@/lib/match-stats";
 import TeamName from "@/components/TeamName";
 
 interface MatchTeamComparisonProps {

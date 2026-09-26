@@ -1,9 +1,10 @@
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { Calendar, Users } from "lucide-react";
 
-import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
-import { formatDateRange } from "@/lib/utils";
+import WorkspaceBrandIcon from "@/components/workspace/WorkspaceBrandIcon";
+import { formatDateRange } from "@/lib/datetime";
+import { getFormatter } from "@/lib/datetime/server";
 import { tournamentHref } from "@/lib/tournament/url";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { Tournament } from "@/types/tournament.types";
@@ -21,10 +22,10 @@ export async function EventCard({
   workspace,
 }: Readonly<{ tournament: TournamentWithCount; workspace?: Workspace }>) {
   const t = await getTranslations();
-  const locale = await getLocale();
+  const format = await getFormatter();
   const isLive = tournament.status === "live" || tournament.status === "playoffs";
   const statusMeta = getTournamentStatusMeta(tournament.status);
-  const dateStr = formatDateRange(tournament.start_date, tournament.end_date, locale);
+  const dateStr = formatDateRange(format, tournament.start_date, tournament.end_date);
 
   return (
     <HoverPrefetchLink

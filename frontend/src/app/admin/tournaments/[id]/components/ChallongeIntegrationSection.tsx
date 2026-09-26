@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, Users } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
 import type { DateFormatter } from "@/components/kit/format-time";
@@ -18,6 +18,7 @@ import type { ChallongeSyncLogEntry } from "@/types/admin.types";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface ChallongeIntegrationSectionProps {
   tournamentId: number;
@@ -85,14 +86,14 @@ export function ChallongeIntegrationSection({
   const queryClient = useQueryClient();
 
   const { data: logs = [], isLoading } = useQuery({
-    queryKey: ["admin", "challonge-sync-log", tournamentId],
+    queryKey: adminQueryKeys.challongeSyncLog(tournamentId),
     queryFn: () => adminService.challongeSyncLog(tournamentId, 20),
     enabled: hasChallongeSource
   });
 
   const invalidateSyncLog = () => {
     void queryClient.invalidateQueries({
-      queryKey: ["admin", "challonge-sync-log", tournamentId]
+      queryKey: adminQueryKeys.challongeSyncLog(tournamentId)
     });
   };
 
@@ -101,7 +102,7 @@ export function ChallongeIntegrationSection({
     onSuccess: () => {
       invalidateSyncLog();
       void queryClient.invalidateQueries({
-        queryKey: ["admin", "tournament", tournamentId]
+        queryKey: adminQueryKeys.tournament(tournamentId)
       });
       invalidateTournamentWorkspace(queryClient, tournamentId);
       notify.success("Challonge import started", { description: "Sync log will update shortly." });

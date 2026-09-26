@@ -2,6 +2,7 @@ import nextConfig from "eslint-config-next/core-web-vitals";
 
 /** @type {import("eslint").Linter.Config[]} */
 export default [
+  { ignores: ["src/types/api.generated.ts"] },
   ...nextConfig,
   {
     rules: {
@@ -12,7 +13,8 @@ export default [
       "react/prop-types": "off",
       "react/no-unknown-property": "off",
       "no-redeclare": "off",
-      "react-hooks/exhaustive-deps": "off",
+      // "warn": catch stale closures without failing CI on the existing backlog.
+      "react-hooks/exhaustive-deps": "warn",
       "no-undef": "off",
     },
   },
@@ -37,6 +39,56 @@ export default [
           // before it crosses a wire contract. The named sibling is unused by
           // design, so flagging it only invites renaming it to `_rowId`.
           ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
+  {
+    // Every date goes through `@/lib/datetime`: next-intl's own formatter knows
+    // only the UI language, and `toLocale*String` only the host's locale/zone.
+    files: ["**/*.ts", "**/*.tsx"],
+    ignores: ["src/lib/datetime/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next-intl",
+              importNames: ["useFormatter", "createFormatter"],
+              message: "Use useFormatter from @/lib/datetime/client.",
+            },
+            {
+              name: "next-intl/server",
+              importNames: ["getFormatter"],
+              message: "Use getFormatter from @/lib/datetime/server.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        { property: "toLocaleDateString", message: "Format dates with useFormatter from @/lib/datetime/client." },
+        { property: "toLocaleTimeString", message: "Format dates with useFormatter from @/lib/datetime/client." },
+      ],
+    },
+  },
+  {
+    // Query keys come from a domain factory (`src/lib/<domain>/query-keys.ts`),
+    // never from an array literal at the call site. The same data used to be
+    // cached under `["heroes-all"]`, `["heroes-select-options"]` and
+    // `["heroes", "all"]` at once, and every invalidation reached at most one of
+    // them. Tests are exempt: pinning a literal is how they prove the factory
+    // still produces the key its readers were built against.
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    ignores: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/lib/**/query-keys.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Property[key.name='queryKey'] > ArrayExpression > Literal:first-child",
+          message:
+            "Build query keys with the domain factory in src/lib/<domain>/query-keys.ts, not an inline array literal.",
         },
       ],
     },

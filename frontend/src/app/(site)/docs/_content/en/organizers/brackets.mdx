@@ -84,16 +84,20 @@ For Swiss, the same section has **Swiss bye points**: what a team scores for a r
 
 **Standings preset** picks a ready-made set of tiebreakers (**System default (based on type)**, **Challonge Swiss (Buchholz first)**, **Challonge Round Robin**, **Default bracket**), and the **Tiebreaker evaluation order** list below lets you reorder the steps with the arrows or switch off the ones you do not want — a metric that is switched off is simply not evaluated.
 
-The metrics are **Points**, **Head-to-Head**, **Median Buchholz**, **Buchholz**, **Match Wins** and **Score Differential**. **Points** is the ranking metric: it is always first and cannot be switched off. **Manual Override** is a system step and always comes last.
+The metrics are **Points**, **Head-to-Head**, **Median Buchholz**, **Buchholz**, **Match Wins** and **Score Differential**. **Points** is the ranking metric: it is always first and cannot be switched off.
 
 **Reset to preset defaults** restores the order the chosen preset dictates.
 
-### Manual positions
+### Pinned places
 
-When teams come out level on every tiebreaker, the **Unresolved ties** panel appears on **Matches → Standings**. Order the teams with the arrows and press **Save order** — that order is stored and survives a recalculation. **Clear override** removes it again.
+On **Matches → Standings**, switch the view from **Table** to **Arrange**. Every standings table — a group, or a playoff stage — gets its own card. Drag a team to a place to pin it there: a pinned place holds no matter what results come later, and survives every recalculation. The other teams fill the remaining places in the order their results give them. Pinned rows carry a lock, in the admin and on the public table.
+
+Teams that came out level on every tiebreaker are marked **Tied** — pinning one of them is how you decide the order. **Unpin** on a row releases that team; **Clear pins** releases the whole table.
+
+Once a playoff seeded from a group has started, only the places below that group's qualifying cut can still change.
 
 <Callout type="warning">
-**Recalculate** rebuilds every standings row of the tournament from encounter results. Manual edits to individual rows are overwritten — save an order through **Unresolved ties** instead.
+**Recalculate** rebuilds every standings row of the tournament from encounter results. Manual edits to individual rows are overwritten; pinned places are kept.
 </Callout>
 
 Standings count closed rounds only: while a round still has an unplayed encounter, it does not enter the table.

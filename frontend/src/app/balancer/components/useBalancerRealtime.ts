@@ -14,6 +14,7 @@ import type { RealtimeEventEnvelope } from "@/types/realtime.types";
 import type { JobAction } from "./useBalancerJob";
 import { appendGeneratedVariants, type JobResultContext } from "./balancer-job-result";
 import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 /**
  * Tournament-scoped balancer topic. Access is gated by workspace membership in
@@ -163,7 +164,7 @@ export function useBalancerRealtime({
         // there is nobody to keep in agreement. Everything a balancer write
         // stales for the PUBLIC side travels as tournament resources.
         void queryClient.invalidateQueries({
-          queryKey: ["balancer-admin", "tournament-config", tournamentId],
+          queryKey: balancerQueryKeys.tournamentConfig(tournamentId),
         });
       }
     },

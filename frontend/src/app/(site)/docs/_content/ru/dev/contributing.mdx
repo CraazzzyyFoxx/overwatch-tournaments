@@ -69,7 +69,7 @@ cd gateway && go run ./cmd/gateway
 | --- | --- |
 | lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), сверка сгенерированных артефактов: `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, и `scripts/check_rpc_docs.py` — каждый маршрутизируемый RPC-метод должен быть задокументирован |
 | test-backend | pytest по каждому пакету отдельно с покрытием; интеграционные тесты сами пропускаются, если база недоступна |
-| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:split`, `bun run test:vitest`, `bun run test:bun`; продакшен-сборка `bun run build` — только на пушах в `master`, не на пул-реквестах |
+| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:vitest`; продакшен-сборка `bun run build` — только на пушах в `master`, не на пул-реквестах |
 | ci-gateway | `go mod tidy -diff`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race ./...` |
 | ci-docs | `python3 scripts/check_doc_links.py` — относительные ссылки в документации должны разрешаться |
 

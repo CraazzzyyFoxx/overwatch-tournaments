@@ -631,6 +631,9 @@ class ScrimService:
             # bracket (``shared.services.bracket.usability.is_encounter_live``).
             is_published=True,
         )
+        # Seeded while transient: once flushed, the first touch of a collection
+        # nothing loaded would lazy-SELECT (MissingGreenlet under async).
+        stage.round_best_of = []
         await self.stage_repo.create(session, stage)
 
         configs = await self._build_configs(session, user, pool, tournament_id=container.id, stage_id=stage.id)

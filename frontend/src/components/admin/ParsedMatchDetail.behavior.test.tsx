@@ -19,6 +19,8 @@ vi.mock("@/services/admin.service", () => ({
   default: { getAdminMatch: (...args: unknown[]) => getAdminMatch(...args) }
 }));
 vi.mock("next-intl", () => ({
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 

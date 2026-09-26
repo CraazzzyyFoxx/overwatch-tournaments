@@ -75,7 +75,7 @@ export function formFromWorkspace(ws: Workspace): WorkspaceSettingsFormState {
  * (`WorkspaceUpdate.model_dump(exclude_unset=True)` records exactly the keys a
  * PATCH sends).
  */
-export function buildPayload(form: WorkspaceSettingsFormState): WorkspaceSettingsFormState {
+function buildPayload(form: WorkspaceSettingsFormState): WorkspaceSettingsFormState {
   const payload = { ...form } as Record<WorkspaceFieldKey, unknown>;
   for (const key of FIELD_KEYS) {
     const { wire } = FIELD_DEFS[key];
@@ -87,7 +87,7 @@ export function buildPayload(form: WorkspaceSettingsFormState): WorkspaceSetting
 }
 
 /** Every key whose normalised value differs from the baseline. */
-export function diffPayload(
+function diffPayload(
   current: WorkspaceSettingsFormState,
   baseline: WorkspaceSettingsFormState
 ): Partial<WorkspaceSettingsFormState> {

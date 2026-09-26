@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Capture the real service boundary so tests can assert the public API contract
 // without coupling to apiFetch's internal URL serialization.
@@ -13,7 +13,7 @@ type Call = {
 };
 const calls: Call[] = [];
 
-mock.module("@/lib/api/fetch", () => ({
+vi.mock("@/lib/api/fetch", () => ({
   apiFetch: (
     path: string,
     options?: { skipWorkspace?: boolean; query?: Record<string, unknown> },
@@ -23,7 +23,7 @@ mock.module("@/lib/api/fetch", () => ({
   },
 }));
 
-mock.module("@/lib/api/normalize-paginated-response", () => ({
+vi.mock("@/lib/api/normalize-paginated-response", () => ({
   normalizePaginatedResponse: (r: unknown) => r,
 }));
 

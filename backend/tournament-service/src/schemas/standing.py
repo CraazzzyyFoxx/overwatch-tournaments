@@ -53,6 +53,8 @@ class StandingRead(BaseRead):
     tie_group: int | None = None
     tb: int | None
     score_differential: int | None = None
+    #: The organizer fixed this row's ``position``; it holds regardless of results.
+    is_pinned: bool = False
     ranking_context: dict[str, str | int | float | None] | None = None
     tb_metrics: dict[str, int | float | None] | None = None
     source_rule_profile: str | None = None

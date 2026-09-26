@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`varcap01`** (82 revisions in `backend/migrations/versions/`).
+Alembic head: **`stjson01`** (84 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1174,7 +1174,20 @@ erDiagram
         boolean is_active
         boolean is_published
         boolean is_completed
-        json settings_json "nullable"
+        varchar ranking_preset "nullable"
+        varchar[] tiebreak_order "nullable"
+        float win_points "nullable"
+        float draw_points "nullable"
+        float loss_points "nullable"
+        float swiss_bye_points "nullable"
+        varchar(16) de_grand_final_type
+        varchar(16) seed_ranking
+        int best_of_default
+        int best_of_final "nullable"
+        float[] ffa_placement_points
+        float ffa_score_points
+        varchar(32) ffa_score_label "nullable"
+        bigint challonge_group_id "nullable"
     }
     TOURNAMENT_STAGE_ITEM {
         bigint id PK
@@ -1197,6 +1210,11 @@ erDiagram
         bigint source_stage_item_id FK "nullable"
         int source_position "nullable"
     }
+    TOURNAMENT_STAGE_ROUND_BEST_OF {
+        bigint stage_id PK,FK
+        int round PK
+        int best_of
+    }
     TOURNAMENT_STANDING {
         bigint id PK
         timestamptz created_at
@@ -1217,6 +1235,33 @@ erDiagram
         int tie_group "nullable"
         int tb "nullable"
         int score_differential "nullable"
+        boolean is_pinned
+    }
+    TOURNAMENT_STANDING_PIN {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint stage_id FK
+        bigint stage_item_id FK "nullable"
+        bigint team_id FK
+        int position
+    }
+    TOURNAMENT_SWISS_BYE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint stage_id FK
+        bigint stage_item_id FK "nullable"
+        bigint team_id FK
+        int round "nullable"
+    }
+    TOURNAMENT_SWISS_STOPPED_SCOPE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint stage_id FK
+        bigint stage_item_id FK "nullable"
     }
     TOURNAMENT_TEAM {
         bigint id PK
@@ -1332,11 +1377,18 @@ erDiagram
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_STANDING : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_SCRIM_ROOM : "stage_id"
     TOURNAMENT_STAGE ||--o{ TOURNAMENT_STAGE_ITEM : "stage_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_STANDING_PIN : "stage_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_SWISS_BYE : "stage_id"
+    TOURNAMENT_STAGE ||--o{ TOURNAMENT_SWISS_STOPPED_SCOPE : "stage_id"
+    TOURNAMENT_STAGE ||--o| TOURNAMENT_STAGE_ROUND_BEST_OF : "stage_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_CHALLONGE_SOURCE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_COMPUTATION_JOB : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_ENCOUNTER : "stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : "source_stage_item_id"
     TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING : "stage_item_id"
+    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING_PIN : "stage_item_id"
+    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_BYE : "stage_item_id"
+    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_SWISS_STOPPED_SCOPE : "stage_item_id"
     TOURNAMENT_STAGE_ITEM ||--o{ TOURNAMENT_STAGE_ITEM_INPUT : "stage_item_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_ENCOUNTER : "away_team_id"
     TOURNAMENT_TEAM |o--o{ TOURNAMENT_ENCOUNTER : "home_team_id"
@@ -1348,6 +1400,8 @@ erDiagram
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_ENCOUNTER_PARTICIPANT : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_PLAYER : "team_id"
     TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING : "team_id"
+    TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING_PIN : "team_id"
+    TOURNAMENT_TEAM ||--o{ TOURNAMENT_SWISS_BYE : "team_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SOURCE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_COMPUTATION_JOB : "tournament_id"
@@ -1358,6 +1412,7 @@ erDiagram
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SLUG_REDIRECT : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STAGE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STANDING : "tournament_id"
+    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STANDING_PIN : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TEAM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_LINK : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE : "tournament_id"

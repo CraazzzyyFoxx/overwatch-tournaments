@@ -11,7 +11,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
+import { DataTable } from "@/components/data-table/DataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -44,7 +44,7 @@ let container: HTMLElement;
 let root: Root;
 const bulkActions = vi.fn((selected: Row[]) => <span>{`bulk:${selected.map((row) => row.id).join(",")}`}</span>);
 
-async function render(props: Partial<React.ComponentProps<typeof AdminDataTable<Row>>>) {
+async function render(props: Partial<React.ComponentProps<typeof DataTable<Row>>>) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -52,7 +52,7 @@ async function render(props: Partial<React.ComponentProps<typeof AdminDataTable<
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row> columns={columns} getRowId={(row) => String(row.id)} initialPageSize={2} {...props} />
+        <DataTable<Row> columns={columns} getRowId={(row) => String(row.id)} initialPageSize={2} {...props} />
       </QueryClientProvider>
     );
   });
@@ -86,7 +86,7 @@ afterEach(async () => {
   window.history.replaceState(null, "", "/admin/players");
 });
 
-describe("AdminDataTable selection across pages", () => {
+describe("DataTable selection across pages", () => {
   it("keeps a row selected on an earlier page in the bulk action payload", async () => {
     await render({
       queryKey: (page) => ["players", page],
@@ -115,7 +115,7 @@ describe("AdminDataTable selection across pages", () => {
   });
 });
 
-describe("AdminDataTable multi-sort", () => {
+describe("DataTable multi-sort", () => {
   it("stacks a second sort with Shift+click and writes both to the URL", async () => {
     await render({ rows: ROWS, initialPageSize: 10 });
 

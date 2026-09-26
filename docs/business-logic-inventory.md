@@ -404,7 +404,7 @@ Duplicates only what the UI needs instantly; comments cite the server symbol:
 | `…/roster-shape-editor.model.ts` | Only 2–12 to preempt a 422; `inherit` sends `null` |
 | `frontend/src/hooks/usePermissions.ts` | RBAC mirror including deny and host ≠ admin panel |
 | `…/tournament-checklist.ts` | Challonge slug skips registration-form checklist items; `null` readiness fields mean no-access, not zero |
-| `frontend/src/middleware.ts` | Tenant host; client-supplied workspace headers are always stripped |
+| `frontend/src/proxy.ts` | Tenant host; client-supplied workspace headers are always stripped |
 
 ---
 

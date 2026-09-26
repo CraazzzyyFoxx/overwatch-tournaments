@@ -2,22 +2,24 @@
 // platform ladder in `RoleRanksField`. Reading it back through the workspace
 // grid renamed every number under them — the admin registrations table showed a
 // workspace's own division beside an SR that is Diamond 3 in OW terms.
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import { act } from "react";
 
 const testWindow = new Window({ url: "http://localhost:3000/", width: 720, height: 900 });
 
 // The role glyph localizes its own label; no provider in a unit render.
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string) => key
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 // A workspace grid that calls every rank one thing. If the chip reads it, the
 // crest below says "Workspace Apex" instead of the OW ladder's division.
-mock.module("@/hooks/useCurrentWorkspace", () => ({
+vi.mock("@/hooks/useCurrentWorkspace", () => ({
   useDivisionGrid: () => ({
     tiers: [
       {

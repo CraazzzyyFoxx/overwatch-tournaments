@@ -33,6 +33,7 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface UserMergeDialogProps {
   sourceUser: User;
@@ -209,7 +210,7 @@ export function UserMergeDialog({
   const executeMutation = useMutation({
     mutationFn: (payload: UserMergeExecuteRequest) => adminService.executeUserMerge(payload),
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      await queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       onOpenChange(false);
       onMerged?.(result.surviving_target_user_id);
     }

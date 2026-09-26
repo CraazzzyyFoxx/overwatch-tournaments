@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import type { Stage } from "@/types/tournament.types";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
@@ -50,7 +50,7 @@ const standingsTableModule =
     ) => { enabled: boolean; queryFn: () => Promise<Stage[]> };
   };
 
-const viewsRoot = import.meta.dir;
+const viewsRoot = import.meta.dirname;
 const tournamentRoot = join(viewsRoot, "..");
 const componentsRoot = join(viewsRoot, "../../../../../components");
 
@@ -343,10 +343,10 @@ describe("public tournament data page contracts", () => {
 
   it("gives the bracket its own labelled horizontal scroll owner", () => {
     const css = readFileSync(join(tournamentRoot, "TournamentDetail.module.css"), "utf8");
-    const page = readFileSync(
-      join(tournamentRoot, "bracket", "TournamentBracketPage.tsx"),
-      "utf8"
-    );
+    const page = [
+      readFileSync(join(tournamentRoot, "bracket", "TournamentBracketPage.tsx"), "utf8"),
+      readFileSync(join(tournamentRoot, "bracket", "BracketScroller.tsx"), "utf8")
+    ].join("\n");
 
     // A grid item defaults to `min-width: auto`, so without this the bracket's
     // intrinsic width grew the page and the whole document scrolled sideways.
@@ -385,13 +385,20 @@ describe("public tournament data page contracts", () => {
     expect(bracketData).toContain(
       "tournamentQueryKeys.encounters(tournament.id, tournament.workspace_id)"
     );
-    expect(pageSource("TournamentEncountersPage.tsx")).toContain("tournament.workspace_id");
+    expect(
+      pageSource("TournamentEncountersPage.tsx") +
+        readFileSync(join(process.cwd(), "src/lib/tournament/encounters-query.ts"), "utf8")
+    ).toContain("tournament.workspace_id");
     expect(encountersTable).toContain("encounterService.getAll(");
     expect(encountersTable).toContain("workspaceId");
   });
 
   it("keeps the teams grid scoped, responsive and non-destructive during refresh", () => {
-    const source = pageSource("TournamentTeamsPage.tsx");
+    const source = [
+      pageSource("TournamentTeamsPage.tsx"),
+      readFileSync(join(viewsRoot, "useTournamentTeamsData.ts"), "utf8"),
+      readFileSync(join(process.cwd(), "src/lib/tournament/teams-query.ts"), "utf8")
+    ].join("\n");
 
     expect(source).toContain(
       "tournamentQueryKeys.teams(tournament.id, tournament.workspace_id)"

@@ -1,0 +1,336 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Player profile — opponents list, map/mode breakdown, hero radar,
+   placement timeline. Imported by app/(site)/users/layout.tsx; every
+   consumer lives under that route.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* opp row */
+.aqt-opp-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 14px;
+  font-size: var(--text-caption);
+  border-bottom: 1px solid var(--aqt-border);
+}
+
+.aqt-opp-row:last-child {
+  border-bottom: 0;
+}
+
+.aqt-opp-row .aqt-rank {
+  font-family: var(--aqt-data);
+  font-size: var(--text-label);
+  color: var(--aqt-fg-faint);
+  text-align: right;
+}
+
+.aqt-opp-row .aqt-nm {
+  font-weight: 600;
+  color: var(--aqt-fg);
+}
+
+.aqt-opp-row .aqt-wl {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.aqt-opp-row .aqt-wl .b {
+  width: 6px;
+  height: 18px;
+  border-radius: 1px;
+  background: var(--aqt-overlay-3);
+}
+
+.aqt-opp-row .aqt-wl .b.w {
+  background: var(--aqt-emerald);
+}
+
+.aqt-opp-row .aqt-wl .b.l {
+  background: var(--aqt-rose);
+}
+
+.aqt-opp-row .aqt-wl .b.d {
+  background: var(--aqt-amber);
+}
+
+.aqt-opp-row .aqt-pct {
+  font-family: var(--aqt-data);
+  font-size: var(--text-label);
+  color: var(--aqt-fg-muted);
+  min-width: 34px;
+  text-align: right;
+  font-weight: 600;
+}
+
+/* mode cards */
+.aqt-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 1280px) {
+  .aqt-mode-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 880px) {
+  .aqt-mode-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.aqt-mode-card {
+  padding: 14px;
+  background: var(--aqt-card);
+  border: 1px solid var(--aqt-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.aqt-mode-card .aqt-l {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--aqt-fg-faint);
+}
+
+.aqt-mode-card .aqt-bar {
+  height: 4px;
+  background: var(--aqt-overlay-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.aqt-mode-card .aqt-bar .aqt-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.aqt-mode-card.control .aqt-fill {
+  background: linear-gradient(90deg, hsl(38 95% 60%), hsl(38 80% 48%));
+}
+
+.aqt-mode-card.escort .aqt-fill {
+  background: linear-gradient(90deg, hsl(174 72% 50%), hsl(174 60% 40%));
+}
+
+.aqt-mode-card.hybrid .aqt-fill {
+  background: linear-gradient(90deg, hsl(210 80% 65%), hsl(210 65% 48%));
+}
+
+.aqt-mode-card.flashpoint .aqt-fill {
+  background: linear-gradient(90deg, hsl(340 78% 65%), hsl(340 60% 48%));
+}
+
+.aqt-mode-card.push .aqt-fill {
+  background: linear-gradient(90deg, hsl(270 70% 65%), hsl(270 55% 45%));
+}
+
+.aqt-mode-card.assault .aqt-fill {
+  background: linear-gradient(90deg, hsl(190 75% 65%), hsl(190 60% 45%));
+}
+
+/* map row */
+.aqt-map-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 1fr 80px 60px 50px;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--aqt-border);
+  transition: 0.15s;
+}
+
+.aqt-map-row:hover {
+  background: var(--aqt-overlay-2);
+}
+
+.aqt-map-row:last-child {
+  border-bottom: 0;
+}
+
+.aqt-map-thumb {
+  width: 56px;
+  height: 32px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, var(--aqt-card-2), var(--aqt-bg-2));
+  border: 1px solid var(--aqt-border-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--aqt-display);
+  font-weight: 800;
+  font-size: var(--text-label);
+  color: var(--aqt-fg-muted);
+  overflow: hidden;
+  position: relative;
+}
+
+.aqt-wr-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aqt-wr-bar .aqt-track {
+  flex: 1;
+  height: 6px;
+  background: var(--aqt-overlay-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.aqt-wr-bar .aqt-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--aqt-rose), var(--aqt-amber), var(--aqt-emerald));
+}
+
+.aqt-wr-bar .aqt-num {
+  font-family: var(--aqt-data);
+  font-weight: 600;
+  font-size: var(--text-label);
+  min-width: 36px;
+  text-align: right;
+  color: var(--aqt-fg);
+}
+
+.aqt-wr-bar .aqt-num.good {
+  color: var(--aqt-emerald);
+}
+
+.aqt-wr-bar .aqt-num.bad {
+  color: var(--aqt-rose);
+}
+
+/* radar */
+.aqt-radar-grid {
+  fill: none;
+  stroke: hsl(0 0% 100% / 0.05);
+}
+
+.aqt-radar-spoke {
+  stroke: hsl(0 0% 100% / 0.05);
+}
+
+.aqt-radar-global {
+  fill: hsl(220 12% 50% / 0.18);
+  stroke: hsl(220 12% 60%);
+  stroke-width: 1.2;
+}
+
+.aqt-radar-you {
+  fill: color-mix(in srgb, var(--aqt-teal) 22%, transparent);
+  stroke: var(--aqt-teal);
+  stroke-width: 1.8;
+}
+
+.aqt-radar-axis {
+  font-family: var(--aqt-data);
+  font-size: var(--text-label);
+  fill: var(--aqt-fg-muted);
+}
+
+/* timeline */
+.aqt-timeline {
+  position: relative;
+  height: 200px;
+  padding: 14px 8px 8px;
+  border: 1px solid var(--aqt-border);
+  background: var(--aqt-overlay-1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.aqt-timeline .aqt-y-axis {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 30px;
+  width: 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--aqt-data);
+  font-size: var(--text-label);
+  color: var(--aqt-fg-faint);
+  text-align: right;
+  padding-right: 6px;
+}
+
+.aqt-timeline .aqt-ln {
+  position: absolute;
+  left: 50px;
+  right: 14px;
+  top: 14px;
+  bottom: 30px;
+}
+
+.aqt-timeline .aqt-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--aqt-card);
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.aqt-timeline .aqt-dot:hover {
+  transform: translate(-50%, -50%) scale(1.5);
+  z-index: 5;
+}
+
+.aqt-timeline .aqt-dot.gold {
+  background: linear-gradient(
+    135deg,
+    var(--aqt-medal-gold),
+    color-mix(in srgb, var(--aqt-medal-gold) 65%, black)
+  );
+}
+
+.aqt-timeline .aqt-dot.silver {
+  background: linear-gradient(
+    135deg,
+    var(--aqt-medal-silver),
+    color-mix(in srgb, var(--aqt-medal-silver) 65%, black)
+  );
+}
+
+.aqt-timeline .aqt-dot.bronze {
+  background: linear-gradient(
+    135deg,
+    var(--aqt-medal-bronze),
+    color-mix(in srgb, var(--aqt-medal-bronze) 65%, black)
+  );
+}
+
+.aqt-timeline .aqt-dot.mid {
+  background: var(--aqt-teal);
+}
+
+.aqt-timeline .aqt-dot.bottom {
+  background: var(--aqt-rose);
+}
+
+.aqt-timeline .aqt-x-axis {
+  position: absolute;
+  left: 50px;
+  right: 14px;
+  bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--aqt-data);
+  font-size: var(--text-label);
+  color: var(--aqt-fg-faint);
+}

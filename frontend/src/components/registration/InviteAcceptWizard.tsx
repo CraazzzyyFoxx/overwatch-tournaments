@@ -20,6 +20,7 @@ import registrationTeamService from "@/services/registration-team.service";
 import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
 import RegistrationSchemaForm from "./RegistrationSchemaForm";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface InviteAcceptWizardProps {
   workspaceId: number;
@@ -65,7 +66,7 @@ export default function InviteAcceptWizard({
   const [declineOpen, setDeclineOpen] = useState(false);
 
   const userQuery = useQuery({
-    queryKey: ["me", "social"],
+    queryKey: userQueryKeys.mySocial(),
     queryFn: () => meService.getSocialAccounts(),
     enabled: !!authUser,
     staleTime: 60_000,

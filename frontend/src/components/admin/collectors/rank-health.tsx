@@ -10,6 +10,7 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -25,6 +26,7 @@ import {
   formatRelative,
   rankParsingOutage
 } from "./rank-shared";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const RANK_SETTING_KEY = "parser.rank_collection";
 
@@ -66,6 +68,7 @@ function StatusBar({ stats }: Readonly<{ stats: RankCollectionStats }>) {
 }
 
 export function RankHealthDashboard() {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
   const isSuperuser = user?.isSuperuser ?? false;
@@ -74,7 +77,7 @@ export function RankHealthDashboard() {
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const statsQuery = useQuery({
-    queryKey: ["admin", "rank", "stats", workspaceId],
+    queryKey: adminQueryKeys.rankStats(workspaceId),
     queryFn: () => adminService.getRankCollectionStats(),
     refetchInterval: 10000
   });
@@ -84,7 +87,7 @@ export function RankHealthDashboard() {
     mutationFn: () => adminService.reenableDisabledRankCollection(false),
     onSuccess: (result) => {
       notify.success(`Re-enabled ${result.reenabled} disabled battle tag(s)`);
-      queryClient.invalidateQueries({ queryKey: ["admin", "rank"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.rank() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not re-enable the disabled tags — try again" })
@@ -98,7 +101,7 @@ export function RankHealthDashboard() {
     },
     onSuccess: () => {
       notify.success(stats?.enabled ? "Collection paused" : "Collection resumed");
-      queryClient.invalidateQueries({ queryKey: ["admin", "rank", "stats"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.rankStatsAll() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not change the collection state — try again" })
@@ -162,7 +165,7 @@ export function RankHealthDashboard() {
           <AlertDescription>
             {outage.reason === "circuit_open"
               ? `The circuit breaker to ${stats.overfast_base_url || "OverFast"} is open — every fetch is refused inside the worker, so the counters below stopped moving instead of reporting errors.`
-              : `No battle tag has been collected successfully since ${formatRelative(stats.last_success_at)}, although collection is switched on.`}{" "}
+              : `No battle tag has been collected successfully since ${formatRelative(format, stats.last_success_at)}, although collection is switched on.`}{" "}
             Check that {stats.overfast_base_url || "the OverFast instance"} resolves and answers, then watch this
             banner clear on the next tick.
           </AlertDescription>
@@ -188,7 +191,7 @@ export function RankHealthDashboard() {
         <StatTile
           label="Fetches (24h)"
           value={stats.fetch_24h_total ?? 0}
-          detail={`${errRate}% errors · ok ${okCount} · not found ${notFoundCount} · errors ${errCount} · last success ${formatRelative(stats.last_success_at)}`}
+          detail={`${errRate}% errors · ok ${okCount} · not found ${notFoundCount} · errors ${errCount} · last success ${formatRelative(format, stats.last_success_at)}`}
           tone={errRate >= 20 ? "danger" : "neutral"}
           icon={errRate >= 20 ? AlertTriangle : undefined}
         />

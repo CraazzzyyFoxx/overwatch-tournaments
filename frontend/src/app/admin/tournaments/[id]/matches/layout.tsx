@@ -15,6 +15,7 @@ import {
   MATCHES_SUB_TABS,
   type MatchesSubTabKey
 } from "../tab-guards";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 const SUB_TAB_LABELS: Record<MatchesSubTabKey, string> = {
   encounters: "Encounters",
@@ -67,11 +68,7 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
   );
 
   const reportStatsQuery = useQuery({
-    queryKey: [
-      "encounter-reports",
-      "stats",
-      { workspace_id: workspaceId, tournament_id: tournamentId }
-    ],
+    queryKey: encounterQueryKeys.reportStats({ workspace_id: workspaceId, tournament_id: tournamentId }),
     queryFn: () =>
       adminService.getEncounterReportStats({
         workspace_id: workspaceId!,

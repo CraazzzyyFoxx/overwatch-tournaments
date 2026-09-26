@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { useDebounce } from "use-debounce";
 
 import { StatusPill } from "@/components/kit/StatusPill";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const PAGE_SIZE = 25;
 /**
@@ -153,7 +154,7 @@ export function TournamentLogsTab({
   const historyKey =
     tournamentId != null
       ? getTournamentWorkspaceQueryKeys(tournamentId).logHistory
-      : (["admin", "workspace", workspaceId, "log-history"] as const);
+      : adminQueryKeys.workspaceLogHistory(workspaceId);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch] = useDebounce(searchInput, 300);
   const searchTerm = debouncedSearch.trim();

@@ -12,6 +12,7 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 export default function DangerSettingsPage() {
   return (
@@ -37,7 +38,7 @@ function DeleteTournament({
   const deleteMutation = useMutation({
     mutationFn: () => adminService.deleteTournament(tournamentId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      await queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() });
       notify.success("Tournament deleted successfully");
       router.push("/admin/tournaments");
     },

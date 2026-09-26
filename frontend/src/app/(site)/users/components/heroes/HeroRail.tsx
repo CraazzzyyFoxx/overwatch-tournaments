@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import HeroImage from "@/components/hero/HeroImage";

@@ -63,7 +63,7 @@ vi.mock("@/hooks/usePermissions", () => ({
 }));
 
 let isMobile = false;
-vi.mock("@/hooks/use-mobile", () => ({
+vi.mock("@/hooks/useMobile", () => ({
   useIsMobile: () => isMobile
 }));
 
@@ -120,7 +120,14 @@ function groupStage(): Stage {
     is_active: true,
     is_published: true,
     is_completed: false,
-    settings_json: {},
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
     challonge_id: null,
     challonge_slug: null,
     items: [
@@ -160,7 +167,14 @@ function playoffStage(): Stage {
     is_active: false,
     is_published: false,
     is_completed: false,
-    settings_json: {},
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
     challonge_id: null,
     challonge_slug: null,
     items: []

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { formatClock } from "@/hooks/usePickCountdown";
@@ -6,11 +6,13 @@ import type { DraftPick } from "@/types/draft.types";
 
 // Module mocks are process-wide in bun: every mock of next-intl in the draft
 // suite exposes the same hooks, or whichever file loads first breaks the rest.
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
-    values ? `${key}:${JSON.stringify(values)}` : key,
+    values ? `${key}:${JSON.stringify(values)}` : key
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: () => "", number: (value: number) => String(value), relativeTime: () => "" })
 }));
 
 // Dynamic: `mock.module` only applies to modules imported after it runs.

@@ -4,7 +4,7 @@ Three layers, all of them here, none of them touching a session:
 
 1. ``SeedRanking`` — the order a stage hands to the bracket engine, which
    treats ``team_ids[0]`` as seed 1 (plays the lowest seed). Lives in
-   ``Stage.settings_json.seed_ranking`` (same bag as ``best_of``):
+   ``Stage.seed_ranking``:
 
    - ``slot`` (default): keep StageItemInput slot order — standings wiring,
      manual slots, and every existing tournament stay unchanged.
@@ -50,7 +50,6 @@ __all__ = (
     "group_for_index",
     "lower_bracket_item",
     "parse_seed_mode",
-    "parse_seed_ranking",
     "rank_team_ids",
     "resolve_seeds",
 )
@@ -67,16 +66,6 @@ class RankableTeam(Protocol):
     id: int
     avg_sr: float | None
     total_sr: float | int | None
-
-
-def parse_seed_ranking(settings_json: Any) -> SeedRanking:
-    if not isinstance(settings_json, dict):
-        return SeedRanking.SLOT
-    raw = settings_json.get("seed_ranking")
-    try:
-        return SeedRanking(raw)
-    except (TypeError, ValueError):
-        return SeedRanking.SLOT
 
 
 # ``seed_teams``'s public vocabulary. ``slot`` has no entry: dealing teams into

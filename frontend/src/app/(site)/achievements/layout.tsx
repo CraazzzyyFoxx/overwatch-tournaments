@@ -1,3 +1,7 @@
+// Achievement-specific global CSS, loaded with this route's chunk rather than
+// from globals.css (where it used to sit, on every page in the app).
+import "./achievements.css";
+
 import type { Metadata } from "next";
 import React from "react";
 

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { TeamWithStats } from "@/types/team.types";
-import { LEADER_STATS, STAT_META, findLeader, formatStat } from "@/utils/matchStats";
+import { LEADER_STATS, STAT_META, findLeader, formatStat } from "@/lib/match-stats";
 import { HeroStrip } from "@/components/hero/HeroImage";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 interface MatchLeadersProps {
   home: TeamWithStats;

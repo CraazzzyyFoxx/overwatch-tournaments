@@ -77,14 +77,16 @@ class ProcessorCarriesTheRecordId(IsolatedAsyncioTestCase):
         self.assertFalse(hasattr(processor, "log_record_id"))
 
     async def test_process_match_log_passes_the_claimed_record(self) -> None:
-        """The id must come from the record this run claimed, not from a second
-        lookup that could resolve to a different duplicate."""
-        record = SimpleNamespace(id=4242)
+        """The id and the attached encounter must come from the record this run
+        claimed, not from a second lookup that could resolve to a different
+        duplicate."""
+        record = SimpleNamespace(id=4242, attached_encounter_id=77)
         constructed: dict = {}
 
         class _FakeProcessor:
-            def __init__(self, tournament, name, data_in, s3, log_record_id=None):
+            def __init__(self, tournament, name, data_in, s3, log_record_id=None, *, attached_encounter_id=None):
                 constructed["log_record_id"] = log_record_id
+                constructed["attached_encounter_id"] = attached_encounter_id
                 constructed["name"] = name
 
             async def start(self, _session, is_raise: bool = True):
@@ -109,6 +111,7 @@ class ProcessorCarriesTheRecordId(IsolatedAsyncioTestCase):
             await flows.process_match_log(Mock(), 1, "logs/1/m.txt", Mock(), is_raise=False)
 
         self.assertEqual(4242, constructed["log_record_id"])
+        self.assertEqual(77, constructed["attached_encounter_id"])
         # The processor still sees the bare name; only the link is new.
         self.assertEqual("m.txt", constructed["name"])
 

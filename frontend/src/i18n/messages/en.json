@@ -75,8 +75,7 @@
       "ffa_game_wins": "Game wins",
       "ffa_score": "Score",
       "ffa_best_placement": "Best placement",
-      "ffa_last_placement": "Last placement",
-      "manual_override": "Manual override"
+      "ffa_last_placement": "Last placement"
     },
     "combined": "Combined",
     "groupStage": "Group stage",
@@ -485,6 +484,10 @@
       "blockedBySolo": "You are registered as an individual player, so you cannot create a team — but a captain can still invite you, and accepting will move your existing registration onto their roster."
     },
     "invite": {
+      "meta": {
+        "title": "Team invite",
+        "description": "Accept a team invite on {siteName}."
+      },
       "action": "Invite a player",
       "actionSlot": "Invite to the {slot} slot",
       "actionBench": "Invite a substitute",
@@ -2545,6 +2548,7 @@
     "priority": "Priority {n}",
     "buchholzMedianFull": "median / full",
     "tieCluster": "Equal on every tiebreaker — order assigned, not earned",
+    "pinnedPlace": "Place set by the organizer",
     "tieStatus": "Tie",
     "tieDecidesAdvance": "Tied on every tiebreaker — the assigned order, not the results, decides whether this team advances",
     "upperBracketCut": "Top {count} → upper bracket",
@@ -4101,6 +4105,9 @@
       }
     },
     "compare": {
+      "meta": {
+        "description": "Compare players side by side on {siteName}."
+      },
       "title": "Users Compare",
       "subtitle": "Compare overall performance on a hero/map.",
       "hero": {
@@ -5220,7 +5227,7 @@
         },
         "cookies": {
           "title": "Cookies",
-          "body": "{siteName} sets a session cookie to keep you signed in, a cookie recording your active workspace so a custom-domain workspace shows the right branding, and a locale cookie for your language preference. These functional cookies are required for the site to work. Google Analytics and Yandex Metrica cookies, which measure how pages are used, are optional: they load only after you accept them in the cookie notice, and declining keeps them off. You can change that choice at any time from \"Cookie settings\" in the site footer; withdrawing it also deletes the analytics cookies already stored. No advertising cookies are set."
+          "body": "{siteName} sets a session cookie to keep you signed in, a cookie recording your active workspace so a custom-domain workspace shows the right branding, a locale cookie for your language preference, and a time-zone cookie so dates show in your local time. These functional cookies are required for the site to work. Google Analytics and Yandex Metrica cookies, which measure how pages are used, are optional: they load only after you accept them in the cookie notice, and declining keeps them off. You can change that choice at any time from \"Cookie settings\" in the site footer; withdrawing it also deletes the analytics cookies already stored. No advertising cookies are set."
         },
         "sharing": {
           "title": "Who can see your information",
@@ -5746,6 +5753,13 @@
     "locked": "A draft session has already been created, so the roster shape is locked. Complete or cancel it to change the shape."
   },
   "scrims": {
+    "meta": {
+      "description": "Open a scrim room on {siteName} — map veto, hero bans and per-map results without a tournament.",
+      "room": {
+        "title": "Scrim room",
+        "description": "A private scrim room on {siteName}, shared by link."
+      }
+    },
     "hero": {
       "eyebrow": "SCRIMS // PRE-GAME",
       "title": "Scrim rooms",
@@ -6356,8 +6370,14 @@
     "eliminated": "Out",
     "tieStatus": "Tie",
     "tieCluster": "Equal on every tiebreaker — order assigned, not earned",
+    "pinnedPlace": "Place set by the organizer",
     "tieDecidesAdvance": "Tied on every tiebreaker — the assigned order, not the lobby results, decides whether this team advances",
     "gamesPerLobby": "Games per lobby",
+    "gamesProgress": "{played} of {total, plural, one {# game} other {# games}} played",
+    "legendCells": "Game cells: place / {label}",
+    "legendPoints": "Points = place points ({placements}) + {label} × {multiplier}",
+    "legendPointsPlacement": "Points = place points ({placements})",
+    "legendPointsScore": "Points = {label} × {multiplier}",
     "participants": "{count, plural, one {# team} other {# teams}}",
     "lobbyEmpty": "No teams have been seeded into this lobby yet",
     "stageLobbies": "Lobbies",

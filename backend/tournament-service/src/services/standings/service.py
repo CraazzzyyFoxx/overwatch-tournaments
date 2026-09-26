@@ -1,3 +1,4 @@
+import types
 import typing
 from collections import defaultdict
 from collections.abc import Callable
@@ -11,7 +12,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.core import enums
 from shared.core.enums import StageType
-from shared.domain.ffa_scoring import FfaGameLine, parse_ffa_rules, team_totals
+from shared.domain.ffa_scoring import FfaGameLine, ffa_rules, team_totals
 from shared.domain.tournament_utils import (
     completed_encounters as _shared_completed_encounters,
 )
@@ -20,7 +21,7 @@ from shared.domain.tournament_utils import (
 )
 from shared.domain.tournament_utils import is_completed_encounter, sort_bracket_matches
 from shared.repository import EncounterRepository, StandingRepository, TeamRepository, TournamentRepository
-from shared.services.bracket.swiss_settings import swiss_bye_counts, swiss_scope_stopped
+from shared.services.bracket.swiss_state import bye_counts_by_scope, stopped_scopes
 from src import models, schemas
 from src.core import utils
 from src.services.encounter.ffa import ffa_encounter_service
@@ -79,7 +80,6 @@ KNOWN_TIEBREAK_METRICS = frozenset(
         "score_differential",
         "map_differential",
         "wins_as_higher_stage_specific_metric",
-        "manual_override",
         "ffa_game_wins",
         "ffa_score",
         "ffa_best_placement",
@@ -107,7 +107,8 @@ class RankedStageTeam:
     ffa_last_placement: int | None = None
     #: Position of the head of this team's tie cluster, ``None`` when it is not
     #: tied. Teams sharing a value were equal on every configured metric; their
-    #: relative order is assigned (manual override, else team id), not earned.
+    #: relative order is the team-id fallback, not earned. A pinned team is never
+    #: in a cluster: its place was decided, not tied.
     tie_group: int | None = None
 
 
@@ -174,11 +175,6 @@ def _assign_final_round_placements(
         data[typing.cast(int, loser)]["placement"] = 2
 
 
-def _stage_settings(stage: models.Stage | None) -> dict:
-    raw = stage.settings_json if stage and stage.settings_json else {}
-    return raw if isinstance(raw, dict) else {}
-
-
 def _stage_max_rounds(stage: models.Stage) -> int:
     raw_value = getattr(stage, "max_rounds", DEFAULT_STAGE_MAX_ROUNDS)
     try:
@@ -193,9 +189,8 @@ def _swiss_scope_completed(total: int, completed: int, max_round: int, max_round
 
 
 def _rule_profile(stage: models.Stage) -> str:
-    settings = _stage_settings(stage)
-    if isinstance(settings.get("ranking_preset"), str):
-        return settings["ranking_preset"]
+    if stage.ranking_preset:
+        return stage.ranking_preset
     if stage.stage_type == StageType.FFA_LEAGUE:
         return "ffa_default"
     if stage.stage_type == StageType.SWISS:
@@ -208,20 +203,18 @@ def _rule_profile(stage: models.Stage) -> str:
 def normalize_tiebreak_order(metrics: typing.Iterable[typing.Any]) -> list[str]:
     """The order the engine will actually apply, from whatever was configured.
 
-    Strictly additive — the stored order's own sequence is honoured verbatim,
-    including where it puts ``points`` (see a0f866e2: hoisting ``points`` to the
-    front overrode an explicit organizer choice, and every preset already leads
-    with it). What this does fix are the two things a stored list can say that
-    mean nothing, plus the one it cannot say at all:
+    The stored order's own sequence is honoured verbatim, including where it
+    puts ``points`` (see a0f866e2: hoisting ``points`` to the front overrode an
+    explicit organizer choice, and every preset already leads with it). What
+    this does fix are the two things a stored list can say that mean nothing:
 
     - unknown metrics are dropped: ``_metric_value`` scores them 0 for every
       team, which is indistinguishable from a tiebreaker that never fires;
-    - duplicates collapse to their first occurrence — a second pass over one
-      metric can never separate teams the first pass left equal;
-    - ``manual_override`` is appended when absent, so an organizer's pinned
-      position works on a stage whose order never mentioned the step. An order
-      that DOES mention it keeps it where it was put. It is a no-op unless
-      ``manual_positions`` names the team.
+    - duplicates collapse to their first occurrence -- a second pass over one
+      metric can never separate teams the first pass left equal.
+
+    An organizer's fixed place is not a metric: it is a ``StandingPin``, applied
+    after this order has ranked the table (:func:`apply_pins`).
     """
     ordered: list[str] = []
     for metric in metrics:
@@ -229,45 +222,27 @@ def normalize_tiebreak_order(metrics: typing.Iterable[typing.Any]) -> list[str]:
             continue
         if metric not in ordered:
             ordered.append(metric)
-    if "manual_override" not in ordered:
-        ordered.append("manual_override")
     return ordered
 
 
 def _tiebreak_order(stage: models.Stage) -> list[str]:
-    settings = _stage_settings(stage)
-    explicit = settings.get("tiebreak_order")
-    if isinstance(explicit, list) and any(isinstance(metric, str) for metric in explicit):
-        return normalize_tiebreak_order(explicit)
+    if stage.tiebreak_order is not None:
+        normalized = normalize_tiebreak_order(stage.tiebreak_order)
+        # A stored list with nothing the engine knows would rank by team id alone.
+        if normalized:
+            return normalized
     return normalize_tiebreak_order(
         RULE_PRESET_DEFAULTS.get(_rule_profile(stage), RULE_PRESET_DEFAULTS["bracket_default"])
     )
 
 
-def _manual_positions(stage: models.Stage) -> dict[int, int]:
-    settings = _stage_settings(stage)
-    raw = settings.get("manual_positions")
-    if not isinstance(raw, dict):
-        return {}
-    output: dict[int, int] = {}
-    for team_id, position in raw.items():
-        try:
-            output[int(team_id)] = int(position)
-        except (TypeError, ValueError):
-            continue
-    return output
-
-
 def _scoring(stage: models.Stage, tournament: models.Tournament) -> tuple[float, float, float]:
-    settings = _stage_settings(stage)
-    scoring = settings.get("scoring")
-    if isinstance(scoring, dict):
-        return (
-            float(scoring.get("win", tournament.win_points)),
-            float(scoring.get("draw", tournament.draw_points)),
-            float(scoring.get("loss", tournament.loss_points)),
-        )
-    return tournament.win_points, tournament.draw_points, tournament.loss_points
+    """Points per win/draw/loss: the stage's own where it set one, else the tournament's."""
+    return (
+        tournament.win_points if stage.win_points is None else stage.win_points,
+        tournament.draw_points if stage.draw_points is None else stage.draw_points,
+        tournament.loss_points if stage.loss_points is None else stage.loss_points,
+    )
 
 
 #: Stands in for "this team has no placement yet" so the negated placement
@@ -275,12 +250,7 @@ def _scoring(stage: models.Stage, tournament: models.Tournament) -> tuple[float,
 _NO_PLACEMENT = 10**9
 
 
-def _metric_value(
-    team: RankedStageTeam,
-    metric: str,
-    *,
-    manual_positions: dict[int, int],
-) -> float | int:
+def _metric_value(team: RankedStageTeam, metric: str) -> float | int:
     if metric == "points":
         return team.points
     if metric == "match_wins":
@@ -307,8 +277,6 @@ def _metric_value(
         return -(team.ffa_best_placement or _NO_PLACEMENT)
     if metric == "ffa_last_placement":
         return -(team.ffa_last_placement or _NO_PLACEMENT)
-    if metric == "manual_override":
-        return manual_positions.get(team.team_id, 10**9)
     return 0
 
 
@@ -316,7 +284,6 @@ def _sort_ranked_teams(
     teams: list[RankedStageTeam],
     *,
     tiebreak_order: list[str],
-    manual_positions: dict[int, int],
 ) -> list[RankedStageTeam]:
     ordered = list(teams)
     # Lowest-priority key first: the metric loop below is applied in reverse, so
@@ -327,11 +294,7 @@ def _sort_ranked_teams(
     # team between the upper and lower bracket.
     ordered.sort(key=lambda team: team.team_id)
     for metric in reversed(tiebreak_order):
-        reverse = metric != "manual_override"
-        ordered.sort(
-            key=lambda team: _metric_value(team, metric, manual_positions=manual_positions),
-            reverse=reverse,
-        )
+        ordered.sort(key=lambda team: _metric_value(team, metric), reverse=True)
     return ordered
 
 
@@ -339,19 +302,19 @@ def assign_tie_groups(
     ordered: typing.Sequence[RankedStageTeam],
     *,
     tiebreak_order: typing.Sequence[str],
-    manual_positions: dict[int, int],
+    pinned: typing.Collection[int] = (),
 ) -> None:
-    """Mark runs of teams no configured metric could separate.
+    """Mark runs of adjacent teams no configured metric could separate.
 
-    ``manual_override`` is excluded from the comparison on purpose: an organizer
-    breaking a tie by hand decides the ORDER, it does not make the teams unequal.
-    The cluster stays visible so the table can say "this order was assigned", and
-    so the admin panel keeps offering the group after it has been resolved once.
+    ``ordered`` is the final table order, so a run's head is its first place. A
+    team in ``pinned`` is never part of a run -- its place was set by hand, which
+    is exactly what resolves a tie -- and it splits the teams around it.
     """
-    metrics = [metric for metric in tiebreak_order if metric != "manual_override"]
 
     def key(team: RankedStageTeam) -> tuple:
-        return tuple(_metric_value(team, metric, manual_positions=manual_positions) for metric in metrics)
+        if team.team_id in pinned:
+            return ("pinned", team.team_id)
+        return tuple(_metric_value(team, metric) for metric in tiebreak_order)
 
     for team in ordered:
         team.tie_group = None
@@ -364,6 +327,82 @@ def assign_tie_groups(
             for team in ordered[start:index]:
                 team.tie_group = head_position
         start = index
+
+
+#: A table with no pins: the default of every stage builder.
+_EMPTY: typing.Mapping[int, int] = types.MappingProxyType({})
+
+
+def _pin_seats(pins: typing.Mapping[int, int], size: int) -> dict[int, int]:
+    """Place -> team for every pin, each at its own place inside ``1..size``.
+
+    Pins are distinct and in range as stored; this only keeps that true when the
+    table shrank under them (a team left the group). Order is kept: a pin is
+    pushed below an earlier one it collides with, then the tail is pulled back
+    up inside the table, so the last pinned team ends on the last place rather
+    than past it.
+    """
+    ordered = sorted(pins.items(), key=lambda item: (item[1], item[0]))
+    places: list[int] = []
+    for _team_id, wanted in ordered:
+        places.append(max(wanted, places[-1] + 1 if places else 1))
+    ceiling = size
+    for index in range(len(places) - 1, -1, -1):
+        places[index] = min(places[index], ceiling)
+        ceiling = places[index] - 1
+    return {place: team_id for place, (team_id, _wanted) in zip(places, ordered, strict=True)}
+
+
+def apply_pins(
+    ranked: typing.Sequence[tuple[int, int]],
+    pins: typing.Mapping[int, int],
+) -> list[tuple[int, int, bool]]:
+    """Seat pinned teams at their place; everyone else fills the rest in order.
+
+    ``ranked`` is one table as the engine ranked it: ``(team_id, position)`` in
+    table order, position 0 meaning "not ranked yet" (a playoff team that has not
+    played). ``pins`` maps team to its fixed place; pins of teams not in the
+    table are ignored. Returns ``(team_id, position, is_pinned)`` in final order.
+
+    Unpinned teams keep their computed order, and adjacent unpinned teams that
+    shared a computed place keep sharing it -- a playoff's "5th-8th" stays one
+    place, under the first free seat of the run. An unpinned, unranked team stays
+    at 0 and takes no seat. With no pins this returns ``ranked`` unchanged.
+    """
+    table_pins = {team_id: pins[team_id] for team_id, _position in ranked if team_id in pins}
+    free = [(team_id, position) for team_id, position in ranked if team_id not in table_pins and position > 0]
+    size = len(table_pins) + len(free)
+    seats = _pin_seats(table_pins, size)
+
+    output: list[tuple[int, int, bool]] = []
+    upcoming = iter(free)
+    previous: tuple[int, int] | None = None  # (computed, final) of the unpinned team one seat up
+    for place in range(1, size + 1):
+        if place in seats:
+            output.append((seats[place], place, True))
+            previous = None
+            continue
+        team_id, computed = next(upcoming)
+        position = previous[1] if previous is not None and previous[0] == computed else place
+        output.append((team_id, position, False))
+        previous = (computed, position)
+    output.extend((team_id, 0, False) for team_id, position in ranked if team_id not in table_pins and position <= 0)
+    return output
+
+
+def _pin_group_table(
+    ordered: list[RankedStageTeam],
+    pins: typing.Mapping[int, int],
+    *,
+    tiebreak_order: list[str],
+) -> tuple[list[RankedStageTeam], set[int]]:
+    """A ranked group table with its pins applied and its ties re-marked."""
+    by_id = {team.team_id: team for team in ordered}
+    placed = apply_pins([(team.team_id, index) for index, team in enumerate(ordered, 1)], pins)
+    final = [by_id[team_id] for team_id, _position, _pinned in placed]
+    pinned = {team_id for team_id, _position, is_pinned in placed if is_pinned}
+    assign_tie_groups(final, tiebreak_order=tiebreak_order, pinned=pinned)
+    return final, pinned
 
 
 def _calculate_buchholz(
@@ -411,7 +450,6 @@ def prepare_teams_for_groups(
     draw_points: float = 0.5,
     loss_points: float = 0.0,
     tiebreak_order: list[str] | None = None,
-    manual_positions: dict[int, int] | None = None,
 ) -> list[RankedStageTeam]:
     completed_encounters = _completed_encounters_in_finished_rounds(encounters)
     team_cache: dict[int, RankedStageTeam] = {}
@@ -459,9 +497,8 @@ def prepare_teams_for_groups(
     # Normalized here too: a caller passing a raw stage order (tests, the Swiss
     # pairing preview) must rank by the same list the stored standings did.
     order = normalize_tiebreak_order(tiebreak_order or RULE_PRESET_DEFAULTS["bracket_default"])
-    positions = manual_positions or {}
-    ordered = _sort_ranked_teams(list(team_cache.values()), tiebreak_order=order, manual_positions=positions)
-    assign_tie_groups(ordered, tiebreak_order=order, manual_positions=positions)
+    ordered = _sort_ranked_teams(list(team_cache.values()), tiebreak_order=order)
+    assign_tie_groups(ordered, tiebreak_order=order)
     return ordered
 
 
@@ -636,33 +673,31 @@ def _build_group_stage_standings(
     stage: models.Stage,
     stage_item: models.StageItem | None,
     encounters: typing.Sequence[models.Encounter],
+    *,
+    pins: typing.Mapping[int, int] = _EMPTY,
+    bye_counts: typing.Mapping[int, int] = _EMPTY,
 ) -> list[models.Standing]:
     seed_team_ids = _stage_item_team_ids(stage_item)
     if not encounters and not seed_team_ids:
         return []
 
     tiebreak_order = _tiebreak_order(stage)
-    manual_positions = _manual_positions(stage)
     win_points, draw_points, loss_points = _scoring(stage, tournament)
-    settings = _stage_settings(stage)
-    bye_points = float(settings.get("swiss_bye_points", win_points))
-    bye_counts = (
-        swiss_bye_counts(stage, stage_item.id if stage_item is not None else None)
-        if stage.stage_type == StageType.SWISS
-        else {}
-    )
+    bye_points = win_points if stage.swiss_bye_points is None else stage.swiss_bye_points
 
     teams = prepare_teams_for_groups(
         encounters,
         seed_team_ids=seed_team_ids,
-        bye_counts=bye_counts,
+        bye_counts=dict(bye_counts) if stage.stage_type == StageType.SWISS else {},
         bye_points=bye_points,
         win_points=win_points,
         draw_points=draw_points,
         loss_points=loss_points,
         tiebreak_order=tiebreak_order,
-        manual_positions=manual_positions,
     )
+    # Pinned after ranking, never inside ``prepare_teams_for_groups``: that one
+    # also feeds the Swiss pairing preview, which must pair on real results.
+    teams, pinned = _pin_group_table(teams, pins, tiebreak_order=tiebreak_order)
 
     standings: list[models.Standing] = []
     for position, team in enumerate(teams, 1):
@@ -683,6 +718,7 @@ def _build_group_stage_standings(
                 full_buchholz=team.buchholz,
                 tie_group=team.tie_group,
                 tb=team.head_to_head,
+                is_pinned=team.team_id in pinned,
                 score_differential=team.score_differential,
                 stage=stage,
                 stage_item=stage_item,
@@ -697,6 +733,8 @@ def _build_ffa_stage_standings(
     stage_item: models.StageItem,
     participant_ids: typing.Sequence[int],
     games: typing.Sequence[typing.Sequence[FfaGameLine]],
+    *,
+    pins: typing.Mapping[int, int] = _EMPTY,
 ) -> list[models.Standing]:
     """Rank one FFA group: its roster plus every confirmed game of its lobbies.
 
@@ -708,7 +746,7 @@ def _build_ffa_stage_standings(
     if not seed_ids:
         return []
 
-    totals = team_totals(seed_ids, games, parse_ffa_rules(stage.settings_json))
+    totals = team_totals(seed_ids, games, ffa_rules(stage))
     teams = [
         RankedStageTeam(
             team_id=row.team_id,
@@ -722,9 +760,7 @@ def _build_ffa_stage_standings(
         for row in totals.values()
     ]
     order = _tiebreak_order(stage)
-    manual = _manual_positions(stage)
-    ordered = _sort_ranked_teams(teams, tiebreak_order=order, manual_positions=manual)
-    assign_tie_groups(ordered, tiebreak_order=order, manual_positions=manual)
+    ordered, pinned = _pin_group_table(_sort_ranked_teams(teams, tiebreak_order=order), pins, tiebreak_order=order)
     return [
         models.Standing(
             tournament_id=tournament.id,
@@ -745,6 +781,7 @@ def _build_ffa_stage_standings(
             full_buchholz=None,
             tie_group=team.tie_group,
             tb=None,
+            is_pinned=team.team_id in pinned,
             score_differential=None,
             stage=stage,
             stage_item=stage_item,
@@ -757,6 +794,8 @@ def _build_elimination_stage_standings(
     tournament: models.Tournament,
     stage: models.Stage,
     encounters: typing.Sequence[models.Encounter],
+    *,
+    pins: typing.Mapping[int, int] = _EMPTY,
 ) -> list[models.Standing]:
     # Collect all team ids participating in this stage from inputs.
     seed_team_ids: list[int] = []
@@ -770,76 +809,42 @@ def _build_elimination_stage_standings(
     if not encounters and not seed_team_ids:
         return []
 
-    if not encounters:
-        # No matches played yet — create placeholder standings with position 0.
-        standings: list[models.Standing] = []
-        for team_id in seed_team_ids:
-            standings.append(
-                models.Standing(
-                    tournament_id=tournament.id,
-                    team_id=team_id,
-                    stage_id=stage.id,
-                    stage_item_id=None,
-                    position=0,
-                    overall_position=0,
-                    matches=0,
-                    win=0,
-                    draw=0,
-                    lose=0,
-                    points=0,
-                    buchholz=None,
-                    tb=None,
-                    stage=stage,
-                )
-            )
-        return standings
+    teams: list[schemas.StandingTeamDataWithRanking] = []
+    if encounters:
+        stage_type = stage.stage_type or _infer_stage_type_from_encounters(encounters)
+        calculator = PLAYOFF_CALCULATORS.get(stage_type, prepare_teams_for_playoffs_single_elimination)
+        teams = calculator(encounters)
+    by_id = {team.id: team for team in teams}
+    ranked = sorted(
+        ((team.id, int(team.ranking)) for team in teams),
+        key=lambda item: (item[1] <= 0, item[1], item[0]),
+    )
+    # Teams that have not played any completed match yet get a placeholder row
+    # at position 0 -- unless a pin seats them (a team disqualified unplayed).
+    ranked.extend((team_id, 0) for team_id in seed_team_ids if team_id not in by_id)
 
-    stage_type = stage.stage_type or _infer_stage_type_from_encounters(encounters)
-    calculator = PLAYOFF_CALCULATORS.get(stage_type, prepare_teams_for_playoffs_single_elimination)
-    teams = calculator(encounters)
-    teams_with_standings = {team.id for team in teams}
-
-    standings = []
-    for team in teams:
+    standings: list[models.Standing] = []
+    for team_id, position, is_pinned in apply_pins(ranked, pins):
+        team = by_id.get(team_id)
         standings.append(
             models.Standing(
                 tournament_id=tournament.id,
-                team_id=team.id,
+                team_id=team_id,
                 stage_id=stage.id,
                 stage_item_id=None,
-                position=int(team.ranking),
-                overall_position=int(team.ranking),
-                matches=team.matches,
-                win=team.wins,
-                draw=team.draws,
-                lose=team.loses,
-                points=team.points,
+                position=position,
+                overall_position=position,
+                matches=team.matches if team is not None else 0,
+                win=team.wins if team is not None else 0,
+                draw=team.draws if team is not None else 0,
+                lose=team.loses if team is not None else 0,
+                points=team.points if team is not None else 0,
                 buchholz=None,
                 tb=None,
+                is_pinned=is_pinned,
                 stage=stage,
             )
         )
-    # Teams that have not played any completed match yet get a placeholder row.
-    for team_id in seed_team_ids:
-        if team_id not in teams_with_standings:
-            standings.append(
-                models.Standing(
-                    tournament_id=tournament.id,
-                    team_id=team_id,
-                    stage_id=stage.id,
-                    stage_item_id=None,
-                    position=0,
-                    overall_position=0,
-                    matches=0,
-                    win=0,
-                    draw=0,
-                    lose=0,
-                    points=0,
-                    buchholz=None,
-                    tb=None,
-                    stage=stage,
-                )
-            )
     return standings
 
 
@@ -877,8 +882,9 @@ def calculate_overall_positions(
     # least one played match. This is deliberately per-team/per-stage, not
     # gated on reaching a playoff stage: league (round-robin-only) tournaments
     # never have a playoff stage and still need real, incrementally-updated
-    # overall standings as soon as their teams start playing.
-    rankable = [standing for standing in standings if standing.matches > 0]
+    # overall standings as soon as their teams start playing. A pinned row is
+    # the exception: its place is the organizer's decision, not a result.
+    rankable = [standing for standing in standings if standing.matches > 0 or standing.is_pinned]
 
     playoff_standings = [
         standing
@@ -1106,6 +1112,7 @@ class StandingsService:
                     int(row.max_round or 0),
                 )
             )
+        stopped = await stopped_scopes(session, [stage.id for stage in stages if stage.stage_type == StageType.SWISS])
 
         for stage in stages:
             stage_rows = rows_by_stage.get(stage.id, [])
@@ -1124,7 +1131,7 @@ class StandingsService:
                 ]
                 scopes = item_scopes or extra_scopes
                 should_be_completed = bool(scopes) and all(
-                    swiss_scope_stopped(stage, stage_item_id)
+                    (stage.id, stage_item_id) in stopped
                     or _swiss_scope_completed(total, completed, max_round, _stage_max_rounds(stage))
                     for stage_item_id, total, completed, max_round in scopes
                 )
@@ -1138,6 +1145,25 @@ class StandingsService:
             if stage.is_completed != should_be_completed:
                 stage.is_completed = should_be_completed
 
+    async def get_pins_by_table(
+        self,
+        session: AsyncSession,
+        tournament_id: int,
+    ) -> dict[tuple[int, int | None], dict[int, int]]:
+        """Every pin of the tournament: ``(stage_id, stage_item_id) -> {team_id: position}``."""
+        result = await session.execute(
+            sa.select(
+                models.StandingPin.stage_id,
+                models.StandingPin.stage_item_id,
+                models.StandingPin.team_id,
+                models.StandingPin.position,
+            ).where(models.StandingPin.tournament_id == tournament_id)
+        )
+        pins: defaultdict[tuple[int, int | None], dict[int, int]] = defaultdict(dict)
+        for stage_id, stage_item_id, team_id, position in result.all():
+            pins[(stage_id, stage_item_id)][team_id] = position
+        return pins
+
     async def calculate_for_tournament(
         self,
         session: AsyncSession,
@@ -1146,6 +1172,8 @@ class StandingsService:
         commit: bool = True,
     ) -> typing.Sequence[models.Standing]:
         stages = sorted(getattr(tournament, "stages", []) or [], key=lambda stage: stage.order)
+        pins = await self.get_pins_by_table(session, tournament.id)
+        byes = await bye_counts_by_scope(session, [stage.id for stage in stages if stage.stage_type == StageType.SWISS])
         all_standings: list[models.Standing] = []
 
         for stage in stages:
@@ -1163,15 +1191,35 @@ class StandingsService:
                             encounter for encounter in stage_encounters if encounter.stage_item_id == stage_item.id
                         ]
                         all_standings.extend(
-                            _build_group_stage_standings(tournament, stage, stage_item, item_encounters)
+                            _build_group_stage_standings(
+                                tournament,
+                                stage,
+                                stage_item,
+                                item_encounters,
+                                pins=pins.get((stage.id, stage_item.id), _EMPTY),
+                                bye_counts=byes.get((stage.id, stage_item.id), _EMPTY),
+                            )
                         )
                 else:
-                    all_standings.extend(_build_group_stage_standings(tournament, stage, None, stage_encounters))
+                    all_standings.extend(
+                        _build_group_stage_standings(
+                            tournament,
+                            stage,
+                            None,
+                            stage_encounters,
+                            pins=pins.get((stage.id, None), _EMPTY),
+                            bye_counts=byes.get((stage.id, None), _EMPTY),
+                        )
+                    )
             elif stage.stage_type in ELIMINATION_STAGE_TYPES:
                 stage_encounters = sort_matches(
                     await encounter_service.get_by_stage_id(session, tournament.id, stage.id, [])
                 )
-                all_standings.extend(_build_elimination_stage_standings(tournament, stage, stage_encounters))
+                all_standings.extend(
+                    _build_elimination_stage_standings(
+                        tournament, stage, stage_encounters, pins=pins.get((stage.id, None), _EMPTY)
+                    )
+                )
             elif stage.stage_type in FFA_STAGE_TYPES:
                 results = await ffa_encounter_service.load_stage_results(session, stage.id)
                 for stage_item in sorted(stage.items or [], key=lambda item: item.order):
@@ -1182,6 +1230,7 @@ class StandingsService:
                             stage_item,
                             results.participant_ids(stage_item.id),
                             results.games(stage_item.id),
+                            pins=pins.get((stage.id, stage_item.id), _EMPTY),
                         )
                     )
 

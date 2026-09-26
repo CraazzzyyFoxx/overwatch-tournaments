@@ -1,7 +1,7 @@
 /**
  * What an FFA league pays for, as the stage editor offers it.
  *
- * `settings_json.ffa_scoring` is read by the points adder
+ * A stage's `ffa_scoring` is read by the points adder
  * (`shared.domain.ffa_scoring.parse_ffa_rules`): `placement_points[i]` is what
  * place `i + 1` is worth, and every unit of raw score — a kill, an elimination,
  * a lap point — is worth `score_points`. An empty table means placement carries
@@ -10,14 +10,6 @@
  * The presets below are starting points, not rules: the editor writes back
  * whatever the organizer leaves in the table.
  */
-
-/** `settings_json.ffa_scoring`, mirroring backend `FfaScoring`. */
-export interface FfaScoringSettings {
-  placement_points: number[];
-  score_points: number;
-  /** The organizer's word for the score column ("Kills"); null keeps "Score". */
-  score_label: string | null;
-}
 
 export interface FfaScoringPreset {
   value: string;

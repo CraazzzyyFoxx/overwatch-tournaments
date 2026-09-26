@@ -57,6 +57,7 @@ function row(slot: number, games: FfaGameCell[] = []): FfaLobbyRow {
     slot,
     position: slot,
     tie_group: null,
+    is_pinned: false,
     points: 0,
     games_played: games.length,
     wins: 0,

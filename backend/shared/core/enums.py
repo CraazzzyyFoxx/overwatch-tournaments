@@ -387,8 +387,8 @@ class StageType(StrEnum):
     SINGLE_ELIMINATION = "single_elimination"
     DOUBLE_ELIMINATION = "double_elimination"
     SWISS = "swiss"
-    #: Scored by lobby placement and raw score, not head-to-head: its rules live
-    #: in ``settings_json['ffa_scoring']`` (shared.domain.ffa_scoring).
+    #: Scored by lobby placement and raw score, not head-to-head: its rules are
+    #: the stage's ``ffa_*`` columns (shared.domain.ffa_scoring).
     FFA_LEAGUE = "ffa_league"
 
 
@@ -533,10 +533,11 @@ class PickBanNoRepeatScope(StrEnum):
 class MatchSource(StrEnum):
     """Provenance of a :class:`~shared.models.matches.match.Match` row.
 
-    ``LOG_PARSER``: written by ``MatchLogFlow`` from an uploaded OW log —
-    ``time``/``log_name`` are populated, kill-feed/stats may follow.
-    ``CAPTAIN_REPORT``: written from a per-map dual captain confirmation with
-    no log — ``time``/``log_name`` stay NULL, there is no kill-feed/stats.
+    ``LOG_PARSER``: written by ``MatchLogFlow`` from an uploaded OW log — the
+    only value written today.
+    ``CAPTAIN_REPORT``: legacy per-map captain confirmation with no log.
+    encgame01 moved those results to ``encounter_game`` and deleted the rows;
+    nothing writes this value any more.
     """
 
     LOG_PARSER = "log_parser"

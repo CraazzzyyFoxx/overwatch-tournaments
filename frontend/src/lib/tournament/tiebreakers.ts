@@ -15,8 +15,7 @@ export type TiebreakerMetricId =
   | "ffa_game_wins"
   | "ffa_score"
   | "ffa_best_placement"
-  | "ffa_last_placement"
-  | "manual_override";
+  | "ffa_last_placement";
 
 // Default English labels. Used as a fallback when no i18n resolver is supplied.
 const TIEBREAKER_LABELS: Record<string, string> = {
@@ -29,8 +28,7 @@ const TIEBREAKER_LABELS: Record<string, string> = {
   ffa_game_wins: "Game Wins",
   ffa_score: "Score",
   ffa_best_placement: "Best Placement",
-  ffa_last_placement: "Last Placement",
-  manual_override: "Manual Override"
+  ffa_last_placement: "Last Placement"
 };
 
 // Ordered catalog presented in the StageManager config editor.
@@ -40,8 +38,7 @@ export const ALL_TIEBREAKERS: { id: TiebreakerMetricId; label: string }[] = [
   { id: "median_buchholz", label: TIEBREAKER_LABELS.median_buchholz },
   { id: "buchholz", label: TIEBREAKER_LABELS.buchholz },
   { id: "match_wins", label: TIEBREAKER_LABELS.match_wins },
-  { id: "score_differential", label: TIEBREAKER_LABELS.score_differential },
-  { id: "manual_override", label: TIEBREAKER_LABELS.manual_override }
+  { id: "score_differential", label: TIEBREAKER_LABELS.score_differential }
 ];
 
 /**
@@ -56,8 +53,7 @@ export const FFA_TIEBREAKERS: { id: TiebreakerMetricId; label: string }[] = [
   { id: "ffa_game_wins", label: TIEBREAKER_LABELS.ffa_game_wins },
   { id: "ffa_score", label: TIEBREAKER_LABELS.ffa_score },
   { id: "ffa_best_placement", label: TIEBREAKER_LABELS.ffa_best_placement },
-  { id: "ffa_last_placement", label: TIEBREAKER_LABELS.ffa_last_placement },
-  { id: "manual_override", label: TIEBREAKER_LABELS.manual_override }
+  { id: "ffa_last_placement", label: TIEBREAKER_LABELS.ffa_last_placement }
 ];
 
 /** The metrics the engine can actually compute for `stageType`. */

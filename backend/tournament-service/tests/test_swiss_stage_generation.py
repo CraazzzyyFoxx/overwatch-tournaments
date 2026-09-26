@@ -16,27 +16,37 @@ os.environ["DEBUG"] = "true"
 
 enums = importlib.import_module("shared.core.enums")
 swiss = importlib.import_module("shared.services.bracket.swiss")
-swiss_settings = importlib.import_module("shared.services.bracket.swiss_settings")
 types = importlib.import_module("shared.services.bracket.types")
 stage_service = importlib.import_module("src.services.admin.stage")
 
 
 class SwissStageGenerationTests(IsolatedAsyncioTestCase):
-    async def test_generation_records_bye_for_scope(self) -> None:
-        stage = SimpleNamespace(
-            id=77,
-            stage_type=enums.StageType.SWISS,
-            max_rounds=5,
-            settings_json={},
+    """The Swiss bookkeeping the generator writes through ``swiss_state``.
+
+    Those functions each take the session and hit their own tables, so what is
+    pinned here is the call the generator makes for the scope it generated.
+    """
+
+    def setUp(self) -> None:
+        self.session = SimpleNamespace()
+        self.stage = SimpleNamespace(id=77, stage_type=enums.StageType.SWISS, max_rounds=5)
+        self.recorded = AsyncMock()
+        self.stopped = AsyncMock()
+        self.cleared = AsyncMock()
+        patches = (
+            patch.object(stage_service, "record_swiss_bye", self.recorded),
+            patch.object(stage_service, "mark_swiss_scope_stopped", self.stopped),
+            patch.object(stage_service, "clear_swiss_scope_stopped", self.cleared),
+            patch.object(stage_service, "clear_swiss_byes", AsyncMock()),
+            patch.object(stage_service, "swiss_bye_team_ids", AsyncMock(return_value=[])),
         )
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    async def test_generation_records_bye_for_scope(self) -> None:
         skeleton = types.BracketSkeleton(
-            pairings=[
-                types.Pairing(
-                    home_team_id=1,
-                    away_team_id=2,
-                    round_number=2,
-                )
-            ],
+            pairings=[types.Pairing(home_team_id=1, away_team_id=2, round_number=2)],
             total_rounds=1,
             bye_team_id=3,
         )
@@ -50,23 +60,17 @@ class SwissStageGenerationTests(IsolatedAsyncioTestCase):
             patch.object(stage_service, "generate_bracket", return_value=skeleton),
         ):
             result = await stage_service.stage_service._generate_stage_skeleton(
-                SimpleNamespace(),
-                stage,
+                self.session,
+                self.stage,
                 [1, 2, 3],
                 501,
             )
 
         self.assertIs(result, skeleton)
-        self.assertEqual([3], swiss_settings.swiss_bye_team_ids(stage, 501))
+        self.recorded.assert_awaited_once_with(self.session, 77, 501, 3, round_number=2)
+        self.stopped.assert_not_awaited()
 
     async def test_impossible_pairing_marks_scope_stopped(self) -> None:
-        stage = SimpleNamespace(
-            id=77,
-            stage_type=enums.StageType.SWISS,
-            max_rounds=5,
-            settings_json={},
-        )
-
         with (
             patch.object(
                 stage_service.stage_service,
@@ -80,34 +84,28 @@ class SwissStageGenerationTests(IsolatedAsyncioTestCase):
             ),
         ):
             result = await stage_service.stage_service._generate_stage_skeleton(
-                SimpleNamespace(),
-                stage,
+                self.session,
+                self.stage,
                 [1, 2],
                 501,
             )
 
         self.assertEqual([], result.pairings)
-        self.assertTrue(swiss_settings.swiss_scope_stopped(stage, 501))
+        self.stopped.assert_awaited_once_with(self.session, 77, 501)
+        self.recorded.assert_not_awaited()
 
     async def test_full_circle_swiss_is_generated_as_a_round_robin(self) -> None:
         """max_rounds >= teams - 1 means every team meets every other, so the
         whole schedule is built at once instead of one paired round at a time —
         round-by-round pairing can corner itself into an unplayable round."""
-        stage = SimpleNamespace(
-            id=77,
-            stage_type=enums.StageType.SWISS,
-            max_rounds=5,
-            settings_json={"swiss_stopped_scopes": ["501"]},
-        )
-
         with patch.object(
             stage_service.stage_service,
             "_get_swiss_generation_context",
             AsyncMock(return_value=(None, None, 1)),
         ):
             result = await stage_service.stage_service._generate_stage_skeleton(
-                SimpleNamespace(),
-                stage,
+                self.session,
+                self.stage,
                 [1, 2, 3, 4, 5, 6],
                 501,
             )
@@ -116,4 +114,7 @@ class SwissStageGenerationTests(IsolatedAsyncioTestCase):
         self.assertEqual(15, len(result.pairings))
         pairs = {frozenset({pairing.home_team_id, pairing.away_team_id}) for pairing in result.pairings}
         self.assertEqual(15, len(pairs))
-        self.assertFalse(swiss_settings.swiss_scope_stopped(stage, 501))
+        # The shortcut plays the whole circle, so nothing is stopped: a scope
+        # previously marked stopped is cleared instead.
+        self.cleared.assert_awaited_once_with(self.session, 77, 501)
+        self.stopped.assert_not_awaited()

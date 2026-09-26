@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { LayoutGrid, ArrowUpRight } from "lucide-react";
 
 import type { TeamFormation, Tournament } from "@/types/tournament.types";
-import { cn, formatDateRange } from "@/lib/utils";
+import { formatDateRange } from "@/lib/datetime";
+import { cn } from "@/lib/utils";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
@@ -14,7 +16,6 @@ import { stageProgress } from "./tournaments-helpers";
 const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
   const { variant } = getTournamentStatusMeta(tournament.status);
   const stage = stageProgress(tournament, tournament.status, t);
   const players = tournament.participants_count ?? 0;
@@ -48,7 +49,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
             )}
           </span>
           <span className="sub">
-            {formatDateRange(tournament.start_date, tournament.end_date, locale)}
+            {formatDateRange(format, tournament.start_date, tournament.end_date)}
             {tournament.is_league && (
               <>
                 <span className="sep">·</span>

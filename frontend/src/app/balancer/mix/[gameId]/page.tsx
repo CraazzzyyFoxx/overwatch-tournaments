@@ -19,9 +19,9 @@ import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
-import mapService from "@/services/map.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 /**
  * One mix in two columns: the **lineup** a host curates, and the **matchup** the
@@ -71,11 +71,7 @@ export default function BalancerPickupMixPage() {
   // The OW catalogue with its gamemodes: the roll pool for the next map and
   // the manual picker. Which map is *chosen* is the mix's own `next_map_id`,
   // so a co-host in another tab sees the same roll.
-  const mapsQuery = useQuery({
-    queryKey: ["maps", "gamemode"],
-    queryFn: () => mapService.getAll({ entities: ["gamemode"] }).then((page) => page.results),
-    staleTime: 5 * 60 * 1000,
-  });
+  const mapsQuery = useMapsCatalog({ withGamemode: true });
   // All-time only: the sheet reports a player's standing, and a window would
   // make that read differently depending on what the list page was last set to.
   const statsQuery = useQuery({

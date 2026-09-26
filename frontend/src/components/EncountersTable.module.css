@@ -3,7 +3,8 @@
  *
  * These used to be imported from `(site)/tournaments/[id]/TournamentDetail.module.css`
  * — a shared component reaching into a route's CSS module. The row/cell
- * presentation still lives in the global `.aqt-matches` scope in `globals.css`;
+ * presentation still lives in the global `.aqt-matches` scope, now in
+ * `EncountersTable.css` next to this file;
  * only the scroll container, the intrinsic table width and the two columns that
  * are exclusive to the standalone `/encounters` list live here.
  */

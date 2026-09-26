@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import type { FormErrorCode, Translate } from "@/lib/forms/form-errors";
 import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";

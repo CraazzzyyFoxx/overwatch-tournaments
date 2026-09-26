@@ -22,6 +22,7 @@ import {
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type { SubscriptionRequirement } from "@/types/registration.types";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 const EMPTY_REQUIREMENT: SubscriptionRequirement = { mode: "all", requirements: [] };
 
@@ -64,7 +65,7 @@ export function WorkspaceRequirementCard({ workspaceId }: Readonly<{ workspaceId
   // renders instead of hardcoding the provider pair the form builder guessed at.
   // Same query key, so enabling a provider there refreshes the options here.
   const providersQuery = useQuery({
-    queryKey: ["subscription-providers", workspaceId] as const,
+    queryKey: workspaceQueryKeys.subscriptionProviders(workspaceId),
     queryFn: () => balancerAdminService.listSubscriptionProviders(workspaceId),
     refetchOnWindowFocus: false
   });

@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -7,15 +7,17 @@ import type { DraftBoard, DraftPick, DraftPlayer, DraftTeam } from "@/types/draf
 import type { DraftMutations } from "@/hooks/useDraftData";
 import type { Tournament } from "@/types/tournament.types";
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
+  useTranslations: () => (key: string, values?: Record<string, unknown>) =>
+    values ? `${key}:${JSON.stringify(values)}` : key
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: () => "",
     number: (value: number) => String(value),
     relativeTime: () => ""
-  }),
-  useTranslations: () => (key: string, values?: Record<string, unknown>) =>
-    values ? `${key}:${JSON.stringify(values)}` : key
+  })
 }));
 
 // Dynamic, not static: `mock.module` only applies to modules imported after it

@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Globe, MonitorSmartphone, UserCog } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -184,7 +184,7 @@ export default function AccessAdminSessionsPage() {
   return (
     <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
       <div className="min-w-0">
-        <AdminDataTable<AdminAuthSession>
+        <DataTable<AdminAuthSession>
           columns={columns}
           initialPageSize={PAGE_SIZE}
           pageSizeOptions={[10, 20, 50, 100]}

@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { buildTeamViews, needRoles, type QueueControls } from "@/lib/draft/room-model";
@@ -6,12 +6,14 @@ import { draftPoolView, type DraftPoolTab, type DraftViewParams } from "@/lib/dr
 import type { RosterSlotMap } from "@/lib/roster/shape";
 import type { DraftBoard, DraftPickOptionsResponse, DraftPlayer, DraftStatus } from "@/types/draft.types";
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   // Shared across bun test files: DraftJournal (loaded by siblings) reads it.
-  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
 }));
 
 // Dynamic, not static: `mock.module` only applies to modules imported after it

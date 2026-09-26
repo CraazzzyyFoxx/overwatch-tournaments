@@ -7,7 +7,7 @@ import FavoriteStarButton from "@/components/FavoriteStarButton";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFavoritePlayers } from "@/hooks/useFavoritePlayers";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 export default function FavoritesSection() {
   const t = useTranslations("accountSettings");

@@ -6,15 +6,21 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useLocale } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import {
   DayPicker,
   getDefaultClassNames,
   type DayButton,
 } from "react-day-picker";
+import { enUS, ru } from "react-day-picker/locale";
 
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
+
+// Caption, weekday names, aria labels and week start come from the day
+// picker's own (date-fns) locale, not from `Intl` — so it needs the UI's too.
+const DAY_PICKER_LOCALES = { en: enUS, ru } as const;
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"];
@@ -35,9 +41,11 @@ function Calendar({
   // be captured here rather than resolved inside them ("default" resolved to the
   // host locale, not the UI's).
   const format = useFormatter();
+  const locale = DAY_PICKER_LOCALES[useLocale()];
 
   return (
     <DayPicker
+      locale={locale}
       showOutsideDays={showOutsideDays}
       className={cn(
         "group/calendar bg-background p-3 [--cell-size:--spacing(8)]",
@@ -45,8 +53,13 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       formatters={{
+        // The picker hands over local midnight on the 1st; re-anchored to UTC
+        // so no zone can turn it into the last day of the previous month.
         formatMonthDropdown: (date) =>
-          format.dateTime(date, { month: "short" }),
+          format.dateTime(new Date(Date.UTC(date.getFullYear(), date.getMonth(), 1)), {
+            month: "short",
+            timeZone: "UTC"
+          }),
         ...formatters,
       }}
       classNames={{
@@ -180,7 +193,7 @@ function CalendarDayButton({
       ref={ref}
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={day.isoDate}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

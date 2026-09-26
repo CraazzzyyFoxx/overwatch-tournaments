@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 137
+-- Tables: 147
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -28,19 +28,21 @@ CREATE TYPE logstatsname AS ENUM ('Eliminations', 'FinalBlows', 'Deaths', 'AllDa
 CREATE TYPE catalogentitytype AS ENUM ('hero', 'map', 'gamemode');
 CREATE TYPE tournament.encounterstatus AS ENUM ('COMPLETED', 'PENDING', 'OPEN');
 CREATE TYPE tournament.encounterresultstatus AS ENUM ('none', 'pending_confirmation', 'confirmed', 'disputed');
+CREATE TYPE tournament.encountergamestate AS ENUM ('planned', 'awaiting_result', 'disputed', 'confirmed', 'cancelled');
+CREATE TYPE tournament.encountergameresultsource AS ENUM ('captain_agreement', 'admin', 'admin_log');
 CREATE TYPE tournament.encounterlinkrole AS ENUM ('winner', 'loser');
 CREATE TYPE tournament.encounterlinkslot AS ENUM ('home', 'away');
 CREATE TYPE tournament.pickbankind AS ENUM ('map', 'hero');
 CREATE TYPE tournament.pickbanside AS ENUM ('home', 'away', 'decider', 'admin');
-CREATE TYPE tournament.encounterresultauditaction AS ENUM ('confirm', 'reopen', 'auto_confirm', 'auto_dispute', 'import', 'cascade_reset');
+CREATE TYPE tournament.encounterresultauditaction AS ENUM ('confirm', 'reopen', 'auto_confirm', 'auto_dispute', 'import', 'cascade_reset', 'game_confirm', 'game_correct', 'game_cancel');
 CREATE TYPE tournament.pickbanmode AS ENUM ('pool', 'slots');
 CREATE TYPE tournament.pickbanfirstpickrule AS ENUM ('higher_seed');
 CREATE TYPE tournament.pickbanrotation AS ENUM ('fixed', 'alternate', 'result_winner_first', 'result_loser_first', 'result_loser_choice');
 CREATE TYPE tournament.pickbannorepeatscope AS ENUM ('none', 'encounter', 'encounter_same_side');
-CREATE TYPE tournament.pickbanentrystatus AS ENUM ('available', 'picked', 'banned', 'played', 'protected');
+CREATE TYPE tournament.pickbanentrystatus AS ENUM ('available', 'picked', 'banned', 'protected');
 CREATE TYPE tournament.pickbanseedsource AS ENUM ('bracket_slot', 'standings', 'fallback_home', 'admin');
 CREATE TYPE tournament.pickbansessionstatus AS ENUM ('active', 'completed', 'cancelled');
-CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss');
+CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss', 'ffa_league');
 CREATE TYPE tournament.stageitemtype AS ENUM ('group', 'bracket_upper', 'bracket_lower', 'single_bracket');
 CREATE TYPE tournament.stageiteminputtype AS ENUM ('final', 'tentative', 'empty');
 CREATE TYPE tournament.tournamentstatus AS ENUM ('announcement', 'registration', 'draft', 'check_in', 'live', 'playoffs', 'completed', 'archived');
@@ -751,6 +753,7 @@ CREATE TABLE balancer.draft_pick (
 	clock_started_at TIMESTAMP WITH TIME ZONE, 
 	clock_expires_at TIMESTAMP WITH TIME ZONE, 
 	clock_remaining_ms INTEGER, 
+	overtime_started_at TIMESTAMP WITH TIME ZONE, 
 	version INTEGER DEFAULT '0' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_draft_pick_session_overall UNIQUE (session_id, overall_no), 
@@ -804,6 +807,7 @@ CREATE TABLE balancer.draft_session (
 	format VARCHAR(16) DEFAULT 'snake' NOT NULL, 
 	rounds INTEGER DEFAULT '4' NOT NULL, 
 	pick_time_seconds INTEGER DEFAULT '45' NOT NULL, 
+	overtime_seconds INTEGER DEFAULT '0' NOT NULL, 
 	current_pick_id BIGINT, 
 	pool_source VARCHAR(32) DEFAULT 'balancer_balance' NOT NULL, 
 	source_balance_id BIGINT, 
@@ -839,6 +843,7 @@ CREATE TABLE balancer.draft_team (
 	name VARCHAR(255) NOT NULL, 
 	draft_position INTEGER NOT NULL, 
 	exported_team_id BIGINT, 
+	pick_queue JSONB DEFAULT '[]' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_draft_team_session_position UNIQUE (session_id, draft_position), 
 	FOREIGN KEY(session_id) REFERENCES balancer.draft_session (id) ON DELETE CASCADE, 
@@ -891,6 +896,7 @@ CREATE TABLE balancer.registration (
 	battle_tag_normalized VARCHAR(255), 
 	smurf_tags_json JSON, 
 	stream_pov BOOLEAN DEFAULT 'false' NOT NULL, 
+	is_reserve BOOLEAN DEFAULT 'false' NOT NULL, 
 	form_version_id BIGINT, 
 	public_notes TEXT, 
 	organizer_notes TEXT, 
@@ -1092,8 +1098,8 @@ CREATE TABLE balancer.registration_role_hero (
 	hero_id BIGINT NOT NULL, 
 	priority INTEGER NOT NULL, 
 	PRIMARY KEY (id), 
-	CONSTRAINT uq_reg_role_hero_role_priority UNIQUE (role_id, priority), 
-	CONSTRAINT uq_reg_role_hero_role_hero UNIQUE (role_id, hero_id), 
+	CONSTRAINT uq_reg_role_hero_role_priority UNIQUE (role_id, priority) DEFERRABLE INITIALLY DEFERRED, 
+	CONSTRAINT uq_reg_role_hero_role_hero UNIQUE (role_id, hero_id) DEFERRABLE INITIALLY DEFERRED, 
 	FOREIGN KEY(role_id) REFERENCES balancer.registration_role (id) ON DELETE CASCADE, 
 	FOREIGN KEY(hero_id) REFERENCES overwatch.hero (id) ON DELETE CASCADE
 );
@@ -2024,6 +2030,7 @@ CREATE TABLE notification (
 	workspace_id BIGINT, 
 	source_workspace_id BIGINT, 
 	kind VARCHAR(64) NOT NULL, 
+	dedupe_key VARCHAR(128), 
 	payload_json JSONB DEFAULT '{}' NOT NULL, 
 	actor_auth_user_id BIGINT, 
 	published_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -2038,9 +2045,32 @@ CREATE TABLE notification (
 
 CREATE INDEX ix_notification_audience_published ON notification (audience, published_at DESC) WHERE audience <> 'user';
 
+CREATE INDEX ix_notification_dedupe ON notification (kind, dedupe_key) WHERE dedupe_key IS NOT NULL;
+
 CREATE INDEX ix_notification_recipient_published ON notification (recipient_auth_user_id, published_at DESC);
 
 CREATE INDEX ix_notification_source_workspace_published ON notification (source_workspace_id, published_at DESC) WHERE source_workspace_id IS NOT NULL;
+
+CREATE TABLE notification_delivery (
+	id BIGSERIAL NOT NULL, 
+	channel VARCHAR(32) NOT NULL, 
+	target VARCHAR(64) NOT NULL, 
+	dedupe_key VARCHAR(128) NOT NULL, 
+	notification_id BIGINT, 
+	workspace_id BIGINT, 
+	kind VARCHAR(64) NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_notification_delivery_target UNIQUE (channel, target, dedupe_key)
+);
+
+CREATE TABLE notification_preference (
+	auth_user_id BIGINT NOT NULL, 
+	discord_dm JSONB DEFAULT '{}' NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (auth_user_id), 
+	FOREIGN KEY(auth_user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
+);
 
 CREATE TABLE notification_read (
 	auth_user_id BIGINT NOT NULL, 
@@ -2048,6 +2078,16 @@ CREATE TABLE notification_read (
 	read_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	deleted_at TIMESTAMP WITH TIME ZONE, 
 	PRIMARY KEY (auth_user_id, notification_id)
+);
+
+CREATE TABLE notification_workspace_config (
+	workspace_id BIGINT NOT NULL, 
+	discord_channel_id BIGINT, 
+	locale VARCHAR(2) DEFAULT 'ru' NOT NULL, 
+	broadcast_kinds JSONB DEFAULT '["registration.opened", "check_in.opened"]' NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (workspace_id), 
+	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE
 );
 
 CREATE TABLE settings (
@@ -2445,6 +2485,7 @@ CREATE TABLE tournament.encounter (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE, 
 	name VARCHAR NOT NULL, 
+	format VARCHAR(8) DEFAULT 'duel' NOT NULL, 
 	home_team_id BIGINT, 
 	away_team_id BIGINT, 
 	home_score INTEGER NOT NULL, 
@@ -2463,6 +2504,8 @@ CREATE TABLE tournament.encounter (
 	result_status tournament.encounterresultstatus DEFAULT 'none' NOT NULL, 
 	confirmed_at TIMESTAMP WITH TIME ZONE, 
 	PRIMARY KEY (id), 
+	CONSTRAINT ck_encounter_format CHECK (format IN ('duel', 'ffa')), 
+	CONSTRAINT ck_encounter_ffa_has_no_sides CHECK (format = 'duel' OR (home_team_id IS NULL AND away_team_id IS NULL AND home_score = 0 AND away_score = 0)), 
 	FOREIGN KEY(home_team_id) REFERENCES tournament.team (id) ON DELETE CASCADE, 
 	FOREIGN KEY(away_team_id) REFERENCES tournament.team (id) ON DELETE CASCADE, 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
@@ -2511,6 +2554,56 @@ CREATE INDEX ix_tournament_encounter_captain_report_encounter_id ON tournament.e
 
 CREATE INDEX ix_tournament_encounter_captain_report_team_id ON tournament.encounter_captain_report (team_id);
 
+CREATE TABLE tournament.encounter_game (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	encounter_id BIGINT NOT NULL, 
+	position INTEGER NOT NULL, 
+	format VARCHAR(8) DEFAULT 'duel' NOT NULL, 
+	map_id BIGINT, 
+	state tournament.encountergamestate DEFAULT 'planned' NOT NULL, 
+	accepted_home_score INTEGER, 
+	accepted_away_score INTEGER, 
+	result_source tournament.encountergameresultsource, 
+	result_version INTEGER DEFAULT '0' NOT NULL, 
+	confirmed_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (id), 
+	CONSTRAINT ck_encounter_game_position CHECK (position >= 1), 
+	CONSTRAINT ck_encounter_game_home_score CHECK (accepted_home_score IS NULL OR accepted_home_score >= 0), 
+	CONSTRAINT ck_encounter_game_away_score CHECK (accepted_away_score IS NULL OR accepted_away_score >= 0), 
+	CONSTRAINT ck_encounter_game_format CHECK (format IN ('duel', 'ffa')), 
+	CONSTRAINT ck_encounter_game_confirmed_shape CHECK (state != 'confirmed' OR (result_source IS NOT NULL AND confirmed_at IS NOT NULL AND (format = 'ffa' OR (accepted_home_score IS NOT NULL AND accepted_away_score IS NOT NULL)))), 
+	CONSTRAINT ck_encounter_game_ffa_has_no_scores CHECK (format = 'duel' OR (accepted_home_score IS NULL AND accepted_away_score IS NULL)), 
+	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
+	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE RESTRICT
+);
+
+CREATE INDEX ix_tournament_encounter_game_encounter_id ON tournament.encounter_game (encounter_id);
+
+CREATE INDEX ix_tournament_encounter_game_map_id ON tournament.encounter_game (map_id);
+
+CREATE UNIQUE INDEX uq_encounter_game_encounter_position ON tournament.encounter_game (encounter_id, position) WHERE state != 'cancelled';
+
+CREATE TABLE tournament.encounter_game_result (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	game_id BIGINT NOT NULL, 
+	encounter_id BIGINT NOT NULL, 
+	team_id BIGINT NOT NULL, 
+	placement INTEGER NOT NULL, 
+	score INTEGER DEFAULT '0' NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_encounter_game_result_game_team UNIQUE (game_id, team_id), 
+	CONSTRAINT ck_encounter_game_result_placement CHECK (placement >= 1), 
+	CONSTRAINT ck_encounter_game_result_score CHECK (score >= 0), 
+	CONSTRAINT fk_encounter_game_result_participant FOREIGN KEY(encounter_id, team_id) REFERENCES tournament.encounter_participant (encounter_id, team_id) ON DELETE CASCADE, 
+	FOREIGN KEY(game_id) REFERENCES tournament.encounter_game (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_encounter_game_result_encounter_team ON tournament.encounter_game_result (encounter_id, team_id);
+
 CREATE TABLE tournament.encounter_link (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -2552,28 +2645,37 @@ CREATE TABLE tournament.encounter_map_report (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE, 
-	encounter_id BIGINT NOT NULL, 
-	map_id BIGINT NOT NULL, 
-	map_index INTEGER DEFAULT '0' NOT NULL, 
-	team_id BIGINT NOT NULL, 
+	game_id BIGINT NOT NULL, 
+	side VARCHAR(16) NOT NULL, 
 	reporter_user_id BIGINT, 
 	home_score INTEGER NOT NULL, 
 	away_score INTEGER NOT NULL, 
 	PRIMARY KEY (id), 
-	CONSTRAINT uq_encounter_map_report_encounter_map_index_team UNIQUE (encounter_id, map_id, map_index, team_id), 
+	CONSTRAINT uq_encounter_map_report_game_side UNIQUE (game_id, side), 
 	CONSTRAINT ck_encounter_map_report_scores CHECK (home_score >= 0 AND away_score >= 0), 
-	CONSTRAINT ck_encounter_map_report_index CHECK (map_index >= 0), 
-	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
-	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE CASCADE, 
-	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE, 
+	CONSTRAINT ck_encounter_map_report_side CHECK (side IN ('home', 'away')), 
+	FOREIGN KEY(game_id) REFERENCES tournament.encounter_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(reporter_user_id) REFERENCES players."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_encounter_map_report_encounter_id ON tournament.encounter_map_report (encounter_id);
+CREATE INDEX ix_tournament_encounter_map_report_game_id ON tournament.encounter_map_report (game_id);
 
-CREATE INDEX ix_tournament_encounter_map_report_map_id ON tournament.encounter_map_report (map_id);
+CREATE TABLE tournament.encounter_participant (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	encounter_id BIGINT NOT NULL, 
+	team_id BIGINT NOT NULL, 
+	slot INTEGER NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_encounter_participant_encounter_team UNIQUE (encounter_id, team_id), 
+	CONSTRAINT uq_encounter_participant_encounter_slot UNIQUE (encounter_id, slot), 
+	CONSTRAINT ck_encounter_participant_slot CHECK (slot >= 1), 
+	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE
+);
 
-CREATE INDEX ix_tournament_encounter_map_report_team_id ON tournament.encounter_map_report (team_id);
+CREATE INDEX ix_encounter_participant_team_id ON tournament.encounter_participant (team_id);
 
 CREATE TABLE tournament.encounter_pick_ban_ledger (
 	id BIGSERIAL NOT NULL, 
@@ -2633,17 +2735,25 @@ CREATE TABLE tournament.encounter_result_audit (
 	to_result_status tournament.encounterresultstatus NOT NULL, 
 	home_score_before INTEGER, 
 	away_score_before INTEGER, 
-	home_score_after INTEGER NOT NULL, 
-	away_score_after INTEGER NOT NULL, 
+	home_score_after INTEGER, 
+	away_score_after INTEGER, 
+	ffa_results_json JSONB, 
 	adopted_team_id BIGINT, 
+	game_id BIGINT, 
+	game_result_version INTEGER, 
+	reason TEXT, 
 	source VARCHAR(16) NOT NULL, 
 	PRIMARY KEY (id), 
+	CONSTRAINT ck_encounter_result_audit_after_shape CHECK ((home_score_after IS NOT NULL AND away_score_after IS NOT NULL) OR ffa_results_json IS NOT NULL), 
 	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
 	FOREIGN KEY(actor_user_id) REFERENCES players."user" (id) ON DELETE SET NULL, 
-	FOREIGN KEY(adopted_team_id) REFERENCES tournament.team (id) ON DELETE SET NULL
+	FOREIGN KEY(adopted_team_id) REFERENCES tournament.team (id) ON DELETE SET NULL, 
+	FOREIGN KEY(game_id) REFERENCES tournament.encounter_game (id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_encounter_result_audit_encounter_created ON tournament.encounter_result_audit (encounter_id, created_at);
+
+CREATE INDEX ix_tournament_encounter_result_audit_game_id ON tournament.encounter_result_audit (game_id);
 
 CREATE TABLE tournament.encounter_saved_view (
 	id BIGSERIAL NOT NULL, 
@@ -2924,8 +3034,26 @@ CREATE TABLE tournament.stage (
 	is_active BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_published BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_completed BOOLEAN DEFAULT 'false' NOT NULL, 
-	settings_json JSON, 
+	ranking_preset VARCHAR, 
+	tiebreak_order VARCHAR[], 
+	win_points FLOAT, 
+	draw_points FLOAT, 
+	loss_points FLOAT, 
+	swiss_bye_points FLOAT, 
+	de_grand_final_type VARCHAR(16) DEFAULT 'no_reset' NOT NULL, 
+	seed_ranking VARCHAR(16) DEFAULT 'slot' NOT NULL, 
+	best_of_default INTEGER DEFAULT '3' NOT NULL, 
+	best_of_final INTEGER, 
+	ffa_placement_points FLOAT[] DEFAULT '{}' NOT NULL, 
+	ffa_score_points FLOAT DEFAULT '1' NOT NULL, 
+	ffa_score_label VARCHAR(32), 
+	challonge_group_id BIGINT, 
 	PRIMARY KEY (id), 
+	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')), 
+	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')), 
+	CONSTRAINT ck_stage_best_of_default CHECK (best_of_default >= 1), 
+	CONSTRAINT ck_stage_best_of_final CHECK (best_of_final IS NULL OR best_of_final >= 1), 
+	CONSTRAINT ck_stage_ffa_score_points CHECK (ffa_score_points >= 0), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
 );
 
@@ -2967,6 +3095,15 @@ CREATE INDEX ix_tournament_stage_item_input_stage_item_id ON tournament.stage_it
 
 CREATE INDEX ix_tournament_stage_item_input_team_id ON tournament.stage_item_input (team_id);
 
+CREATE TABLE tournament.stage_round_best_of (
+	stage_id BIGINT NOT NULL, 
+	round INTEGER NOT NULL, 
+	best_of INTEGER NOT NULL, 
+	PRIMARY KEY (stage_id, round), 
+	CONSTRAINT ck_stage_round_best_of_best_of CHECK (best_of >= 1), 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE
+);
+
 CREATE TABLE tournament.standing (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -2987,6 +3124,7 @@ CREATE TABLE tournament.standing (
 	tie_group INTEGER, 
 	tb INTEGER, 
 	score_differential INTEGER, 
+	is_pinned BOOLEAN DEFAULT 'false' NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE, 
@@ -3005,6 +3143,62 @@ CREATE INDEX ix_tournament_standing_stage_item_id ON tournament.standing (stage_
 CREATE INDEX ix_tournament_standing_team_id ON tournament.standing (team_id);
 
 CREATE INDEX ix_tournament_standing_tournament_id ON tournament.standing (tournament_id);
+
+CREATE TABLE tournament.standing_pin (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	tournament_id BIGINT NOT NULL, 
+	stage_id BIGINT NOT NULL, 
+	stage_item_id BIGINT, 
+	team_id BIGINT NOT NULL, 
+	position INTEGER NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT ck_standing_pin_position CHECK (position >= 1), 
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE, 
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_tournament_standing_pin_team_id ON tournament.standing_pin (team_id);
+
+CREATE INDEX ix_tournament_standing_pin_tournament_id ON tournament.standing_pin (tournament_id);
+
+CREATE UNIQUE INDEX uq_standing_pin_position ON tournament.standing_pin (stage_id, stage_item_id, position) NULLS NOT DISTINCT;
+
+CREATE UNIQUE INDEX uq_standing_pin_team ON tournament.standing_pin (stage_id, stage_item_id, team_id) NULLS NOT DISTINCT;
+
+CREATE TABLE tournament.swiss_bye (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	stage_id BIGINT NOT NULL, 
+	stage_item_id BIGINT, 
+	team_id BIGINT NOT NULL, 
+	round INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE, 
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_tournament_swiss_bye_stage_id ON tournament.swiss_bye (stage_id);
+
+CREATE INDEX ix_tournament_swiss_bye_team_id ON tournament.swiss_bye (team_id);
+
+CREATE TABLE tournament.swiss_stopped_scope (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	stage_id BIGINT NOT NULL, 
+	stage_item_id BIGINT, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX uq_swiss_stopped_scope ON tournament.swiss_stopped_scope (stage_id, stage_item_id) NULLS NOT DISTINCT;
 
 CREATE TABLE tournament.team (
 	id BIGSERIAL NOT NULL, 
@@ -3042,6 +3236,8 @@ CREATE TABLE tournament.tournament (
 	end_date TIMESTAMP WITH TIME ZONE, 
 	auto_transitions_enabled BOOLEAN DEFAULT 'true' NOT NULL, 
 	allow_late_registration BOOLEAN DEFAULT 'false' NOT NULL, 
+	discord_broadcasts_enabled BOOLEAN DEFAULT 'true' NOT NULL, 
+	discord_dms_enabled BOOLEAN DEFAULT 'true' NOT NULL, 
 	win_points FLOAT DEFAULT '1.0' NOT NULL, 
 	draw_points FLOAT DEFAULT '0.5' NOT NULL, 
 	loss_points FLOAT DEFAULT '0.0' NOT NULL, 

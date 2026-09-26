@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { CalendarIcon } from "lucide-react";
-import { useFormatter, type DateTimeFormatOptions } from "next-intl";
+import { type DateTimeFormatOptions } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { type DateRange } from "react-day-picker";
 
 import { cn } from "@/lib/utils";
@@ -28,14 +29,14 @@ interface DateRangePickerProps {
 }
 
 /**
- * The Dates here are LOCAL midnight (`parseDateValue`), but next-intl's
- * formatter carries the DEPLOYMENT's zone — next-intl resolves its default on
- * the server (UTC in the container) and `NextIntlClientProvider` inherits it.
- * Formatting a local-midnight Date through it printed the previous day for any
- * viewer east of UTC: the calendar highlighted 12-13 Sep while the trigger read
- * "11 сент. - 12 сент.". Re-anchor the calendar fields to UTC and name the zone,
- * so the label always matches the highlighted cell and the ISO value sent up,
- * in every zone and identically on server and client.
+ * The Dates here are LOCAL midnight (`parseDateValue`), but the app formatter
+ * carries the zone the SERVER rendered in — the viewer's once their browser has
+ * reported it, the workspace default before that — which need not be the zone
+ * this Date was built in. Formatting a local-midnight Date through a zone west
+ * of the browser's printed the previous day: the calendar highlighted 12-13 Sep
+ * while the trigger read "11 сент. - 12 сент.". Re-anchor the calendar fields
+ * to UTC and name the zone, so the label always matches the highlighted cell
+ * and the ISO value sent up, in every zone and identically on server and client.
  */
 function formatDisplay(format: DateFormatter, date: Date): string {
   return format.dateTime(

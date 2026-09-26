@@ -29,9 +29,11 @@ const SESSIONS = vi.hoisted(
 // instead of a copy string, and the formatter is pinned so the row is stable.
 vi.mock("next-intl", () => ({
   useLocale: () => "en",
-  useFormatter: () => ({ dateTime: () => "1 Feb 2026, 10:00" }),
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key
+}));
+vi.mock("@/lib/datetime/client", () => ({
+  useFormatter: () => ({ dateTime: () => "1 Feb 2026, 10:00" })
 }));
 
 vi.mock("@tanstack/react-query", () => ({

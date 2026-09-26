@@ -7,7 +7,7 @@ import { User, UserProfile } from "@/types/user.types";
 import { hasVerifiedSocial } from "@/lib/social/providers";
 import { playerRoleTint } from "@/lib/roster/player-role";
 import { SocialAccountList } from "@/components/social/SocialAccountList";
-import { getPlayerImage } from "@/utils/player";
+import { getPlayerImage } from "@/lib/player";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { FormStreak, type FormResult } from "@/app/(site)/users/components/shared/atoms";

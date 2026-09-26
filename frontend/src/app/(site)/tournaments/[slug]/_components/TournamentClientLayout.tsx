@@ -15,16 +15,16 @@ import {
   isTournamentStatusEnded,
 } from "@/lib/tournament/status";
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import { formatDateRange } from "@/lib/utils";
+import { formatDateRange } from "@/lib/datetime";
+import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
-import { TournamentRouteProvider } from "../_hooks/useTournamentId";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import type { Tournament } from "@/types/tournament.types";
 
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
 import { collapsedRailTitle } from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
@@ -87,7 +87,7 @@ export default function TournamentClientLayout({
   children
 }: Readonly<TournamentClientLayoutProps>) {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const router = useRouter();
   const tournamentQuery = useTournamentQuery(slug);
   const tournament = tournamentQuery.data;
@@ -138,8 +138,19 @@ export default function TournamentClientLayout({
 
   const [heroRef, heroScrolledPast] = useScrolledPast<HTMLDivElement>();
 
+  // The chrome is still resolving, but the tab below it is NOT waiting on this
+  // query: each tab page is a server component that prefetched its own reads
+  // and hydrated them around its view, so `{children}` already has content to
+  // render — into the streamed HTML on the first request, which is the whole
+  // point of the prefetch. Gating it on the shell would keep every public
+  // tournament page a skeleton for crawlers and for the first paint alike.
   if (tournamentQuery.isPending) {
-    return <TournamentShellSkeleton />;
+    return (
+      <div className="aqt-tn space-y-4">
+        <TournamentShellSkeleton />
+        <section className="min-w-0">{children}</section>
+      </div>
+    );
   }
 
   if (tournamentQuery.isError) {
@@ -214,7 +225,7 @@ export default function TournamentClientLayout({
                 {t("common.tournaments")}
               </HoverPrefetchLink>
               <span className="opacity-50">/</span>
-              <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
+              <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
               {tournament.is_league ? (
                 <>
                   <span className="opacity-50">/</span>
@@ -302,11 +313,7 @@ export default function TournamentClientLayout({
         }
       />
 
-      <section className="min-w-0">
-        <TournamentRouteProvider value={{ tournamentId: tournament.id, slug: tournament.slug }}>
-          {children}
-        </TournamentRouteProvider>
-      </section>
+      <section className="min-w-0">{children}</section>
 
       {/* Fixed to the bottom-trailing corner, so it takes no room in this
           stack. Rendered LAST on purpose: a complementary panel that a

@@ -48,6 +48,8 @@ import { COOKIE_CONSENT_COOKIE } from "@/lib/site/cookie-consent";
 import { GA_ID, YM_ID } from "@/config/site";
 import CookieConsent from "@/components/CookieConsent";
 import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
+import { DateTimeProvider } from "@/lib/datetime/client";
+import { getFormatLocale } from "@/lib/datetime/server";
 import { getLocale } from "next-intl/server";
 import { cookies } from "next/headers";
 
@@ -80,8 +82,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [locale, tenantWorkspace, cookieStore] = await Promise.all([
+  // The whole tree is request-time: tenant resolution is host-based
+  // (`src/proxy.ts` → `x-owt-workspace-id`) and locale / cookie-consent are
+  // cookie-based. Segment `force-dynamic` exports document that, they are not
+  // the switch. Link prefetch is opt-in (`prefetch={false}` / HoverPrefetchLink)
+  // because each prefetch is a full server render.
+  const [locale, formatLocale, tenantWorkspace, cookieStore] = await Promise.all([
     getLocale(),
+    getFormatLocale(),
     resolveTenantWorkspace(),
     cookies()
   ]);
@@ -100,18 +108,20 @@ export default async function RootLayout({
     <html lang={locale} className={cn(inter.variable, onest.variable)}>
       <body className={cn(inter.className, "dark")}>
         <ZoneIntlProvider zone="root">
-          <Providers>
-            <Suspense fallback={null}>
-              <LoginModalTrigger />
-            </Suspense>
-            <AuthModal tenantWorkspace={tenantWorkspace ?? undefined} />
-            <Suspense fallback={null}>
-              <AccountSettingsModal />
-            </Suspense>
-            <CookieConsent initial={cookieConsent} gaId={GA_ID} ymId={YM_ID} />
-            <Toaster />
-            {children}
-          </Providers>
+          <DateTimeProvider formatLocale={formatLocale}>
+            <Providers>
+              <Suspense fallback={null}>
+                <LoginModalTrigger />
+              </Suspense>
+              <AuthModal tenantWorkspace={tenantWorkspace ?? undefined} />
+              <Suspense fallback={null}>
+                <AccountSettingsModal />
+              </Suspense>
+              <CookieConsent initial={cookieConsent} gaId={GA_ID} ymId={YM_ID} />
+              <Toaster />
+              {children}
+            </Providers>
+          </DateTimeProvider>
         </ZoneIntlProvider>
       </body>
     </html>

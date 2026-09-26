@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import { act } from "react";
 import type { createRoot as CreateRoot, Root } from "react-dom/client";
@@ -63,7 +63,7 @@ afterAll(async () => {
 
 describe("TimeInput", () => {
   it("accepts compact time and normalizes it on blur", () => {
-    const onValueChange = mock(() => undefined);
+    const onValueChange = vi.fn(() => undefined);
     const container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -84,7 +84,7 @@ describe("TimeInput", () => {
   });
 
   it("rejects an out-of-range time without changing the controlled value", () => {
-    const onValueChange = mock(() => undefined);
+    const onValueChange = vi.fn(() => undefined);
     const container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);

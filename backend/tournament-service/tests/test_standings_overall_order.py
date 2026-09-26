@@ -21,10 +21,12 @@ os.environ["DEBUG"] = "true"
 from src import models  # noqa: E402
 from src.core import enums  # noqa: E402
 from src.services.standings import service  # noqa: E402
+from tests._stage_regulation import stage_regulation  # noqa: E402
 
 
 def _stage(*, id: int, order: int) -> models.Stage:
     return models.Stage(
+        **stage_regulation(),
         id=id,
         created_at=datetime.now(UTC),
         updated_at=None,
@@ -36,7 +38,6 @@ def _stage(*, id: int, order: int) -> models.Stage:
         order=order,
         is_active=True,
         is_completed=False,
-        settings_json=None,
     )
 
 

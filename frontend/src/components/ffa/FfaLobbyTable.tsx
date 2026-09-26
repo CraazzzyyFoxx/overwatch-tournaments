@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Lock } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -55,10 +56,18 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
       left.slot - right.slot
   );
 
+  // Before the first game counts, every team is level on every tiebreaker, so
+  // the engine answers one cluster holding the whole lobby. Printed as-is that
+  // is "everyone 1st" and, under a cut line, "the assigned order decides who
+  // advances" — claims about a lobby nobody has played. No ranks, no verdicts
+  // until there are results to rank by; the cut line stays, it is the rule.
+  const ranked = rows.some((row) => row.games_played > 0);
+
   const advanceCount = lobby.advance_count;
   const showCut = advanceCount != null && rows.length > advanceCount;
+  const showStatus = advanceCount != null && ranked;
   const tiedAtCut =
-    advanceCount == null
+    advanceCount == null || !ranked
       ? new Set<number>()
       : straddlingTieGroups(
           rows.map((row) => ({
@@ -72,119 +81,154 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
   // say how many games are still to come.
   const positions = lobbyGamePositions(lobby);
   const scoreLabel = lobby.rules.score_label?.trim() || t("ffa.colScore");
-  const columnCount = 5 + positions.length + (advanceCount == null ? 0 : 1);
-  const tieClusterTitle = t("ffa.tieCluster");
-  const tieVerdictTitle = t("ffa.tieDecidesAdvance");
+  const columnCount = 5 + positions.length + (showStatus ? 1 : 0);
+
+  // What turns a game cell and the points column back into numbers a reader
+  // can check: the lobby's own rules, not a stage-wide description.
+  const placementPoints = lobby.rules.placement_points.join(" · ");
+  const multiplier = lobby.rules.score_points;
+  const pointsLegend =
+    placementPoints && multiplier
+      ? t("ffa.legendPoints", { placements: placementPoints, label: scoreLabel, multiplier })
+      : placementPoints
+        ? t("ffa.legendPointsPlacement", { placements: placementPoints })
+        : multiplier
+          ? t("ffa.legendPointsScore", { label: scoreLabel, multiplier })
+          : null;
 
   return (
-    <Table aria-label={t("ffa.tableLabel", { lobby: lobby.name })}>
-      <TableHeader>
-        <TableRow>
-          <TableHead scope="col" className="w-[52px] whitespace-nowrap">
-            <span className="sr-only">{t("ffa.colPlace")}</span>
-            <span aria-hidden>#</span>
-          </TableHead>
-          <TableHead scope="col" className="min-w-[180px]">
-            {t("ffa.colTeam")}
-          </TableHead>
-          <TableHead scope="col" className="text-right">
-            {t("ffa.colPoints")}
-          </TableHead>
-          <TableHead scope="col" className="text-right">
-            {t("ffa.colGames")}
-          </TableHead>
-          <TableHead scope="col" className="text-right whitespace-nowrap">
-            {scoreLabel}
-          </TableHead>
-          {positions.map((position) => (
-            <TableHead
-              key={position}
-              scope="col"
-              className="text-center whitespace-nowrap"
-              // The visible text is an abbreviation; assistive technology gets
-              // the spelled-out game number.
-              aria-label={t("ffa.gameLabel", { position })}
-              title={t("ffa.gameLabel", { position })}
-            >
-              {t("ffa.colGame", { position })}
+    <div>
+      <Table aria-label={t("ffa.tableLabel", { lobby: lobby.name })}>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead scope="col" className="w-[52px] whitespace-nowrap">
+              <span className="sr-only">{t("ffa.colPlace")}</span>
+              <span aria-hidden>#</span>
             </TableHead>
-          ))}
-          {advanceCount != null && (
-            <TableHead scope="col" className="text-center">
-              <span className="sr-only">{t("common.status")}</span>
+            <TableHead scope="col" className={cn(STICKY_TEAM, "min-w-[9rem] bg-card")}>
+              {t("ffa.colTeam")}
             </TableHead>
-          )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row, index) => (
-          <React.Fragment key={row.team_id}>
-            <LobbyRow
-              row={row}
-              positions={positions}
-              advancing={advanceCount != null && row.position != null && row.position <= advanceCount}
-              tied={row.tie_group != null && tiedAtCut.has(row.tie_group)}
-              showStatus={advanceCount != null}
-              clusterTitle={tieClusterTitle}
-              verdictTitle={tieVerdictTitle}
-            />
-            {showCut && index === advanceCount - 1 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columnCount} className="p-0" data-ffa-cut>
-                  <span className="flex items-center gap-3 px-2 py-1.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
-                    <span
-                      aria-hidden
-                      className="h-px flex-1 bg-[color:color-mix(in_srgb,var(--aqt-teal)_40%,transparent)]"
-                    />
-                    {t("common.topAdvance", { count: advanceCount })}
-                    <span
-                      aria-hidden
-                      className="h-px flex-1 bg-[color:color-mix(in_srgb,var(--aqt-teal)_40%,transparent)]"
-                    />
-                  </span>
-                </TableCell>
-              </TableRow>
+            <TableHead scope="col" className="w-16 text-right">
+              {t("ffa.colPoints")}
+            </TableHead>
+            <TableHead scope="col" className="w-16 text-right">
+              {t("ffa.colGames")}
+            </TableHead>
+            <TableHead scope="col" className="w-20 text-right whitespace-nowrap">
+              {scoreLabel}
+            </TableHead>
+            {positions.map((position) => (
+              <TableHead
+                key={position}
+                scope="col"
+                className="w-12 text-center whitespace-nowrap"
+                // The visible text is an abbreviation; assistive technology gets
+                // the spelled-out game number.
+                aria-label={t("ffa.gameLabel", { position })}
+                title={t("ffa.gameLabel", { position })}
+              >
+                {t("ffa.colGame", { position })}
+              </TableHead>
+            ))}
+            {showStatus && (
+              <TableHead scope="col" className="w-20 text-center">
+                <span className="sr-only">{t("common.status")}</span>
+              </TableHead>
             )}
-          </React.Fragment>
-        ))}
-      </TableBody>
-    </Table>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row, index) => (
+            <React.Fragment key={row.team_id}>
+              <LobbyRow
+                row={row}
+                positions={positions}
+                ranked={ranked}
+                advancing={showStatus && row.position != null && row.position <= advanceCount}
+                tied={row.tie_group != null && tiedAtCut.has(row.tie_group)}
+                showStatus={showStatus}
+                scoreLabel={scoreLabel}
+              />
+              {showCut && index === advanceCount - 1 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={columnCount} className="p-0" data-ffa-cut>
+                    <span className="flex items-center gap-3 px-2 py-1.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
+                      {/* Leading and sticky, not centred: on a phone the table
+                          scrolls sideways and a centred label sat off-screen. */}
+                      <span className="sticky left-2 whitespace-nowrap">
+                        {t("common.topAdvance", { count: advanceCount })}
+                      </span>
+                      <span
+                        aria-hidden
+                        className="h-px flex-1 bg-[color:color-mix(in_srgb,var(--aqt-teal)_40%,transparent)]"
+                      />
+                    </span>
+                  </TableCell>
+                </TableRow>
+              )}
+            </React.Fragment>
+          ))}
+        </TableBody>
+      </Table>
+      <p className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-3 text-caption text-[color:var(--aqt-fg-dim)]">
+        <span>{t("ffa.legendCells", { label: scoreLabel })}</span>
+        {pointsLegend && <span>{pointsLegend}</span>}
+      </p>
+    </div>
   );
 }
+
+/**
+ * The team column stays put while the numbers scroll under it on a phone.
+ * The row line is redrawn on the cell: a positioned cell paints above the
+ * collapsed `tr` border, which erased the line under every team name.
+ */
+const STICKY_TEAM =
+  "sticky left-0 z-[1] shadow-[inset_0_-1px_hsl(var(--border))] [tbody_tr:last-child_&]:shadow-none";
+
+/**
+ * Row backgrounds are OPAQUE mixes over the card, not alpha tints: the sticky
+ * team cell inherits its row's background and has to hide the columns that
+ * scroll under it. `--card` is the surface every host paints the table on —
+ * the public bracket and lobby page through `--aqt-card` (the same value), the
+ * organizer's `Card` directly, in either theme. Hover deepens the tint instead
+ * of swapping it for the primitive's neutral one, as the group table does.
+ */
+const ROW_TONE = {
+  tie: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,hsl(var(--card)))] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,hsl(var(--card)))]",
+  advancing:
+    "bg-[color:color-mix(in_srgb,var(--aqt-teal)_5%,hsl(var(--card)))] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_9%,hsl(var(--card)))]",
+  none: "bg-card hover:bg-[color:color-mix(in_srgb,hsl(var(--foreground))_4%,hsl(var(--card)))]"
+} as const;
 
 function LobbyRow({
   row,
   positions,
+  ranked,
   advancing,
   tied,
   showStatus,
-  clusterTitle,
-  verdictTitle
+  scoreLabel
 }: Readonly<{
   row: FfaLobbyRow;
   positions: number[];
+  ranked: boolean;
   advancing: boolean;
   tied: boolean;
   showStatus: boolean;
-  clusterTitle: string;
-  verdictTitle: string;
+  scoreLabel: string;
 }>) {
   const t = useTranslations();
   const gameAt = new Map(row.games.map((cell) => [cell.position, cell]));
+  const clustered = ranked && row.tie_group != null;
 
   return (
     <TableRow
       data-advancing={advancing ? "" : undefined}
       data-tie={tied ? "" : undefined}
-      className={cn(
-        // The tie wins the tint: the line cuts through the cluster, so
-        // "advancing" is a promise the lobby's results have not made.
-        tied
-          ? "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,transparent)]"
-          : advancing
-            ? "bg-[color:color-mix(in_srgb,var(--aqt-teal)_5%,transparent)]"
-            : undefined
-      )}
+      // The tie wins the tint: the line cuts through the cluster, so
+      // "advancing" is a promise the lobby's results have not made.
+      className={tied ? ROW_TONE.tie : advancing ? ROW_TONE.advancing : ROW_TONE.none}
     >
       <TableCell className="whitespace-nowrap">
         {/* Every row of a cluster prints its head's position, so 2/2/4 reads
@@ -199,13 +243,34 @@ function LobbyRow({
                 ? "text-[color:var(--aqt-teal)]"
                 : "text-[color:var(--aqt-fg-faint)]"
           )}
-          title={row.tie_group != null ? clusterTitle : undefined}
         >
-          {row.tie_group ?? row.position ?? "—"}
+          {ranked ? (row.tie_group ?? row.position ?? "—") : "—"}
         </span>
+        {clustered && (
+          <>
+            <span aria-hidden className="ml-0.5 text-[color:var(--aqt-fg-dim)]" title={t("ffa.tieCluster")}>
+              =
+            </span>
+            <span className="sr-only">{t("ffa.tieCluster")}</span>
+          </>
+        )}
+        {ranked && row.is_pinned && (
+          <span
+            className="ml-1 inline-flex align-[-0.125em] text-[color:var(--aqt-fg-dim)]"
+            title={t("ffa.pinnedPlace")}
+          >
+            <Lock aria-hidden className="size-3" />
+            <span className="sr-only">{t("ffa.pinnedPlace")}</span>
+          </span>
+        )}
       </TableCell>
-      <TableCell>
-        <TeamName team={{ name: row.team_name, image_url: row.team_image_url }} size="xs" />
+      <TableCell className={cn(STICKY_TEAM, "bg-inherit")}>
+        <TeamName
+          team={{ name: row.team_name, image_url: row.team_image_url }}
+          size="xs"
+          className="max-w-[9rem] sm:max-w-none"
+          nameClassName="font-semibold text-[color:var(--aqt-fg)]"
+        />
       </TableCell>
       <TableCell className="aqt-tnum text-right text-[color:var(--aqt-fg)]">
         {row.points.toFixed(1)}
@@ -223,12 +288,16 @@ function LobbyRow({
             {/* A game nobody has entered renders NOTHING. A `0` here would read
                 as "played it, scored nothing" — a different claim entirely. */}
             {cell?.state == null ? null : (
+              // Two bare numbers read aloud as "3 6"; each carries the label its
+              // column would, had the cell room for two headers.
               <span className="inline-flex flex-col items-center leading-tight">
                 <span className="aqt-tnum text-caption font-semibold text-[color:var(--aqt-fg)]">
+                  <span className="sr-only">{t("ffa.colPlace")} </span>
                   {cell.placement ?? "—"}
                 </span>
                 {cell.score != null && (
                   <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
+                    <span className="sr-only">{scoreLabel} </span>
                     {cell.score}
                   </span>
                 )}
@@ -241,7 +310,7 @@ function LobbyRow({
         <TableCell className="text-center">
           <span
             data-ffa-status
-            title={tied ? verdictTitle : undefined}
+            title={tied ? t("ffa.tieDecidesAdvance") : undefined}
             className={cn(
               "inline-flex items-center rounded px-2 py-0.5 text-label font-bold uppercase tracking-label",
               tied

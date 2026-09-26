@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";
@@ -20,6 +20,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 
 import { StatusBadge, formatDate } from "./rank-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const STATUS_FILTERS = ["all", "ok", "private", "not_found", "error", "rate_limited"];
 const SOURCE_FILTERS = ["all", "scheduled", "registration", "manual"];
@@ -41,7 +42,7 @@ export function RankTaskHistory() {
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const query = useQuery({
-    queryKey: ["admin", "rank", "fetch-log", workspaceId, status, source],
+    queryKey: adminQueryKeys.rankFetchLog(workspaceId, status, source),
     queryFn: () =>
       adminService.getRankFetchLog({
         status: status === "all" ? undefined : status,

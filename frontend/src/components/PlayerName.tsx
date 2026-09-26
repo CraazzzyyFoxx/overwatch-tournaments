@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { getPlayerSlug, getPlayerType } from "@/utils/player";
+import { getPlayerSlug, getPlayerType } from "@/lib/player";
 
 /**
  * Minimal player-like shape accepted by `PlayerName`. Compatible with

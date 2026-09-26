@@ -12,7 +12,7 @@ import type { EncounterGameState, EncounterResultStatus } from "@/types/tourname
  * standings job has not ranked once.
  */
 
-/** The stage's `settings_json.ffa_scoring`, resolved for this lobby. */
+/** The stage's `ffa_scoring`, resolved for this lobby. */
 export interface FfaRules {
   /** Points for placing 1st, 2nd, … A shorter list scores the tail at zero. */
   placement_points: number[];
@@ -40,6 +40,8 @@ export interface FfaLobbyRow {
    *  standings job has ranked the group once. */
   position: number | null;
   tie_group: number | null;
+  /** The organizer pinned `position`; results no longer move it. */
+  is_pinned: boolean;
   points: number;
   games_played: number;
   wins: number;

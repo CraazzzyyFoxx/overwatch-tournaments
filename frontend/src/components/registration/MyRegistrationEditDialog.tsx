@@ -18,6 +18,7 @@ import type {
 } from "@/types/registration.types";
 
 import RegistrationSchemaForm from "./RegistrationSchemaForm";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 /**
  * The refusals of the write AS A WHOLE — the same codes `edit_locked_reason`
@@ -68,7 +69,7 @@ export default function MyRegistrationEditDialog({
   // The registrant's own linked logins, for the identity questions' handle
   // suggestions — the same self view the sign-up wizard uses.
   const userQuery = useQuery({
-    queryKey: ["me", "social"],
+    queryKey: userQueryKeys.mySocial(),
     queryFn: () => meService.getSocialAccounts(),
     enabled: open && authUser != null,
     staleTime: 60_000,

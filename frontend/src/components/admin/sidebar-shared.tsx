@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { AccountMenuContent } from "@/components/UserMenu";
-import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
+import { WorkspaceAvatar } from "@/components/workspace/WorkspaceSwitcher";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { EYEBROW_CLASS } from "@/components/kit/tone";

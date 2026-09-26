@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { INVITE_LINK_PATH, buildInviteLink, readInviteTokenFromHash } from "./invite-link";
 

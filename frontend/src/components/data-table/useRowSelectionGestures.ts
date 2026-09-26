@@ -25,6 +25,17 @@ export function isInteractiveRowTarget(target: HTMLElement) {
   return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [role='link'], [data-radix-collection-item]"));
 }
 
+/** The row/checkbox handlers `DataTable` spreads onto its rows. */
+export interface RowSelectionGestures<TData> {
+  /** Reports (and clears) whether the click now firing was the tail of a selection gesture. */
+  consumeClick: () => boolean;
+  checkboxPointerDown: (row: Row<TData>) => (event: React.PointerEvent<HTMLElement>) => void;
+  rowPointerDown: (row: Row<TData>) => (event: React.PointerEvent<HTMLElement>) => void;
+  checkboxClick: (event: React.MouseEvent<HTMLElement>) => void;
+  /** True when the key was consumed, so the caller can keep Enter for its own row action. */
+  bodyKeyDown: (event: React.KeyboardEvent<HTMLElement>) => boolean;
+}
+
 /**
  * Mouse, touch and keyboard selection gestures for the admin table, in the
  * spreadsheet idiom.
@@ -45,7 +56,7 @@ export function isInteractiveRowTarget(target: HTMLElement) {
  * Shift+arrow grows the range from the anchor, Space toggles, Ctrl/Cmd+A
  * selects the page, Escape clears.
  */
-export function useRowSelectionGestures<TData>(table: Table<TData>, selectable: boolean) {
+export function useRowSelectionGestures<TData>(table: Table<TData>, selectable: boolean): RowSelectionGestures<TData> {
   const dragRef = useRef<Drag | null>(null);
   const anchorRef = useRef<string | null>(null);
   /** The click that follows this press belongs to a selection gesture, not to `onRowClick`. */

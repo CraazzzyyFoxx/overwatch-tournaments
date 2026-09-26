@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import {
   BarChart,
   Bar,
@@ -14,7 +15,7 @@ import {
 } from "recharts";
 import { TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
-import { STAT_META, activePlayers, formatStat, playerStat } from "@/utils/matchStats";
+import { STAT_META, activePlayers, formatStat, playerStat } from "@/lib/match-stats";
 
 interface MatchContributionChartProps {
   home: TeamWithStats;

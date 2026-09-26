@@ -7,22 +7,17 @@
  * payload builder becomes a pure function that `SaveBar` can also ask "is this
  * dirty, and what changed?".
  *
- * The payload shape is deliberately unchanged from the pre-redesign
- * `Save override` handler: same fields, same "delete the key rather than send
- * undefined" rules, same `settings_json` spread over the stage's existing keys.
+ * The payload sends every regulation field the editor owns, each one whole:
+ * the server replaces a sent field rather than merging into it.
  */
-import type { StageBestOfConfig, StageUpdateInput } from "@/types/admin.types";
-import type { Stage, StageType } from "@/types/tournament.types";
-import { parseStageBestOf } from "@/lib/tournament/best-of";
+import type { StageUpdateInput } from "@/types/admin.types";
+import type { SeedRanking, Stage, StageBestOfConfig, StageType } from "@/types/tournament.types";
 
 import {
   BRACKET_STAGE_TYPES,
   FFA_STAGE_TYPES,
-  buildBestOfSettings,
   defaultTiebreakOrder,
-  normalizeMaxRounds,
-  type SeedRanking,
-  type StageSettings
+  normalizeMaxRounds
 } from "@/lib/bracket/projection";
 
 export interface StageForm {
@@ -50,96 +45,34 @@ export interface StageForm {
   ffaScoreLabel: string;
 }
 
-export function stageFormFromStage(stage: Stage): StageForm {
-  const settings = (stage.settings_json ?? {}) as StageSettings;
-  const seedRanking =
-    settings.seed_ranking === "avg_sr" ||
-    settings.seed_ranking === "total_sr" ||
-    settings.seed_ranking === "random"
-      ? settings.seed_ranking
-      : "slot";
+const numberOrEmpty = (value: number | null) => (value != null ? String(value) : "");
+const emptyOrNumber = (value: string) => (value !== "" ? Number(value) : null);
 
+export function stageFormFromStage(stage: Stage): StageForm {
   return {
     name: stage.name,
     order: stage.order,
     stageType: stage.stage_type,
     maxRounds: String(stage.max_rounds ?? 5),
-    advanceCount: stage.advance_count != null ? String(stage.advance_count) : "",
-    deGrandFinalType: settings.de_grand_final_type ?? "no_reset",
+    advanceCount: numberOrEmpty(stage.advance_count),
+    deGrandFinalType: stage.de_grand_final_type,
     splitLowerBracket: stage.split_lower_bracket ?? false,
-    seedRanking,
-    rankingPreset: settings.ranking_preset || "default",
-    tiebreakOrder: settings.tiebreak_order ?? defaultTiebreakOrder(stage.stage_type),
-    scoringWin: settings.scoring?.win != null ? String(settings.scoring.win) : "",
-    scoringDraw: settings.scoring?.draw != null ? String(settings.scoring.draw) : "",
-    scoringLoss: settings.scoring?.loss != null ? String(settings.scoring.loss) : "",
-    swissByePoints: settings.swiss_bye_points != null ? String(settings.swiss_bye_points) : "",
-    bestOf: parseStageBestOf(settings),
-    ffaPlacementPoints: settings.ffa_scoring?.placement_points ?? [],
-    ffaScorePoints: settings.ffa_scoring?.score_points ?? 1,
-    ffaScoreLabel: settings.ffa_scoring?.score_label ?? ""
+    seedRanking: stage.seed_ranking,
+    rankingPreset: stage.ranking_preset || "default",
+    tiebreakOrder: stage.tiebreak_order ?? defaultTiebreakOrder(stage.stage_type),
+    scoringWin: numberOrEmpty(stage.scoring.win),
+    scoringDraw: numberOrEmpty(stage.scoring.draw),
+    scoringLoss: numberOrEmpty(stage.scoring.loss),
+    swissByePoints: numberOrEmpty(stage.swiss_bye_points),
+    bestOf: stage.best_of,
+    ffaPlacementPoints: stage.ffa_scoring.placement_points,
+    ffaScorePoints: stage.ffa_scoring.score_points,
+    ffaScoreLabel: stage.ffa_scoring.score_label ?? ""
   };
 }
 
 export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpdateInput {
-  const scoring: NonNullable<StageSettings["scoring"]> = {};
-  if (form.scoringWin !== "") scoring.win = Number(form.scoringWin);
-  if (form.scoringDraw !== "") scoring.draw = Number(form.scoringDraw);
-  if (form.scoringLoss !== "") scoring.loss = Number(form.scoringLoss);
-
-  const settings: StageSettings = {
-    ...((stage.settings_json ?? {}) as StageSettings),
-    ranking_preset: form.rankingPreset === "default" ? undefined : form.rankingPreset || undefined,
-    // A metric switched off in the editor is simply absent from the list — that
-    // absence IS the "disabled" state the engine reads. `points` is the one
-    // exception: it cannot be turned off, and the engine forces it first if it
-    // is missing, so persist the list that already says so rather than an order
-    // the server would have to correct (an empty list saves as `["points"]`).
-    tiebreak_order: form.tiebreakOrder.includes("points")
-      ? form.tiebreakOrder
-      : ["points", ...form.tiebreakOrder],
-    scoring: Object.keys(scoring).length > 0 ? scoring : undefined,
-    swiss_bye_points: form.swissByePoints !== "" ? Number(form.swissByePoints) : undefined
-  };
-
-  if (!settings.ranking_preset) delete settings.ranking_preset;
-  if (!settings.scoring) delete settings.scoring;
-  if (settings.swiss_bye_points === undefined) delete settings.swiss_bye_points;
-
-  if (form.stageType === "double_elimination") {
-    settings.de_grand_final_type = form.deGrandFinalType;
-  } else {
-    delete settings.de_grand_final_type;
-  }
-
-  if (BRACKET_STAGE_TYPES.includes(form.stageType) && form.seedRanking !== "slot") {
-    settings.seed_ranking = form.seedRanking;
-  } else {
-    delete settings.seed_ranking;
-  }
-
-  // An FFA lobby is one round of N games, and the generator resolves that count
-  // as `resolve_best_of(cfg, 1, is_final=False)` — `by_round["1"]` outranks
-  // `default`, and `final` is a bracket's last round. Either one left over from
-  // the format this stage used to be would silently beat "Games per lobby",
-  // with nothing in the editor that can reach it, so only `default` is kept.
-  const bestOf = buildBestOfSettings(
-    FFA_STAGE_TYPES.includes(form.stageType) ? { default: form.bestOf.default } : form.bestOf
-  );
-  if (bestOf) settings.best_of = bestOf;
-  else delete settings.best_of;
-
-  // Only an FFA league is scored by place and raw score; on any other type the
-  // block is a rule the engine would read for a format that cannot produce it.
-  if (FFA_STAGE_TYPES.includes(form.stageType)) {
-    settings.ffa_scoring = {
-      placement_points: form.ffaPlacementPoints,
-      score_points: form.ffaScorePoints,
-      score_label: form.ffaScoreLabel.trim() || null
-    };
-  } else {
-    delete settings.ffa_scoring;
-  }
+  const isFfa = FFA_STAGE_TYPES.includes(form.stageType);
 
   return {
     name: form.name.trim() || stage.name,
@@ -150,7 +83,39 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
       form.advanceCount !== "" ? normalizeMaxRounds(form.advanceCount, 1) : null,
     split_lower_bracket:
       form.stageType === "double_elimination" ? form.splitLowerBracket : false,
-    settings_json: settings
+    ranking_preset: form.rankingPreset === "default" ? null : form.rankingPreset || null,
+    // A metric switched off in the editor is simply absent from the list — that
+    // absence IS the "disabled" state the engine reads. `points` is the one
+    // exception: it cannot be turned off, and the engine forces it first if it
+    // is missing, so persist the list that already says so rather than an order
+    // the server would have to correct (an empty list saves as `["points"]`).
+    tiebreak_order: form.tiebreakOrder.includes("points")
+      ? form.tiebreakOrder
+      : ["points", ...form.tiebreakOrder],
+    scoring: {
+      win: emptyOrNumber(form.scoringWin),
+      draw: emptyOrNumber(form.scoringDraw),
+      loss: emptyOrNumber(form.scoringLoss)
+    },
+    swiss_bye_points: emptyOrNumber(form.swissByePoints),
+    de_grand_final_type:
+      form.stageType === "double_elimination" ? form.deGrandFinalType : "no_reset",
+    seed_ranking: BRACKET_STAGE_TYPES.includes(form.stageType) ? form.seedRanking : "slot",
+    // An FFA lobby is one round of N games, and the generator resolves that count
+    // as `resolve_best_of(cfg, 1, is_final=False)` — `by_round["1"]` outranks
+    // `default`, and `final` is a bracket's last round. Either one left over from
+    // the format this stage used to be would silently beat "Games per lobby",
+    // with nothing in the editor that can reach it, so only `default` is kept.
+    best_of: isFfa ? { default: form.bestOf.default, by_round: {}, final: null } : form.bestOf,
+    // Only an FFA league is scored by place and raw score; any other type leaves
+    // the stored table alone rather than saving a rule its format cannot use.
+    ...(isFfa && {
+      ffa_scoring: {
+        placement_points: form.ffaPlacementPoints,
+        score_points: form.ffaScorePoints,
+        score_label: form.ffaScoreLabel.trim() || null
+      }
+    })
   };
 }
 

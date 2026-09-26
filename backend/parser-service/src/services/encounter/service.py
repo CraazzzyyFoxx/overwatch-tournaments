@@ -9,58 +9,6 @@ from shared.repository import MatchRepository, TeamRepository
 from src import models
 from src.core import utils
 from src.services.map import service as map_service
-from src.services.tournament import service as tournament_service
-
-
-def encounter_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
-    entities = []
-    if "tournament" in in_entities:
-        tournament_entity = utils.join_entity(child, models.Encounter.tournament)
-        entities.append(tournament_entity)
-        entities.extend(
-            tournament_service.tournament_entities(utils.prepare_entities(in_entities, "tournament"), tournament_entity)
-        )
-    if "teams" in in_entities:
-        home_team_entity = utils.join_entity(child, models.Encounter.home_team)
-        away_team_entity = utils.join_entity(child, models.Encounter.away_team)
-        entities.append(home_team_entity)
-        entities.append(away_team_entity)
-        entities.extend(TeamRepository.team_entities(utils.prepare_entities(in_entities, "teams"), home_team_entity))
-        entities.extend(TeamRepository.team_entities(utils.prepare_entities(in_entities, "teams"), away_team_entity))
-    if "home_team" in in_entities:
-        home_team_entity = utils.join_entity(child, models.Encounter.home_team)
-        entities.append(home_team_entity)
-        entities.extend(
-            TeamRepository.team_entities(
-                utils.prepare_entities(in_entities, "home_team"),
-                home_team_entity,
-            )
-        )
-    if "away_team" in in_entities:
-        away_team_entity = utils.join_entity(child, models.Encounter.away_team)
-        entities.append(away_team_entity)
-        entities.extend(
-            TeamRepository.team_entities(
-                utils.prepare_entities(in_entities, "away_team"),
-                away_team_entity,
-            )
-        )
-    if "stage" in in_entities:
-        stage_entity = utils.join_entity(child, models.Encounter.stage)
-        stage_items_entity = utils.join_entity(stage_entity, models.Stage.items)
-        entities.append(stage_entity)
-        entities.append(stage_items_entity)
-        entities.append(utils.join_entity(stage_items_entity, models.StageItem.inputs))
-    if "stage_item" in in_entities:
-        stage_item_entity = utils.join_entity(child, models.Encounter.stage_item)
-        entities.append(stage_item_entity)
-        entities.append(utils.join_entity(stage_item_entity, models.StageItem.inputs))
-    if "matches" in in_entities:
-        matches_entity = utils.join_entity(child, models.Encounter.matches)
-        entities.append(matches_entity)
-        entities.extend(match_entities(utils.prepare_entities(in_entities, "matches"), matches_entity))
-
-    return entities
 
 
 def match_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
@@ -115,18 +63,12 @@ class EncounterService:
         result = await session.execute(query)
         return result.unique().scalars().first()
 
-    async def get_by_teams(
-        self,
-        session: AsyncSession,
-        home_team_id: int,
-        away_team_id: int,
-        entities: list[str],
-        *,
-        has_closeness: bool | None = False,
-    ) -> models.Encounter | None:
+    async def list_by_teams(
+        self, session: AsyncSession, home_team_id: int, away_team_id: int
+    ) -> typing.Sequence[models.Encounter]:
+        """Every encounter the two teams play, in either orientation."""
         query = (
             sa.select(models.Encounter)
-            .options(*encounter_entities(entities))
             .where(
                 sa.or_(
                     sa.and_(
@@ -139,16 +81,21 @@ class EncounterService:
                     ),
                 )
             )
+            .order_by(models.Encounter.id)
         )
-
-        if isinstance(has_closeness, bool):
-            if has_closeness:
-                query = query.where(models.Encounter.closeness.isnot(None))
-            else:
-                query = query.where(models.Encounter.closeness.is_(None))
-
         result = await session.execute(query)
-        return result.unique().scalars().first()
+        return result.scalars().all()
+
+    async def encounter_ids_with_log(
+        self, session: AsyncSession, encounter_ids: typing.Sequence[int], log_name: str
+    ) -> set[int]:
+        """Which of ``encounter_ids`` already hold a map parsed from ``log_name``."""
+        result = await session.execute(
+            sa.select(models.Match.encounter_id)
+            .where(models.Match.encounter_id.in_(encounter_ids), models.Match.log_name == log_name)
+            .distinct()
+        )
+        return set(result.scalars().all())
 
     async def create_match(
         self,
@@ -184,5 +131,6 @@ class EncounterService:
 
 encounter_service = EncounterService()
 get_match_by_encounter_and_map = encounter_service.get_match_by_encounter_and_map
-get_by_teams = encounter_service.get_by_teams
+list_by_teams = encounter_service.list_by_teams
+encounter_ids_with_log = encounter_service.encounter_ids_with_log
 create_match = encounter_service.create_match

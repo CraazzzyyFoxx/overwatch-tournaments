@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { ArrowRight, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";

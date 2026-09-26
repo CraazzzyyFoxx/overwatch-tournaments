@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { CalendarIcon, ChevronDownIcon, X } from "lucide-react";
-import { useFormatter, type DateTimeFormatOptions } from "next-intl";
+import { type DateTimeFormatOptions } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -50,11 +51,11 @@ interface DateTimePickerProps {
 /**
  * Calendar fields of a local-time Date, re-anchored to UTC.
  *
- * The triggers below print a calendar day, but next-intl's formatter carries the
- * DEPLOYMENT's zone — next-intl resolves its default on the server (UTC in the
- * container) and `NextIntlClientProvider` inherits it. Formatting these Dates
- * raw (local midnight from `parseDateValue`, or a local wall clock from
- * `parseDateTimeValue`) printed the previous day for any viewer east of UTC,
+ * The triggers below print a calendar day, but the app formatter carries the
+ * zone the SERVER rendered in — the viewer's once their browser has reported
+ * it, the workspace default before that — not necessarily the browser's own.
+ * Formatting these Dates raw (local midnight from `parseDateValue`, or a local
+ * wall clock from `parseDateTimeValue`) could print the neighbouring day,
  * disagreeing with the highlighted calendar cell and with the adjacent
  * `TimeInput`, which reads local hours.
  */

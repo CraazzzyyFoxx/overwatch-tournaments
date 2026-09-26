@@ -61,6 +61,7 @@ import {
   validateScrimPoolDraft,
   type ScrimPoolDraft
 } from "./ScrimPoolEditor";
+import { scrimQueryKeys } from "@/lib/scrims/query-keys";
 
 /** Where a room's rules come from. */
 type PoolSource = "copy" | "custom";
@@ -93,13 +94,13 @@ export function ScrimCreateDialog({
   const [pool, setPool] = useState<ScrimPoolDraft>(emptyScrimPoolDraft);
 
   const tournamentsQuery = useQuery({
-    queryKey: ["scrims", "tournaments-lookup", workspaceId],
+    queryKey: scrimQueryKeys.tournamentsLookup(workspaceId),
     queryFn: () => tournamentService.lookup(workspaceId),
     enabled: open && source === "copy",
     staleTime: 5 * 60 * 1000
   });
   const stagesQuery = useQuery({
-    queryKey: ["scrims", "stages", copyTournamentId],
+    queryKey: scrimQueryKeys.stages(copyTournamentId),
     queryFn: () => tournamentService.getStages(copyTournamentId as number),
     enabled: open && source === "copy" && copyTournamentId != null
   });
@@ -107,7 +108,7 @@ export function ScrimCreateDialog({
   // elimination numbering is not derivable client-side (see `stageRoundOptions`),
   // and a wrong guess would copy a level the source tournament never had.
   const encountersQuery = useQuery({
-    queryKey: ["scrims", "encounters", copyTournamentId],
+    queryKey: scrimQueryKeys.encounters(copyTournamentId),
     queryFn: () =>
       encounterService.getAll(1, "", copyTournamentId, -1, "id", "asc", workspaceId, {
         entities: []

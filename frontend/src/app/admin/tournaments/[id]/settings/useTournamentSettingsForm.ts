@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { DEFAULT_WORKSPACE_TIMEZONE } from "@/lib/workspace/timezone";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { TournamentUpdateInput } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
+import {
+  useScopedSettingsForm,
+  type ScopedSettingsForm
+} from "@/components/admin/settings/useScopedSettingsForm";
 import {
   getPhaseSchedulePayload,
   getTournamentForm,
@@ -48,18 +51,11 @@ export const SETTINGS_SECTION_FIELDS = {
 
 export type SettingsFormSection = keyof typeof SETTINGS_SECTION_FIELDS;
 
-export interface TournamentSettingsForm {
+export interface TournamentSettingsForm
+  extends ScopedSettingsForm<TournamentFormState, TournamentUpdateInput> {
+  /** Never `null`: the tournament is loaded before a section mounts. */
   form: TournamentFormState;
-  /** Merges a partial into the form; the only way a section mutates it. */
-  patch: (values: Partial<TournamentFormState>) => void;
-  dirty: boolean;
-  /** "2 changed fields" for the `SaveBar` summary. */
-  summary: string;
-  saving: boolean;
-  /** The PATCH body this section would send right now — the diff, scoped. */
   payload: TournamentUpdateInput;
-  save: () => void;
-  discard: () => void;
   /** Zone the schedule section enters and shows times in; storage stays UTC. */
   timezone: string;
 }
@@ -81,76 +77,52 @@ export function useTournamentSettingsForm(
     workspaces.find((workspace) => workspace.id === tournament.workspace_id)?.timezone ??
     DEFAULT_WORKSPACE_TIMEZONE;
 
-  const initial = useMemo(
+  const baseline = useMemo(
     () => getTournamentForm(tournament, timezone),
     [tournament, timezone]
   );
-  const [form, setForm] = useState<TournamentFormState>(initial);
 
-  // Re-baseline when the tournament changes under us (another admin's write
-  // arriving through the shell's realtime invalidation, or the zone loading in).
-  // Done during render, not in an effect: `initial` is derived from props, so an
-  // effect would first commit a render whose `dirty`/`payload` compare the new
-  // baseline against the old form and briefly report phantom changed fields.
-  const [baseline, setBaseline] = useState(initial);
-  if (baseline !== initial) {
-    setBaseline(initial);
-    setForm(initial);
-  }
-
-  const payload = useMemo(() => {
-    const diff = getTournamentUpdatePayload(form, initial);
-    const scoped: TournamentUpdateInput = {};
-    for (const field of SETTINGS_SECTION_FIELDS[section]) {
-      if (field in diff) {
-        (scoped as Record<string, unknown>)[field] = (diff as Record<string, unknown>)[field];
-      }
-    }
-    return scoped;
-  }, [form, initial, section]);
-
-  const scheduleChanged =
+  // The schedule travels through its own endpoint, so it is neither in the
+  // PATCH body nor in its key count — but the save bar still has to see it.
+  const scheduleChanged = (form: TournamentFormState, base: TournamentFormState) =>
     section === "schedule" &&
-    JSON.stringify(form.phase_schedule) !== JSON.stringify(initial.phase_schedule);
+    JSON.stringify(form.phase_schedule) !== JSON.stringify(base.phase_schedule);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
+  const settings = useScopedSettingsForm<TournamentFormState, TournamentUpdateInput>({
+    baseline,
+    toPayload: (form, base) => {
+      const diff = getTournamentUpdatePayload(form, base);
+      const scoped: TournamentUpdateInput = {};
+      for (const field of SETTINGS_SECTION_FIELDS[section]) {
+        if (field in diff) {
+          (scoped as Record<string, unknown>)[field] = (diff as Record<string, unknown>)[field];
+        }
+      }
+      return scoped;
+    },
+    countChanges: (payload, form, base) =>
+      Object.keys(payload).length + (scheduleChanged(form, base) ? 1 : 0),
+    submit: async (payload, form, base) => {
       if (Object.keys(payload).length > 0) {
         await adminService.updateTournament(tournamentId, payload);
       }
-      if (scheduleChanged) {
+      if (scheduleChanged(form, base)) {
         await adminService.setTournamentSchedule(
           tournamentId,
           getPhaseSchedulePayload(form.phase_schedule, timezone)
         );
       }
     },
-    onSuccess: () => {
-      invalidateTournamentWorkspace(queryClient, tournamentId);
-      notify.success("Settings saved");
-    },
-    onError: (error) => notify.apiError(error, { title: "Could not save these settings" })
+    onSaved: () => invalidateTournamentWorkspace(queryClient, tournamentId)
   });
 
-  const changedCount = Object.keys(payload).length + (scheduleChanged ? 1 : 0);
-  const patch = useCallback(
-    (values: Partial<TournamentFormState>) => setForm((current) => ({ ...current, ...values })),
-    []
-  );
-  const discard = useCallback(() => setForm(initial), [initial]);
-
   return {
-    form,
-    patch,
-    dirty: changedCount > 0,
-    summary:
-      changedCount === 1
-        ? "1 changed field"
-        : `${changedCount} changed fields`,
-    saving: mutation.isPending,
-    payload,
-    save: () => mutation.mutate(),
-    discard,
+    ...settings,
+    // The generic hook only reports `null` before its entity loads; here the
+    // tournament is a prop, so the baseline is the value of the very first
+    // render.
+    form: settings.form ?? baseline,
+    payload: settings.payload ?? {},
     timezone
   };
 }

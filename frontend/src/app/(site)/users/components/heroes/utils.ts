@@ -1,10 +1,10 @@
-import type { useFormatter } from "next-intl";
+import type { Formatter } from "@/lib/datetime";
 
 import { LogStatsName } from "@/types/stats.types";
 import { HeroWithUserStats } from "@/types/hero.types";
 
 /** Only `number` is needed here; `useFormatter()` and `await getFormatter()` both satisfy it. */
-export type NumberFormatter = Pick<ReturnType<typeof useFormatter>, "number">;
+export type NumberFormatter = Pick<Formatter, "number">;
 
 const STAT_NUMBER_OPTIONS = { maximumFractionDigits: 2 } as const;
 

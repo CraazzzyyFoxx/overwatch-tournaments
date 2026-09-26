@@ -2,6 +2,8 @@ import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 import { IntlErrorCode } from "next-intl";
 
+import { TIME_ZONE_COOKIE, resolveTimeZone } from "@/lib/datetime";
+
 import { resolveLocale } from "./resolve-locale";
 
 export default getRequestConfig(async () => {
@@ -22,6 +24,9 @@ export default getRequestConfig(async () => {
   return {
     locale,
     messages,
+    // The viewer's zone, not the server's: every client provider inherits it,
+    // so SSR and hydration print the same local time.
+    timeZone: resolveTimeZone(cookieStore.get(TIME_ZONE_COOKIE)?.value),
     onError(error) {
       if (error.code !== IntlErrorCode.MISSING_MESSAGE) {
         console.error(error);

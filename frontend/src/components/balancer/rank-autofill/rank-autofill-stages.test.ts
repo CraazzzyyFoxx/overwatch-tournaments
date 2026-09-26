@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vitest";
+
 import {
   defaultRankAutofillStages,
   moveStage,
@@ -7,16 +9,6 @@ import {
   setStageLookback,
   stageWindowValue
 } from "./rank-autofill-stages";
-
-type TestFunction = () => void | Promise<void>;
-type Expectation<T> = {
-  toBe: (expected: T) => void;
-  toEqual: (expected: unknown) => void;
-};
-
-declare const describe: (name: string, fn: TestFunction) => void;
-declare const it: (name: string, fn: TestFunction) => void;
-declare const expect: <T>(actual: T) => Expectation<T>;
 
 describe("rank autofill stage helpers", () => {
   it("builds the default chain ow → division_history → analytics, all enabled", () => {

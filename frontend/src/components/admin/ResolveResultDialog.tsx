@@ -3,7 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronDown, History } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
@@ -25,6 +25,7 @@ import type { EncounterReportsRow, EncounterSetResultInput } from "@/types/admin
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 /**
  * How the score is decided. Mirrors the server's resolution order so what the
@@ -68,7 +69,7 @@ export function ResolveResultDialog({
   const isConfirmed = row?.result_status === "confirmed";
 
   const auditQuery = useQuery({
-    queryKey: ["encounter-result-audit", row?.id],
+    queryKey: encounterQueryKeys.resultAudit(row?.id),
     queryFn: () => adminService.getEncounterResultAudit(row!.id),
     enabled: open && historyOpen && row != null
   });

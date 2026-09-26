@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * Shared cache contract for the owner of one workspace.
@@ -20,7 +21,7 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
  */
 function useWorkspaceOwner(workspaceId: number | null) {
   return useQuery({
-    queryKey: ["workspace-owner", workspaceId],
+    queryKey: adminQueryKeys.workspaceOwner(workspaceId),
     queryFn: () => workspaceService.getOwner(workspaceId as number),
     enabled: workspaceId != null,
     retry: false,
@@ -83,7 +84,7 @@ export function WorkspaceOwnerControl({
     mutationFn: (authUserId: number | null) =>
       workspaceService.setOwner(workspaceId as number, authUserId),
     onSuccess: (next) => {
-      queryClient.setQueryData(["workspace-owner", workspaceId], next);
+      queryClient.setQueryData(adminQueryKeys.workspaceOwner(workspaceId), next);
       notify.success(
         next ? `Owner set to ${next.username ? `@${next.username}` : `#${next.auth_user_id}`}` : "Owner cleared"
       );
@@ -150,7 +151,7 @@ export function WorkspaceOwnerTransferControl({
     mutationFn: (authUserId: number) =>
       workspaceService.transferOwnership(workspaceId as number, authUserId),
     onSuccess: (next) => {
-      queryClient.setQueryData(["workspace-owner", workspaceId], next);
+      queryClient.setQueryData(adminQueryKeys.workspaceOwner(workspaceId), next);
       setTarget(null);
       notify.success(
         `Ownership transferred to ${next.username ? `@${next.username}` : `#${next.auth_user_id}`}`

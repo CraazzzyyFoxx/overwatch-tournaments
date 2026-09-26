@@ -598,7 +598,7 @@ services:
       - NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
       - NEXT_PUBLIC_YM_ID=${NEXT_PUBLIC_YM_ID}
       # Single gateway origin: the browser uses relative same-origin paths; only
-      # server-side (SSR + route handlers + middleware) fetches need a base.
+      # server-side (SSR + route handlers + proxy) fetches need a base.
       - NEXT_INTERNAL_API_URL=${NEXT_INTERNAL_API_URL:-http://gateway:8080}
     depends_on:
       gateway:

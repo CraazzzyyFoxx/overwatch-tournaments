@@ -127,7 +127,7 @@ export function ConfirmDialog({
             }}
             disabled={pending || !typedOk}
             // `destructive` is the solid-button role; `danger` is its text tone
-            // (see the comment on the tone scales in tailwind.config.ts).
+            // (see the comment on the tone scales in `globals.css`).
             className={cn(
               intent.tone === "danger" &&
                 "bg-destructive text-destructive-foreground hover:bg-destructive/90"

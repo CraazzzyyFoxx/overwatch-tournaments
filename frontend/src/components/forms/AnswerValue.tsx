@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Check, ExternalLink, Minus } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -152,11 +152,12 @@ export function AnswerValue({
 
   if (kind === "date") {
     // An unparseable answer is shown verbatim: a stored string the organizer
-    // can see is more useful than "Invalid Date".
+    // can see is more useful than "Invalid Date". A date answer is a bare
+    // "YYYY-MM-DD", which parses as UTC midnight — so it is printed in UTC.
     const parsed = new Date(String(value));
     const text = Number.isNaN(parsed.getTime())
       ? String(value)
-      : format.dateTime(parsed, { dateStyle: "medium" });
+      : format.dateTime(parsed, { dateStyle: "medium", timeZone: "UTC" });
     return <span className={MUTED}>{text}</span>;
   }
 

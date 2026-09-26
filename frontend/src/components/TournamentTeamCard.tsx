@@ -1,8 +1,12 @@
 "use client";
 
+// The card's own global CSS (`.team-card`, `.roster`, `.group-chip`,
+// `.placement`), moved out of globals.css and next to its only consumer.
+import "./TournamentTeamCard.css";
+
 import React from "react";
 import { useTranslations } from "next-intl";
-import { sortTeamPlayers, type TeamRosterPlayer } from "@/utils/player";
+import { sortTeamPlayers, type TeamRosterPlayer } from "@/lib/player";
 import { CircleMinus, CirclePlus, CornerDownRight, Crown } from "lucide-react";
 import PlayerName from "@/components/PlayerName";
 import { Team } from "@/types/team.types";

@@ -712,6 +712,23 @@ class AdminService {
     };
   }
 
+  /**
+   * Replace every pinned place of one standings table — `(stageId,
+   * stage_item_id)`. Resolves once the recalculation that applies the pins has
+   * finished, so a refetch afterwards already shows them.
+   */
+  async setStandingPins(
+    stageId: number,
+    body: { stage_item_id: number | null; pins: { team_id: number; position: number }[] }
+  ): Promise<void> {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/standing-pins`, {
+      method: "PUT",
+      body
+    });
+    const job = (await response.json()) as TournamentComputationJob;
+    await this.waitForTournamentJob(job);
+  }
+
   // ─── User CRUD ─────────────────────────────────────────────────────────────
 
   async getUsers(

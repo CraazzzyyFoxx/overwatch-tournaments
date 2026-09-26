@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { rehydrateRegistrationList } from "@/services/registration.helpers";
 import type { RegistrationListResponse } from "@/types/registration.types";

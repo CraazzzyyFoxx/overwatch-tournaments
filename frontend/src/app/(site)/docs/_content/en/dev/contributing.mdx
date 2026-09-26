@@ -69,7 +69,7 @@ A change goes through five independent workflows. Run the ones covering the area
 | --- | --- |
 | lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), the generated-artifact gates `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, and `scripts/check_rpc_docs.py` — every routed RPC subject must be documented |
 | test-backend | pytest per package with coverage; integration tests skip themselves when the database is unreachable |
-| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:split`, `bun run test:vitest`, `bun run test:bun`; the production build `bun run build` runs only on pushes to `master`, not on pull requests |
+| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:vitest`; the production build `bun run build` runs only on pushes to `master`, not on pull requests |
 | ci-gateway | `go mod tidy -diff`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race ./...` |
 | ci-docs | `python3 scripts/check_doc_links.py` — relative documentation links must resolve |
 

@@ -7,7 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { CheckCircle, Eye, EyeOff, Pencil, Plus, Trash2, XCircle } from "lucide-react";
 
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { Inspector } from "@/components/kit/Inspector";
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Workspace } from "@/types/workspace.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const PAGE_SIZE = 15;
 
@@ -88,7 +89,7 @@ export default function WorkspacesPage() {
     // `["admin-workspaces"]` is the prefix the workspace settings sections
     // invalidate too (`workspace-settings/useWorkspaceSettingsForm.ts`), so a
     // rename made there refreshes this list without a reload.
-    queryClient.invalidateQueries({ queryKey: ["admin-workspaces"] });
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.workspaces() });
     fetchWorkspaces();
   };
 
@@ -139,7 +140,7 @@ export default function WorkspacesPage() {
         accessorKey: "is_active",
         header: "Status",
         size: 120,
-        meta: adminColumnMeta<Workspace>({ align: "center" }),
+        meta: columnMeta<Workspace>({ align: "center" }),
         cell: ({ row }) =>
           row.original.is_active ? (
             <StatusIcon icon={CheckCircle} label="Active" variant="success" />
@@ -151,7 +152,7 @@ export default function WorkspacesPage() {
         accessorKey: "is_hidden",
         header: "Visibility",
         size: 120,
-        meta: adminColumnMeta<Workspace>({ align: "center" }),
+        meta: columnMeta<Workspace>({ align: "center" }),
         cell: ({ row }) =>
           row.original.is_hidden ? (
             <StatusIcon icon={EyeOff} label="Hidden" variant="warning" />
@@ -229,7 +230,7 @@ export default function WorkspacesPage() {
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >
         <div className="min-w-0">
-          <AdminDataTable<Workspace>
+          <DataTable<Workspace>
             columns={columns}
             initialPageSize={PAGE_SIZE}
             searchPlaceholder="Search workspaces…"

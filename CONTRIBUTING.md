@@ -101,9 +101,7 @@ cd frontend
 bun run typecheck
 bun run lint
 bun run lint:design                                # design-token compliance
-bun run test:split                                 # every test file is paired with a runner
 bun run test:vitest
-bun run test:bun
 
 # Gateway
 cd gateway
@@ -120,9 +118,8 @@ Type checking (`mypy` / `ty`) is deliberately **not** part of the backend gate. 
 runs only on `master`, not on pull requests — do not run it locally to test a change;
 `bun run typecheck` and `bun run lint` are the fast signal.
 
-The frontend has two test runners. `test:split` derives the split rather than maintaining it:
-vitest's collection defines its half and `bun:test` gets the exact complement. A new test file
-must be collectible by exactly one of them.
+The frontend runs one test runner. `vitest.config.ts` collects `src/**/*.test.ts(x)` by glob,
+so a new test file runs the moment it is written — nothing to register anywhere.
 
 ## Documentation
 

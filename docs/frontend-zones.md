@@ -71,9 +71,19 @@ Never: a relative `../../admin/…` climb, and never a re-export shim to launder
 The `Admin` prefix is gone from `components/kit/` (2026-09-24): `LinkTabs`, `Combobox`,
 `FilterBar`, `useFilters`, `Inspector`, `SectionNav`. They were the admin surface's kit before
 other zones started using them; the directory is the scope, not the name.
-`components/data-table/` still exports `AdminDataTable` / `adminColumnMeta`: the plain name
-`DataTable` is taken by `components/ui/data-table.tsx`, and merging the two is its own step
-(`docs/superpowers/specs/2026-09-24-unified-component-library-design.md` §4.4).
+`components/data-table/` exports `DataTable` / `columnMeta` (renamed from
+`AdminDataTable` / `adminColumnMeta` on 2026-09-26 after deleting the unused
+`components/ui/data-table.tsx` that held the plain name).
+
+## Why the tree is dynamic
+
+The root layout reads `cookies()` (locale, cookie-consent) and the proxy injects
+`x-owt-workspace-id` from the request host. That makes every route request-time;
+segment `export const dynamic = "force-dynamic"` is documentation of the same
+fact. Prefetching a link is therefore a full server render — `prefetch={false}`
+on the chrome and `HoverPrefetchLink` on dense surfaces exist because of that,
+not as a style preference. Changing the model means putting tenant (and maybe
+locale) in the path, which is a routing project, not a flag flip.
 
 ## What a split would still have to solve
 
@@ -89,7 +99,7 @@ things in this codebase are single-instance today and would need an owner first:
 3. **Proactive token refresh** — `hooks/use-proactive-token-refresh.ts` rotates the refresh
    token. Two zones rotating concurrently race and log the user out. Needs a single writer
    (Web Locks / `BroadcastChannel`).
-4. **Host → workspace resolution** — `src/middleware.ts` resolves the request host to a
+4. **Host → workspace resolution** — `src/proxy.ts` resolves the request host to a
    workspace and injects `x-owt-workspace-id`, with its own 60 s TTL cache. N zones would run
    N copies of that lookup and N caches. Moving it to the gateway is the obvious answer *then*
    and deliberately not now: the rule it implements (platform subdomain, or a custom domain
@@ -99,7 +109,7 @@ things in this codebase are single-instance today and would need an owner first:
    tenants as the platform site the day the two drift. What *did* move to the edge is header
    hygiene: `gateway/internal/proxy` strips the whole `x-owt-*` prefix from inbound requests,
    so the trust boundary — not the app being scoped — is what refuses a spoofed
-   `x-owt-workspace-id`. The middleware still deletes before setting; two independent barriers.
+   `x-owt-workspace-id`. The proxy still deletes before setting; two independent barriers.
 
 ## Message payload
 
@@ -125,7 +135,7 @@ their own inside it. Rule Z5 of the gate checks that every zone does.
 
 This is not a style preference. A client-side navigation re-renders only the segments below the
 deepest *shared* layout, so the first version — one provider in the root layout, fed by an
-`x-owt-zone` header the middleware set from the pathname — kept whatever bundle the first page
+`x-owt-zone` header the proxy set from the pathname — kept whatever bundle the first page
 load picked, for the life of the tab. Clicking through from a tournament page to its draft room
 rendered 20 raw `draftRedesign.*` keys, because the root layout never re-rendered and the tab
 was still holding the `web` bundle. A zone's own layout re-renders exactly when its zone is

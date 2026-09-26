@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getFormatter, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
+import { getFormatter } from "@/lib/datetime/server";
 import { ArrowLeft, MessageSquare } from "lucide-react";
 
 import { cn } from "@/lib/utils";

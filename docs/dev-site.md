@@ -21,7 +21,7 @@ separate cookie namespace.
 ## Why `PLATFORM_ZONE` exists
 
 `dev.owt.craazzzyyfoxx.me` is a subdomain of the production platform zone, so with the zone
-hardcoded the dev site read as production's `dev` *tenant*: `middleware.ts` resolved the host
+hardcoded the dev site read as production's `dev` *tenant*: `proxy.ts` resolved the host
 to a workspace, found none, and rewrote every request to `/not-configured` (404) — and its
 session cookies, written under `Domain=.owt.craazzzyyfoxx.me`, would have collided with
 production's. Both sides of the stack therefore take the zone from the environment:

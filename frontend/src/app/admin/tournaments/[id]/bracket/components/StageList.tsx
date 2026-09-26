@@ -91,8 +91,7 @@ export function StageList({
         stage_type: stageType,
         max_rounds: normalizeMaxRounds(maxRounds),
         order: nextStageOrder(stages),
-        settings_json:
-          stageType === "double_elimination" ? { de_grand_final_type: grandFinalType } : null
+        de_grand_final_type: stageType === "double_elimination" ? grandFinalType : "no_reset"
       }),
     onSuccess: (stage) => {
       onChanged();

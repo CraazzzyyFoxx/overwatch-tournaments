@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { Crown, Trophy } from "lucide-react";
 import { LogStatsName } from "@/types/stats.types";
 import type { HeroBestStat, HeroWithUserStats } from "@/types/hero.types";
-import { getHumanizedStats } from "@/utils/stats";
+import { getHumanizedStats } from "@/lib/stats";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { formatStatValue } from "@/app/(site)/users/components/heroes/utils";
 import {

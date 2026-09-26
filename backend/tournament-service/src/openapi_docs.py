@@ -440,6 +440,10 @@ DOCS: dict[str, dict] = {
         "summary": "Recalculate standings",
         "description": "Permission: workspace `standing.update` on the tournament's workspace. Schedules a durable standings-recalculation job (202 Accepted) for the tournament.",
     },
+    "rpc.tournament.standing_pins_set": {
+        "summary": "Set standings pins",
+        "description": "Permission: workspace `standing.update` on the stage's workspace. Replaces every pin of one standings table (the stage plus body `stage_item_id`, null for an elimination stage): a pinned team keeps that place whatever results arrive later, the others fill the free places in computed order. An empty `pins` list unpins the table. 422 for a team outside the table or a place past its end; 409 when a playoff seeded from the group is under way and the change touches its qualifying places or removes a pin. Schedules the standings-recalculation job that applies them (202 Accepted).",
+    },
     # ── preview access (who may see a hidden tournament before it is public) ─
     # Workspace-admin gated rather than tournament-permission gated: this grants
     # sight of an unpublished tournament, which no per-resource permission covers.
@@ -538,7 +542,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.stage_apply_best_of": {
         "summary": "Apply best-of to existing matches",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from its settings_json best-of config (in place, preserving scores).",
+        "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
     },
     "rpc.tournament.stage_activate_and_generate": {
         "summary": "Activate and generate stage",

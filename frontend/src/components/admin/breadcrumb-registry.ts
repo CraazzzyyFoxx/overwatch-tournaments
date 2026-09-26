@@ -1,4 +1,6 @@
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
+import { achievementQueryKeys } from "@/lib/achievements/query-keys";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * Detail routes whose numeric id segment can be resolved to a real entity name.
@@ -17,10 +19,10 @@ export const BREADCRUMB_ENTITIES: Record<
 > = {
   tournaments: (id) => getTournamentWorkspaceQueryKeys(id).tournament,
   // Same key as the team workspace query (admin/teams/[id]/page.tsx).
-  teams: (id) => ["admin", "team", id] as const,
-  people: (id) => ["admin", "person", id] as const,
-  achievements: (id, workspaceId) => ["admin", "achievement-rule", workspaceId, id] as const,
-  workspaces: (id) => ["admin-workspace", id] as const,
+  teams: (id) => adminQueryKeys.team(id),
+  people: (id) => adminQueryKeys.person(id),
+  achievements: (id, workspaceId) => achievementQueryKeys.rule(workspaceId, id),
+  workspaces: (id) => adminQueryKeys.workspace(id),
 };
 
 /**

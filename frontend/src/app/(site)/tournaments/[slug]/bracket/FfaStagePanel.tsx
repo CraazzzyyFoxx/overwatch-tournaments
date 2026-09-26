@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import FfaLobbyTable from "@/components/ffa/FfaLobbyTable";
+import FfaLobbyTable, { lobbyGamePositions } from "@/components/ffa/FfaLobbyTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SegmentedLinks, type SegmentedLinkItem } from "@/components/ui/segmented";
@@ -91,14 +92,24 @@ export function FfaStagePanel({
           lobbies.map((lobby) => (
             <section key={lobby.encounter_id} className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <Link
-                  href={`/encounters/${lobby.encounter_id}`}
-                  className="text-sm font-semibold uppercase tracking-label text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
-                >
-                  {lobby.name}
-                </Link>
+                <h4 className="text-sm font-semibold uppercase tracking-label">
+                  <Link
+                    href={`/encounters/${lobby.encounter_id}`}
+                    className="inline-flex items-center gap-1 text-[color:var(--aqt-fg)] underline-offset-4 hover:text-[color:var(--aqt-teal)] hover:underline"
+                  >
+                    {lobby.name}
+                    <ChevronRight aria-hidden className="size-3.5" />
+                  </Link>
+                </h4>
                 <span className="text-xs uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
-                  {t("ffa.gamesPerLobby")}: {lobby.best_of}
+                  {t("ffa.gamesProgress", {
+                    played: new Set(
+                      lobby.rows.flatMap((row) =>
+                        row.games.filter((game) => game.state === "confirmed").map((game) => game.position)
+                      )
+                    ).size,
+                    total: lobbyGamePositions(lobby).length
+                  })}
                 </span>
               </div>
               {lobby.rows.length === 0 ? (

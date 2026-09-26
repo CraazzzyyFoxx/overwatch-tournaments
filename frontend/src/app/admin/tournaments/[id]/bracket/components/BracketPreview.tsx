@@ -22,6 +22,7 @@ import {
   type BracketTeamCountSource,
   type StageProjection
 } from "@/lib/bracket/projection";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const COUNT_SOURCE_NOTE: Record<BracketTeamCountSource, string> = {
   seeded: "from the teams already seeded into this stage",
@@ -103,7 +104,7 @@ export function BracketPreview({
   const previewQuery = useQuery({
     // The whole stage in the key: the skeleton is a function of the SAVED stage,
     // so any save that changes its seeds, format or best-of refetches it.
-    queryKey: ["admin", "stage", stage.id, "bracket-preview", stage],
+    queryKey: adminQueryKeys.stageBracketPreview(stage.id, stage),
     queryFn: () => adminService.getStageBracketPreview(stage.id),
     // A group stage has no bracket to project, so it never asks.
     enabled: isBracket && !encountersQuery.isPending && generated.length === 0

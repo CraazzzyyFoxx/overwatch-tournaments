@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { Registration } from "@/types/registration.types";
 
 import styles from "../../TournamentDetail.module.css";
-import type { ColumnDefinition } from "./participantsColumns";
+import type { ColumnDefinition } from "./participantsColumns.model";
 import { isMandatoryParticipantColumnId } from "./participants-url-state";
 
 const ESTIMATED_ROW_HEIGHT = 56;

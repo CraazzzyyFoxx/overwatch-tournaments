@@ -13,6 +13,8 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("next-intl", () => ({
+}));
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ number: (value: number) => String(value) })
 }));
 

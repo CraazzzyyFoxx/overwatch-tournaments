@@ -20,6 +20,7 @@ import {
   CommandSeparator
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface UserSearchComboboxProps {
   value?: number;
@@ -47,7 +48,7 @@ const UserSearchCombobox = ({
   const shouldSearch = normalizedQuery.length >= 2;
 
   const usersQuery = useQuery({
-    queryKey: ["users-search-minimized", normalizedQuery],
+    queryKey: userQueryKeys.searchMinimized(normalizedQuery),
     enabled: open && shouldSearch,
     queryFn: ({ signal }) => userService.searchUsers(normalizedQuery, signal),
     staleTime: 60 * 1000

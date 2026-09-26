@@ -1,6 +1,7 @@
 """Admin service layer for stage CRUD and bracket generation."""
 
 from collections.abc import Sequence
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import case, func, or_, select, update
@@ -26,9 +27,7 @@ from shared.services.bracket import round_robin
 from shared.services.bracket.engine import generate_bracket, placeholder_bracket, placeholder_seeds
 from shared.services.bracket.persist import persist_skeleton
 from shared.services.bracket.swiss import SwissPairingImpossibleError, SwissStanding
-from shared.services.bracket.swiss_settings import (
-    SWISS_BYES_KEY,
-    SWISS_STOPPED_SCOPES_KEY,
+from shared.services.bracket.swiss_state import (
     clear_swiss_byes,
     clear_swiss_scope_stopped,
     mark_swiss_scope_stopped,
@@ -37,7 +36,7 @@ from shared.services.bracket.swiss_settings import (
 )
 from shared.services.bracket.types import BracketSkeleton, Pairing
 from src import models, schemas
-from src.domain.admin.best_of import parse_best_of_config, resolve_best_of
+from src.domain.admin.best_of import best_of_config, resolve_best_of
 from src.domain.stage.lifecycle import stage_lifecycle
 from src.domain.stage.seeds import (
     GroupSlice,
@@ -46,7 +45,6 @@ from src.domain.stage.seeds import (
     group_advance_counts,
     group_for_index,
     parse_seed_mode,
-    parse_seed_ranking,
     rank_team_ids,
 )
 from src.domain.stage.seeds import (
@@ -98,24 +96,41 @@ def _boundary_tie_unresolved(standings: Sequence[models.Standing], position: int
     return standing.tie_group is not None and standings[position].tie_group == standing.tie_group
 
 
-def _merge_stage_settings(stored: dict | None, incoming: dict | None) -> dict | None:
-    """Lay ``incoming`` over ``stored``, keeping the engine's own bookkeeping.
+def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
+    """Write validated ``StageCreate``/``StageUpdate`` fields onto the stage.
 
-    ``settings_json`` holds two different things: the admin's regulation, and
-    the Swiss state the generator writes back into it (which team has already
-    had a BYE, which scopes ran out of pairings). The second is not the client's
-    to send, and a form that round-trips the whole blob would drop it -- so
-    those keys are always taken from what is stored.
+    ``scoring``, ``best_of`` and ``ffa_scoring`` arrive as the objects the API
+    shows and each replaces its columns as a whole; everything else is a column.
+    Rounds of ``best_of.by_round`` are updated in place rather than recreated: a
+    replaced collection would insert the new ``(stage_id, round)`` rows before
+    deleting the old ones and collide on the key.
     """
-    if incoming is None:
-        return stored
-    merged = {**(stored or {}), **incoming}
-    for key in (SWISS_BYES_KEY, SWISS_STOPPED_SCOPES_KEY):
-        if key in (stored or {}):
-            merged[key] = stored[key]
-        else:
-            merged.pop(key, None)
-    return merged
+    if "scoring" in fields:
+        scoring = fields.pop("scoring") or {}
+        stage.win_points = scoring.get("win")
+        stage.draw_points = scoring.get("draw")
+        stage.loss_points = scoring.get("loss")
+    if "best_of" in fields:
+        best_of = fields.pop("best_of")
+        stage.best_of_default = best_of["default"]
+        stage.best_of_final = best_of["final"]
+        wanted: dict[int, int] = best_of["by_round"]
+        existing = {row.round: row for row in stage.round_best_of}
+        for round_number, row in existing.items():
+            if round_number not in wanted:
+                stage.round_best_of.remove(row)
+        for round_number, value in sorted(wanted.items()):
+            if round_number in existing:
+                existing[round_number].best_of = value
+            else:
+                stage.round_best_of.append(models.StageRoundBestOf(round=round_number, best_of=value))
+    if "ffa_scoring" in fields:
+        ffa_scoring = fields.pop("ffa_scoring")
+        stage.ffa_placement_points = list(ffa_scoring["placement_points"])
+        stage.ffa_score_points = ffa_scoring["score_points"]
+        stage.ffa_score_label = ffa_scoring["score_label"]
+    for field, value in fields.items():
+        setattr(stage, field, value)
 
 
 class AdminStageService:
@@ -245,7 +260,7 @@ class AdminStageService:
         )
 
         team_names_by_id = await self._load_team_names(session, upper_ids + lower_ids)
-        best_of_cfg = parse_best_of_config(stage.settings_json)
+        best_of_cfg = best_of_config(stage)
         max_round = max((pairing.round_number for pairing in skeleton.pairings), default=0)
         sources: dict[int, list[dict]] = {}
         for edge in skeleton.advancement_edges:
@@ -413,7 +428,8 @@ class AdminStageService:
         payload = data.model_dump()
         challonge_id = payload.pop("challonge_id", None)
         challonge_slug = payload.pop("challonge_slug", None)
-        stage = models.Stage(tournament_id=tournament_id, **payload)
+        stage = models.Stage(tournament_id=tournament_id)
+        _apply_stage_fields(stage, payload)
         await self.stage_repo.create(session, stage)
         if challonge_id is not None:
             session.add(
@@ -432,14 +448,10 @@ class AdminStageService:
     async def update_stage(self, session: AsyncSession, stage_id: int, data: schemas.StageUpdate) -> models.Stage:
         """Edit a stage's regulation.
 
-        Two things are not plain field writes. ``stage_type`` decides the shape
-        of the matches that were already generated, so it cannot be flipped
-        under them -- a published Swiss silently becoming a single elimination
-        leaves the bracket it already produced meaning nothing. And
-        ``settings_json`` is merged rather than replaced, because it is not only
-        the admin's settings: the engine keeps the Swiss BYE ledger and the
-        stopped-scope list in there, and a client PUTting the form's view of the
-        blob would erase that history.
+        ``stage_type`` is not a plain field write: it decides the shape of the
+        matches that were already generated, so it cannot be flipped under them
+        -- a published Swiss silently becoming a single elimination leaves the
+        bracket it already produced meaning nothing.
         """
         stage = await self.get_stage(session, stage_id)
         tournament_id = stage.tournament_id
@@ -457,11 +469,7 @@ class AdminStageService:
                     ),
                 )
 
-        if "settings_json" in update_data:
-            update_data["settings_json"] = _merge_stage_settings(stage.settings_json, update_data["settings_json"])
-
-        for field, value in update_data.items():
-            setattr(stage, field, value)
+        _apply_stage_fields(stage, update_data)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
@@ -1012,7 +1020,7 @@ class AdminStageService:
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
                             detail=(
-                                "unresolved tie at qualification boundary; set a manual override "
+                                "unresolved tie at qualification boundary; pin the order in Standings "
                                 f"(source stage item {inp.source_stage_item_id}, "
                                 f"position {inp.source_position})"
                             ),
@@ -1117,7 +1125,7 @@ class AdminStageService:
         stage: models.Stage,
         team_ids: list[int],
     ) -> list[int]:
-        ranking = parse_seed_ranking(getattr(stage, "settings_json", None))
+        ranking = SeedRanking(stage.seed_ranking)
         if ranking is SeedRanking.SLOT or not team_ids:
             return team_ids
         teams = await self._load_rankable_teams(session, team_ids)
@@ -1180,7 +1188,7 @@ class AdminStageService:
                 session, stage.id, stage_item_id
             )
             if swiss_standings is None:
-                clear_swiss_byes(stage, stage_item_id)
+                await clear_swiss_byes(session, stage.id, stage_item_id)
             from src.services.standings.swiss_auto_round import stage_allows_next_round, stage_max_rounds
 
             if not stage_allows_next_round(stage, swiss_round):
@@ -1198,7 +1206,7 @@ class AdminStageService:
             # and hand out a schedule longer than the configured limit.
             rr_rounds = len(team_ids) if len(team_ids) % 2 else len(team_ids) - 1
             if swiss_standings is None and stage_max_rounds(stage) >= rr_rounds:
-                clear_swiss_scope_stopped(stage, stage_item_id)
+                await clear_swiss_scope_stopped(session, stage.id, stage_item_id)
                 return round_robin.generate(team_ids)
 
         try:
@@ -1208,11 +1216,15 @@ class AdminStageService:
                 swiss_standings=swiss_standings,
                 swiss_played_pairs=swiss_played_pairs,
                 swiss_round_number=swiss_round,
-                swiss_bye_history=set(swiss_bye_team_ids(stage, stage_item_id)),
+                swiss_bye_history=(
+                    set(await swiss_bye_team_ids(session, stage.id, stage_item_id))
+                    if stage.stage_type == enums.StageType.SWISS
+                    else set()
+                ),
                 lower_bracket_team_ids=lower_bracket_team_ids,
             )
         except SwissPairingImpossibleError:
-            mark_swiss_scope_stopped(stage, stage_item_id)
+            await mark_swiss_scope_stopped(session, stage.id, stage_item_id)
             logger.info(
                 "Swiss scope ended because no complete non-rematch pairing exists",
                 stage_id=stage.id,
@@ -1222,9 +1234,9 @@ class AdminStageService:
             return BracketSkeleton(pairings=[], total_rounds=0)
 
         if stage.stage_type == enums.StageType.SWISS:
-            clear_swiss_scope_stopped(stage, stage_item_id)
+            await clear_swiss_scope_stopped(session, stage.id, stage_item_id)
             if skeleton.bye_team_id is not None:
-                record_swiss_bye(stage, stage_item_id, skeleton.bye_team_id, round_number=swiss_round)
+                await record_swiss_bye(session, stage.id, stage_item_id, skeleton.bye_team_id, round_number=swiss_round)
         return skeleton
 
     async def _create_encounters_from_skeleton(
@@ -1238,7 +1250,7 @@ class AdminStageService:
         lb_stage_item_id: int | None = None,
     ) -> list[models.Encounter]:
         """Persist bracket pairings as Encounter rows and wire EncounterLink records."""
-        best_of_cfg = parse_best_of_config(stage.settings_json)
+        best_of_cfg = best_of_config(stage)
         return await persist_skeleton(
             session,
             stage=stage,
@@ -1662,6 +1674,28 @@ class AdminStageService:
                 ),
             )
 
+    async def started_qualification_cut(self, session: AsyncSession, source_stage_item_id: int) -> int | None:
+        """The lowest ``source_stage_item_id`` place a downstream stage already
+        in progress was seeded from, or ``None`` when nothing started plays off it.
+
+        Every place down to this one is frozen into a playoff that
+        ``requalify_downstream_inputs`` may no longer re-seed; places below it
+        qualified nobody who is playing.
+        """
+        result = await session.execute(
+            select(models.StageItemInput.stage_item_id, models.StageItemInput.source_position).where(
+                models.StageItemInput.source_stage_item_id == source_stage_item_id,
+                models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
+                models.StageItemInput.source_position.is_not(None),
+            )
+        )
+        seeds = result.all()
+        if not seeds:
+            return None
+        untouched = await self._untouched_stage_items(session, sorted({item_id for item_id, _ in seeds}))
+        started = [position for item_id, position in seeds if item_id not in untouched]
+        return max(started) if started else None
+
     async def requalify_downstream_inputs(self, session: AsyncSession, tournament_id: int) -> int:
         """Re-resolve frozen qualification seeds that recomputed standings moved.
 
@@ -2020,7 +2054,7 @@ class AdminStageService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Every group already has a lobby. Delete a lobby to regenerate it.",
             )
-        games = resolve_best_of(parse_best_of_config(stage.settings_json), 1, is_final=False)
+        games = resolve_best_of(best_of_config(stage), 1, is_final=False)
         return [
             await ffa_encounter_service.create_lobby(session, stage, item, _collect_item_team_ids(item), games=games)
             for item in items
@@ -2124,14 +2158,14 @@ class AdminStageService:
     async def apply_best_of_to_existing(self, session: AsyncSession, stage_id: int) -> int:
         """Backfill ``best_of`` on a stage's existing encounters from its config.
 
-        Reads ``Stage.settings_json['best_of']`` and rewrites each encounter's
+        Reads the stage's best-of config and rewrites each encounter's
         ``best_of`` in place (preserving scores/results). Applies the same
         resolution the generator uses; ``final`` targets the max round among the
         stage's encounters for elimination stages. Returns the number of rows
         whose ``best_of`` actually changed.
         """
         stage = await self.get_stage(session, stage_id)
-        cfg = parse_best_of_config(stage.settings_json)
+        cfg = best_of_config(stage)
         is_elimination = stage.stage_type in BRACKET_STAGE_TYPES
 
         # ``EncounterRepository.list_by_stage`` also predicates on tournament_id

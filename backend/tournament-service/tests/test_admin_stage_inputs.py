@@ -15,9 +15,8 @@ Creating a stage input checked none of the invariants editing one checks, so an
 input the update endpoint refuses could be created outright.
 
 And ``update_stage`` was a plain field write: the format of a stage that already
-had matches could be flipped under them, an unusable ``scoring`` blob passed the
-schema and only exploded later inside the points adder, and a full
-``settings_json`` replacement erased the Swiss BYE ledger the engine keeps there.
+had matches could be flipped under them, and an unusable ``scoring`` blob passed
+the schema and only exploded later inside the points adder.
 """
 
 from __future__ import annotations
@@ -43,6 +42,8 @@ stage_common = importlib.import_module("src.services.admin.stage_common")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
 
+from tests._stage_regulation import stage_regulation  # noqa: E402
+
 service = stage_service.stage_service
 
 
@@ -61,13 +62,26 @@ def _input(*, slot: int, input_type, team_id: int | None = None) -> SimpleNamesp
 class SwissRoundRobinShortcutTests(IsolatedAsyncioTestCase):
     """Item 5: the shortcut may only fire for a genuinely full circle."""
 
+    def setUp(self) -> None:
+        self.session = SimpleNamespace()
+        self.recorded = AsyncMock()
+        patches = (
+            patch.object(stage_service, "record_swiss_bye", self.recorded),
+            patch.object(stage_service, "clear_swiss_byes", AsyncMock()),
+            patch.object(stage_service, "clear_swiss_scope_stopped", AsyncMock()),
+            patch.object(stage_service, "mark_swiss_scope_stopped", AsyncMock()),
+            patch.object(stage_service, "swiss_bye_team_ids", AsyncMock(return_value=[])),
+        )
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def _stage(self, *, max_rounds: int) -> SimpleNamespace:
         return SimpleNamespace(
             id=1,
             tournament_id=99,
             stage_type=enums.StageType.SWISS,
             max_rounds=max_rounds,
-            settings_json={},
         )
 
     async def _skeleton(self, *, teams: int, max_rounds: int):
@@ -78,7 +92,7 @@ class SwissRoundRobinShortcutTests(IsolatedAsyncioTestCase):
             AsyncMock(return_value=(None, None, 1)),
         ):
             return await service._generate_stage_skeleton(
-                SimpleNamespace(),
+                self.session,
                 stage,
                 list(range(1, teams + 1)),
                 200,
@@ -107,9 +121,9 @@ class SwissRoundRobinShortcutTests(IsolatedAsyncioTestCase):
             "_get_swiss_generation_context",
             AsyncMock(return_value=(None, None, 3)),
         ):
-            await service._generate_stage_skeleton(SimpleNamespace(), stage, [1, 2, 3, 4, 5], 200)
+            await service._generate_stage_skeleton(self.session, stage, [1, 2, 3, 4, 5], 200)
 
-        self.assertEqual([{"round": 3, "team_id": 5}], stage.settings_json["swiss_byes"]["200"])
+        self.recorded.assert_awaited_once_with(self.session, 1, 200, 5, round_number=3)
 
 
 class ApplySeedingTests(TestCase):
@@ -271,37 +285,56 @@ class StageItemInputSchemaTests(TestCase):
             schemas.StageItemInputCreate(slot=1, input_type=enums.StageItemInputType.FINAL)
 
 
-class StageSettingsSchemaTests(TestCase):
-    """Item 16: the regulation blob is validated, not merely carried."""
+class StageRegulationSchemaTests(TestCase):
+    """Item 16: the regulation is validated, not merely carried."""
 
     def test_non_numeric_scoring_is_refused(self) -> None:
         with self.assertRaises(pydantic.ValidationError):
-            schemas.StageUpdate(settings_json={"scoring": {"win": "broken"}})
+            schemas.StageUpdate(scoring={"win": "broken"})
+
+    def test_a_misspelled_scoring_key_is_refused_instead_of_silently_dropped(self) -> None:
+        with self.assertRaises(pydantic.ValidationError):
+            schemas.StageUpdate(scoring={"win": 3, "drew": 1})
 
     def test_unknown_grand_final_type_is_refused(self) -> None:
         with self.assertRaises(pydantic.ValidationError):
-            schemas.StageUpdate(settings_json={"de_grand_final_type": "best_of_three"})
+            schemas.StageUpdate(de_grand_final_type="best_of_three")
 
     def test_every_grand_final_type_the_editor_sends_is_accepted(self) -> None:
         for value in ("no_reset", "with_reset"):
-            payload = {"de_grand_final_type": value}
-            self.assertEqual(payload, schemas.StageUpdate(settings_json=payload).settings_json)
+            self.assertEqual(value, schemas.StageUpdate(de_grand_final_type=value).de_grand_final_type)
 
-    def test_unknown_keys_pass_through_verbatim(self) -> None:
-        payload = {"best_of": {"default": 3}, "scoring": {"win": 3, "draw": 1, "loss": 0}}
-        self.assertEqual(payload, schemas.StageUpdate(settings_json=payload).settings_json)
+    def test_an_explicit_null_for_a_non_nullable_field_is_refused(self) -> None:
+        # These carry a default only so that an omitted field is left alone --
+        # sending null must not write a NULL into a NOT NULL column.
+        for field in ("de_grand_final_type", "seed_ranking", "best_of", "scoring", "ffa_scoring"):
+            with self.subTest(field=field), self.assertRaises(pydantic.ValidationError):
+                schemas.StageUpdate(**{field: None})
+
+    def test_a_round_cannot_be_played_as_best_of_zero(self) -> None:
+        with self.assertRaises(pydantic.ValidationError):
+            schemas.StageUpdate(best_of={"default": 3, "by_round": {2: 0}})
 
 
 class UpdateStageTests(IsolatedAsyncioTestCase):
-    """Item 16: structural edits and server-owned settings keys."""
+    """Item 16: structural edits and how the regulation reaches the columns."""
 
-    def _stage(self, settings: dict | None = None) -> SimpleNamespace:
+    def _stage(self, **overrides) -> SimpleNamespace:
         return SimpleNamespace(
+            **stage_regulation(**overrides),
             id=1,
             tournament_id=99,
             stage_type=enums.StageType.SWISS,
-            settings_json=settings,
         )
+
+    async def _update(self, stage, data) -> None:
+        session = SimpleNamespace(commit=AsyncMock())
+        with (
+            patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
+            patch.object(service.encounter_repo, "count", AsyncMock(return_value=0)),
+            patch.object(service, "_publish_structure_changed", AsyncMock()),
+        ):
+            await service.update_stage(session, 1, data)
 
     async def test_format_change_with_existing_matches_is_refused(self) -> None:
         stage = self._stage()
@@ -321,47 +354,36 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
 
     async def test_format_change_without_matches_is_allowed(self) -> None:
         stage = self._stage()
-        session = SimpleNamespace(commit=AsyncMock())
-        data = schemas.StageUpdate(stage_type=enums.StageType.SINGLE_ELIMINATION)
 
-        with (
-            patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
-            patch.object(service.encounter_repo, "count", AsyncMock(return_value=0)),
-            patch.object(service, "_publish_structure_changed", AsyncMock()),
-        ):
-            await service.update_stage(session, 1, data)
+        await self._update(stage, schemas.StageUpdate(stage_type=enums.StageType.SINGLE_ELIMINATION))
 
         self.assertEqual(enums.StageType.SINGLE_ELIMINATION, stage.stage_type)
 
-    async def test_settings_update_keeps_the_swiss_bye_ledger(self) -> None:
-        stored = {
-            "swiss_byes": {"200": [{"round": 1, "team_id": 5}]},
-            "swiss_stopped_scopes": ["200"],
-            "scoring": {"win": 3, "draw": 1, "loss": 0},
-        }
-        stage = self._stage(stored)
-        session = SimpleNamespace(commit=AsyncMock())
-        data = schemas.StageUpdate(settings_json={"scoring": {"win": 2, "draw": 1, "loss": 0}})
+    async def test_scoring_lands_on_the_columns_the_engine_reads(self) -> None:
+        stage = self._stage()
 
-        with (
-            patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
-            patch.object(service, "_publish_structure_changed", AsyncMock()),
-        ):
-            await service.update_stage(session, 1, data)
+        await self._update(stage, schemas.StageUpdate(scoring={"win": 2, "draw": 1, "loss": 0}))
 
-        self.assertEqual({"200": [{"round": 1, "team_id": 5}]}, stage.settings_json["swiss_byes"])
-        self.assertEqual(["200"], stage.settings_json["swiss_stopped_scopes"])
-        self.assertEqual(2, stage.settings_json["scoring"]["win"])
+        self.assertEqual((2, 1, 0), (stage.win_points, stage.draw_points, stage.loss_points))
 
-    async def test_client_cannot_plant_a_bye_ledger(self) -> None:
-        stage = self._stage({"scoring": {"win": 3, "draw": 1, "loss": 0}})
-        session = SimpleNamespace(commit=AsyncMock())
-        data = schemas.StageUpdate(settings_json={"swiss_byes": {"200": [{"round": 1, "team_id": 9}]}})
+    async def test_an_untouched_field_is_left_alone(self) -> None:
+        stage = self._stage(swiss_bye_points=2.0)
 
-        with (
-            patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
-            patch.object(service, "_publish_structure_changed", AsyncMock()),
-        ):
-            await service.update_stage(session, 1, data)
+        await self._update(stage, schemas.StageUpdate(name="Group stage"))
 
-        self.assertNotIn("swiss_byes", stage.settings_json)
+        self.assertEqual("Group stage", stage.name)
+        self.assertEqual(2.0, stage.swiss_bye_points)
+
+    async def test_a_kept_round_is_edited_in_place_not_recreated(self) -> None:
+        # ``(stage_id, round)`` is the primary key: replacing the row would
+        # insert the new one before deleting the old and collide on it.
+        kept = stage_service.models.StageRoundBestOf(round=1, best_of=2)
+        stage = self._stage()
+        stage.round_best_of = [kept, stage_service.models.StageRoundBestOf(round=2, best_of=5)]
+
+        await self._update(stage, schemas.StageUpdate(best_of={"default": 3, "by_round": {1: 5}, "final": 7}))
+
+        self.assertEqual([kept], stage.round_best_of)
+        self.assertEqual(5, kept.best_of)
+        self.assertEqual(3, stage.best_of_default)
+        self.assertEqual(7, stage.best_of_final)

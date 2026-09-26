@@ -27,13 +27,12 @@ class Match(db.TimeStampIntegerMixin):
     away_team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), index=True)
     home_score: Mapped[int] = mapped_column(Integer())
     away_score: Mapped[int] = mapped_column(Integer())
-    # NULL for a `source=captain_report` row: no log means no measured
-    # duration. Always present for `source=log_parser`.
+    # The duration the log measured. Nullable only for the legacy
+    # `captain_report` rows (see `source`), which had no log to measure.
     time: Mapped[float | None] = mapped_column(Float(), nullable=True)
     # The bare log filename as the parser saw it. Kept because the S3 key is
     # built from it (logs/{tournament_id}/{log_name}); provenance itself lives on
-    # log_record_id below. NULL for a `source=captain_report` row — there is no
-    # file. `source` is the field to branch on, not this nullability.
+    # log_record_id below. Nullable for the same legacy reason as `time`.
     log_name: Mapped[str | None] = mapped_column(nullable=True)
     code: Mapped[str | None] = mapped_column(nullable=True)
     # Which ingested log produced this match. Nullable: rows written before this
@@ -43,12 +42,12 @@ class Match(db.TimeStampIntegerMixin):
     log_record_id: Mapped[int | None] = mapped_column(
         ForeignKey("log_processing.record.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    # `log_parser`: written by MatchLogFlow from an uploaded OW log — `time`/
-    # `log_name` populated, kill-feed/stats may follow. `captain_report`:
-    # written from the per-map dual captain confirmation with no log — `time`/
-    # `log_name` stay NULL, no kill-feed/stats exist. Every row written before
-    # this column existed is a real parsed log, hence the `log_parser` default —
-    # never re-guessed for the backfill (see the pick-ban engine's migration).
+    # `log_parser` is the only value written today: MatchLogFlow, from an
+    # uploaded OW log. `captain_report` rows carried a per-map score with no log
+    # behind it; encgame01 turned them into `encounter_game` results and deleted
+    # them, and nothing writes that label any more (it stays on the Postgres
+    # enum, which cannot drop one). Every row written before this column existed
+    # is a real parsed log, hence the `log_parser` default.
     source: Mapped[enums.MatchSource] = mapped_column(
         Enum(
             enums.MatchSource,
@@ -62,12 +61,11 @@ class Match(db.TimeStampIntegerMixin):
 
     encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"), index=True)
     map_id: Mapped[int] = mapped_column(ForeignKey("overwatch.map.id", ondelete="CASCADE"), index=True)
-    # Which map OF THE SERIES this row is, 1-based in play order (the index
-    # ``EncounterMapCode``/``EncounterMapReport`` use). NULL when unknown: every
-    # parsed log, and every row written before this column existed. Stamped by
-    # ``map_report.submit_map_report`` on the row it reconciles, because a series
-    # can play the SAME map twice — without a position the second play's result
-    # overwrote the first play's row instead of standing beside it.
+    # Which map OF THE SERIES this row is, 1-based in play order. Only the
+    # legacy captain-report reconciliation ever stamped it; the parser leaves it
+    # NULL, and the series position now lives on `encounter_game.position`. The
+    # parser keys its row on (encounter_id, map_id), so a series that plays the
+    # same map twice still lands both plays on one row.
     map_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     home_team: Mapped[Team] = relationship(foreign_keys=[home_team_id])
@@ -82,10 +80,9 @@ class Match(db.TimeStampIntegerMixin):
 # Derived from ``Match`` existence rather than stored: a persisted boolean
 # here would need a writer to keep it in sync with this table (the old
 # design had exactly one, set-only-once, never reset back to False on log
-# removal). Filtered on ``source == log_parser`` — a ``captain_report`` row
-# (``map_report.submit_map_report`` upserts one before any log arrives, with
-# no log behind it) must NOT count, or the public "logs available" badge
-# would light up on encounters nobody ever uploaded a log for. The EXISTS
+# removal). Filtered on ``source == log_parser`` so a row with no log behind
+# it -- the legacy ``captain_report`` kind, none left since encgame01 -- can
+# never light the public "logs available" badge. The EXISTS
 # subquery is index-backed via ``encounter_id`` above, computed by Postgres
 # in the same SELECT as the rest of the row (no lazy load, so no
 # async/greenlet hazard — see ``Team.avg_sr`` for the same pattern), and can

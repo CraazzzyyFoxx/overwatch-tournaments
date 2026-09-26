@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, HelpCircle } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "@/components/kit/tone";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { AdminMatchRow, LogProcessingStatus } from "@/types/admin.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const STATUS_TONE: Record<LogProcessingStatus, Tone> = {
   pending: "neutral",
@@ -54,7 +55,7 @@ export function ParsedMatchDetail({
 }>) {
   const format = useFormatter();
   const detailQuery = useQuery({
-    queryKey: ["admin-matches", "detail", row.id, workspaceId],
+    queryKey: adminQueryKeys.matchDetail(row.id, workspaceId),
     queryFn: () => adminService.getAdminMatch(row.id, workspaceId!),
     enabled: workspaceId != null
   });

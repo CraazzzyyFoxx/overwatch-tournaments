@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CheckCircle, Clock, Trash2, UserCog } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { PROVIDER_META, ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { FilterBar } from "@/components/kit/FilterBar";
@@ -22,6 +22,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import type { OAuthConnectionAdmin, OAuthProvider } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 const PAGE_SIZE = 20;
 
@@ -92,7 +93,7 @@ export default function OAuthConnectionsAdminPage() {
     mutationFn: (connectionId: number) => rbacService.deleteOAuthConnection(connectionId),
     onSuccess: async () => {
       const removed = pendingDelete;
-      await queryClient.invalidateQueries({ queryKey: ["access-admin", "oauth-connections"] });
+      await queryClient.invalidateQueries({ queryKey: accessQueryKeys.oauthConnections() });
       setPendingDelete(null);
       if (removed && String(removed.id) === openId) setParams({ id: null });
       notify.success("OAuth connection removed");
@@ -157,7 +158,7 @@ export default function OAuthConnectionsAdminPage() {
         id: "token_status",
         header: "Token",
         enableSorting: false,
-        meta: adminColumnMeta({ align: "center" }),
+        meta: columnMeta({ align: "center" }),
         cell: ({ row }) => {
           const expiresAt = row.original.token_expires_at;
           if (!expiresAt) {
@@ -206,7 +207,7 @@ export default function OAuthConnectionsAdminPage() {
   return (
     <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
       <div className="min-w-0">
-        <AdminDataTable<OAuthConnectionAdmin>
+        <DataTable<OAuthConnectionAdmin>
           columns={columns}
           initialPageSize={PAGE_SIZE}
           pageSizeOptions={[10, 20, 50, 100]}

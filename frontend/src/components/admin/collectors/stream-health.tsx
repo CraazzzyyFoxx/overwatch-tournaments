@@ -10,6 +10,7 @@ import { formatInterval, formatRelative } from "@/components/kit/format-time";
 import { TONE_CLASS, type Tone } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -17,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { RUN_STATE_TONES } from "./collector-state";
 import { STREAM_STATUS_META, diagnoseStreamHealth } from "./stream-shared";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const STREAM_KEY = "stream.collection";
 
@@ -27,13 +29,14 @@ const STREAM_KEY = "stream.collection";
 const REFETCH_MS = 30_000;
 
 export function StreamHealthDashboard() {
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
   const isSuperuser = user?.isSuperuser ?? false;
 
   // No workspace in the key: one poller, one Redis key, one set of numbers.
   const healthQuery = useQuery({
-    queryKey: ["admin", "streams", "health"],
+    queryKey: adminQueryKeys.streamsHealth(),
     queryFn: () => adminService.getStreamPollHealth(),
     refetchInterval: REFETCH_MS
   });
@@ -47,8 +50,8 @@ export function StreamHealthDashboard() {
     },
     onSuccess: () => {
       notify.success(health?.enabled ? "Polling paused" : "Polling resumed");
-      queryClient.invalidateQueries({ queryKey: ["admin", "streams"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.streams() });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.settings() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not change the polling state — try again" })
@@ -111,7 +114,7 @@ export function StreamHealthDashboard() {
           <p className="text-muted-foreground">{diagnosis.hint}</p>
         ) : (
           <p className="text-muted-foreground">
-            Last tick {formatRelative(health.last_run_at)}. Nothing to do.
+            Last tick {formatRelative(format, health.last_run_at)}. Nothing to do.
           </p>
         )}
       </div>
@@ -119,7 +122,7 @@ export function StreamHealthDashboard() {
       <StatTileGrid>
         <StatTile
           label="Last tick"
-          value={formatRelative(health.last_run_at)}
+          value={formatRelative(format, health.last_run_at)}
           detail={
             health.status === null
               ? "Never run — no outcome recorded yet"

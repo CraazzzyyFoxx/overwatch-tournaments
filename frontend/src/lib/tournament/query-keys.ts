@@ -1,3 +1,5 @@
+import type { KeyPart } from "@/lib/query-keys";
+
 export const tournamentQueryKeys = {
   // `ref` is either the resolved numeric tournament id (admin flow, and
   // every other key in this object) or the public `/tournaments/{ref}` URL
@@ -9,7 +11,9 @@ export const tournamentQueryKeys = {
   stages: (tournamentId: number) => ["tournament", tournamentId, "stages"] as const,
   streams: (tournamentId: number) => ["tournament", tournamentId, "streams"] as const,
   links: (tournamentId: number) => ["tournament", tournamentId, "links"] as const,
-  teams: (tournamentId: number, workspaceId?: number | null) =>
+  /** `tournamentId` is nullable here: the admin browsers key this list by the
+   *  scope chip, and "no tournament picked" is its own cache entry. */
+  teams: (tournamentId: KeyPart, workspaceId?: number | null) =>
     workspaceId == null
       ? (["teams", tournamentId] as const)
       : (["teams", tournamentId, workspaceId] as const),
@@ -100,4 +104,26 @@ export const tournamentQueryKeys = {
     ["draft", "session", sessionId, "queue", teamId] as const,
   draftJournal: (sessionId: number) => ["draft", "session", sessionId, "journal"] as const,
   draftPlayerCard: (userId: number) => ["draft", "player-card", userId] as const,
+  /** The public tournament list, and the bare prefix every admin write drops. */
+  list: () => ["tournaments"] as const,
+  listPage: (workspaceId: KeyPart, status: KeyPart, type: KeyPart, query: KeyPart, sort: KeyPart) =>
+    ["tournaments", "list", workspaceId, status, type, query, sort] as const,
+  facets: (workspaceId: KeyPart, status: KeyPart, type: KeyPart, query: KeyPart) =>
+    ["tournaments", "facets", workspaceId, status, type, query] as const,
+  /** The workspace's own slice, or the platform-wide one under `"global"`. */
+  byWorkspace: (workspaceScope: KeyPart) => ["tournaments", workspaceScope] as const,
+  allActive: () => ["tournaments", "all-active"] as const,
+  /** The picker feed: every tournament, name-sorted, no paging. */
+  selectOptions: () => ["tournaments-select-options"] as const,
+  overview: (tournamentId: KeyPart) => ["tournament-overview", tournamentId] as const,
+  /** The bare `detail` prefix: every tournament's overview at once. */
+  detailRoot: () => ["tournament"] as const,
+  teamsAll: () => ["teams"] as const,
+  standingsAll: () => ["standings"] as const,
+  /** The registration form as the registrant sees it (no organizer fields). */
+  registrationFormPublic: (tournamentId: KeyPart) =>
+    ["registration-form-public", tournamentId] as const,
+  /** Keyed by the invite token, which is all an unauthenticated visitor holds. */
+  registrationInvitePreview: (token: KeyPart) =>
+    ["registration-team-invite-preview", token] as const,
 };

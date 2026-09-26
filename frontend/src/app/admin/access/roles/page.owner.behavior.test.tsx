@@ -26,8 +26,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-// The real store is `persist`-wrapped and its storage adapter trips under
-// happy-dom, so it is the one module stubbed here — with the real `/api/v1/
+// The real store fetches its workspaces and hydrates the active one from a
+// cookie, so it is the one module stubbed here — with the real `/api/v1/
 // workspaces` shape, deliberately NOT owner-first: the page picks
 // `adminWorkspaces[0]`, and the store's order is whatever the API returned.
 const WORKSPACE_STATE = {

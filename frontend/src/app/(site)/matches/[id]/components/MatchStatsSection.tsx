@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 import { MatchWithStats } from "@/types/encounter.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,12 +20,20 @@ import {
   PresetKey,
   availableRounds,
   columnMaxima
-} from "@/utils/matchStats";
+} from "@/lib/match-stats";
 import MatchTeamTable from "@/app/(site)/matches/[id]/components/MatchTeamTable";
 import MatchTeamComparison from "@/app/(site)/matches/[id]/components/MatchTeamComparison";
 import MatchLeaders from "@/app/(site)/matches/[id]/components/MatchLeaders";
-import MatchContributionChart from "@/app/(site)/matches/[id]/components/MatchContributionChart";
+import { Skeleton } from "@/components/ui/skeleton";
 import MatchKillFeedTimeline from "@/app/(site)/matches/[id]/components/MatchKillFeedTimeline";
+
+// recharts is ~100 kB of the client bundle and only the "comparison" tab ever
+// renders it, so it loads on demand. The placeholder matches the chart's own
+// minimum height (220px + the stat toggles) so the tab does not jump.
+const MatchContributionChart = dynamic(
+  () => import("@/app/(site)/matches/[id]/components/MatchContributionChart"),
+  { ssr: false, loading: () => <Skeleton className="h-70 w-full rounded-lg" /> }
+);
 
 interface MatchStatsSectionProps {
   match: MatchWithStats;

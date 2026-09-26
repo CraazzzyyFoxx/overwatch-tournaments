@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { HeroFrame, HeroCoord, HeroStat } from "@/components/site/PageHero";
 import type { Achievement } from "@/types/achievement.types";

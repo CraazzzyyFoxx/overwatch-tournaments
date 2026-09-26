@@ -5,9 +5,9 @@ import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
 import { Check, CheckCircle, EyeOff } from "lucide-react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -24,6 +24,7 @@ import type { CatalogAliasMissRead, CatalogEntityType } from "@/types/admin.type
 import { Spinner } from "@/components/ui/spinner";
 
 import { MISS_QUEUE_KEY } from "../miss-queue";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const ENTITY_TYPES: CatalogEntityType[] = ["hero", "map", "gamemode"];
 
@@ -93,15 +94,15 @@ export default function UnresolvedNamesAdminPage() {
   const [heroesQuery, mapsQuery, gamemodesQuery] = useQueries({
     queries: [
       {
-        queryKey: ["admin", "heroes", "alias-targets"],
+        queryKey: adminQueryKeys.contentAliasTargets("heroes"),
         queryFn: () => adminService.getHeroes({ per_page: ENTITY_PAGE_SIZE }),
       },
       {
-        queryKey: ["admin", "maps", "alias-targets"],
+        queryKey: adminQueryKeys.contentAliasTargets("maps"),
         queryFn: () => adminService.getMaps({ per_page: ENTITY_PAGE_SIZE }),
       },
       {
-        queryKey: ["admin", "gamemodes", "alias-targets"],
+        queryKey: adminQueryKeys.contentAliasTargets("gamemodes"),
         queryFn: () => adminService.getGamemodes({ per_page: ENTITY_PAGE_SIZE }),
       },
     ],
@@ -154,7 +155,7 @@ export default function UnresolvedNamesAdminPage() {
       notify.success(`“${miss.raw_name}” attached as a ${ENTITY_LABELS[miss.entity_type]} alias`);
       invalidateQueue();
       // The alias now lives on the entity, so its admin list is stale too.
-      queryClient.invalidateQueries({ queryKey: ["admin", ENTITY_LIST_KEYS[miss.entity_type]] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.contentEntity(ENTITY_LIST_KEYS[miss.entity_type]) });
       queryClient.invalidateQueries({ queryKey: [ENTITY_LIST_KEYS[miss.entity_type]] });
       forgetTarget(miss.id);
     },
@@ -332,7 +333,7 @@ export default function UnresolvedNamesAdminPage() {
   ];
 
   return (
-    <AdminDataTable
+    <DataTable
       filterKey={filters.filterKey}
       queryKey={(page, search, pageSize) => [
         ...MISS_QUEUE_KEY,

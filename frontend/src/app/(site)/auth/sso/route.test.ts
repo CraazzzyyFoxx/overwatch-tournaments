@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // /auth/sso (Task 9) is the far side of the custom-domain login-ticket
 // handoff: it runs ON the workspace's custom domain and establishes a brand
@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 type CookieRecord = { value: string };
 let requestCookies: Record<string, CookieRecord | undefined> = {};
 
-mock.module("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => requestCookies[name]
   })
@@ -33,7 +33,7 @@ let ssoExchangeTokens = { access_token: "access-token-1", refresh_token: "refres
 // imports the two link-error classes from THIS module -- so the mock has to
 // re-export both names or the whole file dies on a SyntaxError at import time,
 // before a single test runs. Same requirement as /auth/link/complete's mock.
-mock.module("@/services/auth.service", () => ({
+vi.mock("@/services/auth.service", () => ({
   OAuthLinkAuthRequiredError: class extends Error {},
   OAuthLinkFailedError: class extends Error {},
   authService: {

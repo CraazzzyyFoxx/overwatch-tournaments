@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import { act, type ReactNode } from "react";
 
@@ -10,13 +10,13 @@ import type { Registration, RegistrationForm } from "@/types/registration.types"
 const testWindow = new Window({ url: "http://localhost:3000/", width: 900, height: 900 });
 const previousGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => Object.assign((key: string) => key, { has: () => true }),
 }));
 // Radix portals and pointer measurement do not work under happy-dom; these two
 // primitives are stood in by the contracts the form actually uses.
-mock.module("@/components/ui/select", () => ({
+vi.mock("@/components/ui/select", () => ({
   Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectTrigger: ({ children, ...rest }: { children: ReactNode }) => (
     <button type="button" {...rest}>
@@ -27,21 +27,21 @@ mock.module("@/components/ui/select", () => ({
   SelectContent: () => null,
   SelectItem: () => null,
 }));
-mock.module("@/components/ui/switch", () => ({
+vi.mock("@/components/ui/switch", () => ({
   Switch: () => <button type="button" role="switch" aria-checked="false" />,
 }));
-mock.module("@/services/hero.service", () => ({ default: { getAll: async () => ({ results: [] }) } }));
-mock.module("@/services/registration.service", () => ({
+vi.mock("@/services/hero.service", () => ({ default: { getAll: async () => ({ results: [] }) } }));
+vi.mock("@/services/registration.service", () => ({
   default: { getMySubscriptionStatus: async () => ({ required: false, verdicts: {} }) },
 }));
-mock.module("@/services/rbac.service", () => ({
+vi.mock("@/services/rbac.service", () => ({
   rbacService: { listOAuthConnections: async () => ({ results: [] }) },
 }));
-mock.module("@/stores/account-settings-modal.store", () => ({
+vi.mock("@/stores/account-settings-modal.store", () => ({
   useAccountSettingsModalStore: (select: (state: { open: () => void }) => unknown) =>
     select({ open: () => {} }),
 }));
-mock.module("@/lib/notify", () => ({ notify: { error: () => {} } }));
+vi.mock("@/lib/notify", () => ({ notify: { error: () => {} } }));
 
 for (const [key, value] of Object.entries({
   window: testWindow,

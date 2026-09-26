@@ -56,12 +56,12 @@ from src.services.standings.service import standings_service  # noqa: E402
 from tests._rpc_fakes import FakeSessionMaker  # noqa: E402
 
 #: Score-only: a point per elimination, places derived from the scoreboard.
-SCORING = {"ffa_scoring": {"score_points": 1}}
+SCORING = {"ffa_score_points": 1}
 #: Battle-royale style: 1st place pays 10, 2nd 6, 3rd 4, plus a point per score.
-PLACEMENT_SCORING = {"ffa_scoring": {"placement_points": [10, 6, 4], "score_points": 1}}
+PLACEMENT_SCORING = {"ffa_placement_points": [10, 6, 4], "ffa_score_points": 1}
 
 
-async def _seed(session: Any, *, games: int = 2, settings: dict | None = None) -> SimpleNamespace:
+async def _seed(session: Any, *, games: int = 2, regulation: dict | None = None) -> SimpleNamespace:
     """One ffa_league stage with a three-team lobby, and a duel to contrast it."""
     suffix = uuid.uuid4().hex[:12]
     workspace = Workspace(slug=f"ffares-{suffix}", name=f"FFA results {suffix}")
@@ -86,7 +86,7 @@ async def _seed(session: Any, *, games: int = 2, settings: dict | None = None) -
         name="Lobbies",
         stage_type=enums.StageType.FFA_LEAGUE,
         order=1,
-        settings_json=dict(settings if settings is not None else SCORING),
+        **(regulation if regulation is not None else SCORING),
     )
     session.add(stage)
     await session.flush()
@@ -491,7 +491,7 @@ def test_shrinking_the_stage_best_of_completes_a_lobby_that_already_played_enoug
     """Ruling R10: the stage-wide apply-best-of must settle lobbies, not just rewrite a number."""
 
     async def _run() -> tuple:
-        seeded = await _seed(db_session, games=3, settings=dict(SCORING, best_of={"default": 2}))
+        seeded = await _seed(db_session, games=3, regulation=dict(SCORING, best_of_default=2))
         try:
             for position, scores in ((1, [10, 6, 2]), (2, [2, 6, 10])):
                 await ffa_encounter_service.set_game_results(
@@ -543,7 +543,7 @@ def test_a_position_past_the_planned_games_is_refused(db_session) -> None:
 
 
 @pytest.mark.parametrize(
-    ("settings", "build", "code"),
+    ("regulation", "build", "code"),
     [
         (SCORING, lambda ids: [FfaGameLine(team_id=ids[0], placement=None, score=1)], "ffa_result_missing_team"),
         (
@@ -584,9 +584,9 @@ def test_a_position_past_the_planned_games_is_refused(db_session) -> None:
         ),
     ],
 )
-def test_an_invalid_result_is_refused_with_its_own_code(db_session, settings, build, code) -> None:
+def test_an_invalid_result_is_refused_with_its_own_code(db_session, regulation, build, code) -> None:
     async def _run() -> tuple:
-        seeded = await _seed(db_session, settings=settings)
+        seeded = await _seed(db_session, regulation=regulation)
         try:
             with pytest.raises(BaseAPIException) as raised:
                 await ffa_encounter_service.set_game_results(
@@ -616,7 +616,7 @@ def test_a_refusal_carries_its_code_through_the_rpc_envelope(db_session) -> None
     """
 
     async def _case() -> dict:
-        seeded = await _seed(db_session, settings=PLACEMENT_SCORING)
+        seeded = await _seed(db_session, regulation=PLACEMENT_SCORING)
         try:
             with patch.object(rpc_helpers.db, "async_session_maker", FakeSessionMaker(db_session)):
                 envelope = await rpc_helpers._run(
@@ -744,7 +744,7 @@ async def _seed_league(session: Any) -> SimpleNamespace:
         name="League",
         stage_type=enums.StageType.FFA_LEAGUE,
         order=1,
-        settings_json=dict(SCORING),
+        **SCORING,
     )
     bracket_stage = Stage(
         tournament_id=tournament.id,
@@ -853,12 +853,12 @@ def test_a_finished_league_ranks_its_groups_and_seeds_the_bracket(db_session) ->
 # ── the reads the lobby table is drawn from ──────────────────────────────────
 
 #: Placement pays, and the organizer named the score column.
-LABELLED_SCORING = {"ffa_scoring": {"placement_points": [10, 6, 4], "score_points": 1, "score_label": "Kills"}}
+LABELLED_SCORING = {"ffa_placement_points": [10, 6, 4], "ffa_score_points": 1, "ffa_score_label": "Kills"}
 
 
 def test_the_lobby_read_carries_rules_rows_and_one_cell_per_planned_game(db_session) -> None:
     async def _run() -> tuple:
-        seeded = await _seed(db_session, games=2, settings=LABELLED_SCORING)
+        seeded = await _seed(db_session, games=2, regulation=LABELLED_SCORING)
         try:
             await ffa_encounter_service.set_game_results(
                 db_session,

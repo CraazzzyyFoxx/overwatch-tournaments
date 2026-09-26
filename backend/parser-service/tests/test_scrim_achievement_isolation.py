@@ -78,6 +78,7 @@ TABLE_NAMES = (
     "tournament.tournament",
     "tournament.tournament_phase_schedule",
     "tournament.stage",
+    "tournament.stage_round_best_of",
     "tournament.stage_item",
     "tournament.team",
     "tournament.player",

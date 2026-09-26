@@ -74,6 +74,8 @@ class FfaLobbyRowRead(BaseModel):
     #: standings job has ranked the group once.
     position: int | None
     tie_group: int | None
+    #: The organizer pinned ``position``: it is not what the points earn.
+    is_pinned: bool = False
     points: float
     games_played: int
     wins: int

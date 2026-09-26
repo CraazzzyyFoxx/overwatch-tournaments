@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, RefreshCcw } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/lib/datetime/client";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, type Tone } from "@/components/kit/tone";

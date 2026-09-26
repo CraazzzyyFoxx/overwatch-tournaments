@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import captainService, { type CaptainReportSubmitResult } from "@/services/captain.service";
 import pickBanService from "@/services/pickBan.service";
-import mapService from "@/services/map.service";
 import { CaptainReportsView } from "@/components/tournaments/CaptainReportsView";
 import { refreshEncounterViews } from "@/components/tournaments/refreshEncounterViews";
 import { buildMapCodeSlots } from "@/components/tournaments/matchReportSlots";
@@ -25,6 +24,8 @@ import {
   type Encounter,
   type ReportCustomFieldDefinition
 } from "@/types/encounter.types";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 export interface MatchReportFormProps {
   encounter: Encounter;
@@ -204,22 +205,18 @@ export function MatchReportForm({
   }>({});
 
   const reportsQuery = useQuery({
-    queryKey: ["encounter", encounter.id, "reports"],
+    queryKey: encounterQueryKeys.captainReports(encounter.id),
     queryFn: () => captainService.getReports(encounter.id)
   });
   const roleQuery = useQuery({
-    queryKey: ["encounter", encounter.id, "my-role"],
+    queryKey: encounterQueryKeys.myRole(encounter.id),
     queryFn: () => captainService.getMyRole(encounter.id)
   });
   const mapPoolQuery = useQuery({
-    queryKey: ["encounter", encounter.id, "pick-ban-state", "map"],
+    queryKey: encounterQueryKeys.mapPickBanState(encounter.id),
     queryFn: () => pickBanService.getPickBanState("map", encounter.id)
   });
-  const mapsQuery = useQuery({
-    queryKey: ["maps-all"],
-    queryFn: () => mapService.getAll({ perPage: -1 }),
-    staleTime: 5 * 60 * 1000
-  });
+  const mapsQuery = useMapsCatalog();
 
   // The per-tournament field config rides the reports envelope. While it is in
   // flight we render the documented defaults rather than an empty form, so the
@@ -238,7 +235,7 @@ export function MatchReportForm({
 
   const mapNameById = useMemo(() => {
     const lookup = new Map<number, string>();
-    for (const map of mapsQuery.data?.results ?? []) {
+    for (const map of mapsQuery.data ?? []) {
       lookup.set(map.id, map.name);
     }
     return lookup;

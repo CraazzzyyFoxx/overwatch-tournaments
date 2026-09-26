@@ -1,5 +1,5 @@
 import type { User, UserProfile } from "@/types/user.types";
-import { getPlayerImage } from "@/utils/player";
+import { getPlayerImage } from "@/lib/player";
 import { SITE_NAME, SITE_URL_OBJ } from "@/config/site";
 
 const toAbsolute = (value: string) =>
