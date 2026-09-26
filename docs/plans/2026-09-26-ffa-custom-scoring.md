@@ -1,13 +1,14 @@
 # FFA: столбцы организатора и формула очков
 
-**Status:** design approved (2026-09-26); implementation plan — следующий шаг.
+**Status:** design approved (2026-09-26); план — [`2026-09-26-ffa-custom-scoring-plan.md`](./2026-09-26-ffa-custom-scoring-plan.md).
 
 **Goal:** организатор FFA-стадии сам задаёт, что вносится за игру (убийства, смерти, урон, штрафы…), и формулу,
 по которой из этих значений и места считаются очки. Очки, места в `Standing` и публичная таблица пересчитываются
 автоматически при каждой записи результата и каждой правке формулы.
 
 **Architecture:** сырые значения игры — `encounter_game_result.stats jsonb` (`{"kills": 12, "deaths": 3}`) рядом с
-`placement`; описание столбцов и формула — данные стадии (`settings_json.ffa_scoring`). Формула — выражение над
+`placement`; описание столбцов и формула — колонки стадии (`stage.ffa_columns`, `stage.ffa_formula`) рядом с
+существующей `stage.ffa_placement_points`, в API — блок `ffa_scoring`. Формула — выражение над
 ключами столбцов и местом, разбирается стандартным `ast` Python с белым списком узлов (без `eval`) в новом чистом
 модуле `shared/domain/ffa_formula.py` и вызывается из `shared/domain/ffa_scoring.py`. Очки нигде не хранятся: запись
 результата, расчёт `Standing` и чтение лобби считают их одной функцией из сырых значений, как сейчас.
@@ -46,17 +47,17 @@ react-query / next-intl / vitest (frontend).
 | Факт | Где | Следствие |
 | --- | --- | --- |
 | Формула зашита: `placement_points[место−1] + score × score_points` | `backend/shared/domain/ffa_scoring.py:123-127` | Заменяется вызовом скомпилированной формулы |
-| Правила — `FfaRules(placement_points, score_points)`; `parse_ffa_rules` только конвертирует | `ffa_scoring.py:39-61` | Правила получают столбцы и скомпилированную формулу |
+| Правила — `FfaRules(placement_points, score_points)`; `ffa_rules(stage)` только конвертирует колонки стадии | `ffa_scoring.py:39-64` | Правила получают столбцы и скомпилированную формулу |
 | Место обязательно, если формула платит за место; иначе выводится из сырого `score` | `ffa_scoring.py:92-120` | Условие — «формула читает `place`/`place_pts`»; вывод — из очков игры |
 | Итоги команды: `score: int` | `ffa_scoring.py:130-167` | `stats: dict[str, float]` |
 | Результат участника: `placement int`, `score int`, CHECK `score >= 0` | `backend/shared/models/tournament/encounter_game_result.py:21-41` | `score` → `stats jsonb` |
-| Настройки проверяет `FfaScoring(placement_points, score_points, score_label)`, `extra="forbid"` | `backend/tournament-service/src/schemas/admin/stage.py:32-48` | Новая форма и компиляция формулы на записи |
+| Настройки — колонки `Stage.ffa_placement_points`, `ffa_score_points`, `ffa_score_label` (коммит `35416163` перенёс регламент из `settings_json` в колонки); API-блок `ffa_scoring` проверяет `FfaScoring(placement_points, score_points, score_label)`, `extra="forbid"`; пишет `_apply_stage_fields` | `backend/shared/models/tournament/stage.py:125-130,161-167`, `backend/tournament-service/src/schemas/stage.py:55-71`, `backend/tournament-service/src/services/admin/stage.py:99-133` | Колонки `ffa_columns`, `ffa_formula`; новая форма блока и компиляция формулы на записи |
 | Строка ввода `{team_id, placement?, score}` | `backend/tournament-service/src/schemas/ffa.py:34-37` | `{team_id, placement?, stats}` |
 | Чтение: `FfaRulesRead`, `FfaGameCellRead.score`, `FfaLobbyRowRead.score`; `score_label` пробрасывается мимо `FfaRules` | `schemas/ffa.py:53-81`, `src/services/encounter/ffa.py:463-470` | Новые поля; фильтр непубличных столбцов |
 | `score` читают только FFA-сервис, репозиторий и тесты | `services/encounter/ffa.py:378,501,682`, `backend/shared/repository/encounter.py:192`, `rpc/ffa.py:127` | Внешних читателей нет — миграция локальна |
 | Тай-брейки FFA: `ffa_game_wins`, `ffa_score`, `ffa_best_placement`, `ffa_last_placement`; пресет по умолчанию с `ffa_score` | `backend/tournament-service/src/services/standings/service.py:57-87,300-309,717-720` | `ffa_score` → `ffa_stat:<key>` |
 | Фронтовое зеркало тай-брейков — статический список | `frontend/src/lib/tournament/tiebreakers.ts:14-61`, `frontend/src/lib/bracket/projection.ts:101-105` | Пункты `ffa_stat:<key>` строятся из столбцов стадии |
-| `update_stage` сливает `settings_json` и публикует «структура изменилась», но **не** ставит пересчёт мест | `backend/tournament-service/src/services/admin/stage.py:432-467` | Правка `placement_points` сегодня не переранжирует `Standing`; новая правка формулы обязана ставить пересчёт |
+| `update_stage` пишет поля (`_apply_stage_fields`) и публикует «структура изменилась», но **не** ставит пересчёт мест | `backend/tournament-service/src/services/admin/stage.py:448-475` | Правка `placement_points` сегодня не переранжирует `Standing`; новая правка формулы обязана ставить пересчёт |
 | Правка результата после посева следующей стадии запрещена (409) — проверка на одно лобби | `admin/stage.py:1640-1663`, вызов `rpc/ffa.py:61-63` | Нужна та же проверка на всю стадию |
 | Обновление стадии идёт через CRUD-реестр админки (журнал до/после) | `backend/tournament-service/src/services/admin/registry.py:269` | Журнал правок формулы уже есть |
 | Шлюз кэширует `GET /tournaments/{id}/stages/{stage_id}/ffa` до сигнала пересчёта турнира | `gateway/internal/tournament/cacheable.go:45-52` | Пересчёт после правки формулы сбрасывает кэш сам |
@@ -91,7 +92,11 @@ react-query / next-intl / vitest (frontend).
 
 ## 3. Модель данных
 
-### 3.1. `stage.settings_json.ffa_scoring`
+### 3.1. Колонки стадии и API-блок `ffa_scoring`
+
+Хранение: `stage.ffa_columns jsonb NOT NULL`, `stage.ffa_formula varchar(500) NOT NULL`, существующая
+`stage.ffa_placement_points float8[]`. `ffa_score_points`, `ffa_score_label` и CHECK `ck_stage_ffa_score_points`
+удаляются. `Stage.ffa_scoring` (property) и API-блок `ffa_scoring` в `StageCreate`/`StageUpdate`/`StageRead`:
 
 ```json
 {
@@ -117,8 +122,9 @@ react-query / next-intl / vitest (frontend).
 | `formula` | 1–500 символов; компилируется (§4) | `ffa_formula_*` |
 
 Ошибки — `PydanticCustomError(type=<код>, ctx={"offset": n, "name": …})`, чтобы фронт показал позицию под полем.
-Блок не задан → `columns = [{"key": "score", "label": "Счёт"}]`, `formula = "score"` — сегодняшнее поведение
-стадии без `ffa_scoring`; подпись та же, что миграция ставит стадиям без `score_label` (§3.3).
+Значения по умолчанию колонок: `ffa_columns = [{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]`,
+`ffa_formula = 'score'` — сегодняшнее поведение стадии, которой не задавали формулу; подпись та же, что миграция
+ставит стадиям без `score_label` (§3.3). Для стадий не `ffa_league` колонки инертны, как сейчас.
 
 ### 3.2. `tournament.encounter_game_result`
 
@@ -136,16 +142,18 @@ react-query / next-intl / vitest (frontend).
 Вперёд:
 
 1. `stats = jsonb_build_object('score', score)`; снять CHECK и колонку `score`; добавить CHECK `stats`.
-2. Каждая стадия с `settings_json ? 'ffa_scoring'` (цикл в Python — стадий единицы):
-   `columns = [{"key": "score", "label": score_label or "Счёт", "public": true, "better": "higher"}]`;
-   `formula` = `place_pts + score * k` при непустом `placement_points`, иначе `score * k`; при `k = 1` без `* 1`.
-   `score_points` и `score_label` удаляются.
-3. `tiebreak_order`: `ffa_score` → `ffa_stat:score`.
+2. `stage`: добавить `ffa_columns` и `ffa_formula` со значениями по умолчанию §3.1, затем для каждой стадии с
+   непустым `ffa_score_label` или `ffa_score_points ≠ 1` или непустым `ffa_placement_points` —
+   `ffa_columns = [{"key": "score", "label": coalesce(ffa_score_label, 'Счёт'), "public": true, "better": "higher"}]`;
+   `ffa_formula` = `place_pts + score * k` при непустом `ffa_placement_points`, иначе `score * k`; при `k = 1` без
+   `* 1`. Снять CHECK `ck_stage_ffa_score_points`, удалить `ffa_score_points`, `ffa_score_label`.
+3. `stage.tiebreak_order`: `array_replace(tiebreak_order, 'ffa_score', 'ffa_stat:score')`.
 4. Снимки в `encounter_result_audit.ffa_results_json` не трогаем: это история, новые строки пишутся в новой форме.
 
 Назад: отказ (`RuntimeError`, как у `ffa0001`), если у какой-то стадии столбцы — не ровно `[score]` или формула не
 совпадает с `^(place_pts \+ )?score( \* [0-9.]+)?$`. Иначе обратное преобразование:
-`score = round((stats->>'score')::numeric)`, `score_points`/`score_label` восстанавливаются из формулы и подписи.
+`score = round((stats->>'score')::numeric)`, `ffa_score_points`/`ffa_score_label` восстанавливаются из формулы и
+подписи, `ffa_stat:score` → `ffa_score`.
 
 ---
 
@@ -228,7 +236,8 @@ class FfaRules:
         return bool(self.formula.names & {"place", "place_pts"})
 ```
 
-`parse_ffa_rules(settings)` компилирует формулу один раз на стадию. Блок уже проверен на записи, поэтому ошибка
+`ffa_rules(stage)` читает `stage.ffa_columns`, `stage.ffa_placement_points`, `stage.ffa_formula` и компилирует
+формулу один раз на стадию; `None` → правила по умолчанию (§3.1). Блок уже проверен на записи, поэтому ошибка
 компиляции здесь — повреждённые данные: исключение, а не молчаливый ноль.
 
 ### 5.2. Проверка игры — `normalize_game_lines(lines, participant_ids, rules)`
@@ -277,6 +286,7 @@ class FfaRules:
   422 `ffa_column_in_use` (`… stats ? :key` по играм стадии).
 - **После успешной правки:** `enqueue_tournament_recalculation(session, tournament_id)` — пересчёт `Standing`,
   сигнал `tournament.standings`, сброс кэша шлюза и фронтовых ключей `["ffa", id]`. Журнал — CRUD-реестр (§1).
+  «До/после» сравнивается по `Stage.ffa_scoring` в `update_stage` вокруг `_apply_stage_fields`.
 
 ---
 
@@ -295,8 +305,9 @@ class FfaRules:
 
 ### 7.2. Сохранение стадии
 
-`StageUpdate.settings_json` через CRUD-реестр, как сейчас. `FfaScoring` проверяет форму и компилирует формулу;
-`update_stage` при изменении `ffa_scoring` выполняет §6.
+`StageUpdate.ffa_scoring` через CRUD-реестр, как сейчас (блок заменяется целиком). `FfaScoring`
+(`src/schemas/stage.py`) проверяет форму и компилирует формулу; `_apply_stage_fields` пишет `ffa_columns`,
+`ffa_placement_points`, `ffa_formula`; `update_stage` при изменении блока выполняет §6.
 
 ### 7.3. Чтение
 
