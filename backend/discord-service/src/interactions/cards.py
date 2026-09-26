@@ -10,6 +10,7 @@ Link buttons are opened by Discord itself; action buttons carry
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import discord
@@ -17,7 +18,7 @@ import discord
 from shared.schemas.events import DiscordActionButton, DiscordButton, DiscordCard
 from src.interactions.actions import custom_id, parse_custom_id
 
-__all__ = ("card_view", "settle")
+__all__ = ("card_view", "select_row", "settle")
 
 _STYLES = {
     "primary": discord.ButtonStyle.primary,
@@ -48,7 +49,7 @@ def _detached(view: discord.ui.LayoutView) -> discord.ui.LayoutView:
     return view
 
 
-def card_view(card: DiscordCard) -> discord.ui.LayoutView:
+def card_view(card: DiscordCard, *, extra_rows: Sequence[discord.ui.ActionRow] = ()) -> discord.ui.LayoutView:
     text = discord.ui.TextDisplay(card.text)
     children: list[discord.ui.Item[Any]] = [
         discord.ui.Section(text, accessory=discord.ui.Thumbnail(card.thumbnail_url)) if card.thumbnail_url else text
@@ -59,9 +60,31 @@ def card_view(card: DiscordCard) -> discord.ui.LayoutView:
         children.append(discord.ui.ActionRow(*(_button(button) for button in card.answers)))
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*children, accent_colour=card.accent_color))
+    # Rows the bot built itself (a select) sit above the card's own buttons.
+    for row in extra_rows:
+        view.add_item(row)
     for row in card.rows:
         view.add_item(discord.ui.ActionRow(*(_button(button) for button in row)))
     return _detached(view)
+
+
+def select_row(
+    *,
+    action: str,
+    target: str,
+    placeholder: str,
+    options: Sequence[discord.SelectOption],
+) -> discord.ui.ActionRow:
+    """A string select as a row of its own, answered by ``custom_id`` like a button.
+
+    Discord allows nothing else beside a select in its action row, so the row
+    is built here instead of being folded into ``DiscordCard.rows``: the card
+    contract carries buttons only, and a select is something the bot builds
+    for its own ephemeral replies -- never something a publisher can ask for.
+    """
+    return discord.ui.ActionRow(
+        discord.ui.Select(custom_id=custom_id(action, target), placeholder=placeholder, options=list(options))
+    )
 
 
 def settle(view: discord.ui.LayoutView, *, retire: frozenset[str], note: str) -> discord.ui.LayoutView | None:

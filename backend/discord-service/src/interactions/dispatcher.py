@@ -14,7 +14,7 @@ clicker privately, and in a DM take the spent buttons off the card.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -75,13 +75,19 @@ class ActionDispatcher:
         self._broker = broker
         self._timeout = timeout
 
-    async def perform(self, discord_user_id: int, action_name: str, target: str) -> Outcome:
+    async def perform(self, discord_user_id: int, action_name: str, target: str, values: Sequence[str] = ()) -> Outcome:
         """Act as the account linked to ``discord_user_id``. ``target`` is already validated."""
         action = ACTIONS[action_name]
         if action.subject is None:
             # Answered by the bot alone: it only shows the next button, and that
             # button is where the account is checked.
             return Outcome("ok")
+        try:
+            request = action.request(target, tuple(values))
+        except ValueError:
+            # A component value the bot never minted: refused here, so a mangled
+            # select costs neither an identity lookup nor a platform call.
+            return Outcome("failed", code="bad_values")
         broker = self._broker()
         if broker is None:
             return Outcome("unavailable")
@@ -103,9 +109,7 @@ class ActionDispatcher:
             return Outcome("unavailable", code=who.code, message=who.message)
 
         try:
-            reply = await request_rpc(
-                broker, {"identity": who.data, **action.request(target)}, action.subject, timeout=self._timeout
-            )
+            reply = await request_rpc(broker, {"identity": who.data, **request}, action.subject, timeout=self._timeout)
         except Exception as exc:
             # A timeout does not prove the call did nothing; the reply says only
             # that the platform did not answer, and the card keeps its buttons.
@@ -155,14 +159,16 @@ class ActionDispatcher:
     def _card(color: int, text: str, *buttons: DiscordButton) -> discord.ui.LayoutView:
         return card_view(DiscordCard(accent_color=color, text=text, rows=[list(buttons)] if buttons else []))
 
-    async def handle(self, interaction: discord.Interaction, action_name: str, target: str) -> None:
+    async def handle(
+        self, interaction: discord.Interaction, action_name: str, target: str, values: Sequence[str] = ()
+    ) -> None:
         locale = copy.locale_of(interaction.locale)
         # Acknowledge first: Discord fails a click left unanswered for three
         # seconds, and two RPCs can take longer. For a button this is a silent
         # "update the message later", so nothing flashes in the channel.
         await interaction.response.defer()
         try:
-            outcome = await self.perform(interaction.user.id, action_name, target)
+            outcome = await self.perform(interaction.user.id, action_name, target, values)
         except Exception:
             logger.exception(f"Discord action {action_name} crashed")
             outcome = Outcome("unavailable")

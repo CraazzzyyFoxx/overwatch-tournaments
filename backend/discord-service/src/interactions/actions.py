@@ -16,7 +16,7 @@ here plus a button in the card renderer (``app-service`` ``notification_render``
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -28,18 +28,18 @@ _PREFIX = "owt"
 _CUSTOM_ID = re.compile(rf"^{_PREFIX}:(?P<action>[a-z_.]+):(?P<target>[A-Za-z0-9_-]{{1,40}})$")
 
 
-def _invite(target: str) -> dict[str, Any]:
+def _invite(target: str, values: Sequence[str]) -> dict[str, Any]:
     # A body field, not a path parameter: the site sends it the same way
     # (``POST /registration-teams/invites/accept``), so the handler cannot tell.
     return {"payload": {"invite_id": int(target)}}
 
 
-def _tournament(target: str) -> dict[str, Any]:
+def _tournament(target: str, values: Sequence[str]) -> dict[str, Any]:
     # ``{tournament_id}`` is a path parameter, which the gateway copies to the body by name.
     return {"tournament_id": int(target)}
 
 
-def _nothing(target: str) -> dict[str, Any]:
+def _nothing(target: str, values: Sequence[str]) -> dict[str, Any]:
     return {}
 
 
@@ -53,15 +53,18 @@ class Action:
 
     ``subject`` is ``None`` for a button the bot answers alone (it only shows
     the next button, so it needs neither an account nor a call). ``request``
-    turns the target into the RPC body next to ``identity``; ``accepts`` is
-    checked before anything is called, so a malformed target is refused here
-    rather than as a 422 from the service. ``settles`` names the card buttons
-    that stop making sense once this succeeded -- they are taken off the DM it
-    was clicked in (never off a channel post, which is everyone's).
+    turns the target -- and, for a select, the values Discord sent with the
+    click -- into the RPC body next to ``identity``; ``accepts`` is checked
+    before anything is called, so a malformed target is refused here rather
+    than as a 422 from the service. A value the bot never minted is refused
+    the same way: ``request`` raises ``ValueError`` and no RPC is made.
+    ``settles`` names the card buttons that stop making sense once this
+    succeeded -- they are taken off the DM it was clicked in (never off a
+    channel post, which is everyone's).
     """
 
     subject: str | None
-    request: Callable[[str], dict[str, Any]] = _nothing
+    request: Callable[[str, Sequence[str]], dict[str, Any]] = _nothing
     accepts: Callable[[str], bool] = str.isdigit
     settles: frozenset[str] = field(default_factory=frozenset)
 
@@ -83,7 +86,7 @@ ACTIONS: dict[str, Action] = {
         "rpc.app.notification_preferences_update",
         # Every group, not the card's: the reader asked for Discord to go quiet.
         # In-app notifications are not affected, and settings turn DMs back on.
-        lambda _all: {"payload": {"discord_dm": dict.fromkeys(NOTIFICATION_GROUPS, False)}},
+        lambda _all, _values: {"payload": {"discord_dm": dict.fromkeys(NOTIFICATION_GROUPS, False)}},
         accepts=_everything,
     ),
 }

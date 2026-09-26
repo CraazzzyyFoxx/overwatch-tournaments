@@ -24,7 +24,7 @@ from shared.schemas.rpc import parse_rpc, rpc_error, rpc_ok  # noqa: E402
 from src.cogs.interactions import InteractionsCog  # noqa: E402
 from src.interactions import dispatcher as dispatcher_module  # noqa: E402
 from src.interactions.actions import ACTIONS, parse_custom_id  # noqa: E402
-from src.interactions.cards import card_view, settle  # noqa: E402
+from src.interactions.cards import card_view, select_row, settle  # noqa: E402
 from src.interactions.dispatcher import IDENTITY_SUBJECT, ActionDispatcher  # noqa: E402
 
 SITE = "https://owt.example"
@@ -235,3 +235,30 @@ class MuteEverythingTests(IsolatedAsyncioTestCase):
         # The prompt becomes the answer rather than gaining a second reply beneath it.
         prompt.followup.send.assert_not_awaited()
         self.assertIn("отключены", _reply_text(prompt.edit_original_response.await_args.kwargs["view"]))
+
+
+class SelectComponentTests(IsolatedAsyncioTestCase):
+    """A select is routed by the same ``custom_id`` as a button, and Discord gives it a row of its own."""
+
+    async def test_a_select_routes_like_a_button_and_sits_alone_in_its_row(self) -> None:
+        row = select_row(
+            action="registration.view",
+            target="3",
+            placeholder="Roles",
+            options=[
+                discord.SelectOption(label="Tank", value="tank", description="Tank 3100", default=True),
+                discord.SelectOption(label="Support", value="support"),
+            ],
+        )
+
+        view = card_view(DiscordCard(text="### Roles"), extra_rows=[row])
+
+        container, rendered = view.to_components()
+        self.assertEqual(container["type"], 17)
+        (select,) = rendered["components"]
+        self.assertEqual(select["type"], 3)
+        self.assertEqual(parse_custom_id(select["custom_id"]), ("registration.view", "3"))
+        self.assertEqual(
+            [(option["value"], option["default"]) for option in select["options"]],
+            [("tank", True), ("support", False)],
+        )

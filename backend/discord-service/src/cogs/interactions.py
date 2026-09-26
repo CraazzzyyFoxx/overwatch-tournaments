@@ -28,7 +28,8 @@ class InteractionsCog(commands.Cog):
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         if interaction.type is not discord.InteractionType.component:
             return
-        value = (interaction.data or {}).get("custom_id")
+        data = interaction.data or {}
+        value = data.get("custom_id")
         if not is_ours(value):
             return
         parsed = parse_custom_id(value)
@@ -39,7 +40,9 @@ class InteractionsCog(commands.Cog):
                 locale = copy.locale_of(interaction.locale)
                 await interaction.response.send_message(copy.text(locale, "expired_button"), ephemeral=True)
                 return
-            await self._dispatcher.handle(interaction, *parsed)
+            # A select sends what was picked; a button sends nothing.
+            values = tuple(str(item) for item in data.get("values") or ())
+            await self._dispatcher.handle(interaction, *parsed, values)
         except discord.HTTPException as exc:
             # Typically a click that reached us after Discord's 3-second window:
             # nothing ran, and the clicker can press again.
