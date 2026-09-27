@@ -3575,7 +3575,7 @@ export interface paths {
         };
         /**
          * Get FFA stage lobbies
-         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points, and one cell per planned game. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points and column sums, and one cell per planned game. Columns the organizer marked non-public are omitted here entirely — their sums and per-game values never leave the service. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.
          *
          *     RPC subject: `rpc.tournament.ffa_stage`
          */
@@ -5753,7 +5753,7 @@ export interface paths {
         put?: never;
         /**
          * Set FFA game results
-         * @description Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once. Placements are required when the stage pays for place and derived from the score otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table. 409 when a later stage has already been seeded from this group.
+         * @description Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once, carrying one value per column of the stage. Placements are required when the stage's formula reads the place and derived from the game's points otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table, with every column on it. 409 when a later stage has already been seeded from this group.
          *
          *     RPC subject: `rpc.tournament.ffa_game_results_set`
          */
@@ -7468,6 +7468,28 @@ export interface paths {
          *     RPC subject: `rpc.app.statistics.tournament_readiness`
          */
         get: operations["get__api_v1_admin_tournaments__id__readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{id}/stages/{stage_id}/ffa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get FFA stage lobbies (organizer view)
+         * @description Permission: workspace `match.update` on the tournament's workspace — whoever may record a result may read the values behind it. The same lobby tables as the public stage read, with the columns marked non-public still on them: that is what the result-entry dialog fills in. Not cached by the gateway.
+         *
+         *     RPC subject: `rpc.tournament.ffa_stage_admin`
+         */
+        get: operations["get__api_v1_admin_tournaments__id__stages__stage_id__ffa"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16046,6 +16068,41 @@ export interface components {
             /** Tournament Id */
             tournament_id: number;
         };
+        /** FfaColumnRead */
+        "tournament.FfaColumnRead": {
+            /**
+             * Better
+             * @enum {string}
+             */
+            better: TournamentFfaColumnReadBetter;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Public */
+            public: boolean;
+        };
+        /**
+         * FfaColumnSettings
+         * @description One value an ffa_league stage records per team per game.
+         */
+        "tournament.FfaColumnSettings": {
+            /**
+             * Better
+             * @default higher
+             * @enum {string}
+             */
+            better: TournamentFfaColumnSettingsBetter;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Public
+             * @default true
+             */
+            public: boolean;
+        };
         /** FfaGameCellRead */
         "tournament.FfaGameCellRead": {
             /** Placement */
@@ -16054,9 +16111,11 @@ export interface components {
             points: number | null;
             /** Position */
             position: number;
-            /** Score */
-            score: number | null;
             state: components["schemas"]["tournament.EncounterGameState"] | null;
+            /** Stats */
+            stats: {
+                [key: string]: number;
+            } | null;
         };
         /** FfaLobbyRead */
         "tournament.FfaLobbyRead": {
@@ -16097,10 +16156,12 @@ export interface components {
             points: number;
             /** Position */
             position: number | null;
-            /** Score */
-            score: number;
             /** Slot */
             slot: number;
+            /** Stats */
+            stats: {
+                [key: string]: number;
+            };
             /** Team Id */
             team_id: number;
             /** Team Image Url */
@@ -16114,30 +16175,32 @@ export interface components {
         };
         /** FfaRulesRead */
         "tournament.FfaRulesRead": {
+            /** Columns */
+            columns: components["schemas"]["tournament.FfaColumnRead"][];
+            /** Formula */
+            formula: string;
             /** Placement Points */
             placement_points: number[];
-            /** Score Label */
-            score_label: string | null;
-            /** Score Points */
-            score_points: number;
+            /** Requires Placement */
+            requires_placement: boolean;
         };
         /**
          * FfaScoring
-         * @description What an ffa_league stage pays for (plan §4.2); inert on any other type.
+         * @description What an ffa_league stage records and what it pays for it (plan §3.1).
+         *
+         *     Inert on any other stage type. The unset block is the behaviour a stage had
+         *     before columns existed: one raw score column paid one for one.
          */
         "tournament.FfaScoring": {
+            /** Columns */
+            columns?: components["schemas"]["tournament.FfaColumnSettings"][];
+            /**
+             * Formula
+             * @default score
+             */
+            formula: string;
             /** Placement Points */
             placement_points?: number[];
-            /**
-             * Score Label
-             * @default null
-             */
-            score_label: string | null;
-            /**
-             * Score Points
-             * @default 1
-             */
-            score_points: number;
         };
         /**
          * FirstBanRotation
@@ -23271,8 +23334,10 @@ export interface components {
              * @default null
              */
             placement: number | null;
-            /** Score */
-            score: number;
+            /** Stats */
+            stats: {
+                [key: string]: number;
+            };
             /** Team Id */
             team_id: number;
         };
@@ -53537,6 +53602,85 @@ export interface operations {
             };
         };
     };
+    get__api_v1_admin_tournaments__id__stages__stage_id__ffa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.FfaLobbyRead"][];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_admin_tournaments__tournament_id_: {
         parameters: {
             query?: never;
@@ -68236,6 +68380,14 @@ export enum TournamentEncounterStatus {
     completed = "completed",
     pending = "pending",
     open = "open"
+}
+export enum TournamentFfaColumnReadBetter {
+    higher = "higher",
+    lower = "lower"
+}
+export enum TournamentFfaColumnSettingsBetter {
+    higher = "higher",
+    lower = "lower"
 }
 export enum TournamentFirstBanRotation {
     fixed = "fixed",
