@@ -46,8 +46,10 @@ from shared.models.tournament import (  # noqa: E402
     Standing,
     Team,
     Tournament,
+    TournamentComputationJob,
 )
 from shared.services.chat import ChatRoom  # noqa: E402
+from src import schemas  # noqa: E402
 from src.rpc import _helpers as rpc_helpers  # noqa: E402
 from src.services.admin.stage import stage_service  # noqa: E402
 from src.services.encounter.chat_access import EncounterChatAccess  # noqa: E402
@@ -134,7 +136,20 @@ async def _seed(session: Any, *, games: int = 2, regulation: dict | None = None)
 async def _drop(session: Any, seeded: SimpleNamespace) -> None:
     await session.rollback()
     # The outbox is not workspace-scoped, so the completion and invalidation
-    # rows this tournament emitted have to be swept by hand.
+    # rows this tournament emitted have to be swept by hand -- including the
+    # ones that carry only the id of a computation job the workspace delete
+    # cascades away.
+    job_ids = (
+        await session.scalars(
+            sa.select(TournamentComputationJob.id).where(
+                TournamentComputationJob.tournament_id == seeded.tournament_id
+            )
+        )
+    ).all()
+    if job_ids:
+        await session.execute(
+            sa.delete(EventOutbox).where(EventOutbox.payload_json["job_id"].as_integer().in_(job_ids))
+        )
     await session.execute(
         sa.delete(EventOutbox).where(
             sa.or_(
@@ -1221,3 +1236,180 @@ def test_a_lobby_participant_captain_writes_in_its_chat_and_an_outsider_watches(
     mine, theirs, captain_name = asyncio.run(_run())
     assert mine == ("captain", True, False, captain_name)
     assert theirs == ("spectator", False)
+
+
+# ── editing the scoring of a stage that is already being played ──────────────
+
+
+async def _jobs(session: Any, tournament_id: int) -> int:
+    return (
+        await session.scalar(
+            sa.select(sa.func.count())
+            .select_from(TournamentComputationJob)
+            .where(TournamentComputationJob.tournament_id == tournament_id)
+        )
+    ) or 0
+
+
+def _scoring(**overrides: Any) -> dict:
+    block = {
+        "columns": [{"key": "score", "label": "Счёт", "public": True, "better": "higher"}],
+        "placement_points": [],
+        "formula": "score",
+    }
+    block.update(overrides)
+    return block
+
+
+async def _start_the_playoff(session: Any, seeded: SimpleNamespace) -> None:
+    """Seed the bracket off the league and play a match in it: from here on the
+    league's places are frozen into a playoff nobody can re-seed."""
+    await stage_service.wire_from_groups(session, seeded.bracket_stage_id, seeded.stage_id, top=2, commit=True)
+    for lobby_id, seats, scores in (
+        (seeded.lobby_ids[0], seeded.team_ids[:3], [10, 6, 2]),
+        (seeded.lobby_ids[1], seeded.team_ids[3:], [2, 6, 10]),
+    ):
+        await ffa_encounter_service.set_game_results(
+            session, lobby_id, 1, _lines(seats, scores), actor_user_id=None, reason=None
+        )
+    await standings_service.recalculate_for_tournament(session, seeded.tournament_id)
+    bracket_stage = await stage_service.activate_stage(session, seeded.bracket_stage_id)
+    session.add(
+        Encounter(
+            name="Semifinal",
+            home_team_id=seeded.team_ids[0],
+            away_team_id=seeded.team_ids[5],
+            home_score=2,
+            away_score=1,
+            round=1,
+            tournament_id=seeded.tournament_id,
+            stage_id=seeded.bracket_stage_id,
+            stage_item_id=bracket_stage.items[0].id,
+            status=enums.EncounterStatus.COMPLETED,
+            result_status=enums.EncounterResultStatus.CONFIRMED,
+        )
+    )
+    await session.commit()
+
+
+def test_rewriting_the_formula_after_the_playoff_started_is_refused(db_session) -> None:
+    """The edit would re-rank the groups the playoff was seeded from, and there
+    is nowhere to put the new order (plan §6)."""
+
+    async def _run() -> tuple:
+        seeded = await _seed_league(db_session)
+        try:
+            await _start_the_playoff(db_session, seeded)
+            with pytest.raises(BaseAPIException) as raised:
+                await stage_service.update_stage(
+                    db_session,
+                    seeded.stage_id,
+                    schemas.StageUpdate(ffa_scoring=_scoring(formula="score * 2")),
+                )
+            await db_session.rollback()
+            stage = await _reload_stage(db_session, seeded.stage_id)
+            return raised.value.status_code, str(raised.value.detail), stage.ffa_formula
+        finally:
+            await _drop(db_session, seeded)
+
+    status_code, detail, formula = asyncio.run(_run())
+    assert status_code == 409
+    assert "downstream stage already in progress" in detail
+    assert formula == "score"
+
+
+def test_renaming_a_column_after_the_playoff_started_is_allowed(db_session) -> None:
+    """A label moves nobody: it is editable for as long as the stage exists."""
+
+    async def _run() -> tuple:
+        seeded = await _seed_league(db_session)
+        try:
+            await _start_the_playoff(db_session, seeded)
+            await stage_service.update_stage(
+                db_session,
+                seeded.stage_id,
+                schemas.StageUpdate(
+                    ffa_scoring=_scoring(
+                        columns=[{"key": "score", "label": "Kills", "public": False, "better": "higher"}]
+                    )
+                ),
+            )
+            stage = await _reload_stage(db_session, seeded.stage_id)
+            return stage.ffa_columns, stage.ffa_formula
+        finally:
+            await _drop(db_session, seeded)
+
+    columns, formula = asyncio.run(_run())
+    assert columns == [{"key": "score", "label": "Kills", "public": False, "better": "higher"}]
+    assert formula == "score"
+
+
+def test_dropping_a_column_the_games_hold_values_for_is_refused(db_session) -> None:
+    """Values are the record of the tournament; losing them would go unnoticed
+    until somebody disputed a place (plan §6)."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1, regulation=KILLS_DEATHS)
+        try:
+            await ffa_encounter_service.set_game_results(
+                db_session,
+                seeded.lobby_id,
+                1,
+                _stat_lines(
+                    seeded.team_ids,
+                    [{"kills": 6, "deaths": 1}, {"kills": 3, "deaths": 2}, {"kills": 1, "deaths": 4}],
+                ),
+                actor_user_id=None,
+                reason=None,
+            )
+            with pytest.raises(BaseAPIException) as raised:
+                await stage_service.update_stage(
+                    db_session,
+                    seeded.stage_id,
+                    schemas.StageUpdate(
+                        ffa_scoring=_scoring(
+                            columns=[{"key": "kills", "label": "Kills", "public": True, "better": "higher"}],
+                            formula="kills * 2",
+                        )
+                    ),
+                )
+            await db_session.rollback()
+            stage = await _reload_stage(db_session, seeded.stage_id)
+            return (
+                raised.value.status_code,
+                [item.code for item in raised.value.detail],
+                [column["key"] for column in stage.ffa_columns],
+            )
+        finally:
+            await _drop(db_session, seeded)
+
+    assert asyncio.run(_run()) == (422, ["ffa_column_in_use"], ["kills", "deaths"])
+
+
+def test_an_accepted_scoring_edit_queues_the_recalculation(db_session) -> None:
+    """Points, places and the public table are all derived from the rules, so a
+    rules edit has to re-run the standings -- nothing else would."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1)
+        try:
+            before = await _jobs(db_session, seeded.tournament_id)
+            await stage_service.update_stage(
+                db_session,
+                seeded.stage_id,
+                schemas.StageUpdate(ffa_scoring=_scoring(formula="score * 2")),
+            )
+            after = await _jobs(db_session, seeded.tournament_id)
+            # The same block again is not an edit and must not queue anything.
+            await stage_service.update_stage(
+                db_session,
+                seeded.stage_id,
+                schemas.StageUpdate(ffa_scoring=_scoring(formula="score * 2")),
+            )
+            return before, after, await _jobs(db_session, seeded.tournament_id)
+        finally:
+            await _drop(db_session, seeded)
+
+    before, after, again = asyncio.run(_run())
+    assert after == before + 1
+    assert again == after

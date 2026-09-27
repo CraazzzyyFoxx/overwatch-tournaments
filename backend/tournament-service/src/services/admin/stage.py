@@ -10,10 +10,12 @@ from sqlalchemy.orm import selectinload
 
 from shared.core import enums
 from shared.core import http_status as status
+from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.encounter_naming import build_encounter_name_from_ids
 from shared.models.tournament.pick_ban import PickBanConfig, PickBanConfigSlot
 from shared.repository import (
+    EncounterGameResultRepository,
     EncounterRepository,
     PickBanConfigRepository,
     StageItemInputRepository,
@@ -133,6 +135,25 @@ def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
         setattr(stage, field, value)
 
 
+def _ranking_signature(block: dict[str, Any]) -> tuple[Any, ...]:
+    """What of ``ffa_scoring`` decides places -- everything except presentation.
+
+    Labels and ``public`` are how the table is drawn; the formula, the placement
+    points, the set of column keys and their ``better`` are what the places are
+    computed from. Column ORDER counts too: with no explicit ``tiebreak_order``
+    the ffa_league preset breaks ties by the sum of the FIRST column, so moving
+    one can move a team.
+
+    Compared, not merely "was it sent": saving the same form twice must not run
+    into a 409.
+    """
+    return (
+        block["formula"].strip(),
+        tuple(float(points) for points in block["placement_points"]),
+        tuple((column["key"], column["better"]) for column in block["columns"]),
+    )
+
+
 class AdminStageService:
     def __init__(
         self,
@@ -145,6 +166,7 @@ class AdminStageService:
         team_repo: TeamRepository = TeamRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
         pick_ban_config_repo: PickBanConfigRepository = PickBanConfigRepository(),
+        result_repo: EncounterGameResultRepository = EncounterGameResultRepository(),
     ) -> None:
         self.stage_repo = stage_repo
         self.stage_item_repo = stage_item_repo
@@ -154,6 +176,7 @@ class AdminStageService:
         self.team_repo = team_repo
         self.tournament_repo = tournament_repo
         self.pick_ban_config_repo = pick_ban_config_repo
+        self.result_repo = result_repo
 
     async def _publish_structure_changed(self, session: AsyncSession, tournament_id: int) -> None:
         """Announce that this tournament's set of page sections moved.
@@ -469,10 +492,52 @@ class AdminStageService:
                     ),
                 )
 
+        ffa_before = stage.ffa_scoring if "ffa_scoring" in update_data else None
+        if ffa_before is not None:
+            await self._assert_ffa_scoring_editable(session, stage, ffa_before, update_data["ffa_scoring"])
+
         _apply_stage_fields(stage, update_data)
+        # Points, places and the public table are all derived from the rules, so
+        # a changed block has to re-run the standings: nothing else would, and
+        # the same signal drops the gateway's cache of the lobby read.
+        if ffa_before is not None and ffa_before != stage.ffa_scoring:
+            await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
+
+    async def _assert_ffa_scoring_editable(
+        self,
+        session: AsyncSession,
+        stage: models.Stage,
+        before: dict[str, Any],
+        after: dict[str, Any],
+    ) -> None:
+        """The two ffa_scoring edits a stage in play cannot take (plan §6).
+
+        Re-ranking edits (the formula, the placement points, the column keys,
+        their ``better``) are refused once a playoff seeded off this stage has
+        started -- the same rule, and the same 409, a result correction answers
+        to. Dropping a column the games hold values for is refused outright: the
+        values are a record of the tournament, and no later edit brings them
+        back.
+        """
+        if _ranking_signature(before) != _ranking_signature(after):
+            await self.assert_stage_correction_allowed(session, stage)
+        removed = {column["key"] for column in before["columns"]} - {column["key"] for column in after["columns"]}
+        if not removed:
+            return
+        in_use = sorted(removed & await self.result_repo.stat_keys_for_stage(session, stage.id))
+        if in_use:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[
+                    ApiExc(
+                        code="ffa_column_in_use",
+                        msg=f"Games of this stage already hold values for: {', '.join(in_use)}",
+                    )
+                ],
+            )
 
     async def delete_stage(self, session: AsyncSession, stage_id: int) -> None:
         stage = await self.get_stage(session, stage_id)
@@ -1661,6 +1726,38 @@ class AdminStageService:
         if encounter.stage_item_id is None:
             return
         downstream_item_ids = await self._downstream_item_ids(session, encounter.stage_item_id)
+        if not downstream_item_ids:
+            return
+        untouched = await self._untouched_stage_items(session, sorted(downstream_item_ids))
+        blocked = sorted(downstream_item_ids - untouched)
+        if blocked:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "downstream stage already in progress; correct it there or deactivate it first "
+                    f"(stage items {blocked})"
+                ),
+            )
+
+    async def assert_stage_correction_allowed(self, session: AsyncSession, stage: models.Stage) -> None:
+        """Refuse a stage-wide re-ranking whose fallout cannot be applied.
+
+        ``assert_source_correction_allowed`` asks this of the one group a
+        corrected encounter belongs to. Editing the stage's scoring re-ranks
+        EVERY group of it at once, so the question is asked of every item the
+        stage has -- with the same answer and the same message, because it is the
+        same impossibility: a playoff already being played cannot be re-seeded.
+        """
+        item_ids = [item.id for item in stage.items]
+        if not item_ids:
+            return
+        result = await session.execute(
+            select(models.StageItemInput.stage_item_id).where(
+                models.StageItemInput.source_stage_item_id.in_(item_ids),
+                models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
+            )
+        )
+        downstream_item_ids = set(result.scalars())
         if not downstream_item_ids:
             return
         untouched = await self._untouched_stage_items(session, sorted(downstream_item_ids))

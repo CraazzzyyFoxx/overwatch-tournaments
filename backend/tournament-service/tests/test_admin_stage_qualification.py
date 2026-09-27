@@ -289,3 +289,28 @@ class SourceCorrectionGuardTests(IsolatedAsyncioTestCase):
         session = _session([[]])
         await service.assert_source_correction_allowed(session, _encounter(home_team_id=1, away_team_id=2))
         self.assertEqual(1, session.execute.await_count)
+
+
+class StageCorrectionGuardTests(IsolatedAsyncioTestCase):
+    """The same rule, asked of a whole stage: a rules edit re-ranks every group
+    of it, so any one started playoff behind it blocks the edit (plan §6)."""
+
+    def _stage(self) -> SimpleNamespace:
+        return SimpleNamespace(id=1, items=[SimpleNamespace(id=100), SimpleNamespace(id=101)])
+
+    async def test_a_started_downstream_blocks_the_rules_edit(self) -> None:
+        session = _session([[200], [200]])
+        with self.assertRaises(Exception) as ctx:
+            await service.assert_stage_correction_allowed(session, self._stage())
+
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertIn("downstream stage already in progress", str(ctx.exception.detail))
+
+    async def test_an_untouched_downstream_allows_it(self) -> None:
+        session = _session([[200], []])
+        await service.assert_stage_correction_allowed(session, self._stage())
+
+    async def test_a_stage_nothing_plays_off_asks_one_question(self) -> None:
+        session = _session([[]])
+        await service.assert_stage_correction_allowed(session, self._stage())
+        self.assertEqual(1, session.execute.await_count)
