@@ -6400,7 +6400,7 @@
       "ffa_result_invalid_placement": "Places run from 1 to the number of teams, each taken exactly once.",
       "ffa_columns_too_many": "A stage records at most 10 columns. Remove one before adding another.",
       "ffa_column_key_invalid": "A key starts with a lowercase Latin letter and holds only lowercase letters, digits and underscores, up to 24 characters.",
-      "ffa_column_key_reserved": "That key is a name the formula language already uses (place, place_pts, teams, min, max, abs, round, if). Pick another one.",
+      "ffa_column_key_reserved": "That key is a name the formula language already uses (place, place_pts, teams, min, max, abs, round, if, if_, and, or, not). Pick another one.",
       "ffa_column_duplicate": "Two columns share a key. Every key is used once.",
       "ffa_column_in_use": "Games of this stage already hold values under that key. Keep the column, or void those games first.",
       "ffa_formula_syntax": "Position {offset}: the formula cannot be read. Check the brackets and the operators.",
