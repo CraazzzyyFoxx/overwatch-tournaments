@@ -35,6 +35,7 @@ globalThis.ResizeObserver ??= class {
 
 vi.mock("@/components/PlayerRoleIcon", () => ({ default: () => null }));
 vi.mock("@/components/RankHistory", () => ({ default: () => null }));
+vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 // Drag itself is not what this pins, and dnd-kit resolves its own React copy
 // under pnpm, so the sortable wrapper and its hook render inertly here.
 vi.mock("@/components/kit/SortableRows", () => ({
@@ -87,6 +88,7 @@ function tick() {
 async function mount(
   value: CustomGamePlayer | null = row(),
   mixStats: MixMemberStats | null = null,
+  lobbyCount: 1 | 2 = 1,
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -95,6 +97,7 @@ async function mount(
       <PickupPlayerSheet
         row={value}
         mixStats={mixStats}
+        lobbyCount={lobbyCount}
         canEdit
         saving={false}
         onOpenChange={onOpenChange}
@@ -376,5 +379,51 @@ describe("PickupPlayerSheet mix record", () => {
     const scope = await mount();
 
     expect(scope.textContent).not.toContain("Mixes:");
+  });
+});
+
+// The lobby pin. `next-intl` is mocked to echo the key, so every label below is
+// the message key rather than the rendered sentence.
+describe("PickupPlayerSheet lobby pin", () => {
+  it("offers no lobby pin while the mix runs one lobby", async () => {
+    const scope = await mount(row());
+
+    expect(scope.querySelector('[role="radiogroup"][aria-label="pinGroup"]')).toBeNull();
+  });
+
+  it("pins the player to a lobby, and writes it with the rest of the patch", async () => {
+    const scope = await mount(row(), null, 2);
+
+    await act(async () => {
+      findButton(scope, "pinB").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await tick();
+    });
+    // Staged, like everything else in this sheet.
+    expect(onSave).not.toHaveBeenCalled();
+
+    await act(async () => {
+      findButton(scope, "Save").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await tick();
+    });
+
+    expect(onSave.mock.calls[0][0]).toMatchObject({ lobby_pin: 1 });
+  });
+
+  it("sends no lobby pin at all from a one-lobby mix -- the server 422s it", async () => {
+    const scope = await mount(row());
+
+    await act(async () => {
+      findButton(scope, "Save").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await tick();
+    });
+
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("lobby_pin");
+  });
+
+  it("shows the pin the server already stored", async () => {
+    const scope = await mount(row({ lobby_pin: 0 }), null, 2);
+
+    expect(findButton(scope, "pinA").getAttribute("aria-checked")).toBe("true");
+    expect(findButton(scope, "pinB").getAttribute("aria-checked")).toBe("false");
   });
 });

@@ -8,22 +8,27 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
-from shared.core.enums import MixParticipation
+from shared.core.enums import MixParticipation, MixSelfSignup
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
+    "CustomGameBalanceRequest",
     "CustomGameCoHostPatch",
     "CustomGameCreate",
     "CustomGameHostTransfer",
+    "CustomGameLobbyCountPatch",
     "CustomGameNextMapPatch",
     "CustomGameOutcome",
     "CustomGamePlayerPatch",
     "CustomGamePlayerParticipationPatch",
     "CustomGamePlayersParticipationPatch",
     "CustomGamePostDiscord",
+    "CustomGamePostSignup",
     "CustomGameRecordOutcome",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
+    "CustomGameSelfServicePatch",
+    "CustomGameSelfUpdate",
     "CustomGameTeamNamesPatch",
     "CustomGameVariantIndexPatch",
 )
@@ -57,6 +62,9 @@ class CustomGamePlayerPatch(_Request):
     participation: MixParticipation | None = None
     roles: list[str] | None = None
     is_flex: StrictBool | None = None
+    # ``None`` is "auto": the balance places them wherever they fit. A patch that
+    # does not mention the field leaves the pin exactly as it was.
+    lobby_pin: int | None = Field(None, ge=0, le=1)
 
     @field_validator("roles")
     @classmethod
@@ -95,16 +103,32 @@ class CustomGameTeamNamesPatch(_Request):
     team_names: dict[str, str]
 
 
-class CustomGameNextMapPatch(_Request):
+class _LobbyScoped(_Request):
+    """Every per-match write names its lobby; ``0`` is the only one a
+    single-lobby mix has, which is why it is the default."""
+
+    lobby_index: int = Field(0, ge=0, le=1)
+
+
+class CustomGameNextMapPatch(_LobbyScoped):
     """``null`` clears the pick; the next match then records with no map."""
 
     map_id: int | None
 
 
-class CustomGameVariantIndexPatch(_Request):
-    """Which stored balance option the mix shows, for every viewer at once."""
+class CustomGameVariantIndexPatch(_LobbyScoped):
+    """Which stored balance option the lobby shows, for every viewer at once."""
 
     variant_index: int = Field(ge=0)
+
+
+class CustomGameBalanceRequest(_LobbyScoped):
+    """What to balance. An empty body is the first lobby, as before there was a second.
+
+    ``scope="all"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.
+    """
+
+    scope: Literal["lobby", "all"] = "lobby"
 
 
 #: Ceiling on the encoded lineup screenshot. ~6 MiB decoded: far above the
@@ -114,7 +138,7 @@ _MAX_IMAGE_B64_LENGTH = 8 * 1024 * 1024
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
-class CustomGamePostDiscord(_Request):
+class CustomGamePostDiscord(_LobbyScoped):
     """Which balance option's lineup to post, and the PNG of it to attach.
 
     The image is the matchup card the host is looking at, rasterised in their
@@ -154,7 +178,7 @@ class CustomGameCoHostPatch(_Request):
     co_host_user_id: int
 
 
-class CustomGameSeatSwap(_Request):
+class CustomGameSeatSwap(_LobbyScoped):
     variant_index: int = Field(ge=0)
     first_uuid: str = Field(min_length=1)
     second_uuid: str = Field(min_length=1)
@@ -164,7 +188,55 @@ class CustomGameOutcome(_Request):
     winner: Literal[1, 2] | None
 
 
-class CustomGameRecordOutcome(_Request):
+class CustomGameRecordOutcome(_LobbyScoped):
     outcome: CustomGameOutcome
     variant_index: int = Field(ge=0)
     map_id: int | None = None
+
+
+class CustomGameSelfUpdate(_Request):
+    """What a PLAYER may change about their own seat.
+
+    ``roles`` absent means "leave my role order alone"; ``roles: null`` means
+    "every role I have a rank for". The two are distinguished by
+    ``model_fields_set``, so a flex toggle cannot silently reset a role order.
+    """
+
+    roles: list[str] | None = None
+    is_flex: StrictBool | None = None
+
+    @field_validator("roles")
+    @classmethod
+    def _roles(cls, roles: list[str] | None) -> list[str] | None:
+        if roles is None:
+            return None
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for raw in roles:
+            role = raw.strip().lower()
+            if role not in REGISTRATION_ROLE_CODES:
+                raise ValueError(f"unknown role {role}")
+            if role not in seen:
+                seen.add(role)
+                normalized.append(role)
+        return normalized
+
+
+class CustomGameSelfServicePatch(_Request):
+    """The host's self-service switches: the signup mode and the role-edit flag."""
+
+    self_signup: MixSelfSignup | None = None
+    self_role_edit: StrictBool | None = None
+
+
+class CustomGamePostSignup(_Request):
+    """Which signup mode the posted card opens. ``closed`` is not a choice here:
+    posting a card that refuses every click is never the intent."""
+
+    self_signup: Literal["pool", "benched"]
+
+
+class CustomGameLobbyCountPatch(_Request):
+    """How many lobbies the mix runs at once."""
+
+    lobby_count: Literal[1, 2]

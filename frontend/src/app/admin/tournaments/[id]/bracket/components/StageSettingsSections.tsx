@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
+import { tiebreakerLabel, tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
 import { BEST_OF_OPTIONS, stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -114,7 +114,9 @@ export function GeneralSection({
               // order on a duel stage (or the other way round) is one the
               // engine silently drops, so the new format's default replaces it
               // rather than being saved as an order nothing evaluates.
-              const catalogue = tiebreakersForStageType(stageType).map((metric) => metric.id);
+              const catalogue = tiebreakersForStageType(stageType, form.ffaColumns).map(
+                (metric) => metric.id
+              );
               const runnable = form.tiebreakOrder.every((metricId) =>
                 (catalogue as string[]).includes(metricId)
               );
@@ -124,7 +126,7 @@ export function GeneralSection({
                   : {
                       stageType,
                       rankingPreset: "default",
-                      tiebreakOrder: defaultTiebreakOrder(stageType)
+                      tiebreakOrder: defaultTiebreakOrder(stageType, form.ffaColumns)
                     }
               );
             }}
@@ -415,7 +417,7 @@ export function TiebreakersSection({
   const ids = useId();
   // Which metrics the engine can compute here at all: a lobby has no opponent
   // pairing (no head-to-head, no Buchholz), a duel has no placement or score.
-  const catalogue = tiebreakersForStageType(form.stageType);
+  const catalogue = tiebreakersForStageType(form.stageType, form.ffaColumns);
   const isGroups = GROUP_STAGE_TYPES.includes(form.stageType);
 
   // `points` is not a tiebreaker an organizer chooses: it is the ranking metric
@@ -453,7 +455,7 @@ export function TiebreakersSection({
             onValueChange={(value) =>
               onChange({
                 rankingPreset: value,
-                tiebreakOrder: tiebreakOrderForPreset(value, form.stageType)
+                tiebreakOrder: tiebreakOrderForPreset(value, form.stageType, form.ffaColumns)
               })
             }
           >
@@ -531,7 +533,11 @@ export function TiebreakersSection({
             className="h-auto p-0 text-xs text-primary"
             onClick={() =>
               onChange({
-                tiebreakOrder: tiebreakOrderForPreset(form.rankingPreset, form.stageType)
+                tiebreakOrder: tiebreakOrderForPreset(
+                  form.rankingPreset,
+                  form.stageType,
+                  form.ffaColumns
+                )
               })
             }
           >
@@ -541,7 +547,8 @@ export function TiebreakersSection({
         <ol className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2">
           {active.map((metricId, index) => {
             const metricLabel =
-              catalogue.find((metric) => metric.id === metricId)?.label ?? metricId;
+              catalogue.find((metric) => metric.id === metricId)?.label ??
+              tiebreakerLabel(metricId, undefined, form.ffaColumns);
             const isRankingMetric = metricId === "points";
             return (
               <li

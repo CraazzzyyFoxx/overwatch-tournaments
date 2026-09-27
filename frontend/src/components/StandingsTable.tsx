@@ -9,7 +9,11 @@ import { sortStandingsMatches } from "@/lib/tournament/match-order";
 import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import { tiebreakerLabel, type TiebreakerMetricId } from "@/lib/tournament/tiebreakers";
+import {
+  FFA_STAT_PREFIX,
+  tiebreakerLabel,
+  type TiebreakerMetricId
+} from "@/lib/tournament/tiebreakers";
 import tournamentService from "@/services/tournament.service";
 import styles from "./StandingsTable.module.css";
 import TeamName from "@/components/TeamName";
@@ -222,7 +226,17 @@ const StandingsTable = ({
 
   // "Ranked by …" legend — resolve metric ids through i18n, falling back to the
   // shared English labels when a key is missing.
+  // A column sum names the organizer's column: its label comes from the stage
+  // this table already loads (`stages`, above); the bare key stands in only
+  // while that query is still in flight.
+  const ffaColumns =
+    stages.find((candidate) => candidate.id === stage?.id)?.ffa_scoring?.columns ?? [];
   const labelFor = (id: string) => {
+    if (id.startsWith(FFA_STAT_PREFIX)) {
+      const columnKey = id.slice(FFA_STAT_PREFIX.length);
+      const column = ffaColumns.find((candidate) => candidate.key === columnKey);
+      return t("common.tiebreakerMetrics.ffa_stat", { label: column?.label ?? columnKey });
+    }
     const key = `common.tiebreakerMetrics.${id as TiebreakerMetricId}` as const;
     const label = t(key);
     return label === key ? undefined : label;

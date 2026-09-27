@@ -20,6 +20,22 @@ const ffaService = {
     return response.json();
   },
 
+  /**
+   * The organizer's read of the same lobbies.
+   *
+   * Identical shape, one difference that matters: the public route runs its
+   * answer through `public_view` and strips the columns marked `public: false`
+   * together with every value under them, in `rules`, in the row totals and in
+   * the game cells. The entry dialog has to show exactly those columns, so the
+   * organizer's screens read this route instead (spec §7.3).
+   */
+  async getStageAdmin(tournamentId: number, stageId: number): Promise<FfaLobby[]> {
+    const response = await apiFetch(
+      `/api/v1/admin/tournaments/${tournamentId}/stages/${stageId}/ffa`,
+    );
+    return response.json();
+  },
+
   async getLobby(encounterId: number): Promise<FfaLobby> {
     const response = await apiFetch(`/api/v1/encounters/${encounterId}/ffa`);
     return response.json();

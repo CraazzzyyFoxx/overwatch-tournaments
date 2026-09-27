@@ -8,6 +8,8 @@ import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialo
 import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
 import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
+import { PickupMySeatPanel } from "@/app/balancer/mix/PickupMySeatPanel";
+import { PickupLobbyTabs } from "@/app/balancer/mix/PickupLobbyTabs";
 import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
 import { PickupTeamsPanel } from "@/app/balancer/mix/PickupTeamsPanel";
 import {
@@ -38,7 +40,7 @@ import { useMapsCatalog } from "@/hooks/useMapsCatalog";
  * `/balancer/mix`. This screen only ever reads and edits the one the host
  * already picked.
  *
- * Which balance option is on screen is the mix's own `selected_variant_index`,
+ * Which balance option is on screen is the lobby's own `selected_variant_index`,
  * not page state: the host's pager is the lobby's pager, and a viewer reads
  * the matchup being called out rather than one their browser chose.
  *
@@ -55,6 +57,10 @@ export default function BalancerPickupMixPage() {
 
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
+  // The board is public (`config/auth.ts`), so the seat read is the one thing
+  // here that needs an actual session: without one `GET …/me` 401s and the
+  // panel has nothing to say.
+  const isSignedIn = useAuthProfileStore((state) => state.status === "authenticated");
   const { canAccessPermission, isSuperuser, isWorkspaceAdmin } = usePermissions();
   const router = useRouter();
   // The mix-hosting grant, not a tournament permission: a workspace member can
@@ -69,7 +75,7 @@ export default function BalancerPickupMixPage() {
   const [isPoolOpen, setIsPoolOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   // The OW catalogue with its gamemodes: the roll pool for the next map and
-  // the manual picker. Which map is *chosen* is the mix's own `next_map_id`,
+  // the manual picker. Which map is *chosen* is the lobby's own `next_map_id`,
   // so a co-host in another tab sees the same roll.
   const mapsQuery = useMapsCatalog({ withGamemode: true });
   // All-time only: the sheet reports a player's standing, and a window would
@@ -83,10 +89,13 @@ export default function BalancerPickupMixPage() {
 
   const {
     selectedGameId,
+    activeLobby,
+    setActiveLobby,
     gamesQuery,
     gameQuery,
     matchesQuery,
     rotationQuery,
+    mySeatQuery,
     setRoster,
     patchPlayer,
     applyRotationHints,
@@ -95,6 +104,7 @@ export default function BalancerPickupMixPage() {
     undoMatch,
     setNextMap,
     setVariantIndex,
+    setLobbyCount,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
@@ -104,10 +114,17 @@ export default function BalancerPickupMixPage() {
     addCoHost,
     removeCoHost,
     swapSeats,
-  } = usePickupMix(workspaceId ?? 0, pickedGameId);
+    joinMix,
+    leaveMix,
+    updateMySeat,
+    setSelfService,
+    postSignup,
+  } = usePickupMix(workspaceId ?? 0, pickedGameId, { seatEnabled: isSignedIn });
 
   const game = gameQuery.data;
   const rows = game?.players ?? [];
+  const lobbies = game?.lobbies ?? [];
+  const lobby = lobbies.find((row) => row.lobby_index === activeLobby);
   const rosterIds = rows.map((row) => row.workspace_member_id);
   // Everything that writes a mix -- roster, player patch, balance, outcome --
   // goes through `_writable`, which 403s anyone but the host or a co-host.
@@ -187,6 +204,7 @@ export default function BalancerPickupMixPage() {
               canWrite={canWrite}
               hasMix={selectedGameId != null}
               rows={rows}
+              lobbyCount={game?.lobby_count ?? 1}
               rotation={rotationQuery.data ?? []}
               savingPlayerId={savingPlayerId}
               clearing={setRoster.isPending}
@@ -216,6 +234,20 @@ export default function BalancerPickupMixPage() {
                   onSuccess: () => router.push("/balancer/mix"),
                 })
               }
+              onSetSelfService={(patch) => setSelfService.mutate(patch)}
+              savingSelfService={setSelfService.isPending}
+              onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
+              postingSignup={postSignup.isPending}
+              settingLobbyCount={setLobbyCount.isPending}
+              onLobbyCountChange={(lobbyCount) => setLobbyCount.mutate(lobbyCount)}
+              shufflingAll={balance.isPending && balance.variables?.scope === "all"}
+              onShuffleAll={() => balance.mutate({ scope: "all" })}
+            />
+            <PickupLobbyTabs
+              lobbies={lobbies}
+              activeLobby={activeLobby}
+              maps={mapsQuery.data ?? []}
+              onSelect={setActiveLobby}
             />
             <PickupTeamsPanel
               canWrite={canWrite}
@@ -223,13 +255,17 @@ export default function BalancerPickupMixPage() {
               gamesError={gamesQuery.isError}
               onRetryGames={() => void gamesQuery.refetch()}
               game={game}
+              lobby={lobby}
+              lobbyIndex={activeLobby}
               gameLoading={gameQuery.isLoading}
               hasMix={selectedGameId != null}
               balancing={balance.isPending}
               activeCount={summarizeLineup(rows).active}
-              onBalance={() => balance.mutate()}
-              variantIndex={game?.selected_variant_index ?? 0}
-              onVariantIndexChange={(index) => setVariantIndex.mutate(index)}
+              onBalance={() => balance.mutate({ scope: "lobby", lobbyIndex: activeLobby })}
+              variantIndex={lobby?.selected_variant_index ?? 0}
+              onVariantIndexChange={(index) =>
+                setVariantIndex.mutate({ lobbyIndex: activeLobby, variantIndex: index })
+              }
               recordingOutcome={recordOutcome.isPending}
               onRecordOutcome={(input) => recordOutcome.mutate(input)}
               maps={mapsQuery.data ?? []}
@@ -237,17 +273,37 @@ export default function BalancerPickupMixPage() {
               undoingMatchId={undoMatch.isPending ? (undoMatch.variables ?? null) : null}
               onUndoMatch={(matchId) => undoMatch.mutate(matchId)}
               settingNextMap={setNextMap.isPending}
-              onNextMapChange={(mapId) => setNextMap.mutate(mapId)}
+              onNextMapChange={(mapId) => setNextMap.mutate({ lobbyIndex: activeLobby, mapId })}
               closingMix={closeMix.isPending}
               onCloseMix={() => closeMix.mutate()}
               onRenameTeam={(teamIndex, name) => setTeamNames.mutateAsync({ teamIndex, name })}
               onSwapSeats={(idx, firstUuid, secondUuid) =>
-                swapSeats.mutateAsync({ variantIndex: idx, firstUuid, secondUuid })
+                swapSeats.mutateAsync({
+                  lobbyIndex: activeLobby,
+                  variantIndex: idx,
+                  firstUuid,
+                  secondUuid,
+                })
               }
               onCopyBattleTags={copyBattleTags}
               postingToDiscord={postToDiscord.isPending}
-              onPostToDiscord={(idx, image) => postToDiscord.mutate({ variantIndex: idx, image })}
+              onPostToDiscord={(idx, image) =>
+                postToDiscord.mutate({ lobbyIndex: activeLobby, variantIndex: idx, image })
+              }
             />
+            {/* Visible when the mix invites signups, or when this viewer is
+                already in it -- a closed mix a player is not in has nothing to
+                tell them, and the board stays as public as it was. */}
+            {mySeatQuery.data != null &&
+            (mySeatQuery.data.self_signup !== "closed" || mySeatQuery.data.seat != null) ? (
+              <PickupMySeatPanel
+                state={mySeatQuery.data}
+                saving={joinMix.isPending || leaveMix.isPending || updateMySeat.isPending}
+                onJoin={() => joinMix.mutate()}
+                onLeave={() => leaveMix.mutate()}
+                onSave={(patch) => updateMySeat.mutate(patch)}
+              />
+            ) : null}
           </div>
         </div>
       </div>
@@ -279,6 +335,7 @@ export default function BalancerPickupMixPage() {
 
       <PickupPlayerSheet
         row={openRow}
+        lobbyCount={game?.lobby_count ?? 1}
         mixStats={
           statsQuery.data?.members.find(
             (member) => member.workspace_member_id === openRow?.workspace_member_id,

@@ -14,7 +14,7 @@ clicker privately, and in a DM take the spent buttons off the card.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -26,7 +26,7 @@ from shared.schemas.events import DiscordActionButton, DiscordButton, DiscordCar
 from src.core.broker import optional_broker
 from src.interactions import copy
 from src.interactions.actions import ACTIONS
-from src.interactions.cards import card_view, settle
+from src.interactions.cards import card_view, select_row, settle
 
 __all__ = ("IDENTITY_SUBJECT", "ActionDispatcher", "Outcome")
 
@@ -63,6 +63,26 @@ def _refusal_code(error: Mapping[str, Any] | None) -> str | None:
     return str(error["code"]) if error.get("code") else None
 
 
+#: Every action of the pickup-mix self-signup; their replies are the seat, not a sentence.
+_MIX_PREFIX = "mix."
+
+
+def _mix_blocker(outcome: Outcome) -> str | None:
+    """The mix refusal behind an envelope, or ``None`` for anything else.
+
+    ``self_*`` raise ``HTTPException(detail="<code>")`` with a bare string, and
+    ``shared.rpc.common.http_error`` puts a string detail in the envelope's
+    human ``message`` -- so the code arrives there while ``code`` is only the
+    status it was raised with. Both are read, so moving the code into
+    ``details["fields"]`` later would still land here.
+    """
+    for candidate in (outcome.code, outcome.message):
+        code = (candidate or "").strip()
+        if code in copy.MIX_BLOCKERS:
+            return code
+    return None
+
+
 class ActionDispatcher:
     def __init__(
         self,
@@ -75,13 +95,19 @@ class ActionDispatcher:
         self._broker = broker
         self._timeout = timeout
 
-    async def perform(self, discord_user_id: int, action_name: str, target: str) -> Outcome:
+    async def perform(self, discord_user_id: int, action_name: str, target: str, values: Sequence[str] = ()) -> Outcome:
         """Act as the account linked to ``discord_user_id``. ``target`` is already validated."""
         action = ACTIONS[action_name]
         if action.subject is None:
             # Answered by the bot alone: it only shows the next button, and that
             # button is where the account is checked.
             return Outcome("ok")
+        try:
+            request = action.request(target, tuple(values))
+        except ValueError:
+            # A component value the bot never minted: refused here, so a mangled
+            # select costs neither an identity lookup nor a platform call.
+            return Outcome("failed", code="bad_values")
         broker = self._broker()
         if broker is None:
             return Outcome("unavailable")
@@ -103,9 +129,7 @@ class ActionDispatcher:
             return Outcome("unavailable", code=who.code, message=who.message)
 
         try:
-            reply = await request_rpc(
-                broker, {"identity": who.data, **action.request(target)}, action.subject, timeout=self._timeout
-            )
+            reply = await request_rpc(broker, {"identity": who.data, **request}, action.subject, timeout=self._timeout)
         except Exception as exc:
             # A timeout does not prove the call did nothing; the reply says only
             # that the platform did not answer, and the card keeps its buttons.
@@ -132,6 +156,8 @@ class ActionDispatcher:
                 if not isinstance(outcome.data, Mapping):
                     return self._card(_AMBER, copy.text(locale, "not_registered"))
                 return self._card(_BLUE, copy.registration_text(locale, outcome.data))
+            if action_name.startswith(_MIX_PREFIX):
+                return self._mix_card(outcome.data, locale)
             return self._card(_GREEN, copy.success_text(locale, action_name))
         if outcome.status == "not_linked":
             link = DiscordLinkButton(label=copy.text(locale, "link_discord"), url=f"{self._site}/?settings=profile")
@@ -140,6 +166,14 @@ class ActionDispatcher:
             return self._card(_RED, copy.text(locale, "inactive"))
         if outcome.status == "unavailable":
             return self._card(_AMBER, copy.text(locale, "unavailable"))
+        blocker = _mix_blocker(outcome) if action_name.startswith(_MIX_PREFIX) else None
+        if blocker is not None:
+            fix = (
+                [DiscordLinkButton(label=copy.text(locale, "open_profile"), url=f"{self._site}/?settings=profile")]
+                if blocker in copy.LINK_BLOCKERS
+                else []
+            )
+            return self._card(_AMBER, copy.mix_blocker_text(locale, blocker), *fix)
         # Both self-service tournament reads answer a plain 404 when the caller
         # has no registration there; that is the one "no" worth rewording.
         if outcome.code == "not_found" and action_name in ("check_in", "registration.view"):
@@ -155,14 +189,69 @@ class ActionDispatcher:
     def _card(color: int, text: str, *buttons: DiscordButton) -> discord.ui.LayoutView:
         return card_view(DiscordCard(accent_color=color, text=text, rows=[list(buttons)] if buttons else []))
 
-    async def handle(self, interaction: discord.Interaction, action_name: str, target: str) -> None:
+    def _mix_card(self, state: Any, locale: copy.Locale) -> discord.ui.LayoutView:
+        """The clicker's seat in a mix, with exactly the controls the policy allows.
+
+        Every ``mix.*`` action answers with the same self-state, so one renderer
+        serves the card button, the select and the flex toggle alike -- and the
+        reply a click produces is the reply the next click is made from.
+        """
+        if not isinstance(state, Mapping):
+            return self._card(_AMBER, copy.text(locale, "unavailable"))
+        raw_policy = state.get("policy")
+        policy: Mapping[str, Any] = raw_policy if isinstance(raw_policy, Mapping) else {}
+        raw_seat = state.get("seat")
+        seat: Mapping[str, Any] | None = raw_seat if isinstance(raw_seat, Mapping) else None
+        target = str(state.get("custom_game_id"))
+
+        buttons: list[DiscordButton] = []
+        extra: list[discord.ui.ActionRow] = []
+        if policy.get("can_edit_roles"):
+            flex_on = bool(seat and seat.get("is_flex"))
+            buttons.append(
+                DiscordActionButton(
+                    label=copy.text(locale, "mix_flex_off" if flex_on else "mix_flex_on"),
+                    action="mix.flex",
+                    target=f"{target}-{'off' if flex_on else 'on'}",
+                )
+            )
+            extra.append(
+                select_row(
+                    action="mix.roles_set",
+                    target=target,
+                    placeholder=copy.text(locale, "mix_roles_placeholder"),
+                    options=copy.mix_role_options(locale, state),
+                )
+            )
+        if policy.get("can_join"):
+            buttons.append(
+                DiscordActionButton(
+                    label=copy.text(locale, "mix_join"), action="mix.join", target=target, style="success"
+                )
+            )
+        if policy.get("can_leave"):
+            buttons.append(
+                DiscordActionButton(
+                    label=copy.text(locale, "mix_leave"), action="mix.leave", target=target, style="danger"
+                )
+            )
+        card = DiscordCard(
+            accent_color=_GREEN if seat else _BLUE,
+            text=copy.mix_text(locale, state),
+            rows=[buttons] if buttons else [],
+        )
+        return card_view(card, extra_rows=extra)
+
+    async def handle(
+        self, interaction: discord.Interaction, action_name: str, target: str, values: Sequence[str] = ()
+    ) -> None:
         locale = copy.locale_of(interaction.locale)
         # Acknowledge first: Discord fails a click left unanswered for three
         # seconds, and two RPCs can take longer. For a button this is a silent
         # "update the message later", so nothing flashes in the channel.
         await interaction.response.defer()
         try:
-            outcome = await self.perform(interaction.user.id, action_name, target)
+            outcome = await self.perform(interaction.user.id, action_name, target, values)
         except Exception:
             logger.exception(f"Discord action {action_name} crashed")
             outcome = Outcome("unavailable")

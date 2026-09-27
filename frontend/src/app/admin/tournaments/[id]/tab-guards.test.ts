@@ -1,12 +1,13 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  allowedMatchesSubTab,
+  allowedBracketSubTab,
   allowedSettingsSection,
   allowedTab,
   allowedTeamsSubTab,
   isLegacyTabSegment,
   isTabKey,
+  BRACKET_SUB_TABS,
   MATCHES_SUB_TABS,
   REGISTRATION_SUB_TABS,
   SETTINGS_SECTIONS,
@@ -119,25 +120,19 @@ describe("sub-tabs", () => {
     expect(allowedTeamsSubTab("draft", ALL_PERMS)).toBe(true);
   });
 
-  test("matches splits results into encounters and standings", () => {
-    expect(MATCHES_SUB_TABS).toEqual([
-      "encounters",
-      "lobbies",
-      "standings",
-      "reports",
-      "parsed",
-      "logs"
-    ]);
+  test("matches keeps the result views; standings and lobbies live under bracket", () => {
+    expect(MATCHES_SUB_TABS).toEqual(["encounters", "reports", "parsed", "logs"]);
     // `report-form` is gone: it configures the report, it does not report.
     expect(MATCHES_SUB_TABS as readonly string[]).not.toContain("report-form");
+    expect(BRACKET_SUB_TABS).toEqual(["stages", "standings", "lobbies"]);
   });
 
-  test("matches offers lobbies only where an FFA stage exists", () => {
+  test("bracket offers lobbies only where an FFA stage exists", () => {
     // A duel tournament has no lobby to referee, and a hidden-but-reachable
     // view is the bug the layout's bounce pairs with this.
-    expect(allowedMatchesSubTab("lobbies", { hasFfaStage: false })).toBe(false);
-    expect(allowedMatchesSubTab("lobbies", { hasFfaStage: true })).toBe(true);
-    expect(allowedMatchesSubTab("encounters", { hasFfaStage: false })).toBe(true);
+    expect(allowedBracketSubTab("lobbies", { hasFfaStage: false })).toBe(false);
+    expect(allowedBracketSubTab("lobbies", { hasFfaStage: true })).toBe(true);
+    expect(allowedBracketSubTab("standings", { hasFfaStage: false })).toBe(true);
   });
 });
 

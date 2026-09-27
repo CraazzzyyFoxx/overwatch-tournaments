@@ -29,10 +29,18 @@ function game(id: number, status: CustomGame["status"]): CustomGame {
       team_names: {},
       workspace_discord_channel_id: null
     },
-    balance_result: null,
     created_at: "2026-01-02T00:00:00Z",
-    next_map_id: null,
-    selected_variant_index: 0,
+    lobby_count: 1,
+    lobbies: [
+      {
+        lobby_index: 0,
+        selected_variant_index: 0,
+        next_map_id: null,
+        balanced_at: null
+      },
+    ],
+    self_signup: "closed",
+    self_role_edit: false,
     roster_shape: null,
     matches_count: 0,
     last_match_at: null
@@ -143,5 +151,22 @@ describe("PickupMixList", () => {
     expect(viewer.container.querySelector('[role="status"] button')).toBeNull();
     expect(viewer.container.querySelectorAll("button")).toHaveLength(2);
     expect(viewer.onCreateGame).not.toHaveBeenCalled();
+  });
+
+  it("says on the card when a mix runs two lobbies", async () => {
+    const one = await mount([game(1, "balanced")]);
+    expect(one.container.textContent).not.toContain("lobbies");
+
+    const two = await mount([
+      {
+        ...game(2, "balanced"),
+        lobby_count: 2,
+        lobbies: [
+          { lobby_index: 0, selected_variant_index: 0, next_map_id: null, balanced_at: null },
+          { lobby_index: 1, selected_variant_index: 0, next_map_id: null, balanced_at: null }
+        ]
+      } as CustomGame
+    ]);
+    expect(two.container.textContent).toContain("2 lobbies");
   });
 });

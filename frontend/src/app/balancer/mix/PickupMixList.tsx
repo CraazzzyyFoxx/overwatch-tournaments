@@ -121,6 +121,7 @@ export function PickupMixList({
 
 function PickupMixRow({ game }: Readonly<{ game: CustomGame }>) {
   const t = useTranslations("mixes.list");
+  const tLobbies = useTranslations("mixes.lobbies");
   const format = useFormatter();
 
   return (
@@ -149,6 +150,11 @@ function PickupMixRow({ game }: Readonly<{ game: CustomGame }>) {
           <span className="min-w-0 max-w-full tabular-nums">
             {game.matches_count > 0 ? t("matches", { count: game.matches_count }) : t("noMatches")}
           </span>
+          {game.lobby_count > 1 ? (
+            <span className="min-w-0 max-w-full tabular-nums">
+              {tLobbies("count", { count: game.lobby_count })}
+            </span>
+          ) : null}
           {game.last_match_at ? (
             <time
               dateTime={game.last_match_at}

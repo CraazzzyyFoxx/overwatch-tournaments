@@ -3875,7 +3875,11 @@
       "summary": "Add custom game co-host"
     },
     "rpc.balancer.custom.balance": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Balances the non-benched lineup, reading the host's own rank book above the workspace canon, stores the resulting options on the mix and returns it; 422 when the lineup is empty or a seated player has no ranked role.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). With `scope=\"lobby\"` (the default) balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin on is left out. With `scope=\"all\"` it splits the whole pool into two equally strong lobbies and balances both. Ranks come from the host's own book above the workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, `too_many_must_play`, `too_many_pinned`, `roles_infeasible`).",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameBalanceRequest"
+      },
       "summary": "Balance custom game"
     },
     "rpc.balancer.custom.close": {
@@ -3907,15 +3911,23 @@
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and numbers the match within that lobby. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePostDiscord"
       },
       "summary": "Post custom game lineup to Discord"
     },
+    "rpc.balancer.custom.post_signup": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. 409 when the workspace has no mix channel configured.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGamePostSignup"
+      },
+      "summary": "Open custom game signup in Discord"
+    },
     "rpc.balancer.custom.record_outcome": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Repeatable until the mix is closed.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameRecordOutcome"
@@ -3927,11 +3939,49 @@
       "summary": "Remove custom game co-host"
     },
     "rpc.balancer.custom.rotation": {
-      "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only.",
+      "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the other lobby or pinned to it is left out -- and splits at that lobby's seat count.",
+      "query_params": [
+        {
+          "name": "lobby_index",
+          "required": false,
+          "schema": {
+            "description": "Which lobby to rank candidates for (0 or 1); defaults to 0.",
+            "type": "integer"
+          }
+        }
+      ],
       "summary": "Get custom game rotation hints"
     },
+    "rpc.balancer.custom.self_get": {
+      "description": "Permission: any authenticated account; workspace membership is NOT required. Returns the caller's own seat in the mix (participation, role order, the ranks the host's book resolves for them) plus what they may do next: join, leave, edit roles, and the blocker code for each. `seat` is null when the caller is not on the roster.",
+      "summary": "Get my mix seat"
+    },
+    "rpc.balancer.custom.self_join": {
+      "description": "Permission: any authenticated account with both Discord and Battle.net linked and `custom_game.self_join` not denied; workspace membership is created on the way in. Seats the caller according to the mix's signup mode (pool or bench) and returns the same state as the read. Idempotent: an existing row is left untouched, bench included. 403 for an unlinked account, 409 when signup is closed, the mix is over or the roster is full.",
+      "summary": "Join a mix myself"
+    },
+    "rpc.balancer.custom.self_leave": {
+      "description": "Permission: any authenticated account holding a seat in this mix -- the account links are deliberately NOT required, so unlinking one cannot trap somebody in a lineup. Removes the caller's own roster row; the stored balance is kept until the host re-balances. 404 when the caller has no seat, 409 once the mix is over.",
+      "summary": "Leave a mix myself"
+    },
+    "rpc.balancer.custom.self_update": {
+      "description": "Permission: a seated account, while the host's 'players edit their own roles' switch is on. Re-orders the caller's own roles (null = every role they have a rank for) and flips their flex flag; participation and ranks stay the host's. The shown balance is not recomputed -- the change applies to the next one. 409 when the switch is off, 404 when the caller has no seat.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameSelfUpdate"
+      },
+      "summary": "Update my mix seat"
+    },
+    "rpc.balancer.custom.set_lobby_count": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the first untouched; going back to one deletes the second lobby together with its stored matchup and clears every player's lobby pin. Matches already recorded for the second lobby stay in the history and in the statistics.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameLobbyCountPatch"
+      },
+      "summary": "Set custom game lobby count"
+    },
     "rpc.balancer.custom.set_next_map": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. 404 when the map is not in the catalogue.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the lobby's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. The lobby_index field names which lobby's roll this is; a single-lobby mix leaves it at 0. 404 when the map is not in the catalogue.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameNextMapPatch"
@@ -3946,6 +3996,14 @@
       },
       "summary": "Set custom game participation"
     },
+    "rpc.balancer.custom.set_self_service": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Sets whether players may seat themselves (closed, into the pool, or onto the bench) and whether a seated player may re-order their own roles, then returns the refreshed mix.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameSelfServicePatch"
+      },
+      "summary": "Set custom game self-service switches"
+    },
     "rpc.balancer.custom.set_team_names": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Renames the balanced teams by index and returns the refreshed mix.",
       "request": {
@@ -3955,7 +4013,7 @@
       "summary": "Set custom game team names"
     },
     "rpc.balancer.custom.set_variant_index": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages the mix to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the mix, not about one browser. 404 when the index points past the stored options. Re-balancing resets it to the first option.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages one lobby to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the lobby, not about one browser. 404 when the index points past the stored options, and 409 seat_conflict when the option would seat somebody the mix's other lobby has already put on the floor. Re-balancing resets it to the first option.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameVariantIndexPatch"
@@ -3983,7 +4041,7 @@
       "summary": "Transfer custom game host"
     },
     "rpc.balancer.custom.undo_match": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the mix's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
       "summary": "Undo custom game match"
     },
     "rpc.balancer.custom.update_player": {
@@ -7731,7 +7789,7 @@
       "summary": "Cancel FFA game"
     },
     "rpc.tournament.ffa_game_results_set": {
-      "description": "Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once. Placements are required when the stage pays for place and derived from the score otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table. 409 when a later stage has already been seeded from this group.",
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once, carrying one value per column of the stage. Placements are required when the stage's formula reads the place and derived from the game's points otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table, with every column on it. 409 when a later stage has already been seeded from this group.",
       "request": {
         "array": false,
         "ref": "tournament.FfaGameResultsInput"
@@ -7763,12 +7821,20 @@
       "summary": "Get FFA lobby"
     },
     "rpc.tournament.ffa_stage": {
-      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points, and one cell per planned game. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.",
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points and column sums, and one cell per planned game. Columns the organizer marked non-public are omitted here entirely \u2014 their sums and per-game values never leave the service. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.",
       "response": {
         "array": true,
         "ref": "tournament.FfaLobbyRead"
       },
       "summary": "Get FFA stage lobbies"
+    },
+    "rpc.tournament.ffa_stage_admin": {
+      "description": "Permission: workspace `match.update` on the tournament's workspace \u2014 whoever may record a result may read the values behind it. The same lobby tables as the public stage read, with the columns marked non-public still on them: that is what the result-entry dialog fills in. Not cached by the gateway.",
+      "response": {
+        "array": true,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Get FFA stage lobbies (organizer view)"
     },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
@@ -22130,6 +22196,30 @@
       "title": "CreateJobResponse",
       "type": "object"
     },
+    "balancer.CustomGameBalanceRequest": {
+      "additionalProperties": false,
+      "description": "What to balance. An empty body is the first lobby, as before there was a second.\n\n``scope=\"all\"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.",
+      "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
+        "scope": {
+          "default": "lobby",
+          "enum": [
+            "lobby",
+            "all"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "title": "CustomGameBalanceRequest",
+      "type": "object"
+    },
     "balancer.CustomGameCoHostPatch": {
       "additionalProperties": false,
       "properties": {
@@ -22194,10 +22284,36 @@
       "title": "CustomGameHostTransfer",
       "type": "object"
     },
+    "balancer.CustomGameLobbyCountPatch": {
+      "additionalProperties": false,
+      "description": "How many lobbies the mix runs at once.",
+      "properties": {
+        "lobby_count": {
+          "enum": [
+            1,
+            2
+          ],
+          "title": "Lobby Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "lobby_count"
+      ],
+      "title": "CustomGameLobbyCountPatch",
+      "type": "object"
+    },
     "balancer.CustomGameNextMapPatch": {
       "additionalProperties": false,
       "description": "``null`` clears the pick; the next match then records with no map.",
       "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
         "map_id": {
           "anyOf": [
             {
@@ -22274,6 +22390,20 @@
           "default": null,
           "title": "Is Flex"
         },
+        "lobby_pin": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lobby Pin"
+        },
         "participation": {
           "anyOf": [
             {
@@ -22340,6 +22470,13 @@
           "default": null,
           "title": "Image B64"
         },
+        "lobby_index": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
         "variant_index": {
           "minimum": 0,
           "title": "Variant Index",
@@ -22352,9 +22489,35 @@
       "title": "CustomGamePostDiscord",
       "type": "object"
     },
+    "balancer.CustomGamePostSignup": {
+      "additionalProperties": false,
+      "description": "Which signup mode the posted card opens. ``closed`` is not a choice here:\nposting a card that refuses every click is never the intent.",
+      "properties": {
+        "self_signup": {
+          "enum": [
+            "pool",
+            "benched"
+          ],
+          "title": "Self Signup",
+          "type": "string"
+        }
+      },
+      "required": [
+        "self_signup"
+      ],
+      "title": "CustomGamePostSignup",
+      "type": "object"
+    },
     "balancer.CustomGameRecordOutcome": {
       "additionalProperties": false,
       "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
         "map_id": {
           "anyOf": [
             {
@@ -22409,6 +22572,13 @@
           "title": "First Uuid",
           "type": "string"
         },
+        "lobby_index": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
         "second_uuid": {
           "minLength": 1,
           "title": "Second Uuid",
@@ -22426,6 +22596,72 @@
         "second_uuid"
       ],
       "title": "CustomGameSeatSwap",
+      "type": "object"
+    },
+    "balancer.CustomGameSelfServicePatch": {
+      "additionalProperties": false,
+      "description": "The host's self-service switches: the signup mode and the role-edit flag.",
+      "properties": {
+        "self_role_edit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Self Role Edit"
+        },
+        "self_signup": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.MixSelfSignup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "CustomGameSelfServicePatch",
+      "type": "object"
+    },
+    "balancer.CustomGameSelfUpdate": {
+      "additionalProperties": false,
+      "description": "What a PLAYER may change about their own seat.\n\n``roles`` absent means \"leave my role order alone\"; ``roles: null`` means\n\"every role I have a rank for\". The two are distinguished by\n``model_fields_set``, so a flex toggle cannot silently reset a role order.",
+      "properties": {
+        "is_flex": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Flex"
+        },
+        "roles": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roles"
+        }
+      },
+      "title": "CustomGameSelfUpdate",
       "type": "object"
     },
     "balancer.CustomGameTeamNamesPatch": {
@@ -22447,8 +22683,15 @@
     },
     "balancer.CustomGameVariantIndexPatch": {
       "additionalProperties": false,
-      "description": "Which stored balance option the mix shows, for every viewer at once.",
+      "description": "Which stored balance option the lobby shows, for every viewer at once.",
       "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
         "variant_index": {
           "minimum": 0,
           "title": "Variant Index",
@@ -24383,6 +24626,16 @@
         "benched"
       ],
       "title": "MixParticipation",
+      "type": "string"
+    },
+    "balancer.MixSelfSignup": {
+      "description": "Who may put themselves on a mix roster, and where they land.\n\nOne column, three states: ``closed`` is no self-signup at all, ``pool``\nseats a self-signed player straight into the pool, ``benched`` parks them\nfor the host to promote. A bool plus a destination enum would admit a\nfourth, meaningless pair (\"closed, but onto the bench\").",
+      "enum": [
+        "closed",
+        "pool",
+        "benched"
+      ],
+      "title": "MixSelfSignup",
       "type": "string"
     },
     "balancer.PlayerData": {
@@ -38464,6 +38717,74 @@
       "title": "EncounterUpdate",
       "type": "object"
     },
+    "tournament.FfaColumnRead": {
+      "properties": {
+        "better": {
+          "enum": [
+            "higher",
+            "lower"
+          ],
+          "title": "Better",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "public": {
+          "title": "Public",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "public",
+        "better"
+      ],
+      "title": "FfaColumnRead",
+      "type": "object"
+    },
+    "tournament.FfaColumnSettings": {
+      "additionalProperties": false,
+      "description": "One value an ffa_league stage records per team per game.",
+      "properties": {
+        "better": {
+          "default": "higher",
+          "enum": [
+            "higher",
+            "lower"
+          ],
+          "title": "Better",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "public": {
+          "default": true,
+          "title": "Public",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ],
+      "title": "FfaColumnSettings",
+      "type": "object"
+    },
     "tournament.FfaGameCancelInput": {
       "properties": {
         "reason": {
@@ -38507,17 +38828,6 @@
           "title": "Position",
           "type": "integer"
         },
-        "score": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Score"
-        },
         "state": {
           "anyOf": [
             {
@@ -38527,14 +38837,28 @@
               "type": "null"
             }
           ]
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stats"
         }
       },
       "required": [
         "position",
         "state",
         "placement",
-        "score",
-        "points"
+        "points",
+        "stats"
       ],
       "title": "FfaGameCellRead",
       "type": "object"
@@ -38554,10 +38878,12 @@
           "default": null,
           "title": "Placement"
         },
-        "score": {
-          "minimum": 0,
-          "title": "Score",
-          "type": "integer"
+        "stats": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Stats",
+          "type": "object"
         },
         "team_id": {
           "title": "Team Id",
@@ -38566,7 +38892,7 @@
       },
       "required": [
         "team_id",
-        "score"
+        "stats"
       ],
       "title": "FfaGameResultLineInput",
       "type": "object"
@@ -38747,13 +39073,16 @@
           ],
           "title": "Position"
         },
-        "score": {
-          "title": "Score",
-          "type": "integer"
-        },
         "slot": {
           "title": "Slot",
           "type": "integer"
+        },
+        "stats": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Stats",
+          "type": "object"
         },
         "team_id": {
           "title": "Team Id",
@@ -38800,7 +39129,7 @@
         "points",
         "games_played",
         "wins",
-        "score",
+        "stats",
         "games"
       ],
       "title": "FfaLobbyRowRead",
@@ -38808,6 +39137,17 @@
     },
     "tournament.FfaRulesRead": {
       "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaColumnRead"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "formula": {
+          "title": "Formula",
+          "type": "string"
+        },
         "placement_points": {
           "items": {
             "type": "number"
@@ -38815,34 +39155,38 @@
           "title": "Placement Points",
           "type": "array"
         },
-        "score_label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Score Label"
-        },
-        "score_points": {
-          "title": "Score Points",
-          "type": "number"
+        "requires_placement": {
+          "title": "Requires Placement",
+          "type": "boolean"
         }
       },
       "required": [
+        "columns",
         "placement_points",
-        "score_points",
-        "score_label"
+        "formula",
+        "requires_placement"
       ],
       "title": "FfaRulesRead",
       "type": "object"
     },
     "tournament.FfaScoring": {
       "additionalProperties": false,
-      "description": "What an ffa_league stage pays for (plan \u00a74.2); inert on any other type.",
+      "description": "What an ffa_league stage records and what it pays for it (plan \u00a73.1).\n\nInert on any other stage type. The unset block is the behaviour a stage had\nbefore columns existed: one raw score column paid one for one.",
       "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaColumnSettings"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "formula": {
+          "default": "score",
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Formula",
+          "type": "string"
+        },
         "placement_points": {
           "items": {
             "type": "number"
@@ -38850,25 +39194,6 @@
           "maxItems": 100,
           "title": "Placement Points",
           "type": "array"
-        },
-        "score_label": {
-          "anyOf": [
-            {
-              "maxLength": 32,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Score Label"
-        },
-        "score_points": {
-          "default": 1.0,
-          "minimum": 0,
-          "title": "Score Points",
-          "type": "number"
         }
       },
       "title": "FfaScoring",

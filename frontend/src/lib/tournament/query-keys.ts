@@ -39,6 +39,14 @@ export const tournamentQueryKeys = {
     ["ffa", tournamentId, "stage", stageId] as const,
   ffaLobby: (tournamentId: number, encounterId: number) =>
     ["ffa", tournamentId, "lobby", encounterId] as const,
+  /** The organizer's read of the same stage. A separate entry on purpose: it
+   *  carries the hidden columns the public read drops, and one shared key would
+   *  serve whichever of the two answers landed in the cache first. Still under
+   *  the `["ffa", tournamentId]` prefix, so `ffaAll` — and with it every
+   *  realtime invalidation (`lib/realtime/resources.ts:67-78`) — stales it
+   *  together with the public tables. */
+  ffaStageAdmin: (tournamentId: number, stageId: number) =>
+    ["ffa", tournamentId, "stage", stageId, "admin"] as const,
   /** That shared prefix, for the writes that move every lobby of a tournament. */
   ffaAll: (tournamentId: number) => ["ffa", tournamentId] as const,
   encountersOverview: (workspaceId?: number | null) =>

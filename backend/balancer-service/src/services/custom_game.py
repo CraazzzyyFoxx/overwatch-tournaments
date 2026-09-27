@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,24 +18,32 @@ from shared.core.enums import (
     HeroClass,
     MixParticipation,
     MixRoleSelectionMode,
+    MixSelfSignup,
     MixStatus,
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.roster_shape import resolve_roster_shape
+from shared.rbac import assign_workspace_system_role
 from shared.repository import (
     CasualMatchRepository,
     CasualPlayerRepository,
     CasualTeamRepository,
     CustomGameCoHostRepository,
+    CustomGameLobbyRepository,
     CustomGamePlayerRepository,
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
     CustomGameTeamNameRepository,
     MapRepository,
     UserBalancerConfigRepository,
+    UserRepository,
+    WorkspaceMemberRepository,
 )
+from shared.repository.workspace import get_or_create_workspace_member
+from shared.schemas.events import DiscordCard
 from shared.schemas.roster_slots import RosterShapeRead
+from shared.services.account_links import missing_account_links
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER, MemberRankService, member_rank_service
 from shared.services.roster_shape_access import get_workspace_roster_slots
@@ -44,11 +54,15 @@ from shared.services.workspace_roster import (
     workspace_member_user_ids,
 )
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
-from src.domain.mix_discord import build_lineup_embed
+from src.domain.mix_discord import build_lineup_embed, signup_card
+from src.domain.mix_lobbies import seated_member_ids
+from src.domain.mix_lobby_split import LobbySplitError, SplitCandidate, split_into_lobbies
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
+from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
+from src.services.pickup_mix_realtime import emit_pickup_mix_updated
 
 __all__ = ("CustomGameService", "custom_game_service")
 
@@ -60,9 +74,53 @@ _MAX_TEAMS = 8
 #: co-host list without bound.
 _MAX_CO_HOSTS = 16
 _MAX_TEAM_NAME_LEN = 60
+#: Board-facing name of a lobby; the wire and the database speak indexes.
+LOBBY_LABELS = ("A", "B")
 #: A roster row owns only its lineup state. A rank correction goes into the
 #: host's own layer of ``member_rank``, so it outlives the game it was made in.
-_PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex"})
+_PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex", "lobby_pin"})
+
+#: What a PLAYER may patch on their own row. Ranks are the host's book and
+#: participation is the host's decision, so neither is here.
+_SELF_PATCH_FIELDS = frozenset({"roles", "is_flex"})
+
+#: HTTP status per admission blocker (``mix_self_policy``). 403 is "fix your
+#: account", 409 "the mix says no", 404 "you are not in this lineup".
+_BLOCKER_STATUS = {
+    "mix_closed": status.HTTP_409_CONFLICT,
+    "discord_not_linked": status.HTTP_403_FORBIDDEN,
+    "battlenet_not_linked": status.HTTP_403_FORBIDDEN,
+    "player_not_linked": status.HTTP_403_FORBIDDEN,
+    "self_join_denied": status.HTTP_403_FORBIDDEN,
+    "signup_closed": status.HTTP_409_CONFLICT,
+    "roster_full": status.HTTP_409_CONFLICT,
+    "role_edit_off": status.HTTP_409_CONFLICT,
+    "not_on_roster": status.HTTP_404_NOT_FOUND,
+}
+
+
+def _blocker(code: str) -> HTTPException:
+    """The refusal for one admission code; ``detail`` IS the code, so a client
+    (site or bot) translates it instead of parsing English."""
+    return HTTPException(status_code=_BLOCKER_STATUS[code], detail=code)
+
+
+def _reject_unknown(patch: Mapping[str, Any], allowed: frozenset[str]) -> None:
+    unknown = sorted(set(patch) - allowed)
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown fields {unknown}")
+
+
+@dataclass(frozen=True, slots=True)
+class _SelfContext:
+    """Everything one self-service call reads, resolved once."""
+
+    game: models.CustomGame
+    player: Any
+    member: Any
+    roster: list[models.CustomGamePlayer]
+    row: models.CustomGamePlayer | None
+    policy: MixSelfPolicy
 
 
 def _require_host(actor_user_id: int, host_user_id: int | None) -> None:
@@ -274,6 +332,7 @@ class CustomGameService:
         games: CustomGameRepository = CustomGameRepository(),
         roster: CustomGamePlayerRepository = CustomGamePlayerRepository(),
         co_hosts: CustomGameCoHostRepository = CustomGameCoHostRepository(),
+        lobbies: CustomGameLobbyRepository = CustomGameLobbyRepository(),
         player_roles: CustomGamePlayerRoleRepository = CustomGamePlayerRoleRepository(),
         team_names: CustomGameTeamNameRepository = CustomGameTeamNameRepository(),
         casual_matches: CasualMatchRepository = CasualMatchRepository(),
@@ -286,10 +345,16 @@ class CustomGameService:
         load_hosts=hosts_by_user_id,
         load_member_user_ids=workspace_member_user_ids,
         run_balance=_run_balance,
+        players: UserRepository = UserRepository(),
+        workspace_members: WorkspaceMemberRepository = WorkspaceMemberRepository(),
+        load_missing_links=missing_account_links,
+        enroll_member=get_or_create_workspace_member,
+        grant_player_role=assign_workspace_system_role,
     ) -> None:
         self.games = games
         self.roster = roster
         self.co_hosts = co_hosts
+        self.lobbies = lobbies
         self.player_roles = player_roles
         self.team_names = team_names
         self.casual_matches = casual_matches
@@ -302,6 +367,11 @@ class CustomGameService:
         self.load_hosts = load_hosts
         self.load_member_user_ids = load_member_user_ids
         self.run_balance = run_balance
+        self.players = players
+        self.workspace_members = workspace_members
+        self.load_missing_links = load_missing_links
+        self.enroll_member = enroll_member
+        self.grant_player_role = grant_player_role
 
     async def members(
         self, session: AsyncSession, workspace_id: int, member_ids: Sequence[int]
@@ -376,6 +446,65 @@ class CustomGameService:
         if game.status in _TERMINAL:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Game is {game.status}")
         return game
+
+    async def _lobby(self, session: AsyncSession, game: models.CustomGame, lobby_index: int) -> models.CustomGameLobby:
+        """One lobby row of this mix -- where every per-match fact lives.
+
+        A mix has exactly ``lobby_count`` rows (``create`` opens them,
+        ``set_lobby_count`` adds and removes the second), so a miss is a caller
+        naming a lobby the mix does not run, not a row to conjure up.
+        """
+        lobby = await self.lobbies.get(session, game.id, lobby_index)
+        if lobby is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="lobby_not_found")
+        return lobby
+
+    async def _other_lobby_seated(
+        self, session: AsyncSession, game: models.CustomGame, lobby_index: int
+    ) -> frozenset[int]:
+        """Who the mix's OTHER lobby currently has on the floor.
+
+        Empty for a one-lobby mix: with no lobby next door, nobody is playing
+        one. Membership is not stored -- it is the seats of that lobby's
+        selected option, which is what every caller here means by "busy".
+        """
+        if game.lobby_count != 2:
+            return frozenset()
+        other = await self._lobby(session, game, 1 - lobby_index)
+        return seated_member_ids(other.balance_result_json, other.selected_variant_index)
+
+    async def _lobby_candidates(
+        self,
+        session: AsyncSession,
+        game: models.CustomGame,
+        rows: Sequence[models.CustomGamePlayer],
+        lobby_index: int,
+    ) -> list[models.CustomGamePlayer]:
+        """The roster rows this lobby may seat, out of ``rows``.
+
+        One rule, one place: whoever is on the floor next door is playing, and
+        whoever is pinned to the other lobby is not this one's to seat. A
+        one-lobby mix owns its whole pool, so ``rows`` comes back untouched.
+        """
+        if game.lobby_count != 2:
+            return list(rows)
+        busy = await self._other_lobby_seated(session, game, lobby_index)
+        other_index = 1 - lobby_index
+        return [row for row in rows if row.workspace_member_id not in busy and row.lobby_pin != other_index]
+
+    async def _lobby_team_names(self, session: AsyncSession, game_id: int, lobby_index: int) -> dict[int, str]:
+        """This lobby's two team-name overrides, renumbered to ``0``-``1``.
+
+        Names are stored by GLOBAL index (``lobby_index * 2 + team``) because
+        lobby B's two teams are two more rows of the same table; every reader
+        wants them by position inside its own lobby's variant.
+        """
+        offset = lobby_index * 2
+        return {
+            index - offset: name
+            for index, name in (await self.team_names.mapping_for_game(session, game_id)).items()
+            if 0 <= index - offset < 2
+        }
 
     async def _seed_host_ranks(
         self, session: AsyncSession, game: models.CustomGame, members: Mapping[int, RosterMember]
@@ -476,8 +605,20 @@ class CustomGameService:
             host_user_id=host_user_id,
             name=trimmed,
             status=MixStatus.DRAFT,
+            # A clone is a new session: the host's "players edit their own roles"
+            # choice carries over, the open signup window deliberately does not.
+            self_signup=MixSelfSignup.CLOSED,
+            self_role_edit=bool(source.self_role_edit) if source is not None else False,
+            # How this host runs a session -- one lobby or two -- travels with
+            # the clone; the matchups played in them do not.
+            lobby_count=source.lobby_count if source is not None else 1,
         )
         await self.games.create(session, game)
+        # The invariant every per-match read relies on: a mix always has its
+        # lobbies. A clone copies the pool and the setup, never a played
+        # session, so the fresh lobbies start empty.
+        for lobby_index in range(game.lobby_count):
+            await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=lobby_index))
 
         cloned: list[tuple[models.CustomGamePlayer, models.CustomGamePlayer]] = []
         rows: list[models.CustomGamePlayer] = []
@@ -485,6 +626,7 @@ class CustomGameService:
             row = _new_roster_row(game.id, source_row.workspace_member_id, source_row.sort_order)
             row.role_selection_mode = source_row.role_selection_mode
             row.is_flex = source_row.is_flex
+            row.lobby_pin = source_row.lobby_pin
             rows.append(row)
             cloned.append((source_row, row))
         taken = {row.workspace_member_id for row in rows}
@@ -575,9 +717,9 @@ class CustomGameService:
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
         """Patch one roster row's participation, role selection and flex mode."""
-        unknown = sorted(set(patch) - _PLAYER_PATCH_FIELDS)
-        if unknown:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown fields {unknown}")
+        # Before the game read on purpose: an unknown key is a client bug, and
+        # answering 422 for it must not depend on the row existing.
+        _reject_unknown(patch, _PLAYER_PATCH_FIELDS)
         game = await self._writable(
             session,
             workspace_id=workspace_id,
@@ -589,6 +731,33 @@ class CustomGameService:
         row = next((item for item in roster if item.workspace_member_id == workspace_member_id), None)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game player not found")
+        await self._apply_player_patch(session, row, patch, _PLAYER_PATCH_FIELDS, lobby_count=game.lobby_count)
+        await session.flush()
+        return game
+
+    async def _apply_player_patch(
+        self,
+        session: AsyncSession,
+        row: models.CustomGamePlayer,
+        patch: Mapping[str, Any],
+        allowed: frozenset[str],
+        *,
+        lobby_count: int = 1,
+    ) -> None:
+        """Apply a validated lineup patch to one row, within ``allowed`` fields.
+
+        One mutation for two callers: the host patches the whole row
+        (``_PLAYER_PATCH_FIELDS``), a player only their own role order and flex
+        (``_SELF_PATCH_FIELDS``). The difference between them is the gate, not
+        the write -- a self edit that diverged here would be a second, subtly
+        different way to set the same columns.
+
+        ``lobby_count`` is the mix's, and only the pin reads it: pinning to a
+        lobby the mix does not run is a client bug, not a silent no-op. The self
+        path never carries a pin (``lobby_pin`` is not in ``_SELF_PATCH_FIELDS``),
+        so it leaves the default alone.
+        """
+        _reject_unknown(patch, allowed)
         if "participation" in patch:
             try:
                 row.participation = MixParticipation(patch["participation"])
@@ -610,8 +779,13 @@ class CustomGameService:
                     detail="is_flex must be a boolean",
                 )
             row.is_flex = patch["is_flex"]
-        await session.flush()
-        return game
+        if "lobby_pin" in patch:
+            if lobby_count < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="lobby_pin requires a mix with two lobbies",
+                )
+            row.lobby_pin = patch["lobby_pin"]
 
     async def set_participation(
         self,
@@ -643,6 +817,358 @@ class CustomGameService:
             rows[member_id].participation = state
         await session.flush()
         return game
+
+    async def set_lobby_count(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_count: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """Run this mix as one lobby or two.
+
+        Going to two opens an empty lobby B: it has no matchup until somebody
+        balances it, and lobby A is not touched. Going back to one deletes
+        lobby B -- its stored matchup is lost, its recorded matches stay in the
+        history -- and frees every pin, because a pin to a lobby the mix no
+        longer runs would quietly exclude that player from the next balance.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        if lobby_count == game.lobby_count:
+            return game
+        if lobby_count == 2:
+            await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=1))
+        else:
+            lobby = await self.lobbies.get(session, game.id, 1)
+            if lobby is not None:
+                await self.lobbies.delete(session, lobby)
+            for row in await self.roster.list_for_game(session, game.id):
+                row.lobby_pin = None
+        game.lobby_count = lobby_count
+        await session.flush()
+        return game
+
+    async def _self_context(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None,
+    ) -> _SelfContext:
+        """The mix, the caller's own seat in it, and the policy over both.
+
+        The workspace comes from the mix row, not the caller: the bot knows a
+        ``custom_game_id`` and nothing else. When a ``workspace_id`` IS supplied
+        (the site's route carries one) it must agree, or this is a 404 -- the same
+        answer a mix of another workspace gets everywhere else.
+        """
+        game = await self.games.get(session, custom_game_id)
+        if game is None or (workspace_id is not None and game.workspace_id != workspace_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
+        player = await self.players.get_by_auth_user_id(session, auth_user.id)
+        member = (
+            None
+            if player is None
+            else await self.workspace_members.get_by_player(
+                session, workspace_id=game.workspace_id, player_id=player.id
+            )
+        )
+        roster = list(await self.roster.list_for_game(session, game.id))
+        row = None if member is None else next((item for item in roster if item.workspace_member_id == member.id), None)
+        policy = mix_self_policy(
+            status=game.status,
+            self_signup=game.self_signup,
+            self_role_edit=game.self_role_edit,
+            on_roster=row is not None,
+            missing_links=await self.load_missing_links(session, auth_user.id),
+            has_player=player is not None,
+            self_join_denied=not auth_user.can_capability("custom_game", "self_join", workspace_id=game.workspace_id),
+            roster_size=len(roster),
+        )
+        return _SelfContext(game=game, player=player, member=member, roster=roster, row=row, policy=policy)
+
+    async def _self_dump(self, session: AsyncSession, ctx: _SelfContext) -> dict[str, Any]:
+        """One player's view of one mix: their seat, and what they may do next.
+
+        ``ranks`` carries all three roles, ``None`` included: the Discord role
+        select labels every option with a number or "no rank", and a sparse dict
+        would make the bot guess. ``unranked_roles`` is the narrower list the
+        warning is built from -- the roles this player actually plays.
+
+        ``current_lobby`` is the same derivation the board shows -- the seats of
+        each lobby's selected option -- so nobody downstream re-parses a solver
+        document to answer "which lobby am I in", and ``lobby_count`` is what
+        tells them whether that question is worth asking at all.
+        """
+        seat: dict[str, Any] | None = None
+        unranked: list[str] = []
+        if ctx.row is not None:
+            stored = (await self.player_roles.roles_for_players(session, [ctx.row.id])).get(ctx.row.id, [])
+            explicit = ctx.row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
+            resolved = await self.ranks.resolve(
+                session,
+                workspace_id=ctx.game.workspace_id,
+                members={ctx.row.workspace_member_id: ctx.player.id if ctx.player is not None else None},
+                roles=list(REGISTRATION_ROLE_CODES),
+                order=MIX_ORDER,
+                author_user_id=ctx.game.host_user_id,
+                grid=await get_effective_division_grid(session, None),
+            )
+            ranks: dict[str, int | None] = {}
+            for role in REGISTRATION_ROLE_CODES:
+                rank = resolved.get((ctx.row.workspace_member_id, role))
+                ranks[role] = rank.value if rank is not None else None
+            considered = list(stored) if explicit else list(REGISTRATION_ROLE_CODES)
+            unranked = [role for role in considered if ranks.get(role) is None]
+            seat = {
+                "participation": ctx.row.participation,
+                # ``null`` means all_ranked: every role this player has a number
+                # for plays, which is a different statement from an empty list.
+                "roles": list(stored) if explicit else None,
+                "is_flex": ctx.row.is_flex,
+                "ranks": ranks,
+                # 0 | 1 while a balance seats them, ``null`` while it does not.
+                "current_lobby": next(
+                    (
+                        lobby.lobby_index
+                        for lobby in await self.lobbies.list_for_game(session, ctx.game.id)
+                        if ctx.row.workspace_member_id
+                        in seated_member_ids(lobby.balance_result_json, lobby.selected_variant_index)
+                    ),
+                    None,
+                ),
+            }
+        return {
+            "custom_game_id": ctx.game.id,
+            "name": ctx.game.name,
+            "status": ctx.game.status,
+            "self_signup": ctx.game.self_signup,
+            "self_role_edit": ctx.game.self_role_edit,
+            # Whether "you are in lobby A" is a sentence worth saying: a
+            # one-lobby mix has nothing to distinguish.
+            "lobby_count": ctx.game.lobby_count,
+            "seat": seat,
+            "unranked_roles": unranked,
+            "policy": {
+                "can_join": ctx.policy.can_join,
+                "can_leave": ctx.policy.can_leave,
+                "can_edit_roles": ctx.policy.can_edit_roles,
+                "join_blocker": ctx.policy.join_blocker,
+                "edit_blocker": ctx.policy.edit_blocker,
+            },
+        }
+
+    async def self_state(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Read-only: what this account's seat is and what it may do."""
+        return await self._self_dump(
+            session,
+            await self._self_context(
+                session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+            ),
+        )
+
+    async def self_join(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Seat this account in the mix, enrolling it in the workspace if needed.
+
+        Idempotent by design: an existing row is left EXACTLY as it is, so a
+        player the host benched cannot walk that back by clicking Join again.
+        """
+        ctx = await self._self_context(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+        if ctx.row is not None:
+            return await self._self_dump(session, ctx)
+        if ctx.policy.join_blocker is not None:
+            raise _blocker(ctx.policy.join_blocker)
+
+        # Same two idempotent steps the tournament self-registration takes
+        # (tournament-service/src/services/registration/service.py): the
+        # membership row anchors the roster row, the baseline RBAC role makes the
+        # account an ordinary workspace player rather than a role-less anchor.
+        member = ctx.member or await self.enroll_member(
+            session, workspace_id=ctx.game.workspace_id, player_id=ctx.player.id
+        )
+        await self.grant_player_role(
+            session, user_id=auth_user.id, workspace_id=ctx.game.workspace_id, role_name="player"
+        )
+        row = _new_roster_row(ctx.game.id, member.id, len(ctx.roster))
+        row.participation = MixParticipation(ctx.game.self_signup)
+        try:
+            async with session.begin_nested():
+                await self.roster.create(session, row)
+        except IntegrityError:
+            # Two clicks raced onto uq_custom_game_player_member. The other one
+            # seated them, so report the state it produced instead of a 500.
+            return await self.self_state(
+                session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+            )
+        await self._seed_host_ranks(session, ctx.game, await self.members(session, ctx.game.workspace_id, [member.id]))
+        await session.flush()
+        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        return await self.self_state(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+
+    async def self_leave(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Drop this account's own row, exactly as the host removing it would.
+
+        Deliberately does not require the account links: somebody who unlinked
+        Battle.net after joining must still be able to get out of the lineup.
+        """
+        ctx = await self._self_context(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+        if not ctx.policy.can_leave or ctx.row is None:
+            # A terminal mix refuses every write; anything else means this
+            # account simply holds no row in this lineup.
+            raise _blocker("mix_closed" if ctx.policy.join_blocker == "mix_closed" else "not_on_roster")
+        await self.roster.delete(session, ctx.row)
+        await session.flush()
+        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        return await self.self_state(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+
+    async def self_update(
+        self,
+        session: AsyncSession,
+        *,
+        custom_game_id: int,
+        auth_user: Any,
+        patch: Mapping[str, Any],
+        workspace_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Re-order this account's own roles / flip its flex flag.
+
+        The stored balance is NOT recomputed: it is a snapshot of a search the
+        host ran, and a role change takes effect the next time they balance.
+        """
+        _reject_unknown(patch, _SELF_PATCH_FIELDS)
+        ctx = await self._self_context(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+        if ctx.row is None or not ctx.policy.can_edit_roles:
+            raise _blocker(ctx.policy.edit_blocker or "not_on_roster")
+        await self._apply_player_patch(session, ctx.row, patch, _SELF_PATCH_FIELDS)
+        await session.flush()
+        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        return await self.self_state(
+            session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
+        )
+
+    async def set_self_service(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        patch: Mapping[str, Any],
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """The host's two switches: who may seat themselves, and who may re-role."""
+        _reject_unknown(patch, frozenset({"self_signup", "self_role_edit"}))
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        if "self_signup" in patch:
+            try:
+                game.self_signup = MixSelfSignup(patch["self_signup"]).value
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="invalid self_signup",
+                ) from exc
+        if "self_role_edit" in patch:
+            if not isinstance(patch["self_role_edit"], bool):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="self_role_edit must be a boolean",
+                )
+            game.self_role_edit = patch["self_role_edit"]
+        await session.flush()
+        return game
+
+    async def signup_post(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        self_signup: str,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+        board_url_base: str,
+    ) -> tuple[int, DiscordCard]:
+        """Open signup and build the card that announces it.
+
+        The mode is written HERE rather than left to a separate call: a card in
+        the channel whose buttons answer ``signup_closed`` is the one outcome
+        nobody wants, and the column -- not the card -- is what admits a player.
+
+        Publishing is the RPC layer's job (that is where the broker is), so this
+        returns the channel and the payload, exactly like :meth:`discord_lineup`.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        # Resolved before the write: posting nowhere and silently opening signup
+        # would leave the host believing the channel has a card.
+        channel_id = await self.workspace_discord_channel_id(session, workspace_id)
+        if channel_id is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
+        try:
+            game.self_signup = MixSelfSignup(self_signup).value
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid self_signup") from exc
+        host_names = await self.hosts(session, workspace_id, [game.host_user_id])
+        card = signup_card(
+            mix_name=game.name,
+            host_name=host_names.get(game.host_user_id),
+            board_url=f"{board_url_base.rstrip('/')}/balancer/mix/{game.id}",
+            custom_game_id=game.id,
+        )
+        await session.flush()
+        return channel_id, card
 
     async def _host_config(self, session: AsyncSession, host_user_id: int | None) -> Any:
         """The host's ``balancer.user_config`` row, or ``None`` if they never saved one.
@@ -685,26 +1211,22 @@ class CustomGameService:
         config = await self._host_config(session, host_user_id)
         return (config.points_per_win or 0) if config is not None else 0
 
-    async def balance(
+    async def _lineup_nodes(
         self,
         session: AsyncSession,
         *,
-        workspace_id: int,
-        custom_game_id: int,
-        actor_user_id: int,
-        actor_is_superuser: bool = False,
-    ) -> models.CustomGame:
-        game = await self._writable(
-            session,
-            workspace_id=workspace_id,
-            custom_game_id=custom_game_id,
-            actor_user_id=actor_user_id,
-            actor_is_superuser=actor_is_superuser,
-        )
-        roster = list(await self.roster.list_for_game(session, game.id))
-        lineup = [row for row in roster if row.participation != MixParticipation.BENCHED]
-        if not lineup:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+        game: models.CustomGame,
+        lineup: Sequence[models.CustomGamePlayer],
+    ) -> tuple[dict[str, Any], list[SplitCandidate]]:
+        """The solver's input for these roster rows plus the same facts for the splitter.
+
+        Split out of ``balance`` because one mix is now solved lobby by lobby:
+        each lobby feeds in its own set of rows and reads them the same way. One
+        pass over one set of reads: the ranks, role order and rotation priority
+        the solver wants are exactly what the two-lobby splitter weighs, so the
+        two cannot drift apart (and ``member_rank`` is not read twice for one
+        lineup).
+        """
         # If the lineup does not divide evenly into full teams, `run_balance`'s own
         # overflow trim (`domain.balancer.runtime._prepare_balance_context`) sorts the
         # players not pinned to a seat by `Player.rotation_priority` ascending and
@@ -719,10 +1241,10 @@ class CustomGameService:
         histories_by_member = {
             history.member_id: history for history in await self._rotation_histories(session, game, lineup)
         }
-        members = await self.members(session, workspace_id, [row.workspace_member_id for row in lineup])
+        members = await self.members(session, game.workspace_id, [row.workspace_member_id for row in lineup])
         resolved = await self.ranks.resolve(
             session,
-            workspace_id=workspace_id,
+            workspace_id=game.workspace_id,
             members={member_id: member.player_id for member_id, member in members.items()},
             roles=list(REGISTRATION_ROLE_CODES),
             # ``MIX_ORDER`` puts the host's own book above the workspace canon: a
@@ -736,14 +1258,12 @@ class CustomGameService:
             [row.id for row in lineup if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT],
         )
         player_nodes: dict[str, Any] = {}
+        candidates: list[SplitCandidate] = []
         for row in lineup:
             member = members[row.workspace_member_id]
             classes: dict[str, Any] = {}
-            role_order = (
-                explicit_roles.get(row.id, [])
-                if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
-                else REGISTRATION_ROLE_CODES
-            )
+            explicit = row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
+            role_order = explicit_roles.get(row.id, []) if explicit else REGISTRATION_ROLE_CODES
             # An explicit empty list means no playable role; it never falls back.
             for priority, role in enumerate(role_order, start=1):
                 ranked = resolved.get((member.member_id, role))
@@ -752,15 +1272,41 @@ class CustomGameService:
                 classes[role] = {"isActive": True, "rank": ranked.value, "priority": priority}
             if not classes:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="missing_ranked_role")
+            fairness = rotation_priority(histories_by_member[row.workspace_member_id])
             player_nodes[str(member.member_id)] = {
                 "identity": {
                     "name": member.display_name or member.battle_tag or f"player-{member.member_id}",
                     "isFullFlex": row.is_flex,
                     "mustPlay": row.participation == MixParticipation.MUST_PLAY,
-                    "rotationPriority": rotation_priority(histories_by_member[row.workspace_member_id]),
+                    "rotationPriority": fairness,
                 },
                 "stats": {"classes": classes},
             }
+            ratings = {role: entry["rank"] for role, entry in classes.items()}
+            candidates.append(
+                SplitCandidate(
+                    member_id=member.member_id,
+                    ratings=ratings,
+                    # Which role the player is seated on first: ``classes`` is built
+                    # in priority order, so the first entry is that one. All-ranked
+                    # states no preference, hence its best rank.
+                    strength=next(iter(ratings.values())) if explicit else max(ratings.values()),
+                    pin=row.lobby_pin,
+                    must_play=row.participation == MixParticipation.MUST_PLAY,
+                    rotation_priority=fairness,
+                )
+            )
+        return player_nodes, candidates
+
+    async def _solve_lobby(
+        self,
+        session: AsyncSession,
+        game: models.CustomGame,
+        lobby: models.CustomGameLobby,
+        lineup: Sequence[models.CustomGamePlayer],
+    ) -> None:
+        """Run the solver on exactly these players and store the run on this lobby."""
+        player_nodes, _candidates = await self._lineup_nodes(session, game=game, lineup=lineup)
         # The HOST's row, not the acting co-host's, and read exactly once: the
         # ranks above are already resolved against the host's own book
         # (``MIX_ORDER`` + ``author_user_id=game.host_user_id``), so reading the
@@ -768,7 +1314,7 @@ class CustomGameService:
         # differently depending on who clicked. The same row carries both the
         # solver overrides and the roster shape, so they come off one load.
         host_config = await self._host_config(session, game.host_user_id)
-        role_mask = (await self._shape_for(session, workspace_id, host_config)).slots
+        role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
         try:
             result = await self.run_balance(
                 {"players": player_nodes},
@@ -783,14 +1329,89 @@ class CustomGameService:
             # apart from a real bug and reports "internal error" -- hiding the
             # actual, actionable reason from the host.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-        game.balance_result_json = result
+        lobby.balance_result_json = result
         # A fresh search renumbers every option, so whatever the host had paged
         # to describes nothing now -- back to the best one.
-        game.selected_variant_index = 0
-        _apply_balance_result(roster, result)
+        lobby.selected_variant_index = 0
+        lobby.balanced_at = datetime.now(UTC)
+
+    async def balance(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        scope: str = "lobby",
+        lobby_index: int = 0,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """Rebuild the teams of ONE lobby (the default) or of both at once.
+
+        For a one-lobby mix ``scope="lobby"`` is today's behaviour whole: the
+        non-benched pool minus whoever the other lobby is already playing goes to
+        the solver and lands in this lobby's document. ``scope="all"`` exists only
+        for a two-lobby mix: the pool is first cut into two equally strong halves
+        (``domain.mix_lobby_split``), then each half is solved by the same engine.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        roster = list(await self.roster.list_for_game(session, game.id))
+        lineup = [row for row in roster if row.participation != MixParticipation.BENCHED]
+        if not lineup:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+        if scope == "all":
+            await self._balance_both(session, game, lineup)
+        else:
+            lobby = await self._lobby(session, game, lobby_index)
+            candidates = await self._lobby_candidates(session, game, lineup, lobby_index)
+            if not candidates:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+            await self._solve_lobby(session, game, lobby, candidates)
+            # Benching the overflow is the one-lobby answer. With two lobbies the
+            # players left out WAIT for the other one (§Derived state), and a
+            # BENCHED row would drop out of its candidate pool too.
+            if game.lobby_count < 2:
+                _apply_balance_result(roster, lobby.balance_result_json)
         game.status = MixStatus.BALANCED
         await session.flush()
         return game
+
+    async def _balance_both(
+        self,
+        session: AsyncSession,
+        game: models.CustomGame,
+        lineup: Sequence[models.CustomGamePlayer],
+    ) -> None:
+        """Cut the pool into two equal lobbies and solve each with its own run.
+
+        The splitter hands back exactly ``seats`` players per lobby, so the
+        engine's own trim inside each run is a no-op and whoever did not make it
+        into a game stays in the pool waiting -- not one roster row is benched.
+        """
+        if game.lobby_count < 2:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="single_lobby")
+        # ponytail: ranks, rotation histories and the host config are resolved once
+        # per lobby on top of this run (``_solve_lobby`` builds its own nodes); pass
+        # these nodes down instead if a reshuffle ever shows up as slow.
+        _player_nodes, candidates = await self._lineup_nodes(session, game=game, lineup=lineup)
+        host_config = await self._host_config(session, game.host_user_id)
+        role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
+        try:
+            split = split_into_lobbies(candidates, mask=role_mask)
+        except LobbySplitError as exc:
+            # The machine-readable reason (not_enough_for_two_lobbies / too_many_must_play
+            # / too_many_pinned / roles_infeasible): the UI shows it as text, not a trace.
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code) from exc
+        rows = {row.workspace_member_id: row for row in lineup}
+        for lobby_index, member_ids in enumerate(split.lobbies):
+            lobby = await self._lobby(session, game, lobby_index)
+            await self._solve_lobby(session, game, lobby, [rows[member_id] for member_id in member_ids])
 
     async def set_team_names(
         self,
@@ -834,6 +1455,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         map_id: int | None,
         actor_user_id: int,
         actor_is_superuser: bool = False,
@@ -855,7 +1477,8 @@ class CustomGameService:
         )
         if map_id is not None and await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
-        game.next_map_id = map_id
+        lobby = await self._lobby(session, game, lobby_index)
+        lobby.next_map_id = map_id
         await session.flush()
         return game
 
@@ -865,6 +1488,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         variant_index: int,
         actor_user_id: int,
         actor_is_superuser: bool = False,
@@ -885,11 +1509,18 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        result = as_lobby_document(game.balance_result_json)
+        lobby = await self._lobby(session, game, lobby_index)
+        result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
-        game.selected_variant_index = variant_index
+        # An option that seats somebody the other lobby has already put on the
+        # floor is not a matchup anyone can play; the host picks another or
+        # re-balances. Cheaper and clearer than silently benching them.
+        busy = await self._other_lobby_seated(session, game, lobby_index)
+        if busy & seated_member_ids(lobby.balance_result_json, variant_index):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="seat_conflict")
+        lobby.selected_variant_index = variant_index
         await session.flush()
         return game
 
@@ -920,6 +1551,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         variant_index: int,
         actor_user_id: int,
         actor_is_superuser: bool = False,
@@ -949,7 +1581,8 @@ class CustomGameService:
         channel_id = await self.workspace_discord_channel_id(session, workspace_id)
         if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
-        result = as_lobby_document(game.balance_result_json)
+        lobby = await self._lobby(session, game, lobby_index)
+        result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -957,17 +1590,19 @@ class CustomGameService:
         if not isinstance(variant, Mapping):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
 
-        team_names = await self.team_names.mapping_for_game(session, game.id)
-        activity = await self.casual_matches.activity_for_games(session, [game.id])
-        matches_count = activity.get(game.id, (0, None))[0]
+        team_names = await self._lobby_team_names(session, game.id, lobby_index)
+        # Per lobby: two lobbies keep two paces, so "game 5" in one is not
+        # "game 5" in the other.
+        activity = await self.casual_matches.activity_for_lobbies(session, game.id)
+        matches_count = activity.get(lobby_index, (0, None))[0]
         next_map: tuple[str, str | None] | None = None
-        if game.next_map_id is not None:
+        if lobby.next_map_id is not None:
             # The gamemode is eager-loaded: an async session raises on an
             # unawaited lazy load, and the embed names the mode next to the map.
             row = await session.scalar(
                 sa.select(models.Map)
                 .options(selectinload(models.Map.gamemode))
-                .where(models.Map.id == game.next_map_id)
+                .where(models.Map.id == lobby.next_map_id)
             )
             if row is not None:
                 next_map = (row.name, row.gamemode.name if row.gamemode is not None else None)
@@ -982,6 +1617,9 @@ class CustomGameService:
             # The host's knob, resolved: the footer promises what recording this
             # match will actually move. ``0`` is "off", and off prints nothing.
             points_per_win=await self.host_points_per_win(session, game.host_user_id) or None,
+            # Both lobbies post into the same channel, so a two-lobby mix says
+            # which one this lineup is; a one-lobby mix has nothing to qualify.
+            lobby_label=LOBBY_LABELS[lobby_index] if game.lobby_count == 2 else None,
         )
         return channel_id, embed
 
@@ -1084,6 +1722,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         variant_index: int,
         first_uuid: str,
         second_uuid: str,
@@ -1109,7 +1748,8 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        result = copy.deepcopy(as_lobby_document(game.balance_result_json))
+        lobby = await self._lobby(session, game, lobby_index)
+        result = copy.deepcopy(as_lobby_document(lobby.balance_result_json))
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1140,7 +1780,7 @@ class CustomGameService:
         first_bucket[first_pos], second_bucket[second_pos] = second_bucket[second_pos], first_bucket[first_pos]
         _recompute_variant_stats(variant, _lobby_players(result))
 
-        game.balance_result_json = result
+        lobby.balance_result_json = result
         await session.flush()
         return game
 
@@ -1184,6 +1824,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         winner: int | None,
         variant_index: int,
         map_id: int | None = None,
@@ -1201,7 +1842,7 @@ class CustomGameService:
         played redeems its ``MUST_PLAY`` pin back to ``POOL`` -- the pin promises
         one guaranteed seat, not every seat forever.
 
-        ``map_id`` names the map explicitly; omitted, the match takes the mix's
+        ``map_id`` names the map explicitly; omitted, the match takes the lobby's
         ``next_map_id`` (see :meth:`set_next_map`), which is cleared either way
         so the following match starts with a fresh roll.
         """
@@ -1214,12 +1855,13 @@ class CustomGameService:
         )
         if winner not in (1, 2, None):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="winner must be 1, 2 or null")
+        lobby = await self._lobby(session, game, lobby_index)
         if map_id is None:
-            map_id = game.next_map_id
+            map_id = lobby.next_map_id
         elif await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
-        result = as_lobby_document(game.balance_result_json) or {}
+        result = as_lobby_document(lobby.balance_result_json) or {}
         variants = result.get("variants")
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1231,13 +1873,14 @@ class CustomGameService:
                 detail="A match can only be recorded for a two-team balance",
             )
 
-        names = await self.team_names.mapping_for_game(session, game.id)
+        names = await self._lobby_team_names(session, game.id, lobby_index)
         scores = (1, 0) if winner == 1 else (0, 1) if winner == 2 else (0, 0)
         # The host's knob, not the mix's and not the recording co-host's -- the
         # book being moved is the host's own (see ``_apply_points_delta``).
         points_per_win = await self.host_points_per_win(session, game.host_user_id)
         match = models.CasualMatch(
             custom_game_id=game.id,
+            lobby_index=lobby_index,
             map_id=map_id,
             recorded_by=actor_user_id,
             # Frozen on the match so :meth:`undo_last_match` rolls back what was
@@ -1245,6 +1888,11 @@ class CustomGameService:
             points_per_win_applied=(points_per_win if (points_per_win and winner in (1, 2)) else None),
         )
         await self.casual_matches.create(session, match)
+        # Whoever was on the floor next door neither played this match nor sat
+        # it out; rotation must not read their absence as a rest.
+        busy = await self._other_lobby_seated(session, game, lobby_index)
+        if busy:
+            await self.casual_matches.set_busy_players(session, match.id, sorted(busy))
         casual_teams = [
             models.CasualTeam(
                 match_id=match.id,
@@ -1314,7 +1962,7 @@ class CustomGameService:
                 delta=-points_per_win,
             )
 
-        game.next_map_id = None
+        lobby.next_map_id = None
 
         await session.flush()
         return game
@@ -1329,13 +1977,15 @@ class CustomGameService:
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
-        """Delete the mix's most recent match and give back the ranks it moved.
+        """Delete a lobby's most recent match and give back the ranks it moved.
 
         Newest-only on purpose: the rank book compounds match on match (see
         :meth:`_apply_points_delta`), so undoing an older result would give back
         a delta that later matches have already built on and leave every number
         after it wrong. Recording the correct result again is the way to fix an
-        older mistake.
+        older mistake. Newest *of the match's own lobby*: two lobbies record at
+        two paces, and a host looking at lobby A must be able to take back A's
+        last result while B has already put down a newer one.
 
         The rollback uses ``points_per_win_applied`` frozen on the match, never
         the host's current ``points_per_win``: the host may have changed the knob
@@ -1357,8 +2007,10 @@ class CustomGameService:
         match = await self.casual_matches.get_for_game(session, game.id, match_id)
         if match is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
-        if await self.casual_matches.newest_id_for_game(session, game.id) != match.id:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only the most recent match can be undone")
+        if await self.casual_matches.newest_id_for_lobby(session, game.id, match.lobby_index) != match.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Only the most recent match of this lobby can be undone"
+            )
 
         applied = match.points_per_win_applied or 0
         if applied and game.host_user_id is not None:
@@ -1398,12 +2050,7 @@ class CustomGameService:
         any workspace member, same as :meth:`get` (no host gate: watching the
         history is not writing it).
         """
-        game = await self.get(
-            session,
-            workspace_id=workspace_id,
-            custom_game_id=custom_game_id,
-            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
-        )
+        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
         return list(await self.casual_matches.list_for_custom_game(session, game.id))
 
     async def mix_stats(
@@ -1464,12 +2111,19 @@ class CustomGameService:
         Shared by :meth:`rotation` (ranks the whole pool for the host's hint) and
         :meth:`balance` (ranks the active lineup, so ``run_balance``'s own
         overflow trim benches the least-owed player first).
+
+        A map the member spent in the mix's OTHER lobby drops out of their
+        history entirely: it is neither a game they played nor one they sat out,
+        and counting it as a rest would let somebody who has been playing
+        non-stop next door outrank the people actually waiting. Empty for every
+        one-lobby mix, which is why the verdict there is unchanged.
         """
         matches = list(await self.casual_matches.list_for_custom_game(session, game.id))
         matches.reverse()  # newest-first -> chronological, oldest map first
         participants = [
             {seat.workspace_member_id for team in match.teams for seat in team.players} for match in matches
         ]
+        busy = [{row.workspace_member_id for row in match.busy_players} for match in matches]
         return [
             PlayerHistory(
                 member_id=row.workspace_member_id,
@@ -1477,8 +2131,9 @@ class CustomGameService:
                 # a map played before they signed up is not one they sat out.
                 played=tuple(
                     row.workspace_member_id in played
-                    for match, played in zip(matches, participants, strict=True)
-                    if row.created_at is None or match.created_at >= row.created_at
+                    for match, played, elsewhere in zip(matches, participants, busy, strict=True)
+                    if (row.created_at is None or match.created_at >= row.created_at)
+                    and row.workspace_member_id not in elsewhere
                 ),
                 pinned_must_play=row.participation == MixParticipation.MUST_PLAY,
             )
@@ -1486,7 +2141,7 @@ class CustomGameService:
         ]
 
     async def rotation(
-        self, session: AsyncSession, *, workspace_id: int, custom_game_id: int
+        self, session: AsyncSession, *, workspace_id: int, custom_game_id: int, lobby_index: int = 0
     ) -> list[RotationRecommendation]:
         """Recommend who is owed the next seat and who should sit, from this mix's own map history.
 
@@ -1497,24 +2152,34 @@ class CustomGameService:
         size. A row's own ``MUST_PLAY`` participation (see :meth:`update_player`)
         is honoured the same way it is honoured there: a seat, not a vote.
 
+        Per lobby when the mix runs two: ``lobby_index`` ranks the candidates
+        that lobby may seat (see :meth:`_lobby_candidates`) and splits at that
+        lobby's own seat count, not at the whole pool's.
+
         Read-only, no roster row is touched -- the host applies the verdict
         through the same ``participation`` field.
         """
-        game = await self.get(
-            session,
-            workspace_id=workspace_id,
-            custom_game_id=custom_game_id,
-            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
-        )
+        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
         roster = list(await self.roster.list_for_game(session, game.id))
         if not roster:
             return []
 
-        histories = await self._rotation_histories(session, game, roster)
+        candidates = await self._lobby_candidates(session, game, roster, lobby_index)
+        if not candidates:
+            return []
+
+        histories = await self._rotation_histories(session, game, candidates)
 
         role_mask = (await self.roster_shape(session, workspace_id=workspace_id, host_user_id=game.host_user_id)).slots
         players_per_team = sum(role_mask.values())
-        usable_count = len(roster) if players_per_team <= 0 else (len(roster) // players_per_team) * players_per_team
+        if players_per_team <= 0:
+            usable_count = len(candidates)
+        else:
+            usable_count = (len(candidates) // players_per_team) * players_per_team
+            if game.lobby_count == 2:
+                # One lobby is exactly two teams; the rest of the pool is the
+                # other lobby's business.
+                usable_count = min(usable_count, 2 * players_per_team)
         return recommend_rotation(histories, usable_count=usable_count)
 
     async def close(

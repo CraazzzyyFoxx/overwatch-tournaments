@@ -1,18 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Pin, Save, UserMinus } from "lucide-react";
 
 import { BattleTagCopyButton } from "@/app/balancer/components/BattleTagCopyControls";
-import {
-  NEUTRAL_RANK_ACCENT,
-  ROLE_RANK_ACCENTS,
-  RoleRankControls,
-} from "@/app/balancer/components/RoleRankControls";
-import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
+import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor";
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
-import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -24,9 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
-import { OW_REFERENCE_GRID } from "@/lib/divisions/grid";
-import { ROLE_LABELS, getRoleIconName, type RoleCode } from "@/lib/roster/roles";
+import { type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import {
   RANK_SOURCE_LABELS,
@@ -38,7 +31,6 @@ import {
 
 import {
   LINEUP_ISSUE_MESSAGES,
-  LINEUP_ROLES,
   getLineupIssue,
   playerLabel,
   resolveRoleOrder,
@@ -58,6 +50,8 @@ type PickupPlayerSheetProps = {
   onRemove: () => void;
   /** This player's all-time mix record, or `null` where the page does not read one. */
   mixStats?: MixMemberStats | null;
+  /** How many lobbies the mix runs. The pin only exists, and is only sent, at 2. */
+  lobbyCount?: 1 | 2;
 };
 
 /** Everything the sheet edits before Save, kept apart from the server row. */
@@ -70,6 +64,8 @@ type RoleDraft = {
   /** Every role this row has a rank for is treated as equally preferred, so
    * `order`'s position stops mattering as a priority hint. */
   isFlex: boolean;
+  /** Which lobby the host tied this player to, or `null` for "wherever the balance puts them". */
+  lobbyPin: 0 | 1 | null;
 };
 
 function buildDraft(row: CustomGamePlayer | null): RoleDraft {
@@ -78,8 +74,24 @@ function buildDraft(row: CustomGamePlayer | null): RoleDraft {
     order: row ? resolveRoleOrder(row) : [],
     rankEdits: {},
     isFlex: row?.is_flex ?? false,
+    lobbyPin: row?.lobby_pin ?? null,
   };
 }
+
+/**
+ * The lobby pin, in the order the tabs read: no tie, then A, then B. Each
+ * option owns a key rather than an interpolated letter, so a locale can word
+ * "Auto" and "Lobby A" independently of the tab label.
+ */
+const LOBBY_PIN_OPTIONS: readonly {
+  value: 0 | 1 | null;
+  /** Literal, not `string`: `useTranslations` only takes keys it can see in the bundle. */
+  labelKey: "pinAuto" | "pinA" | "pinB";
+}[] = [
+  { value: null, labelKey: "pinAuto" },
+  { value: 0, labelKey: "pinA" },
+  { value: 1, labelKey: "pinB" },
+];
 
 /** The three-way status picker, in the same order the lineup columns read left to right. */
 const STATUS_OPTIONS: readonly {
@@ -128,8 +140,10 @@ export function PickupPlayerSheet({
   onSave,
   onRemove,
   mixStats = null,
+  lobbyCount = 1,
 }: Readonly<PickupPlayerSheetProps>) {
   const label = row ? playerLabel(row) : "";
+  const t = useTranslations("mixes.lobbies");
   const { name, suffix } = splitBattleTag(label);
   // The record across every mix, not this one: a caption, because it is
   // context for the settings below it and nothing here edits it.
@@ -154,9 +168,6 @@ export function PickupPlayerSheet({
   // for one) must clear this warning immediately, not once Save round-trips.
   const issue = row ? getLineupIssue(draftRow(row, draft)) : null;
   const disabled = !canEdit || saving;
-  // Off roles trail the on ones in canonical order: an unselected role has no
-  // priority, so ranking them would imply one.
-  const offRoles = LINEUP_ROLES.filter((role) => !draft.order.includes(role));
 
   const toggle = (role: RoleCode) =>
     setDraft((current) => ({ ...current, order: toggleRole(current.order, role) }));
@@ -180,7 +191,13 @@ export function PickupPlayerSheet({
       }
     }
     onSave(
-      { participation: draft.participation, roles: draft.order, is_flex: draft.isFlex },
+      {
+        participation: draft.participation,
+        roles: draft.order,
+        is_flex: draft.isFlex,
+        // A one-lobby mix 422s this field, and there is no control to set it.
+        ...(lobbyCount === 2 ? { lobby_pin: draft.lobbyPin } : {}),
+      },
       Object.keys(draft.rankEdits).length > 0 ? { ranks, clear } : null,
     );
     // The mutations fire-and-forget from here (the page owns their pending
@@ -267,116 +284,80 @@ export function PickupPlayerSheet({
               </div>
             </section>
 
+            {lobbyCount === 2 ? (
+              <section className="space-y-2.5 border-b border-[color:var(--aqt-border)] px-5 py-4">
+                <h3 className="text-caption font-medium text-[color:var(--aqt-fg)]">
+                  {t("pinHeading")}
+                </h3>
+                <div
+                  role="radiogroup"
+                  aria-label={t("pinGroup", { name: label })}
+                  className="grid grid-cols-3 gap-1.5"
+                >
+                  {LOBBY_PIN_OPTIONS.map((option) => {
+                    const selected = draft.lobbyPin === option.value;
+                    const optionLabel = t(option.labelKey);
+                    return (
+                      <button
+                        key={option.labelKey}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        aria-label={t("pinOption", { option: optionLabel, name: label })}
+                        disabled={disabled}
+                        onClick={() =>
+                          setDraft((current) => ({ ...current, lobbyPin: option.value }))
+                        }
+                        className={cn(
+                          "rounded-lg border px-2 py-2 text-center text-caption font-semibold transition-colors",
+                          selected
+                            ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)]"
+                            : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-3)]",
+                          "disabled:cursor-default disabled:opacity-60",
+                        )}
+                      >
+                        {optionLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-label text-[color:var(--aqt-fg-dim)]">{t("pinHint")}</p>
+              </section>
+            ) : null}
+
             <section className="space-y-2.5 border-b border-[color:var(--aqt-border)] px-5 py-4">
               <h3 className="text-caption font-medium text-[color:var(--aqt-fg)]">
                 Roles and ranks
               </h3>
 
-              <div
-                className={cn(
-                  "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
-                  draft.isFlex
-                    ? "border-emerald-400/20 bg-emerald-500/[0.08]"
-                    : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]",
-                )}
-              >
-                <div className="min-w-0">
-                  <span className="text-xs font-medium text-[color:var(--aqt-fg)]">Full flex</span>
-                  {draft.isFlex ? (
-                    <p className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">
-                      Every role is equally preferred — priority order stops mattering.
-                    </p>
-                  ) : (
-                    <p className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">
-                      Drag below to set who the balancer seats first.
-                    </p>
-                  )}
-                </div>
-                <Switch
-                  checked={draft.isFlex}
-                  disabled={disabled}
-                  aria-label={`Full flex for ${label}`}
-                  onCheckedChange={(checked) =>
-                    setDraft((current) => ({ ...current, isFlex: checked }))
-                  }
-                />
-              </div>
-
-              <SortableRows
-                items={draft.order}
-                getId={(role) => role}
+              <PickupRoleOrderEditor
+                order={draft.order}
+                isFlex={draft.isFlex}
+                disabled={disabled}
+                label={label}
                 onReorder={(nextOrder) => setDraft((current) => ({ ...current, order: nextOrder }))}
-                className="space-y-2"
-              >
-                {(role, index) => {
+                onToggle={toggle}
+                onFlexChange={(checked) => setDraft((current) => ({ ...current, isFlex: checked }))}
+                rankFor={(role) => {
                   const field = stagedRankFor(row, draft, role);
-                  return (
-                    <SortableRoleCard
-                      key={role}
-                      id={role}
-                      role={role}
-                      label={label}
-                      priority={index + 1}
-                      isPrimary={index === 0}
-                      disabled={disabled}
-                      onToggle={() => toggle(role)}
-                      rankValue={field.rankValue}
-                      sourceLabel={field.sourceLabel}
-                      hasOwnEntry={field.hasOwnEntry}
-                      onRankChange={(next) =>
-                        setDraft((current) => ({
-                          ...current,
-                          rankEdits: { ...current.rankEdits, [role]: next },
-                        }))
-                      }
-                      onRankClear={() =>
-                        setDraft((current) => ({
-                          ...current,
-                          rankEdits: { ...current.rankEdits, [role]: null },
-                        }))
-                      }
-                    />
-                  );
+                  return {
+                    rankValue: field.rankValue,
+                    sourceLabel: field.sourceLabel,
+                    onChange: (next) =>
+                      setDraft((current) => ({
+                        ...current,
+                        rankEdits: { ...current.rankEdits, [role]: next },
+                      })),
+                    onClear: field.hasOwnEntry
+                      ? () =>
+                          setDraft((current) => ({
+                            ...current,
+                            rankEdits: { ...current.rankEdits, [role]: null },
+                          }))
+                      : null,
+                  };
                 }}
-              </SortableRows>
-
-              {offRoles.length === 0 ? null : (
-                <ul className="space-y-2 pt-0.5">
-                  {offRoles.map((role) => {
-                    const field = stagedRankFor(row, draft, role);
-                    return (
-                      <li
-                        key={role}
-                        className="flex items-start gap-2.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-2.5 opacity-80"
-                      >
-                        <RoleCardBody
-                          role={role}
-                          label={label}
-                          isOn={false}
-                          isPrimary={false}
-                          disabled={disabled}
-                          onToggle={() => toggle(role)}
-                          rankValue={field.rankValue}
-                          sourceLabel={field.sourceLabel}
-                          hasOwnEntry={field.hasOwnEntry}
-                          onRankChange={(next) =>
-                            setDraft((current) => ({
-                              ...current,
-                              rankEdits: { ...current.rankEdits, [role]: next },
-                            }))
-                          }
-                          onRankClear={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              rankEdits: { ...current.rankEdits, [role]: null },
-                            }))
-                          }
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+              />
 
               {issue ? (
                 <p className="text-xs text-rose-200">{LINEUP_ISSUE_MESSAGES[issue]}</p>
@@ -468,170 +449,4 @@ function stagedRankFor(
     sourceLabel: source ? RANK_SOURCE_LABELS[source] : null,
     hasOwnEntry: row.author_ranks[role] != null,
   };
-}
-
-/** One role's card, wired to the drag list: grip, then the row's own content. */
-function SortableRoleCard({
-  id,
-  role,
-  label,
-  priority,
-  isPrimary,
-  disabled,
-  onToggle,
-  rankValue,
-  sourceLabel,
-  hasOwnEntry,
-  onRankChange,
-  onRankClear,
-}: Readonly<{
-  id: string;
-  role: RoleCode;
-  label: string;
-  /** The row's position in the drag list, 1-based — what the balancer reads as priority. */
-  priority: number;
-  isPrimary: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  rankValue: number | null;
-  sourceLabel: string | null;
-  hasOwnEntry: boolean;
-  onRankChange: (next: number | null) => void;
-  onRankClear: () => void;
-}>) {
-  const { ref, style, handleProps } = useSortableRow(id, disabled);
-
-  return (
-    <li
-      ref={ref}
-      style={style}
-      className={cn(
-        "flex items-start gap-2.5 rounded-xl border bg-[color:var(--aqt-overlay-2)] p-2.5 transition-colors",
-        "border-[color:var(--aqt-border-2)]",
-        ROLE_RANK_ACCENTS[role]?.row,
-      )}
-    >
-      <div className="flex flex-col items-center gap-1">
-        <SortableGrip
-          handleProps={handleProps}
-          label={`Reorder ${ROLE_LABELS[role]} for ${label}`}
-          disabled={disabled}
-        />
-        <span className="text-label font-semibold text-[color:var(--aqt-fg-dim)]">{`#${priority}`}</span>
-      </div>
-      <RoleCardBody
-        role={role}
-        label={label}
-        isOn
-        isPrimary={isPrimary}
-        disabled={disabled}
-        onToggle={onToggle}
-        rankValue={rankValue}
-        sourceLabel={sourceLabel}
-        hasOwnEntry={hasOwnEntry}
-        onRankChange={onRankChange}
-        onRankClear={onRankClear}
-      />
-    </li>
-  );
-}
-
-/**
- * One role's card: name, first-choice mark, on/off, and the shared rank controls.
- *
- * The field edits the *effective* rank — what balance will actually use — rather
- * than only this host's own entry, because a host reads the number they see and
- * expects to be able to correct it. Typing stages the corrected value in their
- * own book; Clear stages dropping that entry, so the field falls back to
- * whatever the workspace (or Overwatch) says once Save writes it.
- */
-function RoleCardBody({
-  role,
-  label,
-  isOn,
-  isPrimary,
-  disabled,
-  onToggle,
-  rankValue,
-  sourceLabel,
-  hasOwnEntry,
-  onRankChange,
-  onRankClear,
-}: Readonly<{
-  role: RoleCode;
-  label: string;
-  isOn: boolean;
-  /** The top of the drag list — where the balancer will try to seat them first. */
-  isPrimary: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  rankValue: number | null;
-  sourceLabel: string | null;
-  hasOwnEntry: boolean;
-  onRankChange: (next: number | null) => void;
-  onRankClear: () => void;
-}>) {
-  const accent = ROLE_RANK_ACCENTS[role] ?? NEUTRAL_RANK_ACCENT;
-
-  return (
-    <div className="min-w-0 flex-1 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <PlayerRoleIcon role={getRoleIconName(role)} size={15} decorative />
-          <span
-            className={cn(
-              "text-xs font-semibold",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-muted)]",
-            )}
-          >
-            {ROLE_LABELS[role]}
-          </span>
-          {isPrimary ? (
-            <span
-              className={cn(
-                "shrink-0 rounded px-1.5 py-px text-label font-bold uppercase tracking-label",
-                accent.chip,
-              )}
-            >
-              First
-            </span>
-          ) : null}
-        </div>
-
-        <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2">
-          <Switch
-            checked={isOn}
-            disabled={disabled}
-            aria-label={`${ROLE_LABELS[role]} for ${label}`}
-            onCheckedChange={onToggle}
-            className="h-4 w-7 [&>span]:size-3 [&>span]:data-[state=checked]:translate-x-3"
-          />
-          <span
-            className={cn(
-              "text-label font-semibold uppercase tracking-label",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]",
-            )}
-          >
-            {isOn ? "Active" : "Off"}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
-        <RoleRankControls
-          rankValue={rankValue}
-          sourceLabel={sourceLabel}
-          accent={accent}
-          active={isOn}
-          disabled={disabled}
-          onClear={hasOwnEntry ? onRankClear : null}
-          onChange={onRankChange}
-          // The global OW grid: balancer-service resolves a mix's ranks against
-          // the grid with `workspace_id=None`, so the value edited here is on
-          // the OW scale and a workspace's tiers would mislabel it.
-          grid={OW_REFERENCE_GRID}
-        />
-      </div>
-    </div>
-  );
 }

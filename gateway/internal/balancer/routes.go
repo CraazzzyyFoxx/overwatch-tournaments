@@ -90,15 +90,33 @@ var RosterRoutes = []edge.RouteSpec{
 	// The pager itself: which balance option the mix shows every viewer.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/variant", Queue: "rpc.balancer.custom.set_variant_index", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// The player's own seat. One pattern, four verbs: read it, take it, drop it,
+	// re-role it. AuthRequired because the worker authorizes the clicker (the bot
+	// forwards the linked account's identity the same way the site does); the
+	// worker, not this table, decides whether signup is open.
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_get", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_join", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_leave", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me", Queue: "rpc.balancer.custom.self_update", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Host-only: whether players may seat themselves at all, and whether a
+	// seated one may re-order their own roles.
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/self-service", Queue: "rpc.balancer.custom.set_self_service", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// One click: open signup AND post the card that announces it. A separate
+	// "open" write would let a host post a card whose buttons refuse everybody.
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/signup", Queue: "rpc.balancer.custom.post_signup", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/host", Queue: "rpc.balancer.custom.transfer_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts", Queue: "rpc.balancer.custom.add_co_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts/{co_host_user_id}", Queue: "rpc.balancer.custom.remove_co_host", IDParam: "game_id", Path: []string{"workspace_id", "co_host_user_id"}, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/balance", Queue: "rpc.balancer.custom.balance", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/balance", Queue: "rpc.balancer.custom.balance", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// One lobby or two. 1->2 opens an empty lobby B; 2->1 deletes it and frees
+	// every pin, since a pin to a lobby the mix no longer runs would quietly
+	// exclude that player from the next balance.
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/lobbies", Queue: "rpc.balancer.custom.set_lobby_count", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/outcome", Queue: "rpc.balancer.custom.record_outcome", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/teams/swap", Queue: "rpc.balancer.custom.swap_seats", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches", Queue: "rpc.balancer.custom.match_history", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches/{match_id}", Queue: "rpc.balancer.custom.undo_match", IDParam: "game_id", Path: []string{"workspace_id", "match_id"}, Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation", Queue: "rpc.balancer.custom.rotation", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation", Queue: "rpc.balancer.custom.rotation", IDParam: "game_id", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/close", Queue: "rpc.balancer.custom.close", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}", Queue: "rpc.balancer.custom.hard_delete", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
 	// The mix solver knobs are the host's, not the mix's, so they carry no

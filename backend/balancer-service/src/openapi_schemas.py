@@ -114,15 +114,29 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.custom.create": Op(request=custom_game.CustomGameCreate),
     "rpc.balancer.custom.update_roster": Op(request=custom_game.CustomGameRosterUpdate),
     "rpc.balancer.custom.update_player": Op(request=custom_game.CustomGamePlayerPatch),
+    "rpc.balancer.custom.self_update": Op(request=custom_game.CustomGameSelfUpdate),
+    "rpc.balancer.custom.set_self_service": Op(request=custom_game.CustomGameSelfServicePatch),
     "rpc.balancer.custom.set_participation": Op(request=custom_game.CustomGamePlayersParticipationPatch),
+    "rpc.balancer.custom.balance": Op(request=custom_game.CustomGameBalanceRequest),
+    "rpc.balancer.custom.set_lobby_count": Op(request=custom_game.CustomGameLobbyCountPatch),
     "rpc.balancer.custom.set_team_names": Op(request=custom_game.CustomGameTeamNamesPatch),
     "rpc.balancer.custom.set_next_map": Op(request=custom_game.CustomGameNextMapPatch),
     "rpc.balancer.custom.set_variant_index": Op(request=custom_game.CustomGameVariantIndexPatch),
     "rpc.balancer.custom.post_discord": Op(request=custom_game.CustomGamePostDiscord),
+    "rpc.balancer.custom.post_signup": Op(request=custom_game.CustomGamePostSignup),
     "rpc.balancer.custom.transfer_host": Op(request=custom_game.CustomGameHostTransfer),
     "rpc.balancer.custom.add_co_host": Op(request=custom_game.CustomGameCoHostPatch),
     "rpc.balancer.custom.swap_seats": Op(request=custom_game.CustomGameSeatSwap),
     "rpc.balancer.custom.record_outcome": Op(request=custom_game.CustomGameRecordOutcome),
+    "rpc.balancer.custom.rotation": Op(
+        query_params=(
+            QueryParam(
+                "lobby_index",
+                "integer",
+                description="Which lobby to rank candidates for (0 or 1); defaults to 0.",
+            ),
+        )
+    ),
     # ── workspace roster + rank layers ─────────────────────────────────────
     # Ad-hoc query keys read by ``src/rpc/players.py`` (``_list_params``,
     # ``_author_to_read``, ``_author_only``) rather than a query model.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   ChevronLeft,
@@ -20,7 +21,7 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNodeCapture } from "@/hooks/useNodeCapture";
 import { cn } from "@/lib/utils";
-import type { CustomGame, CustomGameMatch } from "@/services/custom-game.service";
+import type { CustomGame, CustomGameLobby, CustomGameMatch } from "@/services/custom-game.service";
 import type { MapRead } from "@/types/map.types";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -43,13 +44,18 @@ type PickupTeamsPanelProps = {
   gamesError: boolean;
   onRetryGames: () => void;
   game: CustomGame | undefined;
+  /** The one lobby this panel is showing. `undefined` before the mix loads. */
+  lobby: CustomGameLobby | undefined;
+  /** Its index, which is also the offset of its team names (`lobbyIndex * 2 + team`). */
+  lobbyIndex: 0 | 1;
   gameLoading: boolean;
   hasMix: boolean;
   balancing: boolean;
   activeCount: number;
+  /** Re-runs the solver for THIS lobby. The confirm for an unrecorded lineup is this panel's. */
   onBalance: () => void;
   /**
-   * Which of the solver's options is on screen — the mix's own
+   * Which of the solver's options is on screen — the lobby's own
    * `selected_variant_index`, so the host's pager moves every viewer with it.
    * Viewers get no pager at all: the matchup is read out to a lobby, and a
    * player quietly paging their own copy is looking at teams nobody is playing.
@@ -58,7 +64,7 @@ type PickupTeamsPanelProps = {
   onVariantIndexChange: (index: number) => void;
   recordingOutcome: boolean;
   onRecordOutcome: (input: PickupRecordOutcomeInput) => void;
-  /** The permanent record of every match this mix has played, newest first. */
+  /** The permanent record of every match this mix has played, both lobbies, newest first. */
   matches: CustomGameMatch[];
   /** The match whose undo is in flight, so only that row spins. */
   undoingMatchId?: number | null;
@@ -67,11 +73,11 @@ type PickupTeamsPanelProps = {
   /** The OW map catalogue with its gamemodes -- the roll pool and the manual picker. */
   maps: MapRead[];
   settingNextMap: boolean;
-  /** Rolled or hand-picked; `null` clears. Persisted server-side so every viewer sees the same map. */
+  /** Rolled or hand-picked; `null` clears. Persisted per lobby server-side. */
   onNextMapChange: (mapId: number | null) => void;
   closingMix: boolean;
   onCloseMix: () => void;
-  /** Omitted -- team headers render read-only, matching a `canWrite=false` viewer. */
+  /** Takes the GLOBAL team index (`lobbyIndex * 2 + team`). Omitted -- team headers render read-only. */
   onRenameTeam?: (teamIndex: number, name: string) => void | Promise<unknown>;
   /** Omitted -- seats render without drag handles, matching a `canWrite=false` viewer. */
   onSwapSeats?: (
@@ -89,9 +95,10 @@ type PickupTeamsPanelProps = {
  * The result side: the teams the solver produced, and the writes that act on
  * them — re-balance, record who won (repeatable), and close the mix.
  *
- * Teams are read from the stored `balance_result` document, because only it
- * knows which *seat* each player got and
- * at what rating — the difference between "these five are together" and a
+ * One lobby at a time: the page hands down which one, and every write this
+ * panel makes addresses it. Teams are read from that lobby's stored
+ * `balance_result` document, because only it knows which *seat* each player got
+ * and at what rating — the difference between "these five are together" and a
  * lineup a host can actually call out. The solver returns many equally-scored
  * options, so the variant pager walks them without re-running the balance.
  */
@@ -101,6 +108,8 @@ export function PickupTeamsPanel({
   gamesError,
   onRetryGames,
   game,
+  lobby,
+  lobbyIndex,
   gameLoading,
   hasMix,
   balancing,
@@ -124,16 +133,26 @@ export function PickupTeamsPanel({
   postingToDiscord = false,
   onPostToDiscord
 }: Readonly<PickupTeamsPanelProps>) {
-  const variants = parseVariants(game?.balance_result, teamNamesByIndex(game?.settings));
+  const t = useTranslations("mixes.lobbies");
+  const variants = parseVariants(
+    lobby?.balance_result,
+    teamNamesByIndex(game?.settings, lobbyIndex)
+  );
   // Clamped rather than reset in an effect: a shorter result must not leave the
   // pager pointing past the end.
   const index = Math.min(variantIndex, Math.max(0, variants.length - 1));
   const variant = variants[index];
   const pointsPerWin = game?.settings.points_per_win ?? null;
+  const lobbyCount = game?.lobby_count ?? 1;
   // The matchup card is a self-contained graphic, so "share the teams" here needs
   // no detour through the fullscreen board.
   const { ref: captureRef, capturing, capture, rasterize } = useNodeCapture();
   const [closeOpen, setCloseOpen] = useState(false);
+  // A balance replaces this lobby's lineup. If the lineup on screen was never
+  // played into the log, that is a result about to be lost, so it is the one
+  // case the button asks first.
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  const lineupAtRisk = lobby?.lineup_recorded === false;
 
   return (
     // Width-capped by the caller now, alongside the mix header that sits
@@ -173,7 +192,7 @@ export function PickupTeamsPanel({
           <div ref={captureRef} data-testid="teams-capture" className="flex flex-col gap-3.5">
             {game ? (
               <NextMapStrip
-                game={game}
+                nextMapId={lobby?.next_map_id ?? null}
                 maps={maps}
                 matches={matches}
                 canWrite={canWrite}
@@ -198,7 +217,10 @@ export function PickupTeamsPanel({
                 variant={variant}
                 canWrite={canWrite}
                 capturing={capturing}
-                onRenameTeam={onRenameTeam}
+                onRenameTeam={
+                  onRenameTeam &&
+                  ((teamIndex, name) => onRenameTeam(lobbyIndex * 2 + teamIndex, name))
+                }
                 onSwapSeats={
                   onSwapSeats &&
                   ((firstUuid, secondUuid) => onSwapSeats(index, firstUuid, secondUuid))
@@ -223,7 +245,7 @@ export function PickupTeamsPanel({
             saving={recordingOutcome}
             pointsPerWin={pointsPerWin}
             onRecord={(recordedOutcome) =>
-              onRecordOutcome({ outcome: recordedOutcome, variantIndex: index })
+              onRecordOutcome({ outcome: recordedOutcome, variantIndex: index, lobbyIndex })
             }
           />
         ) : null}
@@ -235,24 +257,41 @@ export function PickupTeamsPanel({
           )}
         >
           {canWrite ? (
-            <Button
-              type="button"
-              className="h-9"
-              disabled={balancing || activeCount === 0}
-              onClick={onBalance}
-              title={
-                activeCount > LOBBY_SIZE
-                  ? `${activeCount - LOBBY_SIZE} extra player${activeCount - LOBBY_SIZE === 1 ? "" : "s"} will be benched automatically -- rotation fairness picks who`
-                  : undefined
-              }
-            >
-              {balancing ? (
-                <Spinner className="mr-1.5 size-3.5" />
-              ) : (
-                <Shuffle className="mr-1.5 size-3.5" aria-hidden="true" />
-              )}
-              Balance teams
-            </Button>
+            <>
+              <Button
+                type="button"
+                className="h-9"
+                disabled={balancing || activeCount === 0}
+                onClick={() => (lineupAtRisk ? setBalanceOpen(true) : onBalance())}
+                title={
+                  activeCount > LOBBY_SIZE
+                    ? `${activeCount - LOBBY_SIZE} extra player${activeCount - LOBBY_SIZE === 1 ? "" : "s"} will be benched automatically -- rotation fairness picks who`
+                    : undefined
+                }
+              >
+                {balancing ? (
+                  <Spinner className="mr-1.5 size-3.5" />
+                ) : (
+                  <Shuffle className="mr-1.5 size-3.5" aria-hidden="true" />
+                )}
+                Balance teams
+              </Button>
+              <ConfirmDialog
+                open={balanceOpen}
+                onOpenChange={setBalanceOpen}
+                intent={{
+                  title: t("rebalanceTitle"),
+                  description: t("rebalanceDescription"),
+                  confirmLabel: t("rebalanceConfirm"),
+                  tone: "danger"
+                }}
+                pending={balancing}
+                onConfirm={() => {
+                  setBalanceOpen(false);
+                  onBalance();
+                }}
+              />
+            </>
           ) : null}
 
           {canWrite && variants.length > 1 ? (
@@ -403,6 +442,7 @@ export function PickupTeamsPanel({
         {matches.length > 0 ? (
           <MatchHistoryList
             matches={matches}
+            lobbyCount={lobbyCount}
             canWrite={canWrite}
             undoingMatchId={undoingMatchId}
             onUndoMatch={onUndoMatch}

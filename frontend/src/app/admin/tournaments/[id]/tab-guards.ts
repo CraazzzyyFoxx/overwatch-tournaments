@@ -56,28 +56,28 @@ export const TEAMS_SUB_TABS = ["roster", "draft"] as const;
 export type TeamsSubTab = (typeof TEAMS_SUB_TABS)[number];
 
 /**
- * Sub-tabs of `matches`. `results` split into `encounters` + `standings`.
+ * Sub-tabs of `bracket`. `stages` is the landing segment, rendered by the bare
+ * `/bracket` container.
  *
- * `lobbies` is where an FFA league's games are entered. A duel tournament has
- * no lobby to enter, so like `draft` it is a property of the tournament rather
- * than a permission — hidden AND bounced, never hidden-but-reachable.
+ * `standings` and `lobbies` sit beside the stage editor because they read the
+ * stages it builds. `lobbies` is where an FFA league's games are entered. A
+ * duel tournament has no lobby to enter, so like `draft` it is a property of
+ * the tournament rather than a permission — hidden AND bounced, never
+ * hidden-but-reachable.
  */
-export const MATCHES_SUB_TABS = [
-  "encounters",
-  "lobbies",
-  "standings",
-  "reports",
-  "parsed",
-  "logs"
-] as const;
-export type MatchesSubTabKey = (typeof MATCHES_SUB_TABS)[number];
+export const BRACKET_SUB_TABS = ["stages", "standings", "lobbies"] as const;
+export type BracketSubTab = (typeof BRACKET_SUB_TABS)[number];
 
-export function allowedMatchesSubTab(
-  tab: MatchesSubTabKey,
+export function allowedBracketSubTab(
+  tab: BracketSubTab,
   p: Readonly<{ hasFfaStage: boolean }>
 ): boolean {
   return tab === "lobbies" ? p.hasFfaStage : true;
 }
+
+/** Sub-tabs of `matches`. `results` split into `encounters` + the bracket's `standings`. */
+export const MATCHES_SUB_TABS = ["encounters", "reports", "parsed", "logs"] as const;
+export type MatchesSubTabKey = (typeof MATCHES_SUB_TABS)[number];
 
 /** Sections of `settings`, in navigation order (F9 ·1). */
 export const SETTINGS_SECTIONS = [

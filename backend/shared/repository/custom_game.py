@@ -11,22 +11,13 @@ from shared.repository.base import BaseRepository
 
 
 class CustomGameRepository(BaseRepository[models.CustomGame]):
-    #: Leaves the solver document in the database. It is the one heavy column a
-    #: mix has -- an entry per balance option, megabytes once balanced -- and only
-    #: the detail read and the writes that edit it look at it. ``raiseload`` turns
-    #: a stray read into an error instead of an implicit async lazy load.
-    WITHOUT_BALANCE_RESULT = (defer(models.CustomGame.balance_result_json, raiseload=True),)
-
     def __init__(self) -> None:
         super().__init__(models.CustomGame)
 
     async def list_for_workspace(self, session: AsyncSession, workspace_id: int) -> Sequence[models.CustomGame]:
-        """Every mix of the workspace, newest first, without ``balance_result_json``."""
+        """Every mix of the workspace, newest first."""
         result = await session.scalars(
-            self.select()
-            .where(self.model.workspace_id == workspace_id)
-            .options(*self.WITHOUT_BALANCE_RESULT)
-            .order_by(self.model.id.desc())
+            self.select().where(self.model.workspace_id == workspace_id).order_by(self.model.id.desc())
         )
         return result.all()
 
@@ -165,4 +156,57 @@ class CustomGameTeamNameRepository:
             )
         else:
             current.name = name
+        await session.flush()
+
+
+class CustomGameLobbyRepository:
+    """The per-lobby half of a mix, keyed by ``(custom_game_id, lobby_index)``.
+
+    Not a ``BaseRepository``: the row has a composite primary key and no ``id``
+    column, which every generic lookup there is written against.
+    """
+
+    #: Leaves the solver document in the database. It is the one heavy column a
+    #: lobby has -- an entry per balance option, megabytes once balanced -- and
+    #: only the detail read and the writes that edit it look at it. ``raiseload``
+    #: turns a stray read into an error instead of an implicit async lazy load.
+    WITHOUT_BALANCE_RESULT = (defer(models.CustomGameLobby.balance_result_json, raiseload=True),)
+
+    async def list_for_game(self, session: AsyncSession, custom_game_id: int) -> Sequence[models.CustomGameLobby]:
+        """Both lobbies of one mix in board order, documents loaded."""
+        result = await session.scalars(
+            sa.select(models.CustomGameLobby)
+            .where(models.CustomGameLobby.custom_game_id == custom_game_id)
+            .order_by(models.CustomGameLobby.lobby_index)
+        )
+        return result.all()
+
+    async def list_for_games(
+        self, session: AsyncSession, custom_game_ids: Sequence[int]
+    ) -> dict[int, list[models.CustomGameLobby]]:
+        """``custom_game_id -> [lobby, ...]`` for a whole mix list in one query,
+        without the solver documents -- no list row renders one."""
+        if not custom_game_ids:
+            return {}
+        result = await session.scalars(
+            sa.select(models.CustomGameLobby)
+            .where(models.CustomGameLobby.custom_game_id.in_(custom_game_ids))
+            .options(*self.WITHOUT_BALANCE_RESULT)
+            .order_by(models.CustomGameLobby.custom_game_id, models.CustomGameLobby.lobby_index)
+        )
+        grouped: dict[int, list[models.CustomGameLobby]] = {}
+        for row in result.all():
+            grouped.setdefault(row.custom_game_id, []).append(row)
+        return grouped
+
+    async def get(self, session: AsyncSession, custom_game_id: int, lobby_index: int) -> models.CustomGameLobby | None:
+        return await session.get(models.CustomGameLobby, (custom_game_id, lobby_index))
+
+    async def create(self, session: AsyncSession, lobby: models.CustomGameLobby) -> models.CustomGameLobby:
+        session.add(lobby)
+        await session.flush()
+        return lobby
+
+    async def delete(self, session: AsyncSession, lobby: models.CustomGameLobby) -> None:
+        await session.delete(lobby)
         await session.flush()

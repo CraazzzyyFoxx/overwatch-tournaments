@@ -22,7 +22,7 @@ import type { FfaLobby } from "@/types/ffa.types";
 import type { Stage } from "@/types/tournament.types";
 
 import { tabFallback, useHubStagesQuery } from "../../hubQueries";
-import { MatchesView } from "../MatchesView";
+import { MatchesView } from "../../matches/MatchesView";
 
 /**
  * Where an FFA league is refereed.
@@ -71,9 +71,12 @@ function LobbiesBoard({ tournamentId }: Readonly<{ tournamentId: number }>) {
 }
 
 function StageLobbies({ tournamentId, stage }: Readonly<{ tournamentId: number; stage: Stage }>) {
+  // The organizer's read, not the public one: this screen is where a hidden
+  // column is entered and checked, and `public_view` would have deleted it from
+  // the answer before the dialog below ever saw it.
   const lobbiesQuery = useQuery({
-    queryKey: tournamentQueryKeys.ffaStage(tournamentId, stage.id),
-    queryFn: () => ffaService.getStage(tournamentId, stage.id)
+    queryKey: tournamentQueryKeys.ffaStageAdmin(tournamentId, stage.id),
+    queryFn: () => ffaService.getStageAdmin(tournamentId, stage.id)
   });
   const lobbies = lobbiesQuery.data ?? [];
 

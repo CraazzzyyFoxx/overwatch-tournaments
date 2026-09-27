@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 147
+-- Tables: 149
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -649,15 +649,15 @@ CREATE TABLE balancer.custom_game (
 	host_user_id BIGINT, 
 	name VARCHAR(255) NOT NULL, 
 	status VARCHAR(16) DEFAULT 'draft' NOT NULL, 
-	next_map_id BIGINT, 
-	selected_variant_index INTEGER DEFAULT '0' NOT NULL, 
-	balance_result_json JSONB, 
-	balance_result_version INTEGER DEFAULT '1' NOT NULL, 
+	lobby_count INTEGER DEFAULT '1' NOT NULL, 
+	self_signup VARCHAR(16) DEFAULT 'closed' NOT NULL, 
+	self_role_edit BOOLEAN DEFAULT 'false' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_custom_game_status CHECK (status IN ('draft', 'balanced', 'completed', 'cancelled')), 
+	CONSTRAINT ck_custom_game_self_signup CHECK (self_signup IN ('closed', 'pool', 'benched')), 
+	CONSTRAINT ck_custom_game_lobby_count CHECK (lobby_count BETWEEN 1 AND 2), 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
-	FOREIGN KEY(host_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL, 
-	FOREIGN KEY(next_map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL
+	FOREIGN KEY(host_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
 CREATE INDEX ix_balancer_custom_game_host_user_id ON balancer.custom_game (host_user_id);
@@ -672,6 +672,20 @@ CREATE TABLE balancer.custom_game_co_host (
 	FOREIGN KEY(user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
+CREATE TABLE balancer.custom_game_lobby (
+	custom_game_id BIGINT NOT NULL, 
+	lobby_index INTEGER NOT NULL, 
+	selected_variant_index INTEGER DEFAULT '0' NOT NULL, 
+	balance_result_json JSONB, 
+	balance_result_version INTEGER DEFAULT '1' NOT NULL, 
+	next_map_id BIGINT, 
+	balanced_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (custom_game_id, lobby_index), 
+	CONSTRAINT ck_custom_game_lobby_index CHECK (lobby_index BETWEEN 0 AND 1), 
+	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
+	FOREIGN KEY(next_map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL
+);
+
 CREATE TABLE balancer.custom_game_player (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -682,10 +696,12 @@ CREATE TABLE balancer.custom_game_player (
 	participation VARCHAR(16) DEFAULT 'pool' NOT NULL, 
 	role_selection_mode VARCHAR(16) DEFAULT 'all_ranked' NOT NULL, 
 	is_flex BOOLEAN DEFAULT 'false' NOT NULL, 
+	lobby_pin INTEGER, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_custom_game_player_member UNIQUE (custom_game_id, workspace_member_id), 
 	CONSTRAINT ck_custom_game_player_participation CHECK (participation IN ('must_play', 'pool', 'benched')), 
 	CONSTRAINT ck_custom_game_player_role_selection_mode CHECK (role_selection_mode IN ('all_ranked', 'explicit')), 
+	CONSTRAINT ck_custom_game_player_lobby_pin CHECK (lobby_pin BETWEEN 0 AND 1), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
 );
@@ -1312,10 +1328,12 @@ CREATE TABLE casual.match (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE, 
 	custom_game_id BIGINT NOT NULL, 
+	lobby_index INTEGER DEFAULT '0' NOT NULL, 
 	map_id BIGINT, 
 	recorded_by BIGINT, 
 	points_per_win_applied INTEGER, 
 	PRIMARY KEY (id), 
+	CONSTRAINT ck_casual_match_lobby_index CHECK (lobby_index BETWEEN 0 AND 1), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL, 
 	FOREIGN KEY(recorded_by) REFERENCES auth."user" (id) ON DELETE SET NULL
@@ -1324,6 +1342,14 @@ CREATE TABLE casual.match (
 CREATE INDEX ix_casual_match_custom_game_id ON casual.match (custom_game_id);
 
 CREATE INDEX ix_casual_match_map_id ON casual.match (map_id);
+
+CREATE TABLE casual.match_busy_player (
+	match_id BIGINT NOT NULL, 
+	workspace_member_id BIGINT NOT NULL, 
+	PRIMARY KEY (match_id, workspace_member_id), 
+	FOREIGN KEY(match_id) REFERENCES casual.match (id) ON DELETE CASCADE, 
+	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
+);
 
 CREATE TABLE casual.player (
 	id BIGSERIAL NOT NULL, 
@@ -2592,12 +2618,12 @@ CREATE TABLE tournament.encounter_game_result (
 	game_id BIGINT NOT NULL, 
 	encounter_id BIGINT NOT NULL, 
 	team_id BIGINT NOT NULL, 
-	placement INTEGER NOT NULL, 
-	score INTEGER DEFAULT '0' NOT NULL, 
+	placement INTEGER, 
+	stats JSONB DEFAULT '{}'::jsonb NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_encounter_game_result_game_team UNIQUE (game_id, team_id), 
 	CONSTRAINT ck_encounter_game_result_placement CHECK (placement >= 1), 
-	CONSTRAINT ck_encounter_game_result_score CHECK (score >= 0), 
+	CONSTRAINT ck_encounter_game_result_stats CHECK (jsonb_typeof(stats) = 'object'), 
 	CONSTRAINT fk_encounter_game_result_participant FOREIGN KEY(encounter_id, team_id) REFERENCES tournament.encounter_participant (encounter_id, team_id) ON DELETE CASCADE, 
 	FOREIGN KEY(game_id) REFERENCES tournament.encounter_game (id) ON DELETE CASCADE
 );
@@ -3045,15 +3071,14 @@ CREATE TABLE tournament.stage (
 	best_of_default INTEGER DEFAULT '3' NOT NULL, 
 	best_of_final INTEGER, 
 	ffa_placement_points FLOAT[] DEFAULT '{}' NOT NULL, 
-	ffa_score_points FLOAT DEFAULT '1' NOT NULL, 
-	ffa_score_label VARCHAR(32), 
+	ffa_columns JSONB DEFAULT '[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]' NOT NULL, 
+	ffa_formula VARCHAR(500) DEFAULT 'score' NOT NULL, 
 	challonge_group_id BIGINT, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')), 
 	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')), 
 	CONSTRAINT ck_stage_best_of_default CHECK (best_of_default >= 1), 
 	CONSTRAINT ck_stage_best_of_final CHECK (best_of_final IS NULL OR best_of_final >= 1), 
-	CONSTRAINT ck_stage_ffa_score_points CHECK (ffa_score_points >= 0), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
 );
 

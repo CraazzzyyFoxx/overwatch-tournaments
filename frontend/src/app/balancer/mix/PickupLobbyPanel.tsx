@@ -43,6 +43,8 @@ type PickupLobbyPanelProps = {
   canWrite: boolean;
   hasMix: boolean;
   rows: CustomGamePlayer[];
+  /** How many lobbies this mix runs: role demand scales with it, and rows gain a lobby badge. */
+  lobbyCount?: 1 | 2;
   /**
    * Rotation-fairness verdict per roster member, from `usePickupMix`'s
    * `rotationQuery`. Optional, and defaulted to empty, so an older caller (or
@@ -109,6 +111,7 @@ export function PickupLobbyPanel({
   canWrite,
   hasMix,
   rows,
+  lobbyCount = 1,
   rotation = [],
   savingPlayerId,
   clearing,
@@ -122,7 +125,7 @@ export function PickupLobbyPanel({
 }: Readonly<PickupLobbyPanelProps>) {
   const lineup = sortLineup(rows);
   const summary = summarizeLineup(rows);
-  const supply = summarizeRoleSupply(rows);
+  const supply = summarizeRoleSupply(rows, lobbyCount);
   const rotationByMember = new Map(rotation.map((r) => [r.workspace_member_id, r]));
   const pendingHintCount = computeRotationHintPatches(rows, rotation).length;
   const columns = COLUMNS.map((def) => ({
@@ -327,6 +330,7 @@ export function PickupLobbyPanel({
                   hint={column.hint}
                   emptyHint={column.emptyHint}
                   rows={column.rows}
+                  lobbyCount={lobbyCount}
                   rotationByMember={rotationByMember}
                   canWrite={canWrite}
                   savingPlayerId={savingPlayerId}

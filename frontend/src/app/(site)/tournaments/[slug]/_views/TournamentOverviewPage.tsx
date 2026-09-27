@@ -18,7 +18,11 @@ import {
   OverviewLinksCard,
   OverviewPhasesCard
 } from "./_components/OverviewSideCards";
-import { OverviewGroupTable, OverviewMiniBracket } from "./_components/OverviewStageCards";
+import {
+  OverviewFfaTable,
+  OverviewGroupTable,
+  OverviewMiniBracket
+} from "./_components/OverviewStageCards";
 import { useOverviewMatchPresenter } from "./useOverviewMatchPresenter";
 import { useTournamentOverviewData } from "./useTournamentOverviewData";
 
@@ -89,7 +93,7 @@ export default function TournamentOverviewPage({
       <OverviewLinksCard tournament={tournament} />
     ) : null;
 
-  // ---- the mini bracket / group table (§3 ⑥) -------------------------------
+  // ---- the mini bracket / group table / FFA lobbies (§3 ⑥) -----------------
   const miniBracket =
     data.hasMiniBracket && stage !== null ? (
       <OverviewMiniBracket
@@ -102,13 +106,17 @@ export default function TournamentOverviewPage({
       />
     ) : null;
 
+  // An FFA league's lobby tables take the group table's slot: both are the
+  // stage's standings drawn in place of a bracket it does not have.
   const groupTable =
-    data.hasGroupTable && stage !== null ? (
+    stage === null ? null : data.hasGroupTable ? (
       <OverviewGroupTable
         stage={stage}
         stageStandings={data.stageStandings}
         overviewHref={overviewHref}
       />
+    ) : data.hasFfaTable ? (
+      <OverviewFfaTable stage={stage} lobbies={data.ffaLobbies} overviewHref={overviewHref} />
     ) : null;
 
   const nowBlock = (

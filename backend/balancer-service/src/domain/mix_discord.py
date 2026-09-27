@@ -16,17 +16,24 @@ team-name overrides from the database, then hands them here.
 Discord's own limits are part of the contract, not a detail the bot can fix
 afterwards: a field value over 1024 characters is rejected outright, so a
 lineup that long is cut short with a trailing marker instead of failing to post.
+
+The same module also builds the signup card a host posts to open the mix
+(:func:`signup_card`) -- that one is a Components V2 ``DiscordCard`` rather than
+an embed, because it carries buttons the bot answers, but it is the same kind of
+thing: what the message says, with the transport left to discord-service.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
+from shared.schemas.events import DiscordActionButton, DiscordCard, DiscordLinkButton
 from src.domain.balancer.result_serializer import seat_rating
 from src.services.balancer.role_naming import role_slot_code
 
-__all__ = ("build_lineup_embed",)
+__all__ = ("build_lineup_embed", "signup_card")
 
 #: Teal, matching the accent the pickup-mix screens already use.
 _COLOR = 0x14B8A6
@@ -102,6 +109,7 @@ def build_lineup_embed(
     team_names: Mapping[int, str],
     next_map: tuple[str, str | None] | None,
     points_per_win: int | None,
+    lobby_label: str | None = None,
 ) -> dict[str, Any]:
     """One embed dict describing the teams of ``variant`` and the map they play.
 
@@ -112,6 +120,10 @@ def build_lineup_embed(
     rolled one yet -- a mix that posts its lineup before the roll is normal, so
     that reads as "not rolled yet" rather than omitting the line. Teams keep the
     variant's own order, and a team without a name override is numbered from it.
+
+    ``lobby_label`` names the lobby when the mix runs two of them: both post
+    into the same channel, and "game 3" of one is not "game 3" of the other. A
+    single-lobby mix passes ``None`` and reads exactly as it always did.
     """
     if next_map is None:
         description = "Map: not rolled yet"
@@ -131,7 +143,11 @@ def build_lineup_embed(
     ]
 
     embed: dict[str, Any] = {
-        "title": f"{mix_name} — Match {match_number}",
+        "title": (
+            f"{mix_name} — Match {match_number}"
+            if lobby_label is None
+            else f"{mix_name} — Лобби {lobby_label} · игра {match_number}"
+        ),
         "description": description,
         "color": _COLOR,
         "fields": fields,
@@ -139,3 +155,40 @@ def build_lineup_embed(
     if points_per_win is not None:
         embed["footer"] = {"text": f"Points per win: {points_per_win}"}
     return embed
+
+
+#: Everything Discord markdown gives a meaning to; a backslash before ASCII
+#: punctuation is always consumed, so over-escaping is invisible to the reader.
+#: Same rule app-service renders notification cards with.
+_MARKDOWN = re.compile(r"([\\*_~`|>\[\]<#-])")
+
+
+def _escape(text: str) -> str:
+    return _MARKDOWN.sub(r"\\\1", text)
+
+
+def signup_card(*, mix_name: str, host_name: str | None, board_url: str, custom_game_id: int) -> DiscordCard:
+    """The channel post that opens a mix for self-signup.
+
+    Static by design: the bot does not edit channel posts, so a live counter of
+    who signed up would need a stored ``message_id`` and an ``edit_message``
+    path. The buttons therefore carry no state at all -- only the mix id -- and
+    every answer is re-derived from the database at click time, which is also why
+    a card outlives its mix gracefully (a closed mix answers ``mix_closed``).
+
+    Russian, like every other channel-wide post: a channel has no per-reader
+    locale, unlike the ephemeral replies the bot renders per user.
+    """
+    host = _escape(host_name) if host_name else "—"
+    target = str(custom_game_id)
+    return DiscordCard(
+        accent_color=_COLOR,
+        text=f"**Запись на микс «{_escape(mix_name)}»** · хост {host}",
+        details="Нужны привязанные к аккаунту Discord и Battle.net.",
+        answers=[
+            DiscordActionButton(label="Записаться", action="mix.join", target=target, style="success"),
+            DiscordActionButton(label="Мои роли", action="mix.roles", target=target),
+            DiscordActionButton(label="Выписаться", action="mix.leave", target=target, style="danger"),
+        ],
+        rows=[[DiscordLinkButton(label="Доска микса", url=board_url)]],
+    )

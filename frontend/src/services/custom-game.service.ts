@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/fetch";
 import { blobToBase64 } from "@/lib/image-capture";
+import type { RoleCode } from "@/lib/roster/roles";
 import type { RosterShape } from "@/lib/roster/shape";
 
 /** Where an effective rank came from, strongest first. */
@@ -45,6 +46,14 @@ export type CustomGamePlayer = {
    * the solver, so `roles`'s order stops mattering as a priority hint --
    * mirrors the tournament balancer's flex flag (`Player.is_flex`). */
   is_flex: boolean;
+  /**
+   * Which lobby this player is seated in right now, derived server-side from
+   * the selected variant of each lobby; `null` means waiting for a seat.
+   * Detail reads only.
+   */
+  current_lobby?: 0 | 1 | null;
+  /** The host's own tie to a lobby, independent of where the balance seated them. */
+  lobby_pin?: 0 | 1 | null;
   /** `null` only when `role_selection_mode === "all_ranked"`. */
   roles: string[] | null;
   ranks: Record<string, number>;
@@ -97,6 +106,36 @@ export type CustomGameSettings = {
   workspace_discord_channel_id: string | null;
 };
 
+/**
+ * One lobby of a mix — the four columns that used to sit on the mix itself
+ * (`custom_game_lobby`). A mix always has exactly `lobby_count` of them, so
+ * lobby 0 is an ordinary row rather than a special case, and a second lobby
+ * carries its own document, its own pager position and its own next map.
+ */
+export type CustomGameLobby = {
+  /** 0 = A, 1 = B. Also the offset of this lobby's team names: `lobby_index * 2 + team`. */
+  lobby_index: 0 | 1;
+  /**
+   * The solver's own document for this lobby's last balance, or `null` before
+   * one. Detail reads only -- `list` rows leave it out (it runs to megabytes).
+   */
+  balance_result?: unknown;
+  /** Which option of this lobby's `balance_result` the mix is showing. */
+  selected_variant_index: number;
+  /** The map this lobby's next match is played on; cleared by recording it. */
+  next_map_id: number | null;
+  /** When this lobby was last balanced, or `null` while it never was. */
+  balanced_at: string | null;
+  /**
+   * `false` when this lobby has been balanced and no match of its own has been
+   * recorded since -- the lineup on screen is still unplayed, so anything that
+   * would overwrite it asks first. Detail reads only.
+   */
+  lineup_recorded?: boolean;
+  /** How many matches this lobby has recorded. Detail reads only. */
+  matches_count?: number;
+};
+
 export type CustomGame = {
   id: number;
   workspace_id: number;
@@ -107,25 +146,15 @@ export type CustomGame = {
   name: string;
   status: CustomGameStatus;
   settings: CustomGameSettings;
-  /**
-   * The solver's own document for the last balance, or `null` before one.
-   * Detail reads and writes only -- `list` rows leave it out (it runs to
-   * megabytes once a mix is balanced).
-   */
-  balance_result?: unknown;
-  /**
-   * Which option of `balance_result` the mix is showing. Server-held because
-   * the host's pager is the lobby's pager: every viewer renders this index,
-   * and only a host or co-host may move it (`setVariantIndex`).
-   */
-  selected_variant_index: number;
   created_at: string | null;
+  /** How many lobbies this mix runs at once. `2` is the ceiling (CHECK server-side). */
+  lobby_count: 1 | 2;
   /**
-   * The map the next match is played on -- rolled or picked by a host, seen by
-   * every viewer, stamped on the next recorded match and cleared by it. Only
-   * the id: name, mode and thumbnail resolve against the loaded catalogue.
+   * This mix's lobbies, ordered by `lobby_index` -- exactly `lobby_count` of
+   * them. The balance document, the pager position and the next map all live
+   * here now; the mix itself carries none of the three.
    */
-  next_map_id: number | null;
+  lobbies: CustomGameLobby[];
   /**
    * The mix's resolved team composition -- the host's own shape preference,
    * else the workspace default, else the built-in Overwatch 5v5 shape.
@@ -135,6 +164,10 @@ export type CustomGame = {
   matches_count: number;
   /** When the newest match was recorded, or `null` while none has been. */
   last_match_at: string | null;
+  /** Whether players may sign themselves up, and where a signup lands. */
+  self_signup: MixSelfSignup;
+  /** Whether a player on the roster may reorder their own roles and flex. */
+  self_role_edit: boolean;
   players?: CustomGamePlayer[];
 };
 
@@ -156,6 +189,8 @@ export type CustomGameMatch = {
   map_image_path: string | null;
   recorded_by: number | null;
   recorded_at: string | null;
+  /** Which lobby of the mix played it (0 = A, 1 = B). A one-lobby mix records only 0. */
+  lobby_index: 0 | 1;
   /**
    * The rank points this match moved each player by when it was recorded --
    * `null` for a draw, or when the mix had no rank adjustment configured. An
@@ -169,6 +204,79 @@ export type CustomGamePlayerPatch = {
   participation?: MixParticipation;
   roles?: string[] | null;
   is_flex?: boolean;
+  /**
+   * Which lobby this player is tied to, or `null` for "wherever the balance
+   * puts them". Host-only, and 422 on a mix that runs one lobby.
+   */
+  lobby_pin?: 0 | 1 | null;
+};
+
+/**
+ * Whether players may sign themselves up, and where they land when they do --
+ * one column with exactly three states (`custom_game.self_signup`), so
+ * "closed but benched" cannot be expressed at all.
+ */
+export type MixSelfSignup = "closed" | "pool" | "benched";
+
+/**
+ * Why a self-action is refused, exactly as `mix_self_policy` names it. The wire
+ * carries the code, never a sentence: the site renders it per locale
+ * (`mixes.self.blocker.*`) and the bot renders the same code its own way.
+ */
+export type MixSelfBlocker =
+  | "mix_closed"
+  | "discord_not_linked"
+  | "battlenet_not_linked"
+  | "player_not_linked"
+  | "self_join_denied"
+  | "already_joined"
+  | "not_on_roster"
+  | "signup_closed"
+  | "roster_full"
+  | "role_edit_off";
+
+/** The caller's own roster row, or `null` when they are not in the lineup. */
+export type MixSelfSeat = {
+  participation: MixParticipation;
+  /** `null` is the `all_ranked` mode -- every role this player has a rank for. */
+  roles: string[] | null;
+  is_flex: boolean;
+  /** Effective rank per role; `null` where no layer answers for it. */
+  ranks: Record<string, number | null>;
+  /** Which lobby a balance seated them in; `null` means waiting for a seat. */
+  current_lobby: 0 | 1 | null;
+};
+
+/** What the caller may do, and the first reason they may not. */
+export type MixSelfPolicy = {
+  can_join: boolean;
+  can_leave: boolean;
+  can_edit_roles: boolean;
+  /** `null` exactly when `can_join`. */
+  join_blocker: MixSelfBlocker | null;
+  /** `null` exactly when `can_edit_roles`. */
+  edit_blocker: MixSelfBlocker | null;
+};
+
+/**
+ * The whole self surface of one mix in a single read (`GET …/me`).
+ *
+ * Kept apart from `CustomGame` on purpose: the mix board is public and its
+ * detail is the same document for every viewer, while this answer is about the
+ * caller -- their seat, their missing account links, their permission.
+ */
+export type MixSelfState = {
+  custom_game_id: number;
+  name: string;
+  status: CustomGameStatus;
+  self_signup: MixSelfSignup;
+  self_role_edit: boolean;
+  /** How many lobbies the mix runs; with one, `seat.current_lobby` says nothing. */
+  lobby_count: number;
+  seat: MixSelfSeat | null;
+  /** Roles this player would play that no rank layer answers for. */
+  unranked_roles: string[];
+  policy: MixSelfPolicy;
 };
 
 /** One row of a whole-lineup participation write. */
@@ -238,7 +346,22 @@ export const customGameKeys = {
   list: (workspaceId: number) => ["custom-games", workspaceId] as const,
   one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId] as const,
   matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"] as const,
-  rotation: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "rotation"] as const,
+  /**
+   * Every lobby's rotation queue for one mix — the prefix the per-lobby keys
+   * hang off, so a write that moves the queue drops both lobbies in one call.
+   */
+  rotationAll: (workspaceId: number, gameId: number) =>
+    [...customGameKeys.one(workspaceId, gameId), "rotation"] as const,
+  /** One lobby's queue: the candidates of lobby A are not the candidates of lobby B. */
+  rotation: (workspaceId: number, gameId: number, lobbyIndex: number) =>
+    ["custom-games", workspaceId, gameId, "rotation", lobbyIndex] as const,
+  /**
+   * The caller's own seat in one mix. Deliberately under `all`: the realtime
+   * `workspace.pickup_mix` resource drops `customGameKeys.all(workspaceId)`
+   * (`lib/realtime/resources.ts`), so another player's join refreshes this
+   * read with no subscription of its own.
+   */
+  me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"] as const,
   stats: (workspaceId: number, since: string | null) =>
     ["custom-games", workspaceId, "stats", since ?? "all"] as const,
 };
@@ -303,27 +426,43 @@ export const customGameService = {
     }).then((r) => r.json());
   },
 
-  balance(workspaceId: number, gameId: number): Promise<CustomGame> {
+  /**
+   * Re-runs the solver. `scope: "lobby"` balances that lobby alone, leaving the
+   * other one's document, map and pager untouched, and its candidates exclude
+   * whoever is seated in the other lobby or pinned to it. `scope: "all"` splits
+   * the whole pool into two even lobbies and solves each -- two-lobby mixes only
+   * (422 `single_lobby` otherwise).
+   */
+  balance(
+    workspaceId: number,
+    gameId: number,
+    request: { scope: "lobby"; lobbyIndex: 0 | 1 } | { scope: "all" },
+  ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/balance`, {
       method: "POST",
+      body:
+        request.scope === "all"
+          ? { scope: "all" }
+          : { scope: "lobby", lobby_index: request.lobbyIndex },
     }).then((r) => r.json());
   },
 
   /**
-   * Snapshots one played match into the permanent casual-match log — team
-   * rosters and who won. Repeatable: a mix can record many before its host
-   * calls `close`. `variantIndex` is whichever balance option is on screen;
-   * the map is the mix's `next_map_id`, consumed server-side.
+   * Snapshots one played match of one lobby into the permanent casual-match log
+   * — team rosters and who won. Repeatable: a mix can record many before its
+   * host calls `close`. `variantIndex` is whichever balance option that lobby is
+   * showing; the map is that lobby's `next_map_id`, consumed server-side.
    */
   recordOutcome(
     workspaceId: number,
     gameId: number,
+    lobbyIndex: 0 | 1,
     outcome: CustomGameOutcome,
     variantIndex: number,
   ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/outcome`, {
       method: "POST",
-      body: { outcome, variant_index: variantIndex },
+      body: { lobby_index: lobbyIndex, outcome, variant_index: variantIndex },
     }).then((r) => r.json());
   },
 
@@ -348,15 +487,18 @@ export const customGameService = {
   },
 
   /**
-   * Who is owed the next seat and who should rest, ranked from this mix's own
-   * map history and split at the seat count `balance` would fill right now
-   * (see `mix_rotation.recommend_rotation`). Read-only, feeds the lineup as a
-   * hint -- it writes nothing on its own.
+   * Who is owed the next seat in this lobby and who should rest, ranked from
+   * the mix's own map history and split at the seat count a balance of THIS
+   * lobby would fill right now. Read-only, feeds the lineup as a hint.
    */
-  rotation(workspaceId: number, gameId: number): Promise<RotationRecommendation[]> {
-    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/rotation`).then((r) =>
-      r.json(),
-    );
+  rotation(
+    workspaceId: number,
+    gameId: number,
+    lobbyIndex: 0 | 1,
+  ): Promise<RotationRecommendation[]> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/rotation`, {
+      query: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
   },
 
   /**
@@ -401,26 +543,37 @@ export const customGameService = {
   },
 
   /**
-   * Names the map the next match is played on, or clears it (`null`). The roll
-   * itself happens client-side (`rollNextMap`); this stores the verdict so
-   * co-hosts and viewers see the same map and `recordOutcome` stamps it.
+   * Names the map this lobby's next match is played on, or clears it (`null`).
+   * The roll itself happens client-side (`rollNextMap`); this stores the verdict
+   * so co-hosts and viewers see the same map and `recordOutcome` stamps it.
    */
-  setNextMap(workspaceId: number, gameId: number, mapId: number | null): Promise<CustomGame> {
+  setNextMap(
+    workspaceId: number,
+    gameId: number,
+    lobbyIndex: 0 | 1,
+    mapId: number | null,
+  ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/next-map`, {
       method: "PUT",
-      body: { map_id: mapId },
+      body: { lobby_index: lobbyIndex, map_id: mapId },
     }).then((r) => r.json());
   },
 
   /**
-   * Pages the mix to one of the options its last balance produced. Not a local
-   * view toggle: the index is stored on the mix, so co-hosts and viewers move
-   * with the host. 404s an index past the stored options.
+   * Pages one lobby to one of the options its last balance produced. Not a local
+   * view toggle: the index is stored on the lobby, so co-hosts and viewers move
+   * with the host. 404s an index past the stored options; 409 `seat_conflict`
+   * when the option would seat somebody the other lobby has already seated.
    */
-  setVariantIndex(workspaceId: number, gameId: number, variantIndex: number): Promise<CustomGame> {
+  setVariantIndex(
+    workspaceId: number,
+    gameId: number,
+    lobbyIndex: 0 | 1,
+    variantIndex: number,
+  ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/variant`, {
       method: "PUT",
-      body: { variant_index: variantIndex },
+      body: { lobby_index: lobbyIndex, variant_index: variantIndex },
     }).then((r) => r.json());
   },
 
@@ -458,29 +611,35 @@ export const customGameService = {
   },
 
   /**
-   * Swap two seated players between teams, same role only -- a same-role swap
-   * can never break a team's role quota, so it needs no eligibility check
-   * beyond "both exist and share a role". `variantIndex` edits whichever
-   * balance option is on screen, not always the first.
+   * Swap two seated players between the teams of ONE lobby, same role only -- a
+   * same-role swap can never break a team's role quota, so it needs no
+   * eligibility check beyond "both exist and share a role". `variantIndex` edits
+   * whichever balance option that lobby is showing, not always the first.
    */
   swapSeats(
     workspaceId: number,
     gameId: number,
+    lobbyIndex: 0 | 1,
     variantIndex: number,
     firstUuid: string,
     secondUuid: string,
   ): Promise<CustomGame> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/teams/swap`, {
       method: "POST",
-      body: { variant_index: variantIndex, first_uuid: firstUuid, second_uuid: secondUuid },
+      body: {
+        lobby_index: lobbyIndex,
+        variant_index: variantIndex,
+        first_uuid: firstUuid,
+        second_uuid: secondUuid,
+      },
     }).then((r) => r.json());
   },
 
   /**
-   * Posts the current matchup -- teams and the next map -- to the mix's Discord
-   * channel. Fire-and-forget: the response only says the message was queued for
-   * the bot, so a delivery that fails afterwards surfaces in the bot's logs,
-   * not here. `variantIndex` is whichever balance option is on screen.
+   * Posts one lobby's current matchup -- teams and its next map -- to the mix's
+   * Discord channel. Fire-and-forget: the response only says the message was
+   * queued for the bot. `variantIndex` is whichever balance option that lobby is
+   * showing.
    *
    * `image` is that matchup rasterised in the browser; it is what the bot
    * attaches. Passing `null` (a capture that failed, or a caller with no node
@@ -489,6 +648,7 @@ export const customGameService = {
   async postToDiscord(
     workspaceId: number,
     gameId: number,
+    lobbyIndex: 0 | 1,
     variantIndex: number,
     image: Blob | null = null,
   ): Promise<{ status: "queued"; channel_id: string }> {
@@ -496,9 +656,95 @@ export const customGameService = {
       `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/post`,
       {
         method: "POST",
-        body: { variant_index: variantIndex, image_b64: image ? await blobToBase64(image) : null },
+        body: {
+          lobby_index: lobbyIndex,
+          variant_index: variantIndex,
+          image_b64: image ? await blobToBase64(image) : null,
+        },
       },
     );
     return response.json();
+  },
+
+  /**
+   * How many lobbies this mix runs. 1 -> 2 opens an empty lobby B; 2 -> 1 drops
+   * lobby B's row (its balance is lost, its recorded matches stay in the
+   * history) and clears every player's `lobby_pin`.
+   */
+  setLobbyCount(workspaceId: number, gameId: number, lobbyCount: 1 | 2): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/lobbies`, {
+      method: "PUT",
+      body: { lobby_count: lobbyCount },
+    }).then((r) => r.json());
+  },
+
+  /** The caller's own standing in this mix: seat, blockers, what they may do. */
+  getMySeat(workspaceId: number, gameId: number): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`).then((r) =>
+      r.json(),
+    );
+  },
+
+  /**
+   * Signs the caller up. Idempotent: a caller already on the roster gets their
+   * current state back rather than an error, so a second press never moves a
+   * host's bench decision back into the pool.
+   */
+  joinMix(workspaceId: number, gameId: number): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`, {
+      method: "POST",
+    }).then((r) => r.json());
+  },
+
+  /** Takes the caller out of the lineup. Allowed with no linked accounts at all. */
+  leaveMix(workspaceId: number, gameId: number): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`, {
+      method: "DELETE",
+    }).then((r) => r.json());
+  },
+
+  /**
+   * The two fields a player owns on their own row. Same patch semantics as the
+   * host's `updatePlayer` -- an omitted key is untouched, `roles: null` is the
+   * `all_ranked` mode -- against a narrower server-side allow-list: anything
+   * else (participation, ranks) is a 422.
+   */
+  updateMySeat(
+    workspaceId: number,
+    gameId: number,
+    patch: { roles?: RoleCode[] | null; is_flex?: boolean },
+  ): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`, {
+      method: "PATCH",
+      body: patch,
+    }).then((r) => r.json());
+  },
+
+  /** The host's two switches: who may sign up, and whether they may edit roles. */
+  setSelfService(
+    workspaceId: number,
+    gameId: number,
+    patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean },
+  ): Promise<CustomGame> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/self-service`,
+      { method: "PUT", body: patch },
+    ).then((r) => r.json());
+  },
+
+  /**
+   * Opens signup in the requested mode and queues the signup card for the
+   * workspace's mix channel. Fire-and-forget like `postToDiscord`: the response
+   * only says the message reached the bot's queue.
+   */
+  postSignup(
+    workspaceId: number,
+    gameId: number,
+    selfSignup: "pool" | "benched",
+  ): Promise<{ status: "queued"; channel_id: string }> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/signup`,
+      { method: "POST", body: { self_signup: selfSignup } },
+    ).then((r) => r.json());
   },
 };

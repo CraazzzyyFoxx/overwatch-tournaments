@@ -43,9 +43,10 @@ export const GROUP_TYPES: Record<string, true> = { round_robin: true, swiss: tru
  * so no new copy. `stage_type` is a free column, so an unlisted value renders
  * the name alone instead of a raw enum token.
  */
-export const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swiss" | "bracket.singleElimination" | "bracket.doubleElimination"> = {
+export const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swiss" | "common.ffaLeague" | "bracket.singleElimination" | "bracket.doubleElimination"> = {
   round_robin: "common.roundRobin",
   swiss: "common.swiss",
+  ffa_league: "common.ffaLeague",
   single_elimination: "bracket.singleElimination",
   double_elimination: "bracket.doubleElimination"
 };

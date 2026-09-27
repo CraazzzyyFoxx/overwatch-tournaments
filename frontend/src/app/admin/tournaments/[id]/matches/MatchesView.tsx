@@ -12,7 +12,8 @@ export interface MatchesViewScope {
 }
 
 /**
- * The `match.read` gate the five Matches views share.
+ * The `match.read` gate the Matches views share — and the Bracket tab's
+ * Standings and Lobbies views, which read the same match results.
  *
  * The gate lives here rather than in `layout.tsx` because the layout is
  * navigation: the sub-tab bar has no tournament of its own to authorize

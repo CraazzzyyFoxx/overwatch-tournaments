@@ -435,6 +435,8 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.tournament.ffa_game_cancel": Op(request=ffa_schemas.FfaGameCancelInput, response=ffa_schemas.FfaLobbyRead),
     "rpc.tournament.ffa_games_count_set": Op(request=ffa_schemas.FfaGamesCountInput, response=ffa_schemas.FfaLobbyRead),
+    # Same shape as rpc.tournament.ffa_stage, minus the public_view trim.
+    "rpc.tournament.ffa_stage_admin": Op(response=ffa_schemas.FfaLobbyRead, response_array=True),
     # ── per-map match edit (admin) ─────────────────────────────────────────
     # Answers an ad-hoc dict of the match's own columns rather than MatchRead, so
     # only the request body is mapped here.

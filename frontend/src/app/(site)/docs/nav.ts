@@ -144,8 +144,8 @@ export const GUIDES: Record<GuideId, GuideGroup[]> = {
           slug: "mixes",
           title: { ru: "Миксы", en: "Mixes" },
           keywords: {
-            ru: "микс кастомка состав ротация скамейка",
-            en: "mix custom game lineup rotation bench",
+            ru: "микс кастомка состав ротация скамейка лобби",
+            en: "mix custom game lineup rotation bench lobby",
           },
         },
       ],
@@ -319,8 +319,8 @@ export const GUIDES: Record<GuideId, GuideGroup[]> = {
           slug: "mixes",
           title: { ru: "Миксы для хостов", en: "Mixes for hosts" },
           keywords: {
-            ru: "микс хост кастомка ротация соведущий",
-            en: "mix host custom game rotation co-host",
+            ru: "микс хост кастомка ротация соведущий лобби два лобби",
+            en: "mix host custom game rotation co-host lobby two lobbies",
           },
         },
         {

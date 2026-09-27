@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
+import type { RoleCode } from "@/lib/roster/roles";
 import {
   customGameKeys,
   customGameService,
   type CustomGame,
   type CustomGamePlayerPatch,
+  type MixSelfSignup,
+  type MixSelfState,
 } from "@/services/custom-game.service";
 
 import {
@@ -41,10 +45,17 @@ export type PickupTeamNameInput = {
 };
 
 export type PickupSwapSeatsInput = {
+  lobbyIndex: 0 | 1;
   variantIndex: number;
   firstUuid: string;
   secondUuid: string;
 };
+
+/** Which lobby a balance run covers: one of them, or the whole pool split across both. */
+export type PickupBalanceInput = { scope: "lobby"; lobbyIndex: 0 | 1 } | { scope: "all" };
+
+/** The two fields a player owns on their own row. `roles: null` is `all_ranked`. */
+export type PickupMySeatInput = { roles: RoleCode[] | null; is_flex: boolean };
 
 export type PickupCreateGameInput = {
   name: string;
@@ -65,7 +76,11 @@ export type PickupCreateGameInput = {
  * id-descending) is shown, which is also how the view recovers when another
  * host cancels the mix being watched.
  */
-export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
+export function usePickupMix(
+  workspaceId: number,
+  pickedGameId: number | null,
+  options: { seatEnabled?: boolean } = {},
+) {
   const queryClient = useQueryClient();
 
   const gamesQuery = useQuery({
@@ -92,15 +107,40 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     enabled: selectedGameId != null,
   });
 
+  // The lobby on screen. Page state, not server state: two co-hosts may well be
+  // watching different lobbies of the same mix.
+  const [activeLobby, setActiveLobby] = useState<0 | 1>(0);
+  const lobbyCount = gameQuery.data?.lobby_count ?? 1;
+  // Dropping to one lobby while B is open would leave the page pointing at a
+  // lobby the mix no longer has. Reset during render, React's own pattern for
+  // state derived from a prop that must follow it.
+  if (activeLobby >= lobbyCount) {
+    setActiveLobby(0);
+  }
+
   /**
-   * Who is owed the next seat and who should rest, from this mix's own map
-   * history -- feeds a hint into the lineup panel, ahead of `balance` rather
-   * than as a separate screen (see `mix_rotation.recommend_rotation`).
+   * Who is owed the next seat in the open lobby and who should rest, from this
+   * mix's own map history -- feeds a hint into the lineup panel, ahead of
+   * `balance` rather than as a separate screen (see
+   * `mix_rotation.recommend_rotation`). Keyed by lobby: the candidates of lobby
+   * A are not the candidates of lobby B.
    */
   const rotationQuery = useQuery({
-    queryKey: customGameKeys.rotation(workspaceId, selectedGameId ?? 0),
-    queryFn: () => customGameService.rotation(workspaceId, selectedGameId as number),
+    queryKey: customGameKeys.rotation(workspaceId, selectedGameId ?? 0, activeLobby),
+    queryFn: () => customGameService.rotation(workspaceId, selectedGameId as number, activeLobby),
     enabled: selectedGameId != null,
+  });
+
+  /**
+   * The caller's own standing in this mix. A separate read from the board on
+   * purpose: the board is public and identical for every viewer, this answer is
+   * about the caller. Off for a signed-out visitor -- the endpoint requires
+   * auth and the panel has nothing to show them.
+   */
+  const mySeatQuery = useQuery({
+    queryKey: customGameKeys.me(workspaceId, selectedGameId ?? 0),
+    queryFn: () => customGameService.getMySeat(workspaceId, selectedGameId as number),
+    enabled: selectedGameId != null && options.seatEnabled === true,
   });
 
   // Another host editing this workspace's mixes (roster, ranks, bench, role
@@ -120,7 +160,7 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     // itself rather than only on the writes that look rotation-specific. The
     // history is refetched for the same reason: recording and undoing both
     // rewrite it, and until now that only landed through the realtime echo.
-    void queryClient.invalidateQueries({ queryKey: customGameKeys.rotation(workspaceId, game.id) });
+    void queryClient.invalidateQueries({ queryKey: customGameKeys.rotationAll(workspaceId, game.id) });
     void queryClient.invalidateQueries({ queryKey: customGameKeys.matches(workspaceId, game.id) });
   };
 
@@ -201,8 +241,22 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
    * no cache is touched -- the only feedback is that the message was queued.
    */
   const postToDiscord = useMutation({
-    mutationFn: ({ variantIndex, image }: { variantIndex: number; image: Blob | null }) =>
-      customGameService.postToDiscord(workspaceId, selectedGameId as number, variantIndex, image),
+    mutationFn: ({
+      lobbyIndex,
+      variantIndex,
+      image,
+    }: {
+      lobbyIndex: 0 | 1;
+      variantIndex: number;
+      image: Blob | null;
+    }) =>
+      customGameService.postToDiscord(
+        workspaceId,
+        selectedGameId as number,
+        lobbyIndex,
+        variantIndex,
+        image,
+      ),
     onSuccess: () => notify.success("Sent to Discord"),
     onError: (error) => notify.apiError(error),
   });
@@ -242,6 +296,7 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
       customGameService.swapSeats(
         workspaceId,
         selectedGameId as number,
+        input.lobbyIndex,
         input.variantIndex,
         input.firstUuid,
         input.secondUuid,
@@ -251,7 +306,8 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
   });
 
   const balance = useMutation({
-    mutationFn: () => customGameService.balance(workspaceId, selectedGameId as number),
+    mutationFn: (input: PickupBalanceInput) =>
+      customGameService.balance(workspaceId, selectedGameId as number, input),
     onSuccess: (game) => {
       applyGame(game);
       notify.success("Teams balanced");
@@ -264,6 +320,7 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
       customGameService.recordOutcome(
         workspaceId,
         selectedGameId as number,
+        input.lobbyIndex,
         input.outcome,
         input.variantIndex,
       ),
@@ -289,10 +346,10 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
-  /** The map the next match is on -- rolled or picked; `null` clears it. */
+  /** The map this lobby's next match is on -- rolled or picked; `null` clears it. */
   const setNextMap = useMutation({
-    mutationFn: (mapId: number | null) =>
-      customGameService.setNextMap(workspaceId, selectedGameId as number, mapId),
+    mutationFn: ({ lobbyIndex, mapId }: { lobbyIndex: 0 | 1; mapId: number | null }) =>
+      customGameService.setNextMap(workspaceId, selectedGameId as number, lobbyIndex, mapId),
     onSuccess: applyGame,
     onError: (error) => notify.apiError(error),
   });
@@ -308,23 +365,47 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
    * trip behind the arrow keys.
    */
   const setVariantIndex = useMutation({
-    mutationFn: (variantIndex: number) =>
-      customGameService.setVariantIndex(workspaceId, selectedGameId as number, variantIndex),
-    onMutate: (variantIndex: number) => {
+    mutationFn: ({ lobbyIndex, variantIndex }: { lobbyIndex: 0 | 1; variantIndex: number }) =>
+      customGameService.setVariantIndex(
+        workspaceId,
+        selectedGameId as number,
+        lobbyIndex,
+        variantIndex,
+      ),
+    onMutate: ({ lobbyIndex, variantIndex }: { lobbyIndex: 0 | 1; variantIndex: number }) => {
       const key = customGameKeys.one(workspaceId, selectedGameId ?? 0);
       const previous = queryClient.getQueryData<CustomGame>(key);
       if (previous != null) {
-        queryClient.setQueryData(key, { ...previous, selected_variant_index: variantIndex });
+        queryClient.setQueryData(key, {
+          ...previous,
+          lobbies: previous.lobbies.map((row) =>
+            row.lobby_index === lobbyIndex ? { ...row, selected_variant_index: variantIndex } : row,
+          ),
+        });
       }
       return { previous };
     },
     onSuccess: (game) => queryClient.setQueryData(customGameKeys.one(workspaceId, game.id), game),
-    onError: (error, _variantIndex, context) => {
+    onError: (error, _input, context) => {
       if (context?.previous != null) {
         queryClient.setQueryData(customGameKeys.one(workspaceId, selectedGameId ?? 0), context.previous);
       }
       notify.apiError(error);
     },
+  });
+
+  /**
+   * How many lobbies this mix runs. Going back to one drops lobby B's balance
+   * and every pin server-side, so the whole game is re-seeded from the response.
+   */
+  const setLobbyCount = useMutation({
+    mutationFn: (count: 1 | 2) =>
+      customGameService.setLobbyCount(workspaceId, selectedGameId as number, count),
+    onSuccess: (game) => {
+      applyGame(game);
+      notify.success(game.lobby_count === 2 ? "Second lobby opened" : "Back to one lobby");
+    },
+    onError: (error) => notify.apiError(error),
   });
 
   const closeMix = useMutation({
@@ -370,12 +451,78 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * A self-write answers with the caller's state, not with the game, so the
+   * seat is seeded from the response and the board is invalidated instead:
+   * joining and leaving move the roster every viewer reads.
+   */
+  const applySeat = (state: MixSelfState) => {
+    queryClient.setQueryData(customGameKeys.me(workspaceId, state.custom_game_id), state);
+    void queryClient.invalidateQueries({
+      queryKey: customGameKeys.one(workspaceId, state.custom_game_id),
+    });
+    void queryClient.invalidateQueries({ queryKey: customGameKeys.list(workspaceId), exact: true });
+    void queryClient.invalidateQueries({
+      queryKey: customGameKeys.rotationAll(workspaceId, state.custom_game_id),
+    });
+  };
+
+  const joinMix = useMutation({
+    mutationFn: () => customGameService.joinMix(workspaceId, selectedGameId as number),
+    onSuccess: applySeat,
+    onError: (error) => notify.apiError(error),
+  });
+
+  const leaveMix = useMutation({
+    mutationFn: () => customGameService.leaveMix(workspaceId, selectedGameId as number),
+    onSuccess: applySeat,
+    onError: (error) => notify.apiError(error),
+  });
+
+  const updateMySeat = useMutation({
+    mutationFn: (input: PickupMySeatInput) =>
+      customGameService.updateMySeat(workspaceId, selectedGameId as number, input),
+    onSuccess: (state) => {
+      applySeat(state);
+      notify.success("Roles saved");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
+  /** The host's switches. Returns the game, so the board is seeded like any other host write. */
+  const setSelfService = useMutation({
+    mutationFn: (patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean }) =>
+      customGameService.setSelfService(workspaceId, selectedGameId as number, patch),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
+  /**
+   * Opens signup and hands the card to the bot. The mix's own `self_signup`
+   * moves server-side, so the board is refetched; the message itself is
+   * fire-and-forget, exactly like `postToDiscord`.
+   */
+  const postSignup = useMutation({
+    mutationFn: (selfSignup: "pool" | "benched") =>
+      customGameService.postSignup(workspaceId, selectedGameId as number, selfSignup),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: customGameKeys.one(workspaceId, selectedGameId ?? 0),
+      });
+      notify.success("Signup opened in Discord");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
   return {
     selectedGameId,
+    activeLobby,
+    setActiveLobby,
     gamesQuery,
     gameQuery,
     matchesQuery,
     rotationQuery,
+    mySeatQuery,
     createGame,
     setRoster,
     patchPlayer,
@@ -385,6 +532,7 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     undoMatch,
     setNextMap,
     setVariantIndex,
+    setLobbyCount,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
@@ -394,5 +542,10 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     addCoHost,
     removeCoHost,
     swapSeats,
+    joinMix,
+    leaveMix,
+    updateMySeat,
+    setSelfService,
+    postSignup,
   };
 }

@@ -117,7 +117,11 @@ function ffaStage(): Stage {
     de_grand_final_type: "no_reset",
     seed_ranking: "slot",
     best_of: { default: 3, by_round: {}, final: null },
-    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
+    ffa_scoring: {
+      columns: [{ key: "score", label: "Счёт", public: true, better: "higher" }],
+      placement_points: [],
+      formula: "score"
+    },
     challonge_id: null,
     challonge_slug: null,
     items: [
@@ -139,7 +143,12 @@ function lobby(encounterId: number, stageItemId: number, scheduledAt: string | n
     best_of: 3,
     scheduled_at: scheduledAt,
     advance_count: 2,
-    rules: { placement_points: [10, 6, 3], score_points: 1, score_label: null },
+    rules: {
+      columns: [{ key: "score", label: "Score", public: true, better: "higher" }],
+      placement_points: [10, 6, 3],
+      formula: "place_pts + score",
+      requires_placement: true
+    },
     rows: []
   };
 }

@@ -9,10 +9,12 @@ import {
   orderEliminationRounds
 } from "@/lib/bracket/view";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
+import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import encounterService from "@/services/encounter.service";
+import ffaService from "@/services/ffa.service";
 import heroService from "@/services/hero.service";
 import registrationService from "@/services/registration.service";
 import teamService from "@/services/team.service";
@@ -52,6 +54,10 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
   );
   const showsGroupTable =
     variant !== "registration" && stage !== null && GROUP_TYPES[stage.stage_type] === true;
+  // An FFA league has neither a bracket nor duel standings: its lobby tables
+  // are the stage, and the encounter list never answers a lobby.
+  const showsFfaTable =
+    variant !== "registration" && stage !== null && FFA_STAGE_TYPES.includes(stage.stage_type);
   // A group-only tournament has no bracket to read third place off, so the
   // podium falls back to the standings (plan §5).
   const podiumNeedsStandings =
@@ -95,6 +101,13 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     enabled: tournament !== undefined && variant === "completed"
   });
 
+  // Same key and fetcher as the bracket's `FfaStagePanel`.
+  const ffaQuery = useQuery({
+    queryKey: tournamentQueryKeys.ffaStage(tournamentId, stage?.id ?? 0),
+    queryFn: () => ffaService.getStage(tournamentId, stage!.id),
+    enabled: showsFfaTable
+  });
+
   // Same key as `TournamentHeroPlaytimePage`.
   const heroesQuery = useQuery({
     queryKey: tournamentQueryKeys.heroPlaytime(tournamentId),
@@ -111,6 +124,7 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
   const registrations = registrationList?.registrations ?? [];
   const standings = standingsQuery.data ?? [];
   const teams = teamsQuery.data ? teamsQuery.data.results : [];
+  const ffaLobbies = showsFfaTable ? (ffaQuery.data ?? []) : [];
 
   const stageId = stage?.id ?? null;
   const stageEncounters = useMemo(
@@ -155,6 +169,7 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
   // block only when neither of them drew anything.
   const hasMiniBracket = stage !== null && !showsGroupTable && roundGroups.length > 0;
   const hasGroupTable = showsGroupTable && stage !== null && stageStandings.length > 0;
+  const hasFfaTable = ffaLobbies.some((lobby) => lobby.rows.length > 0);
 
   const officialStream = (streamsQuery.data?.official ?? [])[0];
   const participantsOnAir = streamsQuery.data?.participants.length ?? 0;
@@ -200,12 +215,14 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     topHeroes,
     stageEncounters,
     stageStandings,
+    ffaLobbies,
     roundGroups,
     roundShapeByStage,
     roundShape,
     liveTeamStreams,
     hasMiniBracket,
     hasGroupTable,
+    hasFfaTable,
     officialStream,
     participantsOnAir,
     primary,

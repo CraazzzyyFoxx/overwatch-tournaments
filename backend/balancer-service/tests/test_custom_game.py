@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +16,8 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from sqlalchemy.exc import IntegrityError  # noqa: E402
+
 from shared.core.enums import (  # noqa: E402
     CasualTeamSide,
     HeroClass,
@@ -26,6 +29,7 @@ from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
+from src.domain.mix_self_service import MAX_ROSTER  # noqa: E402
 from src.services.custom_game import _MAX_CO_HOSTS, CustomGameService  # noqa: E402
 
 
@@ -54,6 +58,7 @@ def _roster_row(row_id: int, member_id: int, sort_order: int, **overrides) -> Si
         "participation": MixParticipation.POOL,
         "is_flex": False,
         "roles": None,
+        "lobby_pin": None,
         "created_at": None,
     }
     fields.update(overrides)
@@ -82,15 +87,19 @@ def _match(
     home: list,
     away: list,
     scores: tuple[int, int] = (1, 0),
+    busy: Sequence[int] = (),
     **overrides,
 ) -> SimpleNamespace:
-    """One frozen ``casual.match`` with both scored sides and their seats."""
+    """One frozen ``casual.match`` with both scored sides, their seats, and who
+    was playing the mix's other lobby at the time."""
     fields = {
         "id": match_id,
         "created_at": created_at,
+        "lobby_index": 0,
         "map_id": None,
         "recorded_by": 9,
         "points_per_win_applied": None,
+        "busy_players": [_row(workspace_member_id=member_id) for member_id in busy],
         "teams": [
             _row(
                 id=match_id * 100 + index,
@@ -115,10 +124,24 @@ def _game(**overrides) -> SimpleNamespace:
         "host_user_id": 9,
         "name": "Scrim",
         "status": "draft",
-        "next_map_id": None,
-        "balance_result_json": None,
+        "lobby_count": 1,
+        "self_signup": "closed",
+        "self_role_edit": False,
+    }
+    fields.update(overrides)
+    return _row(**fields)
+
+
+def _lobby(lobby_index: int = 0, **overrides) -> SimpleNamespace:
+    """One ``balancer.custom_game_lobby`` row: everything one match is about."""
+    fields = {
+        "custom_game_id": 11,
+        "lobby_index": lobby_index,
         "selected_variant_index": 0,
+        "balance_result_json": None,
         "balance_result_version": 1,
+        "next_map_id": None,
+        "balanced_at": None,
     }
     fields.update(overrides)
     return _row(**fields)
@@ -158,6 +181,15 @@ def _ranks(*member_ids: int) -> dict[tuple[int, str], ResolvedRank]:
     return out
 
 
+def _auth(user_id: int = 42, *, denied: bool = False) -> SimpleNamespace:
+    """The gateway-rehydrated identity a self-service call carries."""
+    return SimpleNamespace(
+        id=user_id,
+        is_superuser=False,
+        can_capability=lambda _resource, _action, workspace_id=None: not denied,
+    )
+
+
 class CustomGameServiceTests(IsolatedAsyncioTestCase):
     if sys.platform == "win32":
         loop_factory = asyncio.SelectorEventLoop
@@ -183,7 +215,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.casual_matches.list_for_custom_game = AsyncMock(return_value=[])
         # Nothing to undo unless a test records something.
         self.casual_matches.get_for_game = AsyncMock(return_value=None)
-        self.casual_matches.newest_id_for_game = AsyncMock(return_value=None)
+        self.casual_matches.newest_id_for_lobby = AsyncMock(return_value=None)
+        self.casual_matches.set_busy_players = AsyncMock()
+        self.casual_matches.activity_for_lobbies = AsyncMock(return_value={})
         # The normalized child tables of a mix. Empty by default: no co-hosts, no
         # per-team name override, no own role mask -- exactly what a fresh mix has.
         self.co_hosts = MagicMock()
@@ -196,6 +230,17 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.team_names = MagicMock()
         self.team_names.mapping_for_game = AsyncMock(return_value={})
         self.team_names.set = AsyncMock()
+        # ``balancer.custom_game_lobby`` as a dict keyed by lobby_index: a fresh
+        # mix has exactly one row, and a test that needs lobby B assigns
+        # ``self.lobby_rows[1] = _lobby(1, ...)``.
+        self.lobby_rows: dict[int, SimpleNamespace] = {0: _lobby(0)}
+        self.lobbies = MagicMock()
+        self.lobbies.list_for_game = AsyncMock(
+            side_effect=lambda _s, _gid: [self.lobby_rows[index] for index in sorted(self.lobby_rows)]
+        )
+        self.lobbies.get = AsyncMock(side_effect=lambda _s, _gid, index: self.lobby_rows.get(index))
+        self.lobbies.create = AsyncMock(side_effect=lambda _s, row: self.lobby_rows.setdefault(row.lobby_index, row))
+        self.lobbies.delete = AsyncMock(side_effect=lambda _s, row: self.lobby_rows.pop(row.lobby_index, None))
         # The host's own row: solver knobs, roster shape and points per win.
         # Nobody has saved one unless a test says otherwise -- the mix then
         # balances on the engine defaults, fields the workspace/built-in roster
@@ -210,6 +255,25 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.roster.delete_for_game = AsyncMock()
         self.roster.get_by = AsyncMock(return_value=None)
         self.roster.delete = AsyncMock()
+        # A single-row insert: `self_join` seats one player, unlike the host's
+        # bulk `create_many`, and needs an id for the role child table.
+        self.roster.create = AsyncMock(side_effect=lambda _s, row: row)
+        # The self-service identity chain: auth account -> players.user ->
+        # workspace_member. Linked and enrolled unless a test says otherwise.
+        self.players = MagicMock()
+        self.players.get_by_auth_user_id = AsyncMock(return_value=_row(id=70, auth_user_id=42))
+        self.workspace_members = MagicMock()
+        self.workspace_members.get_by_player = AsyncMock(return_value=None)
+        # Both required OAuth links present unless a test removes one.
+        self.load_missing_links = AsyncMock(return_value=frozenset())
+        self.enroll_member = AsyncMock(
+            side_effect=lambda _s, *, workspace_id, player_id: _row(id=7, player_id=player_id)
+        )
+        self.grant_player_role = AsyncMock()
+        self.emit = AsyncMock()
+        self._emit_patch = patch("src.services.custom_game.emit_pickup_mix_updated", new=self.emit)
+        self._emit_patch.start()
+        self.addCleanup(self._emit_patch.stop)
         # Every requested member exists in this workspace unless a test says otherwise.
         self.load_roster = AsyncMock(side_effect=lambda _s, *, workspace_id, member_ids: _members(*member_ids))
         # No workspace member resolves to a host name unless a test says
@@ -243,6 +307,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             games=self.games,
             roster=self.roster,
             co_hosts=self.co_hosts,
+            lobbies=self.lobbies,
             player_roles=self.player_roles,
             team_names=self.team_names,
             casual_matches=self.casual_matches,
@@ -255,6 +320,11 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             load_hosts=self.load_hosts,
             load_member_user_ids=self.load_member_user_ids,
             run_balance=self.run_balance,
+            players=self.players,
+            workspace_members=self.workspace_members,
+            load_missing_links=self.load_missing_links,
+            enroll_member=self.enroll_member,
+            grant_player_role=self.grant_player_role,
         )
         self.session = _session()
 
@@ -326,12 +396,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.games.create.assert_not_called()
 
     async def test_create_clones_a_previous_mix(self) -> None:
-        source = _game(
-            id=5,
-            status="completed",
-            next_map_id=42,
-            balance_result_json={"variants": []},
-        )
+        source = _game(id=5, status="completed")
         self.games.get.return_value = source
         self.roster.list_for_game.return_value = [
             _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["tank", "damage"], is_flex=True),
@@ -372,8 +437,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.co_hosts.add.assert_awaited_once_with(self.session, game.id, 4)
         # Nothing that describes a played session travels.
         self.assertEqual(game.status, "draft")
-        self.assertIsNone(game.balance_result_json)
-        self.assertIsNone(game.next_map_id)
+        created = self.lobbies.create.await_args.args[1]
+        self.assertEqual(created.lobby_index, 0)
+        self.assertIsNone(created.balance_result_json)
+        self.assertIsNone(created.next_map_id)
 
     async def test_create_clone_drops_members_who_left_the_workspace(self) -> None:
         self.games.get.return_value = _game(id=5)
@@ -392,6 +459,51 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         rows = self.roster.create_many.await_args.args[1]
         self.assertEqual([row.workspace_member_id for row in rows], [7])
+
+    async def test_create_clone_copies_the_role_edit_switch_but_closes_signup(self) -> None:
+        """A clone is a NEW session: whoever the host let edit their own roles
+        keeps that, but the signup window reopens by hand, never by inheritance."""
+        source = _game(id=5, self_signup="pool", self_role_edit=True)
+        self.games.get.return_value = source
+        self.roster.list_for_game.return_value = []
+
+        game = await self.service.create(
+            self.session,
+            workspace_id=1,
+            host_user_id=9,
+            name="Rematch",
+            actor_user_id=9,
+            clone_from_game_id=5,
+        )
+
+        self.assertTrue(game.self_role_edit)
+        self.assertEqual(game.self_signup, "closed")
+
+    async def test_create_clone_copies_the_lobby_layout(self) -> None:
+        """Two lobbies and who is pinned where are how this host runs the
+        session; the matchups and the history are last session's."""
+        self.games.get.return_value = _game(id=5, lobby_count=2)
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, lobby_pin=1),
+            _roster_row(2, 8, 1),
+        ]
+        self.roster.create_many = AsyncMock(side_effect=self._assign_roster_ids)
+
+        game = await self.service.create(
+            self.session,
+            workspace_id=1,
+            host_user_id=9,
+            name="Scrim 2",
+            actor_user_id=9,
+            clone_from_game_id=5,
+        )
+
+        self.assertEqual(game.lobby_count, 2)
+        rows = self.roster.create_many.await_args.args[1]
+        self.assertEqual([row.lobby_pin for row in rows], [1, None])
+        created = [call.args[1] for call in self.lobbies.create.await_args_list]
+        self.assertEqual([lobby.lobby_index for lobby in created], [0, 1])
+        self.assertTrue(all(lobby.balance_result_json is None for lobby in created))
 
     async def test_create_clone_of_another_workspace_404(self) -> None:
         self.games.get.return_value = _game(id=5, workspace_id=2)
@@ -438,7 +550,13 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertIsNone(config_overrides)
         self.assertEqual(role_mask["tank"], 1)
         self.assertEqual(out.status, "balanced")
-        self.assertIs(out.balance_result_json, payload)
+        # The matchup is a fact about a lobby, not about the mix: a single-lobby
+        # mix is simply lobby 0, so the document, the pager and the moment it
+        # was balanced land on that row.
+        lobby = self.lobby_rows[0]
+        self.assertIs(lobby.balance_result_json, payload)
+        self.assertEqual(lobby.selected_variant_index, 0)
+        self.assertIsNotNone(lobby.balanced_at)
         self.assertNotIn("tournament_id", payload)
         # Seat placement lives in the payload alone -- a seated row keeps the
         # participation the host set rather than mirroring the team it landed in.
@@ -531,7 +649,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_update_player_keeps_stored_balance(self) -> None:
         """A lineup edit must not blow away the last balance -- only pressing
         Balance teams again should replace it."""
-        game = _game(status="balanced", balance_result_json={"variants": []})
+        game = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": []})
         row = _roster_row(1, 7, 0)
         self.games.get.return_value = game
         self.roster.list_for_game.return_value = [row]
@@ -545,7 +664,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(row.participation, MixParticipation.BENCHED)
         self.assertEqual(game.status, "balanced")
-        self.assertEqual(game.balance_result_json, {"variants": []})
+        self.assertEqual(self.lobby_rows[0].balance_result_json, {"variants": []})
         self.assertEqual(row.sort_order, 0)
 
     async def test_update_player_pins_a_seat(self) -> None:
@@ -580,6 +699,111 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertTrue(row.is_flex)
         # A patch, not a replace: the bench switch is untouched.
         self.assertNotEqual(row.participation, MixParticipation.BENCHED)
+
+    async def test_update_player_pins_a_player_to_a_lobby(self) -> None:
+        game = _game(lobby_count=2)
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [row]
+
+        await self.service.update_player(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            workspace_member_id=7,
+            patch={"lobby_pin": 1},
+            actor_user_id=9,
+        )
+
+        self.assertEqual(row.lobby_pin, 1)
+
+    async def test_update_player_clears_a_pin_back_to_auto(self) -> None:
+        game = _game(lobby_count=2)
+        row = _roster_row(1, 7, 0, lobby_pin=0)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [row]
+
+        await self.service.update_player(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            workspace_member_id=7,
+            patch={"lobby_pin": None},
+            actor_user_id=9,
+        )
+
+        self.assertIsNone(row.lobby_pin)
+
+    async def test_update_player_refuses_a_pin_in_a_one_lobby_mix_422(self) -> None:
+        """There is nothing to pin to: the mix runs one lobby."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game()
+        self.roster.list_for_game.return_value = [row]
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.update_player(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                workspace_member_id=7,
+                patch={"lobby_pin": 1},
+                actor_user_id=9,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertIsNone(row.lobby_pin)
+
+    async def test_set_lobby_count_two_opens_lobby_b(self) -> None:
+        game = _game()
+        self.games.get.return_value = game
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=2, actor_user_id=9
+        )
+
+        self.assertEqual(game.lobby_count, 2)
+        self.assertEqual(sorted(self.lobby_rows), [0, 1])
+        self.assertIsNone(self.lobby_rows[1].balance_result_json)
+
+    async def test_set_lobby_count_one_drops_lobby_b_and_every_pin(self) -> None:
+        """Going back to one lobby loses B's matchup and frees everybody: a pin
+        to a lobby that no longer exists would silently exclude that player
+        from the next balance."""
+        game = _game(lobby_count=2)
+        self.lobby_rows[1] = _lobby(1, balance_result_json={"variants": []})
+        pinned = _roster_row(1, 7, 0, lobby_pin=1)
+        other = _roster_row(2, 8, 1, lobby_pin=0)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [pinned, other]
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=1, actor_user_id=9
+        )
+
+        self.assertEqual(game.lobby_count, 1)
+        self.assertEqual(sorted(self.lobby_rows), [0])
+        self.assertIsNone(pinned.lobby_pin)
+        self.assertIsNone(other.lobby_pin)
+
+    async def test_set_lobby_count_to_the_current_value_changes_nothing(self) -> None:
+        game = _game()
+        self.games.get.return_value = game
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=1, actor_user_id=9
+        )
+
+        self.lobbies.create.assert_not_awaited()
+        self.lobbies.delete.assert_not_awaited()
+
+    async def test_set_lobby_count_terminal_409(self) -> None:
+        self.games.get.return_value = _game(status="completed")
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_lobby_count(
+                self.session, workspace_id=1, custom_game_id=11, lobby_count=2, actor_user_id=9
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
 
     async def test_set_participation_moves_every_named_row_at_once(self) -> None:
         game = _game()
@@ -640,6 +864,328 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 409)
+
+    async def test_self_join_seats_a_newcomer_in_the_pool(self) -> None:
+        """The signup mode decides where they land; the row is an ordinary
+        roster row, so the board and the host sheet need no second list."""
+        seated: list = []
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.side_effect = lambda _s, _game_id: list(seated)
+        self.roster.create.side_effect = lambda _s, row: seated.append(row) or row
+        self.workspace_members.get_by_player.side_effect = [None, _row(id=7, player_id=70)]
+
+        state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        [created] = seated
+        self.assertEqual(created.workspace_member_id, 7)
+        self.assertEqual(created.participation, MixParticipation.POOL)
+        self.assertEqual(created.role_selection_mode, MixRoleSelectionMode.ALL_RANKED)
+        self.assertEqual(created.sort_order, 0)
+        self.enroll_member.assert_awaited_once()
+        self.grant_player_role.assert_awaited_once_with(self.session, user_id=42, workspace_id=1, role_name="player")
+        self.assertEqual(self.emit.await_args.kwargs["change"], "roster")
+        self.assertEqual(state["seat"]["participation"], MixParticipation.POOL)
+        self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+
+    async def test_self_join_benched_mode_parks_the_newcomer(self) -> None:
+        self.games.get.return_value = _game(self_signup="benched")
+        self.roster.list_for_game.return_value = []
+
+        await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        (_session_arg, created), _kwargs = self.roster.create.await_args
+        self.assertEqual(created.participation, MixParticipation.BENCHED)
+
+    async def test_self_join_is_idempotent_and_never_unbenches(self) -> None:
+        """A host benched them on purpose; clicking Join again must not walk
+        that back, and must not 409 either."""
+        row = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED)
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.roster.create.assert_not_awaited()
+        self.assertEqual(row.participation, MixParticipation.BENCHED)
+        self.assertEqual(state["seat"]["participation"], MixParticipation.BENCHED)
+        self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+
+    async def test_self_join_a_lost_race_answers_with_the_seated_state(self) -> None:
+        """Two clicks land on uq_custom_game_player_member; the loser reports
+        the row the winner wrote instead of a 500."""
+        seated = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.side_effect = [[], [seated], [seated]]
+        self.roster.create.side_effect = IntegrityError("insert", {}, Exception("duplicate key"))
+        self.workspace_members.get_by_player.side_effect = [None, _row(id=7, player_id=70)]
+
+        state = await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(state["policy"]["join_blocker"], "already_joined")
+        self.assertIsNotNone(state["seat"])
+
+    async def test_self_join_without_battlenet_403(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = []
+        self.load_missing_links.return_value = frozenset({"battlenet"})
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "battlenet_not_linked")
+        self.roster.create.assert_not_awaited()
+
+    async def test_self_join_when_the_host_closed_signup_409(self) -> None:
+        self.games.get.return_value = _game(self_signup="closed")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "signup_closed")
+
+    async def test_self_join_on_a_finished_mix_409(self) -> None:
+        self.games.get.return_value = _game(status="completed", self_signup="pool")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "mix_closed")
+
+    async def test_self_join_on_a_full_roster_409(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = [
+            _roster_row(index + 1, index + 100, index) for index in range(MAX_ROSTER)
+        ]
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "roster_full")
+
+    async def test_self_join_denied_for_this_account_403(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_join(self.session, custom_game_id=11, auth_user=_auth(denied=True), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "self_join_denied")
+
+    async def test_self_leave_works_without_account_links(self) -> None:
+        """Unlinking Battle.net must not trap somebody in tonight's lineup."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.side_effect = [[row], []]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.load_missing_links.return_value = frozenset({"discord", "battlenet"})
+
+        state = await self.service.self_leave(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.roster.delete.assert_awaited_once_with(self.session, row)
+        self.assertIsNone(state["seat"])
+        self.assertEqual(self.emit.await_args.kwargs["change"], "roster")
+
+    async def test_self_leave_when_not_on_the_roster_404(self) -> None:
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = []
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_leave(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertEqual(ctx.exception.detail, "not_on_roster")
+
+    async def test_self_update_reorders_the_players_own_roles(self) -> None:
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=True)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        await self.service.self_update(
+            self.session,
+            custom_game_id=11,
+            auth_user=_auth(),
+            patch={"roles": ["support", "tank"], "is_flex": True},
+            workspace_id=1,
+        )
+
+        self.player_roles.replace_for_player.assert_awaited_once_with(self.session, 1, ["support", "tank"])
+        self.assertEqual(row.role_selection_mode, MixRoleSelectionMode.EXPLICIT)
+        self.assertTrue(row.is_flex)
+
+    async def test_self_update_rejects_participation_422(self) -> None:
+        """Bench and must-play are the host's call, whatever the switch says."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=True)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_update(
+                self.session,
+                custom_game_id=11,
+                auth_user=_auth(),
+                patch={"participation": MixParticipation.MUST_PLAY},
+                workspace_id=1,
+            )
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(row.participation, MixParticipation.POOL)
+
+    async def test_self_update_needs_the_hosts_switch_409(self) -> None:
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=False)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_update(
+                self.session, custom_game_id=11, auth_user=_auth(), patch={"is_flex": True}, workspace_id=1
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "role_edit_off")
+        self.assertFalse(row.is_flex)
+
+    async def test_self_state_reports_every_role_rank_and_the_unranked_ones(self) -> None:
+        """The bot labels all 16 select options, so all three roles carry a
+        number or an explicit null; `unranked_roles` narrows that to what the
+        player actually plays."""
+        row = _roster_row(1, 7, 0, roles=["tank", "support"])
+        self.games.get.return_value = _game(self_signup="pool", self_role_edit=True)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.ranks.resolve.return_value = {(7, "tank"): ResolvedRank(3100, "author")}
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(state["seat"]["ranks"], {"tank": 3100, "damage": None, "support": None})
+        self.assertEqual(state["seat"]["roles"], ["tank", "support"])
+        self.assertEqual(state["unranked_roles"], ["support"])
+        self.assertEqual(state["self_signup"], "pool")
+        self.assertIs(state["self_role_edit"], True)
+
+    async def test_self_state_says_which_lobby_this_player_sits_in(self) -> None:
+        """Where a player sits is the same derivation the board shows -- the
+        seats of each lobby's selected option -- so the panel and the bot read
+        it instead of parsing a solver document of their own."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", lobby_count=2)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.lobby_rows[1] = _lobby(
+            1,
+            balance_result_json=lobby_document(
+                [
+                    {
+                        "teams": [
+                            {"roster": {"tank": [{"uuid": "7", "name": "You"}]}},
+                            {"roster": {"tank": [{"uuid": "8", "name": "Them"}]}},
+                        ]
+                    }
+                ]
+            ),
+        )
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(state["lobby_count"], 2)
+        self.assertEqual(state["seat"]["current_lobby"], 1)
+
+    async def test_self_state_of_a_player_nobody_balanced_in_waits_for_a_seat(self) -> None:
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", lobby_count=2)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertIsNone(state["seat"]["current_lobby"])
+
+    async def test_self_state_of_a_mix_in_another_workspace_404(self) -> None:
+        self.games.get.return_value = _game(workspace_id=2)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    async def test_set_self_service_writes_both_switches(self) -> None:
+        game = _game()
+        self.games.get.return_value = game
+
+        await self.service.set_self_service(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            patch={"self_signup": "benched", "self_role_edit": True},
+            actor_user_id=9,
+        )
+
+        self.assertEqual(game.self_signup, "benched")
+        self.assertTrue(game.self_role_edit)
+
+    async def test_set_self_service_requires_the_host_403(self) -> None:
+        self.games.get.return_value = _game()
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_self_service(
+                self.session, workspace_id=1, custom_game_id=11, patch={"self_signup": "pool"}, actor_user_id=8
+            )
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_signup_post_opens_the_window_and_builds_the_card(self) -> None:
+        game = _game(name="Friday mix")
+        self.games.get.return_value = game
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        self.load_hosts.return_value = {9: "Foxx"}
+
+        channel_id, card = await self.service.signup_post(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            self_signup="benched",
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertEqual(channel_id, 555)
+        self.assertEqual(game.self_signup, "benched")
+        self.assertIn("Friday mix", card.text)
+        [[link]] = card.rows
+        self.assertEqual(link.url, "https://owt.example/balancer/mix/11")
+
+    async def test_signup_post_without_a_workspace_channel_409(self) -> None:
+        """Same refusal as posting a lineup: there is nowhere to post to."""
+        game = _game()
+        self.games.get.return_value = game
+        self.session.scalar = AsyncMock(return_value=None)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.signup_post(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                self_signup="pool",
+                actor_user_id=9,
+                board_url_base="https://owt.example",
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "Discord channel not configured")
+        self.assertEqual(game.self_signup, "closed")
+
+    async def test_signup_post_requires_the_host_403(self) -> None:
+        self.games.get.return_value = _game()
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.signup_post(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                self_signup="pool",
+                actor_user_id=8,
+                board_url_base="https://owt.example",
+            )
+        self.assertEqual(ctx.exception.status_code, 403)
 
     async def test_balance_sends_must_play_to_the_solver(self) -> None:
         game = _game()
@@ -760,6 +1306,147 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(classes["damage"]["priority"], 2)
         self.assertNotIn("tank", classes)
 
+    async def test_balance_of_one_lobby_leaves_out_the_other_lobbys_players(self) -> None:
+        """Лобби A играет: его места и закреплённые за ним не попадают в баланс B."""
+        game = _game(status="balanced", lobby_count=2)
+        roster = [
+            _roster_row(1, 7, 0),
+            _roster_row(2, 8, 1),
+            _roster_row(3, 9, 2, lobby_pin=0),
+            _roster_row(4, 10, 3),
+        ]
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = roster
+        self.ranks.resolve.return_value = _ranks(7, 8, 9, 10)
+        self.lobby_rows[1] = _lobby(1)
+        self.lobby_rows[0] = _lobby(
+            0,
+            balanced_at=datetime(2026, 3, 1, 21, 0),
+            balance_result_json=lobby_document(
+                [
+                    {
+                        "teams": [
+                            {"id": 1, "roster": {"tank": [self._seat("8", "P8", 2500, "tank")]}},
+                            {"id": 2, "roster": {"tank": [self._seat("10", "P10", 2400, "tank")]}},
+                        ],
+                        "statistics": {},
+                        "benched_players": [],
+                    }
+                ]
+            ),
+        )
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, lobby_index=1, actor_user_id=9)
+
+        # 8 и 10 сидят в выбранном варианте лобби A, 9 закреплён за A -- остаётся 7.
+        self.assertEqual(list(self.run_balance.await_args.args[0]["players"]), ["7"])
+        self.assertIsNotNone(self.lobby_rows[1].balance_result_json)
+        self.assertIsNotNone(self.lobby_rows[1].balanced_at)
+        # Документ соседнего лобби не переписан.
+        self.assertEqual(self.lobby_rows[0].balanced_at, datetime(2026, 3, 1, 21, 0))
+
+    async def test_balance_of_a_one_lobby_mix_keeps_the_whole_pool(self) -> None:
+        """У микса одно лобби: ни чужой документ, ни залежавшийся пин не сужают пул."""
+        self.games.get.return_value = _game(lobby_count=1)
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0), _roster_row(2, 8, 1, lobby_pin=1)]
+        self.ranks.resolve.return_value = _ranks(7, 8)
+        self.lobby_rows[1] = _lobby(
+            1,
+            balance_result_json=lobby_document(
+                [
+                    {
+                        "teams": [
+                            {"id": 1, "roster": {"tank": [self._seat("7", "P7", 2500, "tank")]}},
+                            {"id": 2, "roster": {"tank": [self._seat("8", "P8", 2400, "tank")]}},
+                        ],
+                        "statistics": {},
+                        "benched_players": [],
+                    }
+                ]
+            ),
+        )
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=9)
+
+        self.assertEqual(sorted(self.run_balance.await_args.args[0]["players"]), ["7", "8"])
+        self.assertIsNotNone(self.lobby_rows[0].balance_result_json)
+
+    async def test_balance_of_a_two_lobby_mix_leaves_the_unseated_waiting(self) -> None:
+        """Невлезший в лобби игрок ждёт соседнее, а не уходит в бенч: бенч выкинул
+        бы его и из кандидатов второго лобби."""
+        game = _game(lobby_count=2)
+        roster = [_roster_row(1, 7, 0), _roster_row(2, 8, 1), _roster_row(3, 9, 2)]
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = roster
+        self.ranks.resolve.return_value = _ranks(7, 8, 9)
+        self.lobby_rows[1] = _lobby(1)
+        self.run_balance.return_value = {
+            "players": {"7": {"name": "P7"}, "8": {"name": "P8"}, "9": {"name": "P9"}},
+            "variants": [{"teams": [{"roster": {"tank": ["7", "8"]}}], "statistics": {}, "benched": ["9"]}],
+        }
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9)
+
+        self.assertEqual([row.participation for row in roster], [MixParticipation.POOL] * 3)
+
+    async def test_balance_of_both_lobbies_fills_each_with_its_own_half(self) -> None:
+        """«Перемешать оба»: один прогон движка на лобби, ровно на своих игроках."""
+        self.workspace_roster_slots.return_value = {"tank": 1}
+        game = _game(lobby_count=2)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0),
+            _roster_row(2, 8, 1),
+            _roster_row(3, 9, 2),
+            _roster_row(4, 10, 3),
+        ]
+        self.ranks.resolve.return_value = _ranks(7, 8, 9, 10)
+        self.lobby_rows[1] = _lobby(1)
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
+
+        self.assertEqual(self.run_balance.await_count, 2)
+        first, second = (call.args[0]["players"] for call in self.run_balance.await_args_list)
+        # Силы равны, поэтому деление идёт по входному порядку -- и ни один игрок
+        # не попадает в оба лобби.
+        self.assertEqual(set(first), {"7", "9"})
+        self.assertEqual(set(second), {"8", "10"})
+        for lobby in self.lobby_rows.values():
+            self.assertIsNotNone(lobby.balance_result_json)
+            self.assertIsNotNone(lobby.balanced_at)
+            self.assertEqual(lobby.selected_variant_index, 0)
+        self.assertEqual(game.status, "balanced")
+
+    async def test_balance_of_both_lobbies_needs_two_lobbies(self) -> None:
+        self.games.get.return_value = _game(lobby_count=1)
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.ranks.resolve.return_value = _ranks(7)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "single_lobby")
+        self.run_balance.assert_not_called()
+
+    async def test_balance_of_both_lobbies_refuses_a_pool_that_fills_only_one(self) -> None:
+        self.workspace_roster_slots.return_value = {"tank": 1}
+        self.games.get.return_value = _game(lobby_count=2)
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0),
+            _roster_row(2, 8, 1),
+            _roster_row(3, 9, 2),
+        ]
+        self.ranks.resolve.return_value = _ranks(7, 8, 9)
+        self.lobby_rows[1] = _lobby(1)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "not_enough_for_two_lobbies")
+        self.run_balance.assert_not_called()
+
     async def test_update_roster_keeps_surviving_row_state(self) -> None:
         game = _game()
         keep = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["damage"])
@@ -781,7 +1468,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_update_roster_keeps_stored_balance(self) -> None:
         """Adding or dropping a player must not blow away the last balance --
         only pressing Balance teams again should replace it."""
-        game = _game(status="balanced", balance_result_json={"variants": []})
+        game = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": []})
         keep = _roster_row(1, 7, 0)
         self.games.get.return_value = game
         self.roster.list_for_game.return_value = [keep]
@@ -791,7 +1479,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(game.status, "balanced")
-        self.assertEqual(game.balance_result_json, {"variants": []})
+        self.assertEqual(self.lobby_rows[0].balance_result_json, {"variants": []})
         self.assertEqual(keep.sort_order, 0)
 
     async def test_adding_players_materialises_the_hosts_own_ranks(self) -> None:
@@ -900,7 +1588,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         self.team_names.mapping_for_game.return_value = {0: "Wolves"}
 
         game = await self.service.record_outcome(
@@ -950,7 +1639,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         # 7 and 9 took a seat in this match; 8 is pinned for the next one and
         # never played, so its guarantee is still owed.
         pinned_played = _roster_row(1, 7, 0, participation=MixParticipation.MUST_PLAY)
@@ -985,7 +1675,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         self.maps.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
 
         await self.service.record_outcome(
@@ -1012,7 +1703,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        game = _game(status="balanced", balance_result_json=lobby_document(result["variants"]), next_map_id=42)
+        game = _game(status="balanced")
+        lobby = self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]), next_map_id=42)
         self.games.get.return_value = game
 
         await self.service.record_outcome(
@@ -1027,7 +1719,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         created_match = self.casual_matches.create.await_args.args[1]
         self.assertEqual(created_match.map_id, 42)
         # Consumed: the following match starts from a fresh roll, not a stale one.
-        self.assertIsNone(game.next_map_id)
+        self.assertIsNone(lobby.next_map_id)
 
     async def test_record_outcome_explicit_map_beats_the_next_map(self) -> None:
         result = {
@@ -1040,7 +1732,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        game = _game(status="balanced", balance_result_json=lobby_document(result["variants"]), next_map_id=42)
+        game = _game(status="balanced")
+        lobby = self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]), next_map_id=42)
         self.games.get.return_value = game
         self.maps.get = AsyncMock(return_value=_row(id=5, name="Busan"))
 
@@ -1056,7 +1749,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         created_match = self.casual_matches.create.await_args.args[1]
         self.assertEqual(created_match.map_id, 5)
-        self.assertIsNone(game.next_map_id)
+        self.assertIsNone(lobby.next_map_id)
 
     async def test_record_outcome_unknown_map_404(self) -> None:
         self.games.get.return_value = _row(
@@ -1065,9 +1758,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             host_user_id=9,
             name="Scrim",
             status="balanced",
-            config_json=None,
-            balance_result_json={"variants": [{"teams": []}]},
+            lobby_count=1,
         )
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": [{"teams": []}]})
         self.maps.get = AsyncMock(return_value=None)
 
         with self.assertRaises(HTTPException) as ctx:
@@ -1094,7 +1787,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
 
         await self.service.record_outcome(
             self.session,
@@ -1119,7 +1813,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
 
         await self.service.record_outcome(
             self.session,
@@ -1148,7 +1843,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         # The HOST's knob, off the host's own account row -- not the mix's and
         # not the recording co-host's.
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
@@ -1189,7 +1885,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
 
         await self.service.record_outcome(
@@ -1214,7 +1911,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         self.ranks.list_layer = AsyncMock(return_value={})
 
@@ -1241,7 +1939,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 }
             ]
         }
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
 
         await self.service.record_outcome(
@@ -1269,7 +1968,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_undo_only_applies_to_the_newest_match(self) -> None:
         self.games.get.return_value = _game()
         self.casual_matches.get_for_game.return_value = _match(501, created_at=1, home=[7], away=[9])
-        self.casual_matches.newest_id_for_game.return_value = 502
+        self.casual_matches.newest_id_for_lobby.return_value = 502
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.undo_last_match(
@@ -1277,7 +1976,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 409)
-        self.assertEqual(ctx.exception.detail, "Only the most recent match can be undone")
+        self.assertEqual(ctx.exception.detail, "Only the most recent match of this lobby can be undone")
         self.casual_matches.delete.assert_not_awaited()
 
     async def test_undo_reverses_the_points_the_match_stored(self) -> None:
@@ -1293,7 +1992,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.games.get.return_value = _game()
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=999)
         self.casual_matches.get_for_game.return_value = match
-        self.casual_matches.newest_id_for_game.return_value = 501
+        self.casual_matches.newest_id_for_lobby.return_value = 501
         self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2525, (8, "damage"): 2825, (9, "tank"): 2575})
 
         await self.service.undo_last_match(
@@ -1325,7 +2024,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.games.get.return_value = _game()
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         self.casual_matches.get_for_game.return_value = match
-        self.casual_matches.newest_id_for_game.return_value = 501
+        self.casual_matches.newest_id_for_lobby.return_value = 501
 
         await self.service.undo_last_match(
             self.session, workspace_id=1, custom_game_id=11, match_id=501, actor_user_id=9
@@ -1412,11 +2111,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.games.get.return_value = _game()
         self.maps.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
 
-        game = await self.service.set_next_map(
-            self.session, workspace_id=1, custom_game_id=11, map_id=42, actor_user_id=9
-        )
+        await self.service.set_next_map(self.session, workspace_id=1, custom_game_id=11, map_id=42, actor_user_id=9)
 
-        self.assertEqual(game.next_map_id, 42)
+        self.assertEqual(self.lobby_rows[0].next_map_id, 42)
 
     async def test_set_next_map_unknown_map_404(self) -> None:
         self.games.get.return_value = _game()
@@ -1430,17 +2127,19 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_set_variant_index_pages_the_mix_for_every_viewer(self) -> None:
         result = {"variants": [{"teams": []}, {"teams": []}, {"teams": []}]}
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
 
-        game = await self.service.set_variant_index(
+        await self.service.set_variant_index(
             self.session, workspace_id=1, custom_game_id=11, variant_index=2, actor_user_id=9
         )
 
-        self.assertEqual(game.selected_variant_index, 2)
+        self.assertEqual(self.lobby_rows[0].selected_variant_index, 2)
 
     async def test_set_variant_index_past_the_stored_options_404(self) -> None:
         result = {"variants": [{"teams": []}]}
-        self.games.get.return_value = _game(status="balanced", balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.set_variant_index(
@@ -1450,7 +2149,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_discord_lineup_without_a_workspace_channel_409(self) -> None:
         """The workspace names no channel: nothing to post to."""
-        self.games.get.return_value = _game(balance_result_json={"variants": [{"teams": []}]})
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": [{"teams": []}]})
         self.session.scalar = AsyncMock(return_value=None)
 
         with self.assertRaises(HTTPException) as ctx:
@@ -1464,9 +2164,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         """The only channel there is: a mix cannot redirect the workspace's
         Discord, so the workspace-wide setting is both where it is configured
         and where it is read."""
-        self.games.get.return_value = _game(balance_result_json={"variants": [{"teams": []}]})
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": [{"teams": []}]})
         self.team_names.mapping_for_game.return_value = {}
-        self.casual_matches.activity_for_games = AsyncMock(return_value={})
+        self.casual_matches.activity_for_lobbies = AsyncMock(return_value={})
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
 
         channel_id, _embed = await self.service.discord_lineup(
@@ -1476,7 +2177,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(channel_id, 555)
 
     async def test_discord_lineup_unknown_variant_404(self) -> None:
-        self.games.get.return_value = _game(balance_result_json={"variants": [{"teams": []}]})
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": [{"teams": []}]})
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
 
         with self.assertRaises(HTTPException) as ctx:
@@ -1501,10 +2203,11 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 },
             ]
         }
-        self.games.get.return_value = _game(next_map_id=42, balance_result_json=lobby_document(result["variants"]))
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, next_map_id=42, balance_result_json=lobby_document(result["variants"]))
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         self.team_names.mapping_for_game.return_value = {0: "Blue"}
-        self.casual_matches.activity_for_games = AsyncMock(return_value={11: (3, datetime(2026, 1, 1, 20, 0))})
+        self.casual_matches.activity_for_lobbies = AsyncMock(return_value={0: (3, datetime(2026, 1, 1, 20, 0))})
         # Two scalar reads in order: the workspace's channel, then the map.
         self.session.scalar = AsyncMock(
             side_effect=[
@@ -1834,14 +2537,15 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
     async def test_set_team_names_touches_no_other_setting(self) -> None:
-        game = _game(next_map_id=42)
+        game = _game()
+        self.lobby_rows[0] = _lobby(0, next_map_id=42)
         self.games.get.return_value = game
 
         await self.service.set_team_names(
             self.session, workspace_id=1, custom_game_id=11, team_names={"0": "Wolves"}, actor_user_id=9
         )
 
-        self.assertEqual(game.next_map_id, 42)
+        self.assertEqual(self.lobby_rows[0].next_map_id, 42)
 
     async def test_set_team_names_blank_value_clears_that_index_only(self) -> None:
         self.games.get.return_value = _game()
@@ -2011,9 +2715,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         return lobby_document([self._two_team_payload()])
 
     async def test_swap_seats_swaps_players_and_recomputes_stats(self) -> None:
-        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
 
-        game = await self.service.swap_seats(
+        await self.service.swap_seats(
             self.session,
             workspace_id=1,
             custom_game_id=11,
@@ -2023,14 +2728,14 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             actor_user_id=9,
         )
 
-        teams = game.balance_result_json["variants"][0]["teams"]
+        teams = self.lobby_rows[0].balance_result_json["variants"][0]["teams"]
         self.assertEqual(teams[0]["roster"]["tank"], ["p3"])
         self.assertEqual(teams[1]["roster"]["tank"], ["p1"])
         # Team 1 is now Charlie(2600)+Bravo(2900) = 5500/2 = 2750; team 2 is
         # now Alpha(3200)+Delta(3000) = 6200/2 = 3100.
         self.assertEqual(teams[0]["average_mmr"], 2750.0)
         self.assertEqual(teams[1]["average_mmr"], 3100.0)
-        statistics = game.balance_result_json["variants"][0]["statistics"]
+        statistics = self.lobby_rows[0].balance_result_json["variants"][0]["statistics"]
         self.assertEqual(statistics["max_total_rating_gap"], 700.0)
         self.assertAlmostEqual(statistics["mmr_std_dev"], 247.487, places=2)
         self.assertEqual(statistics["off_role_count"], 0)
@@ -2042,9 +2747,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_swap_seats_upgrades_a_document_stored_in_the_old_form(self) -> None:
         # A mix balanced before the lobby form stored the solver's payloads
         # verbatim; a swap on it must work and write back the lobby form.
-        self.games.get.return_value = _game(balance_result_json={"variants": [self._two_team_payload()]})
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json={"variants": [self._two_team_payload()]})
 
-        game = await self.service.swap_seats(
+        await self.service.swap_seats(
             self.session,
             workspace_id=1,
             custom_game_id=11,
@@ -2054,7 +2760,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             actor_user_id=9,
         )
 
-        stored = game.balance_result_json
+        stored = self.lobby_rows[0].balance_result_json
         self.assertEqual(stored["variants"][0]["teams"][0]["roster"]["tank"], ["p3"])
         self.assertEqual(stored["players"]["p1"]["ratings"], {"tank": 3200})
         self.assertEqual(stored["variants"][0]["teams"][1]["total_rating"], 6200.0)
@@ -2063,9 +2769,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         # The mix engine's four terms and their total describe the seating it
         # chose; a hand-moved player invalidates all of them, most of all the
         # role-priority term. Left behind they would read as current.
-        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
 
-        game = await self.service.swap_seats(
+        await self.service.swap_seats(
             self.session,
             workspace_id=1,
             custom_game_id=11,
@@ -2075,7 +2782,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             actor_user_id=9,
         )
 
-        statistics = game.balance_result_json["variants"][0]["statistics"]
+        statistics = self.lobby_rows[0].balance_result_json["variants"][0]["statistics"]
         for key in (
             "mix_balancer_quality_total",
             "mix_balancer_fairness",
@@ -2085,7 +2792,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         ):
             self.assertIsNone(statistics[key], key)
         # The teams' own totals stay, recomputed from the seats on screen.
-        teams = game.balance_result_json["variants"][0]["teams"]
+        teams = self.lobby_rows[0].balance_result_json["variants"][0]["teams"]
         self.assertEqual(5500.0, teams[0]["total_rating"])
         self.assertEqual(6200.0, teams[1]["total_rating"])
 
@@ -2094,9 +2801,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         # Bravo actually prefers tank but was seated at damage -- already off-role
         # before the swap, and moving them must not silently "fix" that count.
         result["players"]["p2"]["role_preferences"] = ["tank", "damage"]
-        self.games.get.return_value = _game(balance_result_json=result)
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=result)
 
-        game = await self.service.swap_seats(
+        await self.service.swap_seats(
             self.session,
             workspace_id=1,
             custom_game_id=11,
@@ -2106,11 +2814,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             actor_user_id=9,
         )
 
-        statistics = game.balance_result_json["variants"][0]["statistics"]
+        statistics = self.lobby_rows[0].balance_result_json["variants"][0]["statistics"]
         self.assertEqual(statistics["off_role_count"], 1)
 
     async def test_swap_seats_rejects_different_roles(self) -> None:
-        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
         with self.assertRaises(HTTPException) as ctx:
             await self.service.swap_seats(
                 self.session,
@@ -2127,7 +2836,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         result = self._two_team_result()
         result["variants"][0]["teams"][0]["roster"]["tank"].append("p5")
         result["players"]["p5"] = {"name": "Echo", "ratings": {"tank": 3100}}
-        self.games.get.return_value = _game(balance_result_json=result)
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=result)
         with self.assertRaises(HTTPException) as ctx:
             await self.service.swap_seats(
                 self.session,
@@ -2141,7 +2851,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 422)
 
     async def test_swap_seats_rejects_an_unknown_player(self) -> None:
-        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
         with self.assertRaises(HTTPException) as ctx:
             await self.service.swap_seats(
                 self.session,
@@ -2155,7 +2866,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 404)
 
     async def test_swap_seats_rejects_an_out_of_range_variant(self) -> None:
-        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
         with self.assertRaises(HTTPException) as ctx:
             await self.service.swap_seats(
                 self.session,
@@ -2171,7 +2883,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_swap_seats_terminal_409(self) -> None:
         for status in ("completed", "cancelled"):
             with self.subTest(status=status):
-                self.games.get.return_value = _game(status=status, balance_result_json=self._two_team_result())
+                self.games.get.return_value = _game(status=status)
+                self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
                 with self.assertRaises(HTTPException) as ctx:
                     await self.service.swap_seats(
                         self.session,
@@ -2185,7 +2898,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 self.assertEqual(ctx.exception.status_code, 409)
 
     async def test_swap_seats_requires_the_host(self) -> None:
-        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=self._two_team_result())
         with self.assertRaises(HTTPException) as ctx:
             await self.service.swap_seats(
                 self.session,
@@ -2260,6 +2974,279 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(by_id[8].status, RotationStatus.MUST_PLAY)
         # 7 is the only one who actually played -- rests to make room.
         self.assertEqual(by_id[7].status, RotationStatus.SHOULD_REST)
+
+    async def test_rotation_counts_a_match_spent_in_the_other_lobby_as_neither(self) -> None:
+        from src.domain.mix_rotation import RotationStatus
+
+        # players_per_team=2, pool of 3 -> one seat short. Two maps were played
+        # in lobby A; 9 spent the first of them on the floor of lobby B.
+        self.games.get.return_value = _game()
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, created_at=0),
+            _roster_row(2, 8, 1, created_at=0),
+            _roster_row(3, 9, 2, created_at=0),
+        ]
+        self.casual_matches.list_for_custom_game = AsyncMock(
+            return_value=[
+                _match(2, created_at=2, home=[7], away=[8]),  # 7 & 8 played, 9 sat
+                _match(1, created_at=1, home=[7], away=[8], busy=[9]),  # 9 was in lobby B
+            ]
+        )
+
+        recommendations = await self.service.rotation(self.session, workspace_id=1, custom_game_id=11)
+        by_id = {rec.member_id: rec for rec in recommendations}
+
+        # One map missed, not two: the first never counted against 9 at all.
+        self.assertEqual(by_id[9].consecutive_sat, 1)
+        self.assertEqual(by_id[9].games_played, 0)
+        # 7 and 8 played both maps in a row, so one of them makes room and the
+        # single sat-out map is still enough to owe 9 the next seat.
+        self.assertEqual(by_id[9].status, RotationStatus.MUST_PLAY)
+
+    async def test_rotation_of_a_one_lobby_mix_has_nothing_to_skip(self) -> None:
+        """No busy rows anywhere: the verdict is the one this mix always got."""
+        from src.domain.mix_rotation import RotationStatus
+
+        self.games.get.return_value = _game()
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, created_at=0),
+            _roster_row(2, 8, 1, created_at=0),
+            _roster_row(3, 9, 2, created_at=0),
+        ]
+        self.casual_matches.list_for_custom_game = AsyncMock(
+            return_value=[
+                _match(2, created_at=2, home=[7], away=[8]),
+                _match(1, created_at=1, home=[7], away=[8]),
+            ]
+        )
+
+        by_id = {
+            rec.member_id: rec for rec in await self.service.rotation(self.session, workspace_id=1, custom_game_id=11)
+        }
+
+        self.assertEqual(by_id[9].consecutive_sat, 2)
+        self.assertEqual(by_id[9].status, RotationStatus.MUST_PLAY)
+        # 7 and 8 tie on history; input order seats 7 and benches 8.
+        self.assertEqual(by_id[7].status, RotationStatus.NEUTRAL)
+        self.assertEqual(by_id[8].status, RotationStatus.SHOULD_REST)
+
+    async def test_per_lobby_writes_touch_only_their_own_lobby(self) -> None:
+        """Lobby B rolls its own map and pages its own option; lobby A keeps
+        the map and the option the host set for it."""
+        self.games.get.return_value = _game(status="balanced", lobby_count=2)
+        self.lobby_rows[0] = _lobby(0, next_map_id=42, balance_result_json=lobby_document([{"teams": []}]))
+        self.lobby_rows[1] = _lobby(1, balance_result_json=lobby_document([{"teams": []}, {"teams": []}]))
+        self.maps.get = AsyncMock(return_value=_row(id=5, name="Busan"))
+
+        await self.service.set_next_map(
+            self.session, workspace_id=1, custom_game_id=11, lobby_index=1, map_id=5, actor_user_id=9
+        )
+        await self.service.set_variant_index(
+            self.session, workspace_id=1, custom_game_id=11, lobby_index=1, variant_index=1, actor_user_id=9
+        )
+
+        self.assertEqual(self.lobby_rows[1].next_map_id, 5)
+        self.assertEqual(self.lobby_rows[1].selected_variant_index, 1)
+        self.assertEqual(self.lobby_rows[0].next_map_id, 42)
+        self.assertEqual(self.lobby_rows[0].selected_variant_index, 0)
+
+    async def test_set_variant_index_refuses_an_option_seating_the_other_lobby_409(self) -> None:
+        """Two co-hosts page at once: an option that seats somebody lobby A has
+        already put on the floor is not a matchup anybody can play."""
+        seated = [{"teams": [{"roster": {"tank": [self._seat("7", "Alpha", 3200, "tank")]}}, {"roster": {}}]}]
+        contested = [
+            {"teams": [{"roster": {"tank": [self._seat("8", "Bravo", 2900, "tank")]}}, {"roster": {}}]},
+            {"teams": [{"roster": {"tank": [self._seat("7", "Alpha", 3200, "tank")]}}, {"roster": {}}]},
+        ]
+        self.games.get.return_value = _game(status="balanced", lobby_count=2)
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(seated))
+        self.lobby_rows[1] = _lobby(1, balance_result_json=lobby_document(contested))
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_variant_index(
+                self.session, workspace_id=1, custom_game_id=11, lobby_index=1, variant_index=1, actor_user_id=9
+            )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "seat_conflict")
+        self.assertEqual(self.lobby_rows[1].selected_variant_index, 0)
+
+    async def test_record_outcome_stamps_its_lobby_and_who_was_in_the_other(self) -> None:
+        """The match belongs to a lobby, and it remembers who was unavailable --
+        playing next door -- so rotation does not read that as sitting out."""
+        playing = [
+            {
+                "teams": [
+                    {"roster": {"tank": [self._seat("7", "Alpha", 3200, "tank")]}},
+                    {"roster": {"tank": [self._seat("8", "Bravo", 2900, "tank")]}},
+                ]
+            }
+        ]
+        elsewhere = [
+            {
+                "teams": [
+                    {"roster": {"tank": [self._seat("9", "Charlie", 2600, "tank")]}},
+                    {"roster": {"tank": [self._seat("10", "Delta", 3000, "tank")]}},
+                ]
+            }
+        ]
+        self.games.get.return_value = _game(status="balanced", lobby_count=2)
+        self.lobby_rows[0] = _lobby(0, next_map_id=42, balance_result_json=lobby_document(elsewhere))
+        self.lobby_rows[1] = _lobby(1, next_map_id=7, balance_result_json=lobby_document(playing))
+
+        await self.service.record_outcome(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=1,
+            winner=1,
+            variant_index=0,
+            actor_user_id=9,
+        )
+
+        created_match = self.casual_matches.create.await_args.args[1]
+        self.assertEqual(created_match.lobby_index, 1)
+        self.assertEqual(created_match.map_id, 7)
+        self.casual_matches.set_busy_players.assert_awaited_once_with(self.session, 501, [9, 10])
+        # Only this lobby's roll is consumed; lobby A still has its own.
+        self.assertIsNone(self.lobby_rows[1].next_map_id)
+        self.assertEqual(self.lobby_rows[0].next_map_id, 42)
+
+    async def test_record_outcome_of_lobby_b_names_its_own_two_teams(self) -> None:
+        """Team names are stored by GLOBAL index, so lobby B's two teams are
+        rows 2 and 3 -- not a second reading of lobby A's 0 and 1."""
+        playing = [
+            {
+                "teams": [
+                    {"roster": {"tank": [self._seat("7", "Alpha", 3200, "tank")]}},
+                    {"roster": {"tank": [self._seat("8", "Bravo", 2900, "tank")]}},
+                ]
+            }
+        ]
+        self.games.get.return_value = _game(status="balanced", lobby_count=2)
+        self.lobby_rows[1] = _lobby(1, balance_result_json=lobby_document(playing))
+        self.team_names.mapping_for_game.return_value = {0: "Wolves", 1: "Ravens", 2: "Owls"}
+
+        await self.service.record_outcome(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=1,
+            winner=1,
+            variant_index=0,
+            actor_user_id=9,
+        )
+
+        created_teams = self.casual_teams.create_many.await_args.args[1]
+        self.assertEqual([team.name for team in created_teams], ["Owls", "Team 2"])
+
+    async def test_record_outcome_of_a_one_lobby_mix_records_no_busy_players(self) -> None:
+        result = {
+            "variants": [
+                {
+                    "teams": [
+                        {"roster": {"tank": [self._seat("7", "Alpha", 3200, "tank")]}},
+                        {"roster": {"tank": [self._seat("9", "Charlie", 2600, "tank")]}},
+                    ]
+                }
+            ]
+        }
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
+
+        await self.service.record_outcome(
+            self.session, workspace_id=1, custom_game_id=11, winner=1, variant_index=0, actor_user_id=9
+        )
+
+        self.assertEqual(self.casual_matches.create.await_args.args[1].lobby_index, 0)
+        self.casual_matches.set_busy_players.assert_not_awaited()
+
+    async def test_undo_targets_the_newest_match_of_its_own_lobby(self) -> None:
+        """Lobby A's last match is undoable even while lobby B has recorded a
+        newer one: the rank book compounds per mix, but the pair a host is
+        looking at is their own lobby's."""
+        self.games.get.return_value = _game(lobby_count=2)
+        self.casual_matches.get_for_game.return_value = _match(501, created_at=1, home=[7], away=[9], lobby_index=0)
+        self.casual_matches.newest_id_for_lobby.return_value = 501
+
+        await self.service.undo_last_match(
+            self.session, workspace_id=1, custom_game_id=11, match_id=501, actor_user_id=9
+        )
+
+        self.casual_matches.newest_id_for_lobby.assert_awaited_once_with(self.session, 11, 0)
+        self.casual_matches.delete.assert_awaited_once()
+
+    async def test_undo_refuses_an_older_match_of_the_same_lobby_409(self) -> None:
+        self.games.get.return_value = _game(lobby_count=2)
+        self.casual_matches.get_for_game.return_value = _match(501, created_at=1, home=[7], away=[9], lobby_index=1)
+        self.casual_matches.newest_id_for_lobby.return_value = 503
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.undo_last_match(
+                self.session, workspace_id=1, custom_game_id=11, match_id=501, actor_user_id=9
+            )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.casual_matches.newest_id_for_lobby.assert_awaited_once_with(self.session, 11, 1)
+        self.casual_matches.delete.assert_not_awaited()
+
+    async def test_discord_lineup_names_the_lobby_and_counts_its_own_games(self) -> None:
+        """Two lobbies keep two paces: "game 3" of B is not "game 3" of A."""
+        result = {
+            "variants": [
+                {
+                    "teams": [
+                        {"roster": {"Tank": [{"uuid": "1", "name": "Ana", "assigned_rating": 3000}]}},
+                        {"roster": {"Tank": [{"uuid": "2", "name": "Bob", "assigned_rating": 2900}]}},
+                    ]
+                }
+            ]
+        }
+        self.games.get.return_value = _game(lobby_count=2)
+        self.lobby_rows[1] = _lobby(1, balance_result_json=lobby_document(result["variants"]))
+        self.team_names.mapping_for_game.return_value = {}
+        self.casual_matches.activity_for_lobbies = AsyncMock(
+            return_value={0: (5, datetime(2026, 1, 1, 20, 0)), 1: (2, datetime(2026, 1, 1, 20, 5))}
+        )
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+
+        _channel_id, embed = await self.service.discord_lineup(
+            self.session, workspace_id=1, custom_game_id=11, lobby_index=1, variant_index=0, actor_user_id=9
+        )
+
+        self.assertEqual(embed["title"], "Scrim — Лобби B · игра 3")
+
+    async def test_rotation_of_one_lobby_ignores_whoever_is_playing_the_other(self) -> None:
+        from src.domain.mix_rotation import RotationStatus
+
+        # players_per_team=2 -> one lobby is four seats; 9 and 10 are on the
+        # floor in lobby A and 11 is pinned to A, so lobby B ranks 7 and 8 only.
+        seated = [
+            {
+                "teams": [
+                    {"roster": {"tank": [self._seat("9", "Charlie", 2600, "tank")]}},
+                    {"roster": {"tank": [self._seat("10", "Delta", 3000, "tank")]}},
+                ]
+            }
+        ]
+        self.games.get.return_value = _game(lobby_count=2)
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(seated))
+        self.lobby_rows[1] = _lobby(1)
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, created_at=0),
+            _roster_row(2, 8, 1, created_at=0),
+            _roster_row(3, 9, 2, created_at=0),
+            _roster_row(4, 10, 3, created_at=0),
+            _roster_row(5, 11, 4, created_at=0, lobby_pin=0),
+        ]
+
+        recommendations = await self.service.rotation(self.session, workspace_id=1, custom_game_id=11, lobby_index=1)
+
+        self.assertEqual(sorted(rec.member_id for rec in recommendations), [7, 8])
+        self.assertTrue(all(rec.status is not RotationStatus.SHOULD_REST for rec in recommendations))
 
     async def test_hard_delete_removes_the_game_row(self) -> None:
         game = _game()

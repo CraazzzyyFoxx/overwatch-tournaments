@@ -1,9 +1,10 @@
 """Pickup mixes over typed RPC.
 
-``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,
+``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,set_lobby_count,
 balance,set_team_names,set_next_map,set_variant_index,
-post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
-undo_match,rotation,stats,close,delete,hard_delete}``.
+post_discord,post_signup,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
+undo_match,rotation,stats,close,delete,hard_delete,
+self_get,self_join,self_leave,self_update,set_self_service}``.
 
 Writes require ``actor`` to be the host, a co-host or a superuser; the per-mix check lives in
 ``CustomGameService._writable``. The reads (``list``, ``get``, ``stats``,
@@ -14,6 +15,12 @@ read out to a lobby, whose players need no account here.
 (``_require_workspace_admin``). Every request body is validated by a
 Pydantic model in ``src.schemas.custom_game`` before it reaches a use case --
 nothing here hand-parses a dict.
+
+The five ``self_*`` subjects are the PLAYER's own surface: they are gated by
+``mix_self_policy`` inside the service rather than by ``_require_mix``, because
+whoever is joining may not be a workspace member yet. ``workspace_id`` is
+optional on them -- the bot knows only a ``custom_game_id`` -- and when present
+must match the mix's own.
 """
 
 from __future__ import annotations
@@ -36,7 +43,9 @@ from shared.schemas.events import DiscordCommandEvent
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER
 from src.core import db
+from src.core.config import config
 from src.domain.balancer.result_serializer import as_lobby_document
+from src.domain.mix_lobbies import seated_member_ids
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
 from src.services.custom_game import custom_game_service
@@ -133,6 +142,7 @@ def _dump_row(
     roles: list[str] | None,
     resolved: dict[tuple[int, str], Any],
     author_ranks: dict[tuple[int, str], int],
+    current_lobby: int | None = None,
 ) -> dict[str, Any]:
     effective = {
         role: resolved[(row.workspace_member_id, role)]
@@ -152,6 +162,11 @@ def _dump_row(
         # included; `all_ranked` means it is `null` and every ranked role plays.
         "role_selection_mode": row.role_selection_mode,
         "is_flex": row.is_flex,
+        # Where this player is right now, derived from the lobbies' selected
+        # options: ``null`` means waiting for a seat. The host's pin is a
+        # separate, durable wish the next balance honours.
+        "current_lobby": current_lobby,
+        "lobby_pin": row.lobby_pin,
         "roles": roles,
         # The ranks balance would actually use: host book > workspace canon > OW.
         "ranks": {role: rank.value for role, rank in effective.items()},
@@ -194,6 +209,31 @@ def _dump_settings(
     }
 
 
+def _dump_lobby(lobby: Any, *, balance_result: bool, activity: tuple[int, Any] | None = None) -> dict[str, Any]:
+    """One lobby: its pager, its rolled map, when it was last balanced -- and,
+    in the detail read, its own matchup and match count.
+
+    ``balance_result`` is detail-only -- the solver document grows with every
+    stored option and no list row renders it. ``lineup_recorded`` is false while
+    a balanced lineup has not been played: the UI asks for confirmation before
+    anything that would overwrite it.
+    """
+    out: dict[str, Any] = {
+        "lobby_index": lobby.lobby_index,
+        "selected_variant_index": lobby.selected_variant_index,
+        "next_map_id": lobby.next_map_id,
+        "balanced_at": lobby.balanced_at.isoformat() if lobby.balanced_at else None,
+    }
+    if balance_result:
+        matches_count, last_match_at = activity if activity is not None else (0, None)
+        out["balance_result"] = as_lobby_document(lobby.balance_result_json)
+        out["matches_count"] = matches_count
+        out["lineup_recorded"] = lobby.balanced_at is None or (
+            last_match_at is not None and last_match_at >= lobby.balanced_at
+        )
+    return out
+
+
 def _dump_game(
     game: Any,
     settings: dict[str, Any],
@@ -207,6 +247,9 @@ def _dump_game(
     roster_shape: dict[str, Any] | None = None,
     co_hosts: list[dict[str, Any]] | None = None,
     activity: tuple[int, Any] | None = None,
+    lobbies: list[Any] | None = None,
+    lobby_activity: dict[int, tuple[int, Any]] | None = None,
+    current_lobby: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     matches_count, last_match_at = activity if activity is not None else (0, None)
     out: dict[str, Any] = {
@@ -220,13 +263,22 @@ def _dump_game(
         "name": game.name,
         "status": game.status,
         "settings": settings,
-        # Which of those options the mix is *showing*: the host's pager, read by
-        # every client, so a viewer never studies a matchup nobody is calling.
-        "selected_variant_index": game.selected_variant_index,
-        # The map the next match is played on, rolled or picked by a host; the
-        # client resolves name/mode/thumbnail against the catalogue it already
-        # holds, so only the id travels.
-        "next_map_id": game.next_map_id,
+        # How many lobbies this mix runs, and what each of them is showing: the
+        # matchup, the pager and the rolled map are per-lobby facts now.
+        "lobby_count": game.lobby_count,
+        "lobbies": [
+            _dump_lobby(
+                lobby,
+                balance_result=roster is not None,
+                activity=(lobby_activity or {}).get(lobby.lobby_index),
+            )
+            for lobby in (lobbies or [])
+        ],
+        # Whether players may seat themselves here (closed | pool | benched) and
+        # whether a seated one may re-order their own roles. Both are read by the
+        # board's host controls and by the player's own panel.
+        "self_signup": game.self_signup,
+        "self_role_edit": game.self_role_edit,
         # How busy this mix has been, so the list can say "3 matches, 20m ago"
         # without fetching every mix's history.
         "matches_count": matches_count,
@@ -235,10 +287,6 @@ def _dump_game(
         "roster_shape": roster_shape,
     }
     if roster is not None:
-        # Detail-only, like the roster: the solver document grows with every
-        # stored option (``lobby_document``), and no list row renders it --
-        # shipping it per row made the list the heaviest read of the service.
-        out["balance_result"] = as_lobby_document(game.balance_result_json)
         by_id = members or {}
         by_player = roles_by_player or {}
         out["players"] = [
@@ -248,6 +296,7 @@ def _dump_game(
                 (by_player.get(row.id, []) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None),
                 resolved or {},
                 author_ranks or {},
+                (current_lobby or {}).get(row.workspace_member_id),
             )
             for row in roster
         ]
@@ -293,6 +342,15 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     host_display_name = host_names.get(game.host_user_id)
     co_hosts = [{"user_id": user_id, "display_name": host_names.get(user_id)} for user_id in co_host_user_ids]
     activity = (await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id)
+    lobbies = list(await custom_game_service.lobbies.list_for_game(session, game.id))
+    lobby_activity = await custom_game_service.casual_matches.activity_for_lobbies(session, game.id)
+    # Derived once, here: the board, the player sheet and the bot all ask the
+    # same question, and none of them should re-parse a solver document.
+    current_lobby = {
+        member_id: lobby.lobby_index
+        for lobby in lobbies
+        for member_id in seated_member_ids(lobby.balance_result_json, lobby.selected_variant_index)
+    }
     if not roster:
         return _dump_game(
             game,
@@ -302,6 +360,9 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
             roster_shape=roster_shape,
             co_hosts=co_hosts,
             activity=activity,
+            lobbies=lobbies,
+            lobby_activity=lobby_activity,
+            current_lobby=current_lobby,
         )
     member_ids = [row.workspace_member_id for row in roster]
     members = await custom_game_service.members(session, game.workspace_id, member_ids)
@@ -341,6 +402,9 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
         roster_shape=roster_shape,
         co_hosts=co_hosts,
         activity=activity,
+        lobbies=lobbies,
+        lobby_activity=lobby_activity,
+        current_lobby=current_lobby,
     )
 
 
@@ -354,6 +418,9 @@ def _dump_match(match: Any, map_info: dict[int, tuple[str, str]]) -> dict[str, A
     map_name, map_image_path = map_info.get(match.map_id, (None, None)) if match.map_id is not None else (None, None)
     return {
         "id": match.id,
+        # Which lobby played it: the history chips and the per-lobby undo both
+        # read this.
+        "lobby_index": match.lobby_index,
         "home_team_name": home.name if home is not None else None,
         "away_team_name": away.name if away is not None else None,
         "home_score": home_score,
@@ -452,6 +519,7 @@ def register(broker: Any, logger: Any) -> None:
             # knob) instead of a query per mix.
             activity = await custom_game_service.casual_matches.activity_for_games(session, game_ids)
             team_names = await custom_game_service.team_names.mapping_for_games(session, game_ids)
+            lobbies_by_game = await custom_game_service.lobbies.list_for_games(session, game_ids)
             workspace_channel_id = await custom_game_service.workspace_discord_channel_id(session, workspace_id)
             # A workspace's mixes are typically run by a handful of people, so one
             # grouped read beats a per-row lookup of the same few account rows.
@@ -466,6 +534,7 @@ def register(broker: Any, logger: Any) -> None:
                         team_names.get(row.id, {}), points_by_host.get(row.host_user_id, 0), workspace_channel_id
                     ),
                     host_display_name=host_names.get(row.host_user_id),
+                    lobbies=lobbies_by_game.get(row.id, []),
                     activity=activity.get(row.id),
                 )
                 for row in rows
@@ -554,16 +623,133 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "custom.set_participation", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.balancer.custom.self_get")
+    async def _self_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            return await custom_game_service.self_state(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+
+        return await c.envelope(logger, "custom.self_get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_join")
+    async def _self_join(data: dict, msg: RabbitMessage) -> dict:
+        """Seat the caller. Not gated by ``_require_mix``: somebody joining a
+        workspace's mix for the first time is not a member of it yet -- the
+        enrolment is part of what this does."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            state = await custom_game_service.self_join(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+            await session.commit()
+            return state
+
+        return await c.envelope(logger, "custom.self_join", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_leave")
+    async def _self_leave(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            state = await custom_game_service.self_leave(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+            await session.commit()
+            return state
+
+        return await c.envelope(logger, "custom.self_leave", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.self_update")
+    async def _self_update(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            body = _body(schemas.CustomGameSelfUpdate, data)
+            state = await custom_game_service.self_update(
+                session,
+                custom_game_id=_game_id(data),
+                auth_user=user,
+                # exclude_unset keeps "don't touch my roles" apart from
+                # "roles: null" (= every ranked role).
+                patch=body.model_dump(exclude_unset=True),
+                workspace_id=_opt_int(data, "workspace_id"),
+            )
+            await session.commit()
+            return state
+
+        return await c.envelope(logger, "custom.self_update", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.set_self_service")
+    async def _set_self_service(data: dict, msg: RabbitMessage) -> dict:
+        """The host's switches, so this one IS an ordinary mix write: membership
+        plus host-or-co-host in ``_writable``."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameSelfServicePatch, data)
+            game = await custom_game_service.set_self_service(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                patch=body.model_dump(exclude_unset=True),
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_self_service", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.set_lobby_count")
+    async def _set_lobby_count(data: dict, msg: RabbitMessage) -> dict:
+        """One lobby or two. Going back to one drops lobby B and every pin --
+        see ``CustomGameService.set_lobby_count``."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameLobbyCountPatch, data)
+            game = await custom_game_service.set_lobby_count(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                lobby_count=body.lobby_count,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_updated(session, workspace_id, change="lobby", actor_user_id=user.id)
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_lobby_count", op, session_factory=_SF)
+
     @broker.subscriber("rpc.balancer.custom.balance")
     async def _balance(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
             _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameBalanceRequest, data)
             game = await custom_game_service.balance(
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                scope=body.scope,
+                lobby_index=body.lobby_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
@@ -605,6 +791,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 map_id=body.map_id,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
@@ -629,6 +816,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
@@ -650,6 +838,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
@@ -672,6 +861,38 @@ def register(broker: Any, logger: Any) -> None:
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.post_signup")
+    async def _post_signup(data: dict, msg: RabbitMessage) -> dict:
+        """Open signup and post the card that announces it, in one click."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGamePostSignup, data)
+            channel_id, card = await custom_game_service.signup_post(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                self_signup=body.self_signup,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+                board_url_base=config.public_site_url,
+            )
+            # The signup mode is a fact about the mix, so the board refreshes;
+            # delivery of the card itself is the bot's problem.
+            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            await session.commit()
+            # Published only once the open window is durable. A queued card is
+            # unrecallable, so publishing first would let a failed commit leave
+            # a post in the channel whose buttons all answer ``signup_closed``
+            # -- same commit-then-publish order the achievement runner uses.
+            event = DiscordCommandEvent(action="post_message", channel_id=channel_id, card=card)
+            await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
+            return {"status": "queued", "channel_id": str(channel_id)}
+
+        return await c.envelope(logger, "custom.post_signup", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.transfer_host")
     async def _transfer_host(data: dict, msg: RabbitMessage) -> dict:
@@ -748,6 +969,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 variant_index=body.variant_index,
                 first_uuid=body.first_uuid,
                 second_uuid=body.second_uuid,
@@ -771,6 +993,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 winner=body.outcome.winner,
                 variant_index=body.variant_index,
                 map_id=body.map_id,
@@ -819,7 +1042,12 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             workspace_id = _int(data, "workspace_id")
             recommendations = await custom_game_service.rotation(
-                session, workspace_id=workspace_id, custom_game_id=_game_id(data)
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                # Query param: the rotation is a read, and which lobby it ranks
+                # for is part of the question, not a body.
+                lobby_index=c.q1(data, "lobby_index", int, 0),
             )
             return _dump_rotation(recommendations)
 
@@ -879,6 +1107,7 @@ def register(broker: Any, logger: Any) -> None:
                     await custom_game_service.workspace_discord_channel_id(session, workspace_id),
                     await custom_game_service.host_points_per_win(session, game.host_user_id),
                 ),
+                lobbies=(await custom_game_service.lobbies.list_for_games(session, [game.id])).get(game.id, []),
                 activity=(await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id),
             )
 

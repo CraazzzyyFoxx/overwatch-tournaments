@@ -9,10 +9,11 @@ import type {
   RotationRecommendation,
 } from "@/services/custom-game.service";
 
-/** What recording a match needs: the click, and which balance option it was played from. */
+/** What recording a match needs: the click, which balance option it was played from, and whose lobby it was. */
 export type PickupRecordOutcomeInput = {
   outcome: CustomGameOutcome;
   variantIndex: number;
+  lobbyIndex: 0 | 1;
 };
 
 /**
@@ -146,15 +147,15 @@ export function summarizeLineup(rows: CustomGamePlayer[]): LineupSummary {
 }
 
 /**
- * A 5v5 mix needs one tank and two of each damage/support per team, so the
- * lineup needs twice that before a balance can seat everyone. Hard-coded
- * because the pickup solver runs the same 1-2-2 shape for every mix; a
- * configurable lock would come from the host's own roster shape preference.
+ * A 5v5 mix needs one tank and two of each damage/support per team, so ONE
+ * lobby needs twice that before a balance can seat everyone. Exported because a
+ * two-lobby mix asks for the same shape twice: the lineup's supply strip
+ * multiplies by `lobby_count` rather than keeping a second table of its own.
  */
-const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, damage: 4, support: 4 };
+export const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, damage: 4, support: 4 };
 
 /**
- * Seats a balance can actually fill — the sum of the demand above.
+ * Seats one lobby's balance can actually fill — the sum of the demand above.
  *
  * The add-players dialog counts against this rather than against a literal 10 so
  * the "you are two over a full lobby" line and the role gauges below it can
@@ -172,12 +173,13 @@ export type RoleSupply = {
 };
 
 /**
- * Who can actually fill each role, counted the way the solver counts.
+ * Who can actually fill each role, counted the way the solver counts, against
+ * the demand of every lobby the mix is running.
  *
  * A selected role with no rank is not supply — the balance refuses to seat it —
  * so this deliberately does not match "how many chips are lit".
  */
-export function summarizeRoleSupply(rows: CustomGamePlayer[]): RoleSupply[] {
+export function summarizeRoleSupply(rows: CustomGamePlayer[], lobbyCount = 1): RoleSupply[] {
   return LINEUP_ROLES.map((role) => {
     const supply = rows.filter(
       (row) =>
@@ -185,7 +187,7 @@ export function summarizeRoleSupply(rows: CustomGamePlayer[]): RoleSupply[] {
         resolveRoleOrder(row).includes(role) &&
         row.ranks[role] != null,
     ).length;
-    const need = ROLE_DEMAND[role];
+    const need = ROLE_DEMAND[role] * lobbyCount;
     return { role, supply, need, short: Math.max(0, need - supply) };
   });
 }
@@ -317,16 +319,23 @@ function asNumber(value: unknown): number | null {
 }
 
 /**
- * A host's team-name overrides re-keyed by 0-based team index -- the same
- * position `parseVariants` below assigns names by. Stored relationally
- * (`custom.set_team_names`) rather than in the solver's own result, so a rename
- * survives paging between balance options and re-running the solver.
+ * A host's team-name overrides re-keyed by the position `parseVariants` assigns
+ * names by -- which is a position INSIDE one lobby. Team names are stored
+ * relationally (`custom.set_team_names`) at their global index
+ * (`lobby_index * 2 + team`, A: 0-1, B: 2-3), so lobby B's overrides shift down
+ * by two here and lobby A's drop out of B's map entirely.
  */
-export function teamNamesByIndex(settings: CustomGameSettings | undefined): Record<number, string> {
+export function teamNamesByIndex(
+  settings: CustomGameSettings | undefined,
+  lobbyIndex = 0,
+): Record<number, string> {
+  const offset = lobbyIndex * 2;
   const out: Record<number, string> = {};
   for (const [key, value] of Object.entries(settings?.team_names ?? {})) {
-    const index = Number(key);
-    if (Number.isInteger(index) && index >= 0 && value.trim()) {
+    const index = Number(key) - offset;
+    // Two teams per lobby, the same bound `discord_lineup` reads names with:
+    // without it lobby A would pick up the overrides stored for lobby B.
+    if (Number.isInteger(index) && index >= 0 && index < 2 && value.trim()) {
       out[index] = value;
     }
   }

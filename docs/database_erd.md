@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`stjson01`** (84 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixlobby01`** (87 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -941,8 +941,8 @@ erDiagram
         bigint game_id FK
         bigint encounter_id FK
         bigint team_id FK
-        int placement
-        int score
+        int placement "nullable"
+        jsonb stats
     }
     TOURNAMENT_ENCOUNTER_LINK {
         bigint id PK
@@ -1185,8 +1185,8 @@ erDiagram
         int best_of_default
         int best_of_final "nullable"
         float[] ffa_placement_points
-        float ffa_score_points
-        varchar(32) ffa_score_label "nullable"
+        jsonb ffa_columns
+        varchar(500) ffa_formula
         bigint challonge_group_id "nullable"
     }
     TOURNAMENT_STAGE_ITEM {
@@ -1979,14 +1979,22 @@ erDiagram
         bigint host_user_id FK "nullable"
         varchar(255) name
         varchar(16) status
-        bigint next_map_id FK "nullable"
-        int selected_variant_index
-        jsonb balance_result_json "nullable"
-        int balance_result_version
+        int lobby_count
+        varchar(16) self_signup
+        boolean self_role_edit
     }
     BALANCER_CUSTOM_GAME_CO_HOST {
         bigint custom_game_id PK,FK
         bigint user_id PK,FK
+    }
+    BALANCER_CUSTOM_GAME_LOBBY {
+        bigint custom_game_id PK,FK
+        int lobby_index PK
+        int selected_variant_index
+        jsonb balance_result_json "nullable"
+        int balance_result_version
+        bigint next_map_id FK "nullable"
+        timestamptz balanced_at "nullable"
     }
     BALANCER_CUSTOM_GAME_PLAYER {
         bigint id PK
@@ -1998,6 +2006,7 @@ erDiagram
         varchar(16) participation
         varchar(16) role_selection_mode
         boolean is_flex
+        int lobby_pin "nullable"
     }
     BALANCER_CUSTOM_GAME_PLAYER_ROLE {
         bigint custom_game_player_id PK,FK
@@ -2014,9 +2023,10 @@ erDiagram
     AUTH_USER ||--o| BALANCER_CUSTOM_GAME_CO_HOST : "user_id"
     BALANCER_CUSTOM_GAME ||--o{ BALANCER_CUSTOM_GAME_PLAYER : "custom_game_id"
     BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_CO_HOST : "custom_game_id"
+    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_LOBBY : "custom_game_id"
     BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_TEAM_NAME : "custom_game_id"
     BALANCER_CUSTOM_GAME_PLAYER ||--o| BALANCER_CUSTOM_GAME_PLAYER_ROLE : "custom_game_player_id"
-    OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME : "next_map_id"
+    OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME_LOBBY : "next_map_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_CUSTOM_GAME : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_CUSTOM_GAME_PLAYER : "workspace_member_id"
 ```
@@ -2044,9 +2054,14 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at "nullable"
         bigint custom_game_id FK
+        int lobby_index
         bigint map_id FK "nullable"
         bigint recorded_by FK "nullable"
         int points_per_win_applied "nullable"
+    }
+    CASUAL_MATCH_BUSY_PLAYER {
+        bigint match_id PK,FK
+        bigint workspace_member_id PK,FK
     }
     CASUAL_PLAYER {
         bigint id PK
@@ -2071,9 +2086,11 @@ erDiagram
     AUTH_USER |o--o{ CASUAL_MATCH : "recorded_by"
     BALANCER_CUSTOM_GAME ||--o{ CASUAL_MATCH : "custom_game_id"
     CASUAL_MATCH ||--o{ CASUAL_TEAM : "match_id"
+    CASUAL_MATCH ||--o| CASUAL_MATCH_BUSY_PLAYER : "match_id"
     CASUAL_TEAM ||--o{ CASUAL_PLAYER : "team_id"
     OVERWATCH_MAP |o--o{ CASUAL_MATCH : "map_id"
     PUBLIC_WORKSPACE_MEMBER |o--o{ CASUAL_PLAYER : "workspace_member_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o| CASUAL_MATCH_BUSY_PLAYER : "workspace_member_id"
 ```
 
 Composite unique keys:

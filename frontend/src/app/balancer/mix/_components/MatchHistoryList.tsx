@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import Image from "next/image";
 
+import { useTranslations } from "next-intl";
+
 import { History, Undo2 } from "lucide-react";
 
 import { EYEBROW_CLASS, teamAccent } from "@/app/balancer/mix/pickup-chrome";
@@ -16,18 +18,34 @@ import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { CustomGameMatch } from "@/services/custom-game.service";
 
-/** Every match this mix has recorded, newest first — the permanent record `Record result` writes into. */
+/** Every match this mix has recorded, both lobbies, newest first — the permanent record `Record result` writes into. */
 export function MatchHistoryList({
   matches,
+  lobbyCount,
   canWrite,
   undoingMatchId,
   onUndoMatch
 }: Readonly<{
   matches: CustomGameMatch[];
+  lobbyCount: number;
   canWrite: boolean;
   undoingMatchId: number | null;
   onUndoMatch?: (matchId: number) => void;
 }>) {
+  // Newest first, so the first row of each lobby IS that lobby's newest -- the
+  // only one the server will undo (`newest_id_for_lobby`).
+  const newestPerLobby = new Set<number>();
+  const seenLobbies = new Set<number>();
+  for (const match of matches) {
+    if (!seenLobbies.has(match.lobby_index)) {
+      seenLobbies.add(match.lobby_index);
+      newestPerLobby.add(match.id);
+    }
+  }
+  // A mix that switched back to one lobby keeps lobby B's matches in the log,
+  // so the chip follows the history as well as the current count.
+  const showLobby = lobbyCount > 1 || seenLobbies.has(1);
+
   return (
     <div className="flex flex-col gap-2 border-t border-[color:var(--aqt-border)] pt-3">
       <span className={cn(EYEBROW_CLASS, "flex items-center gap-1.5 tracking-label")}>
@@ -35,13 +53,12 @@ export function MatchHistoryList({
         Match history
       </span>
       <ul className="flex flex-col gap-1.5">
-        {matches.map((match, position) => (
+        {matches.map((match) => (
           <MatchHistoryRow
             key={match.id}
             match={match}
-            // Newest first, and only the newest can be rolled back -- an older
-            // undo would have to reason about every match stacked on top of it.
-            canUndo={position === 0 && canWrite && onUndoMatch != null}
+            showLobby={showLobby}
+            canUndo={newestPerLobby.has(match.id) && canWrite && onUndoMatch != null}
             undoing={undoingMatchId === match.id}
             onUndoMatch={onUndoMatch}
           />
@@ -63,22 +80,42 @@ function mapInitials(name: string): string {
 
 function MatchHistoryRow({
   match,
+  showLobby,
   canUndo,
   undoing,
   onUndoMatch
 }: Readonly<{
   match: CustomGameMatch;
+  /** Two lobbies now, or lobby B somewhere in the log: say which one played it. */
+  showLobby: boolean;
   canUndo: boolean;
   undoing: boolean;
   onUndoMatch?: (matchId: number) => void;
 }>) {
+  const t = useTranslations("mixes.lobbies");
   const format = useFormatter();
   const homeAccent = teamAccent(0);
   const awayAccent = teamAccent(1);
+  const lobbyAccent = teamAccent(match.lobby_index);
+  // A: 0, B: 1 -- glyphs, identical in every locale, like a team number.
+  const lobbyLetter = match.lobby_index === 0 ? "A" : "B";
   const [undoOpen, setUndoOpen] = useState(false);
 
   return (
     <li className="flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-2.5 py-2">
+      {showLobby ? (
+        <span
+          data-testid="match-lobby"
+          title={t("tab", { letter: lobbyLetter })}
+          className={cn(
+            "flex size-5 shrink-0 items-center justify-center rounded font-display text-label font-extrabold",
+            lobbyAccent.bar,
+            "text-[color:var(--aqt-bg)]"
+          )}
+        >
+          {lobbyLetter}
+        </span>
+      ) : null}
       <div className="relative h-8 w-14 shrink-0 overflow-hidden rounded-md border border-[color:var(--aqt-border-2)] bg-[linear-gradient(135deg,var(--aqt-card-2),var(--aqt-bg-2))]">
         {match.map_image_path ? (
           <Image src={match.map_image_path} alt="" fill sizes="56px" className="object-cover" />

@@ -90,3 +90,56 @@ def test_post_discord_rejects_a_payload_that_is_not_a_png() -> None:
         )
     with pytest.raises(ValidationError):
         _schemas().CustomGamePostDiscord.model_validate({"variant_index": 0, "image_b64": "not base64"})
+
+
+def test_self_update_distinguishes_an_unset_roles_field_from_a_null_one() -> None:
+    """``null`` is "every ranked role"; omitting the key is "don't touch my
+    roles". Collapsing the two would silently reset a role order on a flex
+    toggle."""
+    unset = _schemas().CustomGameSelfUpdate.model_validate({"is_flex": True})
+    cleared = _schemas().CustomGameSelfUpdate.model_validate({"roles": None})
+    assert unset.model_fields_set == {"is_flex"}
+    assert cleared.model_fields_set == {"roles"}
+    assert cleared.roles is None
+
+
+def test_self_update_refuses_the_hosts_own_fields() -> None:
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameSelfUpdate.model_validate({"participation": "must_play"})
+
+
+def test_self_update_validates_role_codes() -> None:
+    assert _schemas().CustomGameSelfUpdate.model_validate({"roles": ["support", "tank"]}).roles == [
+        "support",
+        "tank",
+    ]
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameSelfUpdate.model_validate({"roles": ["healer"]})
+
+
+def test_self_service_patch_takes_the_three_signup_modes_and_nothing_else() -> None:
+    patch = _schemas().CustomGameSelfServicePatch.model_validate({"self_signup": "benched"})
+    assert patch.self_signup is enums.MixSelfSignup.BENCHED
+    assert patch.model_fields_set == {"self_signup"}
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameSelfServicePatch.model_validate({"self_signup": "open"})
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameSelfServicePatch.model_validate({"self_role_edit": "yes"})
+
+
+def test_balance_request_defaults_to_the_first_lobby() -> None:
+    """Пустое тело -- ровно то, что слали клиенты до появления лобби."""
+    body = _schemas().CustomGameBalanceRequest.model_validate({})
+    assert body.scope == "lobby"
+    assert body.lobby_index == 0
+
+
+def test_balance_request_rejects_a_third_lobby() -> None:
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameBalanceRequest.model_validate({"lobby_index": 2})
+
+
+def test_balance_request_takes_the_both_lobbies_scope() -> None:
+    body = _schemas().CustomGameBalanceRequest.model_validate({"scope": "all"})
+    assert body.scope == "all"
+    assert body.lobby_index == 0

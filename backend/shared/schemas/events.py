@@ -36,6 +36,11 @@ DiscordAction = Literal[
     "registration.view",
     "notifications.menu",
     "notifications.mute",
+    "mix.join",
+    "mix.leave",
+    "mix.roles",
+    "mix.roles_set",
+    "mix.flex",
 ]
 
 

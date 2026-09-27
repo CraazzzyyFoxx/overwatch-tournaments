@@ -24,6 +24,7 @@ export function LineupColumn({
   hint,
   emptyHint,
   rows,
+  lobbyCount,
   rotationByMember,
   canWrite,
   savingPlayerId,
@@ -36,6 +37,7 @@ export function LineupColumn({
   hint: string;
   emptyHint: string;
   rows: CustomGamePlayer[];
+  lobbyCount: number;
   rotationByMember: Map<number, RotationRecommendation>;
   canWrite: boolean;
   savingPlayerId: number | null;
@@ -98,6 +100,7 @@ export function LineupColumn({
               row={row}
               rotationHint={rotationByMember.get(row.workspace_member_id)}
               canWrite={canWrite}
+              lobbyCount={lobbyCount}
               saving={savingPlayerId === row.workspace_member_id}
               dimmed={dimmed}
               onPatch={(patch) => onPatchPlayer(row.workspace_member_id, patch)}

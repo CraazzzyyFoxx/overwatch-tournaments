@@ -8,6 +8,7 @@ import type { BracketRoundShape } from "@/lib/bracket/round-name";
 import type { RoundGroup } from "@/lib/bracket/view";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
+import type { FfaLobby } from "@/types/ffa.types";
 import type { StageSummary, Standings } from "@/types/tournament.types";
 
 import { MatchCard } from "../../_components/MatchCard";
@@ -159,6 +160,105 @@ export function OverviewGroupTable({
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        ))}
+      </div>
+    </OverviewCard>
+  );
+}
+
+/**
+ * An FFA league's lobby tables, in place of a bracket the stage does not have.
+ * The same compact ladder as `OverviewGroupTable`, read off the lobby rows the
+ * bracket's `FfaStagePanel` draws in full — games played instead of W·D·L,
+ * because a lobby has no opponent to beat.
+ */
+export function OverviewFfaTable({
+  stage,
+  lobbies,
+  overviewHref
+}: Readonly<{
+  stage: StageSummary;
+  lobbies: readonly FfaLobby[];
+  overviewHref: string;
+}>) {
+  const t = useTranslations();
+
+  const seated = lobbies.filter((lobby) => lobby.rows.length > 0);
+  const pointsHaveFraction = seated.some((lobby) =>
+    lobby.rows.some((row) => !Number.isInteger(row.points))
+  );
+  const formatPoints = (points: number) =>
+    pointsHaveFraction ? points.toFixed(1) : String(points);
+
+  return (
+    <OverviewCard
+      title={t("tournamentDetail.overview.groupTable.title", { stage: stage.name })}
+      action={
+        <CardLink href={`${overviewHref}/bracket?stage=${stage.id}`}>
+          {t("tournamentDetail.overview.groupTable.open")}
+        </CardLink>
+      }
+    >
+      <div className={cn("grid gap-x-8 gap-y-5", seated.length > 1 && "sm:grid-cols-2")}>
+        {seated.map((lobby) => (
+          <table className="w-full table-fixed text-sm" key={lobby.encounter_id}>
+            <caption
+              className={cn(
+                "text-left",
+                seated.length > 1
+                  ? "pb-1.5 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
+                  : "sr-only"
+              )}
+            >
+              {lobby.name}
+            </caption>
+            <thead>
+              <tr className="border-b border-[color:var(--aqt-border)] text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                <th scope="col" className="w-8 py-1.5 pr-2 text-left font-medium">
+                  <span aria-hidden>{t("tournamentDetail.overview.groupTable.pos")}</span>
+                  <span className="sr-only">
+                    {t("tournamentDetail.overview.groupTable.posLabel")}
+                  </span>
+                </th>
+                <th scope="col" className="py-1.5 pr-2 text-left font-medium">
+                  {t("tournamentDetail.overview.groupTable.team")}
+                </th>
+                <th scope="col" className="w-16 py-1.5 pr-2 text-right font-medium">
+                  {t("ffa.colGames")}
+                </th>
+                <th scope="col" className="w-12 py-1.5 text-right font-medium">
+                  {t("tournamentDetail.overview.groupTable.points")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Unranked rows (`position` null until the standings job runs)
+                  keep their seating order at the bottom — `FfaLobbyTable`'s rule. */}
+              {[...lobby.rows]
+                .sort(
+                  (left, right) =>
+                    (left.position ?? Number.MAX_SAFE_INTEGER) -
+                      (right.position ?? Number.MAX_SAFE_INTEGER) || left.slot - right.slot
+                )
+                .map((row) => (
+                  <tr key={row.team_id}>
+                    <td className="aqt-tnum py-1.5 pr-2 text-[color:var(--aqt-fg-muted)]">
+                      {row.position ?? "—"}
+                    </td>
+                    <td className="py-1.5 pr-2">
+                      <TeamName
+                        team={{ name: row.team_name, image_url: row.team_image_url }}
+                        size="xs"
+                      />
+                    </td>
+                    <td className="aqt-tnum py-1.5 pr-2 text-right">{row.games_played}</td>
+                    <td className="aqt-tnum py-1.5 text-right font-semibold">
+                      {formatPoints(row.points)}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         ))}

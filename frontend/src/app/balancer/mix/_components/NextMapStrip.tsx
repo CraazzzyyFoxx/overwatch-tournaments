@@ -13,21 +13,21 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import type { CustomGame, CustomGameMatch } from "@/services/custom-game.service";
+import type { CustomGameMatch } from "@/services/custom-game.service";
 import type { MapRead } from "@/types/map.types";
 
 /**
  * The map the next match is on, and how a host gets one: roll it (inside one
  * mode, or mode-first across all of them -- see `rollNextMap`), or pick it by
- * hand. The verdict is the mix's `next_map_id`, so every viewer reads the same
- * map and the next recorded result carries it. Only the mode filter is local:
- * it is a preference of whoever is rolling, not a fact about the mix.
+ * hand. The verdict is the lobby's `next_map_id`, so every viewer reads the
+ * same map and the next recorded result carries it. Only the mode filter is
+ * local: it is a preference of whoever is rolling, not a fact about the mix.
  *
  * Hidden from the screenshot when nothing is rolled: "Not rolled yet" beside
  * two teams is noise in the channel the image is pasted into.
  */
 export function NextMapStrip({
-  game,
+  nextMapId,
   maps,
   matches,
   canWrite,
@@ -35,7 +35,8 @@ export function NextMapStrip({
   capturing,
   onNextMapChange
 }: Readonly<{
-  game: CustomGame;
+  /** This lobby's own `next_map_id`, not the mix's -- the mix has none. */
+  nextMapId: number | null;
   maps: MapRead[];
   matches: CustomGameMatch[];
   canWrite: boolean;
@@ -45,8 +46,7 @@ export function NextMapStrip({
 }>) {
   const [modeId, setModeId] = useState<number | null>(null);
   const modes = rollableModes(maps);
-  const nextMap =
-    game.next_map_id == null ? null : (maps.find((map) => map.id === game.next_map_id) ?? null);
+  const nextMap = nextMapId == null ? null : (maps.find((map) => map.id === nextMapId) ?? null);
 
   if (!canWrite && nextMap == null) return null;
 
@@ -130,7 +130,7 @@ export function NextMapStrip({
             )}
             Roll
           </Button>
-          <MapCombobox maps={maps} mapId={game.next_map_id} onMapIdChange={onNextMapChange} />
+          <MapCombobox maps={maps} mapId={nextMapId} onMapIdChange={onNextMapChange} />
         </div>
       ) : null}
     </div>

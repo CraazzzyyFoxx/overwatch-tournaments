@@ -91,13 +91,18 @@ export const DEFAULT_BRACKET_TIEBREAKERS = [
   "buchholz"
 ];
 
-/** Mirrors the backend `ffa_default` preset (`RULE_PRESET_DEFAULTS`). */
-export const DEFAULT_FFA_TIEBREAKERS = [
-  "points",
-  "ffa_game_wins",
-  "ffa_score",
-  "ffa_last_placement"
-];
+/**
+ * Mirrors the backend `ffa_default` preset (`RULE_PRESET_DEFAULTS`).
+ *
+ * Not a constant any more: the third step is the sum of the stage's FIRST
+ * column, and a stage that records nothing per game simply has no such step.
+ */
+export function ffaDefaultTiebreakers(columns: readonly { key: string }[] = []): string[] {
+  const first = columns[0]?.key;
+  return first
+    ? ["points", "ffa_game_wins", `ffa_stat:${first}`, "ffa_last_placement"]
+    : ["points", "ffa_game_wins", "ffa_last_placement"];
+}
 
 export const RANKING_PRESETS = [
   { value: "default", label: "System default (based on type)" },
@@ -113,20 +118,27 @@ export const FFA_RANKING_PRESETS = [
 ] as const;
 
 /** The tiebreak order a stage type falls back to with no preset chosen. */
-export function defaultTiebreakOrder(stageType: StageType): string[] {
-  if (stageType === "ffa_league") return DEFAULT_FFA_TIEBREAKERS;
+export function defaultTiebreakOrder(
+  stageType: StageType,
+  ffaColumns: readonly { key: string }[] = []
+): string[] {
+  if (stageType === "ffa_league") return ffaDefaultTiebreakers(ffaColumns);
   if (stageType === "swiss") return DEFAULT_SWISS_TIEBREAKERS;
   if (stageType === "round_robin") return DEFAULT_RR_TIEBREAKERS;
   return DEFAULT_BRACKET_TIEBREAKERS;
 }
 
 /** The order a preset dictates; an unknown preset keeps the type default. */
-export function tiebreakOrderForPreset(preset: string, stageType: StageType): string[] {
+export function tiebreakOrderForPreset(
+  preset: string,
+  stageType: StageType,
+  ffaColumns: readonly { key: string }[] = []
+): string[] {
   if (preset === "challonge_swiss") return DEFAULT_SWISS_TIEBREAKERS;
   if (preset === "challonge_round_robin") return DEFAULT_RR_TIEBREAKERS;
   if (preset === "bracket_default") return DEFAULT_BRACKET_TIEBREAKERS;
-  if (preset === "ffa_default") return DEFAULT_FFA_TIEBREAKERS;
-  return defaultTiebreakOrder(stageType);
+  if (preset === "ffa_default") return ffaDefaultTiebreakers(ffaColumns);
+  return defaultTiebreakOrder(stageType, ffaColumns);
 }
 
 export function getStageTeamSlots(stage: Stage) {

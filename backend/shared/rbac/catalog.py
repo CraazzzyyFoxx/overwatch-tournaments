@@ -89,6 +89,7 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _permission("account", "rename", "Change one's own name"),
     _permission("account", "social", "Manage one's own social accounts"),
     _permission("registration", "self_register", "Self-register for a tournament"),
+    _permission("custom_game", "self_join", "Self-join a pickup mix"),
     # Distinct from the workspace-scoped ``workspace.create`` above, which is a
     # grant held inside a workspace: this one is the platform-wide right to
     # bring a NEW workspace into existence, so denying it revokes self-service

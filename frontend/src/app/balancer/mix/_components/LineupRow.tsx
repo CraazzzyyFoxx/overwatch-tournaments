@@ -2,10 +2,12 @@
 
 import type { ReactNode } from "react";
 
+import { useTranslations } from "next-intl";
 import { useDraggable } from "@dnd-kit/core";
 import { Armchair, GripVertical, RotateCw, SlidersHorizontal, X } from "lucide-react";
 
 import { PANEL_CLASS, splitBattleTag } from "@/components/balancer/balancer-page-helpers";
+import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import DivisionIcon from "@/components/DivisionIcon";
 import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,8 @@ type LineupRowProps = {
   /** This member's rotation-fairness verdict, if the fetch has one. */
   rotationHint: RotationRecommendation | undefined;
   canWrite: boolean;
+  /** Two lobbies: the row says which one seated this player, or that nobody did. */
+  lobbyCount: number;
   saving: boolean;
   /** Benched rows read de-emphasised and freeze their role rail. */
   dimmed: boolean;
@@ -83,6 +87,38 @@ type LineupRowProps = {
   onOpen: () => void;
   onRemove: () => void;
 };
+
+/** A: 0, B: 1 -- glyphs, identical in every locale, like a team number. */
+const LOBBY_LETTERS = ["A", "B"] as const;
+
+/**
+ * Which lobby seated this player, derived server-side from each lobby's
+ * selected variant (`current_lobby`). `null` is "waiting" -- in the pool, in
+ * nobody's teams this round -- which is exactly the state a host scans for
+ * before rebalancing a lobby, so it is spelled out rather than left blank.
+ */
+function LineupLobbyBadge({ currentLobby }: Readonly<{ currentLobby: 0 | 1 | null | undefined }>) {
+  const t = useTranslations("mixes.lobbies");
+  const seated = currentLobby === 0 || currentLobby === 1;
+  return (
+    <span
+      data-testid="lineup-lobby"
+      title={
+        seated
+          ? t("seatedIn", { letter: LOBBY_LETTERS[currentLobby as number] })
+          : t("waitingTitle")
+      }
+      className={cn(
+        "flex h-[18px] shrink-0 items-center justify-center rounded px-1 text-label font-extrabold uppercase tracking-label",
+        seated
+          ? cn(teamAccent(currentLobby as number).bar, "text-[color:var(--aqt-bg)]")
+          : "text-[color:var(--aqt-fg-faint)]"
+      )}
+    >
+      {seated ? LOBBY_LETTERS[currentLobby as number] : t("waiting")}
+    </span>
+  );
+}
 
 /**
  * One lineup row, draggable between the three `LineupColumn`s.
@@ -97,6 +133,7 @@ export function LineupRow({
   row,
   rotationHint,
   canWrite,
+  lobbyCount,
   saving,
   dimmed,
   onPatch,
@@ -159,6 +196,7 @@ export function LineupRow({
         ) : null}
       </span>
 
+      {lobbyCount > 1 ? <LineupLobbyBadge currentLobby={row.current_lobby} /> : null}
       <RotationHintBadge hint={rotationHint} pinned={row.participation === "must_play"} />
 
       <RowAction>

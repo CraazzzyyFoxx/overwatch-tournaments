@@ -117,6 +117,7 @@ async function mount(
     hasMix?: boolean;
     rotation?: RotationRecommendation[];
     applyingHints?: boolean;
+    lobbyCount?: 1 | 2;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -127,6 +128,7 @@ async function mount(
         canWrite={props.canWrite ?? true}
         hasMix={props.hasMix ?? true}
         rows={rows}
+        lobbyCount={props.lobbyCount ?? 1}
         rotation={props.rotation}
         savingPlayerId={null}
         clearing={false}
@@ -559,5 +561,37 @@ describe("PickupLobbyPanel", () => {
     expect(onPatchPlayer).toHaveBeenCalled();
     expect(onRemovePlayer).toHaveBeenCalledWith(7);
     expect(onOpenPlayer).not.toHaveBeenCalled();
+  });
+
+  it("says which lobby each player is in once the mix runs two", async () => {
+    const scope = await mount(
+      [
+        row({ workspace_member_id: 1, battle_tag: "Aria#1111", current_lobby: 0 }),
+        row({ workspace_member_id: 2, battle_tag: "Bex#2222", current_lobby: 1 }),
+        row({ workspace_member_id: 3, battle_tag: "Cy#3333", current_lobby: null }),
+      ],
+      { lobbyCount: 2 },
+    );
+
+    const badges = [...scope.querySelectorAll('[data-testid="lineup-lobby"]')].map((node) =>
+      node.textContent?.trim(),
+    );
+    expect(badges).toEqual(["A", "B", "waiting"]);
+  });
+
+  it("says nothing about lobbies while the mix runs one", async () => {
+    const scope = await mount([row({ current_lobby: 0 })]);
+
+    expect(scope.querySelector('[data-testid="lineup-lobby"]')).toBeNull();
+  });
+
+  it("asks for twice the roles once two lobbies have to be filled", async () => {
+    const rows = Array.from({ length: 3 }, (_, index) =>
+      row({ workspace_member_id: index + 1, roles: ["tank"], ranks: { tank: 2400 } }),
+    );
+    const scope = await mount(rows, { lobbyCount: 2 });
+
+    // One lobby needs 2 tanks, two lobbies need 4 -- three volunteers are short one.
+    expect(scope.textContent).toContain("3 of 4 \u00B7 short 1");
   });
 });

@@ -11,7 +11,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
-from src.domain.mix_discord import build_lineup_embed  # noqa: E402
+from src.domain.mix_discord import build_lineup_embed, signup_card  # noqa: E402
 
 
 def _document(*rosters: dict[str, list[tuple[str, int]]]) -> dict:
@@ -112,3 +112,49 @@ def test_a_lineup_past_the_field_limit_is_cut_short_with_a_marker() -> None:
     # Cut, not squeezed: the lines that survive are unchanged whole lines.
     assert all(line.startswith("Tank · Player ") for line in lines[:-1])
     assert len(lines) < 61
+
+
+def test_signup_card_names_the_mix_and_its_host() -> None:
+    card = signup_card(
+        mix_name="Friday Scrim", host_name="Foxx", board_url="https://owt.example/balancer/mix/42", custom_game_id=42
+    )
+    assert "Friday Scrim" in card.text
+    assert "Foxx" in card.text
+    assert "Discord" in (card.details or "") and "Battle.net" in (card.details or "")
+
+
+def test_signup_card_escapes_a_mix_name_written_as_markdown() -> None:
+    """Mix names are user input and the card is Discord markdown: an unescaped
+    name reformats (or breaks) the whole post."""
+    card = signup_card(
+        mix_name="**Friday** _mix_", host_name=None, board_url="https://owt.example/balancer/mix/42", custom_game_id=42
+    )
+    assert "**Friday**" not in card.text
+    assert r"\*\*Friday\*\*" in card.text
+
+
+def test_signup_card_carries_the_three_actions_and_the_board_link() -> None:
+    card = signup_card(
+        mix_name="Friday Scrim", host_name="Foxx", board_url="https://owt.example/balancer/mix/42", custom_game_id=42
+    )
+    assert [button.action for button in card.answers] == ["mix.join", "mix.roles", "mix.leave"]
+    assert {button.target for button in card.answers} == {"42"}
+    assert [button.style for button in card.answers] == ["success", "secondary", "danger"]
+    [[link]] = card.rows
+    assert link.url == "https://owt.example/balancer/mix/42"
+
+
+def test_signup_card_survives_a_mix_name_at_the_length_cap() -> None:
+    """DiscordCard refuses past 4000 characters, and escaping can double a
+    name's length -- a 255-character mix name must still produce a card."""
+    card = signup_card(
+        mix_name="*" * 255, host_name="Foxx", board_url="https://owt.example/balancer/mix/42", custom_game_id=42
+    )
+    assert len(card.text) < 4000
+
+
+def test_a_two_lobby_mix_says_which_lobby_the_lineup_is_for() -> None:
+    """Both lobbies post into the same channel, so the embed has to say which
+    one it describes -- and each counts its own games."""
+    assert _embed(match_number=3, lobby_label="B")["title"] == "Friday Scrim — Лобби B · игра 3"
+    assert _embed(match_number=3)["title"] == "Friday Scrim — Match 3"

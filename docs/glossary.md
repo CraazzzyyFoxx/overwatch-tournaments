@@ -49,6 +49,7 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | **Slot** | One position in a roster shape (a role slot or a flex slot). In map veto, a slot is instead one map of a series. |
 | **Substitute** | A roster member who replaces another; substitution chains are rendered under the player they replace. |
 | **Balancer** | The team-building solver: a multi-objective genetic search implemented in the native Rust `tournament_balancer` crate and driven by `balancer-service`. |
+| **Mix lobby** | One of the (at most two) matches a pickup mix runs at once — `balancer.custom_game_lobby`, keyed `(custom_game_id, lobby_index)`. Owns that match's balance document, pager position, next map and `balanced_at`; the mix itself owns none of them. Rendered as «лобби A / B» in the Russian UI. Membership is derived from the lobby's selected variant, never stored; only the host's `lobby_pin` is. |
 | **Draft** | The live alternative to the balancer: captains pick players in a snake order, server-authoritative clock, optimistic concurrency on `version`. |
 | **Rank layer** | Where a player's rank number came from. A workspace has a shared canon; each ranking author additionally keeps their own book, and an author rank overrides canon for that author only. The two dictionaries are never merged. |
 | **Division** | A rank band. `division_grid` versions the SR ranges and maps between versions so ranks stay comparable across seasons. |

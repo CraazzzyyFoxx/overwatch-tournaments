@@ -153,6 +153,7 @@ from .workspace import (
 from .casual import CasualMatchRepository, CasualPlayerRepository, CasualTeamRepository
 from .custom_game import (
     CustomGameCoHostRepository,
+    CustomGameLobbyRepository,
     CustomGamePlayerRepository,
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
@@ -299,6 +300,7 @@ __all__ = (
     "CasualPlayerRepository",
     "CasualTeamRepository",
     "CustomGameCoHostRepository",
+    "CustomGameLobbyRepository",
     "CustomGamePlayerRepository",
     "CustomGamePlayerRoleRepository",
     "CustomGameRepository",

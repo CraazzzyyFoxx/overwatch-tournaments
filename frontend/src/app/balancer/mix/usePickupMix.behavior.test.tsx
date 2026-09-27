@@ -26,6 +26,13 @@ const rotation = vi.fn();
 const undoMatch = vi.fn();
 const postToDiscord = vi.fn();
 const setVariantIndex = vi.fn();
+const setLobbyCount = vi.fn();
+const getMySeat = vi.fn();
+const joinMix = vi.fn();
+const leaveMix = vi.fn();
+const updateMySeat = vi.fn();
+const setSelfService = vi.fn();
+const postSignup = vi.fn();
 
 vi.mock("@/services/custom-game.service", () => ({
   customGameKeys: {
@@ -33,7 +40,20 @@ vi.mock("@/services/custom-game.service", () => ({
     list: (workspaceId: number) => ["custom-games", workspaceId],
     one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId],
     matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"],
-    rotation: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "rotation"],
+    rotationAll: (workspaceId: number, gameId: number) => [
+      "custom-games",
+      workspaceId,
+      gameId,
+      "rotation",
+    ],
+    rotation: (workspaceId: number, gameId: number, lobbyIndex: number) => [
+      "custom-games",
+      workspaceId,
+      gameId,
+      "rotation",
+      lobbyIndex,
+    ],
+    me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"],
   },
   customGameService: {
     list: (...args: unknown[]) => listGames(...args),
@@ -46,6 +66,13 @@ vi.mock("@/services/custom-game.service", () => ({
     undoMatch: (...args: unknown[]) => undoMatch(...args),
     postToDiscord: (...args: unknown[]) => postToDiscord(...args),
     setVariantIndex: (...args: unknown[]) => setVariantIndex(...args),
+    setLobbyCount: (...args: unknown[]) => setLobbyCount(...args),
+    getMySeat: (...args: unknown[]) => getMySeat(...args),
+    joinMix: (...args: unknown[]) => joinMix(...args),
+    leaveMix: (...args: unknown[]) => leaveMix(...args),
+    updateMySeat: (...args: unknown[]) => updateMySeat(...args),
+    setSelfService: (...args: unknown[]) => setSelfService(...args),
+    postSignup: (...args: unknown[]) => postSignup(...args),
   },
 }));
 
@@ -91,11 +118,22 @@ function game(overrides: Record<string, unknown> = {}) {
     name: "Tonight",
     status: "draft",
     settings: SETTINGS,
-    balance_result: null,
     created_at: null,
     roster_shape: null,
-    next_map_id: null,
-    selected_variant_index: 0,
+    lobby_count: 1,
+    lobbies: [
+      {
+        lobby_index: 0,
+        balance_result: null,
+        selected_variant_index: 0,
+        next_map_id: null,
+        balanced_at: null,
+        lineup_recorded: true,
+        matches_count: 0,
+      },
+    ],
+    self_signup: "closed",
+    self_role_edit: false,
     matches_count: 0,
     last_match_at: null,
     ...overrides,
@@ -135,8 +173,8 @@ function Harness({
     setRoster: (ids) => setRoster.mutate(ids),
     applyRotationHints: () => applyRotationHints.mutate(),
     undoMatch: (matchId) => undo.mutate(matchId),
-    postToDiscord: (variantIndex, image) => post.mutate({ variantIndex, image }),
-    setVariantIndex: (index) => paging.mutate(index),
+    postToDiscord: (variantIndex, image) => post.mutate({ lobbyIndex: 0, variantIndex, image }),
+    setVariantIndex: (index) => paging.mutate({ lobbyIndex: 0, variantIndex: index }),
     client,
   });
   return null;
@@ -178,7 +216,22 @@ beforeEach(() => {
   rotation.mockResolvedValue([]);
   undoMatch.mockResolvedValue(game({ players: [] }));
   postToDiscord.mockResolvedValue({ status: "queued", channel_id: "123" });
-  setVariantIndex.mockResolvedValue(game({ players: [], selected_variant_index: 2 }));
+  setVariantIndex.mockResolvedValue(
+    game({
+      players: [],
+      lobbies: [
+        {
+          lobby_index: 0,
+          balance_result: null,
+          selected_variant_index: 2,
+          next_map_id: null,
+          balanced_at: null,
+          lineup_recorded: true,
+          matches_count: 0,
+        },
+      ],
+    }),
+  );
 });
 
 describe("usePickupMix", () => {
@@ -228,7 +281,7 @@ describe("usePickupMix", () => {
       await tick();
     });
 
-    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 1, image);
+    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 0, 1, image);
     // Nothing about the mix changed, so a refetch would be pure noise.
     expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
   });
@@ -246,8 +299,11 @@ describe("usePickupMix", () => {
       await tick();
     });
 
-    expect(setVariantIndex).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 2);
-    expect(client.getQueryData<{ selected_variant_index: number }>(gameKey)?.selected_variant_index).toBe(2);
+    expect(setVariantIndex).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 0, 2);
+    expect(
+      client.getQueryData<{ lobbies: { selected_variant_index: number }[] }>(gameKey)?.lobbies[0]
+        .selected_variant_index,
+    ).toBe(2);
     // A view change: roster, history and rotation all say exactly what they said.
     expect(listMatches.mock.calls.length).toBe(matchesBefore);
   });

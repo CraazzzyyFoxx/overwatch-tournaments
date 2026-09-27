@@ -12,7 +12,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.core import enums
 from shared.core.enums import StageType
-from shared.domain.ffa_scoring import FfaGameLine, ffa_rules, team_totals
+from shared.domain.ffa_scoring import FfaGameLine, FfaRules, FfaTeamTotals, ffa_rules, team_totals
 from shared.domain.tournament_utils import (
     completed_encounters as _shared_completed_encounters,
 )
@@ -57,13 +57,19 @@ RULE_PRESET_DEFAULTS: dict[str, list[str]] = {
         "score_differential",
         "match_wins",
     ],
+    # The stage's own headline column is spliced in by ``_tiebreak_order``: it
+    # is not a fixed metric name, it depends on what the organizer configured.
     "ffa_default": [
         "points",
         "ffa_game_wins",
-        "ffa_score",
         "ffa_last_placement",
     ],
 }
+
+#: A tiebreak by the sum of one stage column: ``ffa_stat:kills``. The key after
+#: the prefix is an organizer's column key, so it is validated against the
+#: stage, not against a fixed list.
+FFA_STAT_PREFIX = "ffa_stat:"
 
 
 #: Every metric ``_metric_value`` can actually score. A stage's configured order
@@ -81,7 +87,6 @@ KNOWN_TIEBREAK_METRICS = frozenset(
         "map_differential",
         "wins_as_higher_stage_specific_metric",
         "ffa_game_wins",
-        "ffa_score",
         "ffa_best_placement",
         "ffa_last_placement",
     }
@@ -101,8 +106,9 @@ class RankedStageTeam:
     median_buchholz: float = 0.0
     head_to_head: int = 0
     score_differential: int = 0
-    #: FFA only: raw score summed and placement metrics (plan §5.3).
-    ffa_score: int = 0
+    #: FFA only: every stage column summed, already oriented so that more is
+    #: better (plan §5.4), plus the placement metrics below.
+    ffa_stats: dict[str, float] = field(default_factory=dict)
     ffa_best_placement: int | None = None
     ffa_last_placement: int | None = None
     #: Position of the head of this team's tie cluster, ``None`` when it is not
@@ -200,7 +206,9 @@ def _rule_profile(stage: models.Stage) -> str:
     return "bracket_default"
 
 
-def normalize_tiebreak_order(metrics: typing.Iterable[typing.Any]) -> list[str]:
+def normalize_tiebreak_order(
+    metrics: typing.Iterable[typing.Any], *, ffa_columns: typing.Sequence[str] = ()
+) -> list[str]:
     """The order the engine will actually apply, from whatever was configured.
 
     The stored order's own sequence is honoured verbatim, including where it
@@ -213,27 +221,39 @@ def normalize_tiebreak_order(metrics: typing.Iterable[typing.Any]) -> list[str]:
     - duplicates collapse to their first occurrence -- a second pass over one
       metric can never separate teams the first pass left equal.
 
+    ``ffa_stat:<key>`` is known only while the stage still has that column:
+    deleting a column must not leave a tiebreaker that scores every team 0.
+
     An organizer's fixed place is not a metric: it is a ``StandingPin``, applied
     after this order has ranked the table (:func:`apply_pins`).
     """
+    columns = {f"{FFA_STAT_PREFIX}{key}" for key in ffa_columns}
     ordered: list[str] = []
     for metric in metrics:
-        if not isinstance(metric, str) or metric not in KNOWN_TIEBREAK_METRICS:
+        if not isinstance(metric, str) or (metric not in KNOWN_TIEBREAK_METRICS and metric not in columns):
             continue
         if metric not in ordered:
             ordered.append(metric)
     return ordered
 
 
-def _tiebreak_order(stage: models.Stage) -> list[str]:
+def _tiebreak_order(stage: models.Stage, *, rules: FfaRules | None = None) -> list[str]:
+    """``rules`` is passed by the FFA builder, which already compiled them."""
+    if rules is None and stage.stage_type == StageType.FFA_LEAGUE:
+        rules = ffa_rules(stage)
+    columns = rules.column_keys if rules is not None else ()
     if stage.tiebreak_order is not None:
-        normalized = normalize_tiebreak_order(stage.tiebreak_order)
+        normalized = normalize_tiebreak_order(stage.tiebreak_order, ffa_columns=columns)
         # A stored list with nothing the engine knows would rank by team id alone.
         if normalized:
             return normalized
-    return normalize_tiebreak_order(
-        RULE_PRESET_DEFAULTS.get(_rule_profile(stage), RULE_PRESET_DEFAULTS["bracket_default"])
-    )
+    profile = _rule_profile(stage)
+    preset = RULE_PRESET_DEFAULTS.get(profile, RULE_PRESET_DEFAULTS["bracket_default"])
+    if profile == "ffa_default" and columns:
+        # The stage's first column is its headline stat: "most kills wins the
+        # tie" is what an organizer means by an unconfigured FFA league.
+        preset = [*preset[:2], f"{FFA_STAT_PREFIX}{columns[0]}", *preset[2:]]
+    return normalize_tiebreak_order(preset, ffa_columns=columns)
 
 
 def _scoring(stage: models.Stage, tournament: models.Tournament) -> tuple[float, float, float]:
@@ -269,8 +289,10 @@ def _metric_value(team: RankedStageTeam, metric: str) -> float | int:
         return team.wins
     if metric == "ffa_game_wins":
         return team.wins
-    if metric == "ffa_score":
-        return team.ffa_score
+    if metric.startswith(FFA_STAT_PREFIX):
+        # Already oriented by ``_ranking_stats``; a team with no value for the
+        # column reads as 0, which is what "has not played" sums to anyway.
+        return team.ffa_stats.get(metric[len(FFA_STAT_PREFIX) :], 0.0)
     # Lower place is better and the sort is descending: negate, with "never
     # played" ranking below every real place.
     if metric == "ffa_best_placement":
@@ -727,6 +749,19 @@ def _build_group_stage_standings(
     return standings
 
 
+def _ranking_stats(row: FfaTeamTotals, rules: FfaRules) -> dict[str, float]:
+    """Column sums oriented so that more is better for every key.
+
+    ``_metric_value`` sorts descending, so a ``better="lower"`` column (deaths,
+    penalties) is negated here rather than inside the sort -- exactly what
+    ``ffa_last_placement`` does, and for the same reason.
+    """
+    return {
+        column.key: -row.stats.get(column.key, 0.0) if column.better == "lower" else row.stats.get(column.key, 0.0)
+        for column in rules.columns
+    }
+
+
 def _build_ffa_stage_standings(
     tournament: models.Tournament,
     stage: models.Stage,
@@ -746,20 +781,21 @@ def _build_ffa_stage_standings(
     if not seed_ids:
         return []
 
-    totals = team_totals(seed_ids, games, ffa_rules(stage))
+    rules = ffa_rules(stage)
+    totals = team_totals(seed_ids, games, rules)
     teams = [
         RankedStageTeam(
             team_id=row.team_id,
             matches=row.games,
             wins=row.wins,
             points=row.points,
-            ffa_score=row.score,
+            ffa_stats=_ranking_stats(row, rules),
             ffa_best_placement=row.best_placement,
             ffa_last_placement=row.last_placement,
         )
         for row in totals.values()
     ]
-    order = _tiebreak_order(stage)
+    order = _tiebreak_order(stage, rules=rules)
     ordered, pinned = _pin_group_table(_sort_ranked_teams(teams, tiebreak_order=order), pins, tiebreak_order=order)
     return [
         models.Standing(
