@@ -33,6 +33,7 @@ __all__ = (
     "ffa_rules",
     "game_points",
     "normalize_game_lines",
+    "rank_game",
     "team_totals",
 )
 
@@ -166,7 +167,7 @@ def normalize_game_lines(
             raise FfaResultError(
                 "ffa_result_placement_required", "This stage scores placement: give every team's place"
             )
-        return _derive_placements(given, rules)
+        return rank_game(given, rules)
 
     size = len(given)
     if any(place < 1 or place > size for place in placements):
@@ -196,12 +197,23 @@ def _check_stats(line: FfaGameLine, keys: set[str]) -> None:
         raise FfaResultError("ffa_result_missing_stat", f"Team {line.team_id}: no value for {absent}")
 
 
-def _derive_placements(lines: Sequence[FfaGameLine], rules: FfaRules) -> tuple[FfaGameLine, ...]:
-    """Competition ranking by game points: 10, 7, 7, 3 -> 1, 2, 2, 4.
+def rank_game(lines: Sequence[FfaGameLine], rules: FfaRules) -> tuple[FfaGameLine, ...]:
+    """The game's lines with a place on every one, best place first.
 
-    Points, not a column: the lobby has several columns and only the formula
-    says how they compare.
+    A place the organizer entered is kept as it is. A game with no places --
+    what a score-only lobby stores -- is ranked by competition ranking over the
+    points the CURRENT formula pays: 10, 7, 7, 3 -> 1, 2, 2, 4. Points, not a
+    column: the lobby has several columns and only the formula says how they
+    compare.
+
+    Called on every read, not once on write: the formula may be edited while
+    the stage runs, and a place derived under the retired one would contradict
+    the points printed next to it (plan §5.2). When that formula reads the
+    place itself, a missing place pays 0, so the ranking falls back to the
+    place-independent part of the formula -- deterministic, ties broken by team.
     """
+    if all(item.placement is not None for item in lines):
+        return tuple(sorted(lines, key=lambda item: (item.placement or 0, item.team_id)))
     teams = len(lines)
     scored = sorted(
         ((game_points(item, rules, teams), item) for item in lines),

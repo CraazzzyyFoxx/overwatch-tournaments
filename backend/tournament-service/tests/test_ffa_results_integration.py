@@ -267,7 +267,7 @@ def test_the_first_game_opens_the_lobby_and_the_last_one_completes_it(db_session
     assert events == 1
 
 
-def test_a_recorded_game_stores_one_row_per_participant_with_derived_places(db_session) -> None:
+def test_a_recorded_game_stores_one_row_per_participant_and_no_derived_place(db_session) -> None:
     async def _run() -> tuple:
         seeded = await _seed(db_session)
         try:
@@ -278,19 +278,32 @@ def test_a_recorded_game_stores_one_row_per_participant_with_derived_places(db_s
                 await db_session.execute(
                     sa.text(
                         "select team_id, placement, stats from tournament.encounter_game_result "
-                        "where encounter_id = :e order by placement, team_id"
+                        "where encounter_id = :e order by team_id"
                     ),
                     {"e": seeded.lobby_id},
                 )
             ).all()
             game = (await _games(db_session, seeded.lobby_id))[0]
-            return [tuple(row) for row in rows], (game.state, game.format, game.result_version), seeded.team_ids
+            lobby = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            return (
+                [tuple(row) for row in rows],
+                (game.state, game.format, game.result_version),
+                {row.team_id: row.games[0].placement for row in lobby.rows},
+                seeded.team_ids,
+            )
         finally:
             await _drop(db_session, seeded)
 
-    rows, game_shape, team_ids = asyncio.run(_run())
+    rows, game_shape, places, team_ids = asyncio.run(_run())
+    # Nobody entered a place, so nothing stores one: the column is the manual
+    # entry, and a derived place belongs to whichever formula is current.
+    assert rows == [
+        (team_ids[0], None, {"score": 10}),
+        (team_ids[1], None, {"score": 7}),
+        (team_ids[2], None, {"score": 7}),
+    ]
     # 10, 7, 7 -> 1st, joint 2nd; a lobby game never carries a duel score.
-    assert rows == [(team_ids[0], 1, {"score": 10}), (team_ids[1], 2, {"score": 7}), (team_ids[2], 2, {"score": 7})]
+    assert places == {team_ids[0]: 1, team_ids[1]: 2, team_ids[2]: 2}
     assert game_shape == (enums.EncounterGameState.CONFIRMED, "ffa", 1)
 
 
@@ -361,15 +374,16 @@ def test_correcting_a_confirmed_game_needs_a_reason(db_session) -> None:
     )
     assert before_scores == (None, None)
     assert after_scores == (None, None)
+    # The journal records what was ENTERED: no place was, so none is snapshotted.
     assert snapshot["before"] == [
-        {"team_id": team_ids[0], "placement": 1, "stats": {"score": 10}},
-        {"team_id": team_ids[1], "placement": 2, "stats": {"score": 6}},
-        {"team_id": team_ids[2], "placement": 3, "stats": {"score": 2}},
+        {"team_id": team_ids[0], "placement": None, "stats": {"score": 10}},
+        {"team_id": team_ids[1], "placement": None, "stats": {"score": 6}},
+        {"team_id": team_ids[2], "placement": None, "stats": {"score": 2}},
     ]
     assert snapshot["after"] == [
-        {"team_id": team_ids[1], "placement": 1, "stats": {"score": 8}},
-        {"team_id": team_ids[0], "placement": 2, "stats": {"score": 4}},
-        {"team_id": team_ids[2], "placement": 3, "stats": {"score": 1}},
+        {"team_id": team_ids[1], "placement": None, "stats": {"score": 8}},
+        {"team_id": team_ids[0], "placement": None, "stats": {"score": 4}},
+        {"team_id": team_ids[2], "placement": None, "stats": {"score": 1}},
     ]
 
 
@@ -1314,7 +1328,7 @@ def test_rewriting_the_formula_after_the_playoff_started_is_refused(db_session) 
     assert formula == "score"
 
 
-def test_renaming_a_column_after_the_playoff_started_is_allowed(db_session) -> None:
+def test_relabelling_a_column_after_the_playoff_started_is_allowed(db_session) -> None:
     """A label moves nobody: it is editable for as long as the stage exists."""
 
     async def _run() -> tuple:
@@ -1409,3 +1423,103 @@ def test_an_accepted_scoring_edit_queues_the_recalculation(db_session) -> None:
     before, after, again = asyncio.run(_run())
     assert after == before + 1
     assert again == after
+
+
+def test_a_formula_edit_moves_the_derived_places_with_the_points(db_session) -> None:
+    """Spec acceptance 3: after a scoring edit the places of a placement-less
+    lobby follow the NEW formula, not the one they were recorded under.
+
+    Nothing re-derives a stored place, so the place must not be stored: a cell
+    reading "1st, -7 pts" next to a team with fewer points, and an advancement
+    ranked by ``ffa_game_wins`` off the retired rule, are the same bug.
+    """
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=2, regulation=KILLS_DEATHS)
+        try:
+            for position, stats in enumerate(
+                (
+                    [{"kills": 2, "deaths": 0}, {"kills": 3, "deaths": 2}, {"kills": 5, "deaths": 4}],
+                    [{"kills": 1, "deaths": 0}, {"kills": 0, "deaths": 0}, {"kills": 4, "deaths": 3}],
+                ),
+                1,
+            ):
+                await ffa_encounter_service.set_game_results(
+                    db_session,
+                    seeded.lobby_id,
+                    position,
+                    _stat_lines(seeded.team_ids, stats),
+                    actor_user_id=None,
+                    reason=None,
+                )
+            await standings_service.recalculate_for_tournament(db_session, seeded.tournament_id)
+            # kills * 2 - deaths made the third team win both games.
+            before = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+
+            await stage_service.update_stage(
+                db_session,
+                seeded.stage_id,
+                schemas.StageUpdate(
+                    ffa_scoring=_scoring(columns=KILLS_DEATHS["ffa_columns"], formula="kills - deaths * 3")
+                ),
+            )
+            await standings_service.recalculate_for_tournament(db_session, seeded.tournament_id)
+            after = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            rows = await db_session.execute(sa.select(Standing).where(Standing.stage_item_id == seeded.item_id))
+            table = {row.team_id: (row.position, row.points, row.win) for row in rows.scalars()}
+            return (
+                {row.team_id: (row.points, row.wins) for row in before.rows},
+                {row.team_id: (row.points, row.wins) for row in after.rows},
+                {row.team_id: [(cell.placement, cell.points) for cell in row.games] for row in after.rows},
+                table,
+                seeded.team_ids,
+            )
+        finally:
+            await _drop(db_session, seeded)
+
+    before, after, cells, table, team_ids = asyncio.run(_run())
+    first, second, third = team_ids
+    assert before == {first: (6.0, 0), second: (4.0, 0), third: (11.0, 2)}
+    # kills - deaths * 3: 2/-3/-7 and 1/0/-5, so the first team now wins both.
+    assert cells == {
+        first: [(1, 2.0), (1, 1.0)],
+        second: [(2, -3.0), (2, 0.0)],
+        third: [(3, -7.0), (3, -5.0)],
+    }
+    assert after == {first: (3.0, 2), second: (-3.0, 0), third: (-12.0, 0)}
+    assert table == {first: (1, 3.0, 2), second: (2, -3.0, 0), third: (3, -12.0, 0)}
+
+
+def test_a_formula_edit_leaves_the_places_the_organizer_entered_alone(db_session) -> None:
+    """A score-only lobby MAY carry hand-entered places (plan §5.2). Those are a
+    decision, not a derivation: re-scoring the games must not move them."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1)
+        try:
+            # Places deliberately against the scoreboard: the lowest score is 1st.
+            await ffa_encounter_service.set_game_results(
+                db_session,
+                seeded.lobby_id,
+                1,
+                _lines(seeded.team_ids, [1, 3, 5], [1, 2, 3]),
+                actor_user_id=None,
+                reason=None,
+            )
+            await stage_service.update_stage(
+                db_session,
+                seeded.stage_id,
+                schemas.StageUpdate(ffa_scoring=_scoring(formula="score * 2")),
+            )
+            await standings_service.recalculate_for_tournament(db_session, seeded.tournament_id)
+            lobby = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            return (
+                {row.team_id: ([(cell.placement, cell.points) for cell in row.games], row.wins) for row in lobby.rows},
+                seeded.team_ids,
+            )
+        finally:
+            await _drop(db_session, seeded)
+
+    rows, team_ids = asyncio.run(_run())
+    first, second, third = team_ids
+    assert rows == {first: ([(1, 2.0)], 1), second: ([(2, 6.0)], 0), third: ([(3, 10.0)], 0)}

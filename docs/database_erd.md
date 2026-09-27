@@ -941,7 +941,7 @@ erDiagram
         bigint game_id FK
         bigint encounter_id FK
         bigint team_id FK
-        int placement
+        int placement "nullable"
         jsonb stats
     }
     TOURNAMENT_ENCOUNTER_LINK {

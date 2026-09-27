@@ -20,6 +20,7 @@ from shared.domain.ffa_scoring import (
     ffa_rules,
     game_points,
     normalize_game_lines,
+    rank_game,
     team_totals,
 )
 
@@ -80,6 +81,36 @@ def test_a_formula_that_ignores_placement_accepts_given_places_including_ties() 
     lines = normalize_game_lines([line(1, 1, kills=5, deaths=0), line(2, 1, kills=5, deaths=0)], [1, 2], BY_SCORE)
 
     assert [item.placement for item in lines] == [1, 1]
+
+
+def test_rank_game_ranks_a_stored_placeless_game_by_the_current_formula() -> None:
+    stored = [line(1, kills=5, deaths=0), line(2, kills=3, deaths=1), line(3, kills=1, deaths=0)]
+
+    # kills * 2 - deaths: 10, 5, 2.
+    assert [(item.team_id, item.placement) for item in rank_game(stored, BY_SCORE)] == [(1, 1), (2, 2), (3, 3)]
+
+    # The organizer swaps the formula for kills - deaths * 3: 5, 0, 1.
+    later = rules("kills - deaths * 3", KILLS, DEATHS)
+    assert [(item.team_id, item.placement) for item in rank_game(stored, later)] == [(1, 1), (3, 2), (2, 3)]
+
+
+def test_rank_game_keeps_the_places_that_were_entered() -> None:
+    entered = [line(2, 1, kills=1, deaths=0), line(1, 2, kills=9, deaths=0)]
+
+    # Team 1 scores far more and is still second: the organizer said so.
+    assert [(item.team_id, item.placement) for item in rank_game(entered, BY_SCORE)] == [(2, 1), (1, 2)]
+
+
+def test_rank_game_of_a_placeless_game_falls_back_to_the_place_independent_part() -> None:
+    # A formula that reads the place, over a game recorded before it did: a
+    # missing place pays 0, so ``place_pts`` is 0 for everyone and the kills
+    # decide -- an answer, not a crash, and the same one on every read.
+    placeless = [line(1, kills=2), line(2, kills=7), line(3, kills=4)]
+
+    ranked = rank_game(placeless, BATTLE_ROYALE)
+
+    assert [(item.team_id, item.placement) for item in ranked] == [(2, 1), (3, 2), (1, 3)]
+    assert rank_game(list(reversed(placeless)), BATTLE_ROYALE) == ranked
 
 
 @pytest.mark.parametrize(

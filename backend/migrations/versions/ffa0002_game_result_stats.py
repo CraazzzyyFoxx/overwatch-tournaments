@@ -7,6 +7,11 @@ stage's ``ffa_score_points``/``ffa_score_label`` pair becomes ``ffa_columns``
 Every existing stage keeps the arithmetic it had: one ``score`` column and the
 formula those two numbers spelled out.
 
+``encounter_game_result.placement`` becomes nullable with them: a place is now
+stored only when the organizer entered one, and a game without places is ranked
+on every read by the points the current formula pays. The downgrade refuses
+while any such row exists.
+
 ``encounter_result_audit.ffa_results_json`` is left alone -- it is history, and
 new rows are written in the new shape.
 
@@ -95,6 +100,17 @@ def upgrade() -> None:
         "ck_encounter_game_result_stats",
         "encounter_game_result",
         "jsonb_typeof(stats) = 'object'",
+        schema="tournament",
+    )
+    # A place is stored only when it was entered: a lobby whose formula pays
+    # nothing for placement leaves it NULL and every reader ranks the game by
+    # the points the CURRENT formula pays. Existing rows keep their value and
+    # read back as entered.
+    op.alter_column(
+        "encounter_game_result",
+        "placement",
+        existing_type=sa.Integer(),
+        nullable=True,
         schema="tournament",
     )
 
@@ -187,6 +203,15 @@ def downgrade() -> None:
     if stray:
         raise RuntimeError(f"{stray} FFA results hold stats other than 'score'; downgrade would drop them")
 
+    unplaced = bind.execute(
+        sa.text("SELECT count(*) FROM tournament.encounter_game_result WHERE placement IS NULL")
+    ).scalar()
+    if unplaced:
+        raise RuntimeError(
+            f"{unplaced} FFA results have no entered place; the old column is NOT NULL and the places it "
+            "would need are derived from the formula this downgrade removes"
+        )
+
     op.add_column(
         "stage",
         sa.Column("ffa_score_points", sa.Float(), nullable=False, server_default="1"),
@@ -218,4 +243,11 @@ def downgrade() -> None:
     op.drop_column("encounter_game_result", "stats", schema="tournament")
     op.create_check_constraint(
         "ck_encounter_game_result_score", "encounter_game_result", "score >= 0", schema="tournament"
+    )
+    op.alter_column(
+        "encounter_game_result",
+        "placement",
+        existing_type=sa.Integer(),
+        nullable=False,
+        schema="tournament",
     )

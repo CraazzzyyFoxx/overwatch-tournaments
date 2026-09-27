@@ -41,6 +41,7 @@ from shared.domain.ffa_scoring import (
     ffa_rules,
     game_points,
     normalize_game_lines,
+    rank_game,
     team_totals,
 )
 from shared.models.tournament.encounter_game_result import EncounterGameResult
@@ -187,6 +188,15 @@ class FfaEncounterService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=[ApiExc(code=exc.code, msg=str(exc))]
             ) from exc
+        # Only an ENTERED place is stored. ``normalize_game_lines`` ranks a
+        # placeless game so it can validate and order it, but persisting that
+        # rank would freeze it under today's formula: the readers derive it
+        # again from the current one (plan §5.2). The journal records what was
+        # entered, so a NULL here is a NULL there.
+        if any(item.placement is not None for item in lines):
+            stored = normalized
+        else:
+            stored = tuple(FfaGameLine(team_id=item.team_id, placement=None, stats=item.stats) for item in normalized)
 
         game = await self._live_game(session, lobby, position)
         correcting = game.state == EncounterGameState.CONFIRMED
@@ -196,7 +206,7 @@ class FfaEncounterService:
                 detail=[ApiExc(code="ffa_reason_required", msg="Correcting a confirmed game needs a reason")],
             )
         before = await self._snapshot(session, game)
-        await self.result_repo.replace_for_game(session, game, normalized)
+        await self.result_repo.replace_for_game(session, game, stored)
         now = datetime.now(UTC)
         game.state = EncounterGameState.CONFIRMED
         game.result_source = EncounterGameResultSource.ADMIN
@@ -210,7 +220,7 @@ class FfaEncounterService:
             actor_user_id=actor_user_id,
             game=game,
             before=before,
-            after=[{"team_id": i.team_id, "placement": i.placement, "stats": dict(i.stats)} for i in normalized],
+            after=[{"team_id": i.team_id, "placement": i.placement, "stats": dict(i.stats)} for i in stored],
             reason=reason,
         )
         await self.refresh_completion(session, lobby, actor_user_id=actor_user_id)
@@ -368,6 +378,7 @@ class FfaEncounterService:
             if row.team_id not in seats:
                 seats.append(row.team_id)
 
+        rules = ffa_rules(await self.stage_repo.get(session, stage_id))
         grouped: dict[int, list[list[FfaGameLine]]] = {}
         current: tuple[int, int] | None = None
         for row in await self.result_repo.list_confirmed_for_stage(session, stage_id):
@@ -379,10 +390,10 @@ class FfaEncounterService:
             bucket[-1].append(FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats))
         return FfaStageResults(
             participants=participants,
-            games_by_item={
-                item_id: [tuple(sorted(game, key=_line_order)) for game in bucket]
-                for item_id, bucket in grouped.items()
-            },
+            # ``rank_game``, not the stored order: a game with no entered places
+            # is ranked here by the CURRENT formula, so the ``Standing`` rows
+            # advancement reads never rank by a formula that was replaced.
+            games_by_item={item_id: [rank_game(game, rules) for game in bucket] for item_id, bucket in grouped.items()},
         )
 
     async def load_lobby(self, session: AsyncSession, encounter_id: int) -> FfaLobbyRead:
@@ -504,6 +515,13 @@ class FfaEncounterService:
         lines: dict[int, dict[int, FfaGameLine]] = {game_id: {} for game_id in game_ids}
         for row in await self.result_repo.list_for_games(session, game_ids):
             lines[row.game_id][row.team_id] = FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats)
+        # One ranking for the whole read: the cell's place, the row's wins and
+        # the standings all come from these lines, so a game with no entered
+        # places is ranked once, here, by the current formula.
+        lines = {
+            game_id: {line.team_id: line for line in rank_game(list(by_team.values()), rules)}
+            for game_id, by_team in lines.items()
+        }
 
         team_ids = [seat.team_id for lobby_seats in seats.values() for seat in lobby_seats]
         teams = {
@@ -681,8 +699,10 @@ class FfaEncounterService:
             for row in sorted(rows, key=_line_order)
         ]
 
-    async def _confirmed_games(self, session: AsyncSession, lobby: models.Encounter) -> list[tuple[FfaGameLine, ...]]:
-        """The lobby's confirmed games, oldest position first."""
+    async def _confirmed_games(
+        self, session: AsyncSession, lobby: models.Encounter, rules: FfaRules
+    ) -> list[tuple[FfaGameLine, ...]]:
+        """The lobby's confirmed games, oldest position first, every place ranked."""
         games = [
             game
             for game in await self.game_repo.list_for_encounter(session, lobby.id)
@@ -691,15 +711,16 @@ class FfaEncounterService:
         by_game: dict[int, list[FfaGameLine]] = {game.id: [] for game in games}
         for row in await self.result_repo.list_for_games(session, list(by_game)):
             by_game[row.game_id].append(FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats))
-        return [tuple(sorted(by_game[game.id], key=_line_order)) for game in games]
+        return [rank_game(by_game[game.id], rules) for game in games]
 
     async def _totals_snapshot(self, session: AsyncSession, lobby: models.Encounter) -> list[dict]:
         """What the lobby decided, for the journal: points and games per team."""
         participants = await self.participant_repo.list_for_encounter(session, lobby.id)
+        rules = await self._rules(session, lobby)
         totals = team_totals(
             [p.team_id for p in participants],
-            await self._confirmed_games(session, lobby),
-            await self._rules(session, lobby),
+            await self._confirmed_games(session, lobby, rules),
+            rules,
         )
         return [{"team_id": row.team_id, "points": row.points, "games": row.games} for row in totals.values()]
 
