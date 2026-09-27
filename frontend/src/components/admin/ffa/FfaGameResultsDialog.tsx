@@ -12,7 +12,12 @@ import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import ffaService from "@/services/ffa.service";
-import type { FfaGameResultsInput, FfaLobby } from "@/types/ffa.types";
+import type {
+  FfaColumn,
+  FfaGameResultLineInput,
+  FfaGameResultsInput,
+  FfaLobby
+} from "@/types/ffa.types";
 
 /**
  * Turn any thrown value into the sentence for the rejection it carries.
@@ -47,6 +52,9 @@ export interface FfaGameResultsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** One row of the form. A `null` is "not entered yet", never a zero. */
+type TeamDraft = { placement: number | null; stats: Record<string, number | null> };
+
 /**
  * One game of one lobby, entered as a line per participant.
  *
@@ -55,9 +63,12 @@ export interface FfaGameResultsDialogProps {
  * lobby, and an untouched row still leaves as a line scoring zero rather than
  * as no line at all.
  *
- * Whether a place is required is the stage's formula, not a preference: with
- * `placement_points` the server demands a permutation of 1..N, and without it
- * the places are derived from the scores, which is why they are optional there.
+ * Whether a place is required is the stage's formula, not a preference: a
+ * formula that reads `place`/`place_pts` makes the server demand a permutation
+ * of 1..N (`rules.requires_placement`), and a formula that does not lets the
+ * server derive the places from the points, which is why they are optional
+ * there. The columns are the organizer's too — every one of them, including the
+ * ones a spectator never sees, because this form is where they are entered.
  *
  * Mount with a `key` per game: the fields are seeded once from what the lobby
  * already records for that position, so a correction starts from the numbers
@@ -81,20 +92,30 @@ export function FfaGameResultsDialog({
   // A game somebody has already played: entering it again is a CORRECTION, and
   // the server refuses one of those without a reason.
   const isCorrection = [...cells.values()].some((cell) => cell?.state != null);
-  const paysForPlacement = lobby.rules.placement_points.length > 0;
-  const scoreLabel = lobby.rules.score_label?.trim() || "Score";
+  const requiresPlacement = lobby.rules.requires_placement;
+  // EVERY column, not the public ones: the dialog is mounted from a screen that
+  // reads `getStageAdmin`, and a hidden column is a column the organizer still
+  // has to type a number into.
+  const columns = lobby.rules.columns;
 
-  const [draft, setDraft] = useState<Record<number, { placement: number | null; score: number | null }>>(
-    () =>
-      Object.fromEntries(
-        rows.map((row) => [
+  const [draft, setDraft] = useState<Record<number, TeamDraft>>(() =>
+    Object.fromEntries(
+      rows.map((row) => {
+        const recorded = cells.get(row.team_id);
+        return [
           row.team_id,
           {
-            placement: cells.get(row.team_id)?.placement ?? null,
-            score: cells.get(row.team_id)?.score ?? null
+            placement: recorded?.placement ?? null,
+            // A correction starts from the numbers being corrected. A column
+            // added after this game was played has no value here, and a blank
+            // is the honest answer: nobody entered one.
+            stats: Object.fromEntries(
+              columns.map((column) => [column.key, recorded?.stats?.[column.key] ?? null])
+            )
           }
-        ])
-      )
+        ];
+      })
+    )
   );
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -119,13 +140,27 @@ export function FfaGameResultsDialog({
     onError: (failure: unknown) => setError(describeError(failure))
   });
 
-  const setField = (teamId: number, field: "placement" | "score", value: number | null) =>
-    setDraft((current) => ({ ...current, [teamId]: { ...current[teamId], [field]: value } }));
+  const setPlacement = (teamId: number, value: number | null) =>
+    setDraft((current) => ({ ...current, [teamId]: { ...current[teamId], placement: value } }));
 
-  const lines = rows.map((row) => ({ team_id: row.team_id, ...draft[row.team_id] }));
-  const scored = lines.filter(
-    (line): line is typeof line & { score: number } => line.score !== null
+  const setStat = (teamId: number, key: string, value: number | null) =>
+    setDraft((current) => ({
+      ...current,
+      [teamId]: { ...current[teamId], stats: { ...current[teamId].stats, [key]: value } }
+    }));
+
+  /** The first column left blank anywhere, which is what holds the submit. */
+  const blankColumn = columns.find((column) =>
+    rows.some((row) => draft[row.team_id].stats[column.key] === null)
   );
+
+  const results: FfaGameResultLineInput[] = rows.map((row) => ({
+    team_id: row.team_id,
+    placement: draft[row.team_id].placement,
+    stats: Object.fromEntries(
+      columns.map((column) => [column.key, draft[row.team_id].stats[column.key] ?? 0])
+    )
+  }));
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -137,20 +172,24 @@ export function FfaGameResultsDialog({
       setError(t("ffa.errors.ffa_reason_required"));
       return;
     }
-    if (scored.length < lines.length) {
+    if (blankColumn) {
       // A blank is NOT a zero. Sending it as one would record "played, scored
       // nothing" for a team the organizer simply had not got to yet — and the
-      // server's own `ffa_result_missing_team` guard can never catch that,
-      // because the line was there.
+      // server's own `ffa_result_missing_stat` guard can never catch that,
+      // because the key was there. A blank PLACE needs no guard here: it leaves
+      // as `null` and the server answers `ffa_result_placement_required` when
+      // the formula wants one, which is the one judgement it can make itself.
       setBlanksFlagged(true);
-      // The label is whatever the organizer named the column ("Kills", "Points"),
+      // The label is whatever the organizer named the column ("Kills", "Deaths"),
       // so it is quoted as written rather than bent into a sentence around it.
-      setError(`Enter ${scoreLabel} for every team — type 0 for a team that scored nothing.`);
+      setError(
+        `Enter ${blankColumn.label} for every team — type 0 for a team that scored nothing.`
+      );
       return;
     }
     setBlanksFlagged(false);
     setError(null);
-    mutation.mutate({ results: scored, reason: trimmed || null });
+    mutation.mutate({ results, reason: trimmed || null });
   };
 
   return (
@@ -164,28 +203,46 @@ export function FfaGameResultsDialog({
       isSubmitting={mutation.isPending}
       errorMessage={error ?? undefined}
     >
-      <div className="grid grid-cols-[1fr_5rem_6rem] items-center gap-2">
+      <div
+        className="grid items-center gap-2 overflow-x-auto"
+        // One column per stat, sized in the grid rather than in a class: the
+        // stage decides how many there are, and a Tailwind class cannot be
+        // built from a number at runtime.
+        style={{ gridTemplateColumns: `minmax(7rem, 1fr) 5rem repeat(${columns.length}, 7rem)` }}
+      >
         <span className={EYEBROW_CLASS}>Team</span>
-        <span className={EYEBROW_CLASS}>{paysForPlacement ? "Place" : "Place (optional)"}</span>
-        <span className={EYEBROW_CLASS}>{scoreLabel}</span>
+        <span className={EYEBROW_CLASS}>{requiresPlacement ? "Place" : "Place (optional)"}</span>
+        {columns.map((column) => (
+          <span key={column.key} className={EYEBROW_CLASS}>
+            {column.label}
+            {!column.public && (
+              // The organizer has to know which of these numbers a spectator
+              // will never see — this form is the only place the column shows
+              // up at all, so nothing else can tell them.
+              <span className="block normal-case tracking-normal text-[10px] text-muted-foreground">
+                hidden from viewers
+              </span>
+            )}
+          </span>
+        ))}
         {rows.map((row) => (
           <FieldRow
             key={row.team_id}
             name={row.team_name}
+            columns={columns}
             placement={draft[row.team_id].placement}
-            score={draft[row.team_id].score}
-            scoreLabel={scoreLabel}
-            scoreMissing={blanksFlagged && draft[row.team_id].score === null}
-            onPlacement={(value) => setField(row.team_id, "placement", value)}
-            onScore={(value) => setField(row.team_id, "score", value)}
+            stats={draft[row.team_id].stats}
+            flagBlanks={blanksFlagged}
+            onPlacement={(value) => setPlacement(row.team_id, value)}
+            onStat={(key, value) => setStat(row.team_id, key, value)}
           />
         ))}
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {paysForPlacement
-          ? `Places run 1 to ${rows.length}, each taken exactly once — this stage pays for them.`
-          : "Leave the places empty to derive them from the scores; teams on the same score share a place."}
+        {requiresPlacement
+          ? `Places run 1 to ${rows.length}, each taken exactly once — this stage's formula pays for them.`
+          : "Leave the places empty to derive them from the points; teams on the same points share a place."}
       </p>
 
       {isCorrection ? (
@@ -211,20 +268,20 @@ export function FfaGameResultsDialog({
 
 function FieldRow({
   name,
+  columns,
   placement,
-  score,
-  scoreLabel,
-  scoreMissing,
+  stats,
+  flagBlanks,
   onPlacement,
-  onScore
+  onStat
 }: Readonly<{
   name: string;
+  columns: FfaColumn[];
   placement: number | null;
-  score: number | null;
-  scoreLabel: string;
-  scoreMissing: boolean;
+  stats: Record<string, number | null>;
+  flagBlanks: boolean;
   onPlacement: (value: number | null) => void;
-  onScore: (value: number | null) => void;
+  onStat: (key: string, value: number | null) => void;
 }>) {
   return (
     <>
@@ -236,15 +293,20 @@ function FieldRow({
         value={placement}
         onValueChange={onPlacement}
       />
-      <NumberInput
-        integer
-        min={0}
-        aria-label={`${scoreLabel} for ${name}`}
-        aria-invalid={scoreMissing || undefined}
-        className="aria-invalid:border-destructive"
-        value={score}
-        onValueChange={onScore}
-      />
+      {columns.map((column) => (
+        <NumberInput
+          key={column.key}
+          // NOT `integer`: a column can be a damage share or a half-point
+          // penalty, and the server takes any finite 0..1e9 (spec §3.2).
+          min={0}
+          max={1_000_000_000}
+          aria-label={`${column.label} for ${name}`}
+          aria-invalid={(flagBlanks && stats[column.key] === null) || undefined}
+          className="aria-invalid:border-destructive"
+          value={stats[column.key]}
+          onValueChange={(value) => onStat(column.key, value)}
+        />
+      ))}
     </>
   );
 }
