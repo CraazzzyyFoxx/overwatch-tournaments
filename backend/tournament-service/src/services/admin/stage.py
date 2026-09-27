@@ -126,9 +126,9 @@ def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
                 stage.round_best_of.append(models.StageRoundBestOf(round=round_number, best_of=value))
     if "ffa_scoring" in fields:
         ffa_scoring = fields.pop("ffa_scoring")
+        stage.ffa_columns = [dict(column) for column in ffa_scoring["columns"]]
         stage.ffa_placement_points = list(ffa_scoring["placement_points"])
-        stage.ffa_score_points = ffa_scoring["score_points"]
-        stage.ffa_score_label = ffa_scoring["score_label"]
+        stage.ffa_formula = ffa_scoring["formula"]
     for field, value in fields.items():
         setattr(stage, field, value)
 

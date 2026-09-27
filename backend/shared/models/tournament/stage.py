@@ -12,8 +12,9 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -28,6 +29,14 @@ if typing.TYPE_CHECKING:
 # reach the driver raw.
 _TEXT_ARRAY = ARRAY(String()).with_variant(JSON(), "sqlite")
 _FLOAT_ARRAY = ARRAY(Float()).with_variant(JSON(), "sqlite")
+
+#: What an ffa_league stage pays for until the organizer says otherwise: one
+#: column called "score", and points = that column. Mirrors migration ffa0002.
+DEFAULT_FFA_COLUMNS: tuple[dict[str, typing.Any], ...] = (
+    {"key": "score", "label": "Счёт", "public": True, "better": "higher"},
+)
+DEFAULT_FFA_FORMULA = "score"
+_DEFAULT_FFA_COLUMNS_SQL = """'[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]'::jsonb"""
 
 __all__ = (
     "Stage",
@@ -71,7 +80,6 @@ class Stage(db.TimeStampIntegerMixin):
         CheckConstraint("seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')", name="ck_stage_seed_ranking"),
         CheckConstraint("best_of_default >= 1", name="ck_stage_best_of_default"),
         CheckConstraint("best_of_final IS NULL OR best_of_final >= 1", name="ck_stage_best_of_final"),
-        CheckConstraint("ffa_score_points >= 0", name="ck_stage_ffa_score_points"),
         {"schema": "tournament"},
     )
 
@@ -122,12 +130,20 @@ class Stage(db.TimeStampIntegerMixin):
     best_of_default: Mapped[int] = mapped_column(Integer(), default=3, server_default="3")
     #: An elimination stage's last round; NULL = resolved like any other round.
     best_of_final: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    #: FFA league only: points for 1st, 2nd, ... place; empty = score-only.
+    #: FFA league only: points for 1st, 2nd, ... place; empty = the formula
+    #: pays nothing for placement.
     ffa_placement_points: Mapped[list[float]] = mapped_column(_FLOAT_ARRAY, default=list, server_default="{}")
-    #: FFA league only: points per unit of raw score.
-    ffa_score_points: Mapped[float] = mapped_column(Float(), default=1.0, server_default="1")
-    #: FFA league only: the organizer's word for the score column ("Kills").
-    ffa_score_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: FFA league only: what the organizer enters per game -- ``{"key", "label",
+    #: "public", "better"}`` per column, validated by ``FfaScoring`` (plan §3.1).
+    ffa_columns: Mapped[list[dict[str, typing.Any]]] = mapped_column(
+        JSONB,
+        default=lambda: [dict(column) for column in DEFAULT_FFA_COLUMNS],
+        server_default=text(_DEFAULT_FFA_COLUMNS_SQL),
+    )
+    #: FFA league only: the expression a game's points are computed with.
+    ffa_formula: Mapped[str] = mapped_column(
+        String(500), default=DEFAULT_FFA_FORMULA, server_default=DEFAULT_FFA_FORMULA
+    )
     #: The Challonge group this stage mirrors (Challonge sync's only link to it).
     challonge_group_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
@@ -160,10 +176,19 @@ class Stage(db.TimeStampIntegerMixin):
 
     @property
     def ffa_scoring(self) -> dict[str, typing.Any]:
+        """The ``ffa_scoring`` block of the API, rebuilt from the columns.
+
+        An empty column list is a placement-only league and is shown as such;
+        only a stage not yet flushed (column still ``None``, the server default
+        not applied) reads the default block.
+        """
         return {
+            "columns": [
+                dict(column)
+                for column in (self.ffa_columns if self.ffa_columns is not None else DEFAULT_FFA_COLUMNS)
+            ],
             "placement_points": list(self.ffa_placement_points or ()),
-            "score_points": self.ffa_score_points,
-            "score_label": self.ffa_score_label,
+            "formula": self.ffa_formula or DEFAULT_FFA_FORMULA,
         }
 
 
