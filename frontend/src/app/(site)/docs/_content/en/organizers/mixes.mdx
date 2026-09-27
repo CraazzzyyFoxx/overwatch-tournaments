@@ -13,7 +13,7 @@ A mix always belongs to one workspace: players come from its members, and the **
 1. **Name** — required, for example "Evening mix".
 2. **Starting lineup** — **No players** or **From a previous mix**.
 
-Copying a previous mix brings over the lineup, each player's role setup, the team names and the co-hosts. Match history is not copied and every player starts in the pool: last session's pins and benchings are not inherited.
+Copying a previous mix brings over the lineup, each player's role setup, the team names, the co-hosts, the number of lobbies and the lobby pins. Match history is not copied and every player starts in the pool: last session's **Must play** pins and benchings are not inherited.
 
 The mix itself carries no settings. The roster shape, how a lobby is split and what a win is worth belong to your account and are the same for every mix you host. They live in **Account settings → Mixes**.
 
@@ -33,7 +33,7 @@ Each player has an order of roles, the first being the one they most want, plus 
 
 ## Splitting into teams
 
-**Balance teams** splits the lineup into **two** teams. The team size comes from the roster shape in your account settings, so the number of seats is two rosters. If more people turned up, the extras are moved to **Benched** automatically, and whoever has been sitting out longest is protected first.
+**Balance teams** splits the lineup into **two** teams. The team size comes from the roster shape in your account settings, so the number of seats is two rosters. If more people turned up, the extras are moved to **Benched** automatically, and whoever has been sitting out longest is protected first. With two lobbies nobody is benched: whoever does not fit waits for a seat in the other lobby or in the next balance.
 
 One run can return several options — how many is up to your settings. The arrows by the heading page through them, and everyone watching sees the option you have open. Each option shows the rank gap between the teams and how many players sit off their first-choice role. Two players can be swapped by hand by dragging one onto the other's seat; only seats of the same role swap. Team names are edited with the pencil next to the name.
 
@@ -63,6 +63,8 @@ When there are more players than seats, the mix suggests who should sit. The rul
 
 Players in **Must play** are outside the queue; their seat is promised. While the mix has no maps played yet, or the whole lineup fits into two teams, there are no suggestions at all — nothing fair can be invented out of an empty history.
 
+With two lobbies the queue is computed for the lobby whose tab is open: anyone already seated in the other lobby or pinned to it is outside it, and a map somebody spent in the other lobby counts for them as neither a game played nor a game sat out.
+
 **Apply rotation hints** above the lineup moves everyone into the columns the queue suggests in one press. The decision still stays yours.
 
 ## Co-hosts and handing a mix over
@@ -88,7 +90,7 @@ The **Next map** block rolls a map: **Any** rolls from all competitive maps, or 
 
 The result is recorded with three buttons under the rosters: the first team's win, **Draw**, and the second team's win. You can record as many matches in a row as you like; the mix does not close. After a result the map is cleared for a fresh roll, and the **Must play** pins of everyone who played are released: the promise covered one game, not the whole evening.
 
-The most recent match can be undone — it leaves the history and the ranks go back exactly where they were. Only the newest one: older mistakes are fixed by recording the correct result again.
+A recorded match can be undone — it leaves the history and the ranks go back exactly where they were. Only the newest match can be undone, and with two lobbies that is the newest match of each lobby; older mistakes are fixed by recording the correct result again.
 
 ## Mix statuses
 
@@ -119,7 +121,7 @@ Deleting a mix erases it completely and is available only to a workspace admin. 
 | The split will not run | Someone in the lineup has no ranked role at all. Set a rank on their card or move them to **Benched**. |
 | A role is short | The strip above the columns names the short role. Give someone that role or invite more players. |
 | Too many players end up off-role | Move the **Balancing (rank balance vs role comfort)** slider right in your account settings and balance again. |
-| The wrong result was recorded | Undo the last match and record the right one. Earlier matches cannot be undone. |
+| The wrong result was recorded | Undo the last match (with two lobbies, the last one of its lobby) and record the right one. Earlier matches cannot be undone. |
 | Someone always sits out | Press **Apply rotation hints** — the queue is built from who has waited longest. |
 
 ## See also
