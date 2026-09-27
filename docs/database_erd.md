@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`stjson01`** (84 revisions in `backend/migrations/versions/`).
+Alembic head: **`ffa0002`** (85 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -941,8 +941,8 @@ erDiagram
         bigint game_id FK
         bigint encounter_id FK
         bigint team_id FK
-        int placement
-        int score
+        int placement "nullable"
+        jsonb stats
     }
     TOURNAMENT_ENCOUNTER_LINK {
         bigint id PK
@@ -1185,8 +1185,8 @@ erDiagram
         int best_of_default
         int best_of_final "nullable"
         float[] ffa_placement_points
-        float ffa_score_points
-        varchar(32) ffa_score_label "nullable"
+        jsonb ffa_columns
+        varchar(500) ffa_formula
         bigint challonge_group_id "nullable"
     }
     TOURNAMENT_STAGE_ITEM {

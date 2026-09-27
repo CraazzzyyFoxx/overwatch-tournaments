@@ -12,6 +12,7 @@
  */
 import type { StageUpdateInput } from "@/types/admin.types";
 import type { SeedRanking, Stage, StageBestOfConfig, StageType } from "@/types/tournament.types";
+import type { FfaColumn } from "@/types/ffa.types";
 
 import {
   BRACKET_STAGE_TYPES,
@@ -38,11 +39,12 @@ export interface StageForm {
   scoringLoss: string;
   swissByePoints: string;
   bestOf: StageBestOfConfig;
-  /** FFA leagues: what place `i + 1` pays, `[]` for a score-only lobby. */
+  /** FFA leagues: what place `i + 1` pays, `[]` for a lobby places do not pay. */
   ffaPlacementPoints: number[];
-  ffaScorePoints: number;
-  /** The organizer's word for the score column; empty keeps the default. */
-  ffaScoreLabel: string;
+  /** What a game records per team, in table order. */
+  ffaColumns: FfaColumn[];
+  /** The expression a game's points are computed with. */
+  ffaFormula: string;
 }
 
 const numberOrEmpty = (value: number | null) => (value != null ? String(value) : "");
@@ -59,15 +61,16 @@ export function stageFormFromStage(stage: Stage): StageForm {
     splitLowerBracket: stage.split_lower_bracket ?? false,
     seedRanking: stage.seed_ranking,
     rankingPreset: stage.ranking_preset || "default",
-    tiebreakOrder: stage.tiebreak_order ?? defaultTiebreakOrder(stage.stage_type),
+    tiebreakOrder:
+      stage.tiebreak_order ?? defaultTiebreakOrder(stage.stage_type, stage.ffa_scoring.columns),
     scoringWin: numberOrEmpty(stage.scoring.win),
     scoringDraw: numberOrEmpty(stage.scoring.draw),
     scoringLoss: numberOrEmpty(stage.scoring.loss),
     swissByePoints: numberOrEmpty(stage.swiss_bye_points),
     bestOf: stage.best_of,
     ffaPlacementPoints: stage.ffa_scoring.placement_points,
-    ffaScorePoints: stage.ffa_scoring.score_points,
-    ffaScoreLabel: stage.ffa_scoring.score_label ?? ""
+    ffaColumns: stage.ffa_scoring.columns,
+    ffaFormula: stage.ffa_scoring.formula
   };
 }
 
@@ -107,13 +110,15 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     // the format this stage used to be would silently beat "Games per lobby",
     // with nothing in the editor that can reach it, so only `default` is kept.
     best_of: isFfa ? { default: form.bestOf.default, by_round: {}, final: null } : form.bestOf,
-    // Only an FFA league is scored by place and raw score; any other type leaves
-    // the stored table alone rather than saving a rule its format cannot use.
+    // Only an FFA league is scored by columns and a formula; any other type
+    // leaves the stored rule alone rather than saving one its format cannot use.
+    // The formula is trimmed, not otherwise touched: it is the organizer's text,
+    // and the parser that refuses it also reports the position inside it.
     ...(isFfa && {
       ffa_scoring: {
+        columns: form.ffaColumns,
         placement_points: form.ffaPlacementPoints,
-        score_points: form.ffaScorePoints,
-        score_label: form.ffaScoreLabel.trim() || null
+        formula: form.ffaFormula.trim()
       }
     })
   };
@@ -140,8 +145,8 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   swissByePoints: "Swiss bye points",
   bestOf: "Best-of",
   ffaPlacementPoints: "Points per place",
-  ffaScorePoints: "Points per score unit",
-  ffaScoreLabel: "Score label"
+  ffaColumns: "Game columns",
+  ffaFormula: "Points formula"
 };
 
 export function stageFormChanges(stage: Stage, form: StageForm): string[] {

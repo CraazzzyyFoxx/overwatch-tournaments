@@ -36,7 +36,7 @@ from src.rpc._helpers import _dump, _identity, _path_int, _payload, _read, _requ
 from src.schemas.ffa import FfaGameCancelInput, FfaGameResultsInput, FfaGamesCountInput
 from src.services import visibility_resolvers
 from src.services.admin.stage import stage_service as admin_stage_service
-from src.services.encounter.ffa import ffa_encounter_service
+from src.services.encounter.ffa import ffa_encounter_service, public_view
 
 _user_repo = UserRepository()
 
@@ -81,9 +81,10 @@ def register(broker: Any, logger: Any) -> None:
             # Public route — no identity required, but hidden tournaments 404.
             tournament_id = _require_id(data)
             await assert_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
-            return await ffa_encounter_service.load_stage_lobbies(
+            lobbies = await ffa_encounter_service.load_stage_lobbies(
                 session, _path_int(data, "stage_id"), tournament_id=tournament_id
             )
+            return [public_view(lobby) for lobby in lobbies]
 
         return await _read(logger, op)
 
@@ -95,7 +96,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, encounter_id
             )
             await assert_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
-            return await ffa_encounter_service.load_lobby(session, encounter_id)
+            return public_view(await ffa_encounter_service.load_lobby(session, encounter_id))
 
         return await _read(logger, op)
 
@@ -124,7 +125,7 @@ def register(broker: Any, logger: Any) -> None:
                 encounter_id,
                 position,
                 [
-                    FfaGameLine(team_id=line.team_id, placement=line.placement, score=line.score)
+                    FfaGameLine(team_id=line.team_id, placement=line.placement, stats=line.stats)
                     for line in body.results
                 ],
                 actor_user_id=await _actor_player_id(session, user),
@@ -189,3 +190,29 @@ def register(broker: Any, logger: Any) -> None:
             return _dump(await ffa_encounter_service.load_lobby(session, encounter_id))
 
         return await _run(logger, op)
+
+    # ── admin read ────────────────────────────────────────────────────────
+    # The same lobby table the public path answers, minus ``public_view``: the
+    # organizer enters the hidden columns, so the dialog and the admin group
+    # page have to see them. Gated on the TOURNAMENT's workspace with
+    # "match"/"update" because this read IS the data-entry screen -- it is
+    # fetched by the page that records results, so it carries the permission
+    # that page already needs.
+    #
+    # Not a confidentiality boundary for the values themselves: per-game values,
+    # hidden columns included, also reach "match"/"read" staff through the
+    # result audit trail (``rpc.tournament.encounter_result_audit``), by design
+    # -- a hidden column is hidden from SPECTATORS, not from the workspace.
+
+    @broker.subscriber("rpc.tournament.ffa_stage_admin")
+    async def _ffa_stage_admin(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            return await ffa_encounter_service.load_stage_lobbies(
+                session, _path_int(data, "stage_id"), tournament_id=tournament_id
+            )
+
+        return await _read(logger, op)

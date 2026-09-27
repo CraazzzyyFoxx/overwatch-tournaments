@@ -12,14 +12,37 @@ import type { EncounterGameState, EncounterResultStatus } from "@/types/tourname
  * standings job has not ranked once.
  */
 
+/** Whether a bigger value of a column is the better one. */
+export type FfaColumnBetter = "higher" | "lower";
+
+/**
+ * One value the organizer records per team per game: kills, deaths, damage, a
+ * penalty. The key is what the stage's formula reads; the label is the only
+ * thing ever printed, so the table never invents a word for a column.
+ */
+export interface FfaColumn {
+  key: string;
+  label: string;
+  /** `false` — the column exists only for the organizer. A public read drops
+   *  the column AND its values, so a `false` here can only arrive through the
+   *  admin read. */
+  public: boolean;
+  better: FfaColumnBetter;
+}
+
 /** The stage's `ffa_scoring`, resolved for this lobby. */
 export interface FfaRules {
+  columns: FfaColumn[];
   /** Points for placing 1st, 2nd, … A shorter list scores the tail at zero. */
   placement_points: number[];
-  /** Multiplier applied to a team's raw score in a game. */
-  score_points: number;
-  /** What the score column counts ("Kills", "Points", …); `null` hides it. */
-  score_label: string | null;
+  /** The organizer's expression over the column keys, `place`, `place_pts` and
+   *  `teams`. Shown as the rule the table is scored by; never evaluated here —
+   *  the points on the wire are the server's (spec §11). */
+  formula: string;
+  /** The formula reads the place, so a game cannot be recorded without a full
+   *  permutation of 1..N. Derived server-side from the formula, never a flag
+   *  the organizer can desync from it. */
+  requires_placement: boolean;
 }
 
 export interface FfaGameCell {
@@ -27,8 +50,11 @@ export interface FfaGameCell {
   /** `null` — the game has not been opened yet. */
   state: EncounterGameState | null;
   placement: number | null;
-  score: number | null;
   points: number | null;
+  /** What was entered for this game, by column key. `null` — nobody has played
+   *  it; `{}` is a played game whose stage has no columns. A key missing from a
+   *  played game scores zero (spec §3.2). */
+  stats: Record<string, number> | null;
 }
 
 export interface FfaLobbyRow {
@@ -45,7 +71,9 @@ export interface FfaLobbyRow {
   points: number;
   games_played: number;
   wins: number;
-  score: number;
+  /** Each column summed over the games played. A key the team never scored is
+   *  absent, not zero. */
+  stats: Record<string, number>;
   games: FfaGameCell[];
 }
 
@@ -65,11 +93,14 @@ export interface FfaLobby {
   rows: FfaLobbyRow[];
 }
 
-/** One team's line of a game result. `placement` is null on a score-only lobby. */
+/** One team's line of a game result. `placement` is null when the stage's
+ *  formula does not read the place, and the server derives it from the points. */
 export interface FfaGameResultLineInput {
   team_id: number;
   placement?: number | null;
-  score: number;
+  /** Exactly the stage's column keys — the server rejects a missing one
+   *  (`ffa_result_missing_stat`) and an extra one (`ffa_result_unknown_stat`). */
+  stats: Record<string, number>;
 }
 
 export interface FfaGameResultsInput {

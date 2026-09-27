@@ -1,14 +1,18 @@
 // @vitest-environment happy-dom
 //
-// One claim: an FFA league's points table is editable, and it is saved for an
-// FFA stage ONLY.
+// One claim: an FFA league's own scoring rule is editable, and it is saved for
+// an FFA stage ONLY.
 //
-// The stage's `ffa_scoring` is what the points adder reads
-// (`shared.domain.ffa_scoring.parse_ffa_rules`): points per place, plus points
-// per unit of raw score. A preset is a starting point, not the rule — the
-// organizer's real table ("2nd place is worth 7 here") has to survive the save,
-// which is pinned below through the REAL update mutation rather than through a
-// number changing in a field.
+// The rule is three things the organizer writes: the columns entered per game
+// (`kills`, `deaths`), the points a place pays, and the formula that turns both
+// into a game's points. A preset is a starting point, not the rule — the
+// organizer's real rule ("silver is worth 7 here, and deaths cost us") has to
+// survive the save, which is pinned below through the REAL update mutation
+// rather than through a number changing in a field.
+//
+// The formula is the one field of this editor the server can reject by
+// POSITION, so the rejection is pinned too: it has to land on the formula
+// field, naming what it stumbled over, not vanish into a toast.
 //
 // The rest of the editor has to agree that a lobby is not a duel: no
 // win/draw/loss points (there is no opponent to beat), no Buchholz (there is no
@@ -20,6 +24,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "@/lib/api/error";
 import en from "@/i18n/messages/en.json";
 import type { StageUpdateInput } from "@/types/admin.types";
 import type { Stage, StageRegulation, StageType } from "@/types/tournament.types";
@@ -129,7 +134,11 @@ function stage(stageType: StageType, regulation: Partial<StageRegulation> = {}):
     de_grand_final_type: "no_reset",
     seed_ranking: "slot",
     best_of: { default: 3, by_round: {}, final: null },
-    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
+    ffa_scoring: {
+      columns: [{ key: "score", label: "Score", public: true, better: "higher" }],
+      placement_points: [],
+      formula: "score"
+    },
     ...regulation,
     challonge_id: null,
     challonge_slug: null,
@@ -137,8 +146,35 @@ function stage(stageType: StageType, regulation: Partial<StageRegulation> = {}):
   };
 }
 
-/** A table left behind by a stage that used to be an FFA league. */
-const SAVED_SCORING = { placement_points: [10, 6], score_points: 2, score_label: "Kills" };
+/** A rule left behind by a stage that used to be an FFA league. */
+const SAVED_SCORING = {
+  columns: [{ key: "kills", label: "Kills", public: true, better: "higher" as const }],
+  placement_points: [10, 6],
+  formula: "place_pts + kills"
+};
+
+/** What the server answers when the formula names a column that is not there.
+ *  `place_pts + ` is twelve characters, so `kils` starts at offset 12 — where
+ *  the parser (`shared/domain/ffa_formula.py`) reports it, 0-based. */
+function unknownNameRejection(): ApiError {
+  return new ApiError(
+    422,
+    [{ msg: "Unknown name `kils`", code: "ffa_formula_unknown_name", field: "ffa_scoring.formula" }],
+    {
+      detail: "ffa_scoring.formula: Unknown name `kils`",
+      code: "unprocessable_entity",
+      fields: [
+        {
+          field: "ffa_scoring.formula",
+          msg: "Unknown name `kils`",
+          code: "ffa_formula_unknown_name",
+          offset: 12,
+          name: "kils"
+        }
+      ]
+    }
+  );
+}
 
 let container: HTMLDivElement;
 let root: Root;
@@ -186,13 +222,39 @@ async function click(element: Element) {
   await settle(4);
 }
 
-async function type(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+async function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype =
+    input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
   await act(async () => {
     setter?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await settle(2);
+}
+
+/** The `<textarea>` a `<label>` points at. */
+function area(label: string): HTMLTextAreaElement {
+  const found = [...container.querySelectorAll("label")].find(
+    (element) => (element.textContent ?? "").trim() === label
+  );
+  const input = found?.htmlFor ? document.getElementById(found.htmlFor) : null;
+  if (!(input instanceof HTMLTextAreaElement)) throw new Error(`no textarea labelled "${label}"`);
+  return input;
+}
+
+/** The message a field points at through `aria-errormessage`. */
+function errorFor(element: Element): string {
+  const id = element.getAttribute("aria-errormessage");
+  const node = id ? document.getElementById(id) : null;
+  return (node?.textContent ?? "").trim();
+}
+
+/** The checkbox with this exact `aria-label`. */
+function box(label: string): HTMLElement {
+  const found = container.querySelector<HTMLElement>(`[role="checkbox"][aria-label="${label}"]`);
+  if (!found) throw new Error(`no checkbox labelled "${label}"`);
+  return found;
 }
 
 /** Every `<label>` the open section renders, in order. */
@@ -237,10 +299,12 @@ async function choose(option: string) {
   await click(items[0]);
 }
 
-/** The one button with this exact label, portalled popovers included. */
+/** The one button with this exact label, portalled popovers included. An icon
+ *  button says its name in `aria-label` instead of in text. */
 function only(name: string): HTMLElement {
   const matches = [...document.querySelectorAll<HTMLElement>("button")].filter(
-    (element) => (element.textContent ?? "").trim() === name
+    (element) =>
+      (element.textContent ?? "").trim() === name || element.getAttribute("aria-label") === name
   );
   if (matches.length === 0) throw new Error(`no control named "${name}"`);
   return matches[0];
@@ -277,25 +341,35 @@ beforeEach(() => {
 });
 
 describe("Stage editor, FFA league scoring", () => {
-  it("saves the edited table, not the preset it started from", async () => {
+  it("saves the edited rule, not the preset it started from", async () => {
     await mount(stage("ffa_league"));
 
     await click(select("Scoring preset"));
-    await choose("Placement + score");
-    // The organizer's own rule: silver is worth 7 here, not the preset's 6.
+    await choose("Battle royale");
+    // The organizer's own rule: silver is worth 7 here, not the preset's 6, and
+    // the lobby also tracks deaths — which cost points and stay off the table.
     await type(field("2nd place"), "7");
-    await type(field("Score label"), "Kills");
+    await click(only("Add column"));
+    await type(field("Column 2 key"), "deaths");
+    await type(field("Column 2 label"), "Deaths");
+    await click(box("Show column 2 in the table"));
+    await click(select("Column 2 direction"));
+    await choose("Lower is better");
+    await type(area("Points formula"), "place_pts + kills - deaths");
     await save();
 
     expect(updateStage).toHaveBeenCalledTimes(1);
     expect(payload().ffa_scoring).toEqual({
-      placement_points: [10, 7, 5, 4, 3, 2, 1, 1],
-      score_points: 1,
-      score_label: "Kills"
+      columns: [
+        { key: "kills", label: "Kills", public: true, better: "higher" },
+        { key: "deaths", label: "Deaths", public: false, better: "lower" }
+      ],
+      placement_points: [10, 7, 5, 4, 3, 2, 1],
+      formula: "place_pts + kills - deaths"
     });
   });
 
-  it("scores a place the preset never offered, and drops one it did", async () => {
+  it("scores a place the preset never offered, and drops a column it did", async () => {
     await mount(stage("ffa_league"));
 
     await click(select("Scoring preset"));
@@ -303,13 +377,54 @@ describe("Stage editor, FFA league scoring", () => {
     // Score-only means no placement table at all; adding a place starts one.
     await click(only("Add place"));
     await type(field("1st place"), "3");
+    // And a lobby can pay for the place alone: the column goes, the formula
+    // stops reading it.
+    await click(only("Remove column 1"));
+    await type(area("Points formula"), "place_pts");
     await save();
 
     expect(payload().ffa_scoring).toEqual({
+      columns: [],
       placement_points: [3],
-      score_points: 1,
-      score_label: null
+      formula: "place_pts"
     });
+  });
+
+  it("stops at ten columns", async () => {
+    await mount(
+      stage("ffa_league", {
+        ffa_scoring: {
+          columns: Array.from({ length: 10 }, (_, index) => ({
+            key: `c${index}`,
+            label: `C${index}`,
+            public: true,
+            better: "higher" as const
+          })),
+          placement_points: [],
+          formula: "c0"
+        }
+      })
+    );
+
+    // Ten is what the server stores (`FFA_MAX_COLUMNS`); an eleventh would be
+    // rejected after the organizer had already typed it.
+    expect(only("Add column").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("puts the server's refusal on the formula field", async () => {
+    await mount(stage("ffa_league"));
+
+    await type(area("Points formula"), "place_pts + kils");
+    updateStage.mockRejectedValueOnce(unknownNameRejection());
+    await save();
+
+    // A formula is refused by POSITION, and a toast cannot point at one: the
+    // message belongs to the field, and has to name what the server stumbled on.
+    // The server counts characters from zero and the organizer from one, so the
+    // position shown is the one they can actually point at in the field.
+    expect(errorFor(area("Points formula"))).toBe(
+      "Position 13: unknown name kils. Use a column key, place, place_pts or teams."
+    );
   });
 
   it("keeps the block out of a stage that is not an FFA league", async () => {
@@ -338,15 +453,30 @@ describe("Stage editor, FFA league scoring", () => {
     expect(sent.tiebreak_order?.filter((id) => id.startsWith("ffa_"))).toEqual([]);
   });
 
-  it("offers the lobby tiebreakers, and only those", async () => {
-    await mount(stage("ffa_league"), "tiebreakers");
+  it("offers a sum per column, and no metric a lobby cannot compute", async () => {
+    await mount(
+      stage("ffa_league", {
+        ffa_scoring: {
+          columns: [
+            { key: "kills", label: "Kills", public: true, better: "higher" as const },
+            { key: "deaths", label: "Deaths", public: false, better: "lower" as const }
+          ],
+          placement_points: [],
+          formula: "kills * 2 - deaths"
+        }
+      }),
+      "tiebreakers"
+    );
 
+    // The lobby's own sums are the stage's columns — including the one the
+    // public table never shows, which still decides a tie.
     expect(offeredMetrics()).toEqual([
       "Points",
       "Game Wins",
-      "Score",
+      "Sum: Kills",
       "Last Placement",
-      "Best Placement"
+      "Best Placement",
+      "Sum: Deaths"
     ]);
 
     await click(select("Standings preset"));

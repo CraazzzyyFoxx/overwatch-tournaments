@@ -1,8 +1,17 @@
+import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
-from shared.domain.ffa_scoring import FFA_MAX_LOBBY_SIZE
+from shared.domain.ffa_formula import FORMULA_MAX_LENGTH, RESERVED_NAMES, FfaFormulaError, compile_formula
+from shared.domain.ffa_scoring import (
+    DEFAULT_COLUMN_KEY,
+    DEFAULT_COLUMN_LABEL,
+    DEFAULT_FORMULA,
+    FFA_MAX_COLUMNS,
+    FFA_MAX_LOBBY_SIZE,
+)
 from src.core import enums
 from src.schemas.base import BaseRead
 
@@ -14,6 +23,7 @@ __all__ = (
     "StageItemInputRead",
     "StageScoring",
     "StageBestOf",
+    "FfaColumnSettings",
     "FfaScoring",
     "GrandFinalType",
     "SeedRankingValue",
@@ -52,16 +62,58 @@ class StageBestOf(BaseModel):
         return value
 
 
-class FfaScoring(BaseModel):
-    """What an ffa_league stage pays for (plan §4.2); inert on any other type."""
+#: A column key is a formula identifier, so it is spelled like one and short
+#: enough to type: a lowercase letter, then letters, digits or underscores.
+COLUMN_KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,23}")
+
+
+class FfaColumnSettings(BaseModel):
+    """One value an ffa_league stage records per team per game."""
 
     model_config = ConfigDict(extra="forbid")
 
+    key: str
+    #: The organizer's word for it ("Kills", "Убийства"): each stage has its
+    #: own, so it is data, not a translation key.
+    label: str = Field(min_length=1, max_length=32)
+    #: False = viewers see neither the column nor its values (plan §2).
+    public: bool = True
+    better: Literal["higher", "lower"] = "higher"
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def _trim(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("key")
+    @classmethod
+    def _usable_key(cls, value: str) -> str:
+        if not COLUMN_KEY_PATTERN.fullmatch(value):
+            raise PydanticCustomError(
+                "ffa_column_key_invalid",
+                "A column key is up to 24 characters: a lowercase letter, then letters, digits or _",
+                {"name": value},
+            )
+        if value in RESERVED_NAMES:
+            raise PydanticCustomError(
+                "ffa_column_key_reserved", "`{name}` is a word the formula language owns", {"name": value}
+            )
+        return value
+
+
+class FfaScoring(BaseModel):
+    """What an ffa_league stage records and what it pays for it (plan §3.1).
+
+    Inert on any other stage type. The unset block is the behaviour a stage had
+    before columns existed: one raw score column paid one for one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    columns: list[FfaColumnSettings] = Field(default_factory=lambda: [_default_column()])
+    #: Points for 1st, 2nd, ... place, read by the formula as ``place_pts``.
     placement_points: list[float] = Field(default_factory=list, max_length=FFA_MAX_LOBBY_SIZE)
-    score_points: float = Field(default=1.0, ge=0)
-    #: The organizer's word for the score column ("Kills", "Убийства"): each game
-    #: has its own, so it is data, not a translation key.
-    score_label: str | None = Field(default=None, max_length=32)
+    formula: str = Field(default=DEFAULT_FORMULA, min_length=1, max_length=FORMULA_MAX_LENGTH)
 
     @field_validator("placement_points")
     @classmethod
@@ -69,6 +121,38 @@ class FfaScoring(BaseModel):
         if any(points < 0 for points in value):
             raise ValueError("placement points cannot be negative")
         return value
+
+    @field_validator("columns")
+    @classmethod
+    def _distinct(cls, value: list[FfaColumnSettings]) -> list[FfaColumnSettings]:
+        if len(value) > FFA_MAX_COLUMNS:
+            raise PydanticCustomError(
+                "ffa_columns_too_many", "A stage has at most {limit} columns", {"limit": FFA_MAX_COLUMNS}
+            )
+        seen: set[str] = set()
+        for column in value:
+            if column.key in seen:
+                raise PydanticCustomError("ffa_column_duplicate", "`{name}` is listed twice", {"name": column.key})
+            seen.add(column.key)
+        return value
+
+    @model_validator(mode="after")
+    def _formula_compiles(self) -> FfaScoring:
+        """Columns and formula are one rule: neither is valid without the other.
+
+        The error the parser raises is re-raised with its own code and its
+        position in ``ctx``, so the editor can underline the character instead
+        of showing "invalid".
+        """
+        try:
+            compile_formula(self.formula, [column.key for column in self.columns])
+        except FfaFormulaError as exc:
+            raise PydanticCustomError(exc.code, str(exc), {"offset": exc.offset, "name": exc.name}) from exc
+        return self
+
+
+def _default_column() -> FfaColumnSettings:
+    return FfaColumnSettings(key=DEFAULT_COLUMN_KEY, label=DEFAULT_COLUMN_LABEL)
 
 
 class _StageRegulationRead(BaseModel):
