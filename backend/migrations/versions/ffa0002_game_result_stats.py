@@ -79,8 +79,17 @@ def _take_locks() -> None:
 
 
 def _multiplier(points: float) -> str:
-    """``score_points`` as the tail of the formula; 1 pays for no ``* 1``."""
-    return "" if points == 1 else f" * {points:g}"
+    """``score_points`` as the tail of the formula; 1 pays for no ``* 1``.
+
+    ``repr``, never a format spec: ``{:g}`` keeps six significant digits, so
+    0.3333333 would migrate to a different tournament than the one that was
+    played. A whole number drops its ``.0`` so ``score * 2`` stays what the
+    organizer would have written.
+    """
+    if points == 1:
+        return ""
+    exact = repr(float(points))
+    return f" * {exact[:-2] if exact.endswith('.0') else exact}"
 
 
 def upgrade() -> None:
