@@ -748,6 +748,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                scope=body.scope,
                 lobby_index=body.lobby_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,

@@ -137,3 +137,9 @@ def test_balance_request_defaults_to_the_first_lobby() -> None:
 def test_balance_request_rejects_a_third_lobby() -> None:
     with pytest.raises(ValidationError):
         _schemas().CustomGameBalanceRequest.model_validate({"lobby_index": 2})
+
+
+def test_balance_request_takes_the_both_lobbies_scope() -> None:
+    body = _schemas().CustomGameBalanceRequest.model_validate({"scope": "all"})
+    assert body.scope == "all"
+    assert body.lobby_index == 0

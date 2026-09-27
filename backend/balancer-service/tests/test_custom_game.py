@@ -1389,6 +1389,64 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([row.participation for row in roster], [MixParticipation.POOL] * 3)
 
+    async def test_balance_of_both_lobbies_fills_each_with_its_own_half(self) -> None:
+        """«Перемешать оба»: один прогон движка на лобби, ровно на своих игроках."""
+        self.workspace_roster_slots.return_value = {"tank": 1}
+        game = _game(lobby_count=2)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0),
+            _roster_row(2, 8, 1),
+            _roster_row(3, 9, 2),
+            _roster_row(4, 10, 3),
+        ]
+        self.ranks.resolve.return_value = _ranks(7, 8, 9, 10)
+        self.lobby_rows[1] = _lobby(1)
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
+
+        self.assertEqual(self.run_balance.await_count, 2)
+        first, second = (call.args[0]["players"] for call in self.run_balance.await_args_list)
+        # Силы равны, поэтому деление идёт по входному порядку -- и ни один игрок
+        # не попадает в оба лобби.
+        self.assertEqual(set(first), {"7", "9"})
+        self.assertEqual(set(second), {"8", "10"})
+        for lobby in self.lobby_rows.values():
+            self.assertIsNotNone(lobby.balance_result_json)
+            self.assertIsNotNone(lobby.balanced_at)
+            self.assertEqual(lobby.selected_variant_index, 0)
+        self.assertEqual(game.status, "balanced")
+
+    async def test_balance_of_both_lobbies_needs_two_lobbies(self) -> None:
+        self.games.get.return_value = _game(lobby_count=1)
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.ranks.resolve.return_value = _ranks(7)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "single_lobby")
+        self.run_balance.assert_not_called()
+
+    async def test_balance_of_both_lobbies_refuses_a_pool_that_fills_only_one(self) -> None:
+        self.workspace_roster_slots.return_value = {"tank": 1}
+        self.games.get.return_value = _game(lobby_count=2)
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0),
+            _roster_row(2, 8, 1),
+            _roster_row(3, 9, 2),
+        ]
+        self.ranks.resolve.return_value = _ranks(7, 8, 9)
+        self.lobby_rows[1] = _lobby(1)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "not_enough_for_two_lobbies")
+        self.run_balance.assert_not_called()
+
     async def test_update_roster_keeps_surviving_row_state(self) -> None:
         game = _game()
         keep = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["damage"])
@@ -2965,8 +3023,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
         by_id = {
-            rec.member_id: rec
-            for rec in await self.service.rotation(self.session, workspace_id=1, custom_game_id=11)
+            rec.member_id: rec for rec in await self.service.rotation(self.session, workspace_id=1, custom_game_id=11)
         }
 
         self.assertEqual(by_id[9].consecutive_sat, 2)

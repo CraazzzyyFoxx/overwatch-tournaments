@@ -343,10 +343,13 @@ DOCS: dict[str, dict] = {
         "summary": "Balance custom game",
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
-            "Balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone the "
-            "other lobby is already playing or holds a pin on is left out -- reading the host's own "
-            "rank book above the workspace canon, stores the resulting options on that lobby and "
-            "returns the mix; 422 when the lineup is empty or a seated player has no ranked role."
+            'With `scope="lobby"` (the default) balances the non-benched lineup of ONE lobby '
+            "(`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin "
+            'on is left out. With `scope="all"` it splits the whole pool into two equally strong '
+            "lobbies and balances both. Ranks come from the host's own book above the workspace canon. "
+            "422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby "
+            "(`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, "
+            "`too_many_must_play`, `too_many_pinned`, `roles_infeasible`)."
         ),
     },
     "rpc.balancer.custom.set_team_names": {

@@ -123,9 +123,12 @@ class CustomGameVariantIndexPatch(_LobbyScoped):
 
 
 class CustomGameBalanceRequest(_LobbyScoped):
-    """What to balance. An empty body is the first lobby, as before there was a second."""
+    """What to balance. An empty body is the first lobby, as before there was a second.
 
-    scope: Literal["lobby"] = "lobby"
+    ``scope="all"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.
+    """
+
+    scope: Literal["lobby", "all"] = "lobby"
 
 
 #: Ceiling on the encoded lineup screenshot. ~6 MiB decoded: far above the

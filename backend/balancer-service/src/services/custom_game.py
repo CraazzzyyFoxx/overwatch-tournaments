@@ -56,6 +56,7 @@ from shared.services.workspace_roster import (
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.mix_discord import build_lineup_embed, signup_card
 from src.domain.mix_lobbies import seated_member_ids
+from src.domain.mix_lobby_split import LobbySplitError, SplitCandidate, split_into_lobbies
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
@@ -1216,11 +1217,15 @@ class CustomGameService:
         *,
         game: models.CustomGame,
         lineup: Sequence[models.CustomGamePlayer],
-    ) -> dict[str, Any]:
-        """The solver's input for these roster rows: ranks, role order, rotation priority.
+    ) -> tuple[dict[str, Any], list[SplitCandidate]]:
+        """The solver's input for these roster rows plus the same facts for the splitter.
 
         Split out of ``balance`` because one mix is now solved lobby by lobby:
-        each lobby feeds in its own set of rows and reads them the same way.
+        each lobby feeds in its own set of rows and reads them the same way. One
+        pass over one set of reads: the ranks, role order and rotation priority
+        the solver wants are exactly what the two-lobby splitter weighs, so the
+        two cannot drift apart (and ``member_rank`` is not read twice for one
+        lineup).
         """
         # If the lineup does not divide evenly into full teams, `run_balance`'s own
         # overflow trim (`domain.balancer.runtime._prepare_balance_context`) sorts the
@@ -1253,14 +1258,12 @@ class CustomGameService:
             [row.id for row in lineup if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT],
         )
         player_nodes: dict[str, Any] = {}
+        candidates: list[SplitCandidate] = []
         for row in lineup:
             member = members[row.workspace_member_id]
             classes: dict[str, Any] = {}
-            role_order = (
-                explicit_roles.get(row.id, [])
-                if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
-                else REGISTRATION_ROLE_CODES
-            )
+            explicit = row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
+            role_order = explicit_roles.get(row.id, []) if explicit else REGISTRATION_ROLE_CODES
             # An explicit empty list means no playable role; it never falls back.
             for priority, role in enumerate(role_order, start=1):
                 ranked = resolved.get((member.member_id, role))
@@ -1269,16 +1272,31 @@ class CustomGameService:
                 classes[role] = {"isActive": True, "rank": ranked.value, "priority": priority}
             if not classes:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="missing_ranked_role")
+            fairness = rotation_priority(histories_by_member[row.workspace_member_id])
             player_nodes[str(member.member_id)] = {
                 "identity": {
                     "name": member.display_name or member.battle_tag or f"player-{member.member_id}",
                     "isFullFlex": row.is_flex,
                     "mustPlay": row.participation == MixParticipation.MUST_PLAY,
-                    "rotationPriority": rotation_priority(histories_by_member[row.workspace_member_id]),
+                    "rotationPriority": fairness,
                 },
                 "stats": {"classes": classes},
             }
-        return player_nodes
+            ratings = {role: entry["rank"] for role, entry in classes.items()}
+            candidates.append(
+                SplitCandidate(
+                    member_id=member.member_id,
+                    ratings=ratings,
+                    # Which role the player is seated on first: ``classes`` is built
+                    # in priority order, so the first entry is that one. All-ranked
+                    # states no preference, hence its best rank.
+                    strength=next(iter(ratings.values())) if explicit else max(ratings.values()),
+                    pin=row.lobby_pin,
+                    must_play=row.participation == MixParticipation.MUST_PLAY,
+                    rotation_priority=fairness,
+                )
+            )
+        return player_nodes, candidates
 
     async def _solve_lobby(
         self,
@@ -1288,7 +1306,7 @@ class CustomGameService:
         lineup: Sequence[models.CustomGamePlayer],
     ) -> None:
         """Run the solver on exactly these players and store the run on this lobby."""
-        player_nodes = await self._lineup_nodes(session, game=game, lineup=lineup)
+        player_nodes, _candidates = await self._lineup_nodes(session, game=game, lineup=lineup)
         # The HOST's row, not the acting co-host's, and read exactly once: the
         # ranks above are already resolved against the host's own book
         # (``MIX_ORDER`` + ``author_user_id=game.host_user_id``), so reading the
@@ -1323,14 +1341,18 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        scope: str = "lobby",
         lobby_index: int = 0,
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
-        """Rebuild the teams of ONE lobby (the first one by default).
+        """Rebuild the teams of ONE lobby (the default) or of both at once.
 
-        For a one-lobby mix that is today's behaviour whole: the entire
-        non-benched pool goes to the solver and lands in lobby 0's document.
+        For a one-lobby mix ``scope="lobby"`` is today's behaviour whole: the
+        non-benched pool minus whoever the other lobby is already playing goes to
+        the solver and lands in this lobby's document. ``scope="all"`` exists only
+        for a two-lobby mix: the pool is first cut into two equally strong halves
+        (``domain.mix_lobby_split``), then each half is solved by the same engine.
         """
         game = await self._writable(
             session,
@@ -1343,19 +1365,53 @@ class CustomGameService:
         lineup = [row for row in roster if row.participation != MixParticipation.BENCHED]
         if not lineup:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
-        lobby = await self._lobby(session, game, lobby_index)
-        candidates = await self._lobby_candidates(session, game, lineup, lobby_index)
-        if not candidates:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
-        await self._solve_lobby(session, game, lobby, candidates)
-        # Benching the overflow is the one-lobby answer. With two lobbies the
-        # players left out WAIT for the other one (§Derived state), and a
-        # BENCHED row would drop out of its candidate pool too.
-        if game.lobby_count < 2:
-            _apply_balance_result(roster, lobby.balance_result_json)
+        if scope == "all":
+            await self._balance_both(session, game, lineup)
+        else:
+            lobby = await self._lobby(session, game, lobby_index)
+            candidates = await self._lobby_candidates(session, game, lineup, lobby_index)
+            if not candidates:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+            await self._solve_lobby(session, game, lobby, candidates)
+            # Benching the overflow is the one-lobby answer. With two lobbies the
+            # players left out WAIT for the other one (§Derived state), and a
+            # BENCHED row would drop out of its candidate pool too.
+            if game.lobby_count < 2:
+                _apply_balance_result(roster, lobby.balance_result_json)
         game.status = MixStatus.BALANCED
         await session.flush()
         return game
+
+    async def _balance_both(
+        self,
+        session: AsyncSession,
+        game: models.CustomGame,
+        lineup: Sequence[models.CustomGamePlayer],
+    ) -> None:
+        """Cut the pool into two equal lobbies and solve each with its own run.
+
+        The splitter hands back exactly ``seats`` players per lobby, so the
+        engine's own trim inside each run is a no-op and whoever did not make it
+        into a game stays in the pool waiting -- not one roster row is benched.
+        """
+        if game.lobby_count < 2:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="single_lobby")
+        # ponytail: ranks, rotation histories and the host config are resolved once
+        # per lobby on top of this run (``_solve_lobby`` builds its own nodes); pass
+        # these nodes down instead if a reshuffle ever shows up as slow.
+        _player_nodes, candidates = await self._lineup_nodes(session, game=game, lineup=lineup)
+        host_config = await self._host_config(session, game.host_user_id)
+        role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
+        try:
+            split = split_into_lobbies(candidates, mask=role_mask)
+        except LobbySplitError as exc:
+            # The machine-readable reason (not_enough_for_two_lobbies / too_many_must_play
+            # / too_many_pinned / roles_infeasible): the UI shows it as text, not a trace.
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code) from exc
+        rows = {row.workspace_member_id: row for row in lineup}
+        for lobby_index, member_ids in enumerate(split.lobbies):
+            lobby = await self._lobby(session, game, lobby_index)
+            await self._solve_lobby(session, game, lobby, [rows[member_id] for member_id in member_ids])
 
     async def set_team_names(
         self,
