@@ -47,7 +47,7 @@ vi.mock("@/lib/notify", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/admin/tournaments/84/matches/lobbies",
+  usePathname: () => "/admin/tournaments/84/bracket/lobbies",
   useSearchParams: () => new URLSearchParams()
 }));
 

@@ -22,7 +22,7 @@ import type { FfaLobby } from "@/types/ffa.types";
 import type { Stage } from "@/types/tournament.types";
 
 import { tabFallback, useHubStagesQuery } from "../../hubQueries";
-import { MatchesView } from "../MatchesView";
+import { MatchesView } from "../../matches/MatchesView";
 
 /**
  * Where an FFA league is refereed.
