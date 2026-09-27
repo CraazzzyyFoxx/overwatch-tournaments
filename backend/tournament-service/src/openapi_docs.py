@@ -56,8 +56,10 @@ DOCS: dict[str, dict] = {
             "Permission: public; no authentication required — a hidden tournament is visible only to its "
             "workspace's admins and users on its preview allowlist. Returns one lobby table per group of an "
             "ffa_league stage, in group order: the stage's scoring rules, every seated team with its running "
-            "points, and one cell per planned game. Positions come from the group's standings, so a stage "
-            "nobody has ranked yet answers null positions in seat order."
+            "points and column sums, and one cell per planned game. Columns the organizer marked non-public "
+            "are omitted here entirely — their sums and per-game values never leave the service. Positions "
+            "come from the group's standings, so a stage nobody has ranked yet answers null positions in "
+            "seat order."
         ),
     },
     "rpc.tournament.ffa_lobby": {
@@ -355,11 +357,12 @@ DOCS: dict[str, dict] = {
         "summary": "Set FFA game results",
         "description": (
             "Permission: workspace `match.update` on the encounter's workspace. "
-            "Records one game of a lobby: a line per seated team, every team exactly once. Placements are "
-            "required when the stage pays for place and derived from the score otherwise (ties share a place). "
-            "Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself "
-            "when its confirmed games reach its games count, and reopens when they no longer do. Answers the "
-            "lobby's settled table. 409 when a later stage has already been seeded from this group."
+            "Records one game of a lobby: a line per seated team, every team exactly once, carrying one value "
+            "per column of the stage. Placements are required when the stage's formula reads the place and "
+            "derived from the game's points otherwise (ties share a place). Re-recording a confirmed position "
+            "is a correction and needs a reason. The lobby completes itself when its confirmed games reach its "
+            "games count, and reopens when they no longer do. Answers the lobby's settled table, with every "
+            "column on it. 409 when a later stage has already been seeded from this group."
         ),
     },
     "rpc.tournament.ffa_game_cancel": {
@@ -378,6 +381,15 @@ DOCS: dict[str, dict] = {
             "Changes how many games THIS lobby plays. Never below the number it has already confirmed (422), "
             "since the games are the record. Answers the lobby's settled table, completed or reopened by the "
             "new count."
+        ),
+    },
+    "rpc.tournament.ffa_stage_admin": {
+        "summary": "Get FFA stage lobbies (organizer view)",
+        "description": (
+            "Permission: workspace `match.update` on the tournament's workspace — whoever may record a "
+            "result may read the values behind it. The same lobby tables as the public stage read, with the "
+            "columns marked non-public still on them: that is what the result-entry dialog fills in. Not "
+            "cached by the gateway."
         ),
     },
     # ── generic CRUD engine: standing ──────────────────────────────────────

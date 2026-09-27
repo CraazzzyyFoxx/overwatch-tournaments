@@ -7731,7 +7731,7 @@
       "summary": "Cancel FFA game"
     },
     "rpc.tournament.ffa_game_results_set": {
-      "description": "Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once. Placements are required when the stage pays for place and derived from the score otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table. 409 when a later stage has already been seeded from this group.",
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Records one game of a lobby: a line per seated team, every team exactly once, carrying one value per column of the stage. Placements are required when the stage's formula reads the place and derived from the game's points otherwise (ties share a place). Re-recording a confirmed position is a correction and needs a reason. The lobby completes itself when its confirmed games reach its games count, and reopens when they no longer do. Answers the lobby's settled table, with every column on it. 409 when a later stage has already been seeded from this group.",
       "request": {
         "array": false,
         "ref": "tournament.FfaGameResultsInput"
@@ -7763,12 +7763,20 @@
       "summary": "Get FFA lobby"
     },
     "rpc.tournament.ffa_stage": {
-      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points, and one cell per planned game. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.",
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one lobby table per group of an ffa_league stage, in group order: the stage's scoring rules, every seated team with its running points and column sums, and one cell per planned game. Columns the organizer marked non-public are omitted here entirely \u2014 their sums and per-game values never leave the service. Positions come from the group's standings, so a stage nobody has ranked yet answers null positions in seat order.",
       "response": {
         "array": true,
         "ref": "tournament.FfaLobbyRead"
       },
       "summary": "Get FFA stage lobbies"
+    },
+    "rpc.tournament.ffa_stage_admin": {
+      "description": "Permission: workspace `match.update` on the tournament's workspace \u2014 whoever may record a result may read the values behind it. The same lobby tables as the public stage read, with the columns marked non-public still on them: that is what the result-entry dialog fills in. Not cached by the gateway.",
+      "response": {
+        "array": true,
+        "ref": "tournament.FfaLobbyRead"
+      },
+      "summary": "Get FFA stage lobbies (organizer view)"
     },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
@@ -38464,6 +38472,74 @@
       "title": "EncounterUpdate",
       "type": "object"
     },
+    "tournament.FfaColumnRead": {
+      "properties": {
+        "better": {
+          "enum": [
+            "higher",
+            "lower"
+          ],
+          "title": "Better",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "public": {
+          "title": "Public",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "public",
+        "better"
+      ],
+      "title": "FfaColumnRead",
+      "type": "object"
+    },
+    "tournament.FfaColumnSettings": {
+      "additionalProperties": false,
+      "description": "One value an ffa_league stage records per team per game.",
+      "properties": {
+        "better": {
+          "default": "higher",
+          "enum": [
+            "higher",
+            "lower"
+          ],
+          "title": "Better",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "public": {
+          "default": true,
+          "title": "Public",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ],
+      "title": "FfaColumnSettings",
+      "type": "object"
+    },
     "tournament.FfaGameCancelInput": {
       "properties": {
         "reason": {
@@ -38507,17 +38583,6 @@
           "title": "Position",
           "type": "integer"
         },
-        "score": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Score"
-        },
         "state": {
           "anyOf": [
             {
@@ -38527,14 +38592,28 @@
               "type": "null"
             }
           ]
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stats"
         }
       },
       "required": [
         "position",
         "state",
         "placement",
-        "score",
-        "points"
+        "points",
+        "stats"
       ],
       "title": "FfaGameCellRead",
       "type": "object"
@@ -38554,10 +38633,12 @@
           "default": null,
           "title": "Placement"
         },
-        "score": {
-          "minimum": 0,
-          "title": "Score",
-          "type": "integer"
+        "stats": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Stats",
+          "type": "object"
         },
         "team_id": {
           "title": "Team Id",
@@ -38566,7 +38647,7 @@
       },
       "required": [
         "team_id",
-        "score"
+        "stats"
       ],
       "title": "FfaGameResultLineInput",
       "type": "object"
@@ -38747,13 +38828,16 @@
           ],
           "title": "Position"
         },
-        "score": {
-          "title": "Score",
-          "type": "integer"
-        },
         "slot": {
           "title": "Slot",
           "type": "integer"
+        },
+        "stats": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Stats",
+          "type": "object"
         },
         "team_id": {
           "title": "Team Id",
@@ -38800,7 +38884,7 @@
         "points",
         "games_played",
         "wins",
-        "score",
+        "stats",
         "games"
       ],
       "title": "FfaLobbyRowRead",
@@ -38808,6 +38892,17 @@
     },
     "tournament.FfaRulesRead": {
       "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaColumnRead"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "formula": {
+          "title": "Formula",
+          "type": "string"
+        },
         "placement_points": {
           "items": {
             "type": "number"
@@ -38815,34 +38910,38 @@
           "title": "Placement Points",
           "type": "array"
         },
-        "score_label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Score Label"
-        },
-        "score_points": {
-          "title": "Score Points",
-          "type": "number"
+        "requires_placement": {
+          "title": "Requires Placement",
+          "type": "boolean"
         }
       },
       "required": [
+        "columns",
         "placement_points",
-        "score_points",
-        "score_label"
+        "formula",
+        "requires_placement"
       ],
       "title": "FfaRulesRead",
       "type": "object"
     },
     "tournament.FfaScoring": {
       "additionalProperties": false,
-      "description": "What an ffa_league stage pays for (plan \u00a74.2); inert on any other type.",
+      "description": "What an ffa_league stage records and what it pays for it (plan \u00a73.1).\n\nInert on any other stage type. The unset block is the behaviour a stage had\nbefore columns existed: one raw score column paid one for one.",
       "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FfaColumnSettings"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "formula": {
+          "default": "score",
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Formula",
+          "type": "string"
+        },
         "placement_points": {
           "items": {
             "type": "number"
@@ -38850,25 +38949,6 @@
           "maxItems": 100,
           "title": "Placement Points",
           "type": "array"
-        },
-        "score_label": {
-          "anyOf": [
-            {
-              "maxLength": 32,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Score Label"
-        },
-        "score_points": {
-          "default": 1.0,
-          "minimum": 0,
-          "title": "Score Points",
-          "type": "number"
         }
       },
       "title": "FfaScoring",

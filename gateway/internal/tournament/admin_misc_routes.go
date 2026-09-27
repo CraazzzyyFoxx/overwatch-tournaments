@@ -51,6 +51,11 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/ffa/games/{position}/results", Queue: "rpc.tournament.ffa_game_results_set", IDParam: "encounter_id", Path: []string{"position"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/ffa/games/{position}/cancel", Queue: "rpc.tournament.ffa_game_cancel", IDParam: "encounter_id", Path: []string{"position"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/ffa/games-count", Queue: "rpc.tournament.ffa_games_count_set", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// The organizer's view of the same lobby tables the public route answers,
+	// with the columns marked non-public still on them — that is what the entry
+	// dialog fills in. NOT listed in cacheable.go: the values behind a hidden
+	// column must not sit in a shared response cache.
+	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{id}/stages/{stage_id}/ffa", Queue: "rpc.tournament.ffa_stage_admin", IDParam: "id", Path: []string{"stage_id"}, Auth: edge.AuthRequired},
 	// generic pick-ban config CRUD (map + hero, docs/plans/2026-08-09-generic-pickban-engine.md).
 	// Same cascade key as the veto-configs routes above, additionally partitioned
 	// by `kind` in the body/response.
