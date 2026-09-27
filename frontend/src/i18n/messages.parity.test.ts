@@ -71,6 +71,16 @@ describe("interpolated message keys", () => {
     }
   });
 
+  it("the seat panel's lobby line carries a {letter} placeholder in both locales", () => {
+    // The panel renders `t("inLobby", { letter })`; a translation that dropped
+    // the placeholder would ship "You are in lobby" with no lobby in it.
+    for (const dict of [en, ru]) {
+      const self: Record<string, string> = dict.mixes.self;
+      expect(self.inLobby).toContain("{letter}");
+      expect(self.waitingSeat).toBeTruthy();
+    }
+  });
+
   // A "two team tabs must not share a label" assertion lived here. It is gone
   // with the tab itself: registered teams render on the Participants page, so
   // `common.teams` is the only team-labelled section and `registrationTeams.tab`

@@ -216,6 +216,8 @@ _MIX: dict[Locale, dict[str, str]] = {
         "flex_on": "вкл",
         "flex_off": "выкл",
         "unranked": "Нет ранга: {roles} — хост проставит",
+        "in_lobby": "Вы в лобби {letter}",
+        "waiting_seat": "Ждёте места",
     },
     "en": {
         "heading": "Mix “{name}”",
@@ -232,6 +234,8 @@ _MIX: dict[Locale, dict[str, str]] = {
         "flex_on": "on",
         "flex_off": "off",
         "unranked": "No rank yet: {roles} — the host will fill it in",
+        "in_lobby": "You are in lobby {letter}",
+        "waiting_seat": "Waiting for a seat",
     },
 }
 
@@ -369,6 +373,11 @@ def mix_text(locale: Locale, state: Mapping[str, Any]) -> str:
             order = " → ".join(_role(locale, role) for role in roles)
         lines.append(f"**{words['roles']}:** {order}")
         lines.append(f"**{words['flex']}:** {words['flex_on'] if seat.get('is_flex') else words['flex_off']}")
+        # Only a two-lobby mix has a question here: which of the two games is
+        # theirs, and whether a balance has seated them in one at all.
+        if int(state.get("lobby_count") or 1) > 1:
+            lobby = seat.get("current_lobby")
+            lines.append(words["in_lobby"].format(letter="AB"[lobby]) if lobby in (0, 1) else words["waiting_seat"])
 
     unranked = list(state.get("unranked_roles") or [])
     if unranked:

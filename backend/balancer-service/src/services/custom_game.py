@@ -55,6 +55,7 @@ from shared.services.workspace_roster import (
 )
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.mix_discord import build_lineup_embed, signup_card
+from src.domain.mix_lobbies import seated_member_ids
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
@@ -854,6 +855,10 @@ class CustomGameService:
         would make the bot guess. ``unranked_roles`` is the narrower list the
         warning is built from -- the roles this player actually plays.
 
+        ``current_lobby`` is the same derivation the board shows -- the seats of
+        each lobby's selected option -- so nobody downstream re-parses a solver
+        document to answer "which lobby am I in", and ``lobby_count`` is what
+        tells them whether that question is worth asking at all.
         """
         seat: dict[str, Any] | None = None
         unranked: list[str] = []
@@ -882,6 +887,16 @@ class CustomGameService:
                 "roles": list(stored) if explicit else None,
                 "is_flex": ctx.row.is_flex,
                 "ranks": ranks,
+                # 0 | 1 while a balance seats them, ``null`` while it does not.
+                "current_lobby": next(
+                    (
+                        lobby.lobby_index
+                        for lobby in await self.lobbies.list_for_game(session, ctx.game.id)
+                        if ctx.row.workspace_member_id
+                        in seated_member_ids(lobby.balance_result_json, lobby.selected_variant_index)
+                    ),
+                    None,
+                ),
             }
         return {
             "custom_game_id": ctx.game.id,
@@ -889,6 +904,9 @@ class CustomGameService:
             "status": ctx.game.status,
             "self_signup": ctx.game.self_signup,
             "self_role_edit": ctx.game.self_role_edit,
+            # Whether "you are in lobby A" is a sentence worth saying: a
+            # one-lobby mix has nothing to distinguish.
+            "lobby_count": ctx.game.lobby_count,
             "seat": seat,
             "unranked_roles": unranked,
             "policy": {

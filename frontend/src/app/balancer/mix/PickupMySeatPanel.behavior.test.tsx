@@ -11,8 +11,9 @@
 //  4. leaving is always offered to somebody on the roster, even while every
 //     other action is blocked -- an unlinked account must still be able to go.
 //
-// `next-intl` is mocked to echo the key, so every label asserted below is the
-// message key rather than the rendered sentence.
+// `next-intl` is mocked to echo the key -- plus any interpolated value after a
+// colon -- so every label asserted below is the message key rather than the
+// rendered sentence.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,7 +32,10 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 } as unknown as typeof ResizeObserver;
 
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string, values?: Record<string, unknown>) =>
+    values ? `${key}:${Object.values(values).join(",")}` : key,
+}));
 vi.mock("@/components/PlayerRoleIcon", () => ({ default: () => null }));
 // Drag itself is not what this pins, and dnd-kit resolves its own React copy
 // under bun/node, so the sortable wrapper and its hook render inertly here.
@@ -63,6 +67,7 @@ function seat(overrides: Partial<MixSelfSeat> = {}): MixSelfSeat {
     roles: ["tank", "damage"],
     is_flex: false,
     ranks: { tank: 3300, damage: 2700, support: null },
+    current_lobby: null,
     ...overrides,
   };
 }
@@ -74,6 +79,7 @@ function state(overrides: Partial<MixSelfState> = {}): MixSelfState {
     status: "balanced",
     self_signup: "pool",
     self_role_edit: true,
+    lobby_count: 1,
     seat: seat(),
     unranked_roles: [],
     policy: {
@@ -266,5 +272,16 @@ describe("PickupMySeatPanel roles", () => {
     const scope = await mount(state({ unranked_roles: ["support"] }));
 
     expect(scope.textContent).toContain("unranked");
+  });
+
+  it("says which lobby they are in, and only when the mix runs two", async () => {
+    // One lobby: there is nothing to tell apart, so the panel stays quiet.
+    expect((await mount(state())).textContent).not.toContain("inLobby");
+
+    const seated = await mount(state({ lobby_count: 2, seat: seat({ current_lobby: 1 }) }));
+    expect(seated.textContent).toContain("inLobby:B");
+
+    const waiting = await mount(state({ lobby_count: 2, seat: seat({ current_lobby: null }) }));
+    expect(waiting.textContent).toContain("waitingSeat");
   });
 });

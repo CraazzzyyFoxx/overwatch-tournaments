@@ -228,6 +228,8 @@ export type MixSelfSeat = {
   is_flex: boolean;
   /** Effective rank per role; `null` where no layer answers for it. */
   ranks: Record<string, number | null>;
+  /** Which lobby a balance seated them in; `null` means waiting for a seat. */
+  current_lobby: 0 | 1 | null;
 };
 
 /** What the caller may do, and the first reason they may not. */
@@ -254,6 +256,8 @@ export type MixSelfState = {
   status: CustomGameStatus;
   self_signup: MixSelfSignup;
   self_role_edit: boolean;
+  /** How many lobbies the mix runs; with one, `seat.current_lobby` says nothing. */
+  lobby_count: number;
   seat: MixSelfSeat | null;
   /** Roles this player would play that no rank layer answers for. */
   unranked_roles: string[];

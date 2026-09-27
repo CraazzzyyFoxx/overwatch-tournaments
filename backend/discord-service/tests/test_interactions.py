@@ -387,6 +387,26 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         self.assertIn("Танк → Саппорт", _reply_text(locked))
         self.assertIn("не разрешил игрокам менять роли", _reply_text(locked))
 
+    async def test_the_card_names_the_lobby_only_when_the_mix_runs_two(self) -> None:
+        """With two lobbies "you are signed up" is not enough: a player has to
+        know which of the two games is theirs, or whether they have a seat yet."""
+        dispatcher = _dispatcher()
+
+        one_lobby = _reply_text(dispatcher.reply(Outcome("ok", _mix_state()), "mix.roles", "ru"))
+        self.assertNotIn("лобби", one_lobby)
+
+        seated = _mix_state(lobby_count=2)
+        seated["seat"]["current_lobby"] = 1
+        self.assertIn("Вы в лобби B", _reply_text(dispatcher.reply(Outcome("ok", seated), "mix.roles", "ru")))
+
+        waiting = _mix_state(lobby_count=2)
+        waiting["seat"]["current_lobby"] = None
+        self.assertIn("Ждёте места", _reply_text(dispatcher.reply(Outcome("ok", waiting), "mix.roles", "ru")))
+
+        english = _mix_state(lobby_count=2)
+        english["seat"]["current_lobby"] = 0
+        self.assertIn("You are in lobby A", _reply_text(dispatcher.reply(Outcome("ok", english), "mix.roles", "en")))
+
     async def test_a_missing_battlenet_link_is_named_and_points_at_the_profile(self) -> None:
         rpc = _Rpc(
             {

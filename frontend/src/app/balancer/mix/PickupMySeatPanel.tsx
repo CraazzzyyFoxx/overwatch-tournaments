@@ -123,6 +123,15 @@ export function PickupMySeatPanel({
         <span className="text-caption font-semibold text-[color:var(--aqt-fg)]">
           {seat == null ? t("seat.none") : t(`seat.${seat.participation}`)}
         </span>
+        {state.lobby_count > 1 && seat != null ? (
+          // Two lobbies means two games at once: "signed up" no longer says
+          // which one is theirs, or whether a balance has seated them at all.
+          <span className={CAPTION_CLASS}>
+            {seat.current_lobby == null
+              ? t("waitingSeat")
+              : t("inLobby", { letter: "AB"[seat.current_lobby] })}
+          </span>
+        ) : null}
 
         <div className="ml-auto flex items-center gap-2">
           {policy.can_join ? (

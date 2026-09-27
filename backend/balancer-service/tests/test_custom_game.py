@@ -1058,6 +1058,43 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(state["self_signup"], "pool")
         self.assertIs(state["self_role_edit"], True)
 
+    async def test_self_state_says_which_lobby_this_player_sits_in(self) -> None:
+        """Where a player sits is the same derivation the board shows -- the
+        seats of each lobby's selected option -- so the panel and the bot read
+        it instead of parsing a solver document of their own."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", lobby_count=2)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.lobby_rows[1] = _lobby(
+            1,
+            balance_result_json=lobby_document(
+                [
+                    {
+                        "teams": [
+                            {"roster": {"tank": [{"uuid": "7", "name": "You"}]}},
+                            {"roster": {"tank": [{"uuid": "8", "name": "Them"}]}},
+                        ]
+                    }
+                ]
+            ),
+        )
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(state["lobby_count"], 2)
+        self.assertEqual(state["seat"]["current_lobby"], 1)
+
+    async def test_self_state_of_a_player_nobody_balanced_in_waits_for_a_seat(self) -> None:
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game(self_signup="pool", lobby_count=2)
+        self.roster.list_for_game.return_value = [row]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertIsNone(state["seat"]["current_lobby"])
+
     async def test_self_state_of_a_mix_in_another_workspace_404(self) -> None:
         self.games.get.return_value = _game(workspace_id=2)
 

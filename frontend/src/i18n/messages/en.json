@@ -6200,6 +6200,8 @@
         "must_play": "You are guaranteed a seat",
         "none": "You are not in this mix"
       },
+      "inLobby": "You are in lobby {letter}",
+      "waitingSeat": "Waiting for a seat",
       "rolesAllRanked": "Every role you have a rank for",
       "unranked": "No rank yet: {roles}. The host will fill it in.",
       "fixLinks": "Open account settings",
