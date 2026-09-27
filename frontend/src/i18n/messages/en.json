@@ -6179,6 +6179,42 @@
       "emptyDescription": "Players appear after {minGames} recorded matches in the selected period.",
       "allTime": "Show all time",
       "loading": "Loading player results..."
+    },
+    "self": {
+      "signupLabel": "Signup",
+      "signup": {
+        "closed": "Closed",
+        "pool": "To the pool",
+        "benched": "To the bench"
+      },
+      "roleEdit": "Players edit their own roles",
+      "openInDiscord": "Open signup in Discord",
+      "noChannel": "This community has no mix channel in Discord",
+      "title": "Your seat",
+      "join": "Join this mix",
+      "leave": "Leave",
+      "saveRoles": "Save roles",
+      "seat": {
+        "pool": "You are in the pool",
+        "benched": "You are on the bench — the host moves you into the pool",
+        "must_play": "You are guaranteed a seat",
+        "none": "You are not in this mix"
+      },
+      "rolesAllRanked": "Every role you have a rank for",
+      "unranked": "No rank yet: {roles}. The host will fill it in.",
+      "fixLinks": "Open account settings",
+      "blocker": {
+        "mix_closed": "This mix is over.",
+        "discord_not_linked": "Link your Discord account to join.",
+        "battlenet_not_linked": "Link your Battle.net account to join.",
+        "player_not_linked": "Your account is not linked to a player profile yet.",
+        "self_join_denied": "An admin has closed self-signup for your account.",
+        "already_joined": "You are already in this mix.",
+        "not_on_roster": "Join the mix first.",
+        "signup_closed": "The host has not opened signup.",
+        "roster_full": "This mix is full.",
+        "role_edit_off": "The host edits roles in this mix."
+      }
     }
   },
   "quota": {

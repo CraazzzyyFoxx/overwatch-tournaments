@@ -27,6 +27,8 @@ vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 
 const onOpenPool = vi.fn();
 const onOpenAccess = vi.fn();
+const onSetSelfService = vi.fn();
+const onPostSignup = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -43,8 +45,11 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     selected_variant_index: 0,
     matches_count: 0,
     last_match_at: null,
+    self_signup: "closed",
+    self_role_edit: false,
+    settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: "555" },
     ...overrides,
-  };
+  } as CustomGame;
 }
 
 function tick() {
@@ -71,6 +76,8 @@ async function mount(
         gameLoading={props.gameLoading ?? false}
         onOpenPool={onOpenPool}
         onOpenAccess={onOpenAccess}
+        onSetSelfService={onSetSelfService}
+        onPostSignup={onPostSignup}
       />,
     );
   });
@@ -101,6 +108,8 @@ beforeEach(() => {
   document.body.innerHTML = "";
   onOpenPool.mockReset();
   onOpenAccess.mockReset();
+  onSetSelfService.mockReset();
+  onPostSignup.mockReset();
 });
 
 describe("PickupMixHeader", () => {
@@ -153,5 +162,69 @@ describe("PickupMixHeader", () => {
     const scope = await mount(game(), { canWrite: false });
 
     expect(scope.querySelector('[aria-label="Manage access"]')).toBeNull();
+  });
+});
+
+// The host's self-service switches. `next-intl` is mocked to echo the key, so
+// every label below is the message key rather than the rendered sentence.
+describe("PickupMixHeader self-service", () => {
+  it("writes the signup mode the host picked", async () => {
+    const scope = await mount(game({ self_signup: "closed" }));
+
+    await click(byName(scope, "signup.pool"));
+
+    expect(onSetSelfService).toHaveBeenCalledWith({ self_signup: "pool" });
+  });
+
+  it("marks the mode the mix is actually in", async () => {
+    const scope = await mount(game({ self_signup: "benched" }));
+
+    const checked = [...scope.querySelectorAll('[role="radio"]')]
+      .filter((node) => node.getAttribute("aria-checked") === "true")
+      .map((node) => node.textContent?.trim());
+
+    expect(checked).toEqual(["signup.benched"]);
+  });
+
+  it("writes the role-edit switch on its own", async () => {
+    const scope = await mount(game({ self_role_edit: false }));
+
+    await click(scope.querySelector('[aria-label="roleEdit"]'));
+
+    expect(onSetSelfService).toHaveBeenCalledWith({ self_role_edit: true });
+  });
+
+  it("posts the signup card in the mode the mix is in", async () => {
+    const scope = await mount(game({ self_signup: "benched" }));
+
+    await click(byName(scope, "openInDiscord"));
+
+    expect(onPostSignup).toHaveBeenCalledWith("benched");
+  });
+
+  it("falls a closed mix back to the pool when posting", async () => {
+    const scope = await mount(game({ self_signup: "closed" }));
+
+    await click(byName(scope, "openInDiscord"));
+
+    expect(onPostSignup).toHaveBeenCalledWith("pool");
+  });
+
+  it("cannot post a signup card with no mix channel", async () => {
+    const scope = await mount(
+      game({ settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: null } }),
+    );
+
+    const button = byName(scope, "openInDiscord");
+    expect(button?.hasAttribute("disabled")).toBe(true);
+    expect(button?.getAttribute("title")).toBe("noChannel");
+  });
+
+  it("shows a viewer who cannot write none of it", async () => {
+    const scope = await mount(game(), { canWrite: false });
+
+    expect(byName(scope, "signup.pool")).toBeNull();
+    expect(byName(scope, "openInDiscord")).toBeNull();
+    expect(scope.querySelector('[aria-label="roleEdit"]')).toBeNull();
   });
 });

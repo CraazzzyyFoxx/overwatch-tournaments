@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Trash2, UserCog, UserPlus } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ArrowLeft, Send, Trash2, UserCog, UserPlus } from "lucide-react";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { CustomGame } from "@/services/custom-game.service";
+import type { CustomGame, MixSelfSignup } from "@/services/custom-game.service";
+
+/** The three signup modes, in the order a host widens access. */
+const SELF_SIGNUP_OPTIONS: readonly MixSelfSignup[] = ["closed", "pool", "benched"];
 
 type PickupMixHeaderProps = {
   /** Host or co-host, and not-terminal -- gates every write action in this header. */
@@ -23,6 +28,12 @@ type PickupMixHeaderProps = {
   canDelete?: boolean;
   deleting?: boolean;
   onDeleteMix?: () => void;
+  /** Omitted -- the self-service row is not offered at all. */
+  onSetSelfService?: (patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean }) => void;
+  savingSelfService?: boolean;
+  /** Omitted -- no "open signup in Discord" button. */
+  onPostSignup?: (selfSignup: "pool" | "benched") => void;
+  postingSignup?: boolean;
 };
 
 /**
@@ -52,8 +63,19 @@ export function PickupMixHeader({
   canDelete = false,
   deleting = false,
   onDeleteMix,
+  onSetSelfService,
+  savingSelfService = false,
+  onPostSignup,
+  postingSignup = false,
 }: Readonly<PickupMixHeaderProps>) {
+  const t = useTranslations("mixes.self");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // The workspace's channel is the only target a mix has -- with none, the
+  // signup card has nowhere to go. Unlike the matchup post (which simply is
+  // not offered), this one stays visible and says why: a host who opens
+  // signup expects the Discord button to be there, and "missing" reads as a
+  // bug where "disabled, because there is no channel" reads as an answer.
+  const hasChannel = game?.settings.workspace_discord_channel_id != null;
 
   return (
     <div className={cn(PANEL_CLASS, "flex flex-wrap items-center gap-3 px-4 py-3")}>
@@ -135,6 +157,66 @@ export function PickupMixHeader({
             }}
           />
         </>
+      ) : null}
+
+      {canWrite && game != null && onSetSelfService ? (
+        <div className="flex w-full flex-wrap items-center gap-2.5 border-t border-[color:var(--aqt-border)] pt-3">
+          <span className={EYEBROW_CLASS}>{t("signupLabel")}</span>
+
+          <div role="radiogroup" aria-label={t("signupLabel")} className="flex items-center gap-1">
+            {SELF_SIGNUP_OPTIONS.map((option) => {
+              const selected = game.self_signup === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={savingSelfService}
+                  onClick={() => onSetSelfService({ self_signup: option })}
+                  className={cn(
+                    "rounded-lg border px-2.5 py-1 text-caption font-semibold transition-colors",
+                    selected
+                      ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)]"
+                      : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-3)]",
+                    "disabled:cursor-default disabled:opacity-60",
+                  )}
+                >
+                  {t(`signup.${option}`)}
+                </button>
+              );
+            })}
+          </div>
+
+          <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
+
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={game.self_role_edit}
+              disabled={savingSelfService}
+              aria-label={t("roleEdit")}
+              onCheckedChange={(checked) => onSetSelfService({ self_role_edit: checked })}
+            />
+            <span className="text-caption text-[color:var(--aqt-fg-muted)]">{t("roleEdit")}</span>
+          </div>
+
+          {onPostSignup ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="ml-auto h-9 shrink-0"
+              disabled={!hasChannel || postingSignup}
+              title={hasChannel ? undefined : t("noChannel")}
+              // A closed mix has no mode to post yet, and the card's whole point
+              // is to open signup -- so posting it from `closed` opens the pool,
+              // the mode a host picks in every other case.
+              onClick={() => onPostSignup(game.self_signup === "benched" ? "benched" : "pool")}
+            >
+              <Send className="mr-1.5 size-3.5" aria-hidden="true" />
+              {t("openInDiscord")}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
