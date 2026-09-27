@@ -26,6 +26,12 @@ const rotation = vi.fn();
 const undoMatch = vi.fn();
 const postToDiscord = vi.fn();
 const setVariantIndex = vi.fn();
+const getMySeat = vi.fn();
+const joinMix = vi.fn();
+const leaveMix = vi.fn();
+const updateMySeat = vi.fn();
+const setSelfService = vi.fn();
+const postSignup = vi.fn();
 
 vi.mock("@/services/custom-game.service", () => ({
   customGameKeys: {
@@ -34,6 +40,7 @@ vi.mock("@/services/custom-game.service", () => ({
     one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId],
     matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"],
     rotation: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "rotation"],
+    me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"],
   },
   customGameService: {
     list: (...args: unknown[]) => listGames(...args),
@@ -46,6 +53,12 @@ vi.mock("@/services/custom-game.service", () => ({
     undoMatch: (...args: unknown[]) => undoMatch(...args),
     postToDiscord: (...args: unknown[]) => postToDiscord(...args),
     setVariantIndex: (...args: unknown[]) => setVariantIndex(...args),
+    getMySeat: (...args: unknown[]) => getMySeat(...args),
+    joinMix: (...args: unknown[]) => joinMix(...args),
+    leaveMix: (...args: unknown[]) => leaveMix(...args),
+    updateMySeat: (...args: unknown[]) => updateMySeat(...args),
+    setSelfService: (...args: unknown[]) => setSelfService(...args),
+    postSignup: (...args: unknown[]) => postSignup(...args),
   },
 }));
 

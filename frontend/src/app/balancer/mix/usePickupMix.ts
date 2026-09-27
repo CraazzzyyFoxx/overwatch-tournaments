@@ -4,11 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
+import type { RoleCode } from "@/lib/roster/roles";
 import {
   customGameKeys,
   customGameService,
   type CustomGame,
   type CustomGamePlayerPatch,
+  type MixSelfSignup,
+  type MixSelfState,
 } from "@/services/custom-game.service";
 
 import {
@@ -46,6 +49,9 @@ export type PickupSwapSeatsInput = {
   secondUuid: string;
 };
 
+/** The two fields a player owns on their own row. `roles: null` is `all_ranked`. */
+export type PickupMySeatInput = { roles: RoleCode[] | null; is_flex: boolean };
+
 export type PickupCreateGameInput = {
   name: string;
   /** Copy a previous mix's lineup and settings, or `null` to start empty. */
@@ -65,7 +71,11 @@ export type PickupCreateGameInput = {
  * id-descending) is shown, which is also how the view recovers when another
  * host cancels the mix being watched.
  */
-export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
+export function usePickupMix(
+  workspaceId: number,
+  pickedGameId: number | null,
+  options: { seatEnabled?: boolean } = {},
+) {
   const queryClient = useQueryClient();
 
   const gamesQuery = useQuery({
@@ -101,6 +111,18 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     queryKey: customGameKeys.rotation(workspaceId, selectedGameId ?? 0),
     queryFn: () => customGameService.rotation(workspaceId, selectedGameId as number),
     enabled: selectedGameId != null,
+  });
+
+  /**
+   * The caller's own standing in this mix. A separate read from the board on
+   * purpose: the board is public and identical for every viewer, this answer is
+   * about the caller. Off for a signed-out visitor -- the endpoint requires
+   * auth and the panel has nothing to show them.
+   */
+  const mySeatQuery = useQuery({
+    queryKey: customGameKeys.me(workspaceId, selectedGameId ?? 0),
+    queryFn: () => customGameService.getMySeat(workspaceId, selectedGameId as number),
+    enabled: selectedGameId != null && options.seatEnabled === true,
   });
 
   // Another host editing this workspace's mixes (roster, ranks, bench, role
@@ -370,12 +392,76 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * A self-write answers with the caller's state, not with the game, so the
+   * seat is seeded from the response and the board is invalidated instead:
+   * joining and leaving move the roster every viewer reads.
+   */
+  const applySeat = (state: MixSelfState) => {
+    queryClient.setQueryData(customGameKeys.me(workspaceId, state.custom_game_id), state);
+    void queryClient.invalidateQueries({
+      queryKey: customGameKeys.one(workspaceId, state.custom_game_id),
+    });
+    void queryClient.invalidateQueries({ queryKey: customGameKeys.list(workspaceId), exact: true });
+    void queryClient.invalidateQueries({
+      queryKey: customGameKeys.rotation(workspaceId, state.custom_game_id),
+    });
+  };
+
+  const joinMix = useMutation({
+    mutationFn: () => customGameService.joinMix(workspaceId, selectedGameId as number),
+    onSuccess: applySeat,
+    onError: (error) => notify.apiError(error),
+  });
+
+  const leaveMix = useMutation({
+    mutationFn: () => customGameService.leaveMix(workspaceId, selectedGameId as number),
+    onSuccess: applySeat,
+    onError: (error) => notify.apiError(error),
+  });
+
+  const updateMySeat = useMutation({
+    mutationFn: (input: PickupMySeatInput) =>
+      customGameService.updateMySeat(workspaceId, selectedGameId as number, input),
+    onSuccess: (state) => {
+      applySeat(state);
+      notify.success("Roles saved");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
+  /** The host's switches. Returns the game, so the board is seeded like any other host write. */
+  const setSelfService = useMutation({
+    mutationFn: (patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean }) =>
+      customGameService.setSelfService(workspaceId, selectedGameId as number, patch),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
+  /**
+   * Opens signup and hands the card to the bot. The mix's own `self_signup`
+   * moves server-side, so the board is refetched; the message itself is
+   * fire-and-forget, exactly like `postToDiscord`.
+   */
+  const postSignup = useMutation({
+    mutationFn: (selfSignup: "pool" | "benched") =>
+      customGameService.postSignup(workspaceId, selectedGameId as number, selfSignup),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: customGameKeys.one(workspaceId, selectedGameId ?? 0),
+      });
+      notify.success("Signup opened in Discord");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
   return {
     selectedGameId,
     gamesQuery,
     gameQuery,
     matchesQuery,
     rotationQuery,
+    mySeatQuery,
     createGame,
     setRoster,
     patchPlayer,
@@ -394,5 +480,10 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     addCoHost,
     removeCoHost,
     swapSeats,
+    joinMix,
+    leaveMix,
+    updateMySeat,
+    setSelfService,
+    postSignup,
   };
 }

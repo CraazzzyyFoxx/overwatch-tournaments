@@ -8,6 +8,7 @@ import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialo
 import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
 import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
+import { PickupMySeatPanel } from "@/app/balancer/mix/PickupMySeatPanel";
 import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
 import { PickupTeamsPanel } from "@/app/balancer/mix/PickupTeamsPanel";
 import {
@@ -55,6 +56,10 @@ export default function BalancerPickupMixPage() {
 
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
+  // The board is public (`config/auth.ts`), so the seat read is the one thing
+  // here that needs an actual session: without one `GET …/me` 401s and the
+  // panel has nothing to say.
+  const isSignedIn = useAuthProfileStore((state) => state.status === "authenticated");
   const { canAccessPermission, isSuperuser, isWorkspaceAdmin } = usePermissions();
   const router = useRouter();
   // The mix-hosting grant, not a tournament permission: a workspace member can
@@ -91,6 +96,7 @@ export default function BalancerPickupMixPage() {
     gameQuery,
     matchesQuery,
     rotationQuery,
+    mySeatQuery,
     setRoster,
     patchPlayer,
     applyRotationHints,
@@ -108,7 +114,12 @@ export default function BalancerPickupMixPage() {
     addCoHost,
     removeCoHost,
     swapSeats,
-  } = usePickupMix(workspaceId ?? 0, pickedGameId);
+    joinMix,
+    leaveMix,
+    updateMySeat,
+    setSelfService,
+    postSignup,
+  } = usePickupMix(workspaceId ?? 0, pickedGameId, { seatEnabled: isSignedIn });
 
   const game = gameQuery.data;
   const rows = game?.players ?? [];
@@ -220,6 +231,10 @@ export default function BalancerPickupMixPage() {
                   onSuccess: () => router.push("/balancer/mix"),
                 })
               }
+              onSetSelfService={(patch) => setSelfService.mutate(patch)}
+              savingSelfService={setSelfService.isPending}
+              onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
+              postingSignup={postSignup.isPending}
             />
             <PickupTeamsPanel
               canWrite={canWrite}
@@ -252,6 +267,19 @@ export default function BalancerPickupMixPage() {
               postingToDiscord={postToDiscord.isPending}
               onPostToDiscord={(idx, image) => postToDiscord.mutate({ variantIndex: idx, image })}
             />
+            {/* Visible when the mix invites signups, or when this viewer is
+                already in it -- a closed mix a player is not in has nothing to
+                tell them, and the board stays as public as it was. */}
+            {mySeatQuery.data != null &&
+            (mySeatQuery.data.self_signup !== "closed" || mySeatQuery.data.seat != null) ? (
+              <PickupMySeatPanel
+                state={mySeatQuery.data}
+                saving={joinMix.isPending || leaveMix.isPending || updateMySeat.isPending}
+                onJoin={() => joinMix.mutate()}
+                onLeave={() => leaveMix.mutate()}
+                onSave={(patch) => updateMySeat.mutate(patch)}
+              />
+            ) : null}
           </div>
         </div>
       </div>
