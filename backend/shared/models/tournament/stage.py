@@ -36,7 +36,10 @@ DEFAULT_FFA_COLUMNS: tuple[dict[str, typing.Any], ...] = (
     {"key": "score", "label": "Счёт", "public": True, "better": "higher"},
 )
 DEFAULT_FFA_FORMULA = "score"
-_DEFAULT_FFA_COLUMNS_SQL = """'[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]'::jsonb"""
+#: No ``::jsonb`` cast: Postgres coerces the bare literal to the column's type
+#: anyway, and several tests build ``tournament.stage`` on SQLite, where the
+#: cast is a syntax error inside ``DEFAULT``.
+_DEFAULT_FFA_COLUMNS_SQL = """'[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]'"""
 
 __all__ = (
     "Stage",
