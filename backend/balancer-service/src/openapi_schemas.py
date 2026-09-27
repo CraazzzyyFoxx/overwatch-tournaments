@@ -127,6 +127,15 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.custom.add_co_host": Op(request=custom_game.CustomGameCoHostPatch),
     "rpc.balancer.custom.swap_seats": Op(request=custom_game.CustomGameSeatSwap),
     "rpc.balancer.custom.record_outcome": Op(request=custom_game.CustomGameRecordOutcome),
+    "rpc.balancer.custom.rotation": Op(
+        query_params=(
+            QueryParam(
+                "lobby_index",
+                "integer",
+                description="Which lobby to rank candidates for (0 or 1); defaults to 0.",
+            ),
+        )
+    ),
     # ── workspace roster + rank layers ─────────────────────────────────────
     # Ad-hoc query keys read by ``src/rpc/players.py`` (``_list_params``,
     # ``_author_to_read``, ``_author_only``) rather than a query model.

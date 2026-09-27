@@ -73,6 +73,8 @@ _MAX_TEAMS = 8
 #: co-host list without bound.
 _MAX_CO_HOSTS = 16
 _MAX_TEAM_NAME_LEN = 60
+#: Board-facing name of a lobby; the wire and the database speak indexes.
+LOBBY_LABELS = ("A", "B")
 #: A roster row owns only its lineup state. A rank correction goes into the
 #: host's own layer of ``member_rank``, so it outlives the game it was made in.
 _PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex", "lobby_pin"})
@@ -455,6 +457,53 @@ class CustomGameService:
         if lobby is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="lobby_not_found")
         return lobby
+
+    async def _other_lobby_seated(
+        self, session: AsyncSession, game: models.CustomGame, lobby_index: int
+    ) -> frozenset[int]:
+        """Who the mix's OTHER lobby currently has on the floor.
+
+        Empty for a one-lobby mix: with no lobby next door, nobody is playing
+        one. Membership is not stored -- it is the seats of that lobby's
+        selected option, which is what every caller here means by "busy".
+        """
+        if game.lobby_count != 2:
+            return frozenset()
+        other = await self._lobby(session, game, 1 - lobby_index)
+        return seated_member_ids(other.balance_result_json, other.selected_variant_index)
+
+    async def _lobby_candidates(
+        self,
+        session: AsyncSession,
+        game: models.CustomGame,
+        rows: Sequence[models.CustomGamePlayer],
+        lobby_index: int,
+    ) -> list[models.CustomGamePlayer]:
+        """The roster rows this lobby may seat, out of ``rows``.
+
+        One rule, one place: whoever is on the floor next door is playing, and
+        whoever is pinned to the other lobby is not this one's to seat. A
+        one-lobby mix owns its whole pool, so ``rows`` comes back untouched.
+        """
+        if game.lobby_count != 2:
+            return list(rows)
+        busy = await self._other_lobby_seated(session, game, lobby_index)
+        other_index = 1 - lobby_index
+        return [row for row in rows if row.workspace_member_id not in busy and row.lobby_pin != other_index]
+
+    async def _lobby_team_names(self, session: AsyncSession, game_id: int, lobby_index: int) -> dict[int, str]:
+        """This lobby's two team-name overrides, renumbered to ``0``-``1``.
+
+        Names are stored by GLOBAL index (``lobby_index * 2 + team``) because
+        lobby B's two teams are two more rows of the same table; every reader
+        wants them by position inside its own lobby's variant.
+        """
+        offset = lobby_index * 2
+        return {
+            index - offset: name
+            for index, name in (await self.team_names.mapping_for_game(session, game_id)).items()
+            if 0 <= index - offset < 2
+        }
 
     async def _seed_host_ranks(
         self, session: AsyncSession, game: models.CustomGame, members: Mapping[int, RosterMember]
@@ -1312,6 +1361,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         map_id: int | None,
         actor_user_id: int,
         actor_is_superuser: bool = False,
@@ -1333,7 +1383,7 @@ class CustomGameService:
         )
         if map_id is not None and await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
-        lobby = await self._lobby(session, game, 0)
+        lobby = await self._lobby(session, game, lobby_index)
         lobby.next_map_id = map_id
         await session.flush()
         return game
@@ -1344,6 +1394,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         variant_index: int,
         actor_user_id: int,
         actor_is_superuser: bool = False,
@@ -1364,11 +1415,17 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        lobby = await self._lobby(session, game, 0)
+        lobby = await self._lobby(session, game, lobby_index)
         result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
+        # An option that seats somebody the other lobby has already put on the
+        # floor is not a matchup anyone can play; the host picks another or
+        # re-balances. Cheaper and clearer than silently benching them.
+        busy = await self._other_lobby_seated(session, game, lobby_index)
+        if busy & seated_member_ids(lobby.balance_result_json, variant_index):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="seat_conflict")
         lobby.selected_variant_index = variant_index
         await session.flush()
         return game
@@ -1400,6 +1457,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         variant_index: int,
         actor_user_id: int,
         actor_is_superuser: bool = False,
@@ -1429,7 +1487,7 @@ class CustomGameService:
         channel_id = await self.workspace_discord_channel_id(session, workspace_id)
         if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
-        lobby = await self._lobby(session, game, 0)
+        lobby = await self._lobby(session, game, lobby_index)
         result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
@@ -1438,9 +1496,11 @@ class CustomGameService:
         if not isinstance(variant, Mapping):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
 
-        team_names = await self.team_names.mapping_for_game(session, game.id)
-        activity = await self.casual_matches.activity_for_games(session, [game.id])
-        matches_count = activity.get(game.id, (0, None))[0]
+        team_names = await self._lobby_team_names(session, game.id, lobby_index)
+        # Per lobby: two lobbies keep two paces, so "game 5" in one is not
+        # "game 5" in the other.
+        activity = await self.casual_matches.activity_for_lobbies(session, game.id)
+        matches_count = activity.get(lobby_index, (0, None))[0]
         next_map: tuple[str, str | None] | None = None
         if lobby.next_map_id is not None:
             # The gamemode is eager-loaded: an async session raises on an
@@ -1463,6 +1523,9 @@ class CustomGameService:
             # The host's knob, resolved: the footer promises what recording this
             # match will actually move. ``0`` is "off", and off prints nothing.
             points_per_win=await self.host_points_per_win(session, game.host_user_id) or None,
+            # Both lobbies post into the same channel, so a two-lobby mix says
+            # which one this lineup is; a one-lobby mix has nothing to qualify.
+            lobby_label=LOBBY_LABELS[lobby_index] if game.lobby_count == 2 else None,
         )
         return channel_id, embed
 
@@ -1565,6 +1628,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         variant_index: int,
         first_uuid: str,
         second_uuid: str,
@@ -1590,7 +1654,7 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        lobby = await self._lobby(session, game, 0)
+        lobby = await self._lobby(session, game, lobby_index)
         result = copy.deepcopy(as_lobby_document(lobby.balance_result_json))
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
@@ -1666,6 +1730,7 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
+        lobby_index: int = 0,
         winner: int | None,
         variant_index: int,
         map_id: int | None = None,
@@ -1696,7 +1761,7 @@ class CustomGameService:
         )
         if winner not in (1, 2, None):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="winner must be 1, 2 or null")
-        lobby = await self._lobby(session, game, 0)
+        lobby = await self._lobby(session, game, lobby_index)
         if map_id is None:
             map_id = lobby.next_map_id
         elif await self.maps.get(session, map_id) is None:
@@ -1714,13 +1779,14 @@ class CustomGameService:
                 detail="A match can only be recorded for a two-team balance",
             )
 
-        names = await self.team_names.mapping_for_game(session, game.id)
+        names = await self._lobby_team_names(session, game.id, lobby_index)
         scores = (1, 0) if winner == 1 else (0, 1) if winner == 2 else (0, 0)
         # The host's knob, not the mix's and not the recording co-host's -- the
         # book being moved is the host's own (see ``_apply_points_delta``).
         points_per_win = await self.host_points_per_win(session, game.host_user_id)
         match = models.CasualMatch(
             custom_game_id=game.id,
+            lobby_index=lobby_index,
             map_id=map_id,
             recorded_by=actor_user_id,
             # Frozen on the match so :meth:`undo_last_match` rolls back what was
@@ -1728,6 +1794,11 @@ class CustomGameService:
             points_per_win_applied=(points_per_win if (points_per_win and winner in (1, 2)) else None),
         )
         await self.casual_matches.create(session, match)
+        # Whoever was on the floor next door neither played this match nor sat
+        # it out; rotation must not read their absence as a rest.
+        busy = await self._other_lobby_seated(session, game, lobby_index)
+        if busy:
+            await self.casual_matches.set_busy_players(session, match.id, sorted(busy))
         casual_teams = [
             models.CasualTeam(
                 match_id=match.id,
@@ -1812,13 +1883,15 @@ class CustomGameService:
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
-        """Delete the mix's most recent match and give back the ranks it moved.
+        """Delete a lobby's most recent match and give back the ranks it moved.
 
         Newest-only on purpose: the rank book compounds match on match (see
         :meth:`_apply_points_delta`), so undoing an older result would give back
         a delta that later matches have already built on and leave every number
         after it wrong. Recording the correct result again is the way to fix an
-        older mistake.
+        older mistake. Newest *of the match's own lobby*: two lobbies record at
+        two paces, and a host looking at lobby A must be able to take back A's
+        last result while B has already put down a newer one.
 
         The rollback uses ``points_per_win_applied`` frozen on the match, never
         the host's current ``points_per_win``: the host may have changed the knob
@@ -1840,8 +1913,10 @@ class CustomGameService:
         match = await self.casual_matches.get_for_game(session, game.id, match_id)
         if match is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
-        if await self.casual_matches.newest_id_for_game(session, game.id) != match.id:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only the most recent match can be undone")
+        if await self.casual_matches.newest_id_for_lobby(session, game.id, match.lobby_index) != match.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Only the most recent match of this lobby can be undone"
+            )
 
         applied = match.points_per_win_applied or 0
         if applied and game.host_user_id is not None:
@@ -1964,7 +2039,7 @@ class CustomGameService:
         ]
 
     async def rotation(
-        self, session: AsyncSession, *, workspace_id: int, custom_game_id: int
+        self, session: AsyncSession, *, workspace_id: int, custom_game_id: int, lobby_index: int = 0
     ) -> list[RotationRecommendation]:
         """Recommend who is owed the next seat and who should sit, from this mix's own map history.
 
@@ -1975,6 +2050,10 @@ class CustomGameService:
         size. A row's own ``MUST_PLAY`` participation (see :meth:`update_player`)
         is honoured the same way it is honoured there: a seat, not a vote.
 
+        Per lobby when the mix runs two: ``lobby_index`` ranks the candidates
+        that lobby may seat (see :meth:`_lobby_candidates`) and splits at that
+        lobby's own seat count, not at the whole pool's.
+
         Read-only, no roster row is touched -- the host applies the verdict
         through the same ``participation`` field.
         """
@@ -1983,11 +2062,22 @@ class CustomGameService:
         if not roster:
             return []
 
-        histories = await self._rotation_histories(session, game, roster)
+        candidates = await self._lobby_candidates(session, game, roster, lobby_index)
+        if not candidates:
+            return []
+
+        histories = await self._rotation_histories(session, game, candidates)
 
         role_mask = (await self.roster_shape(session, workspace_id=workspace_id, host_user_id=game.host_user_id)).slots
         players_per_team = sum(role_mask.values())
-        usable_count = len(roster) if players_per_team <= 0 else (len(roster) // players_per_team) * players_per_team
+        if players_per_team <= 0:
+            usable_count = len(candidates)
+        else:
+            usable_count = (len(candidates) // players_per_team) * players_per_team
+            if game.lobby_count == 2:
+                # One lobby is exactly two teams; the rest of the pool is the
+                # other lobby's business.
+                usable_count = min(usable_count, 2 * players_per_team)
         return recommend_rotation(histories, usable_count=usable_count)
 
     async def close(

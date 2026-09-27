@@ -102,14 +102,21 @@ class CustomGameTeamNamesPatch(_Request):
     team_names: dict[str, str]
 
 
-class CustomGameNextMapPatch(_Request):
+class _LobbyScoped(_Request):
+    """Every per-match write names its lobby; ``0`` is the only one a
+    single-lobby mix has, which is why it is the default."""
+
+    lobby_index: int = Field(0, ge=0, le=1)
+
+
+class CustomGameNextMapPatch(_LobbyScoped):
     """``null`` clears the pick; the next match then records with no map."""
 
     map_id: int | None
 
 
-class CustomGameVariantIndexPatch(_Request):
-    """Which stored balance option the mix shows, for every viewer at once."""
+class CustomGameVariantIndexPatch(_LobbyScoped):
+    """Which stored balance option the lobby shows, for every viewer at once."""
 
     variant_index: int = Field(ge=0)
 
@@ -121,7 +128,7 @@ _MAX_IMAGE_B64_LENGTH = 8 * 1024 * 1024
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
-class CustomGamePostDiscord(_Request):
+class CustomGamePostDiscord(_LobbyScoped):
     """Which balance option's lineup to post, and the PNG of it to attach.
 
     The image is the matchup card the host is looking at, rasterised in their
@@ -161,7 +168,7 @@ class CustomGameCoHostPatch(_Request):
     co_host_user_id: int
 
 
-class CustomGameSeatSwap(_Request):
+class CustomGameSeatSwap(_LobbyScoped):
     variant_index: int = Field(ge=0)
     first_uuid: str = Field(min_length=1)
     second_uuid: str = Field(min_length=1)
@@ -171,7 +178,7 @@ class CustomGameOutcome(_Request):
     winner: Literal[1, 2] | None
 
 
-class CustomGameRecordOutcome(_Request):
+class CustomGameRecordOutcome(_LobbyScoped):
     outcome: CustomGameOutcome
     variant_index: int = Field(ge=0)
     map_id: int | None = None

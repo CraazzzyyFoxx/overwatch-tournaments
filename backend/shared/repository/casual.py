@@ -54,10 +54,18 @@ class CasualMatchRepository(BaseRepository[models.CasualMatch]):
             .options(selectinload(self.model.teams).selectinload(models.CasualTeam.players))
         )
 
-    async def newest_id_for_game(self, session: AsyncSession, custom_game_id: int) -> int | None:
-        """Id of the most recently recorded match, or ``None`` for a mix with none."""
+    async def newest_id_for_lobby(self, session: AsyncSession, custom_game_id: int, lobby_index: int) -> int | None:
+        """Id of the most recently recorded match OF THIS LOBBY, or ``None``.
+
+        Per lobby, not per mix: undo compounds inside one lobby's rank history,
+        and a host looking at lobby A must be able to take back A's last result
+        while B has already recorded a newer one.
+        """
         return await session.scalar(
-            sa.select(sa.func.max(self.model.id)).where(self.model.custom_game_id == custom_game_id)
+            sa.select(sa.func.max(self.model.id)).where(
+                self.model.custom_game_id == custom_game_id,
+                self.model.lobby_index == lobby_index,
+            )
         )
 
     async def activity_for_games(
@@ -141,6 +149,16 @@ class CasualMatchRepository(BaseRepository[models.CasualMatch]):
             stmt = stmt.where(models.CasualMatch.created_at >= since)
         result = await session.execute(stmt)
         return result.all()
+
+    async def set_busy_players(self, session: AsyncSession, match_id: int, workspace_member_ids: Sequence[int]) -> None:
+        """Freeze who was playing the mix's other lobby when this match landed."""
+        session.add_all(
+            [
+                models.CasualMatchBusyPlayer(match_id=match_id, workspace_member_id=member_id)
+                for member_id in workspace_member_ids
+            ]
+        )
+        await session.flush()
 
 
 class CasualTeamRepository(BaseRepository[models.CasualTeam]):

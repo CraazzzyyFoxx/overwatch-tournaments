@@ -109,6 +109,7 @@ def build_lineup_embed(
     team_names: Mapping[int, str],
     next_map: tuple[str, str | None] | None,
     points_per_win: int | None,
+    lobby_label: str | None = None,
 ) -> dict[str, Any]:
     """One embed dict describing the teams of ``variant`` and the map they play.
 
@@ -119,6 +120,10 @@ def build_lineup_embed(
     rolled one yet -- a mix that posts its lineup before the roll is normal, so
     that reads as "not rolled yet" rather than omitting the line. Teams keep the
     variant's own order, and a team without a name override is numbered from it.
+
+    ``lobby_label`` names the lobby when the mix runs two of them: both post
+    into the same channel, and "game 3" of one is not "game 3" of the other. A
+    single-lobby mix passes ``None`` and reads exactly as it always did.
     """
     if next_map is None:
         description = "Map: not rolled yet"
@@ -138,7 +143,11 @@ def build_lineup_embed(
     ]
 
     embed: dict[str, Any] = {
-        "title": f"{mix_name} — Match {match_number}",
+        "title": (
+            f"{mix_name} — Match {match_number}"
+            if lobby_label is None
+            else f"{mix_name} — Лобби {lobby_label} · игра {match_number}"
+        ),
         "description": description,
         "color": _COLOR,
         "fields": fields,

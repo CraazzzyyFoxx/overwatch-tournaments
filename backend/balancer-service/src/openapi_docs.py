@@ -356,9 +356,10 @@ DOCS: dict[str, dict] = {
         "summary": "Set custom game next map",
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
-            "Names the map the mix's next match is played on -- rolled or picked by a host ahead of "
+            "Names the map the lobby's next match is played on -- rolled or picked by a host ahead of "
             "the lobby -- or clears it with null. The next recorded match takes this map unless the "
-            "outcome names one explicitly, and clears it either way. 404 when "
+            "outcome names one explicitly, and clears it either way. The lobby_index field names which "
+            "lobby's roll this is; a single-lobby mix leaves it at 0. 404 when "
             "the map is not in the catalogue."
         ),
     },
@@ -366,10 +367,11 @@ DOCS: dict[str, dict] = {
         "summary": "Set custom game shown balance option",
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
-            "Pages the mix to one of the balance options its last run produced, for every viewer at "
-            "once -- the option on screen is a fact about the mix, not about one browser. "
-            "404 when the index points past the stored options. Re-balancing resets it "
-            "to the first option."
+            "Pages one lobby to one of the balance options its last run produced, for every viewer at "
+            "once -- the option on screen is a fact about the lobby, not about one browser. "
+            "404 when the index points past the stored options, and 409 seat_conflict when the option "
+            "would seat somebody the mix's other lobby has already put on the floor. Re-balancing "
+            "resets it to the first option."
         ),
     },
     "rpc.balancer.custom.post_discord": {
@@ -378,7 +380,8 @@ DOCS: dict[str, dict] = {
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Queues an embed of one balance option's teams, the next map and the points at stake "
             "to the workspace-wide mix channel and returns immediately -- delivery is the bot's, "
-            "and nothing about the mix changes. 409 when the workspace has "
+            "and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and "
+            "numbers the match within that lobby. 409 when the workspace has "
             "no mix channel configured and 404 when the balance option is missing."
         ),
     },
@@ -429,8 +432,9 @@ DOCS: dict[str, dict] = {
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Freezes one played match of a balance option into the mix's history, moving both teams' "
             "ranks in the host's book by points_per_win when a winner is given and redeeming every "
-            "seat's must_play pin back to the pool. Repeatable until the "
-            "mix is closed."
+            "seat's must_play pin back to the pool. The match is stamped with the lobby that played it "
+            "and with whoever was playing the other lobby at that moment, whom rotation then counts as "
+            "neither played nor sat out. Repeatable until the mix is closed."
         ),
     },
     "rpc.balancer.custom.match_history": {
@@ -441,16 +445,21 @@ DOCS: dict[str, dict] = {
         "summary": "Undo custom game match",
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
-            "Deletes the mix's most recent match and gives back exactly the rank points it applied, "
+            "Deletes the lobby's most recent match and gives back exactly the rank points it applied, "
             "read from the match itself rather than the mix's current points_per_win. "
-            "404 when the match belongs to another mix and 409 when a newer match "
+            "404 when the match belongs to another mix and 409 when a newer match of the SAME lobby "
             "exists, since the rank book compounds. must_play pins the recording redeemed are not "
             "restored."
         ),
     },
     "rpc.balancer.custom.rotation": {
         "summary": "Get custom game rotation hints",
-        "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only.",
+        "description": (
+            "Permission: public; no authentication required. Recommends who is owed the next seat and "
+            "who should sit out, computed from this mix's own match history, read-only. The optional "
+            "lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the "
+            "other lobby or pinned to it is left out -- and splits at that lobby's seat count."
+        ),
     },
     "rpc.balancer.custom.stats": {
         "summary": "Get custom game statistics",

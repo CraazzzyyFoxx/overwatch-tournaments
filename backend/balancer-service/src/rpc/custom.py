@@ -418,6 +418,9 @@ def _dump_match(match: Any, map_info: dict[int, tuple[str, str]]) -> dict[str, A
     map_name, map_image_path = map_info.get(match.map_id, (None, None)) if match.map_id is not None else (None, None)
     return {
         "id": match.id,
+        # Which lobby played it: the history chips and the per-lobby undo both
+        # read this.
+        "lobby_index": match.lobby_index,
         "home_team_name": home.name if home is not None else None,
         "away_team_name": away.name if away is not None else None,
         "home_score": home_score,
@@ -785,6 +788,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 map_id=body.map_id,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
@@ -809,6 +813,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
@@ -830,6 +835,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
@@ -960,6 +966,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 variant_index=body.variant_index,
                 first_uuid=body.first_uuid,
                 second_uuid=body.second_uuid,
@@ -983,6 +990,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 winner=body.outcome.winner,
                 variant_index=body.variant_index,
                 map_id=body.map_id,
@@ -1031,7 +1039,12 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             workspace_id = _int(data, "workspace_id")
             recommendations = await custom_game_service.rotation(
-                session, workspace_id=workspace_id, custom_game_id=_game_id(data)
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                # Query param: the rotation is a read, and which lobby it ranks
+                # for is part of the question, not a body.
+                lobby_index=c.q1(data, "lobby_index", int, 0),
             )
             return _dump_rotation(recommendations)
 

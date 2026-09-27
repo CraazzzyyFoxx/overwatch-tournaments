@@ -151,3 +151,10 @@ def test_signup_card_survives_a_mix_name_at_the_length_cap() -> None:
         mix_name="*" * 255, host_name="Foxx", board_url="https://owt.example/balancer/mix/42", custom_game_id=42
     )
     assert len(card.text) < 4000
+
+
+def test_a_two_lobby_mix_says_which_lobby_the_lineup_is_for() -> None:
+    """Both lobbies post into the same channel, so the embed has to say which
+    one it describes -- and each counts its own games."""
+    assert _embed(match_number=3, lobby_label="B")["title"] == "Friday Scrim — Лобби B · игра 3"
+    assert _embed(match_number=3)["title"] == "Friday Scrim — Match 3"
