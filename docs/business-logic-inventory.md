@@ -240,7 +240,18 @@ Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is delibera
 
 Rotation (`mix_rotation.py`): longest sit-out streak → shortest played streak → fewest games → input order. `must_play` always seated. No history, or the whole pool fits → all `NEUTRAL` (do not invent fairness).
 
-Caps: 8 teams, 16 co-hosts. Host role required (`custom_game.*`).
+Self-signup (`custom_game.self_signup` = `closed` | `pool` | `benched`, `self_role_edit`): one policy,
+`mix_self_service.mix_self_policy`, gates Discord and the board alike. Check order is the reason order —
+`mix_closed` → `discord_not_linked` → `battlenet_not_linked` → `player_not_linked` → `self_join_denied` →
+`already_joined`/`not_on_roster` → `signup_closed` → `roster_full` → `role_edit_off`. Both Discord **and**
+Battle.net must be linked (`account_links.missing_account_links`); capability `custom_game.self_join` is
+allow-by-default, an admin cuts one account with a deny. `already_joined` is not an error: `self_join` is
+idempotent and a host's bench decision survives a second press. `can_leave` ignores every link. A signup is an
+ordinary `custom_game_player` row — no separate application table. A player writes `roles` and `is_flex` only;
+ranks stay the host's book, participation the host's decision, and an edit applies from the next balance
+(`balance_result_json` is a snapshot).
+
+Caps: 8 teams, 16 co-hosts, 100 roster rows for a self-signup (`roster_full`). Host role required (`custom_game.*`).
 
 ---
 
