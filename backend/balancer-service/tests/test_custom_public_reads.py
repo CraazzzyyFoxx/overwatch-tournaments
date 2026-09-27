@@ -122,6 +122,110 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
             item["lobbies"],
         )
 
+    async def test_detail_read_says_where_every_player_sits_and_what_each_lobby_shows(self) -> None:
+        """The board never derives lobby membership itself: the server reads it
+        off each lobby's selected option, and says whether that option's lineup
+        has been recorded yet."""
+        from src.domain.balancer.result_serializer import lobby_document
+
+        def seat(uuid: str) -> dict[str, Any]:
+            return {"uuid": uuid, "name": f"P{uuid}", "assigned_rating": 2500, "role_preferences": ["tank"]}
+
+        game = SimpleNamespace(
+            id=3,
+            workspace_id=7,
+            host_user_id=5,
+            name="Friday mix",
+            status="balanced",
+            lobby_count=2,
+            self_signup="closed",
+            self_role_edit=False,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        document = lobby_document([{"teams": [{"roster": {"tank": [seat("7")]}}, {"roster": {"tank": [seat("8")]}}]}])
+        balanced_at = datetime(2026, 1, 1, 21, 0, tzinfo=UTC)
+        lobbies = [
+            SimpleNamespace(
+                custom_game_id=3,
+                lobby_index=0,
+                selected_variant_index=0,
+                next_map_id=None,
+                balanced_at=balanced_at,
+                balance_result_json=document,
+            ),
+            SimpleNamespace(
+                custom_game_id=3,
+                lobby_index=1,
+                selected_variant_index=0,
+                next_map_id=None,
+                balanced_at=balanced_at,
+                balance_result_json=None,
+            ),
+        ]
+        rows = [
+            SimpleNamespace(
+                id=1,
+                workspace_member_id=7,
+                sort_order=0,
+                participation="pool",
+                role_selection_mode="all_ranked",
+                is_flex=False,
+                lobby_pin=None,
+            ),
+            SimpleNamespace(
+                id=2,
+                workspace_member_id=9,
+                sort_order=1,
+                participation="pool",
+                role_selection_mode="all_ranked",
+                is_flex=False,
+                lobby_pin=1,
+            ),
+        ]
+
+        service = MagicMock()
+        service.get = AsyncMock(return_value=game)
+        service.roster.list_for_game = AsyncMock(return_value=rows)
+        service.lobbies.list_for_game = AsyncMock(return_value=lobbies)
+        service.team_names.mapping_for_game = AsyncMock(return_value={})
+        service.workspace_discord_channel_id = AsyncMock(return_value=None)
+        service.host_points_per_win = AsyncMock(return_value=0)
+        service.roster_shape = AsyncMock(
+            return_value=SimpleNamespace(model_dump=lambda: {"slots": {"tank": 1}, "source": "default"})
+        )
+        service.co_hosts.user_ids_for_game = AsyncMock(return_value=[])
+        service.hosts = AsyncMock(return_value={5: "Host"})
+        service.casual_matches.activity_for_games = AsyncMock(return_value={})
+        # Lobby 0 recorded a match after it was balanced; lobby 1 never did.
+        service.casual_matches.activity_for_lobbies = AsyncMock(
+            return_value={0: (2, datetime(2026, 1, 1, 22, 0, tzinfo=UTC))}
+        )
+        service.members = AsyncMock(return_value={})
+        service.player_roles.roles_for_players = AsyncMock(return_value={})
+        service.ranks.list_layer_rows = AsyncMock(return_value=[])
+        service.ranks.resolve = AsyncMock(return_value={})
+
+        with (
+            patch.object(custom, "custom_game_service", service),
+            patch.object(custom, "get_effective_division_grid", AsyncMock(return_value=object())),
+        ):
+            read = await self._call("rpc.balancer.custom.get", {"workspace_id": 7, "custom_game_id": 3})
+
+        self.assertTrue(read["ok"], read)
+        data = read["data"]
+        self.assertNotIn("balance_result", data)
+        by_member = {row["workspace_member_id"]: row for row in data["players"]}
+        # 7 sits in lobby A's selected option; 9 is pinned to B but seated nowhere.
+        self.assertEqual(0, by_member[7]["current_lobby"])
+        self.assertIsNone(by_member[9]["current_lobby"])
+        self.assertEqual(1, by_member[9]["lobby_pin"])
+        self.assertEqual([0, 1], [lobby["lobby_index"] for lobby in data["lobbies"]])
+        self.assertEqual(2, data["lobbies"][0]["matches_count"])
+        self.assertTrue(data["lobbies"][0]["lineup_recorded"])
+        self.assertEqual(0, data["lobbies"][1]["matches_count"])
+        self.assertFalse(data["lobbies"][1]["lineup_recorded"])
+        self.assertIsNotNone(data["lobbies"][0]["balance_result"])
+
     async def test_writing_one_still_requires_an_authenticated_actor(self) -> None:
         service = MagicMock()
         service.close = AsyncMock()

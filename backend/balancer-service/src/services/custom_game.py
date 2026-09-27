@@ -74,7 +74,7 @@ _MAX_CO_HOSTS = 16
 _MAX_TEAM_NAME_LEN = 60
 #: A roster row owns only its lineup state. A rank correction goes into the
 #: host's own layer of ``member_rank``, so it outlives the game it was made in.
-_PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex"})
+_PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex", "lobby_pin"})
 
 #: What a PLAYER may patch on their own row. Ranks are the host's book and
 #: participation is the host's decision, so neither is here.
@@ -558,12 +558,16 @@ class CustomGameService:
             # choice carries over, the open signup window deliberately does not.
             self_signup=MixSelfSignup.CLOSED,
             self_role_edit=bool(source.self_role_edit) if source is not None else False,
+            # How this host runs a session -- one lobby or two -- travels with
+            # the clone; the matchups played in them do not.
+            lobby_count=source.lobby_count if source is not None else 1,
         )
         await self.games.create(session, game)
         # The invariant every per-match read relies on: a mix always has its
         # lobbies. A clone copies the pool and the setup, never a played
-        # session, so the fresh lobby starts empty.
-        await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=0))
+        # session, so the fresh lobbies start empty.
+        for lobby_index in range(game.lobby_count):
+            await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=lobby_index))
 
         cloned: list[tuple[models.CustomGamePlayer, models.CustomGamePlayer]] = []
         rows: list[models.CustomGamePlayer] = []
@@ -571,6 +575,7 @@ class CustomGameService:
             row = _new_roster_row(game.id, source_row.workspace_member_id, source_row.sort_order)
             row.role_selection_mode = source_row.role_selection_mode
             row.is_flex = source_row.is_flex
+            row.lobby_pin = source_row.lobby_pin
             rows.append(row)
             cloned.append((source_row, row))
         taken = {row.workspace_member_id for row in rows}
@@ -675,7 +680,7 @@ class CustomGameService:
         row = next((item for item in roster if item.workspace_member_id == workspace_member_id), None)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game player not found")
-        await self._apply_player_patch(session, row, patch, _PLAYER_PATCH_FIELDS)
+        await self._apply_player_patch(session, row, patch, _PLAYER_PATCH_FIELDS, lobby_count=game.lobby_count)
         await session.flush()
         return game
 
@@ -685,6 +690,8 @@ class CustomGameService:
         row: models.CustomGamePlayer,
         patch: Mapping[str, Any],
         allowed: frozenset[str],
+        *,
+        lobby_count: int = 1,
     ) -> None:
         """Apply a validated lineup patch to one row, within ``allowed`` fields.
 
@@ -692,7 +699,12 @@ class CustomGameService:
         (``_PLAYER_PATCH_FIELDS``), a player only their own role order and flex
         (``_SELF_PATCH_FIELDS``). The difference between them is the gate, not
         the write -- a self edit that diverged here would be a second, subtly
-        different way to set the same three columns.
+        different way to set the same columns.
+
+        ``lobby_count`` is the mix's, and only the pin reads it: pinning to a
+        lobby the mix does not run is a client bug, not a silent no-op. The self
+        path never carries a pin (``lobby_pin`` is not in ``_SELF_PATCH_FIELDS``),
+        so it leaves the default alone.
         """
         _reject_unknown(patch, allowed)
         if "participation" in patch:
@@ -716,6 +728,13 @@ class CustomGameService:
                     detail="is_flex must be a boolean",
                 )
             row.is_flex = patch["is_flex"]
+        if "lobby_pin" in patch:
+            if lobby_count < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="lobby_pin requires a mix with two lobbies",
+                )
+            row.lobby_pin = patch["lobby_pin"]
 
     async def set_participation(
         self,
@@ -745,6 +764,45 @@ class CustomGameService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game player not found")
         for member_id, state in participation.items():
             rows[member_id].participation = state
+        await session.flush()
+        return game
+
+    async def set_lobby_count(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_count: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """Run this mix as one lobby or two.
+
+        Going to two opens an empty lobby B: it has no matchup until somebody
+        balances it, and lobby A is not touched. Going back to one deletes
+        lobby B -- its stored matchup is lost, its recorded matches stay in the
+        history -- and frees every pin, because a pin to a lobby the mix no
+        longer runs would quietly exclude that player from the next balance.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        if lobby_count == game.lobby_count:
+            return game
+        if lobby_count == 2:
+            await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=1))
+        else:
+            lobby = await self.lobbies.get(session, game.id, 1)
+            if lobby is not None:
+                await self.lobbies.delete(session, lobby)
+            for row in await self.roster.list_for_game(session, game.id):
+                row.lobby_pin = None
+        game.lobby_count = lobby_count
         await session.flush()
         return game
 
@@ -795,6 +853,7 @@ class CustomGameService:
         select labels every option with a number or "no rank", and a sparse dict
         would make the bot guess. ``unranked_roles`` is the narrower list the
         warning is built from -- the roles this player actually plays.
+
         """
         seat: dict[str, Any] | None = None
         unranked: list[str] = []

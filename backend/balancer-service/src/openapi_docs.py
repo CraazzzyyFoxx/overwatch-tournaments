@@ -470,6 +470,16 @@ DOCS: dict[str, dict] = {
             "every match it recorded stay readable -- so this is the reversible end of a mix."
         ),
     },
+    "rpc.balancer.custom.set_lobby_count": {
+        "summary": "Set custom game lobby count",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the "
+            "first untouched; going back to one deletes the second lobby together with its stored "
+            "matchup and clears every player's lobby pin. Matches already recorded for the second "
+            "lobby stay in the history and in the statistics."
+        ),
+    },
     "rpc.balancer.custom.hard_delete": {
         "summary": "Delete custom game",
         "description": (

@@ -15,6 +15,7 @@ __all__ = (
     "CustomGameCoHostPatch",
     "CustomGameCreate",
     "CustomGameHostTransfer",
+    "CustomGameLobbyCountPatch",
     "CustomGameNextMapPatch",
     "CustomGameOutcome",
     "CustomGamePlayerPatch",
@@ -60,6 +61,9 @@ class CustomGamePlayerPatch(_Request):
     participation: MixParticipation | None = None
     roles: list[str] | None = None
     is_flex: StrictBool | None = None
+    # ``None`` is "auto": the balance places them wherever they fit. A patch that
+    # does not mention the field leaves the pin exactly as it was.
+    lobby_pin: int | None = Field(None, ge=0, le=1)
 
     @field_validator("roles")
     @classmethod
@@ -213,3 +217,9 @@ class CustomGamePostSignup(_Request):
     posting a card that refuses every click is never the intent."""
 
     self_signup: Literal["pool", "benched"]
+
+
+class CustomGameLobbyCountPatch(_Request):
+    """How many lobbies the mix runs at once."""
+
+    lobby_count: Literal[1, 2]

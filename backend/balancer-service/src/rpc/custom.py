@@ -1,6 +1,6 @@
 """Pickup mixes over typed RPC.
 
-``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,
+``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,set_lobby_count,
 balance,set_team_names,set_next_map,set_variant_index,
 post_discord,post_signup,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
 undo_match,rotation,stats,close,delete,hard_delete,
@@ -45,6 +45,7 @@ from shared.services.member_rank import MIX_ORDER
 from src.core import db
 from src.core.config import config
 from src.domain.balancer.result_serializer import as_lobby_document
+from src.domain.mix_lobbies import seated_member_ids
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
 from src.services.custom_game import custom_game_service
@@ -141,6 +142,7 @@ def _dump_row(
     roles: list[str] | None,
     resolved: dict[tuple[int, str], Any],
     author_ranks: dict[tuple[int, str], int],
+    current_lobby: int | None = None,
 ) -> dict[str, Any]:
     effective = {
         role: resolved[(row.workspace_member_id, role)]
@@ -160,6 +162,11 @@ def _dump_row(
         # included; `all_ranked` means it is `null` and every ranked role plays.
         "role_selection_mode": row.role_selection_mode,
         "is_flex": row.is_flex,
+        # Where this player is right now, derived from the lobbies' selected
+        # options: ``null`` means waiting for a seat. The host's pin is a
+        # separate, durable wish the next balance honours.
+        "current_lobby": current_lobby,
+        "lobby_pin": row.lobby_pin,
         "roles": roles,
         # The ranks balance would actually use: host book > workspace canon > OW.
         "ranks": {role: rank.value for role, rank in effective.items()},
@@ -202,11 +209,14 @@ def _dump_settings(
     }
 
 
-def _dump_lobby(lobby: Any, *, balance_result: bool) -> dict[str, Any]:
-    """One lobby: its pager, its rolled map and when it was last balanced.
+def _dump_lobby(lobby: Any, *, balance_result: bool, activity: tuple[int, Any] | None = None) -> dict[str, Any]:
+    """One lobby: its pager, its rolled map, when it was last balanced -- and,
+    in the detail read, its own matchup and match count.
 
     ``balance_result`` is detail-only -- the solver document grows with every
-    stored option and no list row renders it.
+    stored option and no list row renders it. ``lineup_recorded`` is false while
+    a balanced lineup has not been played: the UI asks for confirmation before
+    anything that would overwrite it.
     """
     out: dict[str, Any] = {
         "lobby_index": lobby.lobby_index,
@@ -215,7 +225,12 @@ def _dump_lobby(lobby: Any, *, balance_result: bool) -> dict[str, Any]:
         "balanced_at": lobby.balanced_at.isoformat() if lobby.balanced_at else None,
     }
     if balance_result:
+        matches_count, last_match_at = activity if activity is not None else (0, None)
         out["balance_result"] = as_lobby_document(lobby.balance_result_json)
+        out["matches_count"] = matches_count
+        out["lineup_recorded"] = lobby.balanced_at is None or (
+            last_match_at is not None and last_match_at >= lobby.balanced_at
+        )
     return out
 
 
@@ -233,6 +248,8 @@ def _dump_game(
     co_hosts: list[dict[str, Any]] | None = None,
     activity: tuple[int, Any] | None = None,
     lobbies: list[Any] | None = None,
+    lobby_activity: dict[int, tuple[int, Any]] | None = None,
+    current_lobby: dict[int, int] | None = None,
 ) -> dict[str, Any]:
     matches_count, last_match_at = activity if activity is not None else (0, None)
     out: dict[str, Any] = {
@@ -249,7 +266,14 @@ def _dump_game(
         # How many lobbies this mix runs, and what each of them is showing: the
         # matchup, the pager and the rolled map are per-lobby facts now.
         "lobby_count": game.lobby_count,
-        "lobbies": [_dump_lobby(lobby, balance_result=roster is not None) for lobby in (lobbies or [])],
+        "lobbies": [
+            _dump_lobby(
+                lobby,
+                balance_result=roster is not None,
+                activity=(lobby_activity or {}).get(lobby.lobby_index),
+            )
+            for lobby in (lobbies or [])
+        ],
         # Whether players may seat themselves here (closed | pool | benched) and
         # whether a seated one may re-order their own roles. Both are read by the
         # board's host controls and by the player's own panel.
@@ -272,6 +296,7 @@ def _dump_game(
                 (by_player.get(row.id, []) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None),
                 resolved or {},
                 author_ranks or {},
+                (current_lobby or {}).get(row.workspace_member_id),
             )
             for row in roster
         ]
@@ -318,6 +343,14 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     co_hosts = [{"user_id": user_id, "display_name": host_names.get(user_id)} for user_id in co_host_user_ids]
     activity = (await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id)
     lobbies = list(await custom_game_service.lobbies.list_for_game(session, game.id))
+    lobby_activity = await custom_game_service.casual_matches.activity_for_lobbies(session, game.id)
+    # Derived once, here: the board, the player sheet and the bot all ask the
+    # same question, and none of them should re-parse a solver document.
+    current_lobby = {
+        member_id: lobby.lobby_index
+        for lobby in lobbies
+        for member_id in seated_member_ids(lobby.balance_result_json, lobby.selected_variant_index)
+    }
     if not roster:
         return _dump_game(
             game,
@@ -328,6 +361,8 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
             co_hosts=co_hosts,
             activity=activity,
             lobbies=lobbies,
+            lobby_activity=lobby_activity,
+            current_lobby=current_lobby,
         )
     member_ids = [row.workspace_member_id for row in roster]
     members = await custom_game_service.members(session, game.workspace_id, member_ids)
@@ -368,6 +403,8 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
         co_hosts=co_hosts,
         activity=activity,
         lobbies=lobbies,
+        lobby_activity=lobby_activity,
+        current_lobby=current_lobby,
     )
 
 
@@ -672,6 +709,30 @@ def register(broker: Any, logger: Any) -> None:
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_self_service", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.set_lobby_count")
+    async def _set_lobby_count(data: dict, msg: RabbitMessage) -> dict:
+        """One lobby or two. Going back to one drops lobby B and every pin --
+        see ``CustomGameService.set_lobby_count``."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameLobbyCountPatch, data)
+            game = await custom_game_service.set_lobby_count(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                lobby_count=body.lobby_count,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_updated(session, workspace_id, change="lobby", actor_user_id=user.id)
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_lobby_count", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.balance")
     async def _balance(data: dict, msg: RabbitMessage) -> dict:

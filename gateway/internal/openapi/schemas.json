@@ -3958,6 +3958,14 @@
       },
       "summary": "Update my mix seat"
     },
+    "rpc.balancer.custom.set_lobby_count": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the first untouched; going back to one deletes the second lobby together with its stored matchup and clears every player's lobby pin. Matches already recorded for the second lobby stay in the history and in the statistics.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameLobbyCountPatch"
+      },
+      "summary": "Set custom game lobby count"
+    },
     "rpc.balancer.custom.set_next_map": {
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. 404 when the map is not in the catalogue.",
       "request": {
@@ -22218,6 +22226,25 @@
       "title": "CustomGameHostTransfer",
       "type": "object"
     },
+    "balancer.CustomGameLobbyCountPatch": {
+      "additionalProperties": false,
+      "description": "How many lobbies the mix runs at once.",
+      "properties": {
+        "lobby_count": {
+          "enum": [
+            1,
+            2
+          ],
+          "title": "Lobby Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "lobby_count"
+      ],
+      "title": "CustomGameLobbyCountPatch",
+      "type": "object"
+    },
     "balancer.CustomGameNextMapPatch": {
       "additionalProperties": false,
       "description": "``null`` clears the pick; the next match then records with no map.",
@@ -22297,6 +22324,20 @@
           ],
           "default": null,
           "title": "Is Flex"
+        },
+        "lobby_pin": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lobby Pin"
         },
         "participation": {
           "anyOf": [

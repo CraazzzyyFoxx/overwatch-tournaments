@@ -472,6 +472,32 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertTrue(game.self_role_edit)
         self.assertEqual(game.self_signup, "closed")
 
+    async def test_create_clone_copies_the_lobby_layout(self) -> None:
+        """Two lobbies and who is pinned where are how this host runs the
+        session; the matchups and the history are last session's."""
+        self.games.get.return_value = _game(id=5, lobby_count=2)
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, lobby_pin=1),
+            _roster_row(2, 8, 1),
+        ]
+        self.roster.create_many = AsyncMock(side_effect=self._assign_roster_ids)
+
+        game = await self.service.create(
+            self.session,
+            workspace_id=1,
+            host_user_id=9,
+            name="Scrim 2",
+            actor_user_id=9,
+            clone_from_game_id=5,
+        )
+
+        self.assertEqual(game.lobby_count, 2)
+        rows = self.roster.create_many.await_args.args[1]
+        self.assertEqual([row.lobby_pin for row in rows], [1, None])
+        created = [call.args[1] for call in self.lobbies.create.await_args_list]
+        self.assertEqual([lobby.lobby_index for lobby in created], [0, 1])
+        self.assertTrue(all(lobby.balance_result_json is None for lobby in created))
+
     async def test_create_clone_of_another_workspace_404(self) -> None:
         self.games.get.return_value = _game(id=5, workspace_id=2)
 
@@ -666,6 +692,111 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertTrue(row.is_flex)
         # A patch, not a replace: the bench switch is untouched.
         self.assertNotEqual(row.participation, MixParticipation.BENCHED)
+
+    async def test_update_player_pins_a_player_to_a_lobby(self) -> None:
+        game = _game(lobby_count=2)
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [row]
+
+        await self.service.update_player(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            workspace_member_id=7,
+            patch={"lobby_pin": 1},
+            actor_user_id=9,
+        )
+
+        self.assertEqual(row.lobby_pin, 1)
+
+    async def test_update_player_clears_a_pin_back_to_auto(self) -> None:
+        game = _game(lobby_count=2)
+        row = _roster_row(1, 7, 0, lobby_pin=0)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [row]
+
+        await self.service.update_player(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            workspace_member_id=7,
+            patch={"lobby_pin": None},
+            actor_user_id=9,
+        )
+
+        self.assertIsNone(row.lobby_pin)
+
+    async def test_update_player_refuses_a_pin_in_a_one_lobby_mix_422(self) -> None:
+        """There is nothing to pin to: the mix runs one lobby."""
+        row = _roster_row(1, 7, 0)
+        self.games.get.return_value = _game()
+        self.roster.list_for_game.return_value = [row]
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.update_player(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                workspace_member_id=7,
+                patch={"lobby_pin": 1},
+                actor_user_id=9,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertIsNone(row.lobby_pin)
+
+    async def test_set_lobby_count_two_opens_lobby_b(self) -> None:
+        game = _game()
+        self.games.get.return_value = game
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=2, actor_user_id=9
+        )
+
+        self.assertEqual(game.lobby_count, 2)
+        self.assertEqual(sorted(self.lobby_rows), [0, 1])
+        self.assertIsNone(self.lobby_rows[1].balance_result_json)
+
+    async def test_set_lobby_count_one_drops_lobby_b_and_every_pin(self) -> None:
+        """Going back to one lobby loses B's matchup and frees everybody: a pin
+        to a lobby that no longer exists would silently exclude that player
+        from the next balance."""
+        game = _game(lobby_count=2)
+        self.lobby_rows[1] = _lobby(1, balance_result_json={"variants": []})
+        pinned = _roster_row(1, 7, 0, lobby_pin=1)
+        other = _roster_row(2, 8, 1, lobby_pin=0)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [pinned, other]
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=1, actor_user_id=9
+        )
+
+        self.assertEqual(game.lobby_count, 1)
+        self.assertEqual(sorted(self.lobby_rows), [0])
+        self.assertIsNone(pinned.lobby_pin)
+        self.assertIsNone(other.lobby_pin)
+
+    async def test_set_lobby_count_to_the_current_value_changes_nothing(self) -> None:
+        game = _game()
+        self.games.get.return_value = game
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=1, actor_user_id=9
+        )
+
+        self.lobbies.create.assert_not_awaited()
+        self.lobbies.delete.assert_not_awaited()
+
+    async def test_set_lobby_count_terminal_409(self) -> None:
+        self.games.get.return_value = _game(status="completed")
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_lobby_count(
+                self.session, workspace_id=1, custom_game_id=11, lobby_count=2, actor_user_id=9
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
 
     async def test_set_participation_moves_every_named_row_at_once(self) -> None:
         game = _game()

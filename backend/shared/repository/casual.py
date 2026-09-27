@@ -82,6 +82,24 @@ class CasualMatchRepository(BaseRepository[models.CasualMatch]):
         )
         return {row.custom_game_id: (row.matches, row.last_at) for row in rows}
 
+    async def activity_for_lobbies(self, session: AsyncSession, custom_game_id: int) -> dict[int, tuple[int, datetime]]:
+        """``lobby_index -> (matches recorded, when the newest one was)``.
+
+        Two lobbies keep two paces, so "game 5" in one is not "game 5" in the
+        other: the embed's match number and the board's per-lobby counter both
+        read this. A lobby with no matches is simply absent.
+        """
+        rows = await session.execute(
+            sa.select(
+                self.model.lobby_index,
+                sa.func.count().label("matches"),
+                sa.func.max(self.model.created_at).label("last_at"),
+            )
+            .where(self.model.custom_game_id == custom_game_id)
+            .group_by(self.model.lobby_index)
+        )
+        return {row.lobby_index: (row.matches, row.last_at) for row in rows}
+
     async def seats_for_workspace(
         self, session: AsyncSession, workspace_id: int, since: datetime | None = None
     ) -> Sequence[sa.Row[tuple[int, enums.HeroClass | None, int, datetime, int, int]]]:
