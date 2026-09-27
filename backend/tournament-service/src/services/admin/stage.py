@@ -1703,57 +1703,21 @@ class AdminStageService:
         )
         return ids - set(touched.scalars())
 
-    async def _downstream_item_ids(self, session: AsyncSession, source_stage_item_id: int) -> set[int]:
-        """Stage items whose qualification is already frozen (FINAL) off
-        ``source_stage_item_id``'s standings."""
-        result = await session.execute(
-            select(models.StageItemInput.stage_item_id).where(
-                models.StageItemInput.source_stage_item_id == source_stage_item_id,
-                models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
-            )
-        )
-        return set(result.scalars())
+    async def _assert_downstream_untouched(self, session: AsyncSession, stage_item_ids: Sequence[int]) -> None:
+        """Refuse to re-rank ``stage_item_ids`` while something seeded off them plays.
 
-    async def assert_source_correction_allowed(self, session: AsyncSession, encounter: models.Encounter) -> None:
-        """Refuse a result correction whose qualification fallout cannot be applied.
-
-        ``requalify_downstream_inputs`` re-resolves a frozen seed only while the
-        stage item it feeds is still untouched. Once that playoff has started,
-        correcting the group result here would leave it playing with a team that
-        no longer qualified and no way to take that back -- so the correction is
-        refused at the entry point rather than allowed to diverge silently.
+        The one rule behind both entry points below: a seed frozen (FINAL) off
+        these items may still be re-resolved, but only while the item it feeds is
+        untouched. Past that point the playoff is being played with the teams it
+        has, and there is nowhere to put a new order -- so the edge is refused
+        here instead of diverging silently.
         """
-        if encounter.stage_item_id is None:
-            return
-        downstream_item_ids = await self._downstream_item_ids(session, encounter.stage_item_id)
-        if not downstream_item_ids:
-            return
-        untouched = await self._untouched_stage_items(session, sorted(downstream_item_ids))
-        blocked = sorted(downstream_item_ids - untouched)
-        if blocked:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "downstream stage already in progress; correct it there or deactivate it first "
-                    f"(stage items {blocked})"
-                ),
-            )
-
-    async def assert_stage_correction_allowed(self, session: AsyncSession, stage: models.Stage) -> None:
-        """Refuse a stage-wide re-ranking whose fallout cannot be applied.
-
-        ``assert_source_correction_allowed`` asks this of the one group a
-        corrected encounter belongs to. Editing the stage's scoring re-ranks
-        EVERY group of it at once, so the question is asked of every item the
-        stage has -- with the same answer and the same message, because it is the
-        same impossibility: a playoff already being played cannot be re-seeded.
-        """
-        item_ids = [item.id for item in stage.items]
-        if not item_ids:
+        source_ids = list(stage_item_ids)
+        if not source_ids:
             return
         result = await session.execute(
             select(models.StageItemInput.stage_item_id).where(
-                models.StageItemInput.source_stage_item_id.in_(item_ids),
+                models.StageItemInput.source_stage_item_id.in_(source_ids),
                 models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
             )
         )
@@ -1770,6 +1734,30 @@ class AdminStageService:
                     f"(stage items {blocked})"
                 ),
             )
+
+    async def assert_source_correction_allowed(self, session: AsyncSession, encounter: models.Encounter) -> None:
+        """Refuse a result correction whose qualification fallout cannot be applied.
+
+        ``requalify_downstream_inputs`` re-resolves a frozen seed only while the
+        stage item it feeds is still untouched. Once that playoff has started,
+        correcting the group result here would leave it playing with a team that
+        no longer qualified and no way to take that back -- so the correction is
+        refused at the entry point rather than allowed to diverge silently.
+        """
+        if encounter.stage_item_id is None:
+            return
+        await self._assert_downstream_untouched(session, [encounter.stage_item_id])
+
+    async def assert_stage_correction_allowed(self, session: AsyncSession, stage: models.Stage) -> None:
+        """Refuse a stage-wide re-ranking whose fallout cannot be applied.
+
+        ``assert_source_correction_allowed`` asks this of the one group a
+        corrected encounter belongs to. Editing the stage's scoring re-ranks
+        EVERY group of it at once, so the question is asked of every item the
+        stage has -- with the same answer and the same message, because it is the
+        same impossibility: a playoff already being played cannot be re-seeded.
+        """
+        await self._assert_downstream_untouched(session, [item.id for item in stage.items])
 
     async def started_qualification_cut(self, session: AsyncSession, source_stage_item_id: int) -> int | None:
         """The lowest ``source_stage_item_id`` place a downstream stage already
