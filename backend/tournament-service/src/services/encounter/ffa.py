@@ -210,9 +210,7 @@ class FfaEncounterService:
             actor_user_id=actor_user_id,
             game=game,
             before=before,
-            after=[
-                {"team_id": i.team_id, "placement": i.placement, "stats": dict(i.stats)} for i in normalized
-            ],
+            after=[{"team_id": i.team_id, "placement": i.placement, "stats": dict(i.stats)} for i in normalized],
             reason=reason,
         )
         await self.refresh_completion(session, lobby, actor_user_id=actor_user_id)
@@ -505,9 +503,7 @@ class FfaEncounterService:
         game_ids = [game.id for lobby_games in games.values() for game in lobby_games]
         lines: dict[int, dict[int, FfaGameLine]] = {game_id: {} for game_id in game_ids}
         for row in await self.result_repo.list_for_games(session, game_ids):
-            lines[row.game_id][row.team_id] = FfaGameLine(
-                team_id=row.team_id, placement=row.placement, stats=row.stats
-            )
+            lines[row.game_id][row.team_id] = FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats)
 
         team_ids = [seat.team_id for lobby_seats in seats.values() for seat in lobby_seats]
         teams = {
@@ -694,9 +690,7 @@ class FfaEncounterService:
         ]
         by_game: dict[int, list[FfaGameLine]] = {game.id: [] for game in games}
         for row in await self.result_repo.list_for_games(session, list(by_game)):
-            by_game[row.game_id].append(
-                FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats)
-            )
+            by_game[row.game_id].append(FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats))
         return [tuple(sorted(by_game[game.id], key=_line_order)) for game in games]
 
     async def _totals_snapshot(self, session: AsyncSession, lobby: models.Encounter) -> list[dict]:

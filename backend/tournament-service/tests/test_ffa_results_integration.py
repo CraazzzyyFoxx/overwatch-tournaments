@@ -141,9 +141,7 @@ async def _drop(session: Any, seeded: SimpleNamespace) -> None:
     # cascades away.
     job_ids = (
         await session.scalars(
-            sa.select(TournamentComputationJob.id).where(
-                TournamentComputationJob.tournament_id == seeded.tournament_id
-            )
+            sa.select(TournamentComputationJob.id).where(TournamentComputationJob.tournament_id == seeded.tournament_id)
         )
     ).all()
     if job_ids:
@@ -765,9 +763,7 @@ def test_stage_results_group_confirmed_games_by_lobby_group(db_session) -> None:
     participants, games, unknown_participants, unknown_games, team_ids = asyncio.run(_run())
     assert participants == team_ids
     # The cancelled second game is gone from the read the standings sum.
-    assert games == [
-        [(team_ids[0], 1, {"score": 10}), (team_ids[1], 2, {"score": 6}), (team_ids[2], 3, {"score": 2})]
-    ]
+    assert games == [[(team_ids[0], 1, {"score": 10}), (team_ids[1], 2, {"score": 6}), (team_ids[2], 3, {"score": 2})]]
     assert (unknown_participants, unknown_games) == ([], [])
 
 

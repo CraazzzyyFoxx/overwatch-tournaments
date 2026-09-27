@@ -184,8 +184,7 @@ class Stage(db.TimeStampIntegerMixin):
         """
         return {
             "columns": [
-                dict(column)
-                for column in (self.ffa_columns if self.ffa_columns is not None else DEFAULT_FFA_COLUMNS)
+                dict(column) for column in (self.ffa_columns if self.ffa_columns is not None else DEFAULT_FFA_COLUMNS)
             ],
             "placement_points": list(self.ffa_placement_points or ()),
             "formula": self.ffa_formula or DEFAULT_FFA_FORMULA,

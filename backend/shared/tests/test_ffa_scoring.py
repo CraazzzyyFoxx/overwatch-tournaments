@@ -77,9 +77,7 @@ def test_a_formula_that_pays_for_placement_needs_every_place_exactly_once() -> N
 
 
 def test_a_formula_that_ignores_placement_accepts_given_places_including_ties() -> None:
-    lines = normalize_game_lines(
-        [line(1, 1, kills=5, deaths=0), line(2, 1, kills=5, deaths=0)], [1, 2], BY_SCORE
-    )
+    lines = normalize_game_lines([line(1, 1, kills=5, deaths=0), line(2, 1, kills=5, deaths=0)], [1, 2], BY_SCORE)
 
     assert [item.placement for item in lines] == [1, 1]
 
@@ -87,8 +85,14 @@ def test_a_formula_that_ignores_placement_accepts_given_places_including_ties() 
 @pytest.mark.parametrize(
     ("lines", "code"),
     [
-        ([line(1, kills=1, deaths=0), line(2, kills=1, deaths=0), line(9, kills=1, deaths=0)], "ffa_result_unknown_team"),
-        ([line(1, kills=1, deaths=0), line(1, kills=2, deaths=0), line(2, kills=1, deaths=0)], "ffa_result_duplicate_team"),
+        (
+            [line(1, kills=1, deaths=0), line(2, kills=1, deaths=0), line(9, kills=1, deaths=0)],
+            "ffa_result_unknown_team",
+        ),
+        (
+            [line(1, kills=1, deaths=0), line(1, kills=2, deaths=0), line(2, kills=1, deaths=0)],
+            "ffa_result_duplicate_team",
+        ),
         ([line(1, kills=1, deaths=0)], "ffa_result_missing_team"),
         ([line(1, kills=1, deaths=0, assists=2), line(2, kills=1, deaths=0)], "ffa_result_unknown_stat"),
         ([line(1, kills=1), line(2, kills=1, deaths=0)], "ffa_result_missing_stat"),

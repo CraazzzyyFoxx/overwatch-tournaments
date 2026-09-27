@@ -40,9 +40,9 @@ class FfaScoringSchemaTests(TestCase):
         # A stage that never opened the editor must score exactly what it
         # scored before columns existed.
         scoring = schemas.FfaScoring()
-        self.assertEqual([("score", "Счёт", True, "higher")], [
-            (c.key, c.label, c.public, c.better) for c in scoring.columns
-        ])
+        self.assertEqual(
+            [("score", "Счёт", True, "higher")], [(c.key, c.label, c.public, c.better) for c in scoring.columns]
+        )
         self.assertEqual("score", scoring.formula)
 
     def test_negative_placement_points_are_refused(self) -> None:
@@ -61,14 +61,16 @@ class FfaScoringSchemaTests(TestCase):
             schemas.FfaScoring(columns=[self.KILLS], formula="kills", placement_points=[1.0] * (FFA_MAX_LOBBY_SIZE + 1))
 
     def test_a_full_length_placement_table_is_accepted(self) -> None:
-        scoring = schemas.FfaScoring(
-            columns=[self.KILLS], formula="kills", placement_points=[1.0] * FFA_MAX_LOBBY_SIZE
-        )
+        scoring = schemas.FfaScoring(columns=[self.KILLS], formula="kills", placement_points=[1.0] * FFA_MAX_LOBBY_SIZE)
         self.assertEqual(FFA_MAX_LOBBY_SIZE, len(scoring.placement_points))
 
     def test_a_column_key_must_be_a_usable_identifier(self) -> None:
-        self.assertEqual("ffa_column_key_invalid", self._reject(columns=[{"key": "Kills", "label": "K"}], formula="1")["type"])
-        self.assertEqual("ffa_column_key_invalid", self._reject(columns=[{"key": "", "label": "K"}], formula="1")["type"])
+        self.assertEqual(
+            "ffa_column_key_invalid", self._reject(columns=[{"key": "Kills", "label": "K"}], formula="1")["type"]
+        )
+        self.assertEqual(
+            "ffa_column_key_invalid", self._reject(columns=[{"key": "", "label": "K"}], formula="1")["type"]
+        )
 
     def test_a_column_may_not_shadow_a_formula_word(self) -> None:
         for key in ("place", "place_pts", "teams", "min", "round", "if", "if_", "not"):
@@ -80,7 +82,9 @@ class FfaScoringSchemaTests(TestCase):
         duplicate = self._reject(columns=[{"key": "k", "label": "A"}, {"key": "k", "label": "B"}], formula="k")
         self.assertEqual("ffa_column_duplicate", duplicate["type"])
         self.assertEqual("k", duplicate["ctx"]["name"])
-        too_many = self._reject(columns=[{"key": f"c{i}", "label": "x"} for i in range(FFA_MAX_COLUMNS + 1)], formula="1")
+        too_many = self._reject(
+            columns=[{"key": f"c{i}", "label": "x"} for i in range(FFA_MAX_COLUMNS + 1)], formula="1"
+        )
         self.assertEqual("ffa_columns_too_many", too_many["type"])
 
     def test_a_blank_label_is_refused(self) -> None:

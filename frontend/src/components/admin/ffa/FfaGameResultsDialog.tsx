@@ -252,7 +252,7 @@ export function FfaGameResultsDialog({
               // The organizer has to know which of these numbers a spectator
               // will never see — this form is the only place the column shows
               // up at all, so nothing else can tell them.
-              <span className="block normal-case tracking-normal text-[10px] text-muted-foreground">
+              <span className="block normal-case tracking-normal text-[11px] text-muted-foreground">
                 hidden from viewers
               </span>
             )}

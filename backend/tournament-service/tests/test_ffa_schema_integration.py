@@ -80,7 +80,7 @@ async def _stage(session: Any, tournament_id: int) -> int:
     return (
         await session.execute(
             sa.text(
-                "insert into tournament.stage (tournament_id, name, stage_type, \"order\") "
+                'insert into tournament.stage (tournament_id, name, stage_type, "order") '
                 "values (:t, 'Lobbies', 'ffa_league', 1) returning id"
             ),
             {"t": tournament_id},
@@ -289,7 +289,7 @@ def test_stat_keys_of_a_stage_skip_cancelled_games(db_session) -> None:
                 sa.text(
                     "insert into tournament.encounter_game_result "
                     "(game_id, encounter_id, team_id, placement, stats) "
-                    "values (:g, :e, :t, 1, '{\"kills\": 4, \"deaths\": 1}'::jsonb)"
+                    'values (:g, :e, :t, 1, \'{"kills": 4, "deaths": 1}\'::jsonb)'
                 ),
                 {"g": live, "e": lobby, "t": teams[0]},
             )
