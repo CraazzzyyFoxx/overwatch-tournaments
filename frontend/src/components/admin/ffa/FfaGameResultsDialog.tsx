@@ -207,8 +207,14 @@ export function FfaGameResultsDialog({
         className="grid items-center gap-2 overflow-x-auto"
         // One column per stat, sized in the grid rather than in a class: the
         // stage decides how many there are, and a Tailwind class cannot be
-        // built from a number at runtime.
-        style={{ gridTemplateColumns: `minmax(7rem, 1fr) 5rem repeat(${columns.length}, 7rem)` }}
+        // built from a number at runtime. `repeat(0, …)` is invalid CSS and
+        // would drop the whole track list, so a placement-only stage — a legal
+        // league with no columns at all — names only the two fixed tracks.
+        style={{
+          gridTemplateColumns: `minmax(7rem, 1fr) 5rem${
+            columns.length > 0 ? ` repeat(${columns.length}, 7rem)` : ""
+          }`
+        }}
       >
         <span className={EYEBROW_CLASS}>Team</span>
         <span className={EYEBROW_CLASS}>{requiresPlacement ? "Place" : "Place (optional)"}</span>

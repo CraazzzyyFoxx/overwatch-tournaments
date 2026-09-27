@@ -190,6 +190,28 @@ describe("entering an FFA game", () => {
     expect(document.body.textContent).toContain("hidden from viewers");
   });
 
+  it("keeps a valid grid for a placement-only stage, whose lines carry no stats", async () => {
+    await mount(lobby([row(1), row(2)], { rules: rules({ columns: [], formula: "place_pts" }) }), 1);
+
+    // `repeat(0, …)` is invalid CSS: a browser drops the whole track list and
+    // every team's fields fall into one column. happy-dom evaluates no CSS, so
+    // the track list itself is the observable property.
+    const grid = document.body.querySelector<HTMLElement>('[style*="grid-template-columns"]');
+    expect(grid?.style.gridTemplateColumns).toBe("minmax(7rem, 1fr) 5rem");
+
+    await type(field("Place for Team 1"), "1");
+    await type(field("Place for Team 2"), "2");
+    await save();
+
+    expect(setGameResults).toHaveBeenCalledWith(500, 1, {
+      results: [
+        { team_id: 1, placement: 1, stats: {} },
+        { team_id: 2, placement: 2, stats: {} }
+      ],
+      reason: null
+    });
+  });
+
   it("holds the request back while a column is blank, rather than sending a zero", async () => {
     // A forgotten value used to leave as `0` — a line the server accepts, so
     // `ffa_result_missing_stat` could never catch it. Nothing is sent until the
