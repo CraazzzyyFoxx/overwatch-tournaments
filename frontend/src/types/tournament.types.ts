@@ -91,7 +91,7 @@ export interface StageFfaScoring {
   /** What place `i + 1` is worth; a shorter list scores the tail at zero. */
   placement_points: number[];
   /** The expression a game's points are computed with, over the column keys
-   *  plus `place`, `place_pts` and `teams`. */
+   *  plus `place`, `place_pts` and the lobby size (teams). */
   formula: string;
 }
 
