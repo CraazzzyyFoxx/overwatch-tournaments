@@ -26,6 +26,7 @@ const rotation = vi.fn();
 const undoMatch = vi.fn();
 const postToDiscord = vi.fn();
 const setVariantIndex = vi.fn();
+const setLobbyCount = vi.fn();
 const getMySeat = vi.fn();
 const joinMix = vi.fn();
 const leaveMix = vi.fn();
@@ -39,7 +40,19 @@ vi.mock("@/services/custom-game.service", () => ({
     list: (workspaceId: number) => ["custom-games", workspaceId],
     one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId],
     matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"],
-    rotation: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "rotation"],
+    rotationAll: (workspaceId: number, gameId: number) => [
+      "custom-games",
+      workspaceId,
+      gameId,
+      "rotation",
+    ],
+    rotation: (workspaceId: number, gameId: number, lobbyIndex: number) => [
+      "custom-games",
+      workspaceId,
+      gameId,
+      "rotation",
+      lobbyIndex,
+    ],
     me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"],
   },
   customGameService: {
@@ -53,6 +66,7 @@ vi.mock("@/services/custom-game.service", () => ({
     undoMatch: (...args: unknown[]) => undoMatch(...args),
     postToDiscord: (...args: unknown[]) => postToDiscord(...args),
     setVariantIndex: (...args: unknown[]) => setVariantIndex(...args),
+    setLobbyCount: (...args: unknown[]) => setLobbyCount(...args),
     getMySeat: (...args: unknown[]) => getMySeat(...args),
     joinMix: (...args: unknown[]) => joinMix(...args),
     leaveMix: (...args: unknown[]) => leaveMix(...args),
@@ -159,8 +173,8 @@ function Harness({
     setRoster: (ids) => setRoster.mutate(ids),
     applyRotationHints: () => applyRotationHints.mutate(),
     undoMatch: (matchId) => undo.mutate(matchId),
-    postToDiscord: (variantIndex, image) => post.mutate({ variantIndex, image }),
-    setVariantIndex: (index) => paging.mutate(index),
+    postToDiscord: (variantIndex, image) => post.mutate({ lobbyIndex: 0, variantIndex, image }),
+    setVariantIndex: (index) => paging.mutate({ lobbyIndex: 0, variantIndex: index }),
     client,
   });
   return null;
@@ -267,7 +281,7 @@ describe("usePickupMix", () => {
       await tick();
     });
 
-    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 1, image);
+    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 0, 1, image);
     // Nothing about the mix changed, so a refetch would be pure noise.
     expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
   });
@@ -285,7 +299,7 @@ describe("usePickupMix", () => {
       await tick();
     });
 
-    expect(setVariantIndex).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 2);
+    expect(setVariantIndex).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 0, 2);
     expect(
       client.getQueryData<{ lobbies: { selected_variant_index: number }[] }>(gameKey)?.lobbies[0]
         .selected_variant_index,

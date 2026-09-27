@@ -6217,6 +6217,16 @@
         "roster_full": "This mix is full.",
         "role_edit_off": "The host edits roles in this mix."
       }
+    },
+    "lobbies": {
+      "tabsLabel": "Lobbies",
+      "tab": "Lobby {letter}",
+      "game": "game {number}",
+      "notRecorded": "not recorded",
+      "notBalanced": "not balanced",
+      "rebalanceTitle": "Rebalance this lobby?",
+      "rebalanceDescription": "The result of the lineup on screen has not been recorded. Balancing replaces it, and there will be nothing left to record it from.",
+      "rebalanceConfirm": "Balance anyway"
     }
   },
   "quota": {

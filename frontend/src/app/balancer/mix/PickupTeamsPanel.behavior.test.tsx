@@ -202,6 +202,7 @@ function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
     recorded_by: 9,
     recorded_at: new Date().toISOString(),
     points_per_win_applied: null,
+    lobby_index: 0,
     ...overrides,
   };
 }
@@ -218,6 +219,7 @@ async function mount(
     canWrite?: boolean;
     activeCount?: number;
     variantIndex?: number;
+    lobbyIndex?: 0 | 1;
     hasMix?: boolean;
     omitSwapSeats?: boolean;
     maps?: MapRead[];
@@ -227,6 +229,7 @@ async function mount(
     omitPostToDiscord?: boolean;
   } = {},
 ) {
+  const lobbyIndex = props.lobbyIndex ?? 0;
   const container = document.createElement("div");
   document.body.appendChild(container);
   await act(async () => {
@@ -237,6 +240,8 @@ async function mount(
         gamesError={false}
         onRetryGames={vi.fn()}
         game={current}
+        lobby={current?.lobbies.find((row) => row.lobby_index === lobbyIndex)}
+        lobbyIndex={lobbyIndex}
         gameLoading={false}
         hasMix={props.hasMix ?? current != null}
         balancing={false}
@@ -470,17 +475,29 @@ describe("PickupTeamsPanel", () => {
     expect(onRecordOutcome).not.toHaveBeenCalled();
 
     await click(byName(scope, "Draw"));
-    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: null }, variantIndex: 0 });
+    expect(onRecordOutcome).toHaveBeenCalledWith({
+      outcome: { winner: null },
+      variantIndex: 0,
+      lobbyIndex: 0,
+    });
 
     await click(byName(scope, "Team 2 win"));
-    expect(onRecordOutcome).toHaveBeenLastCalledWith({ outcome: { winner: 2 }, variantIndex: 0 });
+    expect(onRecordOutcome).toHaveBeenLastCalledWith({
+      outcome: { winner: 2 },
+      variantIndex: 0,
+      lobbyIndex: 0,
+    });
   });
 
   it("reports the page's variant index alongside a recorded result", async () => {
     const scope = await mount(game(), { variantIndex: 1 });
 
     await click(byName(scope, "Team 1 win"));
-    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: 1 }, variantIndex: 1 });
+    expect(onRecordOutcome).toHaveBeenCalledWith({
+      outcome: { winner: 1 },
+      variantIndex: 1,
+      lobbyIndex: 0,
+    });
   });
 
   it("shows the mix's next map, with its mode, inside the captured block", async () => {
@@ -775,5 +792,111 @@ describe("PickupTeamsPanel", () => {
     expect(scope.textContent).toContain("3100");
     expect(pagerLabel(scope)).toBe("3 / 3");
     expect(scope.querySelector('[data-testid="teams-capture"]')?.textContent).toContain("Ilios");
+  });
+
+  it("records a result for the lobby it is showing, not always the first", async () => {
+    const twoLobbies = game({
+      lobby_count: 2,
+      lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })],
+    });
+    const scope = await mount(twoLobbies, { lobbyIndex: 1, variantIndex: 1 });
+
+    await click(byName(scope, "Team 1 win"));
+
+    expect(onRecordOutcome).toHaveBeenCalledWith({
+      outcome: { winner: 1 },
+      variantIndex: 1,
+      lobbyIndex: 1,
+    });
+  });
+
+  it("renames lobby B's teams at their global indices, not at 0 and 1", async () => {
+    const twoLobbies = game({
+      lobby_count: 2,
+      lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })],
+    });
+    const scope = await mount(twoLobbies, { lobbyIndex: 1 });
+
+    const pencils = [...scope.querySelectorAll('button[aria-label="Edit team name"]')];
+    await click(pencils[0]);
+    const field = inputByLabel(scope, "team name");
+    await typeInto(field as HTMLInputElement, "Ravens");
+    await click(scope.querySelector('button[aria-label="Save team name"]'));
+
+    // A: 0-1, B: 2-3 -- the same `CustomGameTeamName.team_index` the host's
+    // override for lobby A already uses.
+    expect(onRenameTeam).toHaveBeenCalledWith(2, "Ravens");
+  });
+
+  it("shows lobby B its own stored name override", async () => {
+    const twoLobbies = game({
+      lobby_count: 2,
+      lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })],
+      settings: { ...SETTINGS, team_names: { "0": "Wolves", "2": "Ravens" } },
+    });
+    const scope = await mount(twoLobbies, { lobbyIndex: 1 });
+
+    expect(scope.textContent).toContain("Ravens");
+    expect(scope.textContent).not.toContain("Wolves");
+  });
+
+  it("asks before rebalancing a lobby whose lineup is still unrecorded", async () => {
+    const scope = await mount(game({ lobbies: [lobbyRow({ lineup_recorded: false })] }));
+
+    await click(byName(scope, "Balance teams"));
+    expect(onBalance).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "rebalanceDescription",
+    );
+
+    await click(byName(document, "rebalanceConfirm"));
+    expect(onBalance).toHaveBeenCalledTimes(1);
+  });
+
+  it("balances straight away once this lobby's last lineup has been recorded", async () => {
+    const scope = await mount(game({ lobbies: [lobbyRow({ lineup_recorded: true })] }));
+
+    await click(byName(scope, "Balance teams"));
+
+    expect(onBalance).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it("offers an undo on the newest match of each lobby, not only on the newest of the mix", async () => {
+    const twoLobbies = game({
+      lobby_count: 2,
+      lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })],
+    });
+    const scope = await mount(twoLobbies, {
+      matches: [
+        match({ id: 12, lobby_index: 0 }),
+        match({ id: 11, lobby_index: 1 }),
+        match({ id: 10, lobby_index: 0 }),
+      ],
+    });
+
+    // 12 is A's newest, 11 is B's newest; 10 sits under 12 in the same lobby.
+    expect(scope.querySelectorAll('button[aria-label="Undo this match"]')).toHaveLength(2);
+  });
+
+  it("marks which lobby each recorded match belongs to once the mix runs two", async () => {
+    const twoLobbies = game({
+      lobby_count: 2,
+      lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })],
+    });
+    const scope = await mount(twoLobbies, {
+      matches: [match({ id: 12, lobby_index: 0 }), match({ id: 11, lobby_index: 1 })],
+    });
+
+    const chips = [...scope.querySelectorAll('[data-testid="match-lobby"]')].map((node) =>
+      node.textContent?.trim(),
+    );
+    expect(chips).toEqual(["A", "B"]);
+  });
+
+  it("leaves the history unchipped while the mix has run one lobby all along", async () => {
+    const scope = await mount(game(), { matches: [match({ id: 12 })] });
+
+    expect(scope.querySelector('[data-testid="match-lobby"]')).toBeNull();
   });
 });

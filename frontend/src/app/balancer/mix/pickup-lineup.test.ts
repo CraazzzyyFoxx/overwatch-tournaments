@@ -166,14 +166,19 @@ describe("summarizeRoleSupply", () => {
 });
 
 describe("teamNamesByIndex", () => {
-  it("re-keys the host's overrides by team index, dropping blanks", () => {
-    expect(
-      teamNamesByIndex({
-        points_per_win: 0,
-        team_names: { "0": "Wolves", "1": "   ", "2": "Bears" },
-        workspace_discord_channel_id: null,
-      }),
-    ).toEqual({ 0: "Wolves", 2: "Bears" });
+  const SETTINGS = {
+    points_per_win: 0,
+    // Global indices: 0-1 are lobby A's two teams, 2-3 are lobby B's.
+    team_names: { "0": "Wolves", "1": "   ", "2": "Bears", "3": "Ravens" },
+    workspace_discord_channel_id: null,
+  };
+
+  it("re-keys lobby A's overrides by team index, dropping blanks and lobby B's", () => {
+    expect(teamNamesByIndex(SETTINGS)).toEqual({ 0: "Wolves" });
+  });
+
+  it("shifts lobby B's overrides down to the positions its own two teams render at", () => {
+    expect(teamNamesByIndex(SETTINGS, 1)).toEqual({ 0: "Bears", 1: "Ravens" });
   });
 
   it("has nothing to say for a mix with no overrides at all", () => {

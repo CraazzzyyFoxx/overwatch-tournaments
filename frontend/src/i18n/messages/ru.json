@@ -6217,6 +6217,16 @@
         "roster_full": "Мест больше нет.",
         "role_edit_off": "Роли в этом миксе меняет хост."
       }
+    },
+    "lobbies": {
+      "tabsLabel": "Лобби",
+      "tab": "Лобби {letter}",
+      "game": "игра {number}",
+      "notRecorded": "не записано",
+      "notBalanced": "не собрано",
+      "rebalanceTitle": "Перебалансировать это лобби?",
+      "rebalanceDescription": "Результат состава на экране не записан. Перебаланс заменит его, и записывать будет нечего.",
+      "rebalanceConfirm": "Всё равно перебалансировать"
     }
   },
   "quota": {

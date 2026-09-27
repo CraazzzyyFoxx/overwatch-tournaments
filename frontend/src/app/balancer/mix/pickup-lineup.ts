@@ -9,10 +9,11 @@ import type {
   RotationRecommendation,
 } from "@/services/custom-game.service";
 
-/** What recording a match needs: the click, and which balance option it was played from. */
+/** What recording a match needs: the click, which balance option it was played from, and whose lobby it was. */
 export type PickupRecordOutcomeInput = {
   outcome: CustomGameOutcome;
   variantIndex: number;
+  lobbyIndex: 0 | 1;
 };
 
 /**
@@ -317,16 +318,23 @@ function asNumber(value: unknown): number | null {
 }
 
 /**
- * A host's team-name overrides re-keyed by 0-based team index -- the same
- * position `parseVariants` below assigns names by. Stored relationally
- * (`custom.set_team_names`) rather than in the solver's own result, so a rename
- * survives paging between balance options and re-running the solver.
+ * A host's team-name overrides re-keyed by the position `parseVariants` assigns
+ * names by -- which is a position INSIDE one lobby. Team names are stored
+ * relationally (`custom.set_team_names`) at their global index
+ * (`lobby_index * 2 + team`, A: 0-1, B: 2-3), so lobby B's overrides shift down
+ * by two here and lobby A's drop out of B's map entirely.
  */
-export function teamNamesByIndex(settings: CustomGameSettings | undefined): Record<number, string> {
+export function teamNamesByIndex(
+  settings: CustomGameSettings | undefined,
+  lobbyIndex = 0,
+): Record<number, string> {
+  const offset = lobbyIndex * 2;
   const out: Record<number, string> = {};
   for (const [key, value] of Object.entries(settings?.team_names ?? {})) {
-    const index = Number(key);
-    if (Number.isInteger(index) && index >= 0 && value.trim()) {
+    const index = Number(key) - offset;
+    // Two teams per lobby, the same bound `discord_lineup` reads names with:
+    // without it lobby A would pick up the overrides stored for lobby B.
+    if (Number.isInteger(index) && index >= 0 && index < 2 && value.trim()) {
       out[index] = value;
     }
   }

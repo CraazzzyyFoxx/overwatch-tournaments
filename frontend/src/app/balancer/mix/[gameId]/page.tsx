@@ -9,6 +9,7 @@ import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
 import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
 import { PickupMySeatPanel } from "@/app/balancer/mix/PickupMySeatPanel";
+import { PickupLobbyTabs } from "@/app/balancer/mix/PickupLobbyTabs";
 import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
 import { PickupTeamsPanel } from "@/app/balancer/mix/PickupTeamsPanel";
 import {
@@ -92,6 +93,8 @@ export default function BalancerPickupMixPage() {
 
   const {
     selectedGameId,
+    activeLobby,
+    setActiveLobby,
     gamesQuery,
     gameQuery,
     matchesQuery,
@@ -123,6 +126,8 @@ export default function BalancerPickupMixPage() {
 
   const game = gameQuery.data;
   const rows = game?.players ?? [];
+  const lobbies = game?.lobbies ?? [];
+  const lobby = lobbies.find((row) => row.lobby_index === activeLobby);
   const rosterIds = rows.map((row) => row.workspace_member_id);
   // Everything that writes a mix -- roster, player patch, balance, outcome --
   // goes through `_writable`, which 403s anyone but the host or a co-host.
@@ -236,19 +241,29 @@ export default function BalancerPickupMixPage() {
               onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
               postingSignup={postSignup.isPending}
             />
+            <PickupLobbyTabs
+              lobbies={lobbies}
+              activeLobby={activeLobby}
+              maps={mapsQuery.data ?? []}
+              onSelect={setActiveLobby}
+            />
             <PickupTeamsPanel
               canWrite={canWrite}
               gamesLoading={gamesQuery.isLoading}
               gamesError={gamesQuery.isError}
               onRetryGames={() => void gamesQuery.refetch()}
               game={game}
+              lobby={lobby}
+              lobbyIndex={activeLobby}
               gameLoading={gameQuery.isLoading}
               hasMix={selectedGameId != null}
               balancing={balance.isPending}
               activeCount={summarizeLineup(rows).active}
-              onBalance={() => balance.mutate()}
-              variantIndex={game?.lobbies?.[0]?.selected_variant_index ?? 0}
-              onVariantIndexChange={(index) => setVariantIndex.mutate(index)}
+              onBalance={() => balance.mutate({ scope: "lobby", lobbyIndex: activeLobby })}
+              variantIndex={lobby?.selected_variant_index ?? 0}
+              onVariantIndexChange={(index) =>
+                setVariantIndex.mutate({ lobbyIndex: activeLobby, variantIndex: index })
+              }
               recordingOutcome={recordOutcome.isPending}
               onRecordOutcome={(input) => recordOutcome.mutate(input)}
               maps={mapsQuery.data ?? []}
@@ -256,16 +271,23 @@ export default function BalancerPickupMixPage() {
               undoingMatchId={undoMatch.isPending ? (undoMatch.variables ?? null) : null}
               onUndoMatch={(matchId) => undoMatch.mutate(matchId)}
               settingNextMap={setNextMap.isPending}
-              onNextMapChange={(mapId) => setNextMap.mutate(mapId)}
+              onNextMapChange={(mapId) => setNextMap.mutate({ lobbyIndex: activeLobby, mapId })}
               closingMix={closeMix.isPending}
               onCloseMix={() => closeMix.mutate()}
               onRenameTeam={(teamIndex, name) => setTeamNames.mutateAsync({ teamIndex, name })}
               onSwapSeats={(idx, firstUuid, secondUuid) =>
-                swapSeats.mutateAsync({ variantIndex: idx, firstUuid, secondUuid })
+                swapSeats.mutateAsync({
+                  lobbyIndex: activeLobby,
+                  variantIndex: idx,
+                  firstUuid,
+                  secondUuid,
+                })
               }
               onCopyBattleTags={copyBattleTags}
               postingToDiscord={postToDiscord.isPending}
-              onPostToDiscord={(idx, image) => postToDiscord.mutate({ variantIndex: idx, image })}
+              onPostToDiscord={(idx, image) =>
+                postToDiscord.mutate({ lobbyIndex: activeLobby, variantIndex: idx, image })
+              }
             />
             {/* Visible when the mix invites signups, or when this viewer is
                 already in it -- a closed mix a player is not in has nothing to
