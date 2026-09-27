@@ -108,6 +108,7 @@ export default function BalancerPickupMixPage() {
     undoMatch,
     setNextMap,
     setVariantIndex,
+    setLobbyCount,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
@@ -207,6 +208,7 @@ export default function BalancerPickupMixPage() {
               canWrite={canWrite}
               hasMix={selectedGameId != null}
               rows={rows}
+              lobbyCount={game?.lobby_count ?? 1}
               rotation={rotationQuery.data ?? []}
               savingPlayerId={savingPlayerId}
               clearing={setRoster.isPending}
@@ -240,6 +242,10 @@ export default function BalancerPickupMixPage() {
               savingSelfService={setSelfService.isPending}
               onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
               postingSignup={postSignup.isPending}
+              settingLobbyCount={setLobbyCount.isPending}
+              onLobbyCountChange={(lobbyCount) => setLobbyCount.mutate(lobbyCount)}
+              shufflingAll={balance.isPending && balance.variables?.scope === "all"}
+              onShuffleAll={() => balance.mutate({ scope: "all" })}
             />
             <PickupLobbyTabs
               lobbies={lobbies}
@@ -333,6 +339,7 @@ export default function BalancerPickupMixPage() {
 
       <PickupPlayerSheet
         row={openRow}
+        lobbyCount={game?.lobby_count ?? 1}
         mixStats={
           statsQuery.data?.members.find(
             (member) => member.workspace_member_id === openRow?.workspace_member_id,

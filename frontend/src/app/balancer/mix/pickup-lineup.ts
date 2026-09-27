@@ -147,15 +147,15 @@ export function summarizeLineup(rows: CustomGamePlayer[]): LineupSummary {
 }
 
 /**
- * A 5v5 mix needs one tank and two of each damage/support per team, so the
- * lineup needs twice that before a balance can seat everyone. Hard-coded
- * because the pickup solver runs the same 1-2-2 shape for every mix; a
- * configurable lock would come from the host's own roster shape preference.
+ * A 5v5 mix needs one tank and two of each damage/support per team, so ONE
+ * lobby needs twice that before a balance can seat everyone. Exported because a
+ * two-lobby mix asks for the same shape twice: the lineup's supply strip
+ * multiplies by `lobby_count` rather than keeping a second table of its own.
  */
-const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, damage: 4, support: 4 };
+export const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, damage: 4, support: 4 };
 
 /**
- * Seats a balance can actually fill — the sum of the demand above.
+ * Seats one lobby's balance can actually fill — the sum of the demand above.
  *
  * The add-players dialog counts against this rather than against a literal 10 so
  * the "you are two over a full lobby" line and the role gauges below it can
@@ -173,12 +173,13 @@ export type RoleSupply = {
 };
 
 /**
- * Who can actually fill each role, counted the way the solver counts.
+ * Who can actually fill each role, counted the way the solver counts, against
+ * the demand of every lobby the mix is running.
  *
  * A selected role with no rank is not supply — the balance refuses to seat it —
  * so this deliberately does not match "how many chips are lit".
  */
-export function summarizeRoleSupply(rows: CustomGamePlayer[]): RoleSupply[] {
+export function summarizeRoleSupply(rows: CustomGamePlayer[], lobbyCount = 1): RoleSupply[] {
   return LINEUP_ROLES.map((role) => {
     const supply = rows.filter(
       (row) =>
@@ -186,7 +187,7 @@ export function summarizeRoleSupply(rows: CustomGamePlayer[]): RoleSupply[] {
         resolveRoleOrder(row).includes(role) &&
         row.ranks[role] != null,
     ).length;
-    const need = ROLE_DEMAND[role];
+    const need = ROLE_DEMAND[role] * lobbyCount;
     return { role, supply, need, short: Math.max(0, need - supply) };
   });
 }

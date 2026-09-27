@@ -6226,7 +6226,26 @@
       "notBalanced": "not balanced",
       "rebalanceTitle": "Rebalance this lobby?",
       "rebalanceDescription": "The result of the lineup on screen has not been recorded. Balancing replaces it, and there will be nothing left to record it from.",
-      "rebalanceConfirm": "Balance anyway"
+      "rebalanceConfirm": "Balance anyway",
+      "count": "{count, plural, one {# lobby} other {# lobbies}}",
+      "countLabel": "Lobbies",
+      "shuffleAll": "Shuffle both lobbies",
+      "shuffleTitle": "Shuffle both lobbies?",
+      "shuffleDescription": "The result of a lineup on screen has not been recorded. Splitting the pool again replaces both lobbies, and there will be nothing left to record it from.",
+      "shuffleConfirm": "Shuffle anyway",
+      "dropTitle": "Go back to one lobby?",
+      "dropDescription": "Lobby B's teams and every lobby pin are dropped. Matches lobby B already recorded stay in the history and in the leaderboard.",
+      "dropConfirm": "Close lobby B",
+      "seatedIn": "Playing in lobby {letter}",
+      "waiting": "waiting",
+      "waitingTitle": "Waiting for a seat",
+      "pinHeading": "Lobby",
+      "pinGroup": "Lobby for {name}",
+      "pinOption": "{option} for {name}",
+      "pinAuto": "Auto",
+      "pinA": "Lobby A",
+      "pinB": "Lobby B",
+      "pinHint": "Takes effect at the next balance: a pinned player is never a candidate for the other lobby."
     }
   },
   "quota": {

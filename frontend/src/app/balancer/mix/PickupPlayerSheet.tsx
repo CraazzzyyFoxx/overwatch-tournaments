@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Pin, Save, UserMinus } from "lucide-react";
 
 import { BattleTagCopyButton } from "@/app/balancer/components/BattleTagCopyControls";
@@ -49,6 +50,8 @@ type PickupPlayerSheetProps = {
   onRemove: () => void;
   /** This player's all-time mix record, or `null` where the page does not read one. */
   mixStats?: MixMemberStats | null;
+  /** How many lobbies the mix runs. The pin only exists, and is only sent, at 2. */
+  lobbyCount?: 1 | 2;
 };
 
 /** Everything the sheet edits before Save, kept apart from the server row. */
@@ -61,6 +64,8 @@ type RoleDraft = {
   /** Every role this row has a rank for is treated as equally preferred, so
    * `order`'s position stops mattering as a priority hint. */
   isFlex: boolean;
+  /** Which lobby the host tied this player to, or `null` for "wherever the balance puts them". */
+  lobbyPin: 0 | 1 | null;
 };
 
 function buildDraft(row: CustomGamePlayer | null): RoleDraft {
@@ -69,8 +74,24 @@ function buildDraft(row: CustomGamePlayer | null): RoleDraft {
     order: row ? resolveRoleOrder(row) : [],
     rankEdits: {},
     isFlex: row?.is_flex ?? false,
+    lobbyPin: row?.lobby_pin ?? null,
   };
 }
+
+/**
+ * The lobby pin, in the order the tabs read: no tie, then A, then B. Each
+ * option owns a key rather than an interpolated letter, so a locale can word
+ * "Auto" and "Lobby A" independently of the tab label.
+ */
+const LOBBY_PIN_OPTIONS: readonly {
+  value: 0 | 1 | null;
+  /** Literal, not `string`: `useTranslations` only takes keys it can see in the bundle. */
+  labelKey: "pinAuto" | "pinA" | "pinB";
+}[] = [
+  { value: null, labelKey: "pinAuto" },
+  { value: 0, labelKey: "pinA" },
+  { value: 1, labelKey: "pinB" },
+];
 
 /** The three-way status picker, in the same order the lineup columns read left to right. */
 const STATUS_OPTIONS: readonly {
@@ -119,8 +140,10 @@ export function PickupPlayerSheet({
   onSave,
   onRemove,
   mixStats = null,
+  lobbyCount = 1,
 }: Readonly<PickupPlayerSheetProps>) {
   const label = row ? playerLabel(row) : "";
+  const t = useTranslations("mixes.lobbies");
   const { name, suffix } = splitBattleTag(label);
   // The record across every mix, not this one: a caption, because it is
   // context for the settings below it and nothing here edits it.
@@ -168,7 +191,13 @@ export function PickupPlayerSheet({
       }
     }
     onSave(
-      { participation: draft.participation, roles: draft.order, is_flex: draft.isFlex },
+      {
+        participation: draft.participation,
+        roles: draft.order,
+        is_flex: draft.isFlex,
+        // A one-lobby mix 422s this field, and there is no control to set it.
+        ...(lobbyCount === 2 ? { lobby_pin: draft.lobbyPin } : {}),
+      },
       Object.keys(draft.rankEdits).length > 0 ? { ranks, clear } : null,
     );
     // The mutations fire-and-forget from here (the page owns their pending
@@ -254,6 +283,47 @@ export function PickupPlayerSheet({
                 })}
               </div>
             </section>
+
+            {lobbyCount === 2 ? (
+              <section className="space-y-2.5 border-b border-[color:var(--aqt-border)] px-5 py-4">
+                <h3 className="text-caption font-medium text-[color:var(--aqt-fg)]">
+                  {t("pinHeading")}
+                </h3>
+                <div
+                  role="radiogroup"
+                  aria-label={t("pinGroup", { name: label })}
+                  className="grid grid-cols-3 gap-1.5"
+                >
+                  {LOBBY_PIN_OPTIONS.map((option) => {
+                    const selected = draft.lobbyPin === option.value;
+                    const optionLabel = t(option.labelKey);
+                    return (
+                      <button
+                        key={option.labelKey}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        aria-label={t("pinOption", { option: optionLabel, name: label })}
+                        disabled={disabled}
+                        onClick={() =>
+                          setDraft((current) => ({ ...current, lobbyPin: option.value }))
+                        }
+                        className={cn(
+                          "rounded-lg border px-2 py-2 text-center text-caption font-semibold transition-colors",
+                          selected
+                            ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)]"
+                            : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-3)]",
+                          "disabled:cursor-default disabled:opacity-60",
+                        )}
+                      >
+                        {optionLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-label text-[color:var(--aqt-fg-dim)]">{t("pinHint")}</p>
+              </section>
+            ) : null}
 
             <section className="space-y-2.5 border-b border-[color:var(--aqt-border)] px-5 py-4">
               <h3 className="text-caption font-medium text-[color:var(--aqt-fg)]">

@@ -81,6 +81,24 @@ describe("interpolated message keys", () => {
     }
   });
 
+  it("every mixes.lobbies message takes the same ICU arguments in both locales", () => {
+    // The key-set check above passes while ru says `{number}` where en says
+    // `{count}`: next-intl then throws at render time in ONE locale, which no
+    // key comparison can see. Every string in this subtree is rendered by the
+    // mix board, where a throw blanks the whole matchup column.
+    const argsOf = (value: unknown) =>
+      [...String(value).matchAll(/\{\s*([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((match) => match[1]).sort();
+    const enLobbies: Record<string, unknown> = en.mixes.lobbies;
+    const ruLobbies: Record<string, unknown> = ru.mixes.lobbies;
+    const keys = Object.keys(enLobbies).sort();
+    // Nothing below compares a key one locale does not have at all.
+    expect(Object.keys(ruLobbies).sort()).toEqual(keys);
+    const mismatched = keys.filter(
+      (key) => argsOf(enLobbies[key]).join() !== argsOf(ruLobbies[key]).join(),
+    );
+    expect(mismatched).toEqual([]);
+  });
+
   // A "two team tabs must not share a label" assertion lived here. It is gone
   // with the tab itself: registered teams render on the Participants page, so
   // `common.teams` is the only team-labelled section and `registrationTeams.tab`

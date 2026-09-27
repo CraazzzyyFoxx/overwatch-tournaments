@@ -29,6 +29,8 @@ const onOpenPool = vi.fn();
 const onOpenAccess = vi.fn();
 const onSetSelfService = vi.fn();
 const onPostSignup = vi.fn();
+const onLobbyCountChange = vi.fn();
+const onShuffleAll = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -61,6 +63,19 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
   } as CustomGame;
 }
 
+function lobbyRow(lobbyIndex: 0 | 1, overrides: Record<string, unknown> = {}) {
+  return {
+    lobby_index: lobbyIndex,
+    balance_result: null,
+    selected_variant_index: 0,
+    next_map_id: null,
+    balanced_at: "2026-01-01T00:00:00Z",
+    lineup_recorded: true,
+    matches_count: 0,
+    ...overrides,
+  } as CustomGame["lobbies"][number];
+}
+
 function tick() {
   const { promise, resolve } = Promise.withResolvers<void>();
   setTimeout(resolve, 0);
@@ -87,6 +102,10 @@ async function mount(
         onOpenAccess={onOpenAccess}
         onSetSelfService={onSetSelfService}
         onPostSignup={onPostSignup}
+        settingLobbyCount={false}
+        onLobbyCountChange={onLobbyCountChange}
+        shufflingAll={false}
+        onShuffleAll={onShuffleAll}
       />,
     );
   });
@@ -119,6 +138,8 @@ beforeEach(() => {
   onOpenAccess.mockReset();
   onSetSelfService.mockReset();
   onPostSignup.mockReset();
+  onLobbyCountChange.mockReset();
+  onShuffleAll.mockReset();
 });
 
 describe("PickupMixHeader", () => {
@@ -171,6 +192,76 @@ describe("PickupMixHeader", () => {
     const scope = await mount(game(), { canWrite: false });
 
     expect(scope.querySelector('[aria-label="Manage access"]')).toBeNull();
+  });
+
+  // The lobby controls. `next-intl` is mocked to echo the key, so every label
+  // below is the message key rather than the rendered sentence.
+  it("opens a second lobby on request", async () => {
+    const scope = await mount(game());
+
+    await click(byName(scope, "2"));
+
+    expect(onLobbyCountChange).toHaveBeenCalledWith(2);
+  });
+
+  it("does not re-send the lobby count the mix already runs", async () => {
+    const scope = await mount(game());
+
+    await click(byName(scope, "1"));
+
+    expect(onLobbyCountChange).not.toHaveBeenCalled();
+  });
+
+  it("asks before dropping a lobby, because its balance goes with it", async () => {
+    const scope = await mount(
+      game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }),
+    );
+
+    await click(byName(scope, "1"));
+    expect(onLobbyCountChange).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "dropDescription",
+    );
+
+    await click(byName(document, "dropConfirm"));
+    expect(onLobbyCountChange).toHaveBeenCalledWith(1);
+  });
+
+  it("offers the shared reshuffle only once the mix runs two lobbies", async () => {
+    const one = await mount(game());
+    expect(byName(one, "shuffleAll")).toBeNull();
+
+    const two = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }));
+    await click(byName(two, "shuffleAll"));
+
+    expect(onShuffleAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before a shared reshuffle while some lobby's lineup is unrecorded", async () => {
+    const scope = await mount(
+      game({
+        lobby_count: 2,
+        lobbies: [lobbyRow(0), lobbyRow(1, { lineup_recorded: false })],
+      }),
+    );
+
+    await click(byName(scope, "shuffleAll"));
+    expect(onShuffleAll).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "shuffleDescription",
+    );
+
+    await click(byName(document, "shuffleConfirm"));
+    expect(onShuffleAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives a viewer no lobby controls at all", async () => {
+    const scope = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }), {
+      canWrite: false,
+    });
+
+    expect(byName(scope, "shuffleAll")).toBeNull();
+    expect(byName(scope, "2")).toBeNull();
   });
 });
 
