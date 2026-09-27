@@ -420,7 +420,11 @@ describe("Stage editor, FFA league scoring", () => {
 
     // A formula is refused by POSITION, and a toast cannot point at one: the
     // message belongs to the field, and has to name what the server stumbled on.
-    expect(errorFor(area("Points formula"))).toContain("kils");
+    // The server counts characters from zero and the organizer from one, so the
+    // position shown is the one they can actually point at in the field.
+    expect(errorFor(area("Points formula"))).toBe(
+      "Position 13: unknown name kils. Use a column key, place, place_pts or teams."
+    );
   });
 
   it("keeps the block out of a stage that is not an FFA league", async () => {

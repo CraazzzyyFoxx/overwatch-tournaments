@@ -62,7 +62,7 @@ export function useFfaErrorMessage(): (error: unknown) => string {
       // statically known literals; the key named here stands in for the shape of
       // all of them — no `ffa.errors.*` message reads more than these two
       // arguments, and one that reads neither ignores both.
-      const key = `ffa.errors.${entry.code}` as "ffa.errors.ffa_reason_required";
+      const key = `ffa.errors.${entry.code}` as "ffa.errors.ffa_formula_unknown_name";
       if (t.has(key)) {
         return t(key, { offset: (entry.offset ?? 0) + 1, name: entry.name ?? "" });
       }
