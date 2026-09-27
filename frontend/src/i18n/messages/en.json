@@ -73,7 +73,7 @@
       "buchholz": "Buchholz",
       "score_differential": "Score differential",
       "ffa_game_wins": "Game wins",
-      "ffa_score": "Score",
+      "ffa_stat": "Sum: {label}",
       "ffa_best_placement": "Best placement",
       "ffa_last_placement": "Last placement"
     },

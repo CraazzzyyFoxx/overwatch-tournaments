@@ -73,7 +73,7 @@
       "buchholz": "Бухгольц",
       "score_differential": "Разница карт",
       "ffa_game_wins": "Победы в играх",
-      "ffa_score": "Счёт",
+      "ffa_stat": "Сумма: {label}",
       "ffa_best_placement": "Лучшее место",
       "ffa_last_placement": "Последнее место"
     },

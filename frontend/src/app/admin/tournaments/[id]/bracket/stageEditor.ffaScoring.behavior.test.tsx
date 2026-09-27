@@ -449,15 +449,30 @@ describe("Stage editor, FFA league scoring", () => {
     expect(sent.tiebreak_order?.filter((id) => id.startsWith("ffa_"))).toEqual([]);
   });
 
-  it("offers the lobby tiebreakers, and only those", async () => {
-    await mount(stage("ffa_league"), "tiebreakers");
+  it("offers a sum per column, and no metric a lobby cannot compute", async () => {
+    await mount(
+      stage("ffa_league", {
+        ffa_scoring: {
+          columns: [
+            { key: "kills", label: "Kills", public: true, better: "higher" as const },
+            { key: "deaths", label: "Deaths", public: false, better: "lower" as const }
+          ],
+          placement_points: [],
+          formula: "kills * 2 - deaths"
+        }
+      }),
+      "tiebreakers"
+    );
 
+    // The lobby's own sums are the stage's columns — including the one the
+    // public table never shows, which still decides a tie.
     expect(offeredMetrics()).toEqual([
       "Points",
       "Game Wins",
-      "Score",
+      "Sum: Kills",
       "Last Placement",
-      "Best Placement"
+      "Best Placement",
+      "Sum: Deaths"
     ]);
 
     await click(select("Standings preset"));

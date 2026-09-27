@@ -61,7 +61,8 @@ export function stageFormFromStage(stage: Stage): StageForm {
     splitLowerBracket: stage.split_lower_bracket ?? false,
     seedRanking: stage.seed_ranking,
     rankingPreset: stage.ranking_preset || "default",
-    tiebreakOrder: stage.tiebreak_order ?? defaultTiebreakOrder(stage.stage_type),
+    tiebreakOrder:
+      stage.tiebreak_order ?? defaultTiebreakOrder(stage.stage_type, stage.ffa_scoring.columns),
     scoringWin: numberOrEmpty(stage.scoring.win),
     scoringDraw: numberOrEmpty(stage.scoring.draw),
     scoringLoss: numberOrEmpty(stage.scoring.loss),
