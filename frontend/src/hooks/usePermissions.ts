@@ -62,6 +62,7 @@ type SpecialPermission =
   | "account.rename"
   | "account.social"
   | "registration.self_register"
+  | "custom_game.self_join"
   | "workspace.self_create";
 
 export type AppPermission = CrudPermission | SpecialPermission;

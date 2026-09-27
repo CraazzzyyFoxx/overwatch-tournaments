@@ -294,6 +294,14 @@ beforeEach(() => {
       created_at: "2026-01-01"
     },
     {
+      id: 75,
+      name: "custom_game.self_join",
+      resource: "custom_game",
+      action: "self_join",
+      description: "Self-join a pickup mix",
+      created_at: "2026-01-01"
+    },
+    {
       id: 74,
       name: "workspace.self_create",
       resource: "workspace",
@@ -415,16 +423,25 @@ describe("Access › Accounts · one permission toggle", () => {
   // The whole point of a restrictable capability is that this screen can take
   // it away; one that the backend gates but the picker never lists is
   // unrevokable in practice.
-  it("can revoke workspace creation globally", async () => {
+  it("can revoke workspace creation and mix self-join globally", async () => {
     await mount("?id=90");
-    const box = await waitFor(
+    const workspaceBox = await waitFor(
       () => document.querySelector('[aria-label="Toggle workspace.self_create"]'),
       "the workspace.self_create row"
     );
 
-    await click(box);
+    await click(workspaceBox);
 
     expect(addUserDeny).toHaveBeenCalledWith(90, 74, null);
+
+    const mixBox = await waitFor(
+      () => document.querySelector('[aria-label="Toggle custom_game.self_join"]'),
+      "the custom_game.self_join row"
+    );
+
+    await click(mixBox);
+
+    expect(addUserDeny).toHaveBeenCalledWith(90, 75, null);
   });
 
   it("offers no restriction control without role.update", async () => {

@@ -59,6 +59,12 @@ const RESTRICTABLE: PermissionCatalogEntry[] = [
     description: "Sign up for tournaments"
   },
   {
+    key: "custom_game.self_join",
+    resource: "custom_game",
+    action: "self_join",
+    description: "Self-join pickup mixes"
+  },
+  {
     key: "workspace.self_create",
     resource: "workspace",
     action: "self_create",
