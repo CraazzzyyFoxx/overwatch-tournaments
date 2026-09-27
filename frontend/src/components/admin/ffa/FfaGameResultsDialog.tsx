@@ -8,7 +8,7 @@ import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { ApiError, getApiErrorMessage } from "@/lib/api/error";
+import { ApiError, errorBodyFields, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import ffaService from "@/services/ffa.service";
@@ -20,24 +20,51 @@ import type {
 } from "@/types/ffa.types";
 
 /**
+ * The FFA rejections a thrown value carries, richest form first.
+ *
+ * `ApiError.details` is the flattened human view and keeps only the code; the
+ * structured entries the worker sent ride `body` (`errorBodyFields`), and that
+ * is where a formula rejection keeps the things a message has to name — the
+ * position inside the formula, and the name the parser stumbled over.
+ */
+export function ffaErrorEntries(
+  error: unknown
+): { code: string; offset?: number; name?: string }[] {
+  if (!(error instanceof ApiError)) return [];
+  const structured = errorBodyFields(error.body)
+    .filter((entry) => typeof entry.code === "string")
+    .map((entry) => ({
+      code: entry.code as string,
+      offset: typeof entry.offset === "number" ? entry.offset : undefined,
+      name: typeof entry.name === "string" ? entry.name : undefined
+    }));
+  return structured.length > 0 ? structured : error.details.map((detail) => ({ code: detail.code }));
+}
+
+/**
  * Turn any thrown value into the sentence for the rejection it carries.
  *
- * The FFA writes answer a machine code (`ffa_result_invalid_placement`,
- * `ffa_games_below_played`, …) with an English `msg` meant for a log. The
- * catalogue is the lookup rather than a second copy of the code list here: a
- * code with a message gets that message, anything else falls back to whatever
- * the server said, so a code added backend-side degrades instead of breaking.
+ * The FFA writes and the FFA stage rules answer a machine code
+ * (`ffa_result_invalid_placement`, `ffa_formula_unknown_name`, …) with an
+ * English `msg` meant for a log. The catalogue is the lookup rather than a
+ * second copy of the code list here: a code with a message gets that message,
+ * anything else falls back to whatever the server said, so a code added
+ * backend-side degrades instead of breaking.
+ *
+ * `offset` is reported 0-based and shown 1-based: the organizer counts the
+ * characters of their formula from one.
  */
 export function useFfaErrorMessage(): (error: unknown) => string {
   const t = useTranslations();
   return (error: unknown) => {
-    if (error instanceof ApiError) {
-      for (const detail of error.details) {
-        // Built from a server-supplied code, so it is none of next-intl's
-        // statically known literals; every `ffa.errors.*` message takes no
-        // arguments, so one of them stands in for the shape of all of them.
-        const key = `ffa.errors.${detail.code}` as "ffa.errors.ffa_reason_required";
-        if (t.has(key)) return t(key);
+    for (const entry of ffaErrorEntries(error)) {
+      // Built from a server-supplied code, so it is none of next-intl's
+      // statically known literals; the key named here stands in for the shape of
+      // all of them — no `ffa.errors.*` message reads more than these two
+      // arguments, and one that reads neither ignores both.
+      const key = `ffa.errors.${entry.code}` as "ffa.errors.ffa_reason_required";
+      if (t.has(key)) {
+        return t(key, { offset: (entry.offset ?? 0) + 1, name: entry.name ?? "" });
       }
     }
     return getApiErrorMessage(error);

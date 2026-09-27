@@ -137,6 +137,9 @@ export function StageEditor({
   const searchParams = useSearchParams();
   const [form, setForm] = useState<StageForm>(() => stageFormFromStage(stage));
   const [pendingOp, setPendingOp] = useState<PendingOp | null>(null);
+  // The last refusal of a save. The FFA rules are the one part of this form the
+  // server rejects by position inside a field, and a toast cannot point at one.
+  const [saveError, setSaveError] = useState<unknown>(null);
 
   const hasEncounters = (progress?.total ?? 0) > 0;
   const changes = stageFormChanges(stage, form);
@@ -190,11 +193,15 @@ export function StageEditor({
 
   const updateMutation = useMutation({
     mutationFn: () => adminService.updateStage(stage.id, buildStageUpdatePayload(stage, form)),
+    onMutate: () => setSaveError(null),
     onSuccess: (saved) => {
       setForm(stageFormFromStage(saved));
       onChanged();
     },
-    onError: (error) => notify.apiError(error, { title: "Could not save this stage" })
+    onError: (error) => {
+      setSaveError(error);
+      notify.apiError(error, { title: "Could not save this stage" });
+    }
   });
 
   const activateMutation = useMutation({
@@ -525,6 +532,7 @@ export function StageEditor({
           <FfaScoringSection
             form={form}
             onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+            saveError={saveError}
           />
         ) : null}
 

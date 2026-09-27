@@ -75,14 +75,24 @@ export interface StageBestOfConfig {
   final: number | null;
 }
 
-/** What an FFA league pays for, mirroring backend `FfaScoring`. */
+/** One column an FFA game records. Mirrors `FfaColumn` of `ffa.types.ts`, which
+ *  imports FROM this module — spelled out here rather than imported back. */
+export interface StageFfaColumn {
+  key: string;
+  label: string;
+  public: boolean;
+  better: "higher" | "lower";
+}
+
+/** How an FFA league is scored, mirroring backend `FfaScoring`. */
 export interface StageFfaScoring {
+  /** What is entered per game, in table order. `[]` — places alone decide. */
+  columns: StageFfaColumn[];
   /** What place `i + 1` is worth; a shorter list scores the tail at zero. */
   placement_points: number[];
-  /** What one unit of raw score (a kill, a point) is worth. */
-  score_points: number;
-  /** The organizer's word for the score column ("Kills"); null keeps "Score". */
-  score_label: string | null;
+  /** The expression a game's points are computed with, over the column keys
+   *  plus `place`, `place_pts` and `teams`. */
+  formula: string;
 }
 
 /** The rules a stage is played and ranked by. */
