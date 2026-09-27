@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +20,7 @@ from shared.core import db
 __all__ = (
     "CustomGame",
     "CustomGameCoHost",
+    "CustomGameLobby",
     "CustomGamePlayer",
     "CustomGamePlayerRole",
     "CustomGameTeamName",
@@ -39,6 +49,7 @@ class CustomGame(db.TimeStampIntegerMixin):
             "self_signup IN ('closed', 'pool', 'benched')",
             name="ck_custom_game_self_signup",
         ),
+        CheckConstraint("lobby_count BETWEEN 1 AND 2", name="ck_custom_game_lobby_count"),
         # (no per-mix points_per_win check: the knob is the host's, see above)
         {"schema": "balancer"},
     )
@@ -49,19 +60,11 @@ class CustomGame(db.TimeStampIntegerMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
-    # The map the next recorded match is played on -- rolled or picked ahead of
-    # the lobby, consumed and cleared by ``record_outcome``. A deleted catalogue
-    # map nulls this rather than blocking the delete.
-    next_map_id: Mapped[int | None] = mapped_column(ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True)
-    # Which stored balance option the mix is showing. Host-driven: the pager is
-    # the host's, and everyone else -- a co-host in another tab, a player
-    # reading the public board -- renders whatever this points at, so a lobby
-    # never studies a different matchup than the one being called out. Clamped
-    # into range by readers; ``balance`` resets it, a fresh search renumbers
-    # every option.
-    selected_variant_index: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
-    balance_result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    balance_result_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
+    # How many lobbies this mix runs at once. There are exactly this many
+    # ``custom_game_lobby`` rows: everything about one played match -- the
+    # matchup, the pager, the rolled map -- is a fact about a lobby, not about
+    # the mix, so two lobbies never fight over one column.
+    lobby_count: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
     # Whether players may seat THEMSELVES here, and where that lands them:
     # closed | pool | benched. Every existing mix ships closed, so the feature
     # is opt-in per session rather than a platform-wide change of who writes a
@@ -91,6 +94,41 @@ class CustomGameCoHost(db.Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), primary_key=True)
 
 
+class CustomGameLobby(db.Base):
+    """One of a mix's lobbies: its own matchup, pager, map and clock.
+
+    A mix with one lobby is simply row ``lobby_index = 0``, so there is one code
+    path for one and for two. Membership is NOT stored: who is in a lobby right
+    now is derived from the seats of its selected variant, which keeps the
+    matchup the single source of truth instead of a column to re-sync after
+    every balance and every swap.
+
+    ``balanced_at`` says when this lobby last got a matchup, and is the half of
+    "the lineup on screen was never recorded" the mix cannot answer from the
+    match history alone.
+    """
+
+    __tablename__ = "custom_game_lobby"
+    __table_args__ = (
+        CheckConstraint("lobby_index BETWEEN 0 AND 1", name="ck_custom_game_lobby_index"),
+        {"schema": "balancer"},
+    )
+
+    custom_game_id: Mapped[int] = mapped_column(
+        ForeignKey("balancer.custom_game.id", ondelete="CASCADE"), primary_key=True
+    )
+    lobby_index: Mapped[int] = mapped_column(Integer(), primary_key=True)
+    # Which stored balance option this lobby is showing. Host-driven: the pager
+    # is the host's, and every other viewer renders whatever it points at.
+    selected_variant_index: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
+    balance_result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    balance_result_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
+    # The map this lobby's next match is played on -- rolled ahead of the lobby
+    # loading in, consumed and cleared by ``record_outcome``.
+    next_map_id: Mapped[int | None] = mapped_column(ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True)
+    balanced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class CustomGamePlayer(db.TimeStampIntegerMixin):
     """One workspace member's current lineup state in a mix."""
 
@@ -105,6 +143,7 @@ class CustomGamePlayer(db.TimeStampIntegerMixin):
             "role_selection_mode IN ('all_ranked', 'explicit')",
             name="ck_custom_game_player_role_selection_mode",
         ),
+        CheckConstraint("lobby_pin BETWEEN 0 AND 1", name="ck_custom_game_player_lobby_pin"),
         {"schema": "balancer"},
     )
 
@@ -116,6 +155,9 @@ class CustomGamePlayer(db.TimeStampIntegerMixin):
         String(16), nullable=False, default="all_ranked", server_default="all_ranked"
     )
     is_flex: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
+    # The host's "this one plays in A": honoured by the next balance, not a
+    # live seat. ``None`` means the solver places them wherever they fit.
+    lobby_pin: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
 
 class CustomGamePlayerRole(db.Base):

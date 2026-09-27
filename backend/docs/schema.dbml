@@ -1,6 +1,6 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
-// Tables: 137
+// Tables: 145
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -23,6 +23,20 @@ Enum catalogentitytype {
   gamemode
 }
 
+Enum encountergameresultsource {
+  captain_agreement
+  admin
+  admin_log
+}
+
+Enum encountergamestate {
+  planned
+  awaiting_result
+  disputed
+  confirmed
+  cancelled
+}
+
 Enum encounterlinkrole {
   winner
   loser
@@ -40,6 +54,9 @@ Enum encounterresultauditaction {
   auto_dispute
   import
   cascade_reset
+  game_confirm
+  game_correct
+  game_cancel
 }
 
 Enum encounterresultstatus {
@@ -147,7 +164,6 @@ Enum pickbanentrystatus {
   available
   picked
   banned
-  played
   protected
 }
 
@@ -217,6 +233,7 @@ Enum stagetype {
   single_elimination
   double_elimination
   swiss
+  ffa_league
 }
 
 Enum tournamentstatus {
@@ -764,10 +781,9 @@ Table balancer.custom_game {
   host_user_id bigint
   name VARCHAR(255) [not null]
   status VARCHAR(16) [not null, default: `draft`]
-  next_map_id bigint
-  selected_variant_index int [not null, default: 0]
-  balance_result_json jsonb
-  balance_result_version int [not null, default: 1]
+  lobby_count int [not null, default: 1]
+  self_signup VARCHAR(16) [not null, default: `closed`]
+  self_role_edit boolean [not null, default: false]
   indexes {
     (host_user_id) [name: "ix_balancer_custom_game_host_user_id"]
     (workspace_id) [name: "ix_balancer_custom_game_workspace_id"]
@@ -777,6 +793,16 @@ Table balancer.custom_game {
 Table balancer.custom_game_co_host {
   custom_game_id bigint [pk]
   user_id bigint [pk]
+}
+
+Table balancer.custom_game_lobby {
+  custom_game_id bigint [pk]
+  lobby_index int [pk, increment]
+  selected_variant_index int [not null, default: 0]
+  balance_result_json jsonb
+  balance_result_version int [not null, default: 1]
+  next_map_id bigint
+  balanced_at timestamptz
 }
 
 Table balancer.custom_game_player {
@@ -789,6 +815,7 @@ Table balancer.custom_game_player {
   participation VARCHAR(16) [not null, default: `pool`]
   role_selection_mode VARCHAR(16) [not null, default: `all_ranked`]
   is_flex boolean [not null, default: false]
+  lobby_pin int
   indexes {
     (custom_game_id, workspace_member_id) [unique, name: "uq_custom_game_player_member"]
     (custom_game_id) [name: "ix_balancer_custom_game_player_custom_game_id"]
@@ -848,6 +875,7 @@ Table balancer.draft_pick {
   clock_started_at timestamptz
   clock_expires_at timestamptz
   clock_remaining_ms int
+  overtime_started_at timestamptz
   version int [not null, default: 0]
   indexes {
     (session_id, overall_no) [unique, name: "uq_draft_pick_session_overall"]
@@ -888,6 +916,7 @@ Table balancer.draft_session {
   format VARCHAR(16) [not null, default: `snake`]
   rounds int [not null, default: 4]
   pick_time_seconds int [not null, default: 45]
+  overtime_seconds int [not null, default: 0]
   current_pick_id bigint
   pool_source VARCHAR(32) [not null, default: `balancer_balance`]
   source_balance_id bigint
@@ -916,6 +945,7 @@ Table balancer.draft_team {
   name VARCHAR(255) [not null]
   draft_position int [not null]
   exported_team_id bigint
+  pick_queue jsonb [not null, default: `[]`]
   indexes {
     (session_id, draft_position) [unique, name: "uq_draft_team_session_position"]
     (captain_auth_user_id) [name: "ix_balancer_draft_team_captain_auth_user_id"]
@@ -954,6 +984,7 @@ Table balancer.registration {
   battle_tag_normalized VARCHAR(255)
   smurf_tags_json json
   stream_pov boolean [not null, default: false]
+  is_reserve boolean [not null, default: false]
   form_version_id bigint
   public_notes text
   organizer_notes text
@@ -1296,6 +1327,7 @@ TableGroup balancer {
   balancer.balance_variant
   balancer.custom_game
   balancer.custom_game_co_host
+  balancer.custom_game_lobby
   balancer.custom_game_player
   balancer.custom_game_player_role
   balancer.custom_game_team_name
@@ -1331,6 +1363,7 @@ Table casual.match {
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
   custom_game_id bigint [not null]
+  lobby_index int [not null, default: 0]
   map_id bigint
   recorded_by bigint
   points_per_win_applied int
@@ -1338,6 +1371,11 @@ Table casual.match {
     (custom_game_id) [name: "ix_casual_match_custom_game_id"]
     (map_id) [name: "ix_casual_match_map_id"]
   }
+}
+
+Table casual.match_busy_player {
+  match_id bigint [pk]
+  workspace_member_id bigint [pk]
 }
 
 Table casual.player {
@@ -1371,6 +1409,7 @@ Table casual.team {
 
 TableGroup casual {
   casual.match
+  casual.match_busy_player
   casual.player
   casual.team
 }
@@ -1965,6 +2004,7 @@ Table notification {
   workspace_id bigint
   source_workspace_id bigint
   kind VARCHAR(64) [not null]
+  dedupe_key VARCHAR(128)
   payload_json jsonb [not null, default: `'{}'`]
   actor_auth_user_id bigint
   published_at timestamptz [not null, default: `now()`]
@@ -1972,9 +2012,30 @@ Table notification {
   created_at timestamptz [not null, default: `now()`]
   indexes {
     (audience) [name: "ix_notification_audience_published"]
+    (kind, dedupe_key) [name: "ix_notification_dedupe"]
     (recipient_auth_user_id) [name: "ix_notification_recipient_published"]
     (source_workspace_id) [name: "ix_notification_source_workspace_published"]
   }
+}
+
+Table notification_delivery {
+  id bigint [pk, increment]
+  channel VARCHAR(32) [not null]
+  target VARCHAR(64) [not null]
+  dedupe_key VARCHAR(128) [not null]
+  notification_id bigint
+  workspace_id bigint
+  kind VARCHAR(64) [not null]
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (channel, target, dedupe_key) [unique, name: "uq_notification_delivery_target"]
+  }
+}
+
+Table notification_preference {
+  auth_user_id bigint [pk]
+  discord_dm jsonb [not null, default: `'{}'`]
+  updated_at timestamptz [not null, default: `now()`]
 }
 
 Table notification_read {
@@ -1982,6 +2043,14 @@ Table notification_read {
   notification_id bigint [pk]
   read_at timestamptz [not null, default: `now()`]
   deleted_at timestamptz
+}
+
+Table notification_workspace_config {
+  workspace_id bigint [pk]
+  discord_channel_id bigint
+  locale VARCHAR(2) [not null, default: `'ru'`]
+  broadcast_kinds jsonb [not null, default: `'["registration.opened", "check_in.opened"]'`]
+  updated_at timestamptz [not null, default: `now()`]
 }
 
 Table settings {
@@ -2072,7 +2141,10 @@ TableGroup public {
   division_grid_version
   event_outbox
   notification
+  notification_delivery
+  notification_preference
   notification_read
+  notification_workspace_config
   settings
   workspace
   workspace_member
@@ -2361,6 +2433,7 @@ Table tournament.encounter {
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
   name VARCHAR [not null]
+  format VARCHAR(8) [not null, default: `duel`]
   home_team_id bigint
   away_team_id bigint
   home_score int [not null]
@@ -2409,6 +2482,42 @@ Table tournament.encounter_captain_report {
   }
 }
 
+Table tournament.encounter_game {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  encounter_id bigint [not null]
+  position int [not null]
+  format VARCHAR(8) [not null, default: `duel`]
+  map_id bigint
+  state encountergamestate [not null, default: `planned`]
+  accepted_home_score int
+  accepted_away_score int
+  result_source encountergameresultsource
+  result_version int [not null, default: 0]
+  confirmed_at timestamptz
+  indexes {
+    (encounter_id) [name: "ix_tournament_encounter_game_encounter_id"]
+    (map_id) [name: "ix_tournament_encounter_game_map_id"]
+    (encounter_id, position) [unique, name: "uq_encounter_game_encounter_position"]
+  }
+}
+
+Table tournament.encounter_game_result {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  game_id bigint [not null]
+  encounter_id bigint [not null]
+  team_id bigint [not null]
+  placement int [not null]
+  score int [not null, default: 0]
+  indexes {
+    (game_id, team_id) [unique, name: "uq_encounter_game_result_game_team"]
+    (encounter_id, team_id) [name: "ix_encounter_game_result_encounter_team"]
+  }
+}
+
 Table tournament.encounter_link {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -2443,18 +2552,28 @@ Table tournament.encounter_map_report {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
-  encounter_id bigint [not null]
-  map_id bigint [not null]
-  map_index int [not null, default: 0]
-  team_id bigint [not null]
+  game_id bigint [not null]
+  side VARCHAR(16) [not null]
   reporter_user_id bigint
   home_score int [not null]
   away_score int [not null]
   indexes {
-    (encounter_id, map_id, map_index, team_id) [unique, name: "uq_encounter_map_report_encounter_map_index_team"]
-    (encounter_id) [name: "ix_tournament_encounter_map_report_encounter_id"]
-    (map_id) [name: "ix_tournament_encounter_map_report_map_id"]
-    (team_id) [name: "ix_tournament_encounter_map_report_team_id"]
+    (game_id, side) [unique, name: "uq_encounter_map_report_game_side"]
+    (game_id) [name: "ix_tournament_encounter_map_report_game_id"]
+  }
+}
+
+Table tournament.encounter_participant {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  encounter_id bigint [not null]
+  team_id bigint [not null]
+  slot int [not null]
+  indexes {
+    (encounter_id, slot) [unique, name: "uq_encounter_participant_encounter_slot"]
+    (encounter_id, team_id) [unique, name: "uq_encounter_participant_encounter_team"]
+    (team_id) [name: "ix_encounter_participant_team_id"]
   }
 }
 
@@ -2510,12 +2629,17 @@ Table tournament.encounter_result_audit {
   to_result_status encounterresultstatus [not null]
   home_score_before int
   away_score_before int
-  home_score_after int [not null]
-  away_score_after int [not null]
+  home_score_after int
+  away_score_after int
+  ffa_results_json jsonb
   adopted_team_id bigint
+  game_id bigint
+  game_result_version int
+  reason text
   source VARCHAR(16) [not null]
   indexes {
     (encounter_id, created_at) [name: "ix_encounter_result_audit_encounter_created"]
+    (game_id) [name: "ix_tournament_encounter_result_audit_game_id"]
   }
 }
 
@@ -2849,6 +2973,8 @@ Table tournament.tournament {
   end_date timestamptz
   auto_transitions_enabled boolean [not null, default: true]
   allow_late_registration boolean [not null, default: false]
+  discord_broadcasts_enabled boolean [not null, default: true]
+  discord_dms_enabled boolean [not null, default: true]
   win_points float [not null, default: 1.0]
   draw_points float [not null, default: 0.5]
   loss_points float [not null, default: 0.0]
@@ -2917,9 +3043,12 @@ TableGroup tournament {
   tournament.computation_job
   tournament.encounter
   tournament.encounter_captain_report
+  tournament.encounter_game
+  tournament.encounter_game_result
   tournament.encounter_link
   tournament.encounter_map_code
   tournament.encounter_map_report
+  tournament.encounter_participant
   tournament.encounter_pick_ban_ledger
   tournament.encounter_readiness
   tournament.encounter_report_form
@@ -3008,9 +3137,10 @@ Ref: balancer.balance.saved_by > auth.user.id [delete: set null]
 Ref: balancer.balance_variant.balance_id > balancer.balance.id [delete: cascade]
 Ref: balancer.custom_game.workspace_id > workspace.id [delete: cascade]
 Ref: balancer.custom_game.host_user_id > auth.user.id [delete: set null]
-Ref: balancer.custom_game.next_map_id > overwatch.map.id [delete: set null]
 Ref: balancer.custom_game_co_host.custom_game_id > balancer.custom_game.id [delete: cascade]
 Ref: balancer.custom_game_co_host.user_id > auth.user.id [delete: cascade]
+Ref: balancer.custom_game_lobby.custom_game_id > balancer.custom_game.id [delete: cascade]
+Ref: balancer.custom_game_lobby.next_map_id > overwatch.map.id [delete: set null]
 Ref: balancer.custom_game_player.custom_game_id > balancer.custom_game.id [delete: cascade]
 Ref: balancer.custom_game_player.workspace_member_id > workspace_member.id [delete: cascade]
 Ref: balancer.custom_game_player_role.custom_game_player_id > balancer.custom_game_player.id [delete: cascade]
@@ -3084,6 +3214,8 @@ Ref: balancer.workspace_config.updated_by > auth.user.id [delete: set null]
 Ref: casual.match.custom_game_id > balancer.custom_game.id [delete: cascade]
 Ref: casual.match.map_id > overwatch.map.id [delete: set null]
 Ref: casual.match.recorded_by > auth.user.id [delete: set null]
+Ref: casual.match_busy_player.match_id > casual.match.id [delete: cascade]
+Ref: casual.match_busy_player.workspace_member_id > workspace_member.id [delete: cascade]
 Ref: casual.player.team_id > casual.team.id [delete: cascade]
 Ref: casual.player.workspace_member_id > workspace_member.id [delete: set null]
 Ref: casual.team.match_id > casual.match.id [delete: cascade]
@@ -3143,6 +3275,8 @@ Ref: division_grid_mapping_rule.target_tier_id > division_grid_tier.id [delete: 
 Ref: division_grid_tier.version_id > division_grid_version.id [delete: cascade]
 Ref: division_grid_version.grid_id > division_grid.id [delete: cascade]
 Ref: division_grid_version.created_from_version_id > division_grid_version.id [delete: set null]
+Ref: notification_preference.auth_user_id > auth.user.id [delete: cascade]
+Ref: notification_workspace_config.workspace_id > workspace.id [delete: cascade]
 Ref: settings.updated_by > auth.user.id [delete: set null]
 Ref: workspace.discord_guild_verified_by_auth_user_id > auth.user.id [delete: set null]
 Ref: workspace.owner_id > auth.user.id [delete: set null]
@@ -3182,14 +3316,19 @@ Ref: tournament.encounter.stage_item_id > tournament.stage_item.id [delete: set 
 Ref: tournament.encounter_captain_report.encounter_id > tournament.encounter.id [delete: cascade]
 Ref: tournament.encounter_captain_report.team_id > tournament.team.id [delete: cascade]
 Ref: tournament.encounter_captain_report.reporter_user_id > players.user.id [delete: set null]
+Ref: tournament.encounter_game.encounter_id > tournament.encounter.id [delete: cascade]
+Ref: tournament.encounter_game.map_id > overwatch.map.id [delete: restrict]
+Ref: tournament.encounter_game_result.game_id > tournament.encounter_game.id [delete: cascade]
+Ref: tournament.encounter_game_result.encounter_id > tournament.encounter_participant.encounter_id [delete: cascade]
+Ref: tournament.encounter_game_result.team_id > tournament.encounter_participant.team_id [delete: cascade]
 Ref: tournament.encounter_link.source_encounter_id > tournament.encounter.id [delete: cascade]
 Ref: tournament.encounter_link.target_encounter_id > tournament.encounter.id [delete: cascade]
 Ref: tournament.encounter_map_code.report_id > tournament.encounter_captain_report.id [delete: cascade]
 Ref: tournament.encounter_map_code.map_id > overwatch.map.id [delete: set null]
-Ref: tournament.encounter_map_report.encounter_id > tournament.encounter.id [delete: cascade]
-Ref: tournament.encounter_map_report.map_id > overwatch.map.id [delete: cascade]
-Ref: tournament.encounter_map_report.team_id > tournament.team.id [delete: cascade]
+Ref: tournament.encounter_map_report.game_id > tournament.encounter_game.id [delete: cascade]
 Ref: tournament.encounter_map_report.reporter_user_id > players.user.id [delete: set null]
+Ref: tournament.encounter_participant.encounter_id > tournament.encounter.id [delete: cascade]
+Ref: tournament.encounter_participant.team_id > tournament.team.id [delete: cascade]
 Ref: tournament.encounter_pick_ban_ledger.encounter_id > tournament.encounter.id [delete: cascade]
 Ref: tournament.encounter_readiness.encounter_id > tournament.encounter.id [delete: cascade]
 Ref: tournament.encounter_readiness.ready_user_id > players.user.id [delete: set null]
@@ -3197,6 +3336,7 @@ Ref: tournament.encounter_report_form.tournament_id > tournament.tournament.id [
 Ref: tournament.encounter_result_audit.encounter_id > tournament.encounter.id [delete: cascade]
 Ref: tournament.encounter_result_audit.actor_user_id > players.user.id [delete: set null]
 Ref: tournament.encounter_result_audit.adopted_team_id > tournament.team.id [delete: set null]
+Ref: tournament.encounter_result_audit.game_id > tournament.encounter_game.id [delete: cascade]
 Ref: tournament.encounter_saved_view.workspace_id > workspace.id [delete: cascade]
 Ref: tournament.encounter_saved_view.auth_user_id > auth.user.id [delete: cascade]
 Ref: tournament.pick_ban_config.tournament_id > tournament.tournament.id [delete: cascade]

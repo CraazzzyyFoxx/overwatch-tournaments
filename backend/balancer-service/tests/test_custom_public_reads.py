@@ -65,6 +65,7 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         service.team_names.mapping_for_games = AsyncMock(return_value={})
         service.workspace_discord_channel_id = AsyncMock(return_value=None)
         service.host_prefs.points_per_win_by_user = AsyncMock(return_value={})
+        service.lobbies.list_for_games = AsyncMock(return_value={})
         service.mix_stats = AsyncMock(return_value=[])
 
         with patch.object(custom, "custom_game_service", service):
@@ -77,26 +78,29 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         self.assertEqual({"since": None, "members": []}, scored["data"])
 
     async def test_list_rows_leave_the_solver_document_out(self) -> None:
-        """The list never touches ``balance_result_json``: the column is deferred
-        with ``raiseload`` there, and it is megabytes per balanced mix. The row
-        below has no such attribute, so any read of it fails the call."""
+        """The list never touches a lobby's ``balance_result_json``: the column is
+        deferred with ``raiseload`` there, and it is megabytes per balanced mix.
+        The lobby row below has no such attribute, so any read of it fails the call."""
         row = SimpleNamespace(
             id=3,
             workspace_id=7,
             host_user_id=5,
             name="Friday mix",
             status="balanced",
-            selected_variant_index=2,
-            next_map_id=None,
+            lobby_count=1,
             self_signup="pool",
             self_role_edit=True,
             created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        lobby = SimpleNamespace(
+            custom_game_id=3, lobby_index=0, selected_variant_index=2, next_map_id=None, balanced_at=None
         )
         service = MagicMock()
         service.list = AsyncMock(return_value=[row])
         service.hosts = AsyncMock(return_value={5: "Host"})
         service.casual_matches.activity_for_games = AsyncMock(return_value={})
         service.team_names.mapping_for_games = AsyncMock(return_value={3: {1: "Ravens"}})
+        service.lobbies.list_for_games = AsyncMock(return_value={3: [lobby]})
         service.workspace_discord_channel_id = AsyncMock(return_value=None)
         service.host_prefs.points_per_win_by_user = AsyncMock(return_value={5: 25})
 
@@ -106,11 +110,17 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         self.assertTrue(listed["ok"], listed)
         [item] = listed["data"]
         self.assertNotIn("balance_result", item)
+        self.assertNotIn("selected_variant_index", item)
         self.assertEqual({"1": "Ravens"}, item["settings"]["team_names"])
         self.assertEqual(25, item["settings"]["points_per_win"])
-        self.assertEqual(2, item["selected_variant_index"])
+        # From plan A, unchanged by the lobby cutover.
         self.assertEqual("pool", item["self_signup"])
         self.assertIs(True, item["self_role_edit"])
+        self.assertEqual(1, item["lobby_count"])
+        self.assertEqual(
+            [{"lobby_index": 0, "selected_variant_index": 2, "next_map_id": None, "balanced_at": None}],
+            item["lobbies"],
+        )
 
     async def test_writing_one_still_requires_an_authenticated_actor(self) -> None:
         service = MagicMock()

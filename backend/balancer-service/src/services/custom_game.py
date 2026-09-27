@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -30,6 +30,7 @@ from shared.repository import (
     CasualPlayerRepository,
     CasualTeamRepository,
     CustomGameCoHostRepository,
+    CustomGameLobbyRepository,
     CustomGamePlayerRepository,
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
@@ -327,6 +328,7 @@ class CustomGameService:
         games: CustomGameRepository = CustomGameRepository(),
         roster: CustomGamePlayerRepository = CustomGamePlayerRepository(),
         co_hosts: CustomGameCoHostRepository = CustomGameCoHostRepository(),
+        lobbies: CustomGameLobbyRepository = CustomGameLobbyRepository(),
         player_roles: CustomGamePlayerRoleRepository = CustomGamePlayerRoleRepository(),
         team_names: CustomGameTeamNameRepository = CustomGameTeamNameRepository(),
         casual_matches: CasualMatchRepository = CasualMatchRepository(),
@@ -348,6 +350,7 @@ class CustomGameService:
         self.games = games
         self.roster = roster
         self.co_hosts = co_hosts
+        self.lobbies = lobbies
         self.player_roles = player_roles
         self.team_names = team_names
         self.casual_matches = casual_matches
@@ -439,6 +442,18 @@ class CustomGameService:
         if game.status in _TERMINAL:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Game is {game.status}")
         return game
+
+    async def _lobby(self, session: AsyncSession, game: models.CustomGame, lobby_index: int) -> models.CustomGameLobby:
+        """One lobby row of this mix -- where every per-match fact lives.
+
+        A mix has exactly ``lobby_count`` rows (``create`` opens them,
+        ``set_lobby_count`` adds and removes the second), so a miss is a caller
+        naming a lobby the mix does not run, not a row to conjure up.
+        """
+        lobby = await self.lobbies.get(session, game.id, lobby_index)
+        if lobby is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="lobby_not_found")
+        return lobby
 
     async def _seed_host_ranks(
         self, session: AsyncSession, game: models.CustomGame, members: Mapping[int, RosterMember]
@@ -545,6 +560,10 @@ class CustomGameService:
             self_role_edit=bool(source.self_role_edit) if source is not None else False,
         )
         await self.games.create(session, game)
+        # The invariant every per-match read relies on: a mix always has its
+        # lobbies. A clone copies the pool and the setup, never a played
+        # session, so the fresh lobby starts empty.
+        await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=0))
 
         cloned: list[tuple[models.CustomGamePlayer, models.CustomGamePlayer]] = []
         rows: list[models.CustomGamePlayer] = []
@@ -1163,10 +1182,12 @@ class CustomGameService:
             # apart from a real bug and reports "internal error" -- hiding the
             # actual, actionable reason from the host.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-        game.balance_result_json = result
+        lobby = await self._lobby(session, game, 0)
+        lobby.balance_result_json = result
         # A fresh search renumbers every option, so whatever the host had paged
         # to describes nothing now -- back to the best one.
-        game.selected_variant_index = 0
+        lobby.selected_variant_index = 0
+        lobby.balanced_at = datetime.now(UTC)
         _apply_balance_result(roster, result)
         game.status = MixStatus.BALANCED
         await session.flush()
@@ -1235,7 +1256,8 @@ class CustomGameService:
         )
         if map_id is not None and await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
-        game.next_map_id = map_id
+        lobby = await self._lobby(session, game, 0)
+        lobby.next_map_id = map_id
         await session.flush()
         return game
 
@@ -1265,11 +1287,12 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        result = as_lobby_document(game.balance_result_json)
+        lobby = await self._lobby(session, game, 0)
+        result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
-        game.selected_variant_index = variant_index
+        lobby.selected_variant_index = variant_index
         await session.flush()
         return game
 
@@ -1329,7 +1352,8 @@ class CustomGameService:
         channel_id = await self.workspace_discord_channel_id(session, workspace_id)
         if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
-        result = as_lobby_document(game.balance_result_json)
+        lobby = await self._lobby(session, game, 0)
+        result = as_lobby_document(lobby.balance_result_json)
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1341,13 +1365,13 @@ class CustomGameService:
         activity = await self.casual_matches.activity_for_games(session, [game.id])
         matches_count = activity.get(game.id, (0, None))[0]
         next_map: tuple[str, str | None] | None = None
-        if game.next_map_id is not None:
+        if lobby.next_map_id is not None:
             # The gamemode is eager-loaded: an async session raises on an
             # unawaited lazy load, and the embed names the mode next to the map.
             row = await session.scalar(
                 sa.select(models.Map)
                 .options(selectinload(models.Map.gamemode))
-                .where(models.Map.id == game.next_map_id)
+                .where(models.Map.id == lobby.next_map_id)
             )
             if row is not None:
                 next_map = (row.name, row.gamemode.name if row.gamemode is not None else None)
@@ -1489,7 +1513,8 @@ class CustomGameService:
             actor_user_id=actor_user_id,
             actor_is_superuser=actor_is_superuser,
         )
-        result = copy.deepcopy(as_lobby_document(game.balance_result_json))
+        lobby = await self._lobby(session, game, 0)
+        result = copy.deepcopy(as_lobby_document(lobby.balance_result_json))
         variants = result.get("variants") if isinstance(result, dict) else None
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1520,7 +1545,7 @@ class CustomGameService:
         first_bucket[first_pos], second_bucket[second_pos] = second_bucket[second_pos], first_bucket[first_pos]
         _recompute_variant_stats(variant, _lobby_players(result))
 
-        game.balance_result_json = result
+        lobby.balance_result_json = result
         await session.flush()
         return game
 
@@ -1581,7 +1606,7 @@ class CustomGameService:
         played redeems its ``MUST_PLAY`` pin back to ``POOL`` -- the pin promises
         one guaranteed seat, not every seat forever.
 
-        ``map_id`` names the map explicitly; omitted, the match takes the mix's
+        ``map_id`` names the map explicitly; omitted, the match takes the lobby's
         ``next_map_id`` (see :meth:`set_next_map`), which is cleared either way
         so the following match starts with a fresh roll.
         """
@@ -1594,12 +1619,13 @@ class CustomGameService:
         )
         if winner not in (1, 2, None):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="winner must be 1, 2 or null")
+        lobby = await self._lobby(session, game, 0)
         if map_id is None:
-            map_id = game.next_map_id
+            map_id = lobby.next_map_id
         elif await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
-        result = as_lobby_document(game.balance_result_json) or {}
+        result = as_lobby_document(lobby.balance_result_json) or {}
         variants = result.get("variants")
         if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
@@ -1694,7 +1720,7 @@ class CustomGameService:
                 delta=-points_per_win,
             )
 
-        game.next_map_id = None
+        lobby.next_map_id = None
 
         await session.flush()
         return game
@@ -1778,12 +1804,7 @@ class CustomGameService:
         any workspace member, same as :meth:`get` (no host gate: watching the
         history is not writing it).
         """
-        game = await self.get(
-            session,
-            workspace_id=workspace_id,
-            custom_game_id=custom_game_id,
-            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
-        )
+        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
         return list(await self.casual_matches.list_for_custom_game(session, game.id))
 
     async def mix_stats(
@@ -1880,12 +1901,7 @@ class CustomGameService:
         Read-only, no roster row is touched -- the host applies the verdict
         through the same ``participation`` field.
         """
-        game = await self.get(
-            session,
-            workspace_id=workspace_id,
-            custom_game_id=custom_game_id,
-            options=CustomGameRepository.WITHOUT_BALANCE_RESULT,
-        )
+        game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
         roster = list(await self.roster.list_for_game(session, game.id))
         if not roster:
             return []

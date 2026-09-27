@@ -104,6 +104,26 @@ class _TeamNames:
             names[index] = name
 
 
+class _Lobbies:
+    """``balancer.custom_game_lobby`` as a dict keyed by (game id, lobby index)."""
+
+    def __init__(self) -> None:
+        self.rows: dict[tuple[int, int], Any] = {}
+
+    async def list_for_game(self, _session: Any, game_id: int) -> list[Any]:
+        return [row for (gid, _index), row in sorted(self.rows.items()) if gid == game_id]
+
+    async def get(self, _session: Any, game_id: int, lobby_index: int) -> Any:
+        return self.rows.get((game_id, lobby_index))
+
+    async def create(self, _session: Any, row: Any) -> Any:
+        self.rows[(row.custom_game_id, row.lobby_index)] = row
+        return row
+
+    async def delete(self, _session: Any, row: Any) -> None:
+        self.rows.pop((row.custom_game_id, row.lobby_index), None)
+
+
 class _HostPrefs:
     """``balancer.user_config`` as a dict: everything the HOST configures.
 
@@ -218,6 +238,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
         self.host_prefs = _HostPrefs()
         self.co_hosts = _CoHosts()
         self.casual = _CasualStore()
+        self.lobbies = _Lobbies()
 
         self.ranks = MagicMock()
         self.ranks.resolve = AsyncMock(
@@ -245,6 +266,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             games=self.games,
             roster=self.roster,
             co_hosts=self.co_hosts,
+            lobbies=self.lobbies,
             player_roles=self.player_roles,
             team_names=self.team_names,
             # The host's own row: solver knobs, roster shape, points per win.

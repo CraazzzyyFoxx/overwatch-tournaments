@@ -202,6 +202,23 @@ def _dump_settings(
     }
 
 
+def _dump_lobby(lobby: Any, *, balance_result: bool) -> dict[str, Any]:
+    """One lobby: its pager, its rolled map and when it was last balanced.
+
+    ``balance_result`` is detail-only -- the solver document grows with every
+    stored option and no list row renders it.
+    """
+    out: dict[str, Any] = {
+        "lobby_index": lobby.lobby_index,
+        "selected_variant_index": lobby.selected_variant_index,
+        "next_map_id": lobby.next_map_id,
+        "balanced_at": lobby.balanced_at.isoformat() if lobby.balanced_at else None,
+    }
+    if balance_result:
+        out["balance_result"] = as_lobby_document(lobby.balance_result_json)
+    return out
+
+
 def _dump_game(
     game: Any,
     settings: dict[str, Any],
@@ -215,6 +232,7 @@ def _dump_game(
     roster_shape: dict[str, Any] | None = None,
     co_hosts: list[dict[str, Any]] | None = None,
     activity: tuple[int, Any] | None = None,
+    lobbies: list[Any] | None = None,
 ) -> dict[str, Any]:
     matches_count, last_match_at = activity if activity is not None else (0, None)
     out: dict[str, Any] = {
@@ -228,13 +246,10 @@ def _dump_game(
         "name": game.name,
         "status": game.status,
         "settings": settings,
-        # Which of those options the mix is *showing*: the host's pager, read by
-        # every client, so a viewer never studies a matchup nobody is calling.
-        "selected_variant_index": game.selected_variant_index,
-        # The map the next match is played on, rolled or picked by a host; the
-        # client resolves name/mode/thumbnail against the catalogue it already
-        # holds, so only the id travels.
-        "next_map_id": game.next_map_id,
+        # How many lobbies this mix runs, and what each of them is showing: the
+        # matchup, the pager and the rolled map are per-lobby facts now.
+        "lobby_count": game.lobby_count,
+        "lobbies": [_dump_lobby(lobby, balance_result=roster is not None) for lobby in (lobbies or [])],
         # Whether players may seat themselves here (closed | pool | benched) and
         # whether a seated one may re-order their own roles. Both are read by the
         # board's host controls and by the player's own panel.
@@ -248,10 +263,6 @@ def _dump_game(
         "roster_shape": roster_shape,
     }
     if roster is not None:
-        # Detail-only, like the roster: the solver document grows with every
-        # stored option (``lobby_document``), and no list row renders it --
-        # shipping it per row made the list the heaviest read of the service.
-        out["balance_result"] = as_lobby_document(game.balance_result_json)
         by_id = members or {}
         by_player = roles_by_player or {}
         out["players"] = [
@@ -306,6 +317,7 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     host_display_name = host_names.get(game.host_user_id)
     co_hosts = [{"user_id": user_id, "display_name": host_names.get(user_id)} for user_id in co_host_user_ids]
     activity = (await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id)
+    lobbies = list(await custom_game_service.lobbies.list_for_game(session, game.id))
     if not roster:
         return _dump_game(
             game,
@@ -315,6 +327,7 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
             roster_shape=roster_shape,
             co_hosts=co_hosts,
             activity=activity,
+            lobbies=lobbies,
         )
     member_ids = [row.workspace_member_id for row in roster]
     members = await custom_game_service.members(session, game.workspace_id, member_ids)
@@ -354,6 +367,7 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
         roster_shape=roster_shape,
         co_hosts=co_hosts,
         activity=activity,
+        lobbies=lobbies,
     )
 
 
@@ -465,6 +479,7 @@ def register(broker: Any, logger: Any) -> None:
             # knob) instead of a query per mix.
             activity = await custom_game_service.casual_matches.activity_for_games(session, game_ids)
             team_names = await custom_game_service.team_names.mapping_for_games(session, game_ids)
+            lobbies_by_game = await custom_game_service.lobbies.list_for_games(session, game_ids)
             workspace_channel_id = await custom_game_service.workspace_discord_channel_id(session, workspace_id)
             # A workspace's mixes are typically run by a handful of people, so one
             # grouped read beats a per-row lookup of the same few account rows.
@@ -479,6 +494,7 @@ def register(broker: Any, logger: Any) -> None:
                         team_names.get(row.id, {}), points_by_host.get(row.host_user_id, 0), workspace_channel_id
                     ),
                     host_display_name=host_names.get(row.host_user_id),
+                    lobbies=lobbies_by_game.get(row.id, []),
                     activity=activity.get(row.id),
                 )
                 for row in rows
@@ -1014,6 +1030,7 @@ def register(broker: Any, logger: Any) -> None:
                     await custom_game_service.workspace_discord_channel_id(session, workspace_id),
                     await custom_game_service.host_points_per_win(session, game.host_user_id),
                 ),
+                lobbies=(await custom_game_service.lobbies.list_for_games(session, [game.id])).get(game.id, []),
                 activity=(await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id),
             )
 

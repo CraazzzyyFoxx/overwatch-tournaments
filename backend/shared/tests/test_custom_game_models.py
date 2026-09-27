@@ -20,11 +20,31 @@ class TestMixEnums:
 class TestCustomGameModel:
     def test_known_settings_are_not_stored_in_one_config_bag(self):
         columns = models.CustomGame.__table__.columns
-        assert "balance_result_json" in columns
+        # The solver document is the lobby's, not the mix's: two lobbies of one
+        # mix hold two independent matchups.
+        assert "balance_result_json" not in columns
+        assert "selected_variant_index" not in columns
+        assert "next_map_id" not in columns
         assert "config_json" not in columns
         assert "result_json" not in columns
         assert "outcome_json" not in columns
         assert "co_host_user_ids" not in columns
+
+    def test_everything_about_one_match_lives_on_the_lobby(self):
+        columns = models.CustomGameLobby.__table__.columns
+        assert {
+            "custom_game_id",
+            "lobby_index",
+            "balance_result_json",
+            "balance_result_version",
+            "selected_variant_index",
+            "next_map_id",
+            "balanced_at",
+        } <= set(columns.keys())
+        assert [column.name for column in models.CustomGameLobby.__table__.primary_key] == [
+            "custom_game_id",
+            "lobby_index",
+        ]
 
     def test_self_service_switches_are_columns_with_a_closed_default(self):
         # The signup mode decides *where* a self-signed player lands, so it is
@@ -104,3 +124,9 @@ class TestCasualHistoryModel:
         assert column.nullable is True
         assert next(iter(column.foreign_keys)).ondelete == "SET NULL"
         assert "display_name_snapshot" in models.CasualPlayer.__table__.columns
+
+    def test_a_match_records_which_lobby_played_it(self):
+        assert "lobby_index" in models.CasualMatch.__table__.columns
+        busy = models.CasualMatchBusyPlayer.__table__
+        assert busy.schema == "casual"
+        assert [column.name for column in busy.primary_key] == ["match_id", "workspace_member_id"]

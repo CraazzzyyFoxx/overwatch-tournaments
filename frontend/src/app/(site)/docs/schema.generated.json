@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "mixself01",
+  "alembic_head": "mixlobby01",
   "packages": [
     {
       "key": "achievements",
@@ -172,12 +172,13 @@
     },
     {
       "key": "casual",
-      "mermaid": "erDiagram\n    CASUAL_MATCH {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint custom_game_id FK\n        bigint map_id FK \"nullable\"\n        bigint recorded_by FK \"nullable\"\n        int points_per_win_applied \"nullable\"\n    }\n    CASUAL_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint team_id FK\n        bigint workspace_member_id FK \"nullable\"\n        varchar(255) display_name_snapshot\n        heroclass role \"nullable\"\n        int rank\n    }\n    CASUAL_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint match_id FK\n        varchar(8) side\n        varchar(255) name\n        int score\n    }\n\n    AUTH_USER |o--o{ CASUAL_MATCH : \"recorded_by\"\n    BALANCER_CUSTOM_GAME ||--o{ CASUAL_MATCH : \"custom_game_id\"\n    CASUAL_MATCH ||--o{ CASUAL_TEAM : \"match_id\"\n    CASUAL_TEAM ||--o{ CASUAL_PLAYER : \"team_id\"\n    OVERWATCH_MAP |o--o{ CASUAL_MATCH : \"map_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ CASUAL_PLAYER : \"workspace_member_id\"",
+      "mermaid": "erDiagram\n    CASUAL_MATCH {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint custom_game_id FK\n        int lobby_index\n        bigint map_id FK \"nullable\"\n        bigint recorded_by FK \"nullable\"\n        int points_per_win_applied \"nullable\"\n    }\n    CASUAL_MATCH_BUSY_PLAYER {\n        bigint match_id PK,FK\n        bigint workspace_member_id PK,FK\n    }\n    CASUAL_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint team_id FK\n        bigint workspace_member_id FK \"nullable\"\n        varchar(255) display_name_snapshot\n        heroclass role \"nullable\"\n        int rank\n    }\n    CASUAL_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint match_id FK\n        varchar(8) side\n        varchar(255) name\n        int score\n    }\n\n    AUTH_USER |o--o{ CASUAL_MATCH : \"recorded_by\"\n    BALANCER_CUSTOM_GAME ||--o{ CASUAL_MATCH : \"custom_game_id\"\n    CASUAL_MATCH ||--o{ CASUAL_TEAM : \"match_id\"\n    CASUAL_MATCH ||--o| CASUAL_MATCH_BUSY_PLAYER : \"match_id\"\n    CASUAL_TEAM ||--o{ CASUAL_PLAYER : \"team_id\"\n    OVERWATCH_MAP |o--o{ CASUAL_MATCH : \"map_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ CASUAL_PLAYER : \"workspace_member_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o| CASUAL_MATCH_BUSY_PLAYER : \"workspace_member_id\"",
       "schemas": [
         "casual"
       ],
       "tables": [
         "casual.match",
+        "casual.match_busy_player",
         "casual.player",
         "casual.team"
       ],
@@ -215,13 +216,14 @@
     },
     {
       "key": "custom_game",
-      "mermaid": "erDiagram\n    BALANCER_CUSTOM_GAME {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint host_user_id FK \"nullable\"\n        varchar(255) name\n        varchar(16) status\n        bigint next_map_id FK \"nullable\"\n        int selected_variant_index\n        jsonb balance_result_json \"nullable\"\n        int balance_result_version\n        varchar(16) self_signup\n        boolean self_role_edit\n    }\n    BALANCER_CUSTOM_GAME_CO_HOST {\n        bigint custom_game_id PK,FK\n        bigint user_id PK,FK\n    }\n    BALANCER_CUSTOM_GAME_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint custom_game_id FK\n        bigint workspace_member_id FK\n        int sort_order\n        varchar(16) participation\n        varchar(16) role_selection_mode\n        boolean is_flex\n    }\n    BALANCER_CUSTOM_GAME_PLAYER_ROLE {\n        bigint custom_game_player_id PK,FK\n        varchar(16) role PK\n        int priority\n    }\n    BALANCER_CUSTOM_GAME_TEAM_NAME {\n        bigint custom_game_id PK,FK\n        int team_index PK\n        varchar(60) name\n    }\n\n    AUTH_USER |o--o{ BALANCER_CUSTOM_GAME : \"host_user_id\"\n    AUTH_USER ||--o| BALANCER_CUSTOM_GAME_CO_HOST : \"user_id\"\n    BALANCER_CUSTOM_GAME ||--o{ BALANCER_CUSTOM_GAME_PLAYER : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_CO_HOST : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_TEAM_NAME : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME_PLAYER ||--o| BALANCER_CUSTOM_GAME_PLAYER_ROLE : \"custom_game_player_id\"\n    OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME : \"next_map_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_CUSTOM_GAME : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_CUSTOM_GAME_PLAYER : \"workspace_member_id\"",
+      "mermaid": "erDiagram\n    BALANCER_CUSTOM_GAME {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint host_user_id FK \"nullable\"\n        varchar(255) name\n        varchar(16) status\n        int lobby_count\n        varchar(16) self_signup\n        boolean self_role_edit\n    }\n    BALANCER_CUSTOM_GAME_CO_HOST {\n        bigint custom_game_id PK,FK\n        bigint user_id PK,FK\n    }\n    BALANCER_CUSTOM_GAME_LOBBY {\n        bigint custom_game_id PK,FK\n        int lobby_index PK\n        int selected_variant_index\n        jsonb balance_result_json \"nullable\"\n        int balance_result_version\n        bigint next_map_id FK \"nullable\"\n        timestamptz balanced_at \"nullable\"\n    }\n    BALANCER_CUSTOM_GAME_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint custom_game_id FK\n        bigint workspace_member_id FK\n        int sort_order\n        varchar(16) participation\n        varchar(16) role_selection_mode\n        boolean is_flex\n        int lobby_pin \"nullable\"\n    }\n    BALANCER_CUSTOM_GAME_PLAYER_ROLE {\n        bigint custom_game_player_id PK,FK\n        varchar(16) role PK\n        int priority\n    }\n    BALANCER_CUSTOM_GAME_TEAM_NAME {\n        bigint custom_game_id PK,FK\n        int team_index PK\n        varchar(60) name\n    }\n\n    AUTH_USER |o--o{ BALANCER_CUSTOM_GAME : \"host_user_id\"\n    AUTH_USER ||--o| BALANCER_CUSTOM_GAME_CO_HOST : \"user_id\"\n    BALANCER_CUSTOM_GAME ||--o{ BALANCER_CUSTOM_GAME_PLAYER : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_CO_HOST : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_LOBBY : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_TEAM_NAME : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME_PLAYER ||--o| BALANCER_CUSTOM_GAME_PLAYER_ROLE : \"custom_game_player_id\"\n    OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME_LOBBY : \"next_map_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_CUSTOM_GAME : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_CUSTOM_GAME_PLAYER : \"workspace_member_id\"",
       "schemas": [
         "balancer"
       ],
       "tables": [
         "balancer.custom_game",
         "balancer.custom_game_co_host",
+        "balancer.custom_game_lobby",
         "balancer.custom_game_player",
         "balancer.custom_game_player_role",
         "balancer.custom_game_team_name"

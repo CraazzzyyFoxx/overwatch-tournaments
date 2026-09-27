@@ -5,16 +5,22 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
 
-__all__ = ("CasualMatch", "CasualTeam", "CasualPlayer")
+__all__ = ("CasualMatch", "CasualMatchBusyPlayer", "CasualTeam", "CasualPlayer")
 
 
 class CasualMatch(db.TimeStampIntegerMixin):
     """Aggregate root for one immutable casual-match snapshot."""
 
     __tablename__ = "match"
-    __table_args__ = ({"schema": "casual"},)
+    __table_args__ = (
+        CheckConstraint("lobby_index BETWEEN 0 AND 1", name="ck_casual_match_lobby_index"),
+        {"schema": "casual"},
+    )
 
     custom_game_id: Mapped[int] = mapped_column(ForeignKey("balancer.custom_game.id", ondelete="CASCADE"), index=True)
+    # Which lobby of the mix played it. Every pre-two-lobby match is lobby 0,
+    # which is also what a one-lobby mix keeps writing.
+    lobby_index: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
     map_id: Mapped[int | None] = mapped_column(
         ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -29,6 +35,10 @@ class CasualMatch(db.TimeStampIntegerMixin):
         back_populates="match",
         passive_deletes=True,
         order_by="CasualTeam.id",
+    )
+    busy_players: Mapped[list[CasualMatchBusyPlayer]] = relationship(
+        back_populates="match",
+        passive_deletes=True,
     )
 
 
@@ -71,3 +81,23 @@ class CasualPlayer(db.TimeStampIntegerMixin):
     rank: Mapped[int] = mapped_column(Integer(), nullable=False)
 
     team: Mapped[CasualTeam] = relationship(back_populates="players")
+
+
+class CasualMatchBusyPlayer(db.Base):
+    """Who was playing the mix's OTHER lobby while this match was recorded.
+
+    Rotation fairness only: a member listed here neither played this match nor
+    sat it out -- they were in the other lobby -- so counting it either way
+    would either fake a rest or fake a game. Empty for every one-lobby mix,
+    which is exactly why nothing needs backfilling.
+    """
+
+    __tablename__ = "match_busy_player"
+    __table_args__ = ({"schema": "casual"},)
+
+    match_id: Mapped[int] = mapped_column(ForeignKey("casual.match.id", ondelete="CASCADE"), primary_key=True)
+    workspace_member_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace_member.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    match: Mapped[CasualMatch] = relationship(back_populates="busy_players")

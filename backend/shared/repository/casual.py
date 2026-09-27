@@ -28,7 +28,12 @@ class CasualMatchRepository(BaseRepository[models.CasualMatch]):
         result = await session.scalars(
             self.select()
             .where(self.model.custom_game_id == custom_game_id)
-            .options(selectinload(self.model.teams).selectinload(models.CasualTeam.players))
+            .options(
+                selectinload(self.model.teams).selectinload(models.CasualTeam.players),
+                # The rotation reader asks "was this member in the other lobby
+                # then"; one eager load answers it for the whole history.
+                selectinload(self.model.busy_players),
+            )
             .order_by(self.model.id.desc())
         )
         return result.all()
