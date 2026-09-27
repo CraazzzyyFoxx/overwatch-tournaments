@@ -150,7 +150,9 @@ def _ranking_signature(block: dict[str, Any]) -> tuple[Any, ...]:
     return (
         block["formula"].strip(),
         tuple(float(points) for points in block["placement_points"]),
-        tuple((column["key"], column["better"]) for column in block["columns"]),
+        # ``.get`` with the same defaults ``ffa_rules`` reads the jsonb by: a row
+        # written without ``better`` ranks higher-first, it does not crash a save.
+        tuple((column.get("key"), column.get("better", "higher")) for column in block["columns"]),
     )
 
 
