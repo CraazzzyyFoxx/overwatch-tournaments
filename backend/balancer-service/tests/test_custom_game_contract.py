@@ -125,3 +125,15 @@ def test_self_service_patch_takes_the_three_signup_modes_and_nothing_else() -> N
         _schemas().CustomGameSelfServicePatch.model_validate({"self_signup": "open"})
     with pytest.raises(ValidationError):
         _schemas().CustomGameSelfServicePatch.model_validate({"self_role_edit": "yes"})
+
+
+def test_balance_request_defaults_to_the_first_lobby() -> None:
+    """Пустое тело -- ровно то, что слали клиенты до появления лобби."""
+    body = _schemas().CustomGameBalanceRequest.model_validate({})
+    assert body.scope == "lobby"
+    assert body.lobby_index == 0
+
+
+def test_balance_request_rejects_a_third_lobby() -> None:
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameBalanceRequest.model_validate({"lobby_index": 2})

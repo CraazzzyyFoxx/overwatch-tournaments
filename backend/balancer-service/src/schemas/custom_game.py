@@ -12,6 +12,7 @@ from shared.core.enums import MixParticipation, MixSelfSignup
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
+    "CustomGameBalanceRequest",
     "CustomGameCoHostPatch",
     "CustomGameCreate",
     "CustomGameHostTransfer",
@@ -119,6 +120,12 @@ class CustomGameVariantIndexPatch(_LobbyScoped):
     """Which stored balance option the lobby shows, for every viewer at once."""
 
     variant_index: int = Field(ge=0)
+
+
+class CustomGameBalanceRequest(_LobbyScoped):
+    """What to balance. An empty body is the first lobby, as before there was a second."""
+
+    scope: Literal["lobby"] = "lobby"
 
 
 #: Ceiling on the encoded lineup screenshot. ~6 MiB decoded: far above the

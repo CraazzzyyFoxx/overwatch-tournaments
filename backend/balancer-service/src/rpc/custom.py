@@ -743,10 +743,12 @@ def register(broker: Any, logger: Any) -> None:
             user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
             _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameBalanceRequest, data)
             game = await custom_game_service.balance(
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
+                lobby_index=body.lobby_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )

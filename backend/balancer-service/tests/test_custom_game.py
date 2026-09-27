@@ -1306,6 +1306,89 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(classes["damage"]["priority"], 2)
         self.assertNotIn("tank", classes)
 
+    async def test_balance_of_one_lobby_leaves_out_the_other_lobbys_players(self) -> None:
+        """Лобби A играет: его места и закреплённые за ним не попадают в баланс B."""
+        game = _game(status="balanced", lobby_count=2)
+        roster = [
+            _roster_row(1, 7, 0),
+            _roster_row(2, 8, 1),
+            _roster_row(3, 9, 2, lobby_pin=0),
+            _roster_row(4, 10, 3),
+        ]
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = roster
+        self.ranks.resolve.return_value = _ranks(7, 8, 9, 10)
+        self.lobby_rows[1] = _lobby(1)
+        self.lobby_rows[0] = _lobby(
+            0,
+            balanced_at=datetime(2026, 3, 1, 21, 0),
+            balance_result_json=lobby_document(
+                [
+                    {
+                        "teams": [
+                            {"id": 1, "roster": {"tank": [self._seat("8", "P8", 2500, "tank")]}},
+                            {"id": 2, "roster": {"tank": [self._seat("10", "P10", 2400, "tank")]}},
+                        ],
+                        "statistics": {},
+                        "benched_players": [],
+                    }
+                ]
+            ),
+        )
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, lobby_index=1, actor_user_id=9)
+
+        # 8 и 10 сидят в выбранном варианте лобби A, 9 закреплён за A -- остаётся 7.
+        self.assertEqual(list(self.run_balance.await_args.args[0]["players"]), ["7"])
+        self.assertIsNotNone(self.lobby_rows[1].balance_result_json)
+        self.assertIsNotNone(self.lobby_rows[1].balanced_at)
+        # Документ соседнего лобби не переписан.
+        self.assertEqual(self.lobby_rows[0].balanced_at, datetime(2026, 3, 1, 21, 0))
+
+    async def test_balance_of_a_one_lobby_mix_keeps_the_whole_pool(self) -> None:
+        """У микса одно лобби: ни чужой документ, ни залежавшийся пин не сужают пул."""
+        self.games.get.return_value = _game(lobby_count=1)
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0), _roster_row(2, 8, 1, lobby_pin=1)]
+        self.ranks.resolve.return_value = _ranks(7, 8)
+        self.lobby_rows[1] = _lobby(
+            1,
+            balance_result_json=lobby_document(
+                [
+                    {
+                        "teams": [
+                            {"id": 1, "roster": {"tank": [self._seat("7", "P7", 2500, "tank")]}},
+                            {"id": 2, "roster": {"tank": [self._seat("8", "P8", 2400, "tank")]}},
+                        ],
+                        "statistics": {},
+                        "benched_players": [],
+                    }
+                ]
+            ),
+        )
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=9)
+
+        self.assertEqual(sorted(self.run_balance.await_args.args[0]["players"]), ["7", "8"])
+        self.assertIsNotNone(self.lobby_rows[0].balance_result_json)
+
+    async def test_balance_of_a_two_lobby_mix_leaves_the_unseated_waiting(self) -> None:
+        """Невлезший в лобби игрок ждёт соседнее, а не уходит в бенч: бенч выкинул
+        бы его и из кандидатов второго лобби."""
+        game = _game(lobby_count=2)
+        roster = [_roster_row(1, 7, 0), _roster_row(2, 8, 1), _roster_row(3, 9, 2)]
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = roster
+        self.ranks.resolve.return_value = _ranks(7, 8, 9)
+        self.lobby_rows[1] = _lobby(1)
+        self.run_balance.return_value = {
+            "players": {"7": {"name": "P7"}, "8": {"name": "P8"}, "9": {"name": "P9"}},
+            "variants": [{"teams": [{"roster": {"tank": ["7", "8"]}}], "statistics": {}, "benched": ["9"]}],
+        }
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9)
+
+        self.assertEqual([row.participation for row in roster], [MixParticipation.POOL] * 3)
+
     async def test_update_roster_keeps_surviving_row_state(self) -> None:
         game = _game()
         keep = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["damage"])

@@ -1210,26 +1210,18 @@ class CustomGameService:
         config = await self._host_config(session, host_user_id)
         return (config.points_per_win or 0) if config is not None else 0
 
-    async def balance(
+    async def _lineup_nodes(
         self,
         session: AsyncSession,
         *,
-        workspace_id: int,
-        custom_game_id: int,
-        actor_user_id: int,
-        actor_is_superuser: bool = False,
-    ) -> models.CustomGame:
-        game = await self._writable(
-            session,
-            workspace_id=workspace_id,
-            custom_game_id=custom_game_id,
-            actor_user_id=actor_user_id,
-            actor_is_superuser=actor_is_superuser,
-        )
-        roster = list(await self.roster.list_for_game(session, game.id))
-        lineup = [row for row in roster if row.participation != MixParticipation.BENCHED]
-        if not lineup:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+        game: models.CustomGame,
+        lineup: Sequence[models.CustomGamePlayer],
+    ) -> dict[str, Any]:
+        """The solver's input for these roster rows: ranks, role order, rotation priority.
+
+        Split out of ``balance`` because one mix is now solved lobby by lobby:
+        each lobby feeds in its own set of rows and reads them the same way.
+        """
         # If the lineup does not divide evenly into full teams, `run_balance`'s own
         # overflow trim (`domain.balancer.runtime._prepare_balance_context`) sorts the
         # players not pinned to a seat by `Player.rotation_priority` ascending and
@@ -1244,10 +1236,10 @@ class CustomGameService:
         histories_by_member = {
             history.member_id: history for history in await self._rotation_histories(session, game, lineup)
         }
-        members = await self.members(session, workspace_id, [row.workspace_member_id for row in lineup])
+        members = await self.members(session, game.workspace_id, [row.workspace_member_id for row in lineup])
         resolved = await self.ranks.resolve(
             session,
-            workspace_id=workspace_id,
+            workspace_id=game.workspace_id,
             members={member_id: member.player_id for member_id, member in members.items()},
             roles=list(REGISTRATION_ROLE_CODES),
             # ``MIX_ORDER`` puts the host's own book above the workspace canon: a
@@ -1286,6 +1278,17 @@ class CustomGameService:
                 },
                 "stats": {"classes": classes},
             }
+        return player_nodes
+
+    async def _solve_lobby(
+        self,
+        session: AsyncSession,
+        game: models.CustomGame,
+        lobby: models.CustomGameLobby,
+        lineup: Sequence[models.CustomGamePlayer],
+    ) -> None:
+        """Run the solver on exactly these players and store the run on this lobby."""
+        player_nodes = await self._lineup_nodes(session, game=game, lineup=lineup)
         # The HOST's row, not the acting co-host's, and read exactly once: the
         # ranks above are already resolved against the host's own book
         # (``MIX_ORDER`` + ``author_user_id=game.host_user_id``), so reading the
@@ -1293,7 +1296,7 @@ class CustomGameService:
         # differently depending on who clicked. The same row carries both the
         # solver overrides and the roster shape, so they come off one load.
         host_config = await self._host_config(session, game.host_user_id)
-        role_mask = (await self._shape_for(session, workspace_id, host_config)).slots
+        role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
         try:
             result = await self.run_balance(
                 {"players": player_nodes},
@@ -1308,13 +1311,48 @@ class CustomGameService:
             # apart from a real bug and reports "internal error" -- hiding the
             # actual, actionable reason from the host.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-        lobby = await self._lobby(session, game, 0)
         lobby.balance_result_json = result
         # A fresh search renumbers every option, so whatever the host had paged
         # to describes nothing now -- back to the best one.
         lobby.selected_variant_index = 0
         lobby.balanced_at = datetime.now(UTC)
-        _apply_balance_result(roster, result)
+
+    async def balance(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_index: int = 0,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """Rebuild the teams of ONE lobby (the first one by default).
+
+        For a one-lobby mix that is today's behaviour whole: the entire
+        non-benched pool goes to the solver and lands in lobby 0's document.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        roster = list(await self.roster.list_for_game(session, game.id))
+        lineup = [row for row in roster if row.participation != MixParticipation.BENCHED]
+        if not lineup:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+        lobby = await self._lobby(session, game, lobby_index)
+        candidates = await self._lobby_candidates(session, game, lineup, lobby_index)
+        if not candidates:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
+        await self._solve_lobby(session, game, lobby, candidates)
+        # Benching the overflow is the one-lobby answer. With two lobbies the
+        # players left out WAIT for the other one (§Derived state), and a
+        # BENCHED row would drop out of its candidate pool too.
+        if game.lobby_count < 2:
+            _apply_balance_result(roster, lobby.balance_result_json)
         game.status = MixStatus.BALANCED
         await session.flush()
         return game
