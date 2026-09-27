@@ -39,7 +39,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  * `/balancer/mix`. This screen only ever reads and edits the one the host
  * already picked.
  *
- * Which balance option is on screen is the mix's own `selected_variant_index`,
+ * Which balance option is on screen is the lobby's own `selected_variant_index`,
  * not page state: the host's pager is the lobby's pager, and a viewer reads
  * the matchup being called out rather than one their browser chose.
  *
@@ -74,7 +74,7 @@ export default function BalancerPickupMixPage() {
   const [isPoolOpen, setIsPoolOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   // The OW catalogue with its gamemodes: the roll pool for the next map and
-  // the manual picker. Which map is *chosen* is the mix's own `next_map_id`,
+  // the manual picker. Which map is *chosen* is the lobby's own `next_map_id`,
   // so a co-host in another tab sees the same roll.
   const mapsQuery = useQuery({
     queryKey: ["maps", "gamemode"],
@@ -247,7 +247,7 @@ export default function BalancerPickupMixPage() {
               balancing={balance.isPending}
               activeCount={summarizeLineup(rows).active}
               onBalance={() => balance.mutate()}
-              variantIndex={game?.selected_variant_index ?? 0}
+              variantIndex={game?.lobbies?.[0]?.selected_variant_index ?? 0}
               onVariantIndexChange={(index) => setVariantIndex.mutate(index)}
               recordingOutcome={recordOutcome.isPending}
               onRecordOutcome={(input) => recordOutcome.mutate(input)}

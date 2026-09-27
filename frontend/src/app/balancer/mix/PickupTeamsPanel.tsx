@@ -84,7 +84,7 @@ type PickupTeamsPanelProps = {
   activeCount: number;
   onBalance: () => void;
   /**
-   * Which of the solver's options is on screen — the mix's own
+   * Which of the solver's options is on screen — the lobby's own
    * `selected_variant_index`, so the host's pager moves every viewer with it.
    * Viewers get no pager at all: the matchup is read out to a lobby, and a
    * player quietly paging their own copy is looking at teams nobody is playing.
@@ -124,8 +124,8 @@ type PickupTeamsPanelProps = {
  * The result side: the teams the solver produced, and the writes that act on
  * them — re-balance, record who won (repeatable), and close the mix.
  *
- * Teams are read from the stored `balance_result` document, because only it
- * knows which *seat* each player got and
+ * Teams are read from the first lobby's stored `balance_result` document,
+ * because only it knows which *seat* each player got and
  * at what rating — the difference between "these five are together" and a
  * lineup a host can actually call out. The solver returns many equally-scored
  * options, so the variant pager walks them without re-running the balance.
@@ -159,7 +159,8 @@ export function PickupTeamsPanel({
   postingToDiscord = false,
   onPostToDiscord
 }: Readonly<PickupTeamsPanelProps>) {
-  const variants = parseVariants(game?.balance_result, teamNamesByIndex(game?.settings));
+  const lobby = game?.lobbies?.[0];
+  const variants = parseVariants(lobby?.balance_result, teamNamesByIndex(game?.settings));
   // Clamped rather than reset in an effect: a shorter result must not leave the
   // pager pointing past the end.
   const index = Math.min(variantIndex, Math.max(0, variants.length - 1));
@@ -208,7 +209,7 @@ export function PickupTeamsPanel({
           <div ref={captureRef} data-testid="teams-capture" className="flex flex-col gap-3.5">
             {game ? (
               <NextMapStrip
-                game={game}
+                nextMapId={lobby?.next_map_id ?? null}
                 maps={maps}
                 matches={matches}
                 canWrite={canWrite}
@@ -451,15 +452,15 @@ export function PickupTeamsPanel({
 /**
  * The map the next match is on, and how a host gets one: roll it (inside one
  * mode, or mode-first across all of them -- see `rollNextMap`), or pick it by
- * hand. The verdict is the mix's `next_map_id`, so every viewer reads the same
- * map and the next recorded result carries it. Only the mode filter is local:
- * it is a preference of whoever is rolling, not a fact about the mix.
+ * hand. The verdict is the lobby's `next_map_id`, so every viewer reads the
+ * same map and the next recorded result carries it. Only the mode filter is
+ * local: it is a preference of whoever is rolling, not a fact about the mix.
  *
  * Hidden from the screenshot when nothing is rolled: "Not rolled yet" beside
  * two teams is noise in the channel the image is pasted into.
  */
 function NextMapStrip({
-  game,
+  nextMapId,
   maps,
   matches,
   canWrite,
@@ -467,7 +468,8 @@ function NextMapStrip({
   capturing,
   onNextMapChange
 }: Readonly<{
-  game: CustomGame;
+  /** This lobby's own `next_map_id`, not the mix's -- the mix has none. */
+  nextMapId: number | null;
   maps: MapRead[];
   matches: CustomGameMatch[];
   canWrite: boolean;
@@ -477,8 +479,7 @@ function NextMapStrip({
 }>) {
   const [modeId, setModeId] = useState<number | null>(null);
   const modes = rollableModes(maps);
-  const nextMap =
-    game.next_map_id == null ? null : (maps.find((map) => map.id === game.next_map_id) ?? null);
+  const nextMap = nextMapId == null ? null : (maps.find((map) => map.id === nextMapId) ?? null);
 
   if (!canWrite && nextMap == null) return null;
 
@@ -562,7 +563,7 @@ function NextMapStrip({
             )}
             Roll
           </Button>
-          <MapCombobox maps={maps} mapId={game.next_map_id} onMapIdChange={onNextMapChange} />
+          <MapCombobox maps={maps} mapId={nextMapId} onMapIdChange={onNextMapChange} />
         </div>
       ) : null}
     </div>

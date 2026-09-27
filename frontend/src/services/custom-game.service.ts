@@ -98,6 +98,36 @@ export type CustomGameSettings = {
   workspace_discord_channel_id: string | null;
 };
 
+/**
+ * One lobby of a mix — the four columns that used to sit on the mix itself
+ * (`custom_game_lobby`). A mix always has exactly `lobby_count` of them, so
+ * lobby 0 is an ordinary row rather than a special case, and a second lobby
+ * carries its own document, its own pager position and its own next map.
+ */
+export type CustomGameLobby = {
+  /** 0 = A, 1 = B. Also the offset of this lobby's team names: `lobby_index * 2 + team`. */
+  lobby_index: 0 | 1;
+  /**
+   * The solver's own document for this lobby's last balance, or `null` before
+   * one. Detail reads only -- `list` rows leave it out (it runs to megabytes).
+   */
+  balance_result?: unknown;
+  /** Which option of this lobby's `balance_result` the mix is showing. */
+  selected_variant_index: number;
+  /** The map this lobby's next match is played on; cleared by recording it. */
+  next_map_id: number | null;
+  /** When this lobby was last balanced, or `null` while it never was. */
+  balanced_at: string | null;
+  /**
+   * `false` when this lobby has been balanced and no match of its own has been
+   * recorded since -- the lineup on screen is still unplayed, so anything that
+   * would overwrite it asks first. Detail reads only.
+   */
+  lineup_recorded?: boolean;
+  /** How many matches this lobby has recorded. Detail reads only. */
+  matches_count?: number;
+};
+
 export type CustomGame = {
   id: number;
   workspace_id: number;
@@ -108,25 +138,15 @@ export type CustomGame = {
   name: string;
   status: CustomGameStatus;
   settings: CustomGameSettings;
-  /**
-   * The solver's own document for the last balance, or `null` before one.
-   * Detail reads and writes only -- `list` rows leave it out (it runs to
-   * megabytes once a mix is balanced).
-   */
-  balance_result?: unknown;
-  /**
-   * Which option of `balance_result` the mix is showing. Server-held because
-   * the host's pager is the lobby's pager: every viewer renders this index,
-   * and only a host or co-host may move it (`setVariantIndex`).
-   */
-  selected_variant_index: number;
   created_at: string | null;
+  /** How many lobbies this mix runs at once. `2` is the ceiling (CHECK server-side). */
+  lobby_count: 1 | 2;
   /**
-   * The map the next match is played on -- rolled or picked by a host, seen by
-   * every viewer, stamped on the next recorded match and cleared by it. Only
-   * the id: name, mode and thumbnail resolve against the loaded catalogue.
+   * This mix's lobbies, ordered by `lobby_index` -- exactly `lobby_count` of
+   * them. The balance document, the pager position and the next map all live
+   * here now; the mix itself carries none of the three.
    */
-  next_map_id: number | null;
+  lobbies: CustomGameLobby[];
   /**
    * The mix's resolved team composition -- the host's own shape preference,
    * else the workspace default, else the built-in Overwatch 5v5 shape.
@@ -389,7 +409,7 @@ export const customGameService = {
    * Snapshots one played match into the permanent casual-match log — team
    * rosters and who won. Repeatable: a mix can record many before its host
    * calls `close`. `variantIndex` is whichever balance option is on screen;
-   * the map is the mix's `next_map_id`, consumed server-side.
+   * the map is the lobby's `next_map_id`, consumed server-side.
    */
   recordOutcome(
     workspaceId: number,

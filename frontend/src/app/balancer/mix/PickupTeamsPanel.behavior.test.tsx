@@ -32,7 +32,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CustomGame, CustomGameMatch } from "@/services/custom-game.service";
+import type { CustomGame, CustomGameLobby, CustomGameMatch } from "@/services/custom-game.service";
 import type { MapRead } from "@/types/map.types";
 
 import { PickupTeamsPanel } from "./PickupTeamsPanel";
@@ -148,6 +148,21 @@ function mapRead(id: number, name: string, gamemode: typeof CONTROL): MapRead {
 
 const CATALOGUE = [mapRead(5, "King's Row", HYBRID), mapRead(6, "Ilios", CONTROL), mapRead(7, "Busan", CONTROL)];
 
+/** One row of the mix's `lobbies[]` — the four columns that moved off `custom_game`. */
+function lobbyRow(overrides: Partial<CustomGameLobby> = {}): CustomGameLobby {
+  return {
+    lobby_index: 0,
+    // The last option seats karin at damage, where she is rated 3100.
+    balance_result: lobby([variant(0), variant(100), variant(200, ["8", "7"])]),
+    selected_variant_index: 0,
+    next_map_id: null,
+    balanced_at: "2026-01-01T00:00:00Z",
+    lineup_recorded: true,
+    matches_count: 0,
+    ...overrides,
+  };
+}
+
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
     id: 3,
@@ -158,15 +173,17 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     name: "Thursday scrim",
     status: "balanced",
     settings: SETTINGS,
-    // The last option seats karin at damage, where she is rated 3100.
-    balance_result: lobby([variant(0), variant(100), variant(200, ["8", "7"])]),
     created_at: null,
-    next_map_id: null,
-    selected_variant_index: 0,
+    lobby_count: 1,
+    lobbies: [lobbyRow()],
     roster_shape: null,
     players: [],
     matches_count: 0,
     last_match_at: null,
+    // Added by A8 to `CustomGame`; the fixture carries them so `bun run
+    // typecheck` stays honest about the post-A shape.
+    self_signup: "closed",
+    self_role_edit: false,
     ...overrides,
   };
 }
@@ -345,7 +362,9 @@ describe("PickupTeamsPanel", () => {
       sub_role_collision_count: 2,
     };
     // The floor is the pool's, so the document carries it once, not per option.
-    const scope = await mount(game({ balance_result: lobby([scored], { structural_min_off_role: 1 }) }));
+    const scope = await mount(
+      game({ lobbies: [lobbyRow({ balance_result: lobby([scored], { structural_min_off_role: 1 }) })] }),
+    );
 
     expect(scope.textContent).toContain("QUALITY 41.50");
     expect(scope.textContent).toContain("LINES 119");
@@ -367,7 +386,7 @@ describe("PickupTeamsPanel", () => {
       mmr_std_dev: 12.34,
       off_role_count: 1,
     };
-    const scope = await mount(game({ balance_result: lobby([swapped]) }));
+    const scope = await mount(game({ lobbies: [lobbyRow({ balance_result: lobby([swapped]) })] }));
 
     expect(scope.textContent).not.toContain("QUALITY");
     expect(scope.textContent).not.toContain("LINES");
@@ -407,7 +426,9 @@ describe("PickupTeamsPanel", () => {
   });
 
   it("clamps an index left pointing past a shorter result", async () => {
-    const scope = await mount(game({ balance_result: lobby([variant(0)]) }), { variantIndex: 7 });
+    const scope = await mount(game({ lobbies: [lobbyRow({ balance_result: lobby([variant(0)]) })] }), {
+      variantIndex: 7,
+    });
 
     // One option left: the pager is gone and the first option is on screen.
     expect(pagerLabel(scope)).toBeUndefined();
@@ -415,21 +436,28 @@ describe("PickupTeamsPanel", () => {
   });
 
   it("offers the empty state for a mix that has not been balanced", async () => {
-    const scope = await mount(game({ status: "draft", balance_result: null }));
+    const scope = await mount(
+      game({ status: "draft", lobbies: [lobbyRow({ balance_result: null, balanced_at: null })] }),
+    );
 
     expect(scope.textContent).toContain("No teams yet");
     expect(byName(scope, "Balance teams")).not.toBeNull();
   });
 
   it("refuses to balance an empty lineup and says why", async () => {
-    const scope = await mount(game({ status: "draft", balance_result: null }), { activeCount: 0 });
+    const scope = await mount(
+      game({ status: "draft", lobbies: [lobbyRow({ balance_result: null, balanced_at: null })] }),
+      { activeCount: 0 },
+    );
 
     expect(byName(scope, "Balance teams")?.hasAttribute("disabled")).toBe(true);
     expect(scope.textContent).toContain("Check at least one player in the lobby");
   });
 
   it("balances on request when the lineup is not empty", async () => {
-    const scope = await mount(game({ status: "draft", balance_result: null }));
+    const scope = await mount(
+      game({ status: "draft", lobbies: [lobbyRow({ balance_result: null, balanced_at: null })] }),
+    );
 
     await click(byName(scope, "Balance teams"));
 
@@ -456,7 +484,7 @@ describe("PickupTeamsPanel", () => {
   });
 
   it("shows the mix's next map, with its mode, inside the captured block", async () => {
-    const scope = await mount(game({ next_map_id: 5 }), { maps: CATALOGUE });
+    const scope = await mount(game({ lobbies: [lobbyRow({ next_map_id: 5 })] }), { maps: CATALOGUE });
 
     const captured = scope.querySelector('[data-testid="teams-capture"]');
     expect(captured?.textContent).toContain("King's Row");
@@ -483,7 +511,10 @@ describe("PickupTeamsPanel", () => {
     expect(nothingRolled.textContent).not.toContain("Next map");
 
     document.body.innerHTML = "";
-    const rolled = await mount(game({ next_map_id: 6 }), { maps: CATALOGUE, canWrite: false });
+    const rolled = await mount(game({ lobbies: [lobbyRow({ next_map_id: 6 })] }), {
+      maps: CATALOGUE,
+      canWrite: false,
+    });
     expect(rolled.textContent).toContain("Ilios");
     expect(byName(rolled, "Roll")).toBeNull();
     expect(byName(rolled, "Hybrid")).toBeNull();
@@ -730,5 +761,19 @@ describe("PickupTeamsPanel", () => {
     });
 
     expect(byName(scope, "Post to Discord")).toBeNull();
+  });
+
+  it("reads the matchup from the mix's first lobby, not from the mix itself", async () => {
+    // The four columns moved to `custom_game_lobby`; a mix whose lobby row
+    // carries the document must render exactly what the flat shape rendered.
+    const scope = await mount(game({ lobbies: [lobbyRow({ next_map_id: 6 })] }), {
+      maps: CATALOGUE,
+      variantIndex: 2,
+    });
+
+    expect(scope.textContent).toContain("karin");
+    expect(scope.textContent).toContain("3100");
+    expect(pagerLabel(scope)).toBe("3 / 3");
+    expect(scope.querySelector('[data-testid="teams-capture"]')?.textContent).toContain("Ilios");
   });
 });

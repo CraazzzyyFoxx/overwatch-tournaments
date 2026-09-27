@@ -104,11 +104,22 @@ function game(overrides: Record<string, unknown> = {}) {
     name: "Tonight",
     status: "draft",
     settings: SETTINGS,
-    balance_result: null,
     created_at: null,
     roster_shape: null,
-    next_map_id: null,
-    selected_variant_index: 0,
+    lobby_count: 1,
+    lobbies: [
+      {
+        lobby_index: 0,
+        balance_result: null,
+        selected_variant_index: 0,
+        next_map_id: null,
+        balanced_at: null,
+        lineup_recorded: true,
+        matches_count: 0,
+      },
+    ],
+    self_signup: "closed",
+    self_role_edit: false,
     matches_count: 0,
     last_match_at: null,
     ...overrides,
@@ -191,7 +202,22 @@ beforeEach(() => {
   rotation.mockResolvedValue([]);
   undoMatch.mockResolvedValue(game({ players: [] }));
   postToDiscord.mockResolvedValue({ status: "queued", channel_id: "123" });
-  setVariantIndex.mockResolvedValue(game({ players: [], selected_variant_index: 2 }));
+  setVariantIndex.mockResolvedValue(
+    game({
+      players: [],
+      lobbies: [
+        {
+          lobby_index: 0,
+          balance_result: null,
+          selected_variant_index: 2,
+          next_map_id: null,
+          balanced_at: null,
+          lineup_recorded: true,
+          matches_count: 0,
+        },
+      ],
+    }),
+  );
 });
 
 describe("usePickupMix", () => {
@@ -260,7 +286,10 @@ describe("usePickupMix", () => {
     });
 
     expect(setVariantIndex).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 2);
-    expect(client.getQueryData<{ selected_variant_index: number }>(gameKey)?.selected_variant_index).toBe(2);
+    expect(
+      client.getQueryData<{ lobbies: { selected_variant_index: number }[] }>(gameKey)?.lobbies[0]
+        .selected_variant_index,
+    ).toBe(2);
     // A view change: roster, history and rotation all say exactly what they said.
     expect(listMatches.mock.calls.length).toBe(matchesBefore);
   });

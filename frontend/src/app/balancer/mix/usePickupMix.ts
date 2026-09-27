@@ -336,7 +336,12 @@ export function usePickupMix(
       const key = customGameKeys.one(workspaceId, selectedGameId ?? 0);
       const previous = queryClient.getQueryData<CustomGame>(key);
       if (previous != null) {
-        queryClient.setQueryData(key, { ...previous, selected_variant_index: variantIndex });
+        queryClient.setQueryData(key, {
+          ...previous,
+          lobbies: previous.lobbies.map((row) =>
+            row.lobby_index === 0 ? { ...row, selected_variant_index: variantIndex } : row,
+          ),
+        });
       }
       return { previous };
     },

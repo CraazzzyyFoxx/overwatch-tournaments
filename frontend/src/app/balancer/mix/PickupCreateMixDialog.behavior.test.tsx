@@ -35,10 +35,18 @@ function sampleGame(id: number, name: string): CustomGame {
       team_names: {},
       workspace_discord_channel_id: null
     },
-    balance_result: null,
     created_at: "2026-01-01T00:00:00Z",
-    next_map_id: null,
-    selected_variant_index: 0,
+    lobby_count: 1,
+    lobbies: [
+      {
+        lobby_index: 0,
+        selected_variant_index: 0,
+        next_map_id: null,
+        balanced_at: null
+      },
+    ],
+    self_signup: "closed",
+    self_role_edit: false,
     roster_shape: null,
     matches_count: 5,
     last_match_at: null
