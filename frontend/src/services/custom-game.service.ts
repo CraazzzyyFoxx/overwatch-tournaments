@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/fetch";
 import { blobToBase64 } from "@/lib/image-capture";
+import type { RoleCode } from "@/lib/roster/roles";
 import type { RosterShape } from "@/lib/roster/shape";
 
 /** Where an effective rank came from, strongest first. */
@@ -135,6 +136,10 @@ export type CustomGame = {
   matches_count: number;
   /** When the newest match was recorded, or `null` while none has been. */
   last_match_at: string | null;
+  /** Whether players may sign themselves up, and where a signup lands. */
+  self_signup: MixSelfSignup;
+  /** Whether a player on the roster may reorder their own roles and flex. */
+  self_role_edit: boolean;
   players?: CustomGamePlayer[];
 };
 
@@ -169,6 +174,70 @@ export type CustomGamePlayerPatch = {
   participation?: MixParticipation;
   roles?: string[] | null;
   is_flex?: boolean;
+};
+
+/**
+ * Whether players may sign themselves up, and where they land when they do --
+ * one column with exactly three states (`custom_game.self_signup`), so
+ * "closed but benched" cannot be expressed at all.
+ */
+export type MixSelfSignup = "closed" | "pool" | "benched";
+
+/**
+ * Why a self-action is refused, exactly as `mix_self_policy` names it. The wire
+ * carries the code, never a sentence: the site renders it per locale
+ * (`mixes.self.blocker.*`) and the bot renders the same code its own way.
+ */
+export type MixSelfBlocker =
+  | "mix_closed"
+  | "discord_not_linked"
+  | "battlenet_not_linked"
+  | "player_not_linked"
+  | "self_join_denied"
+  | "already_joined"
+  | "not_on_roster"
+  | "signup_closed"
+  | "roster_full"
+  | "role_edit_off";
+
+/** The caller's own roster row, or `null` when they are not in the lineup. */
+export type MixSelfSeat = {
+  participation: MixParticipation;
+  /** `null` is the `all_ranked` mode -- every role this player has a rank for. */
+  roles: string[] | null;
+  is_flex: boolean;
+  /** Effective rank per role; `null` where no layer answers for it. */
+  ranks: Record<string, number | null>;
+};
+
+/** What the caller may do, and the first reason they may not. */
+export type MixSelfPolicy = {
+  can_join: boolean;
+  can_leave: boolean;
+  can_edit_roles: boolean;
+  /** `null` exactly when `can_join`. */
+  join_blocker: MixSelfBlocker | null;
+  /** `null` exactly when `can_edit_roles`. */
+  edit_blocker: MixSelfBlocker | null;
+};
+
+/**
+ * The whole self surface of one mix in a single read (`GET …/me`).
+ *
+ * Kept apart from `CustomGame` on purpose: the mix board is public and its
+ * detail is the same document for every viewer, while this answer is about the
+ * caller -- their seat, their missing account links, their permission.
+ */
+export type MixSelfState = {
+  custom_game_id: number;
+  name: string;
+  status: CustomGameStatus;
+  self_signup: MixSelfSignup;
+  self_role_edit: boolean;
+  seat: MixSelfSeat | null;
+  /** Roles this player would play that no rank layer answers for. */
+  unranked_roles: string[];
+  policy: MixSelfPolicy;
 };
 
 /** One row of a whole-lineup participation write. */
@@ -239,6 +308,13 @@ export const customGameKeys = {
   one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId] as const,
   matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"] as const,
   rotation: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "rotation"] as const,
+  /**
+   * The caller's own seat in one mix. Deliberately under `all`: the realtime
+   * `workspace.pickup_mix` resource drops `customGameKeys.all(workspaceId)`
+   * (`lib/realtime/resources.ts`), so another player's join refreshes this
+   * read with no subscription of its own.
+   */
+  me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"] as const,
   stats: (workspaceId: number, since: string | null) =>
     ["custom-games", workspaceId, "stats", since ?? "all"] as const,
 };
@@ -500,5 +576,75 @@ export const customGameService = {
       },
     );
     return response.json();
+  },
+
+  /** The caller's own standing in this mix: seat, blockers, what they may do. */
+  getMySeat(workspaceId: number, gameId: number): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`).then((r) =>
+      r.json(),
+    );
+  },
+
+  /**
+   * Signs the caller up. Idempotent: a caller already on the roster gets their
+   * current state back rather than an error, so a second press never moves a
+   * host's bench decision back into the pool.
+   */
+  joinMix(workspaceId: number, gameId: number): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`, {
+      method: "POST",
+    }).then((r) => r.json());
+  },
+
+  /** Takes the caller out of the lineup. Allowed with no linked accounts at all. */
+  leaveMix(workspaceId: number, gameId: number): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`, {
+      method: "DELETE",
+    }).then((r) => r.json());
+  },
+
+  /**
+   * The two fields a player owns on their own row. Same patch semantics as the
+   * host's `updatePlayer` -- an omitted key is untouched, `roles: null` is the
+   * `all_ranked` mode -- against a narrower server-side allow-list: anything
+   * else (participation, ranks) is a 422.
+   */
+  updateMySeat(
+    workspaceId: number,
+    gameId: number,
+    patch: { roles?: RoleCode[] | null; is_flex?: boolean },
+  ): Promise<MixSelfState> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`, {
+      method: "PATCH",
+      body: patch,
+    }).then((r) => r.json());
+  },
+
+  /** The host's two switches: who may sign up, and whether they may edit roles. */
+  setSelfService(
+    workspaceId: number,
+    gameId: number,
+    patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean },
+  ): Promise<CustomGame> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/self-service`,
+      { method: "PUT", body: patch },
+    ).then((r) => r.json());
+  },
+
+  /**
+   * Opens signup in the requested mode and queues the signup card for the
+   * workspace's mix channel. Fire-and-forget like `postToDiscord`: the response
+   * only says the message reached the bot's queue.
+   */
+  postSignup(
+    workspaceId: number,
+    gameId: number,
+    selfSignup: "pool" | "benched",
+  ): Promise<{ status: "queued"; channel_id: string }> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/signup`,
+      { method: "POST", body: { self_signup: selfSignup } },
+    ).then((r) => r.json());
   },
 };
