@@ -36,7 +36,7 @@ Moscow (app-network)                         home
                          └──OTLP──► Sentry    ├─ /api/v1/write      → prometheus 127.0.0.1:19090
                                               ├─ /loki/api/v1/push  → loki       127.0.0.1:13101
                                               └─ /v1/traces         → tempo      127.0.0.1:14318
-                                             grafana.owt.craazzzyyfoxx.me → grafana 127.0.0.1:13002
+                                             grafana.craazzzyyfoxx.me → grafana 127.0.0.1:13002
                                              blackbox-exporter ──probes──► https://owt…/health, 217.149.19.31:22
 ```
 
@@ -68,14 +68,20 @@ its container. Every port on home binds `127.0.0.1`; Traefik on the host is the 
 | home `~/owt-monitoring/.env` | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_ROOT_URL` | Grafana |
 | home `monitoring/secrets/` | `discord_webhook_url` | Alertmanager → Discord |
 | home `~/owt-monitoring/proxy/xray.json` | xray client config (SOCKS5 on `proxy:1080`) | Alertmanager's only way to Discord — home cannot reach discord.com directly. Same file as the dev site's `~/owt-dev/proxy/xray.json` |
-| home `/etc/traefik/dynamic.yml` | routers `owt-ingest-{metrics,logs,traces}`, `owt-grafana`; middlewares `owt-ingest-allow`, `owt-ingest-auth` (bcrypt of the ingest password) | the only way into the stack |
+| home `/etc/traefik/dynamic.yml` | routers `owt-ingest-{metrics,logs,traces}`, `grafana`; middlewares `owt-ingest-allow`, `owt-ingest-auth` (bcrypt of the ingest password) | the only way into the stack |
 
 The secret files are gitignored. Alertmanager runs as `nobody`: make them readable by it
 (`chmod 644`, or `chown 65534:65534` + `chmod 400`), or notifications fail with
 "permission denied" even though the config loads.
 
-DNS (Timeweb zone): `ingest.owt` and `grafana.owt` are A records to home. They win over the
-`*.owt` wildcard, which points at Moscow. If home's address changes, both records change.
+DNS (Timeweb zone): `ingest.owt` is an A record to home. It wins over the `*.owt` wildcard,
+which points at Moscow. Grafana is `grafana.craazzzyyfoxx.me`, also home. If home's address
+changes, both records change.
+
+This Grafana is home's only one. Besides the provisioned dashboards it has a "Home" folder
+(Node Exporter Full, PostgreSQL Database, Xray) with data sources `Prometheus home`
+(`host.docker.internal:9090`, the personal Prometheus in `~/prometheus`) and `Postgres home`.
+Those were created through the UI and live only in the `grafana_data` volume, not in git.
 
 Images come through `dockerhub.timeweb.cloud/<repo>:<tag>`: Docker Hub's CDN does not answer
 from either host (manifests do, layer downloads time out).
