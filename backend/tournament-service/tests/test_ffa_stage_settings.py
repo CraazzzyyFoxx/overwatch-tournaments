@@ -101,6 +101,14 @@ class FfaScoringSchemaTests(TestCase):
 
         self.assertEqual("ffa_formula_syntax", self._reject(columns=[self.KILLS], formula="kills +")["type"])
 
+    def test_a_number_too_big_for_a_float_answers_the_formula_code(self) -> None:
+        # 400 digits is inside ``max_length``, so pydantic's own rule never
+        # fires: without the guard the conversion raises OverflowError and the
+        # endpoint answers 500 instead of the 422 this contract promises.
+        huge = self._reject(columns=[self.KILLS], formula="kills + " + "9" * 400)
+        self.assertEqual("ffa_formula_unsupported", huge["type"])
+        self.assertEqual(8, huge["ctx"]["offset"])
+
     def test_a_formula_reading_a_column_that_is_not_there_is_refused(self) -> None:
         # The pair is validated together: a column renamed without touching the
         # formula must not be storable.

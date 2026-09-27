@@ -129,6 +129,14 @@ def test_an_unparsable_formula_is_a_syntax_error() -> None:
     assert error("").code == "ffa_formula_syntax"
 
 
+def test_a_number_too_big_for_a_float_is_refused_with_a_position() -> None:
+    # 400 digits fits the length cap, so only the constant check stands between
+    # this and an OverflowError escaping as a 500.
+    huge = error("place_pts + " + "9" * 400)
+    assert (huge.code, huge.offset) == ("ffa_formula_unsupported", 12)
+    assert error("9" * 400).code == "ffa_formula_unsupported"
+
+
 def test_a_formula_too_big_to_walk_is_refused() -> None:
     assert error(" + ".join(["kills"] * 60)).code == "ffa_formula_too_complex"
     assert error("kills * " + "1" * 500).code == "ffa_formula_too_complex"

@@ -15,6 +15,7 @@ import ast
 import math
 import operator
 import re
+import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -177,10 +178,29 @@ def _position(node: ast.AST, inserted: Sequence[int]) -> int:
     return _origin(getattr(node, "col_offset", 0), inserted)
 
 
+#: An int literal bigger than this cannot even be converted to a float.
+_MAX_FLOAT_INT = int(sys.float_info.max)
+
+
+def _in_float_range(value: int | float) -> bool:
+    """Is this literal a number the interpreter can compute with?
+
+    ``math.isfinite`` converts its argument to a float first, so an int past
+    the float range raises OverflowError there instead of answering False.
+    """
+    if isinstance(value, int):
+        return -_MAX_FLOAT_INT <= value <= _MAX_FLOAT_INT
+    return math.isfinite(value)
+
+
 def _check(node: ast.expr, known: set[str], names: set[str], inserted: Sequence[int]) -> None:
     """Whitelist walk: collect the names read, refuse everything unlisted."""
     if isinstance(node, ast.Constant):
-        if type(node.value) not in (int, float) or not math.isfinite(node.value):
+        # ``_finite`` on an int past the float range raises OverflowError, not
+        # ValueError, and an unhandled one would answer 500 where the contract
+        # promises a 422 with a position. Such a literal is out of range by the
+        # same rule as ``1e400``, so it is refused the same way.
+        if type(node.value) not in (int, float) or not _in_float_range(node.value):
             raise FfaFormulaError(
                 "ffa_formula_unsupported", "Only finite numbers are allowed", offset=_position(node, inserted)
             )
