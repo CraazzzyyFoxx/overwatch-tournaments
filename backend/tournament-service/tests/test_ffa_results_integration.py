@@ -51,14 +51,27 @@ from shared.services.chat import ChatRoom  # noqa: E402
 from src.rpc import _helpers as rpc_helpers  # noqa: E402
 from src.services.admin.stage import stage_service  # noqa: E402
 from src.services.encounter.chat_access import EncounterChatAccess  # noqa: E402
-from src.services.encounter.ffa import ffa_encounter_service  # noqa: E402
+from src.services.encounter.ffa import ffa_encounter_service, public_view  # noqa: E402
 from src.services.standings.service import standings_service  # noqa: E402
 from tests._rpc_fakes import FakeSessionMaker  # noqa: E402
 
-#: Score-only: a point per elimination, places derived from the scoreboard.
-SCORING = {"ffa_score_points": 1}
+#: One "score" column, no placement points: places derive from the scoreboard.
+SCORE_COLUMN = [{"key": "score", "label": "Счёт", "public": True, "better": "higher"}]
+SCORING = {"ffa_columns": SCORE_COLUMN, "ffa_formula": "score"}
 #: Battle-royale style: 1st place pays 10, 2nd 6, 3rd 4, plus a point per score.
-PLACEMENT_SCORING = {"ffa_placement_points": [10, 6, 4], "ffa_score_points": 1}
+PLACEMENT_SCORING = {
+    "ffa_placement_points": [10, 6, 4],
+    "ffa_columns": SCORE_COLUMN,
+    "ffa_formula": "place_pts + score",
+}
+#: Two columns, one of them hidden from viewers, and a formula over both.
+KILLS_DEATHS = {
+    "ffa_columns": [
+        {"key": "kills", "label": "Kills", "public": True, "better": "higher"},
+        {"key": "deaths", "label": "Deaths", "public": False, "better": "lower"},
+    ],
+    "ffa_formula": "kills * 2 - deaths",
+}
 
 
 async def _seed(session: Any, *, games: int = 2, regulation: dict | None = None) -> SimpleNamespace:
@@ -137,8 +150,15 @@ async def _drop(session: Any, seeded: SimpleNamespace) -> None:
 def _lines(team_ids: list[int], scores: list[int], placements: list[int | None] | None = None) -> list[FfaGameLine]:
     places = placements or [None] * len(team_ids)
     return [
-        FfaGameLine(team_id=team_id, placement=place, score=score)
+        FfaGameLine(team_id=team_id, placement=place, stats={"score": score})
         for team_id, place, score in zip(team_ids, places, scores, strict=True)
+    ]
+
+
+def _stat_lines(team_ids: list[int], stats: list[dict[str, float]]) -> list[FfaGameLine]:
+    return [
+        FfaGameLine(team_id=team_id, placement=None, stats=values)
+        for team_id, values in zip(team_ids, stats, strict=True)
     ]
 
 
@@ -244,7 +264,7 @@ def test_a_recorded_game_stores_one_row_per_participant_with_derived_places(db_s
             rows = (
                 await db_session.execute(
                     sa.text(
-                        "select team_id, placement, score from tournament.encounter_game_result "
+                        "select team_id, placement, stats from tournament.encounter_game_result "
                         "where encounter_id = :e order by placement, team_id"
                     ),
                     {"e": seeded.lobby_id},
@@ -257,7 +277,7 @@ def test_a_recorded_game_stores_one_row_per_participant_with_derived_places(db_s
 
     rows, game_shape, team_ids = asyncio.run(_run())
     # 10, 7, 7 -> 1st, joint 2nd; a lobby game never carries a duel score.
-    assert rows == [(team_ids[0], 1, 10), (team_ids[1], 2, 7), (team_ids[2], 2, 7)]
+    assert rows == [(team_ids[0], 1, {"score": 10}), (team_ids[1], 2, {"score": 7}), (team_ids[2], 2, {"score": 7})]
     assert game_shape == (enums.EncounterGameState.CONFIRMED, "ffa", 1)
 
 
@@ -329,14 +349,14 @@ def test_correcting_a_confirmed_game_needs_a_reason(db_session) -> None:
     assert before_scores == (None, None)
     assert after_scores == (None, None)
     assert snapshot["before"] == [
-        {"team_id": team_ids[0], "placement": 1, "score": 10},
-        {"team_id": team_ids[1], "placement": 2, "score": 6},
-        {"team_id": team_ids[2], "placement": 3, "score": 2},
+        {"team_id": team_ids[0], "placement": 1, "stats": {"score": 10}},
+        {"team_id": team_ids[1], "placement": 2, "stats": {"score": 6}},
+        {"team_id": team_ids[2], "placement": 3, "stats": {"score": 2}},
     ]
     assert snapshot["after"] == [
-        {"team_id": team_ids[1], "placement": 1, "score": 8},
-        {"team_id": team_ids[0], "placement": 2, "score": 4},
-        {"team_id": team_ids[2], "placement": 3, "score": 1},
+        {"team_id": team_ids[1], "placement": 1, "stats": {"score": 8}},
+        {"team_id": team_ids[0], "placement": 2, "stats": {"score": 4}},
+        {"team_id": team_ids[2], "placement": 3, "stats": {"score": 1}},
     ]
 
 
@@ -545,39 +565,59 @@ def test_a_position_past_the_planned_games_is_refused(db_session) -> None:
 @pytest.mark.parametrize(
     ("regulation", "build", "code"),
     [
-        (SCORING, lambda ids: [FfaGameLine(team_id=ids[0], placement=None, score=1)], "ffa_result_missing_team"),
         (
             SCORING,
-            lambda ids: [FfaGameLine(team_id=team_id, placement=None, score=1) for team_id in [*ids, ids[0]]],
-            "ffa_result_duplicate_team",
-        ),
-        (
-            SCORING,
-            lambda ids: [FfaGameLine(team_id=team_id, placement=None, score=1) for team_id in [*ids[:2], -1]],
-            "ffa_result_unknown_team",
-        ),
-        (
-            SCORING,
-            lambda ids: [FfaGameLine(team_id=team_id, placement=None, score=-1) for team_id in ids],
-            "ffa_result_invalid_score",
+            lambda ids: [FfaGameLine(team_id=ids[0], placement=None, stats={"score": 1})],
+            "ffa_result_missing_team",
         ),
         (
             SCORING,
             lambda ids: [
-                FfaGameLine(team_id=team_id, placement=place, score=1)
+                FfaGameLine(team_id=team_id, placement=None, stats={"score": 1}) for team_id in [*ids, ids[0]]
+            ],
+            "ffa_result_duplicate_team",
+        ),
+        (
+            SCORING,
+            lambda ids: [
+                FfaGameLine(team_id=team_id, placement=None, stats={"score": 1}) for team_id in [*ids[:2], -1]
+            ],
+            "ffa_result_unknown_team",
+        ),
+        (
+            SCORING,
+            lambda ids: [FfaGameLine(team_id=team_id, placement=None, stats={"score": -1}) for team_id in ids],
+            "ffa_result_invalid_stat",
+        ),
+        (
+            SCORING,
+            lambda ids: [
+                FfaGameLine(team_id=team_id, placement=None, stats={"score": 1, "kills": 2}) for team_id in ids
+            ],
+            "ffa_result_unknown_stat",
+        ),
+        (
+            SCORING,
+            lambda ids: [FfaGameLine(team_id=team_id, placement=None, stats={}) for team_id in ids],
+            "ffa_result_missing_stat",
+        ),
+        (
+            SCORING,
+            lambda ids: [
+                FfaGameLine(team_id=team_id, placement=place, stats={"score": 1})
                 for team_id, place in zip(ids, [1, None, None], strict=True)
             ],
             "ffa_result_mixed_placement",
         ),
         (
             PLACEMENT_SCORING,
-            lambda ids: [FfaGameLine(team_id=team_id, placement=None, score=1) for team_id in ids],
+            lambda ids: [FfaGameLine(team_id=team_id, placement=None, stats={"score": 1}) for team_id in ids],
             "ffa_result_placement_required",
         ),
         (
             PLACEMENT_SCORING,
             lambda ids: [
-                FfaGameLine(team_id=team_id, placement=place, score=1)
+                FfaGameLine(team_id=team_id, placement=place, stats={"score": 1})
                 for team_id, place in zip(ids, [1, 1, 2], strict=True)
             ],
             "ffa_result_invalid_placement",
@@ -697,7 +737,7 @@ def test_stage_results_group_confirmed_games_by_lobby_group(db_session) -> None:
             return (
                 results.participant_ids(seeded.item_id),
                 [
-                    [(line.team_id, line.placement, line.score) for line in game]
+                    [(line.team_id, line.placement, line.stats) for line in game]
                     for game in results.games(seeded.item_id)
                 ],
                 results.participant_ids(-1),
@@ -710,7 +750,9 @@ def test_stage_results_group_confirmed_games_by_lobby_group(db_session) -> None:
     participants, games, unknown_participants, unknown_games, team_ids = asyncio.run(_run())
     assert participants == team_ids
     # The cancelled second game is gone from the read the standings sum.
-    assert games == [[(team_ids[0], 1, 10), (team_ids[1], 2, 6), (team_ids[2], 3, 2)]]
+    assert games == [
+        [(team_ids[0], 1, {"score": 10}), (team_ids[1], 2, {"score": 6}), (team_ids[2], 3, {"score": 2})]
+    ]
     assert (unknown_participants, unknown_games) == ([], [])
 
 
@@ -852,8 +894,12 @@ def test_a_finished_league_ranks_its_groups_and_seeds_the_bracket(db_session) ->
 
 # ── the reads the lobby table is drawn from ──────────────────────────────────
 
-#: Placement pays, and the organizer named the score column.
-LABELLED_SCORING = {"ffa_placement_points": [10, 6, 4], "ffa_score_points": 1, "ffa_score_label": "Kills"}
+#: Placement pays, and the organizer named the single column.
+LABELLED_SCORING = {
+    "ffa_placement_points": [10, 6, 4],
+    "ffa_columns": [{"key": "score", "label": "Kills", "public": True, "better": "higher"}],
+    "ffa_formula": "place_pts + score",
+}
 
 
 def test_the_lobby_read_carries_rules_rows_and_one_cell_per_planned_game(db_session) -> None:
@@ -883,11 +929,12 @@ def test_the_lobby_read_carries_rules_rows_and_one_cell_per_planned_game(db_sess
     )
     assert (lobby.name, lobby.best_of, lobby.advance_count) == ("Group A", 2, None)
     assert (lobby.status, lobby.result_status) == (enums.EncounterStatus.OPEN, enums.EncounterResultStatus.NONE)
-    assert (lobby.rules.placement_points, lobby.rules.score_points, lobby.rules.score_label) == (
+    assert (lobby.rules.placement_points, lobby.rules.formula, lobby.rules.requires_placement) == (
         [10.0, 6.0, 4.0],
-        1.0,
-        "Kills",
+        "place_pts + score",
+        True,
     )
+    assert [(c.key, c.label, c.public, c.better) for c in lobby.rules.columns] == [("score", "Kills", True, "higher")]
     # Nothing has ranked the group yet, so the read says so instead of inventing
     # a place -- and unranked rows fall back to seat order.
     assert [(row.team_id, row.slot, row.position, row.tie_group) for row in lobby.rows] == [
@@ -895,15 +942,15 @@ def test_the_lobby_read_carries_rules_rows_and_one_cell_per_planned_game(db_sess
         (team_ids[1], 2, None, None),
         (team_ids[2], 3, None, None),
     ]
-    assert [(row.points, row.games_played, row.wins, row.score) for row in lobby.rows] == [
-        (15.0, 1, 1, 5),
-        (9.0, 1, 0, 3),
-        (5.0, 1, 0, 1),
+    assert [(row.points, row.games_played, row.wins, row.stats) for row in lobby.rows] == [
+        (15.0, 1, 1, {"score": 5}),
+        (9.0, 1, 0, {"score": 3}),
+        (5.0, 1, 0, {"score": 1}),
     ]
     assert lobby.rows[0].team_name.startswith("Team 0 ")
     # One cell per PLANNED game: the unplayed second one is a hole, not a zero.
-    assert [(cell.position, cell.state, cell.placement, cell.score, cell.points) for cell in lobby.rows[0].games] == [
-        (1, enums.EncounterGameState.CONFIRMED, 1, 5, 15.0),
+    assert [(cell.position, cell.state, cell.placement, cell.stats, cell.points) for cell in lobby.rows[0].games] == [
+        (1, enums.EncounterGameState.CONFIRMED, 1, {"score": 5}, 15.0),
         (2, None, None, None, None),
     ]
 
@@ -1012,6 +1059,104 @@ def test_the_lobby_read_refuses_a_duel_and_an_unknown_encounter(db_session) -> N
             await _drop(db_session, seeded)
 
     assert asyncio.run(_run()) == (409, 404)
+
+
+def test_a_public_read_carries_no_value_of_a_hidden_column(db_session) -> None:
+    """A hidden column is hidden from the API, not merely from the table: not in
+    ``rules.columns``, not in a row total, not in a game cell (plan §7.3)."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1, regulation=KILLS_DEATHS)
+        try:
+            await ffa_encounter_service.set_game_results(
+                db_session,
+                seeded.lobby_id,
+                1,
+                _stat_lines(
+                    seeded.team_ids,
+                    [{"kills": 6, "deaths": 1}, {"kills": 3, "deaths": 2}, {"kills": 1, "deaths": 4}],
+                ),
+                actor_user_id=None,
+                reason=None,
+            )
+            full = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            return full, public_view(full)
+        finally:
+            await _drop(db_session, seeded)
+
+    full, public = asyncio.run(_run())
+    assert [column.key for column in full.rules.columns] == ["kills", "deaths"]
+    assert [column.key for column in public.rules.columns] == ["kills"]
+    # The rule itself stays readable, hidden key and all: it is a rule, not data.
+    assert public.rules.formula == "kills * 2 - deaths"
+    assert [row.stats for row in public.rows] == [{"kills": 6}, {"kills": 3}, {"kills": 1}]
+    assert [row.stats for row in full.rows] == [
+        {"kills": 6, "deaths": 1},
+        {"kills": 3, "deaths": 2},
+        {"kills": 1, "deaths": 4},
+    ]
+    assert [cell.stats for cell in public.rows[0].games] == [{"kills": 6}]
+    assert [cell.stats for cell in full.rows[0].games] == [{"kills": 6, "deaths": 1}]
+    # Points are computed from every column, hidden ones included.
+    assert [row.points for row in public.rows] == [11.0, 4.0, -2.0]
+
+
+def test_points_and_places_come_from_the_formula(db_session) -> None:
+    """No placement points, no places entered: the formula decides the points and
+    the points decide the places, ties shared (plan §5.2)."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1, regulation=KILLS_DEATHS)
+        try:
+            await ffa_encounter_service.set_game_results(
+                db_session,
+                seeded.lobby_id,
+                1,
+                _stat_lines(
+                    seeded.team_ids,
+                    [{"kills": 2, "deaths": 0}, {"kills": 3, "deaths": 2}, {"kills": 5, "deaths": 4}],
+                ),
+                actor_user_id=None,
+                reason=None,
+            )
+            lobby = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            return (
+                [(row.team_id, row.points) for row in lobby.rows],
+                [(cell.placement, cell.points) for row in lobby.rows for cell in row.games],
+                seeded.team_ids,
+            )
+        finally:
+            await _drop(db_session, seeded)
+
+    totals, cells, team_ids = asyncio.run(_run())
+    # kills * 2 - deaths -> 4, 4, 6: the third team wins, the first two share 2nd.
+    assert dict(totals) == {team_ids[0]: 4.0, team_ids[1]: 4.0, team_ids[2]: 6.0}
+    assert sorted(cells) == [(1, 6.0), (2, 4.0), (2, 4.0)]
+
+
+def test_a_game_is_refused_when_the_formula_needs_a_place(db_session) -> None:
+    """``requires_placement`` is not a flag the organizer sets, it is what the
+    formula reads -- and the read says so to the dialog."""
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1, regulation=PLACEMENT_SCORING)
+        try:
+            lobby = await ffa_encounter_service.load_lobby(db_session, seeded.lobby_id)
+            with pytest.raises(BaseAPIException) as raised:
+                await ffa_encounter_service.set_game_results(
+                    db_session,
+                    seeded.lobby_id,
+                    1,
+                    _lines(seeded.team_ids, [3, 2, 1]),
+                    actor_user_id=None,
+                    reason=None,
+                )
+            await db_session.rollback()
+            return lobby.rules.requires_placement, [item.code for item in raised.value.detail]
+        finally:
+            await _drop(db_session, seeded)
+
+    assert asyncio.run(_run()) == (True, ["ffa_result_placement_required"])
 
 
 # ── who may talk in a lobby's room ───────────────────────────────────────────

@@ -55,6 +55,7 @@ from shared.repository import (
 )
 from src import models
 from src.schemas.ffa import (
+    FfaColumnRead,
     FfaGameCellRead,
     FfaLobbyRead,
     FfaLobbyRowRead,
@@ -65,7 +66,7 @@ from src.services.tournament.events import (
     enqueue_tournament_recalculation,
 )
 
-__all__ = ("FfaEncounterService", "FfaStageResults", "ffa_encounter_service")
+__all__ = ("FfaEncounterService", "FfaStageResults", "ffa_encounter_service", "public_view")
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,7 +210,9 @@ class FfaEncounterService:
             actor_user_id=actor_user_id,
             game=game,
             before=before,
-            after=[{"team_id": i.team_id, "placement": i.placement, "score": i.score} for i in normalized],
+            after=[
+                {"team_id": i.team_id, "placement": i.placement, "stats": dict(i.stats)} for i in normalized
+            ],
             reason=reason,
         )
         await self.refresh_completion(session, lobby, actor_user_id=actor_user_id)
@@ -375,7 +378,7 @@ class FfaEncounterService:
             if key != current:
                 current = key
                 bucket.append([])
-            bucket[-1].append(FfaGameLine(team_id=row.team_id, placement=row.placement, score=row.score))
+            bucket[-1].append(FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats))
         return FfaStageResults(
             participants=participants,
             games_by_item={
@@ -461,12 +464,16 @@ class FfaEncounterService:
         if not lobbies:
             return []
         rules = ffa_rules(stage)
-        # ``score_label`` is presentation, not arithmetic, so it never entered
-        # ``FfaRules``; the read is the one place that needs it.
+        # The full rule set, hidden columns included: ``public_view`` is what
+        # trims it for a public endpoint, so an admin read needs no second path.
         rules_read = FfaRulesRead(
+            columns=[
+                FfaColumnRead(key=column.key, label=column.label, public=column.public, better=column.better)
+                for column in rules.columns
+            ],
             placement_points=list(rules.placement_points),
-            score_points=rules.score_points,
-            score_label=stage.ffa_score_label if stage else None,
+            formula=rules.formula.source,
+            requires_placement=rules.requires_placement,
         )
 
         lobby_ids = [lobby.id for lobby in lobbies]
@@ -498,7 +505,9 @@ class FfaEncounterService:
         game_ids = [game.id for lobby_games in games.values() for game in lobby_games]
         lines: dict[int, dict[int, FfaGameLine]] = {game_id: {} for game_id in game_ids}
         for row in await self.result_repo.list_for_games(session, game_ids):
-            lines[row.game_id][row.team_id] = FfaGameLine(team_id=row.team_id, placement=row.placement, score=row.score)
+            lines[row.game_id][row.team_id] = FfaGameLine(
+                team_id=row.team_id, placement=row.placement, stats=row.stats
+            )
 
         team_ids = [seat.team_id for lobby_seats in seats.values() for seat in lobby_seats]
         teams = {
@@ -589,7 +598,7 @@ class FfaEncounterService:
                     points=total.points,
                     games_played=total.games,
                     wins=total.wins,
-                    score=total.score,
+                    stats=dict(total.stats),
                     games=[
                         self._read_cell(position, by_position.get(position), lines, seat.team_id, rules)
                         for position in range(1, last + 1)
@@ -621,13 +630,17 @@ class FfaEncounterService:
         team_id: int,
         rules: FfaRules,
     ) -> FfaGameCellRead:
-        line = lines.get(game.id, {}).get(team_id) if game is not None else None
+        game_lines = lines.get(game.id, {}) if game is not None else {}
+        line = game_lines.get(team_id)
         return FfaGameCellRead(
             position=position,
             state=game.state if game is not None else None,
             placement=line.placement if line is not None else None,
-            score=line.score if line is not None else None,
-            points=game_points(line, rules) if line is not None else None,
+            # ``teams`` is a variable of the formula, so it is the count of the
+            # lines THIS game holds, not the lobby's seat count: a lobby may seat
+            # a team that never played this game.
+            points=game_points(line, rules, len(game_lines)) if line is not None else None,
+            stats=dict(line.stats) if line is not None else None,
         )
 
     # -- internals ---------------------------------------------------------
@@ -668,7 +681,7 @@ class FfaEncounterService:
             return []
         rows = await self.result_repo.list_for_games(session, [game.id])
         return [
-            {"team_id": row.team_id, "placement": row.placement, "score": row.score}
+            {"team_id": row.team_id, "placement": row.placement, "stats": dict(row.stats)}
             for row in sorted(rows, key=_line_order)
         ]
 
@@ -681,7 +694,9 @@ class FfaEncounterService:
         ]
         by_game: dict[int, list[FfaGameLine]] = {game.id: [] for game in games}
         for row in await self.result_repo.list_for_games(session, list(by_game)):
-            by_game[row.game_id].append(FfaGameLine(team_id=row.team_id, placement=row.placement, score=row.score))
+            by_game[row.game_id].append(
+                FfaGameLine(team_id=row.team_id, placement=row.placement, stats=row.stats)
+            )
         return [tuple(sorted(by_game[game.id], key=_line_order)) for game in games]
 
     async def _totals_snapshot(self, session: AsyncSession, lobby: models.Encounter) -> list[dict]:
@@ -738,6 +753,43 @@ class FfaEncounterService:
 def _line_order(line: FfaGameLine | EncounterGameResult) -> tuple[int, int]:
     """Best place first, ties by team -- the order results are read back in."""
     return (line.placement or 0, line.team_id)
+
+
+def public_view(lobby: FfaLobbyRead) -> FfaLobbyRead:
+    """The same table with every non-public column removed (plan §7.3).
+
+    The service builds ONE lobby read, with every column on it, and the public
+    endpoints trim it here -- so a hidden column cannot leak through a read
+    nobody remembered to filter, and the admin endpoints need no second builder.
+
+    The formula is NOT trimmed: it is the rule the table is computed by, and a
+    viewer seeing a hidden key's NAME there was the accepted trade (plan §2).
+    """
+    public_keys = {column.key for column in lobby.rules.columns if column.public}
+    if len(public_keys) == len(lobby.rules.columns):
+        return lobby
+
+    def _keep(stats: dict[str, float] | None) -> dict[str, float] | None:
+        if stats is None:
+            return None
+        return {key: value for key, value in stats.items() if key in public_keys}
+
+    return lobby.model_copy(
+        update={
+            "rules": lobby.rules.model_copy(
+                update={"columns": [column for column in lobby.rules.columns if column.public]}
+            ),
+            "rows": [
+                row.model_copy(
+                    update={
+                        "stats": _keep(row.stats),
+                        "games": [cell.model_copy(update={"stats": _keep(cell.stats)}) for cell in row.games],
+                    }
+                )
+                for row in lobby.rows
+            ],
+        }
+    )
 
 
 ffa_encounter_service = FfaEncounterService()
