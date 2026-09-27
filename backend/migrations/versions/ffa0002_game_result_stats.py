@@ -116,11 +116,14 @@ def upgrade() -> None:
     )
     # A Python loop, not one UPDATE: the formula depends on both numbers and on
     # whether the multiplier is worth writing at all, and ffa_league stages are
-    # counted in single digits.
+    # counted in single digits. ``stage_type::text``, not the enum literal:
+    # ffa0001 added that label, and on a database built from scratch its
+    # transaction is still the one running here -- Postgres refuses to USE an
+    # enum value added in the open transaction (same constraint ffa0001 names).
     for stage_id, placement_points, score_points, score_label in bind.execute(
         sa.text(
             "SELECT id, ffa_placement_points, ffa_score_points, ffa_score_label "
-            "FROM tournament.stage WHERE stage_type = 'ffa_league'"
+            "FROM tournament.stage WHERE stage_type::text = 'ffa_league'"
         )
     ).all():
         columns = [
@@ -160,7 +163,7 @@ def downgrade() -> None:
     # expressed with score_points must leave the database exactly as it was.
     restore: dict[int, tuple[float, str | None]] = {}
     for stage_id, columns, formula in bind.execute(
-        sa.text("SELECT id, ffa_columns, ffa_formula FROM tournament.stage WHERE stage_type = 'ffa_league'")
+        sa.text("SELECT id, ffa_columns, ffa_formula FROM tournament.stage WHERE stage_type::text = 'ffa_league'")
     ).all():
         keys = [column.get("key") for column in (columns or [])]
         if keys != ["score"]:
@@ -168,6 +171,13 @@ def downgrade() -> None:
         match = _REVERSIBLE_FORMULA.match((formula or "").strip())
         if match is None:
             raise RuntimeError(f"stage {stage_id} pays by {formula!r}; ffa_score_points cannot express it")
+        # The old shape has no room for either: ``ffa_score`` always ranked
+        # higher-first, and the score column was always public.
+        better = columns[0].get("better", "higher")
+        if better != "higher":
+            raise RuntimeError(f"stage {stage_id} ranks score {better}-first; the old ffa_score tiebreak cannot")
+        if not columns[0].get("public", True):
+            raise RuntimeError(f"stage {stage_id} hides its score column; the old score column is always public")
         label = (columns[0].get("label") or "").strip()
         restore[stage_id] = (float(match.group("k") or 1), None if label in ("", "Счёт") else label)
 
