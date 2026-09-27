@@ -51,6 +51,7 @@
     "teamsCount": "{count, plural, one {# команда} few {# команды} many {# команд} other {# команды}}",
     "roundRobin": "круговая система",
     "swiss": "швейцарская система",
+    "ffaLeague": "все против всех",
     "byPlaytime": "По игровому времени",
     "byPlacement": "По занятому месту",
     "byAvgSr": "По среднему SR",

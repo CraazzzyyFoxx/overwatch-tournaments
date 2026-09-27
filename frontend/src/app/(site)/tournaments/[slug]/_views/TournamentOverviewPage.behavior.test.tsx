@@ -47,6 +47,7 @@ const getHeroPlaytime = vi.fn();
 const listPublicConfigs = vi.fn();
 const getAllMaps = vi.fn();
 const getTournamentStreams = vi.fn();
+const getFfaStage = vi.fn();
 
 vi.mock("@/services/encounter.service", () => ({
   default: { getAll: (...args: unknown[]) => getAllEncounters(...args) }
@@ -74,6 +75,9 @@ vi.mock("@/services/map.service", () => ({
 }));
 vi.mock("@/services/stream.service", () => ({
   default: { getTournamentStreams: (...args: unknown[]) => getTournamentStreams(...args) }
+}));
+vi.mock("@/services/ffa.service", () => ({
+  default: { getStage: (...args: unknown[]) => getFfaStage(...args) }
 }));
 
 vi.mock("next/navigation", () => ({
@@ -689,6 +693,56 @@ describe("while it is being played (§3B)", () => {
     expect(titles).toContain(COPY.groupTable.title.replace("{stage}", "Group A"));
     expect(titles).not.toContain(COPY.bracketMini.title.replace("{stage}", "Group A"));
     expect(container.textContent).toContain("3·0·0");
+  });
+
+  it("shows the lobby tables of an FFA stage, which has neither a bracket nor duels", async () => {
+    tournament = makeTournament("live", {
+      stages: [makeStage({ id: 7, name: "League", stage_type: "ffa_league" })]
+    });
+    // The encounter list answers duels only: an FFA-only tournament has none.
+    getAllEncounters.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
+    const row = (teamId: number, name: string, slot: number, position: number, points: number) => ({
+      team_id: teamId,
+      team_name: name,
+      team_image_url: null,
+      slot,
+      position,
+      tie_group: null,
+      is_pinned: false,
+      points,
+      games_played: 2,
+      wins: 0,
+      stats: {},
+      games: []
+    });
+    getFfaStage.mockResolvedValue([
+      {
+        encounter_id: 50,
+        tournament_id: TOURNAMENT_ID,
+        stage_id: 7,
+        stage_item_id: 70,
+        name: "Lobby A",
+        status: "open",
+        result_status: "none",
+        best_of: 3,
+        scheduled_at: null,
+        advance_count: null,
+        rules: { columns: [], placement_points: [], formula: null },
+        // Out of order on purpose: the card ranks by `position`.
+        rows: [row(2, "Gamma Lobby", 2, 2, 9), row(1, "Alpha Lobby", 1, 1, 14)]
+      }
+    ]);
+    await mount();
+
+    expect(getFfaStage).toHaveBeenCalledWith(TOURNAMENT_ID, 7);
+    expect(headings()).toContain(COPY.groupTable.title.replace("{stage}", "League"));
+    const text = container.textContent ?? "";
+    expect(text.indexOf("Alpha Lobby")).toBeGreaterThan(-1);
+    expect(text.indexOf("Alpha Lobby")).toBeLessThan(text.indexOf("Gamma Lobby"));
+    const link = Array.from(container.querySelectorAll("a")).find(
+      (node) => node.textContent === COPY.groupTable.open
+    );
+    expect(link?.getAttribute("href")).toBe(`/tournaments/${SLUG}/bracket?stage=7`);
   });
 
   it("keeps the two groups of one stage apart instead of interleaving their ranks", async () => {

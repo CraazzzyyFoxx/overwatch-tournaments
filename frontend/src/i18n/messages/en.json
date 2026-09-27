@@ -51,6 +51,7 @@
     "teamsCount": "{count, plural, one {# team} other {# teams}}",
     "roundRobin": "round-robin",
     "swiss": "swiss",
+    "ffaLeague": "free-for-all",
     "byPlaytime": "By play time",
     "byPlacement": "By placement",
     "byAvgSr": "By avg SR",
