@@ -25,6 +25,7 @@ __all__ = (
     "FFA_MAX_COLUMNS",
     "FFA_MAX_LOBBY_SIZE",
     "FFA_STAT_MAX",
+    "PLACEMENT_VARIABLES",
     "FfaColumn",
     "FfaGameLine",
     "FfaResultError",
@@ -50,6 +51,9 @@ DEFAULT_COLUMN_LABEL = "Счёт"
 DEFAULT_FORMULA = DEFAULT_COLUMN_KEY
 #: Float noise must not become a false inequality in a tiebreak (plan §12).
 GAME_POINTS_DIGITS = 4
+#: The builtins that read a team's place: a formula naming one needs every
+#: place entered by hand.
+PLACEMENT_VARIABLES: frozenset[str] = frozenset({"place", "place_pts"})
 
 
 class FfaResultError(ValueError):
@@ -88,7 +92,7 @@ class FfaRules:
         It is a question about the formula, never a separate flag: a flag could
         drift away from the rule it describes.
         """
-        return bool(self.formula.names & {"place", "place_pts"})
+        return bool(self.formula.names & PLACEMENT_VARIABLES)
 
     @property
     def column_keys(self) -> tuple[str, ...]:
@@ -208,9 +212,10 @@ def rank_game(lines: Sequence[FfaGameLine], rules: FfaRules) -> tuple[FfaGameLin
 
     Called on every read, not once on write: the formula may be edited while
     the stage runs, and a place derived under the retired one would contradict
-    the points printed next to it (plan §5.2). When that formula reads the
-    place itself, a missing place pays 0, so the ranking falls back to the
-    place-independent part of the formula -- deterministic, ties broken by team.
+    the points printed next to it (plan §5.2). A formula that reads the place
+    never meets such a game: the write demands every place under it, and the
+    stage editor refuses to switch to it while unplaced games exist
+    (``ffa_formula_places_missing``).
     """
     if all(item.placement is not None for item in lines):
         return tuple(sorted(lines, key=lambda item: (item.placement or 0, item.team_id)))

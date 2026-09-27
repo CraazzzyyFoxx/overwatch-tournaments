@@ -228,6 +228,26 @@ class EncounterGameResultRepository(BaseRepository[models.EncounterGameResult]):
         )
         return set(result.scalars())
 
+    async def stage_has_unplaced_results(self, session: AsyncSession, stage_id: int) -> bool:
+        """Does a live game of ``stage_id`` hold a line with no place entered?
+
+        Such a game was scored without places, and its places are derived from
+        the formula's points -- which a formula reading ``place`` cannot give.
+        Cancelled games are excluded like in ``stat_keys_for_stage``.
+        """
+        result = await session.execute(
+            sa.select(models.EncounterGameResult.id)
+            .join(models.EncounterGame, models.EncounterGame.id == models.EncounterGameResult.game_id)
+            .join(models.Encounter, models.Encounter.id == models.EncounterGameResult.encounter_id)
+            .where(
+                models.Encounter.stage_id == stage_id,
+                models.EncounterGame.state != enums.EncounterGameState.CANCELLED,
+                models.EncounterGameResult.placement.is_(None),
+            )
+            .limit(1)
+        )
+        return result.first() is not None
+
 
 class EncounterMapReportRepository(BaseRepository[models.EncounterMapReport]):
     def __init__(self) -> None:

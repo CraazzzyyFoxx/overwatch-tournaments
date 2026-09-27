@@ -1396,6 +1396,44 @@ def test_dropping_a_column_the_games_hold_values_for_is_refused(db_session) -> N
     assert asyncio.run(_run()) == (422, ["ffa_column_in_use"], ["kills", "deaths"])
 
 
+def test_a_formula_reading_the_place_waits_until_every_game_has_places(db_session) -> None:
+    """A game recorded without places is ranked by the formula's own points; a
+    formula that reads the place cannot rank it, so the switch is refused until
+    the organizer enters that game's places -- then the same edit goes through."""
+    place_formula = _scoring(placement_points=[10, 6, 4], formula="place_pts + score")
+
+    async def _run() -> tuple:
+        seeded = await _seed(db_session, games=1)
+        try:
+            await ffa_encounter_service.set_game_results(
+                db_session, seeded.lobby_id, 1, _lines(seeded.team_ids, [9, 5, 1]), actor_user_id=None, reason=None
+            )
+            with pytest.raises(BaseAPIException) as raised:
+                await stage_service.update_stage(
+                    db_session, seeded.stage_id, schemas.StageUpdate(ffa_scoring=place_formula)
+                )
+            await db_session.rollback()
+            refused = (await _reload_stage(db_session, seeded.stage_id)).ffa_formula
+
+            await ffa_encounter_service.set_game_results(
+                db_session,
+                seeded.lobby_id,
+                1,
+                _lines(seeded.team_ids, [9, 5, 1], [1, 2, 3]),
+                actor_user_id=None,
+                reason="places added",
+            )
+            await stage_service.update_stage(
+                db_session, seeded.stage_id, schemas.StageUpdate(ffa_scoring=place_formula)
+            )
+            accepted = (await _reload_stage(db_session, seeded.stage_id)).ffa_formula
+            return raised.value.status_code, [item.code for item in raised.value.detail], refused, accepted
+        finally:
+            await _drop(db_session, seeded)
+
+    assert asyncio.run(_run()) == (422, ["ffa_formula_places_missing"], "score", "place_pts + score")
+
+
 def test_an_accepted_scoring_edit_queues_the_recalculation(db_session) -> None:
     """Points, places and the public table are all derived from the rules, so a
     rules edit has to re-run the standings -- nothing else would."""

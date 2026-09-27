@@ -13,6 +13,8 @@ from shared.core import http_status as status
 from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.encounter_naming import build_encounter_name_from_ids
+from shared.domain.ffa_formula import compile_formula
+from shared.domain.ffa_scoring import PLACEMENT_VARIABLES
 from shared.models.tournament.pick_ban import PickBanConfig, PickBanConfigSlot
 from shared.repository import (
     EncounterGameResultRepository,
@@ -515,17 +517,30 @@ class AdminStageService:
         before: dict[str, Any],
         after: dict[str, Any],
     ) -> None:
-        """The two ffa_scoring edits a stage in play cannot take (plan §6).
+        """The ffa_scoring edits a stage in play cannot take (plan §6).
 
         Re-ranking edits (the formula, the placement points, the column keys,
         their ``better``) are refused once a playoff seeded off this stage has
         started -- the same rule, and the same 409, a result correction answers
-        to. Dropping a column the games hold values for is refused outright: the
-        values are a record of the tournament, and no later edit brings them
-        back.
+        to. A formula reading ``place``/``place_pts`` is refused while live games
+        hold no places: their places are derived from the formula's own points,
+        so the cell and the place would contradict each other. Dropping a column
+        the games hold values for is refused outright: the values are a record
+        of the tournament, and no later edit brings them back.
         """
         if _ranking_signature(before) != _ranking_signature(after):
             await self.assert_stage_correction_allowed(session, stage)
+        formula = compile_formula(after["formula"], [column["key"] for column in after["columns"]])
+        if formula.names & PLACEMENT_VARIABLES and await self.result_repo.stage_has_unplaced_results(session, stage.id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[
+                    ApiExc(
+                        code="ffa_formula_places_missing",
+                        msg="Games of this stage have no places; enter them before the formula reads place",
+                    )
+                ],
+            )
         removed = {column["key"] for column in before["columns"]} - {column["key"] for column in after["columns"]}
         if not removed:
             return

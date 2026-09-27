@@ -6407,6 +6407,7 @@
       "ffa_formula_unknown_name": "Position {offset}: unknown name {name}. Use a column key, place, place_pts or teams.",
       "ffa_formula_unsupported": "Position {offset}: this is not allowed in a formula. Arithmetic, comparisons, and / or / not, min, max, abs, round and if are.",
       "ffa_formula_too_complex": "The formula is too long to evaluate. Shorten it, or split the rule into fewer steps.",
+      "ffa_formula_places_missing": "Games of this stage were entered without places, so the formula cannot read place or place_pts yet. Enter those games' places first, or keep a formula without them.",
       "ffa_reason_required": "Changing a game that has been played needs a reason.",
       "ffa_game_out_of_range": "This lobby does not play that game — change the number of games first.",
       "ffa_games_below_played": "The series cannot be shorter than the games already played.",
