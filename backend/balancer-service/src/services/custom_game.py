@@ -2017,12 +2017,19 @@ class CustomGameService:
         Shared by :meth:`rotation` (ranks the whole pool for the host's hint) and
         :meth:`balance` (ranks the active lineup, so ``run_balance``'s own
         overflow trim benches the least-owed player first).
+
+        A map the member spent in the mix's OTHER lobby drops out of their
+        history entirely: it is neither a game they played nor one they sat out,
+        and counting it as a rest would let somebody who has been playing
+        non-stop next door outrank the people actually waiting. Empty for every
+        one-lobby mix, which is why the verdict there is unchanged.
         """
         matches = list(await self.casual_matches.list_for_custom_game(session, game.id))
         matches.reverse()  # newest-first -> chronological, oldest map first
         participants = [
             {seat.workspace_member_id for team in match.teams for seat in team.players} for match in matches
         ]
+        busy = [{row.workspace_member_id for row in match.busy_players} for match in matches]
         return [
             PlayerHistory(
                 member_id=row.workspace_member_id,
@@ -2030,8 +2037,9 @@ class CustomGameService:
                 # a map played before they signed up is not one they sat out.
                 played=tuple(
                     row.workspace_member_id in played
-                    for match, played in zip(matches, participants, strict=True)
-                    if row.created_at is None or match.created_at >= row.created_at
+                    for match, played, elsewhere in zip(matches, participants, busy, strict=True)
+                    if (row.created_at is None or match.created_at >= row.created_at)
+                    and row.workspace_member_id not in elsewhere
                 ),
                 pinned_must_play=row.participation == MixParticipation.MUST_PLAY,
             )

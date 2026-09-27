@@ -2834,6 +2834,64 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         # 7 is the only one who actually played -- rests to make room.
         self.assertEqual(by_id[7].status, RotationStatus.SHOULD_REST)
 
+    async def test_rotation_counts_a_match_spent_in_the_other_lobby_as_neither(self) -> None:
+        from src.domain.mix_rotation import RotationStatus
+
+        # players_per_team=2, pool of 3 -> one seat short. Two maps were played
+        # in lobby A; 9 spent the first of them on the floor of lobby B.
+        self.games.get.return_value = _game()
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, created_at=0),
+            _roster_row(2, 8, 1, created_at=0),
+            _roster_row(3, 9, 2, created_at=0),
+        ]
+        self.casual_matches.list_for_custom_game = AsyncMock(
+            return_value=[
+                _match(2, created_at=2, home=[7], away=[8]),  # 7 & 8 played, 9 sat
+                _match(1, created_at=1, home=[7], away=[8], busy=[9]),  # 9 was in lobby B
+            ]
+        )
+
+        recommendations = await self.service.rotation(self.session, workspace_id=1, custom_game_id=11)
+        by_id = {rec.member_id: rec for rec in recommendations}
+
+        # One map missed, not two: the first never counted against 9 at all.
+        self.assertEqual(by_id[9].consecutive_sat, 1)
+        self.assertEqual(by_id[9].games_played, 0)
+        # 7 and 8 played both maps in a row, so one of them makes room and the
+        # single sat-out map is still enough to owe 9 the next seat.
+        self.assertEqual(by_id[9].status, RotationStatus.MUST_PLAY)
+
+    async def test_rotation_of_a_one_lobby_mix_has_nothing_to_skip(self) -> None:
+        """No busy rows anywhere: the verdict is the one this mix always got."""
+        from src.domain.mix_rotation import RotationStatus
+
+        self.games.get.return_value = _game()
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, created_at=0),
+            _roster_row(2, 8, 1, created_at=0),
+            _roster_row(3, 9, 2, created_at=0),
+        ]
+        self.casual_matches.list_for_custom_game = AsyncMock(
+            return_value=[
+                _match(2, created_at=2, home=[7], away=[8]),
+                _match(1, created_at=1, home=[7], away=[8]),
+            ]
+        )
+
+        by_id = {
+            rec.member_id: rec
+            for rec in await self.service.rotation(self.session, workspace_id=1, custom_game_id=11)
+        }
+
+        self.assertEqual(by_id[9].consecutive_sat, 2)
+        self.assertEqual(by_id[9].status, RotationStatus.MUST_PLAY)
+        # 7 and 8 tie on history; input order seats 7 and benches 8.
+        self.assertEqual(by_id[7].status, RotationStatus.NEUTRAL)
+        self.assertEqual(by_id[8].status, RotationStatus.SHOULD_REST)
+
     async def test_per_lobby_writes_touch_only_their_own_lobby(self) -> None:
         """Lobby B rolls its own map and pages its own option; lobby A keeps
         the map and the option the host set for it."""
