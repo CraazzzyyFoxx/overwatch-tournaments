@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import { act, useState, type ReactNode } from "react";
 
@@ -10,14 +10,14 @@ import type { FieldRendererContext } from "./types";
 const testWindow = new Window({ url: "http://localhost:3000/", width: 720, height: 900 });
 const previousGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string) => key,
 }));
 // Radix portals and pointer measurement do not work under happy-dom. The two
 // primitives `GenericField` reaches for are stood in by their own contracts:
 // a `select` never opens in these cases, and the switch is a toggle button.
-mock.module("@/components/ui/select", () => ({
+vi.mock("@/components/ui/select", () => ({
   Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectTrigger: ({ children, ...rest }: { children: ReactNode }) => (
     <button type="button" {...rest}>
@@ -28,7 +28,7 @@ mock.module("@/components/ui/select", () => ({
   SelectContent: () => null,
   SelectItem: () => null,
 }));
-mock.module("@/components/ui/switch", () => ({
+vi.mock("@/components/ui/switch", () => ({
   Switch: ({
     checked,
     onCheckedChange,

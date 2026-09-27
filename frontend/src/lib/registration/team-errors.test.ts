@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";

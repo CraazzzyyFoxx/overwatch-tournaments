@@ -1,26 +1,20 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  closestCenter,
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import { AdminTableHead, type AdminTableHeadProps } from "@/components/data-table/AdminTableHead";
 import { ADMIN_ACTION_COLUMN_ID } from "@/components/data-table/columns";
 import { cn } from "@/components/data-table/host";
+import { useDragSensors } from "@/hooks/useDragSensors";
 
 /**
  * Column drag-to-reorder, in its own chunk.
  *
  * `@dnd-kit` is a quarter of the admin table bundle and is used by exactly one
- * gesture, so `AdminDataTable` imports this module when a pointer first
+ * gesture, so `DataTable` imports this module when a pointer first
  * reaches the table rather than statically. Until it resolves the header renders plain
  * `AdminTableHead` cells, which are the same markup minus the drag bindings.
  */
@@ -34,7 +28,7 @@ export function ColumnDndProvider({
   onReorder: (activeId: string, overId: string) => void;
   children: ReactNode;
 }>) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useDragSensors();
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     onReorder(String(active.id), String(over.id));
@@ -86,7 +80,7 @@ export function SortableHead<TData>({
   );
 }
 
-/** What `AdminDataTable` holds once this chunk resolves. */
+/** What `DataTable` holds once this chunk resolves. */
 export type ColumnDndModule = {
   ColumnDndProvider: typeof ColumnDndProvider;
   SortableHead: typeof SortableHead;

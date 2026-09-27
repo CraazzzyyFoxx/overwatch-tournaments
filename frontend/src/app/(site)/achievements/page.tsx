@@ -33,6 +33,7 @@ import {
 import AchievementsHero from "./components/AchievementsHero";
 import AchievementTile from "./components/AchievementTile";
 import AchievementConditionsDialog from "./components/AchievementConditionsDialog";
+import { achievementQueryKeys } from "@/lib/achievements/query-keys";
 
 type SortBy = "rarity" | "name" | "count";
 
@@ -100,7 +101,7 @@ const AchievementsPage = () => {
   const [rulesFor, setRulesFor] = useState<Achievement | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["achievements", "all", workspaceId],
+    queryKey: achievementQueryKeys.all(workspaceId),
     queryFn: () => achievementsService.getAll(1, -1, workspaceId)
   });
 

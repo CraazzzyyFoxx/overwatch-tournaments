@@ -10,6 +10,7 @@ import captainService from "@/services/captain.service";
 import type { CaptainReport, MatchReportForm } from "@/types/encounter.types";
 import { Pill, PillFact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterCaptainReportsProps {
   encounterId: number;
@@ -36,7 +37,7 @@ export default function EncounterCaptainReports({
 }: Readonly<EncounterCaptainReportsProps>) {
   const t = useTranslations();
   const reportsQuery = useQuery({
-    queryKey: ["encounter-reports", encounterId],
+    queryKey: encounterQueryKeys.reports(encounterId),
     queryFn: () => captainService.getReports(encounterId),
     retry: false,
     staleTime: 60_000

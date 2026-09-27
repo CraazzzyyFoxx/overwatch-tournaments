@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
  *
  * Scope lives in the URL (`?history=tournament:12:3`) so a trail can be linked
  * to and survives a reload. `replaceState`, not `pushState`, for the same reason
- * `AdminDataTable` uses it for filters: only a change of place earns a history
+ * `DataTable` uses it for filters: only a change of place earns a history
  * entry, and peeking at a drawer is not one.
  */
 

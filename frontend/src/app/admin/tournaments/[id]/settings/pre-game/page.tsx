@@ -21,8 +21,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import heroService from "@/services/hero.service";
-import mapService from "@/services/map.service";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanConfig, PickBanKind } from "@/types/tournament.types";
 import {
@@ -42,6 +40,8 @@ import {
   type PreGameScope,
   type PreGameStep
 } from "./pre-game-scope";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 export default function PreGameSettingsPage() {
   return (
@@ -92,23 +92,14 @@ function PreGamePhase({
   const configs = useMemo(() => configsQuery.data?.configs ?? [], [configsQuery.data]);
 
   // One catalogue query per kind, both gated on the kind on screen.
-  const mapsQuery = useQuery({
-    queryKey: ["maps", "all", "gamemode"],
-    queryFn: () =>
-      mapService.getAll({ perPage: -1, sort: "name", order: "asc", entities: ["gamemode"] }),
-    enabled: kind === "map"
-  });
-  const heroesQuery = useQuery({
-    queryKey: ["heroes", "all"],
-    queryFn: () => heroService.getAll({ perPage: -1, sort: "name", order: "asc" }),
-    enabled: kind === "hero"
-  });
+  const mapsQuery = useMapsCatalog({ withGamemode: true, enabled: kind === "map" });
+  const heroesQuery = useHeroesCatalog({ enabled: kind === "hero" });
 
   const catalogue = useMemo<CatalogueItem[]>(() => {
     if (kind === "map") {
       // Off-rotation maps (a retired brawl-only map) are not something an
       // organizer bans or picks in a ranked series.
-      return (mapsQuery.data?.results ?? [])
+      return (mapsQuery.data ?? [])
         .filter((map) => map.in_competitive !== false)
         .map((map) => ({
           id: map.id,
@@ -117,7 +108,7 @@ function PreGamePhase({
           imageSrc: map.image_path ?? null
         }));
     }
-    return (heroesQuery.data?.results ?? []).map((hero) => ({
+    return (heroesQuery.data ?? []).map((hero) => ({
       id: hero.id,
       name: hero.name,
       group: hero.type ?? hero.role ?? null,

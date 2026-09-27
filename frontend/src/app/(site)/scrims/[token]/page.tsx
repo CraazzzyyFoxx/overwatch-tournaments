@@ -18,6 +18,7 @@ import type { ScrimRoom } from "@/types/scrim.types";
 
 import { PregameRoom } from "@/app/(site)/tournaments/[slug]/pregame/[encounterId]/_components/PregameRoom";
 import { Spinner } from "@/components/ui/spinner";
+import { scrimQueryKeys } from "@/lib/scrims/query-keys";
 
 /** Where a scrim room hands the viewer back when it is done with them. */
 const SCRIM_RETURN_TO = "/scrims";
@@ -83,7 +84,7 @@ export default function ScrimRoomPage() {
   const queryClient = useQueryClient();
   const [watching, setWatching] = useState(false);
 
-  const roomQueryKey = ["scrims", "room", token] as const;
+  const roomQueryKey = scrimQueryKeys.room(token);
   const roomQuery = useQuery({
     queryKey: roomQueryKey,
     queryFn: () => scrimService.getRoom(token),

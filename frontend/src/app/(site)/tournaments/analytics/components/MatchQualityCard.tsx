@@ -14,6 +14,8 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import AnomalyLegend from "@/app/(site)/tournaments/analytics/components/AnomalyLegend";
 import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/AnomalyTooltip";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface MatchQualityCardProps {
   tournamentId: number;
@@ -103,14 +105,14 @@ export default function MatchQualityCard({ tournamentId }: Readonly<MatchQuality
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["analytics-match-quality", tournamentId],
+    queryKey: analyticsQueryKeys.matchQuality(tournamentId),
     queryFn: () => analyticsService.getMatchQuality(tournamentId),
     staleTime: 60_000,
   });
 
   // Reviewer verdicts (only fetched for users who can act on them).
   const { data: feedback } = useQuery({
-    queryKey: ["analytics-anomaly-feedback", tournamentId],
+    queryKey: analyticsQueryKeys.anomalyFeedback(tournamentId),
     queryFn: () => analyticsService.getAnomalyFeedback(tournamentId),
     enabled: canReview,
     staleTime: 60_000,
@@ -131,13 +133,13 @@ export default function MatchQualityCard({ tournamentId }: Readonly<MatchQuality
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: ["analytics-anomaly-feedback", tournamentId],
+        queryKey: analyticsQueryKeys.anomalyFeedback(tournamentId),
       }),
   });
 
   // Encounter names so each row reads "Team A vs Team B" instead of a raw id.
   const { data: encounters } = useQuery({
-    queryKey: ["encounters", "by-tournament", tournamentId],
+    queryKey: encounterQueryKeys.byTournament(tournamentId),
     queryFn: () => encounterService.getAll(1, "", tournamentId, -1),
     staleTime: 60_000,
   });

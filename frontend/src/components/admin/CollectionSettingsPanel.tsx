@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import adminService from "@/services/admin.service";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface UseCollectionSettingsOptions<T extends object> {
   /** The `settings` table key this collector's config is stored under. */
@@ -31,7 +32,7 @@ export function useCollectionSettings<T extends object>({
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
-    queryKey: ["admin", "settings"],
+    queryKey: adminQueryKeys.settings(),
     queryFn: () => adminService.getSettings()
   });
 
@@ -55,7 +56,7 @@ export function useCollectionSettings<T extends object>({
     mutationFn: () =>
       adminService.updateSetting(settingKey, { value: form as unknown as Record<string, unknown> }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.settings() });
       for (const key of invalidateKeys) {
         queryClient.invalidateQueries({ queryKey: key });
       }

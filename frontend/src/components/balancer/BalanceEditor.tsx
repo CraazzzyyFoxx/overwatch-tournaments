@@ -38,6 +38,7 @@ import {
   type BalanceActiveDrag,
 } from "./balance-editor-helpers";
 import { useBalancerDragGhosts } from "./useBalancerDragGhosts";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 type BalanceEditorProps = {
   value: InternalBalancePayload | null;
@@ -97,7 +98,7 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     useBalancerDragGhosts({ topic: realtimeTopic, currentUserId });
 
   const membersQuery = useQuery({
-    queryKey: ["workspace", "members", workspaceId],
+    queryKey: workspaceQueryKeys.members(workspaceId),
     queryFn: () => workspaceService.getMembersAll(workspaceId as number),
     enabled: workspaceId !== null,
     staleTime: 5 * 60 * 1000,

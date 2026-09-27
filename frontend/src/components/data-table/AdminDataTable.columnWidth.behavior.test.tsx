@@ -10,7 +10,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
+import { DataTable } from "@/components/data-table/DataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -47,7 +47,7 @@ async function render() {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row> rows={rows} columns={columns} getRowId={(r) => r.id} />
+        <DataTable<Row> rows={rows} columns={columns} getRowId={(r) => r.id} />
       </QueryClientProvider>
     );
   });
@@ -58,7 +58,7 @@ afterEach(() => {
   container.remove();
 });
 
-describe("AdminDataTable column widths", () => {
+describe("DataTable column widths", () => {
   it("splits unsized columns evenly and leaves an explicitly-sized column alone", async () => {
     await render();
     const headers = [...container.querySelectorAll("thead th")];

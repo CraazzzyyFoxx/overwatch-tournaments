@@ -1,7 +1,7 @@
 "use client";
 
 import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { StageType } from "@/types/tournament.types";

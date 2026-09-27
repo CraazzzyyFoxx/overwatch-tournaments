@@ -2,19 +2,10 @@
 
 import { useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent
-} from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { AlertCircle, Trash2 } from "lucide-react";
@@ -34,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDragSensors } from "@/hooks/useDragSensors";
 import { defaultFormSchema } from "@/lib/forms/default-schema";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { makeUniqueFieldKey } from "@/lib/forms/keys";
@@ -67,6 +59,8 @@ import {
   replaceField,
   sanitizeSchema
 } from "./_components/schemaEdits";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 // ---------------------------------------------------------------------------
 // The editor
@@ -191,11 +185,7 @@ export function SchemaEditor({
   const [unlockedKeys, setUnlockedKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [previewStep, setPreviewStep] = useState(0);
 
-  const sensors = useSensors(
-    // 5px before a drag starts, so a click on a row's button stays a click.
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useDragSensors({ distance: 5, keyboard: true });
 
   const section = schema.sections.find((entry) => entry.key === sectionKey) ?? schema.sections[0];
   const field = section?.fields.find((entry) => entry.key === fieldKey) ?? null;
@@ -527,7 +517,7 @@ export function SchemaEditor({
  *  the preview renderers want it. */
 export function useSubroleCatalog(workspaceId: number | null) {
   const catalogQuery = useQuery({
-    queryKey: ["admin", "player-sub-roles", workspaceId],
+    queryKey: adminQueryKeys.playerSubRoles(workspaceId),
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId as number }),
     enabled: workspaceId !== null
   });
@@ -579,7 +569,7 @@ export default function RegistrationFormBuilder({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const formQuery = useQuery({
-    queryKey: ["balancer-admin", "registration-form", tournamentId],
+    queryKey: balancerQueryKeys.registrationForm(tournamentId),
     queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
     enabled: tournamentId !== null,
     // This page is a long-lived editor; a background refetch must not clobber
@@ -613,9 +603,9 @@ export default function RegistrationFormBuilder({
       });
     },
     onSuccess: async (updated: AdminRegistrationForm) => {
-      queryClient.setQueryData(["balancer-admin", "registration-form", tournamentId], updated);
+      queryClient.setQueryData(balancerQueryKeys.registrationForm(tournamentId), updated);
       await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registration-form", tournamentId]
+        queryKey: balancerQueryKeys.registrationForm(tournamentId)
       });
       setDraft(null);
       setFieldErrors({});

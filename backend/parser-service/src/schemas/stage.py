@@ -33,7 +33,6 @@ class StageRead(BaseRead):
     is_active: bool
     is_published: bool = False
     is_completed: bool
-    settings_json: dict | None
     challonge_id: int | None
     challonge_slug: str | None
     items: list[StageItemRead] = []

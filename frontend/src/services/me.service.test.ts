@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Capture what me.service sends to apiFetch. The gateway avatar handler
 // (POST /api/v1/auth/me/avatar) requires a multipart form with a "file" field and
@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 type Call = { path: string; options?: { method?: string; body?: unknown } };
 const calls: Call[] = [];
 
-mock.module("@/lib/api/fetch", () => ({
+vi.mock("@/lib/api/fetch", () => ({
   apiFetch: (path: string, options?: { method?: string; body?: unknown }) => {
     calls.push({ path, options });
     return Promise.resolve({ json: async () => ({}) });

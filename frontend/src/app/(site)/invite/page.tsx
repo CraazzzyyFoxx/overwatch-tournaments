@@ -50,7 +50,7 @@ export default function InviteLandingPage() {
   const hashRead = hash !== null;
 
   const previewQuery = useQuery({
-    queryKey: ["registration-team-invite-preview", token],
+    queryKey: tournamentQueryKeys.registrationInvitePreview(token),
     queryFn: () => registrationTeamService.previewInvite(token as string),
     enabled: !!token,
     // A single-use credential: refetching on every window focus buys nothing and

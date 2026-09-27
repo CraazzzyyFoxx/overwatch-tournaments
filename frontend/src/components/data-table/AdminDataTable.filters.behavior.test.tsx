@@ -19,8 +19,8 @@ import { act, StrictMode, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
-import { adminColumnMeta } from "@/components/data-table/columns";
+import { DataTable } from "@/components/data-table/DataTable";
+import { columnMeta } from "@/components/data-table/columns";
 import type { AdminTableFilters } from "@/components/data-table/filters";
 
 declare global {
@@ -41,7 +41,7 @@ const columns: ColumnDef<Row>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    meta: adminColumnMeta<Row>({
+    meta: columnMeta<Row>({
       filter: {
         param: "status",
         label: "Filter by status",
@@ -84,7 +84,7 @@ async function render(search = "") {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row>
+        <DataTable<Row>
           queryKey={(page, searchValue, pageSize, sortField, sortDir, filters) => [
             "rows",
             page,
@@ -122,7 +122,7 @@ async function renderControlled(search = "") {
       applyFilters = setFilters;
     }, [setFilters]);
     return (
-      <AdminDataTable<Row>
+      <DataTable<Row>
         filters={filters}
         onFiltersChange={setFilters}
         queryKey={(page, searchValue, pageSize, sortField, sortDir, tableFilters) => [
@@ -166,7 +166,7 @@ afterEach(async () => {
   container.remove();
 });
 
-describe("AdminDataTable column filters", () => {
+describe("DataTable column filters", () => {
   it("puts nothing but sorting in the header", async () => {
     await render();
     // The funnel popover is gone: one filter surface per screen, and it is the
@@ -233,7 +233,7 @@ describe("AdminDataTable column filters", () => {
     await act(async () => {
       root.render(
         <QueryClientProvider client={client}>
-          <AdminDataTable<Row>
+          <DataTable<Row>
             rows={rows}
             columns={columns}
             getRowId={(row) => String(row.id)}
@@ -281,7 +281,7 @@ describe("AdminDataTable column filters", () => {
     await act(async () => {
       root.render(
         <QueryClientProvider client={client}>
-          <AdminDataTable<Row>
+          <DataTable<Row>
             rows={rows}
             columns={columns}
             getRowId={(row) => String(row.id)}
@@ -310,7 +310,7 @@ describe("AdminDataTable column filters", () => {
     function Controlled() {
       const [filters, setFilters] = useState<AdminTableFilters>({});
       return (
-        <AdminDataTable<Row>
+        <DataTable<Row>
           filters={filters}
           onFiltersChange={setFilters}
           queryKey={(page, searchValue, pageSize, sortField, sortDir, tableFilters) => [

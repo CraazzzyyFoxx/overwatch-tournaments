@@ -186,6 +186,34 @@ class ValidationDetailTests(IsolatedAsyncioTestCase):
         entry = field_entry({"loc": ("body", "config", "size"), "msg": "too big", "type": "less_than"})
         self.assertEqual(entry, {"field": "config.size", "msg": "too big", "code": "less_than"})
 
+    def test_custom_error_context_rides_the_entry(self) -> None:
+        # A ``PydanticCustomError`` carries the position and the offending name in
+        # ``ctx``; dropping it leaves a client with a code and nowhere to point.
+        entry = field_entry(
+            {
+                "loc": ("body", "ffa_scoring", "formula"),
+                "msg": "unknown name 'kils' at 13",
+                "type": "ffa_formula_unknown_name",
+                "ctx": {"offset": 13, "name": "kils"},
+            }
+        )
+        self.assertEqual(
+            entry,
+            {
+                "field": "ffa_scoring.formula",
+                "msg": "unknown name 'kils' at 13",
+                "code": "ffa_formula_unknown_name",
+                "offset": 13,
+                "name": "kils",
+            },
+        )
+
+    def test_unserialisable_context_values_are_dropped(self) -> None:
+        # ``ValidationError.errors()`` puts the raw exception in ``ctx`` for a plain
+        # ``ValueError``; the envelope is JSON, so only scalars may ride along.
+        entry = field_entry({"field": "x", "msg": "bad", "code": "value_error", "ctx": {"error": ValueError("boom")}})
+        self.assertEqual(entry, {"field": "x", "msg": "bad", "code": "value_error"})
+
 
 class EnvelopeTests(IsolatedAsyncioTestCase):
     async def _run(self, op: Any) -> dict[str, Any]:

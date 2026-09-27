@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Lock } from "lucide-react";
 
 import { Encounter } from "@/types/encounter.types";
 import { Stage, Standings } from "@/types/tournament.types";
@@ -8,7 +9,11 @@ import { sortStandingsMatches } from "@/lib/tournament/match-order";
 import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import { tiebreakerLabel, type TiebreakerMetricId } from "@/lib/tournament/tiebreakers";
+import {
+  FFA_STAT_PREFIX,
+  tiebreakerLabel,
+  type TiebreakerMetricId
+} from "@/lib/tournament/tiebreakers";
 import tournamentService from "@/services/tournament.service";
 import styles from "./StandingsTable.module.css";
 import TeamName from "@/components/TeamName";
@@ -148,20 +153,11 @@ const StandingsTable = ({
   const stages = providedStages ?? stagesQuery.data ?? [];
 
   const stage = standings[0]?.stage;
-  const settings = stage?.settings_json ?? {};
   // Prefer the explicit, admin-configured Stage.advance_count column; fall back
-  // to legacy settings_json keys, then to the derived bracket-wiring count.
-  // Order is the precedence: the first candidate that is actually a number wins.
-  const advanceCountCandidates: unknown[] = [
-    stage?.advance_count,
-    settings.advance_count,
-    settings.advanceCount,
-    settings.top
-  ];
-  let settingsCount =
-    advanceCountCandidates.find((value): value is number => typeof value === "number") ?? null;
+  // to the derived bracket-wiring count.
+  let stageCount = stage?.advance_count ?? null;
 
-  if (settingsCount == null && stage != null && stages.length > 0) {
+  if (stageCount == null && stage != null && stages.length > 0) {
     const currentStage = stages.find((s) => s.id === stage.id);
     const stageItemIds = new Set(currentStage?.items?.map((item) => item.id) ?? []);
     if (stageItemIds.size > 0) {
@@ -180,7 +176,7 @@ const StandingsTable = ({
         }
       }
       if (maxPos > 0) {
-        settingsCount = maxPos;
+        stageCount = maxPos;
       }
     }
   }
@@ -199,7 +195,7 @@ const StandingsTable = ({
           .flatMap((s) => s.items ?? [])
           .find((item) => item.id === renderedItemId)?.advance_count ?? null));
 
-  const resolvedAdvanceCount = itemAdvanceCount ?? settingsCount ?? advanceCount;
+  const resolvedAdvanceCount = itemAdvanceCount ?? stageCount ?? advanceCount;
 
   const sortedStandings = [...standings].sort((a, b) => {
     const left = is_groups ? a.position : a.overall_position;
@@ -225,11 +221,22 @@ const StandingsTable = ({
       ? straddlingTieGroups(sortedStandings, upperCut)
       : new Set<number>();
   const tieClusterTitle = t("standings.tieCluster");
+  const pinnedTitle = t("standings.pinnedPlace");
   const columnCount = is_groups ? 9 : 6;
 
   // "Ranked by …" legend — resolve metric ids through i18n, falling back to the
   // shared English labels when a key is missing.
+  // A column sum names the organizer's column: its label comes from the stage
+  // this table already loads (`stages`, above); the bare key stands in only
+  // while that query is still in flight.
+  const ffaColumns =
+    stages.find((candidate) => candidate.id === stage?.id)?.ffa_scoring?.columns ?? [];
   const labelFor = (id: string) => {
+    if (id.startsWith(FFA_STAT_PREFIX)) {
+      const columnKey = id.slice(FFA_STAT_PREFIX.length);
+      const column = ffaColumns.find((candidate) => candidate.key === columnKey);
+      return t("common.tiebreakerMetrics.ffa_stat", { label: column?.label ?? columnKey });
+    }
     const key = `common.tiebreakerMetrics.${id as TiebreakerMetricId}` as const;
     const label = t(key);
     return label === key ? undefined : label;
@@ -364,6 +371,15 @@ const StandingsTable = ({
                           aria-label={tieClusterTitle}
                         >
                           =
+                        </span>
+                      )}
+                      {standing.is_pinned && (
+                        <span
+                          className="ml-1 inline-flex align-[-0.125em] text-[color:var(--fg-dim)]"
+                          title={pinnedTitle}
+                        >
+                          <Lock aria-hidden className="size-3" />
+                          <span className="sr-only">{pinnedTitle}</span>
                         </span>
                       )}
                     </td>

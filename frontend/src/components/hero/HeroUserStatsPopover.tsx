@@ -8,7 +8,7 @@ import HeroImage from "@/components/hero/HeroImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Progress } from "@/components/ui/progress";
 import { formatPercent, formatSeconds } from "@/lib/format";
-import { getWinrateColor } from "@/utils/colors";
+import { getWinrateColor } from "@/lib/colors";
 import type { UserMapHeroStats } from "@/types/user.types";
 import type { HeroPopoverStat } from "@/lib/hero/popover-stats";
 

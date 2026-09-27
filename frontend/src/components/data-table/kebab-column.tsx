@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { adminColumnMeta } from "@/components/data-table/columns";
+import { columnMeta } from "@/components/data-table/columns";
 import { cn } from "@/components/data-table/host";
 
 export interface KebabAction {
@@ -54,7 +54,7 @@ export function createKebabColumn<T>(
     enableSorting: false,
     enableResizing: false,
     size: 56,
-    meta: adminColumnMeta<T>({ align: "right", rowActions: items }),
+    meta: columnMeta<T>({ align: "right", rowActions: items }),
     cell: ({ row }) => {
       const actions = items(row.original).filter((action) => !action.hidden);
       if (actions.length === 0) return null;

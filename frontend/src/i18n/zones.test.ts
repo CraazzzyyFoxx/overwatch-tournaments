@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import en from "./messages/en.json";
 import ZONE_NAMESPACES from "./zone-namespaces.json";

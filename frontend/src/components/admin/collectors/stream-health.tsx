@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { RUN_STATE_TONES } from "./collector-state";
 import { STREAM_STATUS_META, diagnoseStreamHealth } from "./stream-shared";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const STREAM_KEY = "stream.collection";
 
@@ -35,7 +36,7 @@ export function StreamHealthDashboard() {
 
   // No workspace in the key: one poller, one Redis key, one set of numbers.
   const healthQuery = useQuery({
-    queryKey: ["admin", "streams", "health"],
+    queryKey: adminQueryKeys.streamsHealth(),
     queryFn: () => adminService.getStreamPollHealth(),
     refetchInterval: REFETCH_MS
   });
@@ -49,8 +50,8 @@ export function StreamHealthDashboard() {
     },
     onSuccess: () => {
       notify.success(health?.enabled ? "Polling paused" : "Polling resumed");
-      queryClient.invalidateQueries({ queryKey: ["admin", "streams"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.streams() });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.settings() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not change the polling state — try again" })

@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Capture the path passed to apiFetch. Division-grid endpoints live under the
 // unified /api/v1 namespace (tournament-worker); this guards that the service
 // builds the correct gateway path.
 const calls: Array<{ path: string }> = [];
 
-mock.module("@/lib/api/fetch", () => ({
+vi.mock("@/lib/api/fetch", () => ({
   apiFetch: (path: string) => {
     calls.push({ path });
     return Promise.resolve({ json: async () => [] });

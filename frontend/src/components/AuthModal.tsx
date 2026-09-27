@@ -12,11 +12,11 @@ import {
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useOAuthProviders } from "@/hooks/use-oauth-providers";
+import { useOAuthProviders } from "@/hooks/useOAuthProviders";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
-import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
+import WorkspaceBrandIcon from "@/components/workspace/WorkspaceBrandIcon";
 import type { TenantWorkspaceBranding } from "@/lib/site/tenant-host";
 
 type ProviderButtonProps = {

@@ -1,84 +1,212 @@
+"""FFA scoring: which game is valid, what it pays, and what a season totals to.
+
+Pure, no session and no ORM row::
+
+    uv run pytest shared/tests/test_ffa_scoring.py -v
+"""
+
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 
+from shared.domain.ffa_formula import compile_formula
 from shared.domain.ffa_scoring import (
+    FfaColumn,
     FfaGameLine,
     FfaResultError,
     FfaRules,
+    ffa_rules,
     game_points,
     normalize_game_lines,
-    parse_ffa_rules,
+    rank_game,
     team_totals,
 )
 
-SCORE_ONLY = FfaRules()
-BATTLE_ROYALE = FfaRules(placement_points=(10, 6, 5), score_points=1)
+
+def rules(formula: str, *columns: FfaColumn, placement_points: tuple[float, ...] = ()) -> FfaRules:
+    used = columns or (FfaColumn(key="score", label="Счёт"),)
+    return FfaRules(
+        columns=used,
+        placement_points=placement_points,
+        formula=compile_formula(formula, [column.key for column in used]),
+    )
 
 
-def line(team_id: int, score: int, placement: int | None = None) -> FfaGameLine:
-    return FfaGameLine(team_id=team_id, placement=placement, score=score)
+KILLS = FfaColumn(key="kills", label="Kills")
+DEATHS = FfaColumn(key="deaths", label="Deaths", public=False, better="lower")
+
+BATTLE_ROYALE = rules("place_pts + kills", KILLS, placement_points=(10, 6, 5))
+BY_SCORE = rules("kills * 2 - deaths", KILLS, DEATHS)
 
 
-def test_score_only_game_ranks_by_score_and_ties_share_a_place() -> None:
-    lines = normalize_game_lines([line(1, 7), line(2, 10), line(3, 7), line(4, 3)], [1, 2, 3, 4], SCORE_ONLY)
+def line(team_id: int, placement: int | None = None, **stats: float) -> FfaGameLine:
+    return FfaGameLine(team_id=team_id, placement=placement, stats=stats)
 
-    assert [(item.team_id, item.placement) for item in lines] == [(2, 1), (1, 2), (3, 2), (4, 4)]
+
+def test_placement_is_required_exactly_when_the_formula_reads_it() -> None:
+    assert BATTLE_ROYALE.requires_placement is True
+    assert BY_SCORE.requires_placement is False
+    assert rules("teams - place").requires_placement is True
+
+
+def test_places_are_derived_from_game_points_with_shared_places() -> None:
+    # 10, 7, 7, 3 -> 1, 2, 2, 4: the points the formula paid, not a raw column.
+    lines = normalize_game_lines(
+        [
+            line(1, kills=5, deaths=0),
+            line(2, kills=3, deaths=1),
+            line(3, kills=3, deaths=1),
+            line(4, kills=1, deaths=0),
+        ],
+        [1, 2, 3, 4],
+        BY_SCORE,
+    )
+
+    assert [(item.team_id, item.placement) for item in lines] == [(1, 1), (2, 2), (3, 2), (4, 4)]
 
 
 def test_a_formula_that_pays_for_placement_needs_every_place_exactly_once() -> None:
     with pytest.raises(FfaResultError) as missing:
-        normalize_game_lines([line(1, 3), line(2, 1)], [1, 2], BATTLE_ROYALE)
+        normalize_game_lines([line(1, kills=3), line(2, kills=1)], [1, 2], BATTLE_ROYALE)
     with pytest.raises(FfaResultError) as shared_place:
-        normalize_game_lines([line(1, 3, 1), line(2, 1, 1)], [1, 2], BATTLE_ROYALE)
+        normalize_game_lines([line(1, 1, kills=3), line(2, 1, kills=1)], [1, 2], BATTLE_ROYALE)
 
     assert missing.value.code == "ffa_result_placement_required"
     assert shared_place.value.code == "ffa_result_invalid_placement"
 
 
-def test_score_only_lobby_accepts_given_places_including_ties() -> None:
-    lines = normalize_game_lines([line(1, 5, 1), line(2, 5, 1)], [1, 2], SCORE_ONLY)
+def test_a_formula_that_ignores_placement_accepts_given_places_including_ties() -> None:
+    lines = normalize_game_lines([line(1, 1, kills=5, deaths=0), line(2, 1, kills=5, deaths=0)], [1, 2], BY_SCORE)
 
     assert [item.placement for item in lines] == [1, 1]
+
+
+def test_rank_game_ranks_a_stored_placeless_game_by_the_current_formula() -> None:
+    stored = [line(1, kills=5, deaths=0), line(2, kills=3, deaths=1), line(3, kills=1, deaths=0)]
+
+    # kills * 2 - deaths: 10, 5, 2.
+    assert [(item.team_id, item.placement) for item in rank_game(stored, BY_SCORE)] == [(1, 1), (2, 2), (3, 3)]
+
+    # The organizer swaps the formula for kills - deaths * 3: 5, 0, 1.
+    later = rules("kills - deaths * 3", KILLS, DEATHS)
+    assert [(item.team_id, item.placement) for item in rank_game(stored, later)] == [(1, 1), (3, 2), (2, 3)]
+
+
+def test_rank_game_keeps_the_places_that_were_entered() -> None:
+    entered = [line(2, 1, kills=1, deaths=0), line(1, 2, kills=9, deaths=0)]
+
+    # Team 1 scores far more and is still second: the organizer said so.
+    assert [(item.team_id, item.placement) for item in rank_game(entered, BY_SCORE)] == [(2, 1), (1, 2)]
+
+
+def test_rank_game_of_a_placeless_game_falls_back_to_the_place_independent_part() -> None:
+    # A formula that reads the place, over a game recorded before it did: a
+    # missing place pays 0, so ``place_pts`` is 0 for everyone and the kills
+    # decide -- an answer, not a crash, and the same one on every read.
+    placeless = [line(1, kills=2), line(2, kills=7), line(3, kills=4)]
+
+    ranked = rank_game(placeless, BATTLE_ROYALE)
+
+    assert [(item.team_id, item.placement) for item in ranked] == [(2, 1), (3, 2), (1, 3)]
+    assert rank_game(list(reversed(placeless)), BATTLE_ROYALE) == ranked
 
 
 @pytest.mark.parametrize(
     ("lines", "code"),
     [
-        ([line(1, 1), line(2, 1), line(9, 1)], "ffa_result_unknown_team"),
-        ([line(1, 1), line(1, 2), line(2, 1)], "ffa_result_duplicate_team"),
-        ([line(1, 1)], "ffa_result_missing_team"),
-        ([line(1, -1), line(2, 1)], "ffa_result_invalid_score"),
-        ([line(1, 1, 1), line(2, 1)], "ffa_result_mixed_placement"),
-        ([line(1, 1, 3), line(2, 1, 1)], "ffa_result_invalid_placement"),
+        (
+            [line(1, kills=1, deaths=0), line(2, kills=1, deaths=0), line(9, kills=1, deaths=0)],
+            "ffa_result_unknown_team",
+        ),
+        (
+            [line(1, kills=1, deaths=0), line(1, kills=2, deaths=0), line(2, kills=1, deaths=0)],
+            "ffa_result_duplicate_team",
+        ),
+        ([line(1, kills=1, deaths=0)], "ffa_result_missing_team"),
+        ([line(1, kills=1, deaths=0, assists=2), line(2, kills=1, deaths=0)], "ffa_result_unknown_stat"),
+        ([line(1, kills=1), line(2, kills=1, deaths=0)], "ffa_result_missing_stat"),
+        ([line(1, kills=-1, deaths=0), line(2, kills=1, deaths=0)], "ffa_result_invalid_stat"),
+        ([line(1, kills=float("inf"), deaths=0), line(2, kills=1, deaths=0)], "ffa_result_invalid_stat"),
+        ([line(1, kills=2e9, deaths=0), line(2, kills=1, deaths=0)], "ffa_result_invalid_stat"),
+        ([line(1, 1, kills=1, deaths=0), line(2, kills=1, deaths=0)], "ffa_result_mixed_placement"),
+        ([line(1, 3, kills=1, deaths=0), line(2, 1, kills=1, deaths=0)], "ffa_result_invalid_placement"),
     ],
 )
-def test_every_participant_is_accounted_for_exactly_once(lines: list[FfaGameLine], code: str) -> None:
+def test_a_game_is_refused_with_the_code_the_client_branches_on(lines: list[FfaGameLine], code: str) -> None:
     with pytest.raises(FfaResultError) as exc_info:
-        normalize_game_lines(lines, [1, 2], SCORE_ONLY)
+        normalize_game_lines(lines, [1, 2], BY_SCORE)
 
     assert exc_info.value.code == code
 
 
-def test_game_points_add_the_placement_table_and_the_score() -> None:
-    assert game_points(line(1, 4, 2), BATTLE_ROYALE) == 10
+def test_game_points_are_the_formula_rounded_to_four_places() -> None:
+    thirds = rules("kills / 3", KILLS)
+
+    assert game_points(line(1, 1, kills=10), thirds, 4) == 3.3333
+    assert game_points(line(1, 2, kills=4), BATTLE_ROYALE, 4) == 10.0
     # A place past the end of the table pays nothing; kills still count.
-    assert game_points(line(1, 2, 9), BATTLE_ROYALE) == 2
+    assert game_points(line(1, 9, kills=2), BATTLE_ROYALE, 4) == 2.0
 
 
-def test_totals_seed_every_participant_and_track_placement_metrics() -> None:
+def test_a_key_with_no_value_counts_as_zero() -> None:
+    # A column added mid-stage must not break the games already played.
+    later = rules("kills + assists", KILLS, FfaColumn(key="assists", label="Assists"))
+
+    assert game_points(FfaGameLine(team_id=1, placement=1, stats={"kills": 4}), later, 3) == 4.0
+
+
+def test_totals_sum_every_column_and_seed_the_whole_roster() -> None:
     games = [
-        normalize_game_lines([line(1, 3, 1), line(2, 5, 2), line(3, 0, 3)], [1, 2, 3], BATTLE_ROYALE),
-        normalize_game_lines([line(1, 0, 3), line(2, 2, 1), line(3, 1, 2)], [1, 2, 3], BATTLE_ROYALE),
+        normalize_game_lines([line(1, 1, kills=3), line(2, 2, kills=5), line(3, 3, kills=0)], [1, 2, 3], BATTLE_ROYALE),
+        normalize_game_lines([line(1, 3, kills=0), line(2, 1, kills=2), line(3, 2, kills=1)], [1, 2, 3], BATTLE_ROYALE),
     ]
 
     totals = team_totals([1, 2, 3, 4], games, BATTLE_ROYALE)
 
     assert totals[1].points == 13 + 5 and totals[1].wins == 1 and totals[1].last_placement == 3
-    assert totals[2].points == 11 + 12 and totals[2].best_placement == 1 and totals[2].score == 7
-    assert totals[4].games == 0 and totals[4].points == 0
+    assert totals[2].points == 11 + 12 and totals[2].best_placement == 1
+    assert totals[2].stats == {"kills": 7.0}
+    assert totals[4].games == 0 and totals[4].points == 0 and totals[4].stats == {"kills": 0.0}
 
 
-def test_rules_parse_from_stage_settings_and_default_to_score_only() -> None:
-    assert parse_ffa_rules(None) == SCORE_ONLY
-    assert parse_ffa_rules({"ffa_scoring": {"placement_points": [10, 6, 5], "score_points": 1}}) == BATTLE_ROYALE
+def test_no_stage_reads_as_one_score_column() -> None:
+    default = ffa_rules(None)
+
+    assert default.column_keys == ("score",)
+    assert default.requires_placement is False
+    assert game_points(FfaGameLine(team_id=1, placement=1, stats={"score": 7}), default, 3) == 7.0
+
+
+def test_a_stage_without_columns_scores_placement_only() -> None:
+    # An empty column list is a legal stage, not a missing one: a placement-only
+    # league must not fall back to the score column and score everyone zero.
+    stage = SimpleNamespace(ffa_columns=[], ffa_placement_points=[10, 6, 3], ffa_formula="place_pts")
+
+    rules = ffa_rules(stage)
+
+    assert rules.column_keys == ()
+    assert rules.requires_placement is True
+    assert game_points(FfaGameLine(team_id=1, placement=2, stats={}), rules, 3) == 6.0
+
+
+def test_rules_read_the_stage_columns() -> None:
+    stage = SimpleNamespace(
+        ffa_columns=[
+            {"key": "kills", "label": "Убийства"},
+            {"key": "deaths", "label": "Смерти", "public": False, "better": "lower"},
+        ],
+        ffa_placement_points=[10, 6, 5],
+        ffa_formula="place_pts + kills * 2 - deaths",
+    )
+
+    parsed = ffa_rules(stage)
+
+    assert parsed.columns == (
+        FfaColumn(key="kills", label="Убийства"),
+        FfaColumn(key="deaths", label="Смерти", public=False, better="lower"),
+    )
+    assert parsed.placement_points == (10.0, 6.0, 5.0)
+    assert parsed.requires_placement is True
+    assert game_points(FfaGameLine(team_id=1, placement=2, stats={"kills": 3, "deaths": 1}), parsed, 4) == 11.0

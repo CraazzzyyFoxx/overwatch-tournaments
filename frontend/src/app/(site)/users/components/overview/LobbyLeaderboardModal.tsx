@@ -12,7 +12,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import userService from "@/services/user.service";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 import type { LobbyLeaderboard } from "@/types/user.types";
 
 // Stats where a lower value is better (rank 1 = lowest). Mirrors the backend's

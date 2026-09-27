@@ -12,6 +12,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 
 import { DraftEditor } from "../../editor/DraftEditor";
 import { bandsFromTiers } from "../../editor/draftReducer";
+import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 
 /**
  * The draft editor route (F12): loads a version, its parent and its readiness,
@@ -43,20 +44,20 @@ export default function DivisionDraftEditorPage() {
     (isSuperuser || canAccessPermission("division_grid.delete", workspaceId));
 
   const versionQuery = useQuery({
-    queryKey: ["division-grid-version", versionId],
+    queryKey: divisionGridQueryKeys.version(versionId),
     queryFn: () => workspaceService.getDivisionGridVersion(versionId),
     enabled: canRead && Number.isFinite(versionId)
   });
   const version = versionQuery.data ?? null;
 
   const parentQuery = useQuery({
-    queryKey: ["division-grid-version", version?.created_from_version_id ?? null],
+    queryKey: divisionGridQueryKeys.version(version?.created_from_version_id ?? null),
     queryFn: () => workspaceService.getDivisionGridVersion(version!.created_from_version_id!),
     enabled: canRead && version?.created_from_version_id != null
   });
 
   const readinessQuery = useQuery({
-    queryKey: ["division-grid-readiness", workspaceId, versionId],
+    queryKey: divisionGridQueryKeys.readiness(workspaceId, versionId),
     queryFn: () => workspaceService.getDivisionGridVersionReadiness(workspaceId!, versionId),
     enabled: canRead && Number.isFinite(versionId)
   });

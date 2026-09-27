@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vitest";
+
 import {
   canPlayerPlayRole,
   deriveRoleDiscomfort,
@@ -14,19 +16,6 @@ import type {
   InternalBalancePayload,
   InternalBalancePlayer,
 } from "@/types/balancer-admin.types";
-
-type TestFunction = () => void | Promise<void>;
-type Expectation<T> = {
-  toBe: (expected: T) => void;
-  toEqual: (expected: unknown) => void;
-  toBeNull: () => void;
-  toBeUndefined: () => void;
-  toBeCloseTo: (expected: number, precision?: number) => void;
-};
-
-declare const describe: (name: string, fn: TestFunction) => void;
-declare const it: (name: string, fn: TestFunction) => void;
-declare const expect: <T>(actual: T) => Expectation<T>;
 
 function makePlayer(overrides: Partial<InternalBalancePlayer> = {}): InternalBalancePlayer {
   return {

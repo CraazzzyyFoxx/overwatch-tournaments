@@ -21,6 +21,7 @@ import type { Workspace } from "@/types/workspace.types";
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /** DNS propagation is minutes, not seconds; re-checking faster only burns
  * requests on a resolver that has not refreshed yet. */
@@ -112,7 +113,7 @@ export function DomainSection({ workspaceId }: Readonly<{ workspaceId: number | 
   // check.
   const pending = !!domain.domain && !domain.verifiedAt;
   const poll = useQuery({
-    queryKey: ["admin-workspace-domain-verify", workspaceId, domain.domain],
+    queryKey: adminQueryKeys.workspaceDomainVerify(workspaceId, domain.domain),
     queryFn: () => workspaceService.verifyCustomDomain(workspaceId as number),
     enabled: pending,
     refetchInterval: pending ? VERIFY_POLL_MS : false,

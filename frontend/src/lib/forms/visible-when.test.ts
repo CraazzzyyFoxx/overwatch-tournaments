@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { evaluateCondition, visibleFields } from "@/lib/forms/visible-when";
 import type { Condition, FormField, FormSchema } from "@/types/forms.types";

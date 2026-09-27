@@ -10,11 +10,8 @@
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
-# Log storage (loki+promtail) and traces (tempo+otel-collector) are compose
-# profiles: metrics run everywhere, those two only where there is RAM to spare.
-#   make monitoring-up MONITORING_PROFILES="logs traces"
-MONITORING_PROFILES ?=
-MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml $(foreach p,$(MONITORING_PROFILES),--profile $(p))
+# Monitoring runs on home, not on the production host (monitoring/README.md).
+MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 # Backups: rclone → Timeweb S3. Moscow cron 04:30 UTC, see docs/backup-rustfs.md.
 BACKUP_ENV = ops/backup/s3.env
 BACKUP_COMPOSE = docker compose -f docker-compose.backup.yml --env-file $(BACKUP_ENV)
@@ -66,8 +63,7 @@ help:
 	@echo "  make prod-medium    - Scale production to medium (2 of each)"
 	@echo "  make prod-large     - Scale production to large (4 tournament, 3 frontend)"
 	@echo ""
-	@echo "  make monitoring-up  - Start monitoring stack, metrics only (requires prod-up first)"
-	@echo "                        add MONITORING_PROFILES=\"logs traces\" for loki/tempo"
+	@echo "  make monitoring-up  - Start the monitoring stack (on home, see monitoring/README.md)"
 	@echo "  make monitoring-down- Stop monitoring stack"
 	@echo "  make monitoring-logs- Follow monitoring logs"
 	@echo "  make monitoring-ps  - Show monitoring services"
@@ -240,9 +236,8 @@ frontend-rebuild:
 	$(COMPOSE) up -d --build --wait frontend
 
 # ==============================================================================
-# Monitoring stack (separate Compose project: owt-monitoring)
-# Attaches to the production stack's network, so the prod stack must be up
-# first (`make prod-up`) — it creates the shared `owt_app-network`.
+# Monitoring stack (Compose project owt-monitoring) — runs on home and receives
+# telemetry from the Alloy agent on the production host. See monitoring/README.md.
 # ==============================================================================
 monitoring-up:
 	$(MONITORING_COMPOSE) up -d

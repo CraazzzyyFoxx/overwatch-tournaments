@@ -213,10 +213,7 @@ class StandingsServiceStageItemTests(TestCase):
             name="Swiss",
             stage_type=enums.StageType.SWISS,
             order=0,
-            settings_json={
-                "swiss_bye_points": 1.5,
-                "swiss_byes": {"149": [30, 30]},
-            },
+            swiss_bye_points=1.5,
         )
         stage.id = 9
         stage_item = models.StageItem(
@@ -237,6 +234,7 @@ class StandingsServiceStageItemTests(TestCase):
             stage,
             stage_item,
             [],
+            bye_counts={30: 2},
         )
 
         points_by_team = {standing.team_id: standing.points for standing in standings}
@@ -605,6 +603,12 @@ class StandingsServiceGroupedStageIsolationTests(IsolatedAsyncioTestCase):
                 "get_by_tournament",
                 AsyncMock(return_value=[]),
             ),
+            patch.object(
+                standings_service.standings_service,
+                "get_pins_by_table",
+                AsyncMock(return_value={}),
+            ),
+            patch.object(standings_service, "bye_counts_by_scope", AsyncMock(return_value={})),
         ):
             await standings_service.standings_service.calculate_for_tournament(session, tournament)
 
@@ -656,7 +660,8 @@ class StandingsServiceGroupedStageIsolationTests(IsolatedAsyncioTestCase):
 
         session = SimpleNamespace(execute=AsyncMock(return_value=_CountsResult()))
 
-        await standings_service.standings_service._update_stage_completion_flags(session, tournament)
+        with patch.object(standings_service, "stopped_scopes", AsyncMock(return_value=set())):
+            await standings_service.standings_service._update_stage_completion_flags(session, tournament)
 
         self.assertFalse(stage.is_completed)
 
@@ -720,7 +725,8 @@ class StandingsServiceGroupedStageIsolationTests(IsolatedAsyncioTestCase):
 
         session = SimpleNamespace(execute=AsyncMock(return_value=_CountsResult()))
 
-        await standings_service.standings_service._update_stage_completion_flags(session, tournament)
+        with patch.object(standings_service, "stopped_scopes", AsyncMock(return_value=set())):
+            await standings_service.standings_service._update_stage_completion_flags(session, tournament)
 
         self.assertFalse(stage.is_completed)
 
@@ -739,7 +745,6 @@ class StandingsServiceGroupedStageIsolationTests(IsolatedAsyncioTestCase):
             name="Swiss",
             stage_type=enums.StageType.SWISS,
             order=0,
-            settings_json={"swiss_stopped_scopes": ["403"]},
         )
         stage.id = 13
         stage.is_completed = False
@@ -771,6 +776,7 @@ class StandingsServiceGroupedStageIsolationTests(IsolatedAsyncioTestCase):
 
         session = SimpleNamespace(execute=AsyncMock(return_value=_CountsResult()))
 
-        await standings_service.standings_service._update_stage_completion_flags(session, tournament)
+        with patch.object(standings_service, "stopped_scopes", AsyncMock(return_value={(stage.id, item.id)})):
+            await standings_service.standings_service._update_stage_completion_flags(session, tournament)
 
         self.assertTrue(stage.is_completed)

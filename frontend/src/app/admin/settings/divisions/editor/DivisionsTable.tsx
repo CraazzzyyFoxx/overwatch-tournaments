@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronsDown, ChevronsUp, ImagePlus, Scissors } from "lucide-react";
 import Image from "next/image";
 
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -165,7 +165,7 @@ export function DivisionsTable({
 
   return (
     <div className="flex flex-col gap-2">
-      <AdminDataTable<Band>
+      <DataTable<Band>
         rows={bands}
         columns={columns}
         getRowId={(row) => row.slug}

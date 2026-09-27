@@ -19,7 +19,7 @@ export interface BulkBarProps {
  *
  * Same visual register as `kit/SaveBar`: a bar that exists only while there is
  * something to act on, holding a summary on the left and the actions on the
- * right. It is `fixed` rather than `sticky` because `AdminDataTable` renders
+ * right. It is `fixed` rather than `sticky` because `DataTable` renders
  * `bulkActions` inside its toolbar row — which is exactly where bulk actions
  * used to be mistaken for filters, and the reason they moved down here.
  */

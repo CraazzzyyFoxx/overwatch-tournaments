@@ -67,7 +67,7 @@ export async function getAccessTokenCookie(): Promise<string | undefined> {
 }
 
 export async function refreshAccessToken(): Promise<RefreshOutcome> {
-  // Client-only. On the server there is no refresh path (no SSR middleware);
+  // Client-only. On the server there is no refresh path (no SSR proxy);
   // SSR renders from whatever cookie is present and the client takes over on
   // hydration via the proactive scheduler + reactive 401 path.
   if (typeof window === "undefined") return { status: "error" };

@@ -21,8 +21,9 @@ export const classifyRarity = (rarityPercent: number): Rarity => {
   return "common";
 };
 
-// CSS class that sets the `--rar` HSL triplet for a tier (see globals.css
-// `.aqt-rar-*`). Every rarity-tinted element (tile, crest, dot, pill) reads
+// CSS class that sets the `--rar` HSL triplet for a tier (see
+// `app/(site)/achievements/achievements.css`, `.aqt-rar-*`). Every
+// rarity-tinted element (tile, crest, dot, pill) reads
 // `hsl(var(--rar))`, so it only needs this one class on an ancestor.
 export const rarityVarClass = (rarity: Rarity): string => `aqt-rar-${rarity}`;
 

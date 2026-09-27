@@ -41,7 +41,7 @@ export interface FilterState {
   setMany: (values: Record<string, FilterValue | null>) => void;
   clear: () => void;
   toTableFilters: () => AdminTableFilters;
-  /** Opaque identity of the active set, for `AdminDataTable`'s `filterKey`. */
+  /** Opaque identity of the active set, for `DataTable`'s `filterKey`. */
   filterKey: string;
 }
 
@@ -86,7 +86,7 @@ export function useFilters(defs: FilterDef[]): FilterState {
   // build their option lists inline, so `defs` is a fresh array on every pass
   // and any memo keyed on it would miss anyway; parsing a handful of query
   // params is cheaper than the bookkeeping. Nothing downstream holds these
-  // identities — `filterKey` is a string, and `AdminDataTable` compares the
+  // identities — `filterKey` is a string, and `DataTable` compares the
   // table filters serialised.
   const params = new URLSearchParams(search);
   const values = Object.fromEntries(

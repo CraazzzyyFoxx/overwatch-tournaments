@@ -1,4 +1,4 @@
-// Build-time (client bundle) and runtime (SSR/middleware) both read this env
+// Build-time (client bundle) and runtime (SSR/proxy) both read this env
 // var; the dev deployment sets it to its own host so that host is the apex
 // rather than a `dev` tenant subdomain of production. Mirrors the backend
 // shared/tenancy/hostnames.py PLATFORM_ZONE.

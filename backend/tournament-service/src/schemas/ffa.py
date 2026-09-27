@@ -13,6 +13,7 @@ group the standings job has not ranked once.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,7 @@ from shared.core import enums
 from shared.domain.ffa_scoring import FFA_MAX_LOBBY_SIZE
 
 __all__ = (
+    "FfaColumnRead",
     "FfaGameCancelInput",
     "FfaGameCellRead",
     "FfaGameResultLineInput",
@@ -34,7 +36,9 @@ __all__ = (
 class FfaGameResultLineInput(BaseModel):
     team_id: int
     placement: int | None = Field(default=None, ge=1)
-    score: int = Field(ge=0)
+    #: One value per column of the stage; the service refuses a missing or
+    #: unknown key, so the dialog cannot silently drop a column (plan §5.2).
+    stats: dict[str, float]
 
 
 class FfaGameResultsInput(BaseModel):
@@ -50,10 +54,23 @@ class FfaGamesCountInput(BaseModel):
     games: int = Field(ge=1, le=50)
 
 
+class FfaColumnRead(BaseModel):
+    key: str
+    label: str
+    #: False — the value is the organizer's, never sent to a public read.
+    public: bool
+    better: Literal["higher", "lower"]
+
+
 class FfaRulesRead(BaseModel):
+    #: Public reads carry the public columns only (``public_view``).
+    columns: list[FfaColumnRead]
     placement_points: list[float]
-    score_points: float
-    score_label: str | None
+    #: The expression points are computed with, as the organizer wrote it.
+    formula: str
+    #: The formula reads ``place``/``place_pts``, so a game cannot be entered
+    #: without places.
+    requires_placement: bool
 
 
 class FfaGameCellRead(BaseModel):
@@ -61,8 +78,9 @@ class FfaGameCellRead(BaseModel):
     #: ``None`` — the game has not been opened yet.
     state: enums.EncounterGameState | None
     placement: int | None
-    score: int | None
     points: float | None
+    #: ``None`` — nothing was entered for this position at all.
+    stats: dict[str, float] | None
 
 
 class FfaLobbyRowRead(BaseModel):
@@ -74,10 +92,13 @@ class FfaLobbyRowRead(BaseModel):
     #: standings job has ranked the group once.
     position: int | None
     tie_group: int | None
+    #: The organizer pinned ``position``: it is not what the points earn.
+    is_pinned: bool = False
     points: float
     games_played: int
     wins: int
-    score: int
+    #: Per-column sums over the played games.
+    stats: dict[str, float]
     games: list[FfaGameCellRead]
 
 

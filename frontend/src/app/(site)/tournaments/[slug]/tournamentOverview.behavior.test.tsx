@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { Fragment, isValidElement, Suspense, type ReactElement } from "react";
 
@@ -8,7 +8,7 @@ import type { Tournament } from "@/types/tournament.types";
 
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
 
-mock.module("next-intl/server", () => ({
+vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key
 }));
 // The factory has to cover every name the graph under `./layout` imports from
@@ -17,17 +17,17 @@ mock.module("next-intl/server", () => ({
 // ("Export named 'useFormatter' not found"), which takes the whole FILE down
 // before any test runs. `useFormatter` arrives via the shell's phase strip
 // (`_components/PhaseTimeline.tsx`, `_components/NextPhaseChip.tsx`).
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string) => key
 }));
-mock.module("@/lib/datetime/client", () => ({
+vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({
     dateTime: () => "",
     relativeTime: () => ""
   })
 }));
-mock.module("@/lib/site/metadata", () => ({
+vi.mock("@/lib/site/metadata", () => ({
   resolveSiteMetadata: async () => ({ name: "Test OWT", origin: "https://example.test" })
 }));
 
@@ -87,7 +87,7 @@ afterEach(() => {
 describe("TournamentLayout streaming overview", () => {
   it("keeps the overview hydration boundary decoupled from the client shell while unresolved", async () => {
     const pendingOverview = deferred<Tournament>();
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockReturnValue(
+    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockReturnValue(
       pendingOverview.promise
     );
     const layoutPromise = TournamentLayout({ children: null, params: paramsFor("summer-clash") });
@@ -141,7 +141,7 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("uses intentional streamed notFound control flow for an API 404", async () => {
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
+    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
       new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }])
     );
 
@@ -157,7 +157,7 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("returns nothing for a non-404 overview failure, deferring to the client shell's own retry", async () => {
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
+    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
       new Error("upstream unavailable")
     );
 
@@ -168,7 +168,7 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("hydrates a successful overview after the boundary resolves", async () => {
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
+    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
       overviewFixture
     );
 
@@ -187,7 +187,7 @@ describe("TournamentLayout streaming overview", () => {
   // synchronous rejection before that fetch runs.
   for (const ref of arbitraryRefs) {
     it(`passes ref ${ref} straight through to the outer shell without blocking on the overview`, async () => {
-      const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
+      const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
         overviewFixture
       );
 
@@ -199,7 +199,7 @@ describe("TournamentLayout streaming overview", () => {
   }
 
   it("resolves metadata from whatever ref the overview accepts, falling back only on failure", async () => {
-    spyOn(tournamentService, "getPublicOverview").mockResolvedValue(overviewFixture);
+    vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(overviewFixture);
 
     const metadata = await generateMetadata({ params: paramsFor("summer-clash") });
 
@@ -207,7 +207,7 @@ describe("TournamentLayout streaming overview", () => {
   });
 
   it("falls back to generic metadata when the overview ref does not resolve", async () => {
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
+    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
       new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }])
     );
 

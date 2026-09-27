@@ -14,16 +14,20 @@ import { resolveSiteMetadata } from "@/lib/site/metadata";
  * shipped with no title, description or OG tags.
  *
  * `descriptionValues` covers the sections whose description string
- * interpolates `{siteName}`.
+ * interpolates `{siteName}`. `noIndex` is for routes reached only through a
+ * private link (a team invite, a scrim room) — they carry a credential in the
+ * URL and have nothing to rank for.
  */
 export async function buildSiteRouteMetadata({
   titleKey,
   descriptionKey,
-  descriptionValues
+  descriptionValues,
+  noIndex
 }: {
   titleKey: string;
   descriptionKey: string;
   descriptionValues?: Record<string, string | number>;
+  noIndex?: boolean;
 }): Promise<Metadata> {
   const [{ name, origin }, t, locale] = await Promise.all([
     resolveSiteMetadata(),
@@ -40,6 +44,7 @@ export async function buildSiteRouteMetadata({
   return {
     title,
     description,
+    ...(noIndex && { robots: { index: false, follow: false } }),
     metadataBase: new URL(origin),
     openGraph: {
       title,

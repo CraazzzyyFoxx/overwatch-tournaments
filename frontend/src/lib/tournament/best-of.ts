@@ -2,21 +2,19 @@
  * Series length as the bracket defines it.
  *
  * The bracket owns how many maps a match plays. The configuration lives in
- * `Stage.settings_json.best_of`, the generator resolves it per encounter into
+ * `Stage.best_of`, the generator resolves it per encounter into
  * `Encounter.best_of`, and an admin may override a single encounter from the
  * edit dialog. Every surface that needs to talk about Bo N — the stage editor,
  * the veto config editor, the public map-pool page — reads it from here so the
  * three cannot drift.
  *
- * `parseStageBestOf` / `resolveBestOf` mirror the backend's
- * `services/admin/best_of.py`, and `buildSequenceForBestOf` mirrors
- * `services/encounter/veto_session.py`. Keep them in step: the veto room runs
- * the backend's sequence, so a divergence here is a UI that previews steps the
- * captains will not be asked to take.
+ * `resolveBestOf` mirrors the backend's `services/admin/best_of.py`, and
+ * `buildSequenceForBestOf` mirrors `services/encounter/veto_session.py`. Keep
+ * them in step: the veto room runs the backend's sequence, so a divergence here
+ * is a UI that previews steps the captains will not be asked to take.
  */
 import { bracketRoundLabelEn, type BracketRoundShape } from "@/lib/bracket/round-name";
-import type { StageBestOfConfig } from "@/types/admin.types";
-import type { StageType, VetoSequenceToken } from "@/types/tournament.types";
+import type { StageBestOfConfig, StageType, VetoSequenceToken } from "@/types/tournament.types";
 
 export const DEFAULT_BEST_OF = 3;
 
@@ -25,46 +23,6 @@ export const BEST_OF_OPTIONS = [1, 2, 3, 5, 7] as const;
 
 /** Opening bans a generated sequence uses when the pool can spare them. */
 const LEAD_BANS = 2;
-
-/** An int >= 1, or null. Booleans are rejected, matching `_coerce_positive_int`. */
-function positiveInt(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) return null;
-  return value;
-}
-
-/**
- * Read `settings_json.best_of` defensively. Any malformed shape degrades to an
- * empty config rather than throwing — `settings_json` is free-form and predates
- * this feature, so old stages legitimately carry nothing here.
- */
-export function parseStageBestOf(settingsJson: unknown): StageBestOfConfig {
-  if (!settingsJson || typeof settingsJson !== "object") return {};
-  const raw = (settingsJson as Record<string, unknown>).best_of;
-  if (!raw || typeof raw !== "object") return {};
-  const record = raw as Record<string, unknown>;
-
-  const byRound: Record<string, number> = {};
-  if (record.by_round && typeof record.by_round === "object") {
-    for (const [key, value] of Object.entries(record.by_round as Record<string, unknown>)) {
-      // Keys are round-number strings; anything else is ignored, as on the server.
-      // Lower-bracket rounds are negative ("LB rounds use negative round numbers" in
-      // `_create_encounters_from_skeleton`, services/admin/stage.py), and the backend's
-      // `parse_best_of_config` accepts them. Dropping them here would make this mirror
-      // disagree with the server on an LB round's series length.
-      if (!/^-?\d+$/.test(key)) continue;
-      const coerced = positiveInt(value);
-      if (coerced !== null) byRound[key] = coerced;
-    }
-  }
-
-  const config: StageBestOfConfig = {};
-  const fallback = positiveInt(record.default);
-  if (fallback !== null) config.default = fallback;
-  const final = positiveInt(record.final);
-  if (final !== null) config.final = final;
-  if (Object.keys(byRound).length > 0) config.by_round = byRound;
-  return config;
-}
 
 /**
  * Resolve the series length for one round. Precedence matches the backend:
@@ -81,14 +39,14 @@ export function resolveBestOf(
   { isFinal = false }: { isFinal?: boolean } = {}
 ): number {
   if (isFinal && config.final != null) return config.final;
-  const byRound = config.by_round?.[String(round)];
+  const byRound = config.by_round[String(round)];
   if (byRound != null) return byRound;
-  return config.default ?? DEFAULT_BEST_OF;
+  return config.default;
 }
 
 /** True when a stage's rounds do not all play the same series length. */
 export function hasPerRoundBestOf(config: StageBestOfConfig): boolean {
-  return Object.keys(config.by_round ?? {}).length > 0 || config.final != null;
+  return Object.keys(config.by_round).length > 0 || config.final != null;
 }
 
 /**
@@ -100,11 +58,7 @@ export function hasPerRoundBestOf(config: StageBestOfConfig): boolean {
  * `REASON_SLOT_COUNT_MISMATCH`), so the final's Bo5 decides the count.
  */
 export function maxBestOf(config: StageBestOfConfig): number {
-  return Math.max(
-    config.default ?? DEFAULT_BEST_OF,
-    config.final ?? 0,
-    ...Object.values(config.by_round ?? {})
-  );
+  return Math.max(config.default, config.final ?? 0, ...Object.values(config.by_round));
 }
 
 /** A round the best-of editor can target, identified by its `by_round` key. */

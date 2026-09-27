@@ -20,7 +20,6 @@ import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
-import { TournamentRouteProvider } from "../_hooks/useTournamentId";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import type { Tournament } from "@/types/tournament.types";
@@ -139,8 +138,19 @@ export default function TournamentClientLayout({
 
   const [heroRef, heroScrolledPast] = useScrolledPast<HTMLDivElement>();
 
+  // The chrome is still resolving, but the tab below it is NOT waiting on this
+  // query: each tab page is a server component that prefetched its own reads
+  // and hydrated them around its view, so `{children}` already has content to
+  // render — into the streamed HTML on the first request, which is the whole
+  // point of the prefetch. Gating it on the shell would keep every public
+  // tournament page a skeleton for crawlers and for the first paint alike.
   if (tournamentQuery.isPending) {
-    return <TournamentShellSkeleton />;
+    return (
+      <div className="aqt-tn space-y-4">
+        <TournamentShellSkeleton />
+        <section className="min-w-0">{children}</section>
+      </div>
+    );
   }
 
   if (tournamentQuery.isError) {
@@ -303,11 +313,7 @@ export default function TournamentClientLayout({
         }
       />
 
-      <section className="min-w-0">
-        <TournamentRouteProvider value={{ tournamentId: tournament.id, slug: tournament.slug }}>
-          {children}
-        </TournamentRouteProvider>
-      </section>
+      <section className="min-w-0">{children}</section>
 
       {/* Fixed to the bottom-trailing corner, so it takes no room in this
           stack. Rendered LAST on purpose: a complementary panel that a

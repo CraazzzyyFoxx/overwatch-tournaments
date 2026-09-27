@@ -28,6 +28,7 @@ import {
   toFieldErrors
 } from "./_components/mappingConfig";
 import { useMappingState } from "./_components/useMappingState";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 const PREVIEW_SAMPLE_ROWS = 5;
 
@@ -55,14 +56,14 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
   const { hydrate: hydrateMapping } = mapping;
 
   const feedQuery = useQuery({
-    queryKey: ["balancer-admin", "sheet", tournamentId],
+    queryKey: balancerQueryKeys.sheet(tournamentId),
     queryFn: () => balancerAdminService.getTournamentSheet(tournamentId as number),
     enabled: tournamentId !== null,
     refetchOnWindowFocus: false
   });
 
   const catalogQuery = useQuery({
-    queryKey: ["balancer-admin", "sheet-catalog", tournamentId],
+    queryKey: balancerQueryKeys.sheetCatalog(tournamentId),
     queryFn: () =>
       balancerAdminService.getTournamentSheetMappingCatalog(tournamentId as number, true),
     enabled: tournamentId !== null,
@@ -129,9 +130,9 @@ export default function SheetsFeedPage({ tournamentId }: Readonly<{ tournamentId
   });
 
   const invalidateFeed = () =>
-    queryClient.invalidateQueries({ queryKey: ["balancer-admin", "sheet", tournamentId] });
+    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.sheet(tournamentId) });
   const invalidateRegistrations = () =>
-    queryClient.invalidateQueries({ queryKey: ["balancer-admin", "registrations", tournamentId] });
+    queryClient.invalidateQueries({ queryKey: balancerQueryKeys.registrations(tournamentId) });
 
   const saveMutation = useMutation({
     mutationFn: () =>

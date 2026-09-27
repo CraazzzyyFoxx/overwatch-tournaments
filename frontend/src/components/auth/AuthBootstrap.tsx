@@ -7,7 +7,7 @@ import { isAuthRequiredPath } from "@/config/auth";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth/events";
 import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth/tokens";
 import { isExpiredOrNearExpiry } from "@/lib/auth/jwt";
-import { useProactiveTokenRefresh } from "@/hooks/use-proactive-token-refresh";
+import { useProactiveTokenRefresh } from "@/hooks/useProactiveTokenRefresh";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { realtimeClient } from "@/services/realtime.service";
 import { useAuthModalStore } from "@/stores/auth-modal.store";

@@ -12,6 +12,7 @@ import PlayerName from "@/components/PlayerName";
 import TeamName from "@/components/TeamName";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
+import { achievementQueryKeys } from "@/lib/achievements/query-keys";
 
 const PER_PAGE = 30;
 
@@ -20,7 +21,7 @@ const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["achievement", "users", achievement.id, page],
+    queryKey: achievementQueryKeys.users(achievement.id, page),
     queryFn: () => achievementsService.getUsers(achievement.id, page, PER_PAGE),
     placeholderData: keepPreviousData
   });

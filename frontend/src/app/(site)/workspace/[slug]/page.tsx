@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { BarChart3, Percent, Trophy } from "lucide-react";
+// Aliased: `dynamic` is taken by the route segment config below.
+import nextDynamic from "next/dynamic";
 
 import { PlatformStatsGrid } from "@/components/stats/PlatformStatsGrid";
 import {
@@ -11,10 +13,8 @@ import {
   EventsSkeleton,
   type TournamentWithCount,
 } from "@/components/site/LiveEventsWidgets";
-import TournamentsChart from "@/components/TournamentsChart";
-import TournamentsDivisionChart from "@/components/TournamentsDivisionChart";
 import { LeaderboardCard } from "@/components/stats/LeaderboardCard";
-import HeroPlaytimeChart from "@/components/HeroPlaytimeChart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import statisticsService from "@/services/statistics.service";
@@ -31,6 +31,21 @@ import { isTournamentStatusActive } from "@/lib/tournament/status";
 import type { Workspace } from "@/types/workspace.types";
 
 export const dynamic = "force-dynamic";
+
+// Every chart on this dashboard is recharts (~100 kB), and none of them is
+// above the fold on a phone. Loading all three on demand keeps the library out
+// of the page's initial client bundle; each placeholder is the height its chart
+// settles at, so nothing reflows when the chunk lands.
+const TournamentsChart = nextDynamic(() => import("@/components/TournamentsChart"), {
+  loading: () => <Skeleton className="aspect-video w-full" />
+});
+const TournamentsDivisionChart = nextDynamic(
+  () => import("@/components/TournamentsDivisionChart"),
+  { loading: () => <Skeleton className="aspect-video w-full" /> }
+);
+const HeroPlaytimeChart = nextDynamic(() => import("@/components/HeroPlaytimeChart"), {
+  loading: () => <Skeleton className="h-100 w-full rounded-lg" />
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root page

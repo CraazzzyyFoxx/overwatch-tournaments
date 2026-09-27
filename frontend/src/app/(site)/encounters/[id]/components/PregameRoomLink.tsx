@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 import pickBanService from "@/services/pickBan.service";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface PregameRoomLinkProps {
   encounterId: number;
@@ -31,11 +32,11 @@ interface PregameRoomLinkProps {
 export function PregameRoomLink({ encounterId, tournamentId, className }: Readonly<PregameRoomLinkProps>) {
   const t = useTranslations();
   const mapQuery = useQuery({
-    queryKey: ["pregame-state", encounterId, "map"],
+    queryKey: encounterQueryKeys.pregameMapState(encounterId),
     queryFn: () => pickBanService.getPickBanState("map", encounterId)
   });
   const heroQuery = useQuery({
-    queryKey: ["pregame-state", encounterId, "hero"],
+    queryKey: encounterQueryKeys.pregameHeroState(encounterId),
     queryFn: () => pickBanService.getPickBanState("hero", encounterId)
   });
 

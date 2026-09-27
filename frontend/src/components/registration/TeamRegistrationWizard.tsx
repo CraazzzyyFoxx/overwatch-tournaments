@@ -20,6 +20,7 @@ import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registra
 
 import RosterSlotPicker, { type RosterSlotOption } from "./RosterSlotPicker";
 import RegistrationSchemaForm from "./RegistrationSchemaForm";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface TeamRegistrationWizardProps {
   workspaceId: number;
@@ -85,7 +86,7 @@ export default function TeamRegistrationWizard({
   );
 
   const userQuery = useQuery({
-    queryKey: ["me", "social"],
+    queryKey: userQueryKeys.mySocial(),
     queryFn: () => meService.getSocialAccounts(),
     enabled: !!authUser,
     staleTime: 60_000,

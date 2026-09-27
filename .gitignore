@@ -64,3 +64,6 @@ logs/
 .claude/
 frontend-redesign/
 OWT Design System/
+# Agent skills write plans/specs here by default; plans are not committed (AGENTS.md).
+/docs/plans/
+/docs/superpowers/

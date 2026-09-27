@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { Window } from "happy-dom";
 import {
   act,
@@ -27,11 +27,11 @@ import {
 const testWindow = new Window({ url: "http://localhost:3000/", width: 720, height: 900 });
 const previousGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string) => key,
 }));
-mock.module("next/image", () => ({
+vi.mock("next/image", () => ({
   // eslint-disable-next-line @next/next/no-img-element -- test stand-in, never shipped
   default: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
@@ -43,7 +43,7 @@ const PopoverCtx = createContext<{ open: boolean; setOpen: (open: boolean) => vo
   open: false,
   setOpen: () => {},
 });
-mock.module("@/components/ui/popover", () => ({
+vi.mock("@/components/ui/popover", () => ({
   Popover: ({
     children,
     open = false,
@@ -67,7 +67,7 @@ mock.module("@/components/ui/popover", () => ({
 // Radix passes the root's `disabled` down to the trigger through context; the
 // stand-in has to do the same or a disabled specialization cell looks enabled.
 const SelectCtx = createContext<boolean>(false);
-mock.module("@/components/ui/select", () => ({
+vi.mock("@/components/ui/select", () => ({
   Select: ({ children, disabled = false }: { children: ReactNode; disabled?: boolean }) => (
     <SelectCtx.Provider value={disabled}>
       <div>{children}</div>

@@ -19,6 +19,7 @@ os.environ["DEBUG"] = "true"
 from src import models  # noqa: E402
 from src.core import enums  # noqa: E402
 from src.services.standings import flows, service  # noqa: E402
+from tests._stage_regulation import stage_regulation  # noqa: E402
 
 
 def _standing() -> models.Standing:
@@ -42,11 +43,13 @@ def _standing() -> models.Standing:
         tie_group=None,
         tb=None,
         score_differential=None,
+        is_pinned=False,
     )
 
 
 def _round_robin_stage() -> models.Stage:
     return models.Stage(
+        **stage_regulation(),
         id=10,
         created_at=datetime.now(UTC),
         updated_at=None,
@@ -58,7 +61,6 @@ def _round_robin_stage() -> models.Stage:
         order=0,
         is_active=True,
         is_completed=False,
-        settings_json=None,
     )
 
 
@@ -188,9 +190,7 @@ class StandingSerializationTests(IsolatedAsyncioTestCase):
         read = await flows.flows_service.to_pydantic(cast(AsyncSession, object()), standing, [])
 
         self.assertEqual("challonge_round_robin", read.source_rule_profile)
-        # Normalized, not verbatim: the engine forces `manual_override` last and
-        # always present, so the legend must name the step that can actually
-        # decide a rank the preset never mentioned.
+        # The preset's own order: the legend names exactly what ranked the row.
         self.assertEqual(
             [
                 "points",
@@ -198,7 +198,6 @@ class StandingSerializationTests(IsolatedAsyncioTestCase):
                 "median_buchholz",
                 "match_wins",
                 "score_differential",
-                "manual_override",
             ],
             read.tiebreak_order,
         )

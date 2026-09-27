@@ -12,11 +12,11 @@
  */
 import type { Tone } from "@/components/kit/tone";
 import { resolveBestOf, stageBestOfRoundSections } from "@/lib/tournament/best-of";
-import type { FfaScoringSettings } from "@/lib/ffa/scoring-presets";
 import { bracketRoundLabelEn } from "@/lib/bracket/round-name";
-import type { StageBestOfConfig } from "@/types/admin.types";
 import type {
+  SeedRanking,
   Stage,
+  StageBestOfConfig,
   StageItem,
   StageItemInput,
   StageItemType,
@@ -57,8 +57,6 @@ export const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
   single_bracket: "Single bracket"
 };
 
-export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
-
 export const SEED_RANKING_LABELS: Record<SeedRanking, string> = {
   slot: "Slot order (manual / standings)",
   avg_sr: "Highest team avg SR first",
@@ -72,8 +70,7 @@ export const DEFAULT_SWISS_TIEBREAKERS = [
   "buchholz",
   "match_wins",
   "score_differential",
-  "head_to_head",
-  "manual_override"
+  "head_to_head"
 ];
 
 export const DEFAULT_RR_TIEBREAKERS = [
@@ -82,8 +79,7 @@ export const DEFAULT_RR_TIEBREAKERS = [
   "median_buchholz",
   "match_wins",
   "score_differential",
-  "buchholz",
-  "manual_override"
+  "buchholz"
 ];
 
 export const DEFAULT_BRACKET_TIEBREAKERS = [
@@ -92,31 +88,20 @@ export const DEFAULT_BRACKET_TIEBREAKERS = [
   "median_buchholz",
   "score_differential",
   "match_wins",
-  "buchholz",
-  "manual_override"
+  "buchholz"
 ];
 
-/** Mirrors the backend `ffa_default` preset (`RULE_PRESET_DEFAULTS`). */
-export const DEFAULT_FFA_TIEBREAKERS = [
-  "points",
-  "ffa_game_wins",
-  "ffa_score",
-  "ffa_last_placement",
-  "manual_override"
-];
-
-/** `settings_json` fields this editor owns. The column itself is free-form. */
-export interface StageSettings {
-  ranking_preset?: string;
-  tiebreak_order?: string[];
-  scoring?: { win?: number; draw?: number; loss?: number };
-  swiss_bye_points?: number;
-  de_grand_final_type?: "no_reset" | "with_reset";
-  best_of?: StageBestOfConfig;
-  seed_ranking?: SeedRanking;
-  /** FFA leagues only: what a place and a point of raw score are worth. */
-  ffa_scoring?: FfaScoringSettings;
-  [key: string]: unknown;
+/**
+ * Mirrors the backend `ffa_default` preset (`RULE_PRESET_DEFAULTS`).
+ *
+ * Not a constant any more: the third step is the sum of the stage's FIRST
+ * column, and a stage that records nothing per game simply has no such step.
+ */
+export function ffaDefaultTiebreakers(columns: readonly { key: string }[] = []): string[] {
+  const first = columns[0]?.key;
+  return first
+    ? ["points", "ffa_game_wins", `ffa_stat:${first}`, "ffa_last_placement"]
+    : ["points", "ffa_game_wins", "ffa_last_placement"];
 }
 
 export const RANKING_PRESETS = [
@@ -133,20 +118,27 @@ export const FFA_RANKING_PRESETS = [
 ] as const;
 
 /** The tiebreak order a stage type falls back to with no preset chosen. */
-export function defaultTiebreakOrder(stageType: StageType): string[] {
-  if (stageType === "ffa_league") return DEFAULT_FFA_TIEBREAKERS;
+export function defaultTiebreakOrder(
+  stageType: StageType,
+  ffaColumns: readonly { key: string }[] = []
+): string[] {
+  if (stageType === "ffa_league") return ffaDefaultTiebreakers(ffaColumns);
   if (stageType === "swiss") return DEFAULT_SWISS_TIEBREAKERS;
   if (stageType === "round_robin") return DEFAULT_RR_TIEBREAKERS;
   return DEFAULT_BRACKET_TIEBREAKERS;
 }
 
 /** The order a preset dictates; an unknown preset keeps the type default. */
-export function tiebreakOrderForPreset(preset: string, stageType: StageType): string[] {
+export function tiebreakOrderForPreset(
+  preset: string,
+  stageType: StageType,
+  ffaColumns: readonly { key: string }[] = []
+): string[] {
   if (preset === "challonge_swiss") return DEFAULT_SWISS_TIEBREAKERS;
   if (preset === "challonge_round_robin") return DEFAULT_RR_TIEBREAKERS;
   if (preset === "bracket_default") return DEFAULT_BRACKET_TIEBREAKERS;
-  if (preset === "ffa_default") return DEFAULT_FFA_TIEBREAKERS;
-  return defaultTiebreakOrder(stageType);
+  if (preset === "ffa_default") return ffaDefaultTiebreakers(ffaColumns);
+  return defaultTiebreakOrder(stageType, ffaColumns);
 }
 
 export function getStageTeamSlots(stage: Stage) {
@@ -181,19 +173,6 @@ export function normalizeMaxRounds(value: string | number, fallback = 5) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(1, Math.floor(parsed));
-}
-
-/** Strip empty fields; returns undefined when nothing is configured. */
-export function buildBestOfSettings(draft: StageBestOfConfig): StageBestOfConfig | undefined {
-  const out: StageBestOfConfig = {};
-  if (typeof draft.default === "number") out.default = draft.default;
-  if (typeof draft.final === "number") out.final = draft.final;
-  const by_round: Record<string, number> = {};
-  for (const [key, value] of Object.entries(draft.by_round ?? {})) {
-    if (typeof value === "number") by_round[key] = value;
-  }
-  if (Object.keys(by_round).length) out.by_round = by_round;
-  return Object.keys(out).length ? out : undefined;
 }
 
 export function getProgressPercent(completed: number, total: number) {

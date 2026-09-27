@@ -68,7 +68,7 @@ vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: () => ({ isSuperuser: true })
 }));
 
-vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("@/hooks/useMobile", () => ({ useIsMobile: () => false }));
 
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
@@ -110,7 +110,18 @@ function ffaStage(): Stage {
     is_active: true,
     is_published: true,
     is_completed: false,
-    settings_json: {},
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: {
+      columns: [{ key: "score", label: "Счёт", public: true, better: "higher" }],
+      placement_points: [],
+      formula: "score"
+    },
     challonge_id: null,
     challonge_slug: null,
     items: [
@@ -132,7 +143,12 @@ function lobby(encounterId: number, stageItemId: number, scheduledAt: string | n
     best_of: 3,
     scheduled_at: scheduledAt,
     advance_count: 2,
-    rules: { placement_points: [10, 6, 3], score_points: 1, score_label: null },
+    rules: {
+      columns: [{ key: "score", label: "Score", public: true, better: "higher" }],
+      placement_points: [10, 6, 3],
+      formula: "place_pts + score",
+      requires_placement: true
+    },
     rows: []
   };
 }

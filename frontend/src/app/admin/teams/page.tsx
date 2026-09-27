@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
@@ -30,6 +30,8 @@ import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { Player, Team } from "@/types/team.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const PAGE_SIZE = 15;
 
@@ -143,7 +145,7 @@ export default function TeamsPage() {
   const createHintId = useId();
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null)
   });
 
@@ -174,11 +176,11 @@ export default function TeamsPage() {
     onSuccess: () => {
       const removed = pendingDelete;
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["teams"] }),
-        queryClient.invalidateQueries({ queryKey: ["tournaments"] }),
+        queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() }),
+        queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() }),
         removed?.tournament_id != null
           ? queryClient.invalidateQueries({
-              queryKey: ["admin", "tournament", removed.tournament_id, "teams"]
+              queryKey: adminQueryKeys.tournamentTeams(removed.tournament_id)
             })
           : Promise.resolve()
       ]);
@@ -280,7 +282,7 @@ export default function TeamsPage() {
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >
         <div className="min-w-0">
-          <AdminDataTable<Team>
+          <DataTable<Team>
             columns={columns}
             initialPageSize={PAGE_SIZE}
             searchPlaceholder="Search teams…"

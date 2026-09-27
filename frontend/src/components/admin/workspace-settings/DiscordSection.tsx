@@ -24,6 +24,9 @@ import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types"
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { userQueryKeys } from "@/lib/users/query-keys";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 /**
  * The three ways a bind can fail, in the organiser's words.
@@ -150,7 +153,7 @@ function boundIcon(
 function MixChannelCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
   const queryClient = useQueryClient();
   const configQuery = useQuery({
-    queryKey: ["workspace-balancer-config", workspaceId],
+    queryKey: balancerQueryKeys.workspaceConfig(workspaceId),
     queryFn: () => balancerAdminService.getWorkspaceBalancerConfig(workspaceId)
   });
   const config = configQuery.data;
@@ -165,7 +168,7 @@ function MixChannelCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
         mix_discord_channel_id: next === "" ? null : next
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspace-balancer-config", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: balancerQueryKeys.workspaceConfig(workspaceId) });
       notify.success("Mix channel saved");
     },
     onError: (cause) => notify.apiError(cause, { title: "Could not save the mix channel" })
@@ -229,7 +232,7 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
   const [unlinkOpen, setUnlinkOpen] = useState(false);
 
   const guildsQuery = useQuery({
-    queryKey: ["me", "discord-guilds"],
+    queryKey: userQueryKeys.myDiscordGuilds(),
     queryFn: () => workspaceService.myDiscordGuilds(),
     retry: false
   });
@@ -238,7 +241,7 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
   const refresh = () => {
     invalidate();
     if (workspaceId !== null) {
-      queryClient.invalidateQueries({ queryKey: ["workspace", workspaceId, "discord"] });
+      queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.discord(workspaceId) });
     }
   };
 

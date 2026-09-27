@@ -7,6 +7,8 @@ import { useFormatter } from "@/lib/datetime/client";
 import { usePathname, useRouter } from "next/navigation";
 
 import styles from "./EncountersTable.module.css";
+// The `.aqt-matches` scope, moved out of globals.css and next to its consumer.
+import "./EncountersTable.css";
 import {
   getPublicPageQueryPresentation,
   type PublicPageQueryState
@@ -504,8 +506,8 @@ export function EncountersDataTable({
 
   return (
     // `.matches-card` / `.m-scroll` / `table.m` are all scoped as DESCENDANTS of
-    // `.aqt-matches` in globals.css, so the scope class must sit on an ancestor
-    // element — not on the card itself.
+    // `.aqt-matches` in `EncountersTable.css`, so the scope class must sit on an
+    // ancestor element — not on the card itself.
     <div className={cn("aqt-matches min-w-0", className)}>
       <div className="matches-card min-w-0">
         <section

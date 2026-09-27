@@ -85,7 +85,7 @@ const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect 
       </div>
       <div className="flex flex-wrap gap-3.5 border-t border-[color:var(--aqt-border)] px-[18px] py-3.5 text-label text-[color:var(--aqt-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
-          {/* Must stay identical to `.aqt-timeline .aqt-dot.gold` in globals.css. */}
+          {/* Must stay identical to `.aqt-timeline .aqt-dot.gold` in user-profile.css. */}
           <span
             className="inline-block h-2.5 w-2.5 rounded-full"
             style={{
@@ -96,7 +96,7 @@ const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect 
           {tr("users.tournaments.timeline.legend.first")}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          {/* Must stay identical to `.aqt-timeline .aqt-dot.silver` in globals.css. */}
+          {/* Must stay identical to `.aqt-timeline .aqt-dot.silver` in user-profile.css. */}
           <span
             className="inline-block h-2.5 w-2.5 rounded-full"
             style={{

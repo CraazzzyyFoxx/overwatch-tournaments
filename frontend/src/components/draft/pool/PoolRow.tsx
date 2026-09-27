@@ -27,7 +27,7 @@ import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPickOptionsResponse, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { formatSubRoleLabel, getHeroIconUrl } from "@/utils/player";
+import { formatSubRoleLabel, getHeroIconUrl } from "@/lib/player";
 
 /**
  * Shared by the column header and every row. Phones stack the role cells under

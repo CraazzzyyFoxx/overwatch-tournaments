@@ -5,11 +5,12 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
+import { DataTable, columnMeta } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import userService from "@/services/user.service";
 import type { AchievementRarity } from "@/types/achievement.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * What this person has earned.
@@ -20,7 +21,7 @@ import type { AchievementRarity } from "@/types/achievement.types";
  */
 export function PersonAchievementsTab({ personId }: Readonly<{ personId: number }>) {
   const achievementsQuery = useQuery({
-    queryKey: ["admin", "person", personId, "achievements"],
+    queryKey: adminQueryKeys.personAchievements(personId),
     queryFn: () => userService.getUserAchievements(personId)
   });
 
@@ -29,7 +30,7 @@ export function PersonAchievementsTab({ personId }: Readonly<{ personId: number 
       {
         accessorKey: "name",
         header: "Achievement",
-        meta: adminColumnMeta<AchievementRarity>({
+        meta: columnMeta<AchievementRarity>({
           sticky: true,
           searchValue: (row) => `${row.name} ${row.slug}`
         }),
@@ -58,7 +59,7 @@ export function PersonAchievementsTab({ personId }: Readonly<{ personId: number 
         accessorKey: "count",
         header: "Times",
         size: 90,
-        meta: adminColumnMeta<AchievementRarity>({ numeric: true, align: "right" }),
+        meta: columnMeta<AchievementRarity>({ numeric: true, align: "right" }),
         cell: ({ row }) => <span className="tabular-nums">{row.original.count}</span>
       },
       {
@@ -90,7 +91,7 @@ export function PersonAchievementsTab({ personId }: Readonly<{ personId: number 
   }
 
   return (
-    <AdminDataTable<AchievementRarity>
+    <DataTable<AchievementRarity>
       rows={achievementsQuery.data ?? []}
       isLoading={achievementsQuery.isLoading}
       columns={columns}

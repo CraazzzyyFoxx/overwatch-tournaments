@@ -165,7 +165,7 @@ class EncounterGameResultRepository(BaseRepository[models.EncounterGameResult]):
                 encounter_id=game.encounter_id,
                 team_id=line.team_id,
                 placement=line.placement,
-                score=line.score,
+                stats={key: float(value) for key, value in line.stats.items()},
             )
             for line in lines
         )
@@ -189,7 +189,7 @@ class EncounterGameResultRepository(BaseRepository[models.EncounterGameResult]):
                 models.EncounterGame.position,
                 models.EncounterGameResult.team_id,
                 models.EncounterGameResult.placement,
-                models.EncounterGameResult.score,
+                models.EncounterGameResult.stats,
             )
             .join(models.EncounterGame, models.EncounterGame.id == models.EncounterGameResult.game_id)
             .join(models.Encounter, models.Encounter.id == models.EncounterGameResult.encounter_id)
@@ -206,6 +206,47 @@ class EncounterGameResultRepository(BaseRepository[models.EncounterGameResult]):
             )
         )
         return list(result.all())
+
+    async def stat_keys_for_stage(self, session: AsyncSession, stage_id: int) -> set[str]:
+        """Every stat key a live game of ``stage_id`` holds a value for.
+
+        What the stage editor asks before it drops a column: a key with values
+        behind it is a record of the tournament, not a setting (plan §6).
+        Cancelled games are excluded for the same reason their cells read as
+        unplayed -- they are history the table no longer counts.
+        """
+        keys = sa.func.jsonb_object_keys(models.EncounterGameResult.stats).label("key")
+        result = await session.execute(
+            sa.select(keys)
+            .join(models.EncounterGame, models.EncounterGame.id == models.EncounterGameResult.game_id)
+            .join(models.Encounter, models.Encounter.id == models.EncounterGameResult.encounter_id)
+            .where(
+                models.Encounter.stage_id == stage_id,
+                models.EncounterGame.state != enums.EncounterGameState.CANCELLED,
+            )
+            .distinct()
+        )
+        return set(result.scalars())
+
+    async def stage_has_unplaced_results(self, session: AsyncSession, stage_id: int) -> bool:
+        """Does a live game of ``stage_id`` hold a line with no place entered?
+
+        Such a game was scored without places, and its places are derived from
+        the formula's points -- which a formula reading ``place`` cannot give.
+        Cancelled games are excluded like in ``stat_keys_for_stage``.
+        """
+        result = await session.execute(
+            sa.select(models.EncounterGameResult.id)
+            .join(models.EncounterGame, models.EncounterGame.id == models.EncounterGameResult.game_id)
+            .join(models.Encounter, models.Encounter.id == models.EncounterGameResult.encounter_id)
+            .where(
+                models.Encounter.stage_id == stage_id,
+                models.EncounterGame.state != enums.EncounterGameState.CANCELLED,
+                models.EncounterGameResult.placement.is_(None),
+            )
+            .limit(1)
+        )
+        return result.first() is not None
 
 
 class EncounterMapReportRepository(BaseRepository[models.EncounterMapReport]):

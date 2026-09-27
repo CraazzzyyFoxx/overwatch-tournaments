@@ -96,7 +96,7 @@ class _FakeSession:
     ) -> None:
         self.stage = SimpleNamespace(
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
-            settings_json={"de_grand_final_type": grand_final_type},
+            de_grand_final_type=grand_final_type,
         )
         self.incoming = incoming or []
         self.outgoing = outgoing or []

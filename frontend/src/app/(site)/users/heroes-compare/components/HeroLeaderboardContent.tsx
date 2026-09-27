@@ -19,6 +19,9 @@ import {
 import HeroCompareHero from "./HeroCompareHero";
 import HeroLeaderboardFiltersCard from "./HeroLeaderboardFiltersCard";
 import HeroLeaderboardTable from "./HeroLeaderboardTable";
+import { heroQueryKeys } from "@/lib/heroes/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
 
 const HeroLeaderboardContent = () => {
   const t = useTranslations();
@@ -43,27 +46,23 @@ const HeroLeaderboardContent = () => {
     router.replace(`${pathname}?${params.toString()}`);
   };
 
-  const heroesQuery = useQuery({
-    queryKey: ["heroes-select-options"],
-    queryFn: () => heroService.getAll({ perPage: -1, sort: "name", order: "asc" }),
-    staleTime: 5 * 60 * 1000,
-  });
+  const heroesQuery = useHeroesCatalog();
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments-select-options"],
+    queryKey: tournamentQueryKeys.selectOptions(),
     queryFn: () => tournamentService.getAll(),
     staleTime: 5 * 60 * 1000,
   });
 
   const leaderboardQuery = useQuery({
-    queryKey: ["hero-leaderboard", heroId, tournamentId],
+    queryKey: heroQueryKeys.leaderboard(heroId, tournamentId),
     enabled: heroId !== undefined,
     queryFn: () => heroService.getHeroLeaderboard(heroId!, { tournamentId, perPage: -1 }),
   });
 
   const heroOptions: SearchableImageOption[] = useMemo(
     () =>
-      (heroesQuery.data?.results ?? []).map((hero) => ({
+      (heroesQuery.data ?? []).map((hero) => ({
         value: String(hero.id),
         label: hero.name,
         imageSrc: hero.image_path,
@@ -81,7 +80,7 @@ const HeroLeaderboardContent = () => {
   );
 
   const selectedHero = useMemo(
-    () => (heroesQuery.data?.results ?? []).find((h) => h.id === heroId),
+    () => (heroesQuery.data ?? []).find((h) => h.id === heroId),
     [heroesQuery.data, heroId]
   );
 

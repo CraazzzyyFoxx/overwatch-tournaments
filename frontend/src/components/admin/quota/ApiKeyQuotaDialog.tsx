@@ -7,7 +7,7 @@ import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useApiKeyQuota, useSetApiKeyQuota } from "@/hooks/use-account-api-keys";
+import { useApiKeyQuota, useSetApiKeyQuota } from "@/hooks/useAccountApiKeys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import type { AccountApiKey } from "@/types/auth.types";

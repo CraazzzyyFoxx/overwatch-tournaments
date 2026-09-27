@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { PLATFORM_ZONE, resolveHost } from "@/lib/site/host";
 
 describe("resolveHost", () => {

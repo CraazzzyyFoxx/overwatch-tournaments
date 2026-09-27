@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { Admission, AdmissionDecision, StatusMeta } from "@/types/registration.types";

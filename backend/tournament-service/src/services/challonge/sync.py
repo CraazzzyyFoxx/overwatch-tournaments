@@ -339,17 +339,17 @@ def _group_names_for_challonge_ids(group_ids: set[int]) -> dict[int, str]:
 
 
 def _stage_for_challonge_group(tournament: models.Tournament, challonge_group_id: int) -> models.Stage | None:
-    """Find the stage that owns a Challonge group, by its `settings_json` marker.
+    """Find the stage that owns a Challonge group, by ``Stage.challonge_group_id``.
 
-    `settings_json["challonge_group_id"]` is the ONLY link: the `tournament.group`
-    table this used to fall back to (`tournament.groups`, matched on
-    `group.challonge_id`) was dropped with its ORM model, so that fallback raised
-    `AttributeError` instead of returning None -- and it ran on the very first
-    import of a grouped bracket, before any stage carries the marker, i.e. exactly
-    when the caller was about to create the missing group stage.
+    That column is the ONLY link: the `tournament.group` table this used to fall
+    back to (`tournament.groups`, matched on `group.challonge_id`) was dropped
+    with its ORM model, so that fallback raised `AttributeError` instead of
+    returning None -- and it ran on the very first import of a grouped bracket,
+    before any stage carries the marker, i.e. exactly when the caller was about
+    to create the missing group stage.
     """
     for stage in tournament.stages or []:
-        if (stage.settings_json or {}).get("challonge_group_id") == challonge_group_id:
+        if stage.challonge_group_id == challonge_group_id:
             return stage
     return None
 
@@ -635,6 +635,7 @@ class ChallongeStructureService:
         # nothing ever loaded emits a lazy SELECT -- MissingGreenlet under async
         # SQLAlchemy.
         stage.items = []
+        stage.round_best_of = []
         await self.stage_repo.create(session, stage)
         _append_once(tournament.stages, stage)
         item = models.StageItem(
@@ -683,7 +684,7 @@ class ChallongeStructureService:
             item_type=_stage_item_type_for_stage(stage_type),
         )
         if challonge_id is not None:
-            stage.settings_json = {**(stage.settings_json or {}), "challonge_group_id": challonge_id}
+            stage.challonge_group_id = challonge_id
             await session.flush()
         return stage
 
@@ -709,7 +710,7 @@ class ChallongeStructureService:
         for group_id in sorted(group_ids):
             stage = _stage_for_challonge_group(tournament, group_id)
             if stage is None and source.stage is not None:
-                existing_id = (source.stage.settings_json or {}).get("challonge_group_id")
+                existing_id = source.stage.challonge_group_id
                 if existing_id == group_id or (
                     existing_id is None and source.stage.stage_type == enums.StageType.ROUND_ROBIN
                 ):
@@ -725,8 +726,8 @@ class ChallongeStructureService:
                 stats["groups_created"] += 1
                 stats["stages_created"] += 1
             else:
-                if (stage.settings_json or {}).get("challonge_group_id") != group_id:
-                    stage.settings_json = {**(stage.settings_json or {}), "challonge_group_id": group_id}
+                if stage.challonge_group_id != group_id:
+                    stage.challonge_group_id = group_id
                 before_stage_count = len(tournament.stages or [])
                 await self._ensure_group_stage(
                     session,

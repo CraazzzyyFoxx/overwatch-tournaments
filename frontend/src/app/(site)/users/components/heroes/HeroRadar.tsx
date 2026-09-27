@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { LogStatsName } from "@/types/stats.types";
-import { getHumanizedStats } from "@/utils/stats";
+import { getHumanizedStats } from "@/lib/stats";
 
 export const RADAR_STATS: LogStatsName[] = [
   LogStatsName.HeroDamageDealt,

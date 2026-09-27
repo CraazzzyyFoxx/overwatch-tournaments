@@ -32,7 +32,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, patch
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -52,14 +52,10 @@ ScrimRoom = importlib.import_module("shared.models.tournament.scrim").ScrimRoom
 
 
 # Only Postgres-only column types need help; rendering them as JSON keeps the
-# DDL SQLite-compatible without altering any column these paths read.
+# DDL SQLite-compatible without altering any column these paths read. ARRAY
+# columns on Stage already use a JSON variant under SQLite.
 @compiles(JSONB, "sqlite")
 def _compile_jsonb_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN202
-    return "JSON"
-
-
-@compiles(ARRAY, "sqlite")
-def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN202
     return "JSON"
 
 
@@ -80,6 +76,7 @@ TABLE_NAMES = (
     "tournament.tournament",
     "tournament.tournament_phase_schedule",
     "tournament.stage",
+    "tournament.stage_round_best_of",
     "tournament.stage_item",
     "tournament.stage_item_input",
     "tournament.team",
@@ -90,6 +87,7 @@ TABLE_NAMES = (
     # references it now, so it must exist even with zero rows.
     "matches.match",
     "tournament.standing",
+    "tournament.standing_pin",
     "tournament.scrim_room",
 )
 

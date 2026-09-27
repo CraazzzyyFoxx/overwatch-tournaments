@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import { fieldErrorsFrom, type Translate } from "@/lib/forms/form-errors";
 import { parseApiError } from "@/lib/api/error";

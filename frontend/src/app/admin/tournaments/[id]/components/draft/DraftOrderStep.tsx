@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent
-} from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
@@ -29,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { useDragSensors } from "@/hooks/useDragSensors";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftCaptainOrder, DraftFormat } from "@/types/draft.types";
@@ -56,10 +48,9 @@ export function DraftOrderStep({
   roundRules
 }: Readonly<DraftOrderStepProps>) {
   const t = useTranslations("draftAdmin");
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  // No activation distance: a captain row carries no controls of its own, so
+  // there is no click here for a threshold to protect.
+  const sensors = useDragSensors({ distance: 0, keyboard: true });
   // Same rank the captain picker seats by: a captain's STRONGEST playable
   // role, so the previewed order matches the list it was chosen from.
   const ranks = new Map(

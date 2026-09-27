@@ -1,5 +1,6 @@
 import type { LogStatsName } from "@/types/stats.types";
 import type { UserCompareBaselineMode, UserRoleType } from "@/types/user.types";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface QueryContext {
   signal: AbortSignal;
@@ -68,16 +69,7 @@ export const buildOverallCompareQueryOptions = <TData>({
   tournamentId,
   fetchCompare
 }: OverallOptions<TData>) => ({
-  queryKey: [
-    "user-compare",
-    subjectUserId,
-    baseline,
-    targetUserId,
-    role,
-    divMin,
-    divMax,
-    tournamentId
-  ] as const,
+  queryKey: userQueryKeys.compare(subjectUserId, baseline, targetUserId, role, divMin, divMax, tournamentId),
   enabled: !isHeroScope && subjectUserId !== undefined,
   placeholderData: keepPreviousCompareData<TData>,
   queryFn: ({ signal }: QueryContext) =>
@@ -107,19 +99,7 @@ export const buildHeroCompareQueryOptions = <TData>({
   stats,
   fetchCompare
 }: HeroOptions<TData>) => ({
-  queryKey: [
-    "user-hero-compare",
-    subjectUserId,
-    baseline,
-    targetUserId,
-    role,
-    divMin,
-    divMax,
-    tournamentId,
-    leftHeroId,
-    rightHeroId,
-    mapId
-  ] as const,
+  queryKey: userQueryKeys.heroCompare(subjectUserId, baseline, targetUserId, role, divMin, divMax, tournamentId, leftHeroId, rightHeroId, mapId),
   enabled: isHeroScope && subjectUserId !== undefined,
   placeholderData: keepPreviousCompareData<TData>,
   queryFn: ({ signal }: QueryContext) =>

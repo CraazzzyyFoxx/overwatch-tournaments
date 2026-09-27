@@ -26,6 +26,7 @@ import { hasQuotaOverride } from "./dimensions";
 import { QuotaLimitFields } from "./QuotaLimitFields";
 import { QuotaUsagePanel } from "./QuotaUsagePanel";
 import { useQuotaDraft } from "./useQuotaDraft";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 /** In table order: the tenant pool first, then the two per-principal buckets. */
 const SCOPES: readonly QuotaScope[] = ["workspace", "key", "session"];
@@ -34,7 +35,7 @@ const SCOPES: readonly QuotaScope[] = ["workspace", "key", "session"];
 const SCOPE_PARAM = "tab";
 
 function workspaceQuotaKey(workspaceId: number) {
-  return ["workspace", workspaceId, "quota", "usage"] as const;
+  return workspaceQueryKeys.quotaUsage(workspaceId);
 }
 
 /**

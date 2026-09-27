@@ -24,8 +24,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { ScrimRoom } from "@/types/scrim.types";
 
 import { ScrimCreateDialog } from "./_components/ScrimCreateDialog";
-
-export const dynamic = "force-dynamic";
+import { scrimQueryKeys } from "@/lib/scrims/query-keys";
 
 function RoomCard({
   room,
@@ -115,7 +114,7 @@ export default function ScrimsPage() {
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const queryClient = useQueryClient();
 
-  const listQueryKey = useMemo(() => ["scrims", "mine", workspaceId] as const, [workspaceId]);
+  const listQueryKey = useMemo(() => scrimQueryKeys.mine(workspaceId), [workspaceId]);
 
   const roomsQuery = useQuery({
     queryKey: listQueryKey,

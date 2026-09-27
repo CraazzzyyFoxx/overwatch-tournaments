@@ -7,7 +7,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import TeamName from "@/components/TeamName";
 import type { Team } from "@/types/team.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { sortTeamPlayers } from "@/utils/player";
+import { sortTeamPlayers } from "@/lib/player";
 import type { SeriesSide } from "@/lib/encounter/detail";
 import { PillFact, PlayerIdentity } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";

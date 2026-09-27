@@ -1,6 +1,7 @@
 """Admin service layer for stage CRUD and bracket generation."""
 
 from collections.abc import Sequence
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import case, func, or_, select, update
@@ -9,10 +10,14 @@ from sqlalchemy.orm import selectinload
 
 from shared.core import enums
 from shared.core import http_status as status
+from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.encounter_naming import build_encounter_name_from_ids
+from shared.domain.ffa_formula import compile_formula
+from shared.domain.ffa_scoring import PLACEMENT_VARIABLES
 from shared.models.tournament.pick_ban import PickBanConfig, PickBanConfigSlot
 from shared.repository import (
+    EncounterGameResultRepository,
     EncounterRepository,
     PickBanConfigRepository,
     StageItemInputRepository,
@@ -26,9 +31,7 @@ from shared.services.bracket import round_robin
 from shared.services.bracket.engine import generate_bracket, placeholder_bracket, placeholder_seeds
 from shared.services.bracket.persist import persist_skeleton
 from shared.services.bracket.swiss import SwissPairingImpossibleError, SwissStanding
-from shared.services.bracket.swiss_settings import (
-    SWISS_BYES_KEY,
-    SWISS_STOPPED_SCOPES_KEY,
+from shared.services.bracket.swiss_state import (
     clear_swiss_byes,
     clear_swiss_scope_stopped,
     mark_swiss_scope_stopped,
@@ -37,7 +40,7 @@ from shared.services.bracket.swiss_settings import (
 )
 from shared.services.bracket.types import BracketSkeleton, Pairing
 from src import models, schemas
-from src.domain.admin.best_of import parse_best_of_config, resolve_best_of
+from src.domain.admin.best_of import best_of_config, resolve_best_of
 from src.domain.stage.lifecycle import stage_lifecycle
 from src.domain.stage.seeds import (
     GroupSlice,
@@ -46,7 +49,6 @@ from src.domain.stage.seeds import (
     group_advance_counts,
     group_for_index,
     parse_seed_mode,
-    parse_seed_ranking,
     rank_team_ids,
 )
 from src.domain.stage.seeds import (
@@ -98,24 +100,62 @@ def _boundary_tie_unresolved(standings: Sequence[models.Standing], position: int
     return standing.tie_group is not None and standings[position].tie_group == standing.tie_group
 
 
-def _merge_stage_settings(stored: dict | None, incoming: dict | None) -> dict | None:
-    """Lay ``incoming`` over ``stored``, keeping the engine's own bookkeeping.
+def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
+    """Write validated ``StageCreate``/``StageUpdate`` fields onto the stage.
 
-    ``settings_json`` holds two different things: the admin's regulation, and
-    the Swiss state the generator writes back into it (which team has already
-    had a BYE, which scopes ran out of pairings). The second is not the client's
-    to send, and a form that round-trips the whole blob would drop it -- so
-    those keys are always taken from what is stored.
+    ``scoring``, ``best_of`` and ``ffa_scoring`` arrive as the objects the API
+    shows and each replaces its columns as a whole; everything else is a column.
+    Rounds of ``best_of.by_round`` are updated in place rather than recreated: a
+    replaced collection would insert the new ``(stage_id, round)`` rows before
+    deleting the old ones and collide on the key.
     """
-    if incoming is None:
-        return stored
-    merged = {**(stored or {}), **incoming}
-    for key in (SWISS_BYES_KEY, SWISS_STOPPED_SCOPES_KEY):
-        if key in (stored or {}):
-            merged[key] = stored[key]
-        else:
-            merged.pop(key, None)
-    return merged
+    if "scoring" in fields:
+        scoring = fields.pop("scoring") or {}
+        stage.win_points = scoring.get("win")
+        stage.draw_points = scoring.get("draw")
+        stage.loss_points = scoring.get("loss")
+    if "best_of" in fields:
+        best_of = fields.pop("best_of")
+        stage.best_of_default = best_of["default"]
+        stage.best_of_final = best_of["final"]
+        wanted: dict[int, int] = best_of["by_round"]
+        existing = {row.round: row for row in stage.round_best_of}
+        for round_number, row in existing.items():
+            if round_number not in wanted:
+                stage.round_best_of.remove(row)
+        for round_number, value in sorted(wanted.items()):
+            if round_number in existing:
+                existing[round_number].best_of = value
+            else:
+                stage.round_best_of.append(models.StageRoundBestOf(round=round_number, best_of=value))
+    if "ffa_scoring" in fields:
+        ffa_scoring = fields.pop("ffa_scoring")
+        stage.ffa_columns = [dict(column) for column in ffa_scoring["columns"]]
+        stage.ffa_placement_points = list(ffa_scoring["placement_points"])
+        stage.ffa_formula = ffa_scoring["formula"]
+    for field, value in fields.items():
+        setattr(stage, field, value)
+
+
+def _ranking_signature(block: dict[str, Any]) -> tuple[Any, ...]:
+    """What of ``ffa_scoring`` decides places -- everything except presentation.
+
+    Labels and ``public`` are how the table is drawn; the formula, the placement
+    points, the set of column keys and their ``better`` are what the places are
+    computed from. Column ORDER counts too: with no explicit ``tiebreak_order``
+    the ffa_league preset breaks ties by the sum of the FIRST column, so moving
+    one can move a team.
+
+    Compared, not merely "was it sent": saving the same form twice must not run
+    into a 409.
+    """
+    return (
+        block["formula"].strip(),
+        tuple(float(points) for points in block["placement_points"]),
+        # ``.get`` with the same defaults ``ffa_rules`` reads the jsonb by: a row
+        # written without ``better`` ranks higher-first, it does not crash a save.
+        tuple((column.get("key"), column.get("better", "higher")) for column in block["columns"]),
+    )
 
 
 class AdminStageService:
@@ -130,6 +170,7 @@ class AdminStageService:
         team_repo: TeamRepository = TeamRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
         pick_ban_config_repo: PickBanConfigRepository = PickBanConfigRepository(),
+        result_repo: EncounterGameResultRepository = EncounterGameResultRepository(),
     ) -> None:
         self.stage_repo = stage_repo
         self.stage_item_repo = stage_item_repo
@@ -139,6 +180,7 @@ class AdminStageService:
         self.team_repo = team_repo
         self.tournament_repo = tournament_repo
         self.pick_ban_config_repo = pick_ban_config_repo
+        self.result_repo = result_repo
 
     async def _publish_structure_changed(self, session: AsyncSession, tournament_id: int) -> None:
         """Announce that this tournament's set of page sections moved.
@@ -245,7 +287,7 @@ class AdminStageService:
         )
 
         team_names_by_id = await self._load_team_names(session, upper_ids + lower_ids)
-        best_of_cfg = parse_best_of_config(stage.settings_json)
+        best_of_cfg = best_of_config(stage)
         max_round = max((pairing.round_number for pairing in skeleton.pairings), default=0)
         sources: dict[int, list[dict]] = {}
         for edge in skeleton.advancement_edges:
@@ -413,7 +455,8 @@ class AdminStageService:
         payload = data.model_dump()
         challonge_id = payload.pop("challonge_id", None)
         challonge_slug = payload.pop("challonge_slug", None)
-        stage = models.Stage(tournament_id=tournament_id, **payload)
+        stage = models.Stage(tournament_id=tournament_id)
+        _apply_stage_fields(stage, payload)
         await self.stage_repo.create(session, stage)
         if challonge_id is not None:
             session.add(
@@ -432,14 +475,10 @@ class AdminStageService:
     async def update_stage(self, session: AsyncSession, stage_id: int, data: schemas.StageUpdate) -> models.Stage:
         """Edit a stage's regulation.
 
-        Two things are not plain field writes. ``stage_type`` decides the shape
-        of the matches that were already generated, so it cannot be flipped
-        under them -- a published Swiss silently becoming a single elimination
-        leaves the bracket it already produced meaning nothing. And
-        ``settings_json`` is merged rather than replaced, because it is not only
-        the admin's settings: the engine keeps the Swiss BYE ledger and the
-        stopped-scope list in there, and a client PUTting the form's view of the
-        blob would erase that history.
+        ``stage_type`` is not a plain field write: it decides the shape of the
+        matches that were already generated, so it cannot be flipped under them
+        -- a published Swiss silently becoming a single elimination leaves the
+        bracket it already produced meaning nothing.
         """
         stage = await self.get_stage(session, stage_id)
         tournament_id = stage.tournament_id
@@ -457,14 +496,65 @@ class AdminStageService:
                     ),
                 )
 
-        if "settings_json" in update_data:
-            update_data["settings_json"] = _merge_stage_settings(stage.settings_json, update_data["settings_json"])
+        ffa_before = stage.ffa_scoring if "ffa_scoring" in update_data else None
+        if ffa_before is not None:
+            await self._assert_ffa_scoring_editable(session, stage, ffa_before, update_data["ffa_scoring"])
 
-        for field, value in update_data.items():
-            setattr(stage, field, value)
+        _apply_stage_fields(stage, update_data)
+        # Points, places and the public table are all derived from the rules, so
+        # a changed block has to re-run the standings: nothing else would, and
+        # the same signal drops the gateway's cache of the lobby read.
+        if ffa_before is not None and ffa_before != stage.ffa_scoring:
+            await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
+
+    async def _assert_ffa_scoring_editable(
+        self,
+        session: AsyncSession,
+        stage: models.Stage,
+        before: dict[str, Any],
+        after: dict[str, Any],
+    ) -> None:
+        """The ffa_scoring edits a stage in play cannot take (plan §6).
+
+        Re-ranking edits (the formula, the placement points, the column keys,
+        their ``better``) are refused once a playoff seeded off this stage has
+        started -- the same rule, and the same 409, a result correction answers
+        to. A formula reading ``place``/``place_pts`` is refused while live games
+        hold no places: their places are derived from the formula's own points,
+        so the cell and the place would contradict each other. Dropping a column
+        the games hold values for is refused outright: the values are a record
+        of the tournament, and no later edit brings them back.
+        """
+        if _ranking_signature(before) != _ranking_signature(after):
+            await self.assert_stage_correction_allowed(session, stage)
+        formula = compile_formula(after["formula"], [column["key"] for column in after["columns"]])
+        if formula.names & PLACEMENT_VARIABLES and await self.result_repo.stage_has_unplaced_results(session, stage.id):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[
+                    ApiExc(
+                        code="ffa_formula_places_missing",
+                        msg="Games of this stage have no places; enter them before the formula reads place",
+                    )
+                ],
+            )
+        removed = {column["key"] for column in before["columns"]} - {column["key"] for column in after["columns"]}
+        if not removed:
+            return
+        in_use = sorted(removed & await self.result_repo.stat_keys_for_stage(session, stage.id))
+        if in_use:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[
+                    ApiExc(
+                        code="ffa_column_in_use",
+                        msg=f"Games of this stage already hold values for: {', '.join(in_use)}",
+                    )
+                ],
+            )
 
     async def delete_stage(self, session: AsyncSession, stage_id: int) -> None:
         stage = await self.get_stage(session, stage_id)
@@ -1012,7 +1102,7 @@ class AdminStageService:
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
                             detail=(
-                                "unresolved tie at qualification boundary; set a manual override "
+                                "unresolved tie at qualification boundary; pin the order in Standings "
                                 f"(source stage item {inp.source_stage_item_id}, "
                                 f"position {inp.source_position})"
                             ),
@@ -1117,7 +1207,7 @@ class AdminStageService:
         stage: models.Stage,
         team_ids: list[int],
     ) -> list[int]:
-        ranking = parse_seed_ranking(getattr(stage, "settings_json", None))
+        ranking = SeedRanking(stage.seed_ranking)
         if ranking is SeedRanking.SLOT or not team_ids:
             return team_ids
         teams = await self._load_rankable_teams(session, team_ids)
@@ -1180,7 +1270,7 @@ class AdminStageService:
                 session, stage.id, stage_item_id
             )
             if swiss_standings is None:
-                clear_swiss_byes(stage, stage_item_id)
+                await clear_swiss_byes(session, stage.id, stage_item_id)
             from src.services.standings.swiss_auto_round import stage_allows_next_round, stage_max_rounds
 
             if not stage_allows_next_round(stage, swiss_round):
@@ -1198,7 +1288,7 @@ class AdminStageService:
             # and hand out a schedule longer than the configured limit.
             rr_rounds = len(team_ids) if len(team_ids) % 2 else len(team_ids) - 1
             if swiss_standings is None and stage_max_rounds(stage) >= rr_rounds:
-                clear_swiss_scope_stopped(stage, stage_item_id)
+                await clear_swiss_scope_stopped(session, stage.id, stage_item_id)
                 return round_robin.generate(team_ids)
 
         try:
@@ -1208,11 +1298,15 @@ class AdminStageService:
                 swiss_standings=swiss_standings,
                 swiss_played_pairs=swiss_played_pairs,
                 swiss_round_number=swiss_round,
-                swiss_bye_history=set(swiss_bye_team_ids(stage, stage_item_id)),
+                swiss_bye_history=(
+                    set(await swiss_bye_team_ids(session, stage.id, stage_item_id))
+                    if stage.stage_type == enums.StageType.SWISS
+                    else set()
+                ),
                 lower_bracket_team_ids=lower_bracket_team_ids,
             )
         except SwissPairingImpossibleError:
-            mark_swiss_scope_stopped(stage, stage_item_id)
+            await mark_swiss_scope_stopped(session, stage.id, stage_item_id)
             logger.info(
                 "Swiss scope ended because no complete non-rematch pairing exists",
                 stage_id=stage.id,
@@ -1222,9 +1316,9 @@ class AdminStageService:
             return BracketSkeleton(pairings=[], total_rounds=0)
 
         if stage.stage_type == enums.StageType.SWISS:
-            clear_swiss_scope_stopped(stage, stage_item_id)
+            await clear_swiss_scope_stopped(session, stage.id, stage_item_id)
             if skeleton.bye_team_id is not None:
-                record_swiss_bye(stage, stage_item_id, skeleton.bye_team_id, round_number=swiss_round)
+                await record_swiss_bye(session, stage.id, stage_item_id, skeleton.bye_team_id, round_number=swiss_round)
         return skeleton
 
     async def _create_encounters_from_skeleton(
@@ -1238,7 +1332,7 @@ class AdminStageService:
         lb_stage_item_id: int | None = None,
     ) -> list[models.Encounter]:
         """Persist bracket pairings as Encounter rows and wire EncounterLink records."""
-        best_of_cfg = parse_best_of_config(stage.settings_json)
+        best_of_cfg = best_of_config(stage)
         return await persist_skeleton(
             session,
             stage=stage,
@@ -1626,29 +1720,25 @@ class AdminStageService:
         )
         return ids - set(touched.scalars())
 
-    async def _downstream_item_ids(self, session: AsyncSession, source_stage_item_id: int) -> set[int]:
-        """Stage items whose qualification is already frozen (FINAL) off
-        ``source_stage_item_id``'s standings."""
+    async def _assert_downstream_untouched(self, session: AsyncSession, stage_item_ids: Sequence[int]) -> None:
+        """Refuse to re-rank ``stage_item_ids`` while something seeded off them plays.
+
+        The one rule behind both entry points below: a seed frozen (FINAL) off
+        these items may still be re-resolved, but only while the item it feeds is
+        untouched. Past that point the playoff is being played with the teams it
+        has, and there is nowhere to put a new order -- so the edge is refused
+        here instead of diverging silently.
+        """
+        source_ids = list(stage_item_ids)
+        if not source_ids:
+            return
         result = await session.execute(
             select(models.StageItemInput.stage_item_id).where(
-                models.StageItemInput.source_stage_item_id == source_stage_item_id,
+                models.StageItemInput.source_stage_item_id.in_(source_ids),
                 models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
             )
         )
-        return set(result.scalars())
-
-    async def assert_source_correction_allowed(self, session: AsyncSession, encounter: models.Encounter) -> None:
-        """Refuse a result correction whose qualification fallout cannot be applied.
-
-        ``requalify_downstream_inputs`` re-resolves a frozen seed only while the
-        stage item it feeds is still untouched. Once that playoff has started,
-        correcting the group result here would leave it playing with a team that
-        no longer qualified and no way to take that back -- so the correction is
-        refused at the entry point rather than allowed to diverge silently.
-        """
-        if encounter.stage_item_id is None:
-            return
-        downstream_item_ids = await self._downstream_item_ids(session, encounter.stage_item_id)
+        downstream_item_ids = set(result.scalars())
         if not downstream_item_ids:
             return
         untouched = await self._untouched_stage_items(session, sorted(downstream_item_ids))
@@ -1661,6 +1751,52 @@ class AdminStageService:
                     f"(stage items {blocked})"
                 ),
             )
+
+    async def assert_source_correction_allowed(self, session: AsyncSession, encounter: models.Encounter) -> None:
+        """Refuse a result correction whose qualification fallout cannot be applied.
+
+        ``requalify_downstream_inputs`` re-resolves a frozen seed only while the
+        stage item it feeds is still untouched. Once that playoff has started,
+        correcting the group result here would leave it playing with a team that
+        no longer qualified and no way to take that back -- so the correction is
+        refused at the entry point rather than allowed to diverge silently.
+        """
+        if encounter.stage_item_id is None:
+            return
+        await self._assert_downstream_untouched(session, [encounter.stage_item_id])
+
+    async def assert_stage_correction_allowed(self, session: AsyncSession, stage: models.Stage) -> None:
+        """Refuse a stage-wide re-ranking whose fallout cannot be applied.
+
+        ``assert_source_correction_allowed`` asks this of the one group a
+        corrected encounter belongs to. Editing the stage's scoring re-ranks
+        EVERY group of it at once, so the question is asked of every item the
+        stage has -- with the same answer and the same message, because it is the
+        same impossibility: a playoff already being played cannot be re-seeded.
+        """
+        await self._assert_downstream_untouched(session, [item.id for item in stage.items])
+
+    async def started_qualification_cut(self, session: AsyncSession, source_stage_item_id: int) -> int | None:
+        """The lowest ``source_stage_item_id`` place a downstream stage already
+        in progress was seeded from, or ``None`` when nothing started plays off it.
+
+        Every place down to this one is frozen into a playoff that
+        ``requalify_downstream_inputs`` may no longer re-seed; places below it
+        qualified nobody who is playing.
+        """
+        result = await session.execute(
+            select(models.StageItemInput.stage_item_id, models.StageItemInput.source_position).where(
+                models.StageItemInput.source_stage_item_id == source_stage_item_id,
+                models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
+                models.StageItemInput.source_position.is_not(None),
+            )
+        )
+        seeds = result.all()
+        if not seeds:
+            return None
+        untouched = await self._untouched_stage_items(session, sorted({item_id for item_id, _ in seeds}))
+        started = [position for item_id, position in seeds if item_id not in untouched]
+        return max(started) if started else None
 
     async def requalify_downstream_inputs(self, session: AsyncSession, tournament_id: int) -> int:
         """Re-resolve frozen qualification seeds that recomputed standings moved.
@@ -2020,7 +2156,7 @@ class AdminStageService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Every group already has a lobby. Delete a lobby to regenerate it.",
             )
-        games = resolve_best_of(parse_best_of_config(stage.settings_json), 1, is_final=False)
+        games = resolve_best_of(best_of_config(stage), 1, is_final=False)
         return [
             await ffa_encounter_service.create_lobby(session, stage, item, _collect_item_team_ids(item), games=games)
             for item in items
@@ -2124,14 +2260,14 @@ class AdminStageService:
     async def apply_best_of_to_existing(self, session: AsyncSession, stage_id: int) -> int:
         """Backfill ``best_of`` on a stage's existing encounters from its config.
 
-        Reads ``Stage.settings_json['best_of']`` and rewrites each encounter's
+        Reads the stage's best-of config and rewrites each encounter's
         ``best_of`` in place (preserving scores/results). Applies the same
         resolution the generator uses; ``final`` targets the max round among the
         stage's encounters for elimination stages. Returns the number of rows
         whose ``best_of`` actually changed.
         """
         stage = await self.get_stage(session, stage_id)
-        cfg = parse_best_of_config(stage.settings_json)
+        cfg = best_of_config(stage)
         is_elimination = stage.stage_type in BRACKET_STAGE_TYPES
 
         # ``EncounterRepository.list_by_stage`` also predicates on tournament_id

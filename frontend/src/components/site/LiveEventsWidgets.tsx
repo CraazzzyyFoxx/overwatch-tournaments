@@ -2,7 +2,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { getTranslations } from "next-intl/server";
 import { Calendar, Users } from "lucide-react";
 
-import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
+import WorkspaceBrandIcon from "@/components/workspace/WorkspaceBrandIcon";
 import { formatDateRange } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";
 import { tournamentHref } from "@/lib/tournament/url";

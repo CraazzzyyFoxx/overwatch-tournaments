@@ -32,7 +32,6 @@ import {
   buildSequenceForBestOf,
   hasPerRoundBestOf,
   maxBestOf,
-  parseStageBestOf,
   resolveBestOf,
 } from "@/lib/tournament/best-of";
 import { projectStage } from "@/lib/bracket/projection";
@@ -471,25 +470,28 @@ export function resolveSeriesLength(
   }
 
   const stage = stages.find((candidate) => candidate.id === stageId);
-  const bestOfConfig = parseStageBestOf(stage?.settings_json ?? null);
+  // A stage the caller does not know plays the default series.
+  if (stage == null) {
+    return { bestOf: DEFAULT_BEST_OF, source: round != null ? "round" : "stage" };
+  }
 
-  if (round != null && stage != null) {
+  if (round != null) {
     const projected = projectStage({
       stage,
       stages,
       stageType: stage.stage_type,
       splitLowerBracket: stage.split_lower_bracket,
       maxRounds: stage.max_rounds,
-      bestOf: bestOfConfig,
+      bestOf: stage.best_of,
     }).rounds.find((candidate) => candidate.round === round);
     if (projected != null) return { bestOf: projected.bestOf, source: "round" };
   }
 
-  const bestOf = resolveBestOf(bestOfConfig, round ?? 1, {
-    isFinal: round != null && stage != null && round === stage.max_rounds,
+  const bestOf = resolveBestOf(stage.best_of, round ?? 1, {
+    isFinal: round != null && round === stage.max_rounds,
   });
   if (round != null) return { bestOf, source: "round" };
-  return { bestOf, source: hasPerRoundBestOf(bestOfConfig) ? "variesByRound" : "stage" };
+  return { bestOf, source: hasPerRoundBestOf(stage.best_of) ? "variesByRound" : "stage" };
 }
 
 /**
@@ -521,7 +523,7 @@ export function resolveSlotCount(
   if (generated.length > 0) return Math.max(...generated);
 
   const planned = (stageId == null ? stages : stages.filter((stage) => stage.id === stageId)).map(
-    (stage) => maxBestOf(parseStageBestOf(stage.settings_json ?? null))
+    (stage) => maxBestOf(stage.best_of)
   );
   return planned.length > 0 ? Math.max(...planned) : DEFAULT_BEST_OF;
 }

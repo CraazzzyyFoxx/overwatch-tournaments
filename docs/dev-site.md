@@ -14,14 +14,15 @@ separate cookie namespace.
 | Edge | Traefik (host) → nginx `127.0.0.1:80` | Traefik (host) → nginx `127.0.0.1:8081` |
 | Platform zone | `owt.craazzzyyfoxx.me` | `dev.owt.craazzzyyfoxx.me` |
 | Postgres | its own | host `db_postgres` via `db_pgbouncer`, database `anak_dev` |
-| Tracing | otel-collector → Tempo/Sentry | off (`TRACING_ENABLED=false`) |
+| Tracing | Alloy → Tempo on home / Sentry (`monitoring/README.md`) | off (`TRACING_ENABLED=false`) |
+| Telemetry agent | `alloy` + `nginx-exporter` (`COMPOSE_PROFILES=telemetry`) | none — profile left off |
 | Cookie names | `owt_*` | `owtdev_*` (`COOKIE_PREFIX`/`SESSION_COOKIE_PREFIX`) |
 | discord-worker | 1 replica | 1 replica, own bot token |
 
 ## Why `PLATFORM_ZONE` exists
 
 `dev.owt.craazzzyyfoxx.me` is a subdomain of the production platform zone, so with the zone
-hardcoded the dev site read as production's `dev` *tenant*: `middleware.ts` resolved the host
+hardcoded the dev site read as production's `dev` *tenant*: `proxy.ts` resolved the host
 to a workspace, found none, and rewrote every request to `/not-configured` (404) — and its
 session cookies, written under `Domain=.owt.craazzzyyfoxx.me`, would have collided with
 production's. Both sides of the stack therefore take the zone from the environment:
@@ -107,7 +108,9 @@ curl -sX POST -H 'Cookie: owtdev_refresh_token=x' https://dev.owt.craazzzyyfoxx.
   `NEXT_PUBLIC_DISCORD_CLIENT_ID` — the **dev** bot's application id, i.e. the same value as
   `DISCORD_CLIENT_ID` in `backend/env/auth.env`, never production's; it is baked into the
   frontend bundle as the `client_id` of the "Add bot to server" link, so pointing it at
-  production's app would invite production's bot).
+  production's app would invite production's bot). No `COMPOSE_PROFILES=telemetry`: the Alloy
+  agent in `docker-compose.production.yml` pushes into production monitoring and is
+  production-only.
 - `backend/env/*.env` — from the `.example` files, with `PLATFORM_ZONE`, `PROJECT_URL`,
   `CORS_ORIGINS`, `GATEWAY_WS_ALLOWED_ORIGINS` and `OAUTH_REDIRECT` on the dev host,
   `SESSION_COOKIE_PREFIX=owtdev` in `gateway.env`, a

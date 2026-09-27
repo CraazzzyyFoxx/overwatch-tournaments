@@ -30,14 +30,14 @@
 // answer, with `Deprecation` + `Sunset` headers, until the date in
 // gateway/internal/apiver.SunsetDate. Nothing in this app should use them.
 
-// Internal gateway origin for server-side (SSR + route handlers + middleware)
+// Internal gateway origin for server-side (SSR + route handlers + proxy)
 // fetches. Trailing slash stripped. Undefined when unset (bare next dev).
 export function internalApiOrigin(): string | undefined {
   return process.env.NEXT_INTERNAL_API_URL?.replace(/\/$/, "") || undefined;
 }
 
 // Absolute auth base for server-side callers that need a concrete URL
-// (middleware token refresh, /bff/account route handlers). The gateway serves
+// (proxy token refresh, /bff/account route handlers). The gateway serves
 // the identity domain under /api/v1/auth. Defaults to the gateway's local dev port
 // when NEXT_INTERNAL_API_URL is unset.
 export function authServiceBase(): string {

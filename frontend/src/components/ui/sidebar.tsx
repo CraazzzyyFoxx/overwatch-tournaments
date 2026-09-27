@@ -5,7 +5,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/hooks/useMobile"
 import { cn } from "@/lib/utils"
 import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies"
 import { Button } from "@/components/ui/button"

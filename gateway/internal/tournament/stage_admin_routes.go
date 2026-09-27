@@ -32,6 +32,9 @@ var StageSubtreeRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/wire-from-groups", Queue: "rpc.tournament.stage_wire", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/auto-wire", Queue: "rpc.tournament.stage_auto_wire", Path: []string{"stage_id"}, Query: []string{"source_stage_id"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/seed-teams", Queue: "rpc.tournament.stage_seed", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired},
+	// Replace one standings table's pins (the group is in the body); schedules
+	// the recalculation that applies them. Worker enforces "standing"/"update".
+	{Method: "PUT", Pattern: "/api/v1/admin/stages/{stage_id}/standing-pins", Queue: "rpc.tournament.standing_pins_set", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired, Success: 202},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/{stage_id}/items", Queue: "rpc.tournament.admin.create", Entity: "stage_item", Action: "create", Path: []string{"stage_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
 	// stage CRUD by id
 	{Method: "GET", Pattern: "/api/v1/admin/stages/{stage_id}", Queue: "rpc.tournament.admin.get", Entity: "stage", Action: "get", IDParam: "stage_id", Auth: edge.AuthRequired},

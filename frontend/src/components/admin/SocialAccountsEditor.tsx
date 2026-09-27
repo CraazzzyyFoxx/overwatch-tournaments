@@ -22,6 +22,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import type { SocialAccount, SocialProvider, User } from "@/types/user.types";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface SocialAccountsEditorProps {
   userId: number;
@@ -53,7 +54,7 @@ function VisibilityControls({ account, userId, workspaceId, onUserUpdated }: Rea
     mutationFn: (vars: { workspace_id: number | null; visible: boolean }) =>
       adminService.setSocialAccountVisibility(userId, account.id, vars),
     onSuccess: (user) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       onUserUpdated(user);
     },
   });
@@ -104,7 +105,7 @@ function AccountRow({ account, userId, canManage, canSetVisibility, workspaceId,
   const inputRef = useRef<HTMLInputElement>(null);
 
   const config = getSocialProviderConfig(account.provider);
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
 
   useEffect(() => {
     if (editing) setTimeout(() => inputRef.current?.select(), 0);
@@ -293,7 +294,7 @@ function AddAccountRow({ provider, userId, onUserUpdated }: Readonly<{ provider:
   const addMutation = useMutation({
     mutationFn: () => adminService.addSocialAccount(userId, { provider, username: value.trim() }),
     onSuccess: (user) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       onUserUpdated(user);
       setValue("");
     },

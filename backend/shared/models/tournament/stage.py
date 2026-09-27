@@ -1,6 +1,20 @@
 import typing
 
-from sqlalchemy import JSON, Boolean, Enum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -9,10 +23,31 @@ from shared.models.tournament.tournament import Tournament
 if typing.TYPE_CHECKING:
     from shared.models.tournament.team import Team
 
+
+# text[] / float8[] in Postgres. JSON under SQLite, where several test harnesses
+# build this schema: a PostgreSQL ARRAY has no SQLite bind, so a list would
+# reach the driver raw.
+_TEXT_ARRAY = ARRAY(String()).with_variant(JSON(), "sqlite")
+_FLOAT_ARRAY = ARRAY(Float()).with_variant(JSON(), "sqlite")
+
+#: What an ffa_league stage pays for until the organizer says otherwise: one
+#: column called "score", and points = that column. Mirrors migration ffa0002.
+DEFAULT_FFA_COLUMNS: tuple[dict[str, typing.Any], ...] = (
+    {"key": "score", "label": "Счёт", "public": True, "better": "higher"},
+)
+DEFAULT_FFA_FORMULA = "score"
+#: No ``::jsonb`` cast: Postgres coerces the bare literal to the column's type
+#: anyway, and several tests build ``tournament.stage`` on SQLite, where the
+#: cast is a syntax error inside ``DEFAULT``.
+_DEFAULT_FFA_COLUMNS_SQL = """'[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]'"""
+
 __all__ = (
     "Stage",
     "StageItem",
     "StageItemInput",
+    "StageRoundBestOf",
+    "SwissBye",
+    "SwissStoppedScope",
 )
 
 
@@ -43,7 +78,13 @@ STAGE_ITEM_INPUT_TYPE_ENUM = Enum(
 
 class Stage(db.TimeStampIntegerMixin):
     __tablename__ = "stage"
-    __table_args__ = ({"schema": "tournament"},)
+    __table_args__ = (
+        CheckConstraint("de_grand_final_type IN ('no_reset', 'with_reset')", name="ck_stage_de_grand_final_type"),
+        CheckConstraint("seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')", name="ck_stage_seed_ranking"),
+        CheckConstraint("best_of_default >= 1", name="ck_stage_best_of_default"),
+        CheckConstraint("best_of_final IS NULL OR best_of_final >= 1", name="ck_stage_best_of_final"),
+        {"schema": "tournament"},
+    )
 
     tournament_id: Mapped[int] = mapped_column(ForeignKey(Tournament.id, ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String())
@@ -70,7 +111,44 @@ class Stage(db.TimeStampIntegerMixin):
     # until this flips True (``shared.services.bracket.usability``).
     is_published: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     is_completed: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
-    settings_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # ── Regulation. NULL means "not set here": the engine falls back to the
+    # tournament (points), the stage type's preset (ranking) or the win points
+    # (a Swiss bye).
+    #: A ``RULE_PRESET_DEFAULTS`` key; NULL = chosen by ``stage_type``.
+    ranking_preset: Mapped[str | None] = mapped_column(String(), nullable=True)
+    #: The tiebreak metrics in order; NULL = the preset's order.
+    tiebreak_order: Mapped[list[str] | None] = mapped_column(_TEXT_ARRAY, nullable=True)
+    win_points: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    draw_points: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    loss_points: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    #: What a Swiss bye pays; NULL = the stage's win points.
+    swiss_bye_points: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    #: Double elimination only: ``with_reset`` plays a second Grand Final when
+    #: the lower-bracket team wins the first.
+    de_grand_final_type: Mapped[str] = mapped_column(String(16), default="no_reset", server_default="no_reset")
+    #: How a bracket orders its seeds (``src.domain.stage.seeds.SeedRanking``).
+    seed_ranking: Mapped[str] = mapped_column(String(16), default="slot", server_default="slot")
+    #: Series length of an encounter in a round with no ``round_best_of`` row.
+    best_of_default: Mapped[int] = mapped_column(Integer(), default=3, server_default="3")
+    #: An elimination stage's last round; NULL = resolved like any other round.
+    best_of_final: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: FFA league only: points for 1st, 2nd, ... place; empty = the formula
+    #: pays nothing for placement.
+    ffa_placement_points: Mapped[list[float]] = mapped_column(_FLOAT_ARRAY, default=list, server_default="{}")
+    #: FFA league only: what the organizer enters per game -- ``{"key", "label",
+    #: "public", "better"}`` per column, validated by ``FfaScoring`` (plan §3.1).
+    ffa_columns: Mapped[list[dict[str, typing.Any]]] = mapped_column(
+        JSONB,
+        default=lambda: [dict(column) for column in DEFAULT_FFA_COLUMNS],
+        server_default=text(_DEFAULT_FFA_COLUMNS_SQL),
+    )
+    #: FFA league only: the expression a game's points are computed with.
+    ffa_formula: Mapped[str] = mapped_column(
+        String(500), default=DEFAULT_FFA_FORMULA, server_default=DEFAULT_FFA_FORMULA
+    )
+    #: The Challonge group this stage mirrors (Challonge sync's only link to it).
+    challonge_group_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="stages")
     items: Mapped[list[StageItem]] = relationship(
@@ -79,6 +157,59 @@ class Stage(db.TimeStampIntegerMixin):
         passive_deletes=True,
         order_by="StageItem.order",
     )
+    #: Loaded with the stage: every stage read carries ``best_of``.
+    round_best_of: Mapped[list[StageRoundBestOf]] = relationship(
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="StageRoundBestOf.round",
+    )
+
+    @property
+    def scoring(self) -> dict[str, float | None]:
+        return {"win": self.win_points, "draw": self.draw_points, "loss": self.loss_points}
+
+    @property
+    def best_of(self) -> dict[str, typing.Any]:
+        return {
+            "default": self.best_of_default,
+            "by_round": {row.round: row.best_of for row in self.round_best_of},
+            "final": self.best_of_final,
+        }
+
+    @property
+    def ffa_scoring(self) -> dict[str, typing.Any]:
+        """The ``ffa_scoring`` block of the API, rebuilt from the columns.
+
+        An empty column list is a placement-only league and is shown as such;
+        only a stage not yet flushed (column still ``None``, the server default
+        not applied) reads the default block.
+        """
+        return {
+            "columns": [
+                dict(column) for column in (self.ffa_columns if self.ffa_columns is not None else DEFAULT_FFA_COLUMNS)
+            ],
+            "placement_points": list(self.ffa_placement_points or ()),
+            "formula": self.ffa_formula or DEFAULT_FFA_FORMULA,
+        }
+
+
+class StageRoundBestOf(db.Base):
+    """A round's own series length, overriding ``Stage.best_of_default``.
+
+    ``round`` is the encounter round as the bracket numbers it: negative for a
+    double elimination's lower bracket.
+    """
+
+    __tablename__ = "stage_round_best_of"
+    __table_args__ = (
+        CheckConstraint("best_of >= 1", name="ck_stage_round_best_of_best_of"),
+        {"schema": "tournament"},
+    )
+
+    stage_id: Mapped[int] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"), primary_key=True)
+    round: Mapped[int] = mapped_column(Integer(), primary_key=True)
+    best_of: Mapped[int] = mapped_column(Integer())
 
 
 class StageItem(db.TimeStampIntegerMixin):
@@ -131,3 +262,46 @@ class StageItemInput(db.TimeStampIntegerMixin):
     stage_item: Mapped[StageItem] = relationship(back_populates="inputs", foreign_keys=[stage_item_id])
     team: Mapped[Team | None] = relationship(foreign_keys=[team_id])
     source_stage_item: Mapped[StageItem | None] = relationship(foreign_keys=[source_stage_item_id])
+
+
+class SwissBye(db.TimeStampIntegerMixin):
+    """One bye the Swiss generator handed out: a team that sat a round out.
+
+    A pairing never gives the same team a second bye while another is due one,
+    and a bye pays ``Stage.swiss_bye_points``. The scope is the stage item the
+    round was paired in (NULL for a stage without items). ``round`` is NULL only
+    for byes recorded before rounds were tracked; they still count, but no round
+    removal can take them back.
+    """
+
+    __tablename__ = "swiss_bye"
+    __table_args__ = ({"schema": "tournament"},)
+
+    stage_id: Mapped[int] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"), index=True)
+    stage_item_id: Mapped[int | None] = mapped_column(ForeignKey(StageItem.id, ondelete="CASCADE"), nullable=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("tournament.team.id", ondelete="CASCADE"), index=True)
+    round: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+
+
+class SwissStoppedScope(db.TimeStampIntegerMixin):
+    """A Swiss scope that ran out of rematch-free pairings.
+
+    Counts as finished for the stage's completion even short of its planned
+    rounds. The scope is a stage item, or the whole stage when it has none
+    (``stage_item_id`` NULL; NULLs compare equal in the unique index).
+    """
+
+    __tablename__ = "swiss_stopped_scope"
+    __table_args__ = (
+        Index(
+            "uq_swiss_stopped_scope",
+            "stage_id",
+            "stage_item_id",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+        {"schema": "tournament"},
+    )
+
+    stage_id: Mapped[int] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"))
+    stage_item_id: Mapped[int | None] = mapped_column(ForeignKey(StageItem.id, ondelete="CASCADE"), nullable=True)

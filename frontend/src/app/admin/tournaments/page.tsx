@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2, CheckCircle, CircleDot, Crown, EyeOff, Trophy } from "lucide-react";
 import { useFormatter } from "@/lib/datetime/client";
-import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
+import { DataTable, columnMeta } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
@@ -29,6 +29,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { paginateResults, sortArray } from "@/lib/api/paginate-results";
 import { formatTournamentStages } from "@/lib/tournament/stages";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 export default function TournamentsPage() {
   const format = useFormatter();
@@ -46,7 +47,7 @@ export default function TournamentsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminService.deleteTournament(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.list() });
       setDeleteDialogOpen(false);
       setSelectedTournament(null);
       notify.success("Tournament deleted successfully");
@@ -88,7 +89,7 @@ export default function TournamentsPage() {
     {
       accessorKey: "is_league",
       header: "Type",
-      meta: adminColumnMeta<Tournament>({ align: "center" }),
+      meta: columnMeta<Tournament>({ align: "center" }),
       cell: ({ row }) =>
         row.getValue("is_league") ? (
           <StatusIcon icon={Crown} label="League" variant="info" />
@@ -99,7 +100,7 @@ export default function TournamentsPage() {
     {
       accessorKey: "is_finished",
       header: "Status",
-      meta: adminColumnMeta<Tournament>({ align: "center" }),
+      meta: columnMeta<Tournament>({ align: "center" }),
       cell: ({ row }) =>
         row.getValue("is_finished") ? (
           <StatusIcon icon={CheckCircle} label="Finished" variant="muted" />
@@ -184,7 +185,7 @@ export default function TournamentsPage() {
         }
       />
 
-      <AdminDataTable
+      <DataTable
         queryKey={(page, search, pageSize, sortField, sortDir) => [
           "tournaments",
           page,

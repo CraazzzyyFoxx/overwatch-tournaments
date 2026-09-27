@@ -30,7 +30,7 @@ import {
 import type { PlayerCreateInput, PlayerSubRole, PlayerUpdateInput } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { formatSubRoleLabel } from "@/utils/player";
+import { formatSubRoleLabel } from "@/lib/player";
 
 /** Shown on the sub-role field for a role the sub-role catalog has no rows for. */
 const NO_SUB_ROLE_CATALOG_PLACEHOLDER = "No sub-roles for this role";

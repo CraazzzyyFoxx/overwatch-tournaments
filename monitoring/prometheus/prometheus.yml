@@ -1,3 +1,6 @@
+# Local dev stack only (docker-compose.yml). Production metrics are scraped by
+# Alloy on Moscow (monitoring/alloy/moscow.alloy) and stored by the Prometheus on
+# home (prometheus.home.yml) — see monitoring/README.md.
 global:
   scrape_interval: 30s
   evaluation_interval: 30s

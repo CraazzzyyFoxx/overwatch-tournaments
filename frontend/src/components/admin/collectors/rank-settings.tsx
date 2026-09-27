@@ -40,6 +40,7 @@ import type {
   SettingRead
 } from "@/types/admin.types";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const RANK_COLLECTION_KEY = "parser.rank_collection";
 const RANK_MAPPING_KEY = "parser.rank_mapping";
@@ -62,11 +63,11 @@ export function RankSettingsPanel() {
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
-    queryKey: ["admin", "settings"],
+    queryKey: adminQueryKeys.settings(),
     queryFn: () => adminService.getSettings()
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: adminQueryKeys.settings() });
 
   if (settingsQuery.isLoading) {
     return <p className="text-muted-foreground">Loading…</p>;

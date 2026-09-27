@@ -23,6 +23,7 @@ import type { CurrentRank } from "@/types/rank.types";
 import { StatusBadge, formatDate } from "@/components/admin/collectors/rank-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface SelectUser {
   (userId: number, label: string): void;
@@ -42,7 +43,7 @@ export function RankPlayerSearch({ onSelect }: Readonly<{ onSelect: SelectUser }
   useClickOutside(containerRef, () => setOpen(false));
 
   const searchQuery = useQuery({
-    queryKey: ["admin", "rank", "user-search", debounced],
+    queryKey: adminQueryKeys.rankUserSearch(debounced),
     queryFn: () => userService.searchUsers(debounced),
     enabled: debounced.length >= 2
   });
@@ -113,7 +114,7 @@ function rankLabel(rank: CurrentRank): string {
 
 function CurrentRanksSection({ userId }: Readonly<{ userId: number }>) {
   const query = useQuery({
-    queryKey: ["admin", "rank", "current", userId],
+    queryKey: adminQueryKeys.rankCurrent(userId),
     queryFn: () => rankService.getUserCurrentRanks(userId)
   });
   const ranks = (query.data?.ranks ?? []).filter((r) => r.is_ranked);
@@ -155,7 +156,7 @@ export function RankPlayerPanel({ userId }: Readonly<{ userId: number }>) {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
 
   const statusQuery = useQuery({
-    queryKey: ["admin", "rank", "collection", workspaceId, userId],
+    queryKey: adminQueryKeys.rankCollection(workspaceId, userId),
     queryFn: () => adminService.getRankCollectionStatus(userId)
   });
   const rows = statusQuery.data ?? [];
@@ -166,7 +167,7 @@ export function RankPlayerPanel({ userId }: Readonly<{ userId: number }>) {
     onSuccess: (result) => {
       notify.success(`Queued ${result.enqueued} rank fetch(es)`);
       setSelectedTagIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ["admin", "rank"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.rank() });
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not queue the rank fetch — try again" })

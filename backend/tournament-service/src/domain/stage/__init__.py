@@ -11,7 +11,6 @@ from src.domain.stage.seeds import (
     group_for_index,
     lower_bracket_item,
     parse_seed_mode,
-    parse_seed_ranking,
     rank_team_ids,
     resolve_seeds,
 )
@@ -31,7 +30,6 @@ __all__ = (
     "group_for_index",
     "lower_bracket_item",
     "parse_seed_mode",
-    "parse_seed_ranking",
     "rank_team_ids",
     "resolve_seeds",
     "stage_lifecycle",

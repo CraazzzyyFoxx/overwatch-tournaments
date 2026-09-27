@@ -12,12 +12,12 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
  * Deliberately kept after the redesign, unlike the primitives P6 removed.
  * These are not browsers: they have no search, no paging, no sort, no URL
  * state and no row actions, and each row is an inline editor rather than a
- * link to one. `AdminDataTable` (T2) would add a toolbar, a pager and a URL
+ * link to one. `DataTable` (T2) would add a toolbar, a pager and a URL
  * contract to a nine-row grid nested in a form — and two of those, on the
  * same screen as the real table, would compete for `?page=` and `?sort=`.
  * What those grids actually shared was styling, which is all this file is.
  *
- * Reach for `AdminDataTable` for anything that is the subject of its screen;
+ * Reach for `DataTable` for anything that is the subject of its screen;
  * reach for these styles only for a dense table nested in an editor.
  */
 

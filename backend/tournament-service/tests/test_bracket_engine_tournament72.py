@@ -5,14 +5,14 @@ Structure copied verbatim from the production DB (tournament.stage,
 tournament.stage_item_input, tournament.encounter, tournament.standing):
 
 - Stage «Groups» (id 165): SWISS, two groups A/B of 10 teams, 5 rounds,
-  ``settings_json`` = ``{"ranking_preset": "challonge_swiss",
-  "tiebreak_order": ["points", "match_wins", "median_buchholz", "buchholz",
-  "score_differential", "head_to_head", "manual_override"]}``.
+  ``ranking_preset`` = ``challonge_swiss``, ``tiebreak_order`` = ``["points",
+  "match_wins", "median_buchholz", "buchholz", "score_differential",
+  "head_to_head"]`` (``manual_override`` removed by stpin01).
 - Stage «Playoffs» (id 175): DOUBLE_ELIMINATION with a split lower bracket —
   group 1st/2nd places seed the upper bracket, 3rd/4th places start in the
-  lower bracket. ``settings_json`` = ``{"de_grand_final_type": "no_reset",
-  "tiebreak_order": ["points", "head_to_head", "median_buchholz",
-  "score_differential", "match_wins", "buchholz", "manual_override"]}``.
+  lower bracket. ``de_grand_final_type`` = ``no_reset``, ``tiebreak_order`` =
+  ``["points", "head_to_head", "median_buchholz", "score_differential",
+  "match_wins", "buchholz"]``.
 
 The tests lock group-stage ranking, playoff seed pairings, standings
 calculators, and concurrent result editing. Playoff later-round pairing is
@@ -45,6 +45,8 @@ standings_service = importlib.import_module("src.services.standings.service")
 captain_service = importlib.import_module("src.services.encounter.captain")
 models = importlib.import_module("src.models")
 enums = importlib.import_module("shared.core.enums")
+
+from tests._stage_regulation import stage_regulation  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Tournament 72 reference data (production DB, tournament_id=72)
@@ -118,33 +120,26 @@ GROUP_B_RESULTS = [
     (5, 2058, 2066, 2, 0),
 ]
 
-# Stage 165 settings_json (verbatim).
-SWISS_SETTINGS = {
-    "ranking_preset": "challonge_swiss",
-    "tiebreak_order": [
-        "points",
-        "match_wins",
-        "median_buchholz",
-        "buchholz",
-        "score_differential",
-        "head_to_head",
-        "manual_override",
-    ],
-}
+# Stage 165 regulation (verbatim).
+SWISS_RANKING_PRESET = "challonge_swiss"
+SWISS_TIEBREAK_ORDER = [
+    "points",
+    "match_wins",
+    "median_buchholz",
+    "buchholz",
+    "score_differential",
+    "head_to_head",
+]
 
-# Stage 175 settings_json (verbatim).
-PLAYOFF_SETTINGS = {
-    "de_grand_final_type": "no_reset",
-    "tiebreak_order": [
-        "points",
-        "head_to_head",
-        "median_buchholz",
-        "score_differential",
-        "match_wins",
-        "buchholz",
-        "manual_override",
-    ],
-}
+# Stage 175 regulation (verbatim).
+PLAYOFF_TIEBREAK_ORDER = [
+    "points",
+    "head_to_head",
+    "median_buchholz",
+    "score_differential",
+    "match_wins",
+    "buchholz",
+]
 
 # Production standings order (stage 165, positions 1..10 per stage item).
 GROUP_A_PROD_ORDER = [2069, 2055, 2067, 2056, 2054, 2072, 2061, 2070, 2057, 2064]
@@ -236,13 +231,13 @@ def _simulate_bracket(skeleton: BracketSkeleton, decide) -> list[SimpleNamespace
     return encounters
 
 
-def _stage(stage_type, settings_json: dict | None) -> object:
+def _stage(stage_type, **regulation) -> object:
     stage = models.Stage(
+        **stage_regulation(**regulation),
         tournament_id=72,
         name="Stage",
         stage_type=stage_type,
         order=0,
-        settings_json=settings_json,
     )
     stage.id = 165
     return stage
@@ -269,7 +264,7 @@ class SwissGroupStageTournament72Tests(TestCase):
         return [team.team_id for team in ranked], {team.team_id: team for team in ranked}
 
     def test_group_a_reproduces_production_standings(self) -> None:
-        order, by_id = self._rank(GROUP_A_RESULTS, SWISS_SETTINGS["tiebreak_order"])
+        order, by_id = self._rank(GROUP_A_RESULTS, SWISS_TIEBREAK_ORDER)
         self.assertEqual(GROUP_A_PROD_ORDER, order)
 
         averet = by_id[2069]
@@ -285,7 +280,7 @@ class SwissGroupStageTournament72Tests(TestCase):
         self.assertEqual([2067, 2056, 2054, 2072, 2061, 2070], cluster)
 
     def test_group_b_reproduces_production_standings(self) -> None:
-        order, by_id = self._rank(GROUP_B_RESULTS, SWISS_SETTINGS["tiebreak_order"])
+        order, by_id = self._rank(GROUP_B_RESULTS, SWISS_TIEBREAK_ORDER)
         self.assertEqual(GROUP_B_PROD_ORDER, order)
 
         # litnik and Rasetsu tie on points (4.5), wins (4) and median
@@ -311,7 +306,7 @@ class SwissGroupStageTournament72Tests(TestCase):
         cluster this promotes all-draws TeYzee (strong opposition) above
         DemonDimon/Txao and drops Txao behind NoBrain.
         """
-        swiss_order, _ = self._rank(GROUP_A_RESULTS, SWISS_SETTINGS["tiebreak_order"])
+        swiss_order, _ = self._rank(GROUP_A_RESULTS, SWISS_TIEBREAK_ORDER)
         default_order, _ = self._rank(GROUP_A_RESULTS, standings_service.RULE_PRESET_DEFAULTS["bracket_default"])
 
         self.assertNotEqual(swiss_order, default_order)
@@ -325,26 +320,29 @@ class SwissGroupStageTournament72Tests(TestCase):
 
     def test_stage_settings_resolve_tiebreak_parameters(self) -> None:
         """_tiebreak_order must prefer the explicit stage parameter list and
-        fall back to the ranking_preset defaults when it is absent — both of
-        them normalized, which appends the always-last ``manual_override`` step
-        no stored order or preset mentions."""
+        fall back to the ranking_preset defaults when it is absent -- both of
+        them normalized."""
         normalize = standings_service.normalize_tiebreak_order
 
-        explicit = _stage(enums.StageType.SWISS, SWISS_SETTINGS)
-        self.assertEqual(normalize(SWISS_SETTINGS["tiebreak_order"]), standings_service._tiebreak_order(explicit))
+        explicit = _stage(
+            enums.StageType.SWISS,
+            ranking_preset=SWISS_RANKING_PRESET,
+            tiebreak_order=SWISS_TIEBREAK_ORDER,
+        )
+        self.assertEqual(normalize(SWISS_TIEBREAK_ORDER), standings_service._tiebreak_order(explicit))
 
-        preset_only = _stage(enums.StageType.SWISS, {"ranking_preset": "challonge_swiss"})
+        preset_only = _stage(enums.StageType.SWISS, ranking_preset=SWISS_RANKING_PRESET)
         self.assertEqual(
             normalize(standings_service.RULE_PRESET_DEFAULTS["challonge_swiss"]),
             standings_service._tiebreak_order(preset_only),
         )
 
-        playoff = _stage(enums.StageType.DOUBLE_ELIMINATION, PLAYOFF_SETTINGS)
-        self.assertEqual(normalize(PLAYOFF_SETTINGS["tiebreak_order"]), standings_service._tiebreak_order(playoff))
-
-        # The normalization is not a no-op on this data: the stored order does
-        # not mention manual_override, the effective one always ends with it.
-        self.assertEqual("manual_override", standings_service._tiebreak_order(explicit)[-1])
+        playoff = _stage(
+            enums.StageType.DOUBLE_ELIMINATION,
+            de_grand_final_type="no_reset",
+            tiebreak_order=PLAYOFF_TIEBREAK_ORDER,
+        )
+        self.assertEqual(normalize(PLAYOFF_TIEBREAK_ORDER), standings_service._tiebreak_order(playoff))
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +358,7 @@ class SwissRoundGenerationTournament72Tests(TestCase):
         first_four = [row for row in GROUP_A_RESULTS if row[0] <= 4]
         ranked = standings_service.prepare_teams_for_groups(
             _group_encounters(first_four),
-            tiebreak_order=SWISS_SETTINGS["tiebreak_order"],
+            tiebreak_order=SWISS_TIEBREAK_ORDER,
         )
         standings = [SwissStanding(team_id=team.team_id, points=team.points, buchholz=team.buchholz) for team in ranked]
         played_pairs = {frozenset({home, away}) for _, home, away, _, _ in first_four}
@@ -1009,16 +1007,16 @@ class BracketAutoAdvancementTournament72Tests(IsolatedAsyncioTestCase):
             teams={2069: "Averet", 2071: "litnik", 2060: "vac3x"},
             stages={
                 175: SimpleNamespace(
+                    **stage_regulation(),
                     id=175,
                     stage_type=enums.StageType.DOUBLE_ELIMINATION,
                     is_published=True,
-                    settings_json={"de_grand_final_type": "no_reset"},
                 ),
                 165: SimpleNamespace(
+                    **stage_regulation(),
                     id=165,
                     stage_type=enums.StageType.SWISS,
                     is_published=True,
-                    settings_json=None,
                 ),
             },
             players_by_auth={AVERET_CAPTAIN: AVERET_CAPTAIN, LITNIK_CAPTAIN: LITNIK_CAPTAIN},

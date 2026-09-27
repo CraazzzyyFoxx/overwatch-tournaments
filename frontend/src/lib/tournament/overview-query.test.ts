@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, vi } from "vitest";
 
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import tournamentService from "@/services/tournament.service";
@@ -10,7 +10,7 @@ import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query"
 
 describe("tournament overview query contract", () => {
   it("is defined in a server-safe module", () => {
-    const source = readFileSync(join(import.meta.dir, "overview-query.ts"), "utf8");
+    const source = readFileSync(join(import.meta.dirname, "overview-query.ts"), "utf8");
 
     expect(source).not.toMatch(/["']use client["']/);
   });
@@ -27,7 +27,7 @@ describe("tournament overview query contract", () => {
 
   it("uses the detail key and public overview fetcher with a one-minute stale time", async () => {
     const overview = { id: 72 } as Tournament;
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockResolvedValue(overview);
+    const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockResolvedValue(overview);
     const options = tournamentOverviewQueryOptions(72);
 
     expect(options.queryKey).toEqual(tournamentQueryKeys.detail(72));

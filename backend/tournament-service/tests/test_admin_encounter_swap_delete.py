@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -154,7 +154,7 @@ class DeleteEncounter(IsolatedAsyncioTestCase):
             execute=AsyncMock(return_value=SimpleNamespace(first=lambda: (siblings[0],) if siblings else None)),
         )
         service = admin_encounter.AdminEncounterService()
-        remove_bye = MagicMock()
+        remove_bye = AsyncMock()
 
         with (
             patch.object(service.encounter_repo, "get", AsyncMock(return_value=encounter)),
@@ -165,27 +165,27 @@ class DeleteEncounter(IsolatedAsyncioTestCase):
         ):
             await service.delete_encounter(session, encounter.id)
 
-        return calls, remove_bye
+        return calls, remove_bye, session
 
     async def test_delete_voids_the_advancement_before_removing_the_row(self):
         encounter = _encounter(id=10, home=1, away=2, stage_id=None, status=enums.EncounterStatus.COMPLETED)
 
-        calls, _ = await self._delete(encounter)
+        calls, _, _ = await self._delete(encounter)
 
         self.assertEqual(["reset", "delete"], calls)
 
     async def test_deleting_the_rounds_last_swiss_encounter_drops_its_bye(self):
-        stage = SimpleNamespace(id=4, stage_type=enums.StageType.SWISS, settings_json={})
+        stage = SimpleNamespace(id=4, stage_type=enums.StageType.SWISS)
         encounter = _encounter(id=11, home=1, away=2, stage_id=4, stage_item_id=9, round=3)
 
-        _, remove_bye = await self._delete(encounter, stage=stage)
+        _, remove_bye, session = await self._delete(encounter, stage=stage)
 
-        remove_bye.assert_called_once_with(stage, 9, 3)
+        remove_bye.assert_awaited_once_with(session, 4, 9, 3)
 
     async def test_deleting_one_of_two_swiss_encounters_keeps_the_bye(self):
-        stage = SimpleNamespace(id=4, stage_type=enums.StageType.SWISS, settings_json={})
+        stage = SimpleNamespace(id=4, stage_type=enums.StageType.SWISS)
         encounter = _encounter(id=11, home=1, away=2, stage_id=4, stage_item_id=9, round=3)
 
-        _, remove_bye = await self._delete(encounter, stage=stage, siblings=(12,))
+        _, remove_bye, _ = await self._delete(encounter, stage=stage, siblings=(12,))
 
-        remove_bye.assert_not_called()
+        remove_bye.assert_not_awaited()

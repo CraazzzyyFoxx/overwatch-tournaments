@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 interface TeamCreateDialogProps {
   open: boolean;
@@ -54,8 +56,8 @@ export function TeamCreateDialog({ open, onOpenChange, tournamentId }: Readonly<
       }),
     onSuccess: async (team) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["teams"] }),
-        queryClient.invalidateQueries({ queryKey: ["admin", "tournament", tournamentId] })
+        queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.teamsAll() }),
+        queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournament(tournamentId) })
       ]);
       notify.success("Team created — add its roster below");
       setForm(EMPTY_FORM);

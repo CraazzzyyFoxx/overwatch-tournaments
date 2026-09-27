@@ -4,8 +4,6 @@ Canonical map of **domain rules**, not HTTP plumbing. Architecture and request f
 
 Authority is the server. The frontend duplicates a few gates for UX and cites the Python symbol it mirrors.
 
-Decoupling the statistical engine from the tournament engine is a separate intention: [`plans/2026-09-13-decouple-stats-from-tournament.md`](./plans/2026-09-13-decouple-stats-from-tournament.md).
-
 ---
 
 ## 0. Where logic lives
@@ -311,11 +309,11 @@ Jobs: `tournament_bracket_jobs` / `tournament_standings_jobs`, prefetch 4, isola
 
 ## 8. Encounters, reports, pick-ban
 
-Encounter status: `OPEN | PENDING | COMPLETED`. Result status includes `none | confirmed | disputed`. Match provenance: `log_parser | captain_report | …`.
+Encounter status: `OPEN | PENDING | COMPLETED`. The result authority is the **encounter game** (`tournament.encounter_game`, one per series position): `state` `planned | awaiting_result | disputed | confirmed | cancelled`, `result_source` `captain_agreement | admin | admin_log`. The series score is wins over confirmed, non-cancelled games. A `Match` is the parsed-log record of a played map and carries statistics, not the result.
 
 Two report layers:
 
-1. **Per-map** (`EncounterMapReport`) — drives the series and the next ban opener. Both sides agreeing writes a `Match` with `source=captain_report`. Disagreement → dispute + organizer notification. Key is `(encounter, map_id, map_index, team)` because the same map can be played twice.
+1. **Per-game** (`EncounterMapReport`) — one side's claim about one game, at most one row per `(game, side)`. Two matching claims confirm the game with `result_source=captain_agreement` and drive the next ban opener; conflicting claims → `disputed` + organizer notification. A claim against a confirmed game is rejected (`result_locked`); changing it is the admin correction command, which requires a reason.
 2. **Series** (`EncounterCaptainReport`) — after the series. Once `confirmed`, only an admin can change it. Disabled form fields are dropped, not 422.
 
 A preview bracket rejects writes (409).
@@ -442,7 +440,7 @@ Duplicates only what the UI needs instantly; comments cite the server symbol:
 | `…/roster-shape-editor.model.ts` | Only 2–12 to preempt a 422; `inherit` sends `null` |
 | `frontend/src/hooks/usePermissions.ts` | RBAC mirror including deny and host ≠ admin panel |
 | `…/tournament-checklist.ts` | Challonge slug skips registration-form checklist items; `null` readiness fields mean no-access, not zero |
-| `frontend/src/middleware.ts` | Tenant host; client-supplied workspace headers are always stripped |
+| `frontend/src/proxy.ts` | Tenant host; client-supplied workspace headers are always stripped |
 
 ---
 

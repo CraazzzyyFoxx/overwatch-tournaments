@@ -1,3 +1,9 @@
+// Profile-specific global CSS, loaded with this route's chunk rather than from
+// globals.css. The achievements sheet comes along because the profile's
+// achievements tab renders the same `.aqt-ach-*` / `.aqt-rar-*` markup.
+import "../achievements/achievements.css";
+import "./user-profile.css";
+
 import type { Metadata } from "next";
 import React from "react";
 import { getTranslations } from "next-intl/server";

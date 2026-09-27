@@ -1,7 +1,7 @@
 # OWT documentation
 
-The map. Every evergreen document in the repository is reachable from here; anything not
-linked below is either component-local or archive.
+The map. Every document in the repository is reachable from here; anything not linked below
+is component-local.
 
 ## Start here
 
@@ -27,6 +27,7 @@ The system as it is. These are updated in the same commit as the change they des
 | [`frontend-zones.md`](./frontend-zones.md) | Frontend route zones (`web` / `admin` / `tools`), the three import rules CI enforces, and the per-zone i18n message bundles |
 | [`glossary.md`](./glossary.md) | Domain vocabulary used across code, API and UI |
 | [`business-logic-inventory.md`](./business-logic-inventory.md) | Domain rules and invariants: lifecycle, registration, admission, roster, balancer/draft, brackets, pick-ban, logs, achievements, analytics |
+| [`api-rate-limits.md`](./api-rate-limits.md) | Client-facing API quota contract: what is metered, the refusal shape, reading your remaining budget |
 | [`../frontend/src/app/(site)/docs/_content/`](../frontend/src/app/%28site%29/docs/_content/) | Player, organizer and developer guides served at `/docs`, one MDX file per locale (`ru`, `en`). Titles and order live in `frontend/src/app/(site)/docs/nav.ts`. The `/docs/dev/schema` page renders `schema.generated.json`, written by `backend/scripts/export_erd.py` alongside `database_erd.md` |
 
 ### Per component
@@ -65,42 +66,24 @@ Procedures for an operator. Commands are meant to be run verbatim.
 | [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps to Timeweb S3 (Moscow cron), restore |
 | [`disk-cleanup.md`](./disk-cleanup.md) | Daily Moscow disk cleanup: stale docker images, build cache, compose-level log caps |
 | [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
-| [`challonge_normalization_phase2_runbook.md`](./challonge_normalization_phase2_runbook.md) | Running the gated destructive migration — and the pattern for any future one |
-| [`superpowers/plans/2026-07-06-subdomains-ops-runbook.md`](./superpowers/plans/2026-07-06-subdomains-ops-runbook.md) | Workspace subdomains and custom domains: DNS, certificates, verification |
+| [`workspace-domains.md`](./workspace-domains.md) | Workspace subdomains and custom domains: DNS, certificates, verification |
 | [`../backend/analytics-service/docs/runbook-shift-recompute.md`](../backend/analytics-service/docs/runbook-shift-recompute.md) | Recomputing OpenSkill rating shifts |
 
-## In-flight work
+## Designs, plans and reviews
 
-Design and plan documents for work currently being implemented. They are point-in-time and
-stop being maintained once the work ships.
+Not kept here. Decisions and their reasons live in Graphiti, group `anak-tournaments`; drafts
+live in gitignored scratch. The documents that used to sit under `docs/plans/`,
+`docs/superpowers/`, `docs/reviews/`, `docs/<project>/` and `backend/docs/architecture/specs/`
+are one Graphiti episode each, and in full at `git show 50b83c88f537:<path>`.
 
-- [`tournament-redesign/`](./tournament-redesign/) — public tournament page redesign
-- [`plans/2026-09-13-decouple-stats-from-tournament.md`](./plans/2026-09-13-decouple-stats-from-tournament.md) — write-authority seam between series results and match logs
-- [`plans/2026-09-20-multi-discipline-stats-engine.md`](./plans/2026-09-20-multi-discipline-stats-engine.md) — disciplines (games), per-discipline roles, and the `rpc.stats.*` engine seam
-- [`plans/2026-09-24-discipline-catalog-and-team-formats.md`](./plans/2026-09-24-discipline-catalog-and-team-formats.md) — discipline metadata, role axes and tree, relational team formats
-
-## Archive
-
-Historical designs, plans, inventories and reviews. **Frozen** — read for the reasoning behind
-a decision, never as a description of the current system, and never extend them. Internal
-links inside the archive have rotted and are not repaired.
-
-- [`plans/`](./plans/) — designs and implementation plans, dated. New plans go here.
-- [`superpowers/`](./superpowers/) — an earlier split of the same thing into `specs/` (design)
-  and `plans/` (implementation). Superseded by `plans/`.
-- [`reviews/`](./reviews/) — point-in-time audits, e.g. the 2026-07-03 backend security and
-  performance review.
-
-Git history is part of the archive: `git log -- <file>` on a spec answers "why is it like
-this" better than any of these documents.
+Git history answers "why is it like this" too: `git log -S <symbol>` finds the commit that
+introduced it.
 
 ## Conventions
 
-- **English.** Reference documents, runbooks and component READMEs are English. The archive
-  and in-flight project documents are left in whatever language they were written in.
+- **English.**
 - **A document has one job.** Reference describes the present, a runbook describes a
-  procedure, a plan describes an intention. A file that does two of these becomes stale in
-  half of itself.
+  procedure. A file that does both becomes stale in half of itself.
 - **Facts have one home.** When work ships, what must outlive it moves into the reference
   document; the plan is not that home.
 - **Unlinked is invisible.** A new evergreen document that is not in this file does not exist.

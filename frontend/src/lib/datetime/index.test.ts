@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { createFormatter } from "next-intl";
 
 import { formatDateRange, resolveFormatLocale, resolveTimeZone } from ".";
@@ -35,8 +35,10 @@ describe("resolveTimeZone", () => {
 describe("formatDateRange", () => {
   it("prints tournament days as stored, whatever the viewer's zone", () => {
     const format = createFormatter({ locale: "en", timeZone: "America/New_York" });
+    // `\u2009` is the thin space ICU puts around the range dash — spelled as an
+    // escape so a mismatch reads as a separator change, not an invisible diff.
     expect(formatDateRange(format, "2026-10-03T00:00:00Z", "2026-10-04T00:00:00Z")).toBe(
-      "Oct 3 – 4, 2026"
+      "Oct 3\u2009\u2013\u20094, 2026"
     );
   });
 });

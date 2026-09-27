@@ -2,8 +2,7 @@ name: CI Frontend
 
 # The frontend had no CI at all: 140 test files, a typechecker and eslint, none
 # of it gated. A vitest suite that had silently stopped collecting nine files
-# stayed green for as long as nobody read vitest.config.ts, and a bun:test file
-# whose first line threw never ran anywhere.
+# stayed green for as long as nobody read vitest.config.ts.
 #
 # Paths-filtered: nothing here is affected by a backend-only change, and a job
 # that always runs is a job people learn to ignore.
@@ -36,12 +35,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      # bun is the app's own runtime (both Dockerfiles are oven/bun) AND one of
-      # its two test runners, so the same toolchain installs deps and runs tests.
+      # bun is the app's own runtime (both Dockerfiles are oven/bun), so the same
+      # toolchain installs deps and drives every script here.
       - name: Install bun
         uses: oven-sh/setup-bun@v2
-      # Node is needed for the vitest half: its environment is happy-dom under
-      # Node, and the split script shells out to the vitest bin with process.execPath.
+      # Node is what vitest runs on: its environment is happy-dom under Node.
       - name: Install node
         uses: actions/setup-node@v7
         with:
@@ -58,17 +56,8 @@ jobs:
       # of the script for why — so it is its own step, next to the linter.
       - name: Zone boundaries
         run: bun run lint:zones
-      # The two runners split the 140 test files between them and the split is
-      # derived, not maintained: vitest's own collection defines its half and bun
-      # gets the exact complement. This asserts each file speaks the runner whose
-      # half it landed in — a mismatch fails loudly for bun but SILENTLY for
-      # vitest, which is how nine files came to never run.
-      - name: Test files are paired with a runner
-        run: bun run test:split
       - name: Vitest suite
         run: bun run test:vitest
-      - name: bun:test suite
-        run: bun run test:bun
       # Last, and only on the branch: a Next production build is the slowest step
       # here and the only one needing app env, so PRs get the fast signal and
       # master gets the guarantee that the thing still builds. `.env` is

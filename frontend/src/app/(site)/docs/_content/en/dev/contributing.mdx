@@ -69,14 +69,14 @@ A change goes through five independent workflows. Run the ones covering the area
 | --- | --- |
 | lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), the generated-artifact gates `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, and `scripts/check_rpc_docs.py` — every routed RPC subject must be documented |
 | test-backend | pytest per package with coverage; integration tests skip themselves when the database is unreachable |
-| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:split`, `bun run test:vitest`, `bun run test:bun`; the production build `bun run build` runs only on pushes to `master`, not on pull requests |
+| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:vitest`; the production build `bun run build` runs only on pushes to `master`, not on pull requests |
 | ci-gateway | `go mod tidy -diff`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race ./...` |
 | ci-docs | `python3 scripts/check_doc_links.py` — relative documentation links must resolve |
 
 Three committed files are derived from code, and CI fails when they drift: the OpenAPI manifest the gateway builds its specs from, `frontend/src/lib/divisions/ow-ladder.generated.json`, and the entity diagrams in `docs/database_erd.md`. After changing an ORM model, regenerate them with the commands in the table above. Hooks are installed once — `pre-commit install` — and run ruff plus file hygiene on staged files.
 
 <Callout type="warning">
-A migration that drops a column or a table must not arrive through a plain `upgrade head` while running code still reads what it removes. The safe order is in the runbook [challonge_normalization_phase2_runbook.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/challonge_normalization_phase2_runbook.md).
+A migration that drops a column or a table must not arrive through a plain `upgrade head` while running code still reads what it removes. The safe order is in [CONTRIBUTING.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/CONTRIBUTING.md#database-changes).
 </Callout>
 
 ## Commits

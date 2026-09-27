@@ -144,6 +144,9 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.TournamentScheduleSet, response=schemas.TournamentRead
     ),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),
+    "rpc.tournament.standing_pins_set": Op(
+        request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead
+    ),
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=schemas.MergeGroupStagesRequest, response=schemas.StageRead),
     "rpc.tournament.stage_activate": Op(response=schemas.StageRead),
@@ -432,6 +435,8 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.tournament.ffa_game_cancel": Op(request=ffa_schemas.FfaGameCancelInput, response=ffa_schemas.FfaLobbyRead),
     "rpc.tournament.ffa_games_count_set": Op(request=ffa_schemas.FfaGamesCountInput, response=ffa_schemas.FfaLobbyRead),
+    # Same shape as rpc.tournament.ffa_stage, minus the public_view trim.
+    "rpc.tournament.ffa_stage_admin": Op(response=ffa_schemas.FfaLobbyRead, response_array=True),
     # ── per-map match edit (admin) ─────────────────────────────────────────
     # Answers an ad-hoc dict of the match's own columns rather than MatchRead, so
     # only the request body is mapped here.

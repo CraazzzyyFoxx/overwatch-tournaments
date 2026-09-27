@@ -29,6 +29,7 @@ import type {
   AnalyticsJobRealtimePayload
 } from "@/types/analytics.types";
 import { Spinner } from "@/components/ui/spinner";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 
 interface MLAdminToolbarProps {
   tournamentId: number;
@@ -93,7 +94,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
   const isLiveJobActive = liveJob != null && !TERMINAL_STATUSES.has(liveJob.status);
 
   const { data: initialActiveJob } = useQuery({
-    queryKey: ["analytics-active-job", workspaceId ?? "global"],
+    queryKey: analyticsQueryKeys.activeJob(workspaceId ?? "global"),
     queryFn: () => analyticsService.getActiveJob(workspaceId),
     refetchInterval: isLiveJobActive ? false : 30_000
   });
@@ -105,7 +106,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
   }, [initialActiveJob, liveJob]);
 
   const { data: refreshedLiveJob } = useQuery({
-    queryKey: ["analytics-job", liveJob?.id],
+    queryKey: analyticsQueryKeys.job(liveJob?.id),
     queryFn: () => analyticsService.getJob(liveJob!.id),
     enabled: isLiveJobActive,
     refetchInterval: isLiveJobActive ? 1_500 : false

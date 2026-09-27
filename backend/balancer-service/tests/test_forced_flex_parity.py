@@ -38,7 +38,7 @@ import pytest
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = REPO_BACKEND_ROOT.parent
 BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"
-FIXTURES = REPO_ROOT / "docs" / "superpowers" / "fixtures" / "forced-flex-eff-rank.json"
+FIXTURES = BALANCER_SERVICE_ROOT / "tests" / "fixtures" / "forced-flex-eff-rank.json"
 
 for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
     if candidate not in sys.path:

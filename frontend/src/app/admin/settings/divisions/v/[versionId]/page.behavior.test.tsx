@@ -187,7 +187,7 @@ const mounted: { root: Root; container: HTMLElement }[] = [];
  * The `xl` rail vs the "Impact" sub-tab (F12 ·8).
  *
  * `min-width` queries answer for the editor's own rail breakpoint; the
- * `max-width` one `AdminDataTable` asks about is the mobile-card switch and
+ * `max-width` one `DataTable` asks about is the mobile-card switch and
  * stays off, so the table keeps rendering rows either way.
  */
 function mockViewport(wide: boolean) {

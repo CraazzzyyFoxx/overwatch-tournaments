@@ -22,6 +22,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { User } from "@/types/user.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const TABS = ["identity", "participations", "account", "achievements"] as const;
 type PersonTab = (typeof TABS)[number];
@@ -74,7 +75,7 @@ export default function PersonHubPage() {
     : "identity";
 
   const personQuery = useQuery({
-    queryKey: ["admin", "person", personId],
+    queryKey: adminQueryKeys.person(personId),
     queryFn: async () => {
       const page = await adminService.getUsers({ per_page: -1 });
       const found = page.results.find((candidate) => candidate.id === personId);

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import adminService from "@/services/admin.service";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * Cache root of the unresolved-name queue.
@@ -11,7 +12,7 @@ import adminService from "@/services/admin.service";
  * off it, so attaching or dismissing one name invalidates this single key and
  * both surfaces agree on the new count.
  */
-export const MISS_QUEUE_KEY = ["admin", "catalog-alias-misses"] as const;
+export const MISS_QUEUE_KEY = adminQueryKeys.catalogAliasMisses();
 
 /**
  * How many log names are still waiting for a decision — the number on the

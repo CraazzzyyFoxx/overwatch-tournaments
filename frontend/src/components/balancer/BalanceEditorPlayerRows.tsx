@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
-import { formatSubRoleLabel } from "@/utils/player";
+import { formatSubRoleLabel } from "@/lib/player";
 import type { DivisionGrid } from "@/types/workspace.types";
 import type {
   BalancerRosterKey,

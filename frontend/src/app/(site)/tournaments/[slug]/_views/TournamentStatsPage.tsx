@@ -29,7 +29,7 @@ import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { ViewSegment, readViewParam } from "../_components/ViewSegment";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentMapPool } from "../_hooks/useTournamentMapPool";
-import { tournamentEncountersQueryOptions } from "./TournamentEncountersPage";
+import { tournamentEncountersQueryOptions } from "@/lib/tournament/encounters-query";
 import {
   getPublicPageQueryPresentation,
   type PublicPageQueryState

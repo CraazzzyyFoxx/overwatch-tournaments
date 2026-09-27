@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { GripVertical, Pencil, PlusCircle, ShieldX } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useDragSensors } from "@/hooks/useDragSensors";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord, BalancerRoleCode } from "@/types/balancer-admin.types";
 import {
@@ -365,7 +366,7 @@ export function PoolTriageBoard({
   onSetBalancerStatus,
   actionsDisabled = false,
 }: Readonly<PoolTriageBoardProps>) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useDragSensors();
   const statesByLane = useMemo(
     () =>
       POOL_LANES.reduce<Record<PoolLane, PlayerValidationState[]>>(

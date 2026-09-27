@@ -9,6 +9,7 @@ import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind, PickBanState } from "@/types/tournament.types";
 import { Fact, Pill } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterPregamePanelProps {
   encounterId: number;
@@ -86,7 +87,7 @@ export default function EncounterPregamePanel({
 
 function usePregameState(kind: PickBanKind, encounterId: number) {
   return useQuery({
-    queryKey: ["pregame-state", encounterId, kind],
+    queryKey: encounterQueryKeys.pregameState(encounterId, kind),
     queryFn: () => pickBanService.getPickBanState(kind, encounterId),
     staleTime: 30_000
   });

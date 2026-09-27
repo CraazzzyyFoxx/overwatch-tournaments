@@ -10,6 +10,7 @@ import SearchableImageSelect, {
 } from "@/components/ui/searchable-image-select";
 import HeroesView from "@/app/(site)/users/components/heroes/HeroesView";
 import { Skeleton } from "@/components/ui/skeleton";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface UserHeroesContainerProps {
   userId: number;
@@ -20,20 +21,20 @@ const UserHeroesContainer = ({ userId }: UserHeroesContainerProps) => {
   const [tournamentId, setTournamentId] = useState<number | undefined>(undefined);
 
   const tournamentsQuery = useQuery({
-    queryKey: ["user-tournaments", userId],
+    queryKey: userQueryKeys.tournamentsAll(userId),
     queryFn: () => userService.getUserTournaments(userId),
     staleTime: 5 * 60 * 1000
   });
 
   const heroesQuery = useQuery({
-    queryKey: ["user-heroes", userId, tournamentId],
+    queryKey: userQueryKeys.heroes(userId, tournamentId),
     queryFn: () => userService.getUserHeroes(userId, undefined, tournamentId),
     staleTime: 5 * 60 * 1000
   });
 
   // Maps (with per-hero stats) power the "Maps for [Hero]" panel in HeroesView.
   const mapsQuery = useQuery({
-    queryKey: ["user-heroes-maps", userId, tournamentId],
+    queryKey: userQueryKeys.heroMaps(userId, tournamentId),
     queryFn: () => userService.getUserMaps(userId, { perPage: -1, minCount: 1, tournamentId }),
     staleTime: 5 * 60 * 1000
   });

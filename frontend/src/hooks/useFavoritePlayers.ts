@@ -5,11 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import meService from "@/services/me.service";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 // Single shared cache key: the star button, the profile toolbar, and the
 // account-settings list all read/write the same list, so favoriting from any
 // one of them must invalidate the other two instead of leaving them stale.
-const FAVORITE_PLAYERS_QUERY_KEY = ["me", "favorite-players"] as const;
+const FAVORITE_PLAYERS_QUERY_KEY = userQueryKeys.favoritePlayers();
 
 export function useFavoritePlayers() {
   const { user } = useAuthProfile();

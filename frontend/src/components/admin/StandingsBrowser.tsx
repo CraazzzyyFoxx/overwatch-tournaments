@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, RefreshCw, Trash2, Trophy } from "lucide-react";
+import { Lock, Pencil, RefreshCw, Trash2, Trophy } from "lucide-react";
 
-import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@/components/data-table";
 import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { StandingsTiesPanel } from "@/components/admin/StandingsTiesPanel";
+import { StandingsArrangeBoard } from "@/components/admin/StandingsArrangeBoard";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -17,6 +17,7 @@ import {
 } from "@/components/admin/tournament-filter";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { getTournamentWorkspaceQueryKeys, invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
@@ -30,6 +31,8 @@ import tournamentService from "@/services/tournament.service";
 import type { StandingUpdateInput } from "@/types/admin.types";
 import type { Standings } from "@/types/tournament.types";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
 const PAGE_SIZE = 25;
 
@@ -88,6 +91,7 @@ export function StandingsBrowser({
   const [form, setForm] = useState<StandingUpdateInput>({ ...EMPTY_FORM });
   const [pendingDelete, setPendingDelete] = useState<Standings | null>(null);
   const [recalculateOpen, setRecalculateOpen] = useState(false);
+  const [view, setView] = useState<"table" | "arrange">("table");
 
   const chipTournamentId = parseTournamentQueryParam(
     searchParams?.get(TOURNAMENT_QUERY_PARAM) ?? null
@@ -95,13 +99,13 @@ export function StandingsBrowser({
   const scopeTournamentId = tournamentId ?? chipTournamentId;
 
   const tournamentsQuery = useQuery({
-    queryKey: ["tournaments"],
+    queryKey: tournamentQueryKeys.list(),
     queryFn: () => tournamentService.getAll(null),
     enabled: tournamentId == null
   });
 
   const tournamentQuery = useQuery({
-    queryKey: ["admin", "tournament", scopeTournamentId],
+    queryKey: adminQueryKeys.tournament(scopeTournamentId),
     queryFn: () => adminService.getTournament(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
@@ -124,7 +128,7 @@ export function StandingsBrowser({
   const standings = standingsQuery.data ?? [];
 
   const stagesQuery = useQuery({
-    queryKey: ["admin", "stages", scopeTournamentId],
+    queryKey: adminQueryKeys.stages(scopeTournamentId),
     queryFn: () => adminService.getStages(scopeTournamentId!),
     enabled: scopeTournamentId != null
   });
@@ -184,7 +188,7 @@ export function StandingsBrowser({
   const tiebreakOrder = rows[0]?.tiebreak_order ?? null;
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["standings"] });
+    void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.standingsAll() });
     if (scopeTournamentId != null) {
       invalidateTournamentWorkspace(queryClient, scopeTournamentId, workspaceId);
     }
@@ -239,6 +243,12 @@ export function StandingsBrowser({
               <Trophy aria-hidden className="size-4 text-warning" />
             ) : null}
             <span className="font-bold tabular-nums">{row.original.position}</span>
+            {row.original.is_pinned ? (
+              <span title="Pinned place" className="text-muted-foreground">
+                <Lock aria-hidden className="size-3.5" />
+                <span className="sr-only">Pinned place</span>
+              </span>
+            ) : null}
           </div>
         )
       },
@@ -351,100 +361,123 @@ export function StandingsBrowser({
   }
 
   const canRecalculate = canUpdate && scopeTournamentId != null;
+  const arranging = view === "arrange" && scopeTournamentId != null;
+
+  const toolbar = (
+    <FilterBar
+      defs={defs}
+      filters={filters}
+      pinned={
+        tournamentId != null
+          ? [
+              {
+                key: TOURNAMENT_QUERY_PARAM,
+                label: `Tournament: ${tournamentQuery.data?.name ?? `#${tournamentId}`}`
+              }
+            ]
+          : undefined
+      }
+      trailing={
+        <>
+          {scopeTournamentId != null ? (
+            <ToggleGroup
+              type="single"
+              variant="pill"
+              size="sm"
+              value={view}
+              onValueChange={(next) => setView(next as "table" | "arrange")}
+              aria-label="Standings view"
+            >
+              <ToggleGroupItem value="table">Table</ToggleGroupItem>
+              <ToggleGroupItem value="arrange">Arrange</ToggleGroupItem>
+            </ToggleGroup>
+          ) : null}
+          {canRecalculate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={recalculateMutation.isPending}
+              onClick={() => setRecalculateOpen(true)}
+            >
+              <RefreshCw aria-hidden className="size-4" />
+              Recalculate
+            </Button>
+          ) : null}
+          {canAccessPermission("challonge.update", workspaceId) && scopeTournamentId != null ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncMutation.isPending}
+              onClick={() => syncMutation.mutate()}
+            >
+              <RefreshCw aria-hidden className="size-4" />
+              Sync Challonge
+            </Button>
+          ) : null}
+        </>
+      }
+    />
+  );
 
   return (
     <div className="space-y-3">
-      {scopeTournamentId != null ? (
-        <StandingsTiesPanel
-          rows={rows}
-          stages={stageList}
-          tournamentId={scopeTournamentId}
-          canUpdate={canUpdate}
-          onChanged={invalidate}
-        />
-      ) : null}
-
-      <AdminDataTable<Standings>
-        rows={rows}
-        isLoading={standingsQuery.isLoading}
-        columns={columns}
-        initialPageSize={PAGE_SIZE}
-        searchPlaceholder="Search by team name…"
-        filterKey={filters.filterKey}
-        getRowId={(row) => String(row.id)}
-        toolbar={
-          <FilterBar
-            defs={defs}
-            filters={filters}
-            pinned={
-              tournamentId != null
-                ? [
-                    {
-                      key: TOURNAMENT_QUERY_PARAM,
-                      label: `Tournament: ${tournamentQuery.data?.name ?? `#${tournamentId}`}`
-                    }
-                  ]
-                : undefined
-            }
-            trailing={
-              <>
-                {canRecalculate ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={recalculateMutation.isPending}
-                    onClick={() => setRecalculateOpen(true)}
-                  >
-                    <RefreshCw aria-hidden className="size-4" />
-                    Recalculate
-                  </Button>
-                ) : null}
-                {canAccessPermission("challonge.update", workspaceId) &&
-                scopeTournamentId != null ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={syncMutation.isPending}
-                    onClick={() => syncMutation.mutate()}
-                  >
-                    <RefreshCw aria-hidden className="size-4" />
-                    Sync Challonge
-                  </Button>
-                ) : null}
-              </>
-            }
+      {arranging ? (
+        <>
+          {toolbar}
+          <StandingsArrangeBoard
+            rows={rows}
+            stages={stageList}
+            canUpdate={canUpdate}
+            onChanged={invalidate}
           />
-        }
-        emptyMessage={
-          scopeTournamentId == null
-            ? "Standings are computed per tournament. Pick one to see its table."
-            : "No standings yet. Recalculate to build them from encounter results."
-        }
-        onRowDoubleClick={
-          canUpdate
-            ? (row) => {
-                updateMutation.reset();
-                setEditing(row.original);
-                setForm(standingFormOf(row.original));
-              }
-            : undefined
-        }
-        renderMobileCard={(row) => (
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
-              <span className="tabular-nums">{row.original.position}. </span>
-              {row.original.team?.name ?? "Unknown team"}
-            </p>
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {row.original.win}W · {row.original.draw}D · {row.original.lose}L ·{" "}
-              {row.original.points.toFixed(1)} pts
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {standingScopeLabel(row.original)}
-            </p>
-          </div>
-        )}
-      />
+        </>
+      ) : (
+        <DataTable<Standings>
+          rows={rows}
+          isLoading={standingsQuery.isLoading}
+          columns={columns}
+          initialPageSize={PAGE_SIZE}
+          searchPlaceholder="Search by team name…"
+          filterKey={filters.filterKey}
+          getRowId={(row) => String(row.id)}
+          toolbar={toolbar}
+          emptyMessage={
+            scopeTournamentId == null
+              ? "Standings are computed per tournament. Pick one to see its table."
+              : "No standings yet. Recalculate to build them from encounter results."
+          }
+          onRowDoubleClick={
+            canUpdate
+              ? (row) => {
+                  updateMutation.reset();
+                  setEditing(row.original);
+                  setForm(standingFormOf(row.original));
+                }
+              : undefined
+          }
+          renderMobileCard={(row) => (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                <span className="tabular-nums">{row.original.position}. </span>
+                {row.original.is_pinned ? (
+                  <>
+                    <Lock aria-hidden className="mr-1 inline size-3.5" />
+                    <span className="sr-only">Pinned place, </span>
+                  </>
+                ) : null}
+                {row.original.team?.name ?? "Unknown team"}
+              </p>
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {row.original.win}W · {row.original.draw}D · {row.original.lose}L ·{" "}
+                {row.original.points.toFixed(1)} pts
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {standingScopeLabel(row.original)}
+              </p>
+            </div>
+          )}
+        />
+      )}
 
       {tiebreakOrder && tiebreakOrder.length > 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -461,7 +494,7 @@ export function StandingsBrowser({
           if (!next) setEditing(null);
         }}
         title="Edit standing"
-        description="Adjust a stored standings row manually. Position is not editable here — every row is rebuilt from scratch on each recalculation, so use the Unresolved ties panel to set an order that survives."
+        description="Adjust a stored standings row manually. Position is not edited here — use Arrange to pin a place that survives recalculation."
         isSubmitting={updateMutation.isPending}
         submittingLabel="Updating standing…"
         errorMessage={
@@ -560,7 +593,7 @@ export function StandingsBrowser({
         intent={{
           title: "Recalculate standings?",
           description:
-            "Every standings row for this tournament is rebuilt from encounter results. Manual adjustments are overwritten.",
+            "Every standings row for this tournament is rebuilt from encounter results. Manual row edits are overwritten; pinned places are kept.",
           confirmLabel: "Recalculate",
           tone: "warning"
         }}

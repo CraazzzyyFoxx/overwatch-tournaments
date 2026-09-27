@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Logout must (a) never be reachable by GET — a state change on a GET is
 // something link previews, security scanners and speculative prefetch trigger
@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 
 let requestCookies: Record<string, { value: string } | undefined> = {};
 
-mock.module("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => requestCookies[name]
   })
@@ -17,7 +17,7 @@ mock.module("next/headers", () => ({
 // `bun test` shares one module registry across a run, so this mock must carry
 // every export the sibling auth-route tests rely on (see the note in
 // ../refresh/route.test.ts) — whichever file registers first wins.
-mock.module("@/services/auth.service", () => ({
+vi.mock("@/services/auth.service", () => ({
   OAuthLinkAuthRequiredError: class extends Error {},
   OAuthLinkFailedError: class extends Error {},
   authService: {

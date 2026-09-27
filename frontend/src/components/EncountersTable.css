@@ -1,0 +1,255 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Matches table (EncountersTable / Matches Redesign.html).
+   Self-contained `.aqt-matches` scope (token aliases → global --aqt-*) so
+   the shared component styles correctly regardless of ancestor. Imported by
+   EncountersTable.tsx; the `.module.css` next to it holds the layout-only
+   rules that need local names.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Matches table (EncountersTable / Matches Redesign.html).
+   Self-contained .aqt-matches scope (token aliases → global --aqt-*) so the
+   shared component styles correctly regardless of ancestor.
+   ═══════════════════════════════════════════════════════════════════════ */
+.aqt-matches {
+  --tn-card: var(--aqt-card, hsl(215 20% 8%));
+  --tn-border: var(--aqt-border, hsl(215 20% 12%));
+  --border-2: var(--aqt-border-2, hsl(215 20% 16%));
+  --tn-fg: var(--aqt-fg, hsl(210 20% 95%));
+  --fg-muted: var(--aqt-fg-muted, hsl(215 12% 60%));
+  --fg-dim: var(--aqt-fg-dim, hsl(215 12% 40%));
+  --fg-faint: var(--aqt-fg-faint, hsl(215 12% 30%));
+  --teal: var(--aqt-teal, hsl(172 70% 49%));
+  --rose: var(--aqt-rose, hsl(349 84% 63%));
+  --amber: var(--aqt-amber, hsl(36 88% 65%));
+  --mono: var(--aqt-data, Inter, system-ui, sans-serif);
+  --display: var(--aqt-display, "Barlow Condensed", Inter, system-ui, sans-serif);
+  color: var(--tn-fg);
+}
+
+.aqt-matches .matches-card {
+  background: var(--tn-card);
+  border: 1px solid var(--tn-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.aqt-matches .m-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.aqt-matches table.m {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.aqt-matches table.m th {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  text-align: left;
+  padding: 10px 14px;
+  background: var(--aqt-overlay-1);
+  border-bottom: 1px solid var(--tn-border);
+  white-space: nowrap;
+}
+
+.aqt-matches table.m th.r {
+  text-align: right;
+}
+
+.aqt-matches table.m th.c {
+  text-align: center;
+}
+
+.aqt-matches table.m td {
+  padding: 14px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--aqt-border) 55%, var(--aqt-bg));
+  font-size: var(--text-caption);
+  vertical-align: middle;
+}
+
+.aqt-matches table.m tbody tr {
+  cursor: pointer;
+  transition: 0.12s;
+}
+
+.aqt-matches table.m tbody tr:hover td {
+  background: var(--aqt-overlay-2);
+}
+
+.aqt-matches table.m tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.aqt-matches table.m tbody tr.live td {
+  background: color-mix(in srgb, var(--rose) 4.5%, transparent);
+}
+
+.aqt-matches table.m tbody tr.live:hover td {
+  background: color-mix(in srgb, var(--rose) 8%, transparent);
+}
+
+.aqt-matches table.m td.r {
+  text-align: right;
+}
+
+.aqt-matches table.m td.c {
+  text-align: center;
+}
+
+.aqt-matches .m-up {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.aqt-matches .m-up .row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: var(--text-caption);
+}
+
+.aqt-matches .m-up .row .nm {
+  font-weight: 600;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aqt-matches .m-up .row.winner .nm {
+  color: var(--tn-fg);
+  font-weight: 700;
+}
+
+.aqt-matches .m-score {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  justify-content: flex-end;
+}
+
+.aqt-matches .m-score .w {
+  color: var(--teal);
+}
+
+.aqt-matches .m-score .sep {
+  color: var(--fg-faint);
+  font-weight: 500;
+}
+
+.aqt-matches .m-score .l {
+  color: var(--fg-faint);
+}
+
+.aqt-matches .m-close {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 110px;
+}
+
+.aqt-matches .m-close .track {
+  flex: 1;
+  height: 5px;
+  background: var(--aqt-overlay-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.aqt-matches .m-close .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal), color-mix(in srgb, var(--teal) 65%, white));
+  border-radius: 3px;
+}
+
+.aqt-matches .m-close .fill.hot {
+  background: linear-gradient(90deg, var(--rose), hsl(340 75% 70%));
+}
+
+.aqt-matches .m-close .num {
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--fg-muted);
+  font-weight: 600;
+  min-width: 34px;
+  text-align: right;
+}
+
+.aqt-matches .m-round {
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+.aqt-matches .m-round .stage {
+  color: var(--fg-faint);
+  letter-spacing: 0.04em;
+}
+
+.aqt-matches .m-when {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+  font-family: var(--mono);
+  font-size: var(--text-label);
+}
+
+.aqt-matches .m-when .day {
+  font-size: var(--text-label);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.aqt-matches .m-when .time {
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.aqt-matches .m-when .time.live {
+  color: var(--rose);
+}
+
+.aqt-matches .m-media {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.aqt-matches .m-media .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: var(--aqt-overlay-2);
+  border: 1px solid var(--border-2);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+.aqt-matches .m-media .pill.has {
+  color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 8%, transparent);
+  border-color: color-mix(in srgb, var(--teal) 25%, transparent);
+}
+
+.aqt-matches .m-media .pill.empty {
+  opacity: 0.4;
+}

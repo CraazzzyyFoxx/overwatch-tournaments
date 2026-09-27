@@ -2,12 +2,13 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Lock } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { cn } from "@/lib/utils";
-import type { FfaLobby, FfaLobbyRow } from "@/types/ffa.types";
+import type { FfaColumn, FfaGameCell, FfaLobby, FfaLobbyRow } from "@/types/ffa.types";
 
 /**
  * Every game position the lobby has a cell for.
@@ -28,6 +29,55 @@ export function lobbyGamePositions(lobby: FfaLobby): number[] {
     }
   }
   return Array.from({ length: last }, (_, index) => index + 1);
+}
+
+/**
+ * A number the organizer entered or the formula produced, printed as written.
+ *
+ * Game points are a custom expression rounded to four decimals server-side, so
+ * a fixed width is wrong in both directions: `16.0` beside a place number is
+ * noise, and `12` in place of `12.5` is a different number. Two decimals is
+ * what a game cell holds; trailing zeros are dropped so the common whole number
+ * stays one token wide. The Pts column keeps its own `toFixed(1)` — a season
+ * total is read down a column, where a ragged decimal point is the noise.
+ */
+function formatFfaNumber(value: number): string {
+  return String(Number(value.toFixed(2)));
+}
+
+/**
+ * One played game: the place above, the points it paid below.
+ *
+ * Two stacked bare numbers are read aloud as "3 16" and say nothing about where
+ * 16 came from, so the cell carries ONE sentence — place, points and every
+ * public value of that game — as its `title` and as the only thing a screen
+ * reader is given. The visible numbers are `aria-hidden` rather than labelled
+ * one by one: labelled, the cell would announce the place, then the points,
+ * then the very same numbers again inside the description.
+ */
+function GameCell({ cell, columns }: Readonly<{ cell: FfaGameCell; columns: FfaColumn[] }>) {
+  const t = useTranslations();
+  const parts = [`${t("ffa.colPlace")} ${cell.placement ?? "—"}`];
+  if (cell.points != null) parts.push(`${t("ffa.colPoints")} ${formatFfaNumber(cell.points)}`);
+  for (const column of columns) {
+    const value = cell.stats?.[column.key];
+    if (value != null) parts.push(`${column.label} ${formatFfaNumber(value)}`);
+  }
+  const description = parts.join(", ");
+
+  return (
+    <span className="inline-flex flex-col items-center leading-tight" title={description}>
+      <span aria-hidden className="aqt-tnum text-caption font-semibold text-[color:var(--aqt-fg)]">
+        {cell.placement ?? "—"}
+      </span>
+      {cell.points != null && (
+        <span aria-hidden className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
+          {formatFfaNumber(cell.points)}
+        </span>
+      )}
+      <span className="sr-only">{description}</span>
+    </span>
+  );
 }
 
 /**
@@ -79,21 +129,18 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
   // The whole series, not the games entered so far: the empty columns are what
   // say how many games are still to come.
   const positions = lobbyGamePositions(lobby);
-  const scoreLabel = lobby.rules.score_label?.trim() || t("ffa.colScore");
-  const columnCount = 5 + positions.length + (showStatus ? 1 : 0);
+  // Only the organizer's PUBLIC columns are printed, and the filter lives here
+  // rather than at the read: this one component renders the public bracket, the
+  // public lobby page AND the organizer's lobby editor, and the editor feeds it
+  // the admin read, which still carries the hidden columns. Filtering at the
+  // component is what makes "a spectator never sees a hidden value" a property
+  // of the markup instead of a property of whoever picked the endpoint.
+  const columns = lobby.rules.columns.filter((column) => column.public);
+  const columnCount = 4 + columns.length + positions.length + (showStatus ? 1 : 0);
 
-  // What turns a game cell and the points column back into numbers a reader
-  // can check: the lobby's own rules, not a stage-wide description.
+  // What turns the numbers back into something a reader can check: the rule
+  // this lobby was actually scored by, printed as the organizer wrote it.
   const placementPoints = lobby.rules.placement_points.join(" · ");
-  const multiplier = lobby.rules.score_points;
-  const pointsLegend =
-    placementPoints && multiplier
-      ? t("ffa.legendPoints", { placements: placementPoints, label: scoreLabel, multiplier })
-      : placementPoints
-        ? t("ffa.legendPointsPlacement", { placements: placementPoints })
-        : multiplier
-          ? t("ffa.legendPointsScore", { label: scoreLabel, multiplier })
-          : null;
 
   return (
     <div>
@@ -113,9 +160,15 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
             <TableHead scope="col" className="w-16 text-right">
               {t("ffa.colGames")}
             </TableHead>
-            <TableHead scope="col" className="w-20 text-right whitespace-nowrap">
-              {scoreLabel}
-            </TableHead>
+            {columns.map((column) => (
+              <TableHead
+                key={column.key}
+                scope="col"
+                className="w-20 text-right whitespace-nowrap"
+              >
+                {column.label}
+              </TableHead>
+            ))}
             {positions.map((position) => (
               <TableHead
                 key={position}
@@ -146,7 +199,7 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
                 advancing={showStatus && row.position != null && row.position <= advanceCount}
                 tied={row.tie_group != null && tiedAtCut.has(row.tie_group)}
                 showStatus={showStatus}
-                scoreLabel={scoreLabel}
+                columns={columns}
               />
               {showCut && index === advanceCount - 1 && (
                 <TableRow className="hover:bg-transparent">
@@ -170,8 +223,18 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
         </TableBody>
       </Table>
       <p className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-3 text-caption text-[color:var(--aqt-fg-dim)]">
-        <span>{t("ffa.legendCells", { label: scoreLabel })}</span>
-        {pointsLegend && <span>{pointsLegend}</span>}
+        <span>{t("ffa.legendCells")}</span>
+        <span>
+          {t.rich("ffa.legendFormula", {
+            formula: lobby.rules.formula,
+            code: (chunks) => (
+              <code className="font-[family-name:var(--aqt-data)]">{chunks}</code>
+            )
+          })}
+        </span>
+        {placementPoints && (
+          <span>{t("ffa.legendPlacement", { placements: placementPoints })}</span>
+        )}
       </p>
     </div>
   );
@@ -203,19 +266,20 @@ const ROW_TONE = {
 function LobbyRow({
   row,
   positions,
+  columns,
   ranked,
   advancing,
   tied,
-  showStatus,
-  scoreLabel
+  showStatus
 }: Readonly<{
   row: FfaLobbyRow;
   positions: number[];
+  /** The public columns, already filtered by the table. */
+  columns: FfaColumn[];
   ranked: boolean;
   advancing: boolean;
   tied: boolean;
   showStatus: boolean;
-  scoreLabel: string;
 }>) {
   const t = useTranslations();
   const gameAt = new Map(row.games.map((cell) => [cell.position, cell]));
@@ -253,6 +317,15 @@ function LobbyRow({
             <span className="sr-only">{t("ffa.tieCluster")}</span>
           </>
         )}
+        {ranked && row.is_pinned && (
+          <span
+            className="ml-1 inline-flex align-[-0.125em] text-[color:var(--aqt-fg-dim)]"
+            title={t("ffa.pinnedPlace")}
+          >
+            <Lock aria-hidden className="size-3" />
+            <span className="sr-only">{t("ffa.pinnedPlace")}</span>
+          </span>
+        )}
       </TableCell>
       <TableCell className={cn(STICKY_TEAM, "bg-inherit")}>
         <TeamName
@@ -268,31 +341,25 @@ function LobbyRow({
       <TableCell className="aqt-tnum text-right text-[color:var(--aqt-fg-dim)]">
         {row.games_played}
       </TableCell>
-      <TableCell className="aqt-tnum text-right text-[color:var(--aqt-fg-muted)]">
-        {row.score}
-      </TableCell>
+      {columns.map((column) => (
+        <TableCell
+          key={column.key}
+          data-ffa-stat={column.key}
+          className="aqt-tnum text-right text-[color:var(--aqt-fg-muted)]"
+        >
+          {/* A key the team never scored is absent from the totals, and absent
+              means zero (spec §3.2) — a column added mid-stage must not blank
+              out the games already played. */}
+          {formatFfaNumber(row.stats[column.key] ?? 0)}
+        </TableCell>
+      ))}
       {positions.map((position) => {
         const cell = gameAt.get(position);
         return (
           <TableCell key={position} className="text-center" data-ffa-game={position}>
             {/* A game nobody has entered renders NOTHING. A `0` here would read
                 as "played it, scored nothing" — a different claim entirely. */}
-            {cell?.state == null ? null : (
-              // Two bare numbers read aloud as "3 6"; each carries the label its
-              // column would, had the cell room for two headers.
-              <span className="inline-flex flex-col items-center leading-tight">
-                <span className="aqt-tnum text-caption font-semibold text-[color:var(--aqt-fg)]">
-                  <span className="sr-only">{t("ffa.colPlace")} </span>
-                  {cell.placement ?? "—"}
-                </span>
-                {cell.score != null && (
-                  <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
-                    <span className="sr-only">{scoreLabel} </span>
-                    {cell.score}
-                  </span>
-                )}
-              </span>
-            )}
+            {cell?.state == null ? null : <GameCell cell={cell} columns={columns} />}
           </TableCell>
         );
       })}

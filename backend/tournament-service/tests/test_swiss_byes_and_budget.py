@@ -1,7 +1,7 @@
-"""Swiss bye bookkeeping per round and the search node budget.
+"""The Swiss search node budget.
 
-Review items 17 (a bye is an event of one round, revocable with it) and 18
-(the search cap bounds found options, not the work spent finding them).
+Review item 18: the search cap bounds found options, not the work spent finding
+them.
 
 Does not touch the database -- purely tests the pure-function shared library.
 """
@@ -11,7 +11,6 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import TestCase
 
 backend_root = Path(__file__).resolve().parents[2]
@@ -20,44 +19,6 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 from shared.services.bracket import swiss  # noqa: E402
-from shared.services.bracket.swiss_settings import (  # noqa: E402
-    record_swiss_bye,
-    remove_swiss_bye_round,
-    swiss_bye_counts,
-    swiss_bye_team_ids,
-)
-
-
-class SwissByeRoundTests(TestCase):
-    def test_recorded_bye_is_revoked_with_its_round(self) -> None:
-        stage = SimpleNamespace(settings_json=None)
-
-        record_swiss_bye(stage, 10, 7, round_number=3)
-        record_swiss_bye(stage, 10, 9, round_number=4)
-
-        self.assertEqual({7: 1, 9: 1}, swiss_bye_counts(stage, 10))
-
-        remove_swiss_bye_round(stage, 10, 3)
-
-        self.assertEqual({9: 1}, swiss_bye_counts(stage, 10))
-
-    def test_legacy_bare_ids_still_count_and_survive_round_removal(self) -> None:
-        stage = SimpleNamespace(settings_json={"swiss_byes": {"10": [5, 4]}})
-
-        self.assertEqual({5: 1, 4: 1}, swiss_bye_counts(stage, 10))
-
-        remove_swiss_bye_round(stage, 10, 3)
-
-        self.assertEqual({5: 1, 4: 1}, swiss_bye_counts(stage, 10))
-
-    def test_round_removal_keeps_other_scopes_and_legacy_entries(self) -> None:
-        stage = SimpleNamespace(settings_json={"swiss_byes": {"10": [5], "20": [{"round": 3, "team_id": 8}]}})
-
-        record_swiss_bye(stage, 10, 7, round_number=3)
-        remove_swiss_bye_round(stage, 10, 3)
-
-        self.assertEqual([5], swiss_bye_team_ids(stage, 10))
-        self.assertEqual([8], swiss_bye_team_ids(stage, 20))
 
 
 def _stress_field(team_count: int) -> tuple[list[swiss.SwissStanding], set[frozenset[int]]]:

@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { useDebounce } from "use-debounce";
 import userService from "@/services/user.service";
 import { MinimizedUser } from "@/types/user.types";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 
 /** A player search result kept in local recent-search history. */

@@ -18,6 +18,7 @@ import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { PlayerSubRole } from "@/types/admin.types";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * Workspace sub-role catalog (`PlayerSubRole`). This used to live inside a
@@ -42,7 +43,7 @@ export default function WorkspaceSubRolesSettingsPage() {
     // this page is the only reader that wants the deactivated rows too. Sharing
     // the prefix means one `invalidateQueries` refreshes this page *and* every
     // picker in the app.
-    queryKey: ["admin", "player-sub-roles", workspaceId, "all"],
+    queryKey: adminQueryKeys.playerSubRolesAll(workspaceId),
     // Inactive entries are included so a deactivated sub-role can be restored;
     // the tournament form builder only ever sees the active ones.
     queryFn: () =>
@@ -54,7 +55,7 @@ export default function WorkspaceSubRolesSettingsPage() {
   });
 
   const invalidateCatalog = () =>
-    queryClient.invalidateQueries({ queryKey: ["admin", "player-sub-roles"] });
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.playerSubRolesRoot() });
 
   const createMutation = useMutation({
     mutationFn: ({ role, label }: { role: string; label: string }) => {

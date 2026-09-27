@@ -19,7 +19,7 @@ from shared.repository import (
     TournamentRepository,
 )
 from shared.services.bracket.advancement import reset_encounter_result
-from shared.services.bracket.swiss_settings import remove_swiss_bye_round
+from shared.services.bracket.swiss_state import remove_swiss_bye_round
 from src import models, schemas
 from src.core import enums
 from src.services.encounter.pick_ban_session import pick_ban_session_service
@@ -585,7 +585,7 @@ class AdminEncounterService:
         await reset_encounter_result(session, encounter)
         await session.delete(encounter)
         if drop_bye_round:
-            remove_swiss_bye_round(stage, encounter.stage_item_id, encounter.round)
+            await remove_swiss_bye_round(session, stage.id, encounter.stage_item_id, encounter.round)
         await enqueue_tournament_recalculation(session, tournament_id)
         await session.commit()
 

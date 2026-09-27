@@ -215,7 +215,7 @@ def register(broker: Any, logger: Any) -> None:
             # Route: require_stage_permission("stage", "update").
             ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
-            # Rewrites best_of on the stage's encounters from settings_json;
+            # Rewrites best_of on the stage's encounters from its best-of config;
             # commits internally. Returns the number of rows changed.
             stage = await stage_service.get_stage(session, stage_id)
             await record_admin_audit(
@@ -227,7 +227,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_type="stage",
                 entity_id=stage_id,
                 entity_label=stage.name,
-                after={"best_of": (stage.settings_json or {}).get("best_of")},
+                after={"best_of": schemas.StageBestOf.model_validate(stage.best_of).model_dump(mode="json")},
             )
             updated = await stage_service.apply_best_of_to_existing(session, stage_id)
             return {"updated": updated}

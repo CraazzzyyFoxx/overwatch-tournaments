@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // /auth/link/complete (Task 10R) is the far side of the custom-domain
 // account-linking end-ticket: it runs ON the workspace's custom domain and
@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 type CookieRecord = { value: string };
 let requestCookies: Record<string, CookieRecord | undefined> = {};
 
-mock.module("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => requestCookies[name]
   })
@@ -50,7 +50,7 @@ class OAuthLinkFailedError extends Error {
 // null = succeed; otherwise the error completeLink throws.
 let completeLinkError: Error | null = null;
 
-mock.module("@/services/auth.service", () => ({
+vi.mock("@/services/auth.service", () => ({
   OAuthLinkAuthRequiredError,
   OAuthLinkFailedError,
   authService: {

@@ -11,15 +11,19 @@
 //    the one thing the table must not print as a settled "advancing".
 // 3. A game nobody has entered yet renders an EMPTY cell — never a zero. A `0`
 //    there reads as "played, scored nothing", which is a different claim.
-// 4. The score column is headed by what the organizer says it counts
-//    (`rules.score_label`, e.g. "Kills"), falling back to a translated "Score".
+// 4. The table totals one column per PUBLIC column of the stage, headed by the
+//    organizer's own label, and never prints a hidden column — the organizer's
+//    own screens render this very table from the admin read, which carries the
+//    hidden values, so the component is the one place that can guarantee it.
+// 5. A played cell says what it paid: the place, the points, and — for a reader
+//    who cannot see two stacked numbers — the public values of that game.
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { FfaGameCell, FfaLobby, FfaLobbyRow } from "@/types/ffa.types";
+import type { FfaGameCell, FfaLobby, FfaLobbyRow, FfaRules } from "@/types/ffa.types";
 
 import FfaLobbyTable from "./FfaLobbyTable";
 
@@ -33,8 +37,8 @@ function game(position: number, extra: Partial<FfaGameCell> = {}): FfaGameCell {
     position,
     state: "confirmed",
     placement: position,
-    score: 10,
     points: 5,
+    stats: { kills: 10 },
     ...extra
   };
 }
@@ -47,11 +51,23 @@ function row(slot: number, extra: Partial<FfaLobbyRow> = {}): FfaLobbyRow {
     slot,
     position: slot,
     tie_group: null,
+    is_pinned: false,
     points: 10 - slot,
     games_played: 1,
     wins: 0,
-    score: 42,
+    stats: { kills: 42 },
     games: [game(1)],
+    ...extra
+  };
+}
+
+/** The default stage: one public column, places paid, so places are required. */
+function rules(extra: Partial<FfaRules> = {}): FfaRules {
+  return {
+    columns: [{ key: "kills", label: "Kills", public: true, better: "higher" }],
+    placement_points: [10, 6, 3],
+    formula: "place_pts + kills",
+    requires_placement: true,
     ...extra
   };
 }
@@ -68,7 +84,7 @@ function lobby(rows: FfaLobbyRow[], extra: Partial<FfaLobby> = {}): FfaLobby {
     best_of: 1,
     scheduled_at: null,
     advance_count: 2,
-    rules: { placement_points: [10, 6, 3], score_points: 1, score_label: null },
+    rules: rules(),
     rows,
     ...extra
   };
@@ -96,6 +112,13 @@ function cutAfterRow() {
 
 function headers() {
   return [...container.querySelectorAll("thead th")].map((node) => node.textContent);
+}
+
+/** The total printed for one column on one row, or null when there is none. */
+function statCell(slot: number, key: string) {
+  const rows = [...container.querySelectorAll("tbody tr")];
+  const node = rows[slot - 1]?.querySelector(`[data-ffa-stat="${key}"]`);
+  return node ? node.textContent : null;
 }
 
 beforeEach(() => {
@@ -183,8 +206,8 @@ describe("ffa lobby game cells", () => {
     await mount(
       lobby(
         [
-          row(1, { games: [game(1), game(2, { state: null, placement: null, score: null, points: null })] }),
-          row(2, { games: [game(1), game(2, { state: null, placement: null, score: null, points: null })] })
+          row(1, { games: [game(1), game(2, { state: null, placement: null, points: null, stats: null })] }),
+          row(2, { games: [game(1), game(2, { state: null, placement: null, points: null, stats: null })] })
         ],
         { best_of: 2 }
       )
@@ -210,7 +233,7 @@ describe("ffa lobby game cells", () => {
     // it still scores, and voiding it is the only way to finish the cut — so a
     // column count taken from `best_of` alone hid a counted game.
     await mount(
-      lobby([row(1, { games: [game(1), game(2), game(3, { placement: 1, score: 31 })] })], {
+      lobby([row(1, { games: [game(1), game(2), game(3, { placement: 1, points: 31, stats: { kills: 31 } })] })], {
         best_of: 2
       })
     );
@@ -222,21 +245,104 @@ describe("ffa lobby game cells", () => {
   });
 });
 
-describe("ffa lobby score column", () => {
-  it("heads the score column with what the organizer says it counts", async () => {
+describe("ffa lobby stat columns", () => {
+  it("totals one column per public column, headed by the organizer's label", async () => {
     await mount(
-      lobby([row(1)], {
-        rules: { placement_points: [10], score_points: 1, score_label: "Kills" }
+      lobby([row(1, { stats: { kills: 29, assists: 4 } })], {
+        rules: rules({
+          columns: [
+            { key: "kills", label: "Kills", public: true, better: "higher" },
+            { key: "assists", label: "Assists", public: true, better: "higher" }
+          ]
+        })
       })
     );
 
+    // The label the organizer wrote, verbatim, and one column per public key —
+    // the header row is not pinned whole here, because the `#` and status heads
+    // carry sr-only text that says nothing about columns.
     expect(headers()).toContain("Kills");
-    expect(headers()).not.toContain(en.ffa.colScore);
+    expect(headers()).toContain("Assists");
+    expect(statCell(1, "kills")).toBe("29");
+    expect(statCell(1, "assists")).toBe("4");
   });
 
-  it("falls back to the translated score label when the organizer set none", async () => {
-    await mount(lobby([row(1)]));
+  it("prints neither the header nor the values of a hidden column", async () => {
+    // The organizer's own lobby page renders this table from the ADMIN read,
+    // which still carries `deaths`. The same component renders the public
+    // bracket, so dropping the column here is what keeps a hidden value from
+    // ever reaching a spectator's DOM.
+    await mount(
+      lobby([row(1, { stats: { kills: 29, deaths: 777 } })], {
+        rules: rules({
+          columns: [
+            { key: "kills", label: "Kills", public: true, better: "higher" },
+            { key: "deaths", label: "Deaths", public: false, better: "lower" }
+          ]
+        })
+      })
+    );
 
-    expect(headers()).toContain(en.ffa.colScore);
+    expect(headers()).not.toContain("Deaths");
+    expect(statCell(1, "deaths")).toBeNull();
+    expect(container.textContent).not.toContain("777");
+  });
+
+  it("totals a column the team never scored as zero", async () => {
+    // A column added mid-stage: the games already played carry no key for it,
+    // and an empty cell there would read as "not counted yet".
+    await mount(lobby([row(1, { stats: {} })]));
+
+    expect(statCell(1, "kills")).toBe("0");
+  });
+});
+
+describe("ffa lobby played cells", () => {
+  it("prints the place above the points the game paid", async () => {
+    await mount(lobby([row(1, { games: [game(1, { placement: 3, points: 12.5 })] })]));
+
+    const cell = container.querySelector("tbody tr [data-ffa-game='1']");
+    expect(cell?.textContent).toContain("3");
+    // Fractional points are the point of a custom formula; a rounded "12" or a
+    // padded "12.0" would both be a different number than the one that scored.
+    expect(cell?.textContent).toContain("12.5");
+  });
+
+  it("describes a cell with its place, points and public values", async () => {
+    await mount(
+      lobby([row(1, { games: [game(1, { placement: 3, points: 16, stats: { kills: 6, deaths: 2 } })] })], {
+        rules: rules({
+          columns: [
+            { key: "kills", label: "Kills", public: true, better: "higher" },
+            { key: "deaths", label: "Deaths", public: false, better: "lower" }
+          ]
+        })
+      })
+    );
+
+    const described = container.querySelector("tbody tr [data-ffa-game='1'] [title]");
+    expect(described?.getAttribute("title")).toBe(
+      `${en.ffa.colPlace} 3, ${en.ffa.colPoints} 16, Kills 6`
+    );
+    expect(described?.textContent).toContain(`${en.ffa.colPlace} 3, ${en.ffa.colPoints} 16, Kills 6`);
+    expect(described?.getAttribute("title")).not.toContain("Deaths");
+  });
+});
+
+describe("ffa lobby legend", () => {
+  it("shows the formula the lobby is actually scored by", async () => {
+    // The risk the legend answers (spec §12): a formula edited mid-stage moves
+    // every place silently. The table prints the rule it was scored by.
+    await mount(lobby([row(1)], { rules: rules({ formula: "place_pts + kills * 2 - deaths" }) }));
+
+    expect(container.querySelector("code")?.textContent).toBe("place_pts + kills * 2 - deaths");
+    expect(container.textContent).toContain("10 · 6 · 3");
+  });
+
+  it("says nothing about place points when the stage pays none", async () => {
+    await mount(lobby([row(1)], { rules: rules({ placement_points: [], formula: "kills" }) }));
+
+    expect(container.textContent).not.toContain("10 · 6 · 3");
+    expect(container.querySelector("code")?.textContent).toBe("kills");
   });
 });

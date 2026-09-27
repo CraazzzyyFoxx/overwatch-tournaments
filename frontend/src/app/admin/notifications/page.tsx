@@ -7,7 +7,7 @@ import { Archive } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { AdminDataTable } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LinkTabs } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
@@ -106,7 +106,7 @@ export default function AdminWorkspaceNotificationsPage() {
       notify.success(t("notifications.workspaceAdmin.retired", { count: result.retired }));
       // Both feeds read the same rows: an expired notification has to leave the
       // operator table *and* the bell of everyone still holding it open.
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list() });
     }
   });
 
@@ -282,7 +282,7 @@ export default function AdminWorkspaceNotificationsPage() {
         />
       </div>
 
-      <AdminDataTable
+      <DataTable
         rows={rows}
         isLoading={list.isLoading}
         columns={columns}

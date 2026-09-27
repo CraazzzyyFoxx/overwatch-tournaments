@@ -2,7 +2,7 @@ import { memo } from "react";
 import Link from "next/link";
 
 import { HeroLeaderboardEntry } from "@/types/hero.types";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 import { StatColumnDef } from "../config/stat-columns";
 import { teamDotBackground } from "../utils/teamColor";

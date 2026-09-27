@@ -8,7 +8,7 @@ import { MasterDetail } from "@/components/kit/MasterDetail";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import teamService from "@/services/team.service";
@@ -16,6 +16,7 @@ import teamService from "@/services/team.service";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { StageEditor } from "./components/StageEditor";
 import { StageList } from "./components/StageList";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * Bracket (T4, F7): the stage list on the left, one stage's editor on the right.
@@ -38,24 +39,24 @@ export default function BracketTabPage() {
   const isMobile = useIsMobile();
 
   const stagesQuery = useQuery({
-    queryKey: ["admin", "stages", tournamentId],
+    queryKey: adminQueryKeys.stages(tournamentId),
     queryFn: () => adminService.getStages(tournamentId)
   });
 
   const { data: tournament } = useQuery({
-    queryKey: ["admin", "tournament", tournamentId],
+    queryKey: adminQueryKeys.tournament(tournamentId),
     queryFn: () => adminService.getTournament(tournamentId)
   });
 
   const { data: teamsData, isLoading: isTeamsLoading } = useQuery({
-    queryKey: ["admin", "tournament", "teams", tournamentId],
+    queryKey: adminQueryKeys.tournamentTeamCatalog(tournamentId),
     queryFn: () => teamService.getAll({ tournamentId, sort: "name", order: "asc" })
   });
 
   const stages = stagesQuery.data ?? [];
 
   const { data: stageProgress = [] } = useQuery({
-    queryKey: ["admin", "stages", tournamentId, "progress"],
+    queryKey: adminQueryKeys.stagesProgress(tournamentId),
     queryFn: () => adminService.getStagesProgress(tournamentId),
     enabled: stages.length > 0
   });

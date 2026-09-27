@@ -191,7 +191,7 @@ function StatusColorPicker({
  *
  * Extracted from the old `/admin/balancer` page so the statuses settings
  * section keeps the icon and colour pickers verbatim while the surrounding
- * screen becomes a single `AdminDataTable`.
+ * screen becomes a single `DataTable`.
  */
 export function StatusForm({
   value,

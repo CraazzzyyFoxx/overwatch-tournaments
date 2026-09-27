@@ -24,7 +24,6 @@ import { notify } from "@/lib/notify";
 import { ROLES, type RoleCode } from "@/lib/roster/roles";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
-import heroService from "@/services/hero.service";
 import registrationService from "@/services/registration.service";
 import { rbacService } from "@/services/rbac.service";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
@@ -46,6 +45,7 @@ import { accountProviderFor } from "./fields/IdentityField";
 import { defaultRoleAnswer, rolesParams } from "./fields/RolesField";
 import { registrationRenderers } from "./registrationRenderers";
 import { fromRoleSelections, toRoleSelections } from "./types";
+import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
 
 /**
  * The non-schema half of an organizer's edit: the site account this row is
@@ -346,12 +346,7 @@ export default function RegistrationSchemaForm({
 
   const rolesField = allFields(schema).find((field) => field.key === "roles");
   const topHeroesEnabled = rolesField ? rolesParams(rolesField).top_heroes.enabled : false;
-  const heroesQuery = useQuery({
-    queryKey: ["heroes-all"],
-    queryFn: () => heroService.getAll({ perPage: -1 }),
-    enabled: topHeroesEnabled,
-    staleTime: 5 * 60_000
-  });
+  const heroesQuery = useHeroesCatalog({ enabled: topHeroesEnabled });
 
   // Public mode only: the endpoint answers for the CALLER, so it is meaningless
   // while an organizer edits somebody else's registration.
@@ -380,7 +375,7 @@ export default function RegistrationSchemaForm({
     mode,
     accounts,
     subroleCatalog: form.subrole_catalog ?? {},
-    heroes: heroesQuery.data?.results ?? [],
+    heroes: heroesQuery.data ?? [],
     lockedRole,
     subscription: isAdmin ? null : (subscriptionQuery.data ?? null),
     onLinkAccounts,
@@ -484,7 +479,7 @@ export default function RegistrationSchemaForm({
             queryKey: tournamentQueryKeys.registrationForm(form.workspace_id, form.tournament_id)
           }),
           queryClient.invalidateQueries({
-            queryKey: ["registration-form-public", form.tournament_id]
+            queryKey: tournamentQueryKeys.registrationFormPublic(form.tournament_id)
           })
         ]);
         notify.error(mapped.form ?? tErrors("form_version_stale"));

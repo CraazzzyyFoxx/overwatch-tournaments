@@ -10,6 +10,7 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { rbacService } from "@/services/rbac.service";
 import { Spinner } from "@/components/ui/spinner";
+import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
 interface TournamentPreviewAllowlistProps {
   tournamentId: number;
@@ -38,7 +39,7 @@ export function TournamentPreviewAllowlist({
   });
 
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
-    queryKey: ["rbac-users", workspaceId, "all"],
+    queryKey: workspaceQueryKeys.rbacUsersAll(workspaceId),
     queryFn: () => rbacService.listUsersAll({ workspace_id: workspaceId })
   });
 

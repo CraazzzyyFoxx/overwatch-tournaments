@@ -16,8 +16,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The real store is `persist`-wrapped and writing to it under happy-dom trips
-// zustand's storage adapter. Only `currentWorkspaceId` matters here.
+// The real store hydrates its workspace from a cookie, which no test sets.
+// Only `currentWorkspaceId` matters here, so it is pinned outright.
 vi.mock("@/stores/workspace.store", () => ({
   useWorkspaceStore: (selector?: (state: { currentWorkspaceId: number | null }) => unknown) => {
     const state = { currentWorkspaceId: 7 };

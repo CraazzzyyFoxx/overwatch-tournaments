@@ -1,5 +1,5 @@
 import type { AuthProfile } from "@/stores/auth-profile.store";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 // Only a linked player has a public profile page. Without one there is no
 // profile to link to — callers offer the "link your player" action instead.

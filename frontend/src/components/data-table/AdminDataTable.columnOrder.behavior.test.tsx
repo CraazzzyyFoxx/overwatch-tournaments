@@ -10,7 +10,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
+import { DataTable } from "@/components/data-table/DataTable";
 import { createKebabColumn } from "@/components/data-table/kebab-column";
 
 declare global {
@@ -49,7 +49,7 @@ async function render(columns: ColumnDef<Row>[]) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row> rows={ROWS} columns={columns} columnsStorageKey="players" />
+        <DataTable<Row> rows={ROWS} columns={columns} columnsStorageKey="players" />
       </QueryClientProvider>
     );
   });
@@ -90,7 +90,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-describe("AdminDataTable column order", () => {
+describe("DataTable column order", () => {
   it("keeps the actions column last when a column appears after the order was saved", async () => {
     // Saved while only Name/Team existed, with Team dragged in front — and with
     // the actions id inside, the way the first version of the feature wrote it.
@@ -109,7 +109,7 @@ describe("AdminDataTable column order", () => {
   });
 });
 
-describe("AdminDataTable actions column width", () => {
+describe("DataTable actions column width", () => {
   it("ignores a saved sizing for the actions column and offers no resize handle on it", async () => {
     localStorage.setItem("players:sizing", JSON.stringify({ actions: 339, name: 200 }));
     await render([...base, actions]);

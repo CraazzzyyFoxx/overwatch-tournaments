@@ -1,37 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { Workspace } from "@/types/workspace.types";
 import {
-  buildPayload,
-  diffPayload,
+  useScopedSettingsForm,
+  type ScopedSettingsForm
+} from "@/components/admin/settings/useScopedSettingsForm";
+import {
   formFromWorkspace,
   sectionPayload,
   type WorkspaceSettingsFormState
 } from "./fields";
 import type { WorkspaceRecordSectionKey } from "./sections";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
-/** Everything a settings section needs to render and save its own fields. */
-export interface WorkspaceSettingsForm {
+/**
+ * Everything a settings section needs to render and save its own fields:
+ * the shared scoped-form contract plus the workspace read this hook owns.
+ */
+export interface WorkspaceSettingsForm
+  extends ScopedSettingsForm<WorkspaceSettingsFormState, Partial<WorkspaceSettingsFormState>> {
   workspace: Workspace | undefined;
   isLoading: boolean;
   isError: boolean;
-  form: WorkspaceSettingsFormState | null;
-  /** Merges a partial into the form; the only way a section mutates it. */
-  patch: (values: Partial<WorkspaceSettingsFormState>) => void;
-  dirty: boolean;
-  /** "2 changed fields" for the `SaveBar` summary. */
-  summary: string;
-  saving: boolean;
-  /** The PATCH body this section would send right now — the diff, scoped. */
-  payload: Partial<WorkspaceSettingsFormState>;
-  save: () => void;
-  discard: () => void;
   /** Re-read `admin-workspaces`, `admin-workspace` and the picker store. */
   invalidate: () => void;
 }
@@ -53,85 +48,37 @@ export function useWorkspaceSettingsForm(
   // convention: `components/admin/breadcrumb-registry.ts` reads this exact
   // cache entry to name the workspace crumb.
   const query = useQuery({
-    queryKey: ["admin-workspace", workspaceId ?? 0],
+    queryKey: adminQueryKeys.workspace(workspaceId ?? 0),
     queryFn: () => workspaceService.getById(workspaceId as number),
     enabled: workspaceId !== null && Number.isFinite(workspaceId)
   });
   const workspace = query.data;
 
-  const [state, setState] = useState<{
-    form: WorkspaceSettingsFormState;
-    baseline: WorkspaceSettingsFormState;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!workspace) return;
-    const next = formFromWorkspace(workspace);
-    // A refetch — ours after a save, or another admin's write arriving through
-    // an invalidation — always re-baselines, but only replaces the form while
-    // the user has nothing unsaved to lose.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState((current) => {
-      if (!current) return { form: next, baseline: next };
-      const changed = diffPayload(
-        buildPayload(current.form),
-        buildPayload(current.baseline)
-      );
-      return {
-        form: Object.keys(changed).length > 0 ? current.form : next,
-        baseline: next
-      };
-    });
-  }, [workspace]);
-
-  const payload = useMemo(
-    () => (state ? sectionPayload(section, state.form, state.baseline) : {}),
-    [state, section]
+  const baseline = useMemo(
+    () => (workspace ? formFromWorkspace(workspace) : null),
+    [workspace]
   );
 
   const invalidate = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["admin-workspaces"] });
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.workspaces() });
     if (workspaceId !== null) {
-      queryClient.invalidateQueries({ queryKey: ["admin-workspace", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.workspace(workspaceId) });
     }
     void fetchWorkspaces();
   }, [queryClient, workspaceId, fetchWorkspaces]);
 
-  const mutation = useMutation({
-    mutationFn: () => workspaceService.update(workspaceId as number, payload),
-    onSuccess: () => {
-      invalidate();
-      notify.success("Settings saved");
-    },
-    onError: (error) => notify.apiError(error, { title: "Could not save these settings" })
+  const settings = useScopedSettingsForm({
+    baseline,
+    toPayload: (form, base) => sectionPayload(section, form, base),
+    submit: (payload) => workspaceService.update(workspaceId as number, payload),
+    onSaved: invalidate
   });
 
-  const patch = useCallback(
-    (values: Partial<WorkspaceSettingsFormState>) =>
-      setState((current) =>
-        current ? { ...current, form: { ...current.form, ...values } } : current
-      ),
-    []
-  );
-  const discard = useCallback(
-    () => setState((current) => (current ? { ...current, form: current.baseline } : current)),
-    []
-  );
-
-  const changedCount = Object.keys(payload).length;
-
   return {
+    ...settings,
     workspace,
     isLoading: query.isLoading,
     isError: query.isError,
-    form: state?.form ?? null,
-    patch,
-    dirty: changedCount > 0,
-    summary: changedCount === 1 ? "1 changed field" : `${changedCount} changed fields`,
-    saving: mutation.isPending,
-    payload,
-    save: () => mutation.mutate(),
-    discard,
     invalidate
   };
 }

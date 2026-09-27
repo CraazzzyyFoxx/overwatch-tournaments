@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { publicHost, publicHostname, publicOrigin } from "@/lib/site/request-origin";
 
 function req(url: string, headers: Record<string, string> = {}): Request {

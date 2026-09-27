@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // POST /auth/refresh is the ONLY way a browser turns the httpOnly refresh cookie
 // into a fresh access token. Clearing that cookie is therefore irreversible for
@@ -15,7 +15,7 @@ import { ApiError } from "@/lib/api/error";
 
 let requestCookies: Record<string, { value: string } | undefined> = {};
 
-mock.module("next/headers", () => ({
+vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => requestCookies[name]
   })
@@ -28,7 +28,7 @@ let refreshOutcome: (() => Promise<{ access_token: string; refresh_token: string
 // sees. Re-export the link-error classes here too -- @/lib/auth/oauth-callback
 // imports them, and a mock missing either name takes the sibling route tests
 // down with a SyntaxError at import time.
-mock.module("@/services/auth.service", () => ({
+vi.mock("@/services/auth.service", () => ({
   OAuthLinkAuthRequiredError: class extends Error {},
   OAuthLinkFailedError: class extends Error {},
   authService: {

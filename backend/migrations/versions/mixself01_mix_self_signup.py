@@ -1,7 +1,7 @@
 """Self-signup switches on a pickup mix: the signup mode and the role-edit flag.
 
 Revision ID: mixself01
-Revises: varcap01
+Revises: ffa0002
 Create Date: 2026-09-25 00:00:00.000000
 
 Two columns on ``balancer.custom_game``. ``self_signup`` is one column with
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "mixself01"
-down_revision: str | Sequence[str] | None = "varcap01"
+down_revision: str | Sequence[str] | None = "ffa0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

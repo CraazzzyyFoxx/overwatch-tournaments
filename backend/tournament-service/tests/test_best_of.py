@@ -1,4 +1,4 @@
-"""Per-round best-of config parsing, resolution, and backfill."""
+"""Per-round best-of config reading, resolution, and backfill."""
 
 from __future__ import annotations
 
@@ -18,42 +18,29 @@ best_of = importlib.import_module("src.domain.admin.best_of")
 stage_service = importlib.import_module("src.services.admin.stage")
 enums = importlib.import_module("shared.core.enums")
 
+from tests._stage_regulation import stage_regulation  # noqa: E402
 
-class ParseBestOfConfigTests(TestCase):
-    def test_empty_and_malformed_fall_back_to_defaults(self) -> None:
-        for bad in (None, {}, {"best_of": None}, {"best_of": []}, {"best_of": "bo3"}):
-            cfg = best_of.parse_best_of_config(bad)
-            self.assertEqual(cfg.default, 3)
-            self.assertEqual(cfg.by_round, {})
-            self.assertIsNone(cfg.final)
 
-    def test_parses_default_by_round_and_final(self) -> None:
-        cfg = best_of.parse_best_of_config({"best_of": {"default": 3, "by_round": {"1": 2, "3": 5}, "final": 7}})
-        self.assertEqual(cfg.default, 3)
-        self.assertEqual(cfg.by_round, {1: 2, 3: 5})
-        self.assertEqual(cfg.final, 7)
+def _stage(**overrides) -> SimpleNamespace:
+    return SimpleNamespace(**stage_regulation(**overrides))
 
-    def test_rejects_invalid_values_and_keys(self) -> None:
-        cfg = best_of.parse_best_of_config(
-            {
-                "best_of": {
-                    "default": 0,  # < 1 -> fallback 3
-                    "final": True,  # bool rejected
-                    "by_round": {"1": 2, "x": 5, "2": 0, "3": True},
-                }
-            }
-        )
-        self.assertEqual(cfg.default, 3)
-        self.assertIsNone(cfg.final)
-        self.assertEqual(cfg.by_round, {1: 2})  # only the valid entry survives
 
-    def test_keeps_negative_round_keys(self) -> None:
+class BestOfConfigTests(TestCase):
+    def test_reads_default_final_and_the_round_rows(self) -> None:
         # Lower-bracket rounds are negative, and the frontend mirror
-        # (frontend/src/lib/tournament/best-of.ts `parseStageBestOf`) now keeps them to match.
-        # This pins the behaviour that mirror depends on.
-        cfg = best_of.parse_best_of_config({"best_of": {"default": 3, "by_round": {"-1": 5, "2": 2}}})
+        # (frontend/src/lib/tournament/best-of.ts) keeps them to match.
+        cfg = best_of.best_of_config(_stage(best_of_default=3, best_of_final=7, by_round={-1: 5, 2: 2}))
+
         self.assertEqual(cfg.default, 3)
         self.assertEqual(cfg.by_round, {-1: 5, 2: 2})
+        self.assertEqual(cfg.final, 7)
+
+    def test_a_fresh_stage_is_default_only(self) -> None:
+        cfg = best_of.best_of_config(_stage())
+
+        self.assertEqual(cfg.default, 3)
+        self.assertEqual(cfg.by_round, {})
+        self.assertIsNone(cfg.final)
 
 
 class ResolveBestOfTests(TestCase):
@@ -125,11 +112,13 @@ class ApplyBestOfToExistingTests(TestCase):
         return changed, session, published
 
     def test_rewrites_per_round_and_final_for_elimination(self) -> None:
-        stage = SimpleNamespace(
+        stage = _stage(
             id=10,
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
-            settings_json={"best_of": {"default": 3, "by_round": {"1": 1}, "final": 5}},
+            best_of_default=3,
+            best_of_final=5,
+            by_round={1: 1},
         )
         duel = enums.EncounterFormat.DUEL
         encounters = [
@@ -145,11 +134,12 @@ class ApplyBestOfToExistingTests(TestCase):
         self.assertEqual(published, [1])
 
     def test_no_final_override_for_group_stage(self) -> None:
-        stage = SimpleNamespace(
+        stage = _stage(
             id=11,
             tournament_id=2,
             stage_type=enums.StageType.ROUND_ROBIN,
-            settings_json={"best_of": {"default": 2, "final": 5}},
+            best_of_default=2,
+            best_of_final=5,
         )
         encounters = [
             SimpleNamespace(round=1, best_of=3, format=enums.EncounterFormat.DUEL),
@@ -162,12 +152,8 @@ class ApplyBestOfToExistingTests(TestCase):
         self.assertEqual(changed, 2)
 
     def test_no_changes_leaves_commit_but_no_publish(self) -> None:
-        stage = SimpleNamespace(
-            id=12,
-            tournament_id=3,
-            stage_type=enums.StageType.SINGLE_ELIMINATION,
-            settings_json=None,  # no config -> everything resolves to default 3
-        )
+        # Nothing configured -> everything resolves to the default 3.
+        stage = _stage(id=12, tournament_id=3, stage_type=enums.StageType.SINGLE_ELIMINATION)
         encounters = [SimpleNamespace(round=1, best_of=3, format=enums.EncounterFormat.DUEL)]
         changed, session, published = self._run_backfill(stage, encounters)
 

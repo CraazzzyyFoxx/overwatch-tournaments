@@ -5,11 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
-import mapService from "@/services/map.service";
 import pickBanService from "@/services/pickBan.service";
 import tournamentService from "@/services/tournament.service";
 import type { MapRead } from "@/types/map.types";
 import type { PickBanConfig } from "@/types/tournament.types";
+import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 export type MapPoolGroup = {
   /** Game mode name (Control, Hybrid…); "—" when the catalogue names none. */
@@ -76,7 +76,6 @@ export type TournamentMapPool = {
 export const mapPoolQueryKeys = {
   configs: (tournamentId: number) =>
     ["public", "tournament", tournamentId, "pick-ban-configs"] as const,
-  maps: ["maps", "all", "gamemode"] as const,
   stages: (tournamentId: number) => ["public", "tournament", tournamentId, "stages"] as const
 };
 
@@ -137,13 +136,9 @@ export function useTournamentMapPool(tournamentId: number): TournamentMapPool {
     queryKey: mapPoolQueryKeys.configs(tournamentId),
     queryFn: () => pickBanService.listPublicConfigs(tournamentId)
   });
-  // `entities: ["gamemode"]` is load-bearing: the maps endpoint only serialises
-  // the gamemode relation when asked, and the pool is grouped by it.
-  const mapsQuery = useQuery({
-    queryKey: mapPoolQueryKeys.maps,
-    queryFn: () =>
-      mapService.getAll({ perPage: -1, sort: "name", order: "asc", entities: ["gamemode"] })
-  });
+  // `withGamemode` is load-bearing: the maps endpoint only serialises the
+  // gamemode relation when asked, and the pool is grouped by it.
+  const mapsQuery = useMapsCatalog({ withGamemode: true });
   const stagesQuery = useQuery({
     queryKey: mapPoolQueryKeys.stages(tournamentId),
     queryFn: () => tournamentService.getStages(tournamentId)
@@ -151,7 +146,7 @@ export function useTournamentMapPool(tournamentId: number): TournamentMapPool {
 
   const derived = useMemo(() => {
     const configs = (configsQuery.data?.configs ?? []).filter((config) => config.kind === "map");
-    const maps = (mapsQuery.data?.results ?? []).filter((map) => map.in_competitive !== false);
+    const maps = (mapsQuery.data ?? []).filter((map) => map.in_competitive !== false);
     const mapsById = new Map(maps.map((map) => [map.id, map]));
     const resolve = (ids: Iterable<number>) =>
       [...ids].map((id) => mapsById.get(id)).filter((map): map is MapRead => map !== undefined);

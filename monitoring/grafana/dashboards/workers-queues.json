@@ -49,7 +49,7 @@
           ]
         }
       },
-      "targets": [{ "expr": "rabbitmq_up", "legendFormat": "Broker", "instant": true }]
+      "targets": [{ "expr": "up{job=\"rabbitmq\"}", "legendFormat": "Broker", "instant": true }]
     },
     {
       "id": 2,
@@ -212,7 +212,7 @@
       "title": "Message Publish Rate",
       "gridPos": { "x": 8, "y": 36, "w": 8, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "rate(rabbitmq_queue_messages_published_total{queue!~\".*\\\\.dlq\"}[5m])", "legendFormat": "{{ queue }}" }]
+      "targets": [{ "expr": "sum by (queue) (rate(rabbitmq_queue_messages_published_total{queue!~\".*\\\\.dlq\"}[5m]))", "legendFormat": "{{ queue }}" }]
     },
     {
       "id": 24,
@@ -220,7 +220,7 @@
       "title": "Message Deliver Rate",
       "gridPos": { "x": 16, "y": 36, "w": 8, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "rate(rabbitmq_queue_messages_delivered_total{queue!~\".*\\\\.dlq\"}[5m])", "legendFormat": "{{ queue }}" }]
+      "targets": [{ "expr": "sum by (queue) (rate(rabbitmq_channel_messages_delivered_total{queue!~\".*\\\\.dlq\"}[5m]))", "legendFormat": "{{ queue }}" }]
     },
     {
       "id": 30,

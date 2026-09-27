@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 145
+-- Tables: 149
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -2618,12 +2618,12 @@ CREATE TABLE tournament.encounter_game_result (
 	game_id BIGINT NOT NULL, 
 	encounter_id BIGINT NOT NULL, 
 	team_id BIGINT NOT NULL, 
-	placement INTEGER NOT NULL, 
-	score INTEGER DEFAULT '0' NOT NULL, 
+	placement INTEGER, 
+	stats JSONB DEFAULT '{}'::jsonb NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_encounter_game_result_game_team UNIQUE (game_id, team_id), 
 	CONSTRAINT ck_encounter_game_result_placement CHECK (placement >= 1), 
-	CONSTRAINT ck_encounter_game_result_score CHECK (score >= 0), 
+	CONSTRAINT ck_encounter_game_result_stats CHECK (jsonb_typeof(stats) = 'object'), 
 	CONSTRAINT fk_encounter_game_result_participant FOREIGN KEY(encounter_id, team_id) REFERENCES tournament.encounter_participant (encounter_id, team_id) ON DELETE CASCADE, 
 	FOREIGN KEY(game_id) REFERENCES tournament.encounter_game (id) ON DELETE CASCADE
 );
@@ -3060,8 +3060,25 @@ CREATE TABLE tournament.stage (
 	is_active BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_published BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_completed BOOLEAN DEFAULT 'false' NOT NULL, 
-	settings_json JSON, 
+	ranking_preset VARCHAR, 
+	tiebreak_order VARCHAR[], 
+	win_points FLOAT, 
+	draw_points FLOAT, 
+	loss_points FLOAT, 
+	swiss_bye_points FLOAT, 
+	de_grand_final_type VARCHAR(16) DEFAULT 'no_reset' NOT NULL, 
+	seed_ranking VARCHAR(16) DEFAULT 'slot' NOT NULL, 
+	best_of_default INTEGER DEFAULT '3' NOT NULL, 
+	best_of_final INTEGER, 
+	ffa_placement_points FLOAT[] DEFAULT '{}' NOT NULL, 
+	ffa_columns JSONB DEFAULT '[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]' NOT NULL, 
+	ffa_formula VARCHAR(500) DEFAULT 'score' NOT NULL, 
+	challonge_group_id BIGINT, 
 	PRIMARY KEY (id), 
+	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')), 
+	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')), 
+	CONSTRAINT ck_stage_best_of_default CHECK (best_of_default >= 1), 
+	CONSTRAINT ck_stage_best_of_final CHECK (best_of_final IS NULL OR best_of_final >= 1), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
 );
 
@@ -3103,6 +3120,15 @@ CREATE INDEX ix_tournament_stage_item_input_stage_item_id ON tournament.stage_it
 
 CREATE INDEX ix_tournament_stage_item_input_team_id ON tournament.stage_item_input (team_id);
 
+CREATE TABLE tournament.stage_round_best_of (
+	stage_id BIGINT NOT NULL, 
+	round INTEGER NOT NULL, 
+	best_of INTEGER NOT NULL, 
+	PRIMARY KEY (stage_id, round), 
+	CONSTRAINT ck_stage_round_best_of_best_of CHECK (best_of >= 1), 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE
+);
+
 CREATE TABLE tournament.standing (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -3123,6 +3149,7 @@ CREATE TABLE tournament.standing (
 	tie_group INTEGER, 
 	tb INTEGER, 
 	score_differential INTEGER, 
+	is_pinned BOOLEAN DEFAULT 'false' NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE, 
@@ -3141,6 +3168,62 @@ CREATE INDEX ix_tournament_standing_stage_item_id ON tournament.standing (stage_
 CREATE INDEX ix_tournament_standing_team_id ON tournament.standing (team_id);
 
 CREATE INDEX ix_tournament_standing_tournament_id ON tournament.standing (tournament_id);
+
+CREATE TABLE tournament.standing_pin (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	tournament_id BIGINT NOT NULL, 
+	stage_id BIGINT NOT NULL, 
+	stage_item_id BIGINT, 
+	team_id BIGINT NOT NULL, 
+	position INTEGER NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT ck_standing_pin_position CHECK (position >= 1), 
+	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE, 
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_tournament_standing_pin_team_id ON tournament.standing_pin (team_id);
+
+CREATE INDEX ix_tournament_standing_pin_tournament_id ON tournament.standing_pin (tournament_id);
+
+CREATE UNIQUE INDEX uq_standing_pin_position ON tournament.standing_pin (stage_id, stage_item_id, position) NULLS NOT DISTINCT;
+
+CREATE UNIQUE INDEX uq_standing_pin_team ON tournament.standing_pin (stage_id, stage_item_id, team_id) NULLS NOT DISTINCT;
+
+CREATE TABLE tournament.swiss_bye (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	stage_id BIGINT NOT NULL, 
+	stage_item_id BIGINT, 
+	team_id BIGINT NOT NULL, 
+	round INTEGER, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE, 
+	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_tournament_swiss_bye_stage_id ON tournament.swiss_bye (stage_id);
+
+CREATE INDEX ix_tournament_swiss_bye_team_id ON tournament.swiss_bye (team_id);
+
+CREATE TABLE tournament.swiss_stopped_scope (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	stage_id BIGINT NOT NULL, 
+	stage_item_id BIGINT, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE, 
+	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX uq_swiss_stopped_scope ON tournament.swiss_stopped_scope (stage_id, stage_item_id) NULLS NOT DISTINCT;
 
 CREATE TABLE tournament.team (
 	id BIGSERIAL NOT NULL, 

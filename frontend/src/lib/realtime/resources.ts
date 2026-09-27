@@ -1,3 +1,6 @@
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -64,20 +67,20 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
   "tournament.encounters": (id) => [
     tournamentQueryKeys.encounters(id),
     getTournamentWorkspaceQueryKeys(id).encounters,
-    ["ffa", id],
+    tournamentQueryKeys.ffaAll(id),
   ],
   "tournament.standings": (id) => [
     tournamentQueryKeys.standings(id),
     tournamentQueryKeys.heroPlaytime(id),
     getTournamentWorkspaceQueryKeys(id).standings,
     getTournamentWorkspaceQueryKeys(id).standingsTable,
-    ["ffa", id],
+    tournamentQueryKeys.ffaAll(id),
   ],
   "tournament.teams": (id) => [
     tournamentQueryKeys.teams(id),
     getTournamentWorkspaceQueryKeys(id).teams,
     // The balancer page reads the same materialized rows.
-    ["balancer-public", "balance", id],
+    balancerQueryKeys.publicBalance(id),
   ],
   "tournament.structure": (id, ctx) => [
     tournamentQueryKeys.detail(ctx.detailRef ?? id),
@@ -95,7 +98,7 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
   "tournament.registrations": (id, ctx) => [
     tournamentQueryKeys.detail(ctx.detailRef ?? id),
     getTournamentWorkspaceQueryKeys(id).tournament,
-    ["balancer-admin", "registrations", id],
+    balancerQueryKeys.registrations(id),
     ...(ctx.workspaceId == null
       ? []
       : [
@@ -111,19 +114,19 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
     ctx.workspaceId == null ? [] : [tournamentQueryKeys.registrationForm(ctx.workspaceId, id)],
   "tournament.streams": (id) => [tournamentQueryKeys.streams(id)],
   "workspace.logs": (id, ctx) => [
-    ["admin", "workspace", id, "log-history"],
+    adminQueryKeys.workspaceLogHistory(id),
     // The console is mounted per tournament but the parser's signal is
     // workspace-wide, so the tournament-scoped variant of the same key only
     // exists when a tournament is in context (TournamentLogsTab).
     ...(ctx.tournamentId == null ? [] : [getTournamentWorkspaceQueryKeys(ctx.tournamentId).logHistory]),
   ],
   "workspace.pickup_mix": (id) => [customGameKeys.all(id), workspacePlayerKeys.all(id)],
-  "workspace.subscriptions": () => [["admin", "subscriptions"]],
+  "workspace.subscriptions": () => [adminQueryKeys.subscriptions()],
   "workspace.analytics_jobs": (id) => [
-    ["analytics-active-job", id],
-    ["analytics"],
-    ["analytics-standings-distribution"],
-    ["analytics-match-quality"],
+    analyticsQueryKeys.activeJob(id),
+    analyticsQueryKeys.all(),
+    analyticsQueryKeys.standingsDistributionAll(),
+    analyticsQueryKeys.matchQualityAll(),
   ],
   "user.notifications": () => [notificationQueryKeys.list()],
 };

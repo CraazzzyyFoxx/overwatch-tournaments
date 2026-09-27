@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
+import { DataTable, columnMeta } from "@/components/data-table";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
@@ -15,6 +15,7 @@ import { useQueryParams } from "@/hooks/useQueryParams";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacPermission } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 const PAGE_SIZE = 20;
 
@@ -32,7 +33,7 @@ export default function AccessAdminPermissionsPage() {
   const openId = searchParams?.get("id") ?? null;
 
   const permissionsQuery = useQuery({
-    queryKey: ["access-admin", "permissions", "inventory"],
+    queryKey: accessQueryKeys.permissionsInventory(),
     queryFn: () => rbacService.listPermissionsAll()
   });
   const permissions = permissionsQuery.data ?? [];
@@ -74,7 +75,7 @@ export default function AccessAdminPermissionsPage() {
       {
         accessorKey: "name",
         header: "Permission",
-        meta: adminColumnMeta<RbacPermission>({
+        meta: columnMeta<RbacPermission>({
           searchValue: (permission) => `${permission.name} ${permission.description ?? ""}`
         }),
         cell: ({ row }) => <span className="font-mono text-sm">{row.original.name}</span>
@@ -116,7 +117,7 @@ export default function AccessAdminPermissionsPage() {
   return (
     <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
       <div className="min-w-0">
-        <AdminDataTable<RbacPermission>
+        <DataTable<RbacPermission>
           rows={rows}
           isLoading={permissionsQuery.isLoading}
           columns={columns}

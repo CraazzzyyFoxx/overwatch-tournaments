@@ -29,6 +29,7 @@ import {
   formatDate
 } from "./subscription-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const STATE_FILTERS = ["all", "active", "inactive", "unknown", "error"];
 const SOURCE_FILTERS = ["all", "scheduled", "registration", "check_in", "manual", "redeem"];
@@ -53,7 +54,7 @@ export function SubscriptionTaskHistory() {
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const query = useQuery({
-    queryKey: ["admin", "subscriptions", "check-log", workspaceId, state, source, provider],
+    queryKey: adminQueryKeys.subscriptionsCheckLog(workspaceId, state, source, provider),
     queryFn: () =>
       adminService.getSubscriptionCheckLog({
         state: state === "all" ? undefined : state,

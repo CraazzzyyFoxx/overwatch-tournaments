@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+/** @vitest-environment happy-dom */
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthProfile } from "@/stores/auth-profile.store";
 import {
@@ -77,5 +78,46 @@ describe("workspace store host lock (tenant white-label)", () => {
     // Clearing the lock (apex) drops the lock flag.
     useWorkspaceStore.getState().setHostLock(null);
     expect(useWorkspaceStore.getState().hostLockedWorkspaceId).toBeNull();
+  });
+});
+
+// The workspace id has ONE persisted home now (the cookie the server also
+// reads); the store is a runtime cache hydrated from it at module load. This
+// covers the way that hydration can silently regress: reading the wrong cookie
+// after the aqt->owt rename, which would make the client scope disagree with
+// the server's (`getServerWorkspaceId` reads the same two names).
+describe("workspace store cookie hydration", () => {
+  afterEach(() => {
+    document.cookie = "owt-workspace-id=; Max-Age=0; path=/";
+    document.cookie = "aqt-workspace-id=; Max-Age=0; path=/";
+  });
+
+  // Dynamic on purpose: hydration happens at module evaluation, so each case
+  // needs a fresh instance of the module under a different cookie.
+  async function freshStore() {
+    vi.resetModules();
+    return (await import("@/stores/workspace.store")).useWorkspaceStore;
+  }
+
+  it("hydrates the active workspace from the canonical cookie", async () => {
+    document.cookie = "owt-workspace-id=4; path=/";
+
+    const store = await freshStore();
+
+    expect(store.getState().currentWorkspaceId).toBe(4);
+  });
+
+  it("falls back to the legacy cookie during the aqt->owt rename", async () => {
+    document.cookie = "aqt-workspace-id=9; path=/";
+
+    const store = await freshStore();
+
+    expect(store.getState().currentWorkspaceId).toBe(9);
+  });
+
+  it("stays null when no workspace cookie is set", async () => {
+    const store = await freshStore();
+
+    expect(store.getState().currentWorkspaceId).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import type { Stage, Tournament, TournamentStatus } from "@/types/tournament.types";
 
@@ -13,7 +13,7 @@ const bracketModule =
 
 describe("TournamentBracketPage", () => {
   it("keeps the route wrapper thin and leaves all bracket data ownership to the page", () => {
-    const routeSource = readFileSync(join(import.meta.dir, "page.tsx"), "utf8");
+    const routeSource = readFileSync(join(import.meta.dirname, "page.tsx"), "utf8");
 
     expect(routeSource).not.toContain("useTournamentStagesQuery");
     expect(routeSource).not.toContain('from "@/components/ui/skeleton"');
@@ -23,9 +23,9 @@ describe("TournamentBracketPage", () => {
   });
 
   it("mounts tournament invalidation once from the shared client tournament layout", () => {
-    const layoutSource = readFileSync(join(import.meta.dir, "../layout.tsx"), "utf8");
+    const layoutSource = readFileSync(join(import.meta.dirname, "../layout.tsx"), "utf8");
     const clientLayoutSource = readFileSync(
-      join(import.meta.dir, "../_components/TournamentClientLayout.tsx"),
+      join(import.meta.dirname, "../_components/TournamentClientLayout.tsx"),
       "utf8"
     );
 
@@ -36,7 +36,7 @@ describe("TournamentBracketPage", () => {
   });
 
   it("filters playoff standings by the active stage before rendering", () => {
-    const source = readFileSync(join(import.meta.dir, "TournamentBracketPage.tsx"), "utf8");
+    const source = readFileSync(join(import.meta.dirname, "TournamentBracketPage.tsx"), "utf8");
 
     expect(source).toContain("const stagePlayoffStandings = playoffStandings.filter(");
     expect(source).toContain("standing.stage_id === stage.id");
@@ -55,7 +55,7 @@ describe("TournamentBracketPage", () => {
   });
 
   it("uses canonical concurrent bracket queries with full standings data", () => {
-    const source = readFileSync(join(import.meta.dir, "bracketData.ts"), "utf8");
+    const source = readFileSync(join(import.meta.dirname, "bracketData.ts"), "utf8");
 
     expect(source).toContain("tournamentQueryKeys.encounters(");
     expect(source).toContain("tournamentQueryKeys.bracketStandings(");
@@ -172,7 +172,7 @@ describe("TournamentBracketPage", () => {
   });
 
   it("keeps stale bracket content visible during refreshes and errors", () => {
-    const source = readFileSync(join(import.meta.dir, "TournamentBracketPage.tsx"), "utf8");
+    const source = readFileSync(join(import.meta.dirname, "TournamentBracketPage.tsx"), "utf8");
 
     expect(source).toContain("deriveBracketLoadState({");
     expect(source).toContain('state="initial-error"');

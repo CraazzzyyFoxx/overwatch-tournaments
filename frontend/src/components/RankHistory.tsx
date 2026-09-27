@@ -17,6 +17,7 @@ import {
   useUserRankHistory
 } from "@/hooks/useRankHistory";
 import userService from "@/services/user.service";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 /**
  * The player is identified by exactly one of these. `userId` is the cheap path;
@@ -44,7 +45,7 @@ export default function RankHistory({ userId, battleTag, title, className }: Ran
   const dateFrom = useMemo(() => getDefaultDateFrom(granularity), [granularity]);
 
   const resolve = useQuery({
-    queryKey: ["rank-user-resolve", battleTag],
+    queryKey: userQueryKeys.rankResolve(battleTag),
     queryFn: async () => {
       if (!battleTag) return null;
       const user = await userService.getUserByName(battleTag).catch(() => null);

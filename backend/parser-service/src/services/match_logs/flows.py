@@ -102,9 +102,12 @@ def _processor_from_bytes(
     raw_bytes: bytes,
     s3: S3Client,
     log_record_id: int | None,
+    attached_encounter_id: int | None,
 ) -> MatchLogProcessor:
     decoded_lines = [line for line in raw_bytes.decode().split("\n") if line]
-    return MatchLogProcessor(tournament, name, decoded_lines, s3, log_record_id)
+    return MatchLogProcessor(
+        tournament, name, decoded_lines, s3, log_record_id, attached_encounter_id=attached_encounter_id
+    )
 
 
 def _winner_team_id(encounter: models.Encounter) -> int | None:
@@ -124,11 +127,12 @@ async def _enqueue_match_log_tournament_events(
     session: AsyncSession,
     encounter: models.Encounter,
 ) -> None:
-    # A parsed match log moves the encounter's score and the standings built on
-    # top of it. Both halves of the invalidation: emit() for the clients and
-    # this service's own caches, the outbox row for tournament-service and
-    # app-service, which cache the same reads and cannot rely on Redis
-    # pub/sub's at-most-once delivery.
+    # A parsed log adds or replaces one map's observation under the encounter
+    # (``has_logs``, the per-map reads). It does not move the encounter's score:
+    # EncounterGame and finalize own that since encgame01. Both halves of the
+    # invalidation: emit() for the clients and this service's own caches, the
+    # outbox row for tournament-service and app-service, which cache the same
+    # reads and cannot rely on Redis pub/sub's at-most-once delivery.
     invalidated = (Resource.TOURNAMENT_ENCOUNTERS, Resource.TOURNAMENT_STANDINGS)
     scope = Scope.tournament(encounter.tournament_id)
     await emit(session, scope=scope, invalidates=list(invalidated), entity_ids={"encounter_ids": [encounter.id]})
@@ -177,6 +181,8 @@ class MatchLogProcessor:
         data_in: list[str],
         s3: S3Client,
         log_record_id: int | None = None,
+        *,
+        attached_encounter_id: int | None = None,
     ):
         self.tournament: models.Tournament = tournament
         self.filename: str = name
@@ -184,6 +190,9 @@ class MatchLogProcessor:
         # writes so provenance is a foreign key, not a filename comparison
         # across two differently normalised columns.
         self.log_record_id: int | None = log_record_id
+        # The encounter the uploader bound this log to, if any. It overrides the
+        # team-pair lookup in ``start`` (``encounter_flows.resolve_for_log``).
+        self.attached_encounter_id: int | None = attached_encounter_id
         self.df: pd.DataFrame = self._load_and_format_data(data_in)
         self._rows_by_type = _index_rows_by_event_type(self.df)
         self.heroes_map: dict[str, models.Hero] = {}  # Hero cache: canonical names + aliases
@@ -1062,7 +1071,13 @@ class MatchLogProcessor:
         match_time, home_score, away_score = self.get_match_score_and_time()
         logger.info(f"Match time: {match_time}, home score: {home_score}, away score: {away_score}")
 
-        encounter = await encounter_flows.get_by_teams_ids(session, home_team_db.id, away_team_db.id, [])
+        encounter = await encounter_flows.resolve_for_log(
+            session,
+            home_team_db.id,
+            away_team_db.id,
+            log_name=self.filename,
+            attached_encounter_id=self.attached_encounter_id,
+        )
         match_model = await encounter_service.get_match_by_encounter_and_map(
             session, encounter.id, match_map_model.id, []
         )
@@ -1091,14 +1106,6 @@ class MatchLogProcessor:
             match_model.home_team_id = home_team_db.id
             match_model.away_team_id = away_team_db.id
             match_model.log_name = self.filename
-            # A genuine log just superseded this row (most often a
-            # pre-existing ``source=captain_report`` row upserted by
-            # ``map_report.submit_map_report`` before the log arrived) — stamp
-            # it ``log_parser`` so both the row's own provenance and the
-            # derived ``Encounter.has_logs`` (filtered on this column, see
-            # ``shared/models/matches/match.py``) reflect that a real log now
-            # backs it.
-            match_model.source = enums.MatchSource.LOG_PARSER
             if self.log_record_id is not None:
                 match_model.log_record_id = self.log_record_id
             await _match_repo.create(session, match_model)
@@ -1432,6 +1439,7 @@ async def process_match_log(
         raw_bytes,
         s3,
         record.id if record is not None else None,
+        record.attached_encounter_id if record is not None else None,
     )
     # The signal is staged, not published: ``set_done``/``set_failed`` own the
     # commit that carries it, so a state write that fails announces nothing.

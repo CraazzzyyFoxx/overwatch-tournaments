@@ -35,6 +35,13 @@ interface ApiFetchOptions {
    * — e.g. the sitemap's public user fetch. Combine with `skipWorkspace`.
    */
   skipAuth?: boolean;
+  /**
+   * Suppress the built-in refresh-and-retry on 401. For callers that own the
+   * refresh decision themselves because they need the *outcome*, not just the
+   * retried response — the auth-profile store distinguishes a dead session
+   * (go anonymous) from a transient refresh failure (keep the known identity).
+   */
+  skipRefreshRetry?: boolean;
   throwOnError?: boolean;
 }
 
@@ -145,8 +152,8 @@ const getServerWorkspaceId = cache(async (): Promise<string | undefined> => {
     // callers there pass an explicit workspace or skipWorkspace.
     return undefined;
   }
-  // Tenant hosts always carry the middleware-set header, so reaching here
-  // means the platform host (or a middleware-excluded path): use the default.
+  // Tenant hosts always carry the proxy-set header, so reaching here
+  // means the platform host (or a proxy-excluded path): use the default.
   return getDefaultWorkspaceId();
 });
 
@@ -317,11 +324,14 @@ export async function apiFetch(
   };
 
   try {
-    const response = await retryWithRefreshOnUnauthorized({
-      response: await runRequest(initialToken),
-      token: options.token,
-      runRequest,
-    });
+    const initial = await runRequest(initialToken);
+    const response = options.skipRefreshRetry
+      ? initial
+      : await retryWithRefreshOnUnauthorized({
+          response: initial,
+          token: options.token,
+          runRequest,
+        });
 
     if (!response.ok && throwOnError) {
       throw await parseApiError(response);

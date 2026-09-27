@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetRefreshStateForTests } from "@/lib/auth/tokens";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
@@ -48,10 +48,9 @@ const authenticatedState = {
 // than reaching into the mock's internals.
 let requested: string[] = [];
 
-// `globalThis.window` is a non-writable accessor under current Bun, so a plain
-// `g.window = {}` throws "Attempted to assign to readonly property" before a
-// single assertion runs. Redefining the property does what the assignment meant.
-// (This file only started failing once CI actually ran the bun:test half.)
+// `globalThis.window` can be a non-writable accessor, so a plain `g.window = {}`
+// throws "Attempted to assign to readonly property" before a single assertion
+// runs. Redefining the property does what the assignment meant.
 function stubWindow(value: unknown): void {
   Object.defineProperty(globalThis, "window", {
     value,
@@ -66,7 +65,7 @@ beforeEach(() => {
   requested = [];
   resetRefreshStateForTests();
   stubWindow({});
-  g.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+  g.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     requested.push(url);
     if (url.includes("/auth/refresh")) {

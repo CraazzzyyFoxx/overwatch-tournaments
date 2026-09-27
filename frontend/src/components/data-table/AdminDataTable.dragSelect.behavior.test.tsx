@@ -11,7 +11,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
+import { DataTable } from "@/components/data-table/DataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -48,7 +48,7 @@ async function render() {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row>
+        <DataTable<Row>
           rows={ROWS}
           columns={columns}
           getRowId={(row) => String(row.id)}
@@ -96,7 +96,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-describe("AdminDataTable drag selection", () => {
+describe("DataTable drag selection", () => {
   it("paints the pressed state onto every selectable row swept over, until release", async () => {
     await render();
 

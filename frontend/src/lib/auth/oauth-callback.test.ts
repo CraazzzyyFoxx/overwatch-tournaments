@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildLinkTicketRedirect, isVerifiedTenantOrigin, safeRedirectTarget } from "@/lib/auth/oauth-callback";
 import { PLATFORM_ZONE } from "@/lib/site/host";
@@ -32,7 +32,7 @@ beforeEach(() => {
   byHostStatus = undefined;
   byHostThrows = false;
 
-  g.fetch = mock(async (url: string | URL) => {
+  g.fetch = vi.fn(async (url: string | URL) => {
     lastRequestedUrl = String(url);
     if (byHostThrows) throw new Error("network error");
     if (byHostStatus !== undefined) {

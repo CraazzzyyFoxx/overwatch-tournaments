@@ -56,7 +56,7 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Internal gateway base for server-side fetches (SSR + route handlers +
-# middleware). Runtime value; compose overrides it with the gateway service URL.
+# proxy). Runtime value; compose overrides it with the gateway service URL.
 ARG NEXT_INTERNAL_API_URL=http://gateway:8080
 
 ENV NODE_ENV=production

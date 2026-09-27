@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import analyticsService from "@/services/analytics.service";
+import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 
 interface ExplanationPopoverProps {
   playerId: number;
@@ -48,7 +49,7 @@ export default function ExplanationPopover({
   const [open, setOpen] = React.useState(false);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["analytics-explanation", playerId, tournamentId, algorithmId],
+    queryKey: analyticsQueryKeys.explanation(playerId, tournamentId, algorithmId),
     queryFn: () =>
       analyticsService.getPlayerExplanation(playerId, tournamentId, algorithmId),
     enabled: open,

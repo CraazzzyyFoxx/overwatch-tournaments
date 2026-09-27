@@ -17,6 +17,7 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
 import encounterService from "@/services/encounter.service";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterRostersModalProps {
   encounterId: number;
@@ -42,7 +43,7 @@ export function EncounterRostersModal({
   const [open, setOpen] = useState(false);
 
   const encounterQuery = useQuery({
-    queryKey: ["encounter-detail", encounterId],
+    queryKey: encounterQueryKeys.detail(encounterId),
     queryFn: () => encounterService.getEncounter(encounterId),
     enabled: open
   });

@@ -56,6 +56,7 @@ import { TOURNAMENT_DETAIL_PREVIEW_LIMIT } from "./tournamentWorkspace.helpers";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface TournamentTeamsTabProps {
   tournamentId: number;
@@ -217,7 +218,7 @@ export function TournamentTeamsTab({
   const teamsAdminHref = `/admin/teams?tournament=${tournamentId}`;
 
   const { data: challongePreview, isLoading: isChallongePreviewLoading } = useQuery({
-    queryKey: ["admin", "challonge-team-sync-preview", tournamentId],
+    queryKey: adminQueryKeys.challongeTeamSyncPreview(tournamentId),
     queryFn: () => adminService.getChallongeTeamSyncPreview(tournamentId),
     enabled: challongeSyncDialogOpen && hasChallongeSource
   });

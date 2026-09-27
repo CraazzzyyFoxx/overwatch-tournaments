@@ -24,6 +24,7 @@ import { notify } from "@/lib/notify";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
 import { Spinner } from "@/components/ui/spinner";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 // ─── Avatar section ─────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ function AvatarSection({ user, canEdit, onUserUpdated }: Readonly<AvatarSectionP
   const uploadMutation = useMutation({
     mutationFn: (file: File) => adminService.uploadUserAvatar(user.id, file),
     onSuccess: (updatedUser: User) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       onUserUpdated(updatedUser);
     },
   });
@@ -47,7 +48,7 @@ function AvatarSection({ user, canEdit, onUserUpdated }: Readonly<AvatarSectionP
   const deleteMutation = useMutation({
     mutationFn: () => adminService.deleteUserAvatar(user.id),
     onSuccess: (updatedUser: User) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       onUserUpdated(updatedUser);
     },
   });
@@ -104,7 +105,7 @@ function NameSection({ user, canEdit, onUserUpdated }: Readonly<NameSectionProps
   const updateMutation = useMutation({
     mutationFn: () => adminService.updateUser(user.id, { name }),
     onSuccess: (updatedUser: User) => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.users() });
       onUserUpdated(updatedUser);
       setEditing(false);
     },

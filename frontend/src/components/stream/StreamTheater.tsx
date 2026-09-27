@@ -15,7 +15,7 @@ import {
   STREAM_STATUS_META
 } from "@/lib/social/stream-platform";
 import type { StreamEntry } from "@/types/stream.types";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 type StreamTheaterProps = {
   /** The stream currently in the frame. */

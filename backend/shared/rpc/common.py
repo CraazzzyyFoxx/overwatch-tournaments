@@ -180,13 +180,30 @@ def field_entry(item: dict[str, Any]) -> dict[str, Any]:
 
     Accepts both dialects that reach here: ``ApiExc`` items (``msg``/``code``,
     sometimes ``field``) and pydantic items (``loc``/``msg``/``type``).
+
+    ``ctx`` from a ``PydanticCustomError`` is merged in flat, scalars only -- the
+    same shape ``http_error`` gives an attribute bag: the code says *what* is
+    wrong and the context says *where* (the FFA formula errors carry a 0-based
+    ``offset`` the stage editor points at). Non-scalars are dropped: pydantic's
+    own ``value_error`` context holds the ``ValueError`` instance, which would
+    make the envelope unserializable.
     """
     field = _loc_path(item.get("loc")) or item.get("field")
-    return {
+    entry = {
         "field": str(field) if field else None,
         "msg": str(item.get("msg") or "invalid value"),
         "code": str(item.get("code") or item.get("type") or "error"),
     }
+    ctx = item.get("ctx")
+    if isinstance(ctx, dict):
+        entry.update(
+            {
+                key: value
+                for key, value in ctx.items()
+                if key not in entry and (value is None or isinstance(value, (str, int, float, bool)))
+            }
+        )
+    return entry
 
 
 def retry_after_seconds(exc: HTTPException) -> int | None:

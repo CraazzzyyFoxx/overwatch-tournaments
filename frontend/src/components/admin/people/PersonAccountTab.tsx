@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { rbacService } from "@/services/rbac.service";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 function Field({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
@@ -37,7 +38,7 @@ export function PersonAccountTab({
   // Shared cache entry with the People list: the link lives on the auth side
   // (`linked_players`), and there is no "account for player N" read.
   const accountsQuery = useQuery({
-    queryKey: ["access-admin", "users", "all"],
+    queryKey: accessQueryKeys.usersAll(),
     queryFn: () => rbacService.listUsersAll(),
     enabled: canReadAuth
   });
@@ -48,7 +49,7 @@ export function PersonAccountTab({
     ) ?? null;
 
   const detailQuery = useQuery({
-    queryKey: ["access-admin", "user", linked?.id ?? null],
+    queryKey: accessQueryKeys.user(linked?.id ?? null),
     queryFn: () => rbacService.getUser(linked!.id),
     enabled: linked != null
   });

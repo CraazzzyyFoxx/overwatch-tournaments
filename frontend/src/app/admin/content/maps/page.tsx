@@ -5,7 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { Gamepad2, Pencil, Swords, Trash2 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import { CatalogAliasesField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
@@ -33,6 +33,8 @@ import type { Gamemode } from "@/types/gamemode.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCatalogEntityCrud } from "@/hooks/useCatalogEntityCrud";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { mapQueryKeys } from "@/lib/maps/query-keys";
 
 // Key order matters: `hasUnsavedChanges` compares JSON, so `getMapForm` below
 // must list the same fields in the same order or every dialog opens dirty.
@@ -65,7 +67,7 @@ export default function MapsAdminPage() {
 
   // Gamemodes back both the create/edit dialog select and the Gamemode chip.
   const { data: gamemodesData } = useQuery({
-    queryKey: ["gamemodes"],
+    queryKey: mapQueryKeys.gamemodes(),
     queryFn: async () => {
       const response = await apiFetch("/api/v1/gamemodes");
       const data = (await response.json()) as PaginatedResponse<Gamemode>;
@@ -90,7 +92,7 @@ export default function MapsAdminPage() {
     deleteMutation,
     syncMutation,
   } = useCatalogEntityCrud<MapRead, MapCreateInput, MapUpdateInput>({
-    queryKey: ["admin", "maps"],
+    queryKey: adminQueryKeys.contentEntity("maps"),
     emptyForm: emptyMapForm,
     getForm: getMapForm,
     service: {
@@ -139,7 +141,7 @@ export default function MapsAdminPage() {
       id: "image",
       header: "Image",
       size: 96,
-      meta: adminColumnMeta<MapRead>({ align: "center" }),
+      meta: columnMeta<MapRead>({ align: "center" }),
       cell: ({ row }) => {
         const map = row.original;
         return (
@@ -175,7 +177,7 @@ export default function MapsAdminPage() {
       accessorKey: "in_competitive",
       header: "Mode Pool",
       size: 120,
-      meta: adminColumnMeta<MapRead>({ align: "center" }),
+      meta: columnMeta<MapRead>({ align: "center" }),
       cell: ({ row }) => {
         const map = row.original;
         return map.in_competitive !== false ? (
@@ -208,7 +210,7 @@ export default function MapsAdminPage() {
 
   return (
     <>
-      <AdminDataTable
+      <DataTable
         queryKey={(page, search, pageSize, sortField, sortDir) => [
           "admin",
           "maps",

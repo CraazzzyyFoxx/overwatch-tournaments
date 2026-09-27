@@ -1,31 +1,41 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 
+/**
+ * The bundle of keys one tournament's admin writes stale, composed from the
+ * domain factories rather than respelling them: the browsers that read
+ * `["admin", "tournament", id]` and the public pages that read
+ * `["encounters", "tournament", id]` build those same tuples from
+ * `adminQueryKeys` / `tournamentQueryKeys`, so a rename cannot desynchronize a
+ * reader from the write that is supposed to refresh it.
+ */
 export function getTournamentWorkspaceQueryKeys(tournamentId: number) {
   return {
-    tournament: ["admin", "tournament", tournamentId] as const,
-    teams: ["admin", "tournament", tournamentId, "teams"] as const,
+    tournament: adminQueryKeys.tournament(tournamentId),
+    teams: adminQueryKeys.tournamentTeams(tournamentId),
     divisionGrids: ["admin", "tournament", tournamentId, "division-grids"] as const,
-    standings: ["admin", "tournament", tournamentId, "standings"] as const,
+    standings: adminQueryKeys.tournamentStandings(tournamentId),
     standingsTable: ["standings-table", tournamentId] as const,
-    encounters: ["admin", "tournament", tournamentId, "encounters"] as const,
-    stages: ["admin", "stages", tournamentId] as const,
+    encounters: adminQueryKeys.tournamentEncounters(tournamentId),
+    stages: adminQueryKeys.stages(tournamentId),
     discordChannel: ["admin", "tournament", tournamentId, "discord-channel"] as const,
     readiness: ["admin", "tournament", tournamentId, "readiness"] as const,
     logHistory: ["admin", "tournament", tournamentId, "log-history"] as const,
     // Public collections consumed by non-admin pages (the bracket view reads
     // these; without invalidation the public grid goes stale after admin edits).
-    tournaments: ["tournaments"] as const,
-    teamsCollection: ["teams"] as const,
-    encountersCollection: ["encounters"] as const,
-    standingsCollection: ["standings"] as const,
+    tournaments: tournamentQueryKeys.list(),
+    teamsCollection: tournamentQueryKeys.teamsAll(),
+    encountersCollection: encounterQueryKeys.all(),
+    standingsCollection: tournamentQueryKeys.standingsAll(),
     publicTournament: tournamentQueryKeys.detail(tournamentId),
     publicStages: tournamentQueryKeys.stages(tournamentId),
     publicTeams: tournamentQueryKeys.teams(tournamentId),
     publicHeroPlaytime: tournamentQueryKeys.heroPlaytime(tournamentId),
-    publicStandings: ["standings", tournamentId] as const,
-    publicEncounters: ["encounters", "tournament", tournamentId] as const
+    publicStandings: tournamentQueryKeys.standings(tournamentId),
+    publicEncounters: tournamentQueryKeys.encounters(tournamentId)
   };
 }
 
@@ -62,9 +72,11 @@ export function invalidateTournamentWorkspace(
 
   if (workspaceId != null) {
     invalidations.push(
-      queryClient.invalidateQueries({ queryKey: ["standings", tournamentId, workspaceId] }),
       queryClient.invalidateQueries({
-        queryKey: ["encounters", "tournament", tournamentId, workspaceId],
+        queryKey: tournamentQueryKeys.standings(tournamentId, workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.encounters(tournamentId, workspaceId),
       }),
       queryClient.invalidateQueries({
         queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),

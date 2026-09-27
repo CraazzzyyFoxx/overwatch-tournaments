@@ -23,7 +23,7 @@ function platformDefaults(origin: string): SiteMetadata {
 /**
  * Per-request SEO metadata, resolved from the tenant host's workspace.
  *
- * On a tenant host, `middleware.ts` (Task 6) injects `x-owt-workspace-id`
+ * On a tenant host, `proxy.ts` (Task 6) injects `x-owt-workspace-id`
  * ahead of the request. When present, the workspace's own SEO fields
  * (`seo_title` / `seo_description` / `icon_url`) drive the page title, OG
  * tags, and favicon, and `origin` becomes the tenant host itself (so

@@ -1,0 +1,475 @@
+// Moscow telemetry agent: scrapes the production stack, tails ./logs, receives
+// OTLP from the services and pushes all of it to the monitoring stack on home.
+// Topology, secrets and troubleshooting: monitoring/README.md
+//
+// Env (root .env on Moscow, passed through docker-compose.production.yml):
+//   TELEMETRY_INGEST_USER / TELEMETRY_INGEST_PASSWORD  basic auth on ingest.owt
+//   SENTRY_OTLP_PUBLIC_KEY                             public key of SENTRY_DSN
+//   POSTGRES_EXPORTER_DSN                              Postgres :5432, NOT pgBouncer
+
+logging {
+	level  = "warn"
+	format = "json"
+}
+
+// ---------------------------------------------------------------------------
+// Egress: home (ingest.owt) and Sentry
+// ---------------------------------------------------------------------------
+
+prometheus.remote_write "home" {
+	endpoint {
+		url = "https://ingest.owt.craazzzyyfoxx.me/api/v1/write"
+
+		basic_auth {
+			username = sys.env("TELEMETRY_INGEST_USER")
+			password = sys.env("TELEMETRY_INGEST_PASSWORD")
+		}
+	}
+
+	external_labels = {
+		environment = "production",
+		project     = "owt",
+	}
+}
+
+loki.write "home" {
+	endpoint {
+		url = "https://ingest.owt.craazzzyyfoxx.me/loki/api/v1/push"
+
+		basic_auth {
+			username = sys.env("TELEMETRY_INGEST_USER")
+			password = sys.env("TELEMETRY_INGEST_PASSWORD")
+		}
+	}
+}
+
+otelcol.auth.basic "home" {
+	username = sys.env("TELEMETRY_INGEST_USER")
+	password = sys.env("TELEMETRY_INGEST_PASSWORD")
+}
+
+// otlphttp appends /v1/traces to the endpoint.
+otelcol.exporter.otlphttp "tempo" {
+	client {
+		endpoint = "https://ingest.owt.craazzzyyfoxx.me"
+		auth     = otelcol.auth.basic.home.handler
+	}
+}
+
+otelcol.auth.headers "sentry" {
+	header {
+		key   = "x-sentry-auth"
+		value = "sentry sentry_key=" + sys.env("SENTRY_OTLP_PUBLIC_KEY")
+	}
+}
+
+// Sentry's native OTLP ingest (open beta) replaces the contrib Sentry Exporter.
+otelcol.exporter.otlphttp "sentry" {
+	client {
+		endpoint = "https://o4504128802652160.ingest.us.sentry.io/api/4511564408946688/integration/otlp"
+		auth     = otelcol.auth.headers.sentry.handler
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+// Same targets and labels as the old Prometheus: docker-DNS names on
+// app-network, job = instance = service name.
+prometheus.scrape "services" {
+	targets = [
+		{__address__ = "parser-svc:9100", job = "parser-svc", instance = "parser-svc"},
+		{__address__ = "tournament-svc:9103", job = "tournament-svc", instance = "tournament-svc"},
+		{__address__ = "balancer-svc:9100", job = "balancer-svc", instance = "balancer-svc"},
+		{__address__ = "discord-worker:9100", job = "discord-worker", instance = "discord-worker"},
+		{__address__ = "app-svc:9109", job = "app-svc", instance = "app-svc"},
+		{__address__ = "identity-svc:9107", job = "identity-svc", instance = "identity-svc"},
+		{__address__ = "analytics-svc:9108", job = "analytics-svc", instance = "analytics-svc"},
+		{__address__ = "analytics-worker:9106", job = "analytics-worker", instance = "analytics-worker"},
+		{__address__ = "stream-svc:9111", job = "stream-svc", instance = "stream-svc"},
+		{__address__ = "gateway:9110", job = "gateway", instance = "gateway"},
+		{__address__ = "nginx-exporter:9113", job = "nginx", instance = "nginx"},
+		// Alloy's own registry: carries the nginx_limit_* counters that
+		// loki.process "nginx" derives from the access log (rules/nginx.yml).
+		{__address__ = "127.0.0.1:12345", job = "alloy", instance = "moscow"},
+	]
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.home.receiver]
+}
+
+// RabbitMQ's built-in rabbitmq_prometheus plugin replaces kbudde's exporter.
+// Its per-object endpoint uses the same queue metric names the rules use.
+prometheus.scrape "rabbitmq" {
+	targets = [{
+		__address__ = "rabbitmq:15692",
+		job         = "rabbitmq",
+		instance    = "rabbitmq",
+	}]
+	metrics_path    = "/metrics/per-object"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.relabel.rabbitmq.receiver]
+}
+
+// /metrics/per-object is ~17k lines; only these feed rules and dashboards.
+// `up` must survive the filter: RabbitMQDown is up{job="rabbitmq"} == 0.
+prometheus.relabel "rabbitmq" {
+	forward_to = [prometheus.remote_write.home.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "up|rabbitmq_queue_messages|rabbitmq_queue_consumers|rabbitmq_queue_messages_published_total|rabbitmq_channel_messages_delivered_total"
+		action        = "keep"
+	}
+}
+
+// Embedded exporters: the same upstream exporters the old containers ran, so
+// metric names match; job/instance are pinned to the old values.
+prometheus.exporter.unix "host" {
+	rootfs_path = "/host/root"
+	procfs_path = "/proc"
+	sysfs_path  = "/sys"
+
+	// ops/backup/backup.sh writes owt_backup.prom here.
+	textfile {
+		directory = "/host/root/var/lib/node_exporter/textfile"
+	}
+}
+
+discovery.relabel "host" {
+	targets = prometheus.exporter.unix.host.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "node"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "host"
+	}
+}
+
+prometheus.scrape "host" {
+	targets         = discovery.relabel.host.output
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.home.receiver]
+}
+
+// cpu/memory only: the default set walks every container's filesystem and was
+// what pinned the old standalone cAdvisor against its memory limit.
+prometheus.exporter.cadvisor "containers" {
+	docker_host            = "unix:///var/run/docker.sock"
+	docker_only            = true
+	store_container_labels = false
+	enabled_metrics        = ["cpu", "memory"]
+}
+
+discovery.relabel "containers" {
+	targets = prometheus.exporter.cadvisor.containers.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "cadvisor"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "host"
+	}
+}
+
+prometheus.scrape "containers" {
+	targets         = discovery.relabel.containers.output
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.home.receiver]
+}
+
+prometheus.exporter.redis "redis" {
+	redis_addr = "redis:6379"
+}
+
+discovery.relabel "redis" {
+	targets = prometheus.exporter.redis.redis.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "redis"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "redis"
+	}
+}
+
+prometheus.scrape "redis" {
+	targets         = discovery.relabel.redis.output
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.home.receiver]
+}
+
+prometheus.exporter.postgres "postgres" {
+	data_source_names = [sys.env("POSTGRES_EXPORTER_DSN")]
+}
+
+discovery.relabel "postgres" {
+	targets = prometheus.exporter.postgres.postgres.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "postgres"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "postgres"
+	}
+}
+
+prometheus.scrape "postgres" {
+	targets         = discovery.relabel.postgres.output
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.home.receiver]
+}
+
+// ---------------------------------------------------------------------------
+// Logs: ./logs mounted read-only at /var/log/app. Pipelines converted from
+// monitoring/promtail/promtail.yml (`alloy convert`), which only the local dev
+// stack still runs.
+// tail_from_end: the first start must not replay 1.1 GB of old logs.
+// ---------------------------------------------------------------------------
+
+loki.source.file "app_services" {
+	targets = [{
+		__path__         = "/var/log/app/**/*.log",
+		// Gateway and nginx have their own shapes and pipelines below.
+		__path_exclude__ = "/var/log/app/{gateway,nginx}/*.log",
+		job              = "app_services",
+	}]
+	forward_to    = [loki.process.app_services.receiver]
+	tail_from_end = true
+
+	file_match {
+		enabled = true
+	}
+}
+
+// Loguru serialize=True
+loki.process "app_services" {
+	forward_to = [loki.write.home.receiver]
+
+	stage.json {
+		expressions = {
+			correlation_id = "record.extra.correlation_id",
+			handler        = "record.extra.handler",
+			job_id         = "record.extra.job_id",
+			level          = "record.level.name",
+			message        = "record.message",
+			message_id     = "record.extra.message_id",
+			queue          = "record.extra.queue",
+			service        = "record.extra.service",
+			span_id        = "record.extra.span_id",
+			status         = "record.extra.status",
+			timestamp      = "record.time.timestamp",
+			trace_id       = "record.extra.trace_id",
+			trace_sampled  = "record.extra.trace_sampled",
+		}
+	}
+
+	stage.labels {
+		values = {
+			handler       = null,
+			level         = null,
+			queue         = null,
+			service       = null,
+			status        = null,
+			trace_sampled = null,
+		}
+	}
+
+	stage.timestamp {
+		source = "timestamp"
+		format = "Unix"
+	}
+
+	stage.drop {
+		source     = "message"
+		expression = "GET /health"
+	}
+}
+
+loki.source.file "gateway" {
+	targets = [{
+		__path__ = "/var/log/app/gateway/*.log",
+		job      = "gateway",
+	}]
+	forward_to    = [loki.process.gateway.receiver]
+	tail_from_end = true
+
+	file_match {
+		enabled = true
+	}
+}
+
+// Go gateway: flat slog JSON.
+loki.process "gateway" {
+	forward_to = [loki.write.home.receiver]
+
+	stage.json {
+		expressions = {
+			correlation_id = "correlation_id",
+			level          = "level",
+			message        = "msg",
+			route          = "route",
+			service        = "service",
+			status         = "status",
+			timestamp      = "time",
+			trace_id       = "trace_id",
+		}
+	}
+
+	stage.labels {
+		values = {
+			level   = null,
+			service = null,
+			status  = null,
+		}
+	}
+
+	stage.timestamp {
+		source = "timestamp"
+		format = "RFC3339Nano"
+	}
+
+	stage.drop {
+		source     = "message"
+		expression = "GET /health"
+	}
+}
+
+loki.source.file "nginx" {
+	targets = [{
+		__path__ = "/var/log/app/nginx/*.log",
+		job      = "nginx",
+	}]
+	forward_to    = [loki.process.nginx.receiver]
+	tail_from_end = true
+
+	file_match {
+		enabled = true
+	}
+}
+
+// nginx edge_json access log + plain-text error.log (json stage leaves its
+// fields empty, the line still ships). remote_addr/uri stay content, not
+// labels: attacker-controlled, would blow up Loki's index.
+loki.process "nginx" {
+	forward_to = [loki.write.home.receiver]
+
+	stage.json {
+		expressions = {
+			limit_conn  = "limit_conn",
+			limit_req   = "limit_req",
+			method      = "method",
+			remote_addr = "remote_addr",
+			status      = "status",
+			timestamp   = "time",
+			uri         = "uri",
+		}
+	}
+
+	stage.labels {
+		values = {
+			limit_conn = null,
+			limit_req  = null,
+			status     = null,
+		}
+	}
+
+	stage.timestamp {
+		source = "timestamp"
+		format = "RFC3339"
+	}
+
+	stage.drop {
+		source     = "uri"
+		expression = "^/health$"
+	}
+
+	// Rate-limit outcome as Prometheus counters on Alloy's own /metrics
+	// (scraped as job="alloy"). prefix = "" keeps the names rules/nginx.yml
+	// queries; the default prefix (and Promtail's promtail_custom_ before it)
+	// meant those rules never matched anything.
+	// max_idle_duration: rejections are rare; a series that expires between
+	// bursts would make the recording rule's sum() come back empty.
+	stage.metrics {
+		metric.counter {
+			name              = "nginx_limit_req_rejected_total"
+			description       = "Requests rejected by an nginx limit_req zone"
+			prefix            = ""
+			source            = "limit_req"
+			value             = "REJECTED"
+			action            = "inc"
+			max_idle_duration = "24h"
+		}
+
+		metric.counter {
+			name              = "nginx_limit_req_rejected_dry_run_total"
+			description       = "Requests an nginx limit_req zone would have rejected (dry run)"
+			prefix            = ""
+			source            = "limit_req"
+			value             = "REJECTED_DRY_RUN"
+			action            = "inc"
+			max_idle_duration = "24h"
+		}
+
+		metric.counter {
+			name              = "nginx_limit_conn_rejected_total"
+			description       = "Requests rejected by an nginx limit_conn zone"
+			prefix            = ""
+			source            = "limit_conn"
+			value             = "REJECTED"
+			action            = "inc"
+			max_idle_duration = "24h"
+		}
+
+		metric.counter {
+			name              = "nginx_limit_conn_rejected_dry_run_total"
+			description       = "Requests an nginx limit_conn zone would have rejected (dry run)"
+			prefix            = ""
+			source            = "limit_conn"
+			value             = "REJECTED_DRY_RUN"
+			action            = "inc"
+			max_idle_duration = "24h"
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Traces: services export OTLP to alloy:4317 (OTLP_ENDPOINT in
+// docker-compose.production.yml); one copy to Tempo, one to Sentry.
+// ---------------------------------------------------------------------------
+
+otelcol.receiver.otlp "services" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		traces = [otelcol.processor.batch.traces.input]
+	}
+}
+
+otelcol.processor.batch "traces" {
+	output {
+		traces = [
+			otelcol.exporter.otlphttp.tempo.input,
+			otelcol.exporter.otlphttp.sentry.input,
+		]
+	}
+}

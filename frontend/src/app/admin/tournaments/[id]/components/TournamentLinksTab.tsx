@@ -15,7 +15,7 @@ import {
   Trash2
 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import {
   entityFormError,
@@ -48,6 +48,7 @@ import type {
 } from "@/types/stream.types";
 import { primaryStreamLinkSortOrder } from "./tournamentLinks.helpers";
 import { EmptyNote } from "@/components/kit/EmptyNote";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /** Mirrors `TOURNAMENT_LINK_KINDS` in `backend/shared/models/tournament/link.py`. */
 const LINK_KINDS: ReadonlyArray<{ value: TournamentLinkKind; label: string }> = [
@@ -139,7 +140,7 @@ export interface TournamentLinksTabProps {
  * Typed link catalog of one tournament (`tournament.tournament_link`) — the
  * Discord invite, official broadcasts, VODs, the bracket, the rules doc.
  *
- * `AdminDataTable` in client mode: `GET /admin/tournament-links` returns a
+ * `DataTable` in client mode: `GET /admin/tournament-links` returns a
  * flat array rather than a `PaginatedResponse`, and a tournament has a handful
  * of links, not pages of them — so the rows are handed over whole and the
  * table sorts and pages them locally. Row actions are the admin's single
@@ -165,7 +166,7 @@ export function TournamentLinksTab({
   const [formData, setFormData] = useState<LinkForm>({ ...EMPTY_LINK_FORM });
 
   const linksQuery = useQuery({
-    queryKey: ["admin", "tournament", tournamentId, "links"],
+    queryKey: adminQueryKeys.tournamentLinks(tournamentId),
     // Archived rows are included so a soft-deleted link can be restored; the
     // public tournament page only ever reads the active ones.
     queryFn: () => adminService.listTournamentLinks(tournamentId, { activeOnly: false }),
@@ -173,7 +174,7 @@ export function TournamentLinksTab({
   });
 
   const invalidateLinks = () =>
-    queryClient.invalidateQueries({ queryKey: ["admin", "tournament", tournamentId, "links"] });
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.tournamentLinks(tournamentId) });
 
   const closeForm = () => {
     setCreateDialogOpen(false);
@@ -283,7 +284,7 @@ export function TournamentLinksTab({
       cell: ({ row }) => (
         <Badge variant="secondary">{KIND_LABELS[row.original.kind] ?? row.original.kind}</Badge>
       ),
-      meta: adminColumnMeta<TournamentLink>({
+      meta: columnMeta<TournamentLink>({
         searchValue: (link) => KIND_LABELS[link.kind] ?? link.kind
       })
     },
@@ -291,7 +292,7 @@ export function TournamentLinksTab({
       accessorKey: "label",
       header: "Label",
       cell: ({ row }) => row.original.label ?? <span className="text-muted-foreground">—</span>,
-      meta: adminColumnMeta<TournamentLink>({ className: "max-w-[16rem] truncate" })
+      meta: columnMeta<TournamentLink>({ className: "max-w-[16rem] truncate" })
     },
     {
       accessorKey: "url",
@@ -307,7 +308,7 @@ export function TournamentLinksTab({
           <ExternalLink aria-hidden className="size-3.5 shrink-0" />
         </a>
       ),
-      meta: adminColumnMeta<TournamentLink>({ className: "max-w-[22rem]" })
+      meta: columnMeta<TournamentLink>({ className: "max-w-[22rem]" })
     },
     {
       // ponytail: sort order is a plain number field in the edit dialog, not
@@ -318,14 +319,14 @@ export function TournamentLinksTab({
       accessorKey: "sort_order",
       header: "Order",
       size: 80,
-      meta: adminColumnMeta<TournamentLink>({ align: "right", numeric: true })
+      meta: columnMeta<TournamentLink>({ align: "right", numeric: true })
     },
     {
       id: "state",
       header: "State",
       size: 96,
       enableSorting: false,
-      meta: adminColumnMeta<TournamentLink>({ align: "center" }),
+      meta: columnMeta<TournamentLink>({ align: "center" }),
       cell: ({ row }) =>
         row.original.is_active ? (
           <StatusIcon icon={CircleDot} label="Active" variant="success" />
@@ -456,7 +457,7 @@ export function TournamentLinksTab({
             Could not load the links for this tournament.
           </EmptyNote>
         ) : (
-          <AdminDataTable
+          <DataTable
             rows={links}
             isLoading={linksQuery.isLoading}
             columns={columns}

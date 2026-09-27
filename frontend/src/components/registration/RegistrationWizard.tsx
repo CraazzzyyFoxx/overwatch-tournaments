@@ -10,6 +10,8 @@ import meService from "@/services/me.service";
 import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
 import RegistrationSchemaForm from "./RegistrationSchemaForm";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { userQueryKeys } from "@/lib/users/query-keys";
 
 interface RegistrationWizardProps {
   workspaceId: number;
@@ -36,7 +38,7 @@ export default function RegistrationWizard({
   // accounts, so it wrongly reported "no linked accounts" here even when the
   // profile showed them linked.
   const userQuery = useQuery({
-    queryKey: ["me", "social"],
+    queryKey: userQueryKeys.mySocial(),
     queryFn: () => meService.getSocialAccounts(),
     enabled: !!authUser,
     staleTime: 60_000,
@@ -46,9 +48,9 @@ export default function RegistrationWizard({
     mutationFn: (payload: RegistrationSubmitInput) =>
       registrationService.register(tournamentId, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["registration", workspaceId, tournamentId] });
+      await queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId) });
       await queryClient.invalidateQueries({
-        queryKey: ["registrations-list", workspaceId, tournamentId],
+        queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId),
       });
       onClose();
     },

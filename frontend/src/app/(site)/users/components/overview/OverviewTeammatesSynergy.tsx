@@ -8,7 +8,7 @@ import { UserBestTeammate } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { heroInitials } from "@/components/hero/heroRole";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { SearchField } from "@/components/ui/search-field";
 import {

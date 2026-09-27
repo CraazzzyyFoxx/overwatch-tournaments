@@ -13,7 +13,7 @@ import OverviewTeammatesSynergy from "@/app/(site)/users/components/overview/Ove
 import OverviewTopHeroesTable from "@/app/(site)/users/components/overview/OverviewTopHeroesTable";
 import OverviewAchievementsPreview from "@/app/(site)/users/components/overview/OverviewAchievementsPreview";
 import { tournamentMapPips } from "@/app/(site)/users/components/overview/map-results";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 interface OverviewPageProps {
   profile: UserProfile;

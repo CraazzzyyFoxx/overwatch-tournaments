@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
-import { formatSubRoleLabel, getPlayerSlug } from "@/utils/player";
+import { formatSubRoleLabel, getPlayerSlug } from "@/lib/player";
 import styles from "@/components/match/EncounterDetail.module.css";
 
 /**

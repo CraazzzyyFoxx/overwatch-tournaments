@@ -27,6 +27,7 @@ import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { DivisionGridMarketplaceImportRequest } from "@/types/workspace.types";
 import { Spinner } from "@/components/ui/spinner";
+import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 
 const STEPS = ["source", "version", "create"] as const;
 type StepKey = (typeof STEPS)[number];
@@ -70,39 +71,38 @@ export default function DivisionGridImportPage() {
   const includeOwRanks = searchParams?.get("ow") !== "0";
 
   const workspacesQuery = useQuery({
-    queryKey: ["division-grid-import-workspaces", workspaceId],
+    queryKey: divisionGridQueryKeys.importWorkspaces(workspaceId),
     queryFn: () => workspaceService.getDivisionGridMarketplaceWorkspaces(workspaceId!),
     enabled: canImport
   });
 
   const gridsQuery = useQuery({
-    queryKey: ["division-grid-import-grids", workspaceId, sourceWorkspaceId],
+    queryKey: divisionGridQueryKeys.importGrids(workspaceId, sourceWorkspaceId),
     queryFn: () => workspaceService.getDivisionGridMarketplace(workspaceId!, sourceWorkspaceId!),
     enabled: canImport && sourceWorkspaceId !== null
   });
   const grids = gridsQuery.data ?? [];
   const selectedGrid = grids.find((grid) => grid.id === sourceGridId) ?? null;
 
-  const request = useMemo<DivisionGridMarketplaceImportRequest | null>(() => {
-    if (sourceWorkspaceId === null || sourceGridId === null || sourceVersionId === null)
-      return null;
-    return {
-      source_workspace_id: sourceWorkspaceId,
-      source_grid_id: sourceGridId,
-      source_version_id: sourceVersionId,
-      include_icons: includeIcons,
-      include_ow_rank_mappings: includeOwRanks
-    };
-  }, [includeIcons, includeOwRanks, sourceGridId, sourceVersionId, sourceWorkspaceId]);
+  const request: DivisionGridMarketplaceImportRequest | null =
+    sourceWorkspaceId === null || sourceGridId === null || sourceVersionId === null
+      ? null
+      : {
+          source_workspace_id: sourceWorkspaceId,
+          source_grid_id: sourceGridId,
+          source_version_id: sourceVersionId,
+          include_icons: includeIcons,
+          include_ow_rank_mappings: includeOwRanks
+        };
 
   const preflightQuery = useQuery({
-    queryKey: ["division-grid-import-preflight", workspaceId, request],
+    queryKey: divisionGridQueryKeys.importPreflight(workspaceId, request),
     queryFn: () => workspaceService.preflightDivisionGridMarketplace(workspaceId!, request!),
     enabled: canImport && request !== null
   });
 
   const jobQuery = useQuery({
-    queryKey: ["division-grid-import-job", workspaceId, jobId],
+    queryKey: divisionGridQueryKeys.importJob(workspaceId, jobId),
     queryFn: () => workspaceService.getDivisionGridImportJob(workspaceId!, jobId!),
     enabled: canImport && jobId !== null,
     refetchInterval: (query) => {
@@ -114,7 +114,7 @@ export default function DivisionGridImportPage() {
 
   const importedGridId = job?.result?.imported_grids[0]?.target_grid_id ?? null;
   const importedVersionsQuery = useQuery({
-    queryKey: ["division-grid-versions", workspaceId, importedGridId],
+    queryKey: divisionGridQueryKeys.versions(workspaceId, importedGridId),
     queryFn: () => workspaceService.getDivisionGridVersions(workspaceId!, importedGridId!),
     enabled: canImport && importedGridId !== null
   });

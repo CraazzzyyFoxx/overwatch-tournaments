@@ -28,10 +28,19 @@ standings_service = importlib.import_module("src.services.standings.service")
 
 from shared.core.enums import StageType  # noqa: E402
 from shared.domain.ffa_scoring import FfaGameLine  # noqa: E402
+from tests._stage_regulation import stage_regulation  # noqa: E402
 
-#: Places pay 10/6/4/2 and every point of score pays 1 -- enough for two teams
-#: to reach the same total by different routes.
-SCORING = {"ffa_scoring": {"placement_points": [10, 6, 4, 2], "score_points": 1}}
+#: Places pay 10/6/4/2 and every kill pays 1 -- enough for two teams to reach
+#: the same total by different routes. ``deaths`` is the hidden column the
+#: direction test ranks by: fewer is better.
+SCORING = {
+    "ffa_placement_points": [10, 6, 4, 2],
+    "ffa_columns": [
+        {"key": "kills", "label": "Kills"},
+        {"key": "deaths", "label": "Deaths", "public": False, "better": "lower"},
+    ],
+    "ffa_formula": "place_pts + kills",
+}
 
 TEAM_A, TEAM_B, TEAM_C, TEAM_D = 10, 20, 30, 40
 
@@ -40,12 +49,12 @@ def _tournament() -> SimpleNamespace:
     return SimpleNamespace(id=99, win_points=1.0, draw_points=0.5, loss_points=0.0)
 
 
-def _stage(settings: dict | None = None) -> SimpleNamespace:
+def _stage(**overrides: object) -> SimpleNamespace:
     return SimpleNamespace(
+        **stage_regulation(**{**SCORING, **overrides}),
         id=7,
         stage_type=StageType.FFA_LEAGUE,
         order=1,
-        settings_json=dict(settings if settings is not None else SCORING),
     )
 
 
@@ -60,19 +69,22 @@ def _item(team_ids: list[int], *, item_id: int = 147) -> SimpleNamespace:
     )
 
 
-def _game(rows: list[tuple[int, int, int]]) -> tuple[FfaGameLine, ...]:
-    return tuple(FfaGameLine(team_id=team_id, placement=placement, score=score) for team_id, placement, score in rows)
+def _game(rows: list[tuple[int, int, int, int]]) -> tuple[FfaGameLine, ...]:
+    return tuple(
+        FfaGameLine(team_id=team_id, placement=placement, stats={"kills": kills, "deaths": deaths})
+        for team_id, placement, kills, deaths in rows
+    )
 
 
 #: Two games of a four-team lobby.
 #:
 #: A and B both finish on 20: A by winning twice for nothing, B by placing
-#: second twice with four score each. C and D share third place in both games
-#: and trade the same two scores -- no metric in ``ffa_default`` can separate
-#: them.
+#: second twice with four kills each. C and D share third place in both games
+#: and trade the same two kill counts -- no metric in ``ffa_default`` can
+#: separate them, but D dies less.
 GAMES = [
-    _game([(TEAM_A, 1, 0), (TEAM_B, 2, 4), (TEAM_C, 3, 0), (TEAM_D, 3, 2)]),
-    _game([(TEAM_A, 1, 0), (TEAM_B, 2, 4), (TEAM_C, 3, 2), (TEAM_D, 3, 0)]),
+    _game([(TEAM_A, 1, 0, 1), (TEAM_B, 2, 4, 1), (TEAM_C, 3, 0, 2), (TEAM_D, 3, 2, 0)]),
+    _game([(TEAM_A, 1, 0, 1), (TEAM_B, 2, 4, 1), (TEAM_C, 3, 2, 2), (TEAM_D, 3, 0, 0)]),
 ]
 
 
@@ -101,7 +113,8 @@ class FfaStageStandingsTests(TestCase):
             GAMES,
         )
 
-        # C and D: same points, same wins, same raw score, same last place.
+        # C and D: same points, same wins, same kills, same last place. Deaths
+        # separate them, but the default order does not look at them.
         self.assertEqual([None, None, 3, 3], [row.tie_group for row in standings])
 
     def test_games_played_are_counted_as_matches(self) -> None:
@@ -149,20 +162,37 @@ class FfaStageStandingsTests(TestCase):
         self.assertEqual([99] * 4, [row.tournament_id for row in standings])
         self.assertEqual([0] * 4, [row.overall_position for row in standings])
 
-    def test_a_manual_position_reorders_teams_nothing_else_separated(self) -> None:
-        settings = dict(SCORING, manual_positions={str(TEAM_D): 1})
-
+    def test_a_pinned_team_holds_its_place_over_better_points(self) -> None:
+        # D has half of A's points; the organizer's pin puts it first anyway.
         standings = standings_service._build_ffa_stage_standings(
             _tournament(),
-            _stage(settings),
+            _stage(),
+            _item([TEAM_A, TEAM_B, TEAM_C, TEAM_D]),
+            [TEAM_A, TEAM_B, TEAM_C, TEAM_D],
+            GAMES,
+            pins={TEAM_D: 1},
+        )
+
+        self.assertEqual([TEAM_D, TEAM_A, TEAM_B, TEAM_C], [row.team_id for row in standings])
+        self.assertEqual([1, 2, 3, 4], [row.position for row in standings])
+        self.assertEqual([True, False, False, False], [row.is_pinned for row in standings])
+        # The pin also took D out of its tie with C: nobody is left tied.
+        self.assertEqual([None] * 4, [row.tie_group for row in standings])
+
+    def test_an_empty_group_produces_no_rows(self) -> None:
+        self.assertEqual([], standings_service._build_ffa_stage_standings(_tournament(), _stage(), _item([]), [], []))
+
+    def test_a_lower_is_better_column_ranks_the_smaller_sum_first(self) -> None:
+        # C and D are equal on everything the default order knows; an explicit
+        # order by the hidden "deaths" column has to put the team that died
+        # less (D, 0) above the one that died more (C, 4).
+        standings = standings_service._build_ffa_stage_standings(
+            _tournament(),
+            _stage(tiebreak_order=["points", "ffa_game_wins", "ffa_stat:deaths"]),
             _item([TEAM_A, TEAM_B, TEAM_C, TEAM_D]),
             [TEAM_A, TEAM_B, TEAM_C, TEAM_D],
             GAMES,
         )
 
         self.assertEqual([TEAM_A, TEAM_B, TEAM_D, TEAM_C], [row.team_id for row in standings])
-        # Ordering them by hand decided the order, it did not make them unequal.
-        self.assertEqual([None, None, 3, 3], [row.tie_group for row in standings])
-
-    def test_an_empty_group_produces_no_rows(self) -> None:
-        self.assertEqual([], standings_service._build_ffa_stage_standings(_tournament(), _stage(), _item([]), [], []))
+        self.assertEqual([None, None, None, None], [row.tie_group for row in standings])

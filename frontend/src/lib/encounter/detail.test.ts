@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
 import type { Encounter, Match, MatchWithStats } from "@/types/encounter.types";
 import type { PlayerWithStats, TeamWithStats } from "@/types/team.types";

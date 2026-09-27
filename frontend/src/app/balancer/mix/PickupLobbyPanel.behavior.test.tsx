@@ -74,6 +74,7 @@ vi.mock("@dnd-kit/core", () => ({
   },
   DragOverlay: () => null,
   PointerSensor: class {},
+  KeyboardSensor: class {},
   useSensor: () => null,
   useSensors: () => [],
   useDraggable: dndSpies.useDraggable,

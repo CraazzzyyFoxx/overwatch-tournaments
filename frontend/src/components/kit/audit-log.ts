@@ -2,6 +2,7 @@ import type { DateFormatter } from "@/components/kit/format-time";
 
 import adminService from "@/services/admin.service";
 import type { AuditLogRead, AuditSource } from "@/types/admin.types";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 /**
  * Vocabulary and field-diff helpers shared by the audit feed and the per-entity
@@ -406,7 +407,7 @@ export function auditHistoryStartQuery(scope: {
   const { workspaceId = null, allWorkspaces = false } = scope;
 
   return {
-    queryKey: ["admin", "audit", "history-start", allWorkspaces ? "all" : workspaceId] as const,
+    queryKey: adminQueryKeys.auditHistoryStart(allWorkspaces ? "all" : workspaceId),
     queryFn: async (): Promise<string | null> => {
       const page = await adminService.listAudit({
         page: 1,
@@ -505,14 +506,7 @@ export function auditTrailQueryKey(scope: AuditTrailScope) {
  */
 export function auditTrailCountQuery(scope: AuditTrailScope) {
   return {
-    queryKey: [
-      "admin",
-      "audit",
-      "count",
-      scope.workspaceId,
-      scope.entityType,
-      scope.entityId,
-    ] as const,
+    queryKey: adminQueryKeys.auditCount(scope.workspaceId, scope.entityType, scope.entityId),
     queryFn: async (): Promise<number> => {
       const page = await adminService.listAudit({
         workspace_id: scope.workspaceId,

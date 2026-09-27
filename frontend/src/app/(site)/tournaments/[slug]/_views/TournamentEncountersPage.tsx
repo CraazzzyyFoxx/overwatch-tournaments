@@ -1,344 +1,43 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { CalendarClock, ListOrdered } from "lucide-react";
 
-import {
-  bracketRoundShape,
-  buildRoundGroups,
-  orderEliminationRounds,
-  type RoundGroup
-} from "@/lib/bracket/view";
-import { FilterChip } from "@/components/ui/filter-chip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { useBracketRoundLabel, type BracketRoundLabelFormatter } from "@/hooks/useBracketRoundLabel";
+import { bracketRoundShape } from "@/lib/bracket/view";
+import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
-import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { tournamentEncountersQueryOptions } from "@/lib/tournament/encounters-query";
 import { areStreamsVisible } from "@/lib/tournament/status";
-import encounterService from "@/services/encounter.service";
 import type { Encounter } from "@/types/encounter.types";
-import type { StageType, Tournament } from "@/types/tournament.types";
 
 import styles from "../TournamentDetail.module.css";
 import { MatchCard } from "../_components/MatchCard";
 import { MatchRow } from "../_components/MatchRow";
-import { SectionToolbar } from "../_components/SectionToolbar";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentMatchesSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
-import { readViewParam, ViewSegment } from "../_components/ViewSegment";
+import { readViewParam } from "../_components/ViewSegment";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
-
-const MATCHES_VIEWS = ["round", "time"] as const;
-type MatchesView = (typeof MATCHES_VIEWS)[number];
-
-/** Stage types whose rounds are named and numbered by the bracket rather than by group. */
-const IS_ELIMINATION: Record<string, true> = {
-  single_elimination: true,
-  double_elimination: true
-};
+import { MatchesToolbar } from "./_components/MatchesToolbar";
+import {
+  buildStageBlocks,
+  buildTimeSections,
+  collectStages,
+  isEliminationStageType,
+  MATCHES_VIEWS,
+  stageKey,
+  toDate,
+  type MatchesView
+} from "./tournamentMatches.model";
 
 const HEADING_CLASS =
   "aqt-tnum mb-1 mt-5 text-label uppercase tracking-[.06em] text-[color:var(--aqt-fg-faint)]";
-
-/**
- * Every encounter of the tournament, with the maps of each series.
- *
- * Deliberately NOT the bracket's cache entry
- * (`tournamentQueryKeys.encounters(id, workspaceId)`): the bracket asks for no
- * `matches` entity, and a shared key would let whichever screen mounted first
- * decide whether the row expansion has any maps to show. The `"maps"` marker in
- * the key keeps the two payloads apart; the shared prefix keeps realtime
- * invalidation (`tournament.encounters`) reaching both.
- *
- * Exported so the statistics section can count played maps out of the same
- * entry instead of fetching every encounter a second time.
- */
-export function tournamentEncountersQueryOptions(
-  tournament: Pick<Tournament, "id" | "workspace_id">
-) {
-  return queryOptions({
-    queryKey: [
-      ...tournamentQueryKeys.encounters(tournament.id, tournament.workspace_id),
-      "maps"
-    ] as const,
-    queryFn: () =>
-      encounterService.getAll(
-        1,
-        "",
-        tournament.id,
-        -1,
-        undefined,
-        undefined,
-        tournament.workspace_id,
-        {
-          entities: [
-            "tournament",
-            "stage",
-            "stage_item",
-            "home_team",
-            "away_team",
-            // The row expansion is the series' maps with score, length and
-            // mode; the nested relations only serialise when named.
-            "matches",
-            "matches.map",
-            "matches.map.gamemode"
-          ]
-        }
-      )
-  });
-}
-
-function toDate(value: Date | string | null | undefined): Date | null {
-  if (value == null) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-/** When a match happens, as the time view understands it: the plan first, then the record. */
-function encounterInstant(encounter: Encounter): Date | null {
-  return toDate(encounter.scheduled_at) ?? toDate(encounter.ended_at);
-}
-
-/** Local calendar day, so two matches an hour apart across midnight land on different days. */
-function dayKey(date: Date): string {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
-
-/** A stage chip's URL value. `null` is a real bucket (a scrim-shaped encounter), not "all". */
-function stageKey(stageId: number | null): string {
-  return stageId === null ? "none" : String(stageId);
-}
-
-type StageMeta = {
-  id: number | null;
-  name: string;
-  order: number;
-  type: StageType | undefined;
-};
-
-/**
- * The stages that actually carry encounters, last stage first.
- *
- * `tournament.stages` is the source of names and order; a `stage_id` the
- * overview does not carry (a stage created after this page's tournament read)
- * still gets a bucket from the encounter's own `stage` relation, so no match
- * disappears from the chips.
- */
-function collectStages(encounters: Encounter[], tournament: Tournament): StageMeta[] {
-  const byId = new Map<number | null, StageMeta>();
-  for (const encounter of encounters) {
-    if (byId.has(encounter.stage_id)) continue;
-    const summary =
-      tournament.stages.find((stage) => stage.id === encounter.stage_id) ?? encounter.stage ?? null;
-    byId.set(encounter.stage_id, {
-      id: encounter.stage_id,
-      name: summary?.name ?? "",
-      order: summary?.order ?? -1,
-      type: summary?.stage_type
-    });
-  }
-  return [...byId.values()].sort((left, right) => right.order - left.order);
-}
-
-type MatchListRow = {
-  encounter: Encounter;
-  leading: string;
-  trailing?: string;
-};
-
-type MatchBlock = {
-  key: string;
-  /** Mono heading, already joined with " · ". */
-  heading: string;
-  rows: MatchListRow[];
-};
-
-/**
- * One stage's rounds in reading order — final first — with the leading and
- * trailing mono cells of every row.
- *
- * Elimination stages come from `orderEliminationRounds` reversed: the
- * bracket's own match numbering is the only thing that knows the lower final
- * (round -4) is played before the grand final (round 3).
- */
-function buildStageBlocks(
-  stage: StageMeta,
-  encounters: Encounter[],
-  roundLabel: BracketRoundLabelFormatter,
-  countLabel: (count: number) => string
-): MatchBlock[] {
-  const isElimination = IS_ELIMINATION[stage.type ?? ""] === true;
-  const byId = new Map(encounters.map((encounter) => [encounter.id, encounter]));
-
-  let groups: RoundGroup[];
-  let matchNumbers = new Map<number, number>();
-  const shape = bracketRoundShape(isElimination ? stage.type : undefined, encounters);
-
-  if (isElimination) {
-    const order = orderEliminationRounds(encounters, stage.type);
-    groups = [...order.groups].reverse();
-    matchNumbers = order.matchNumbers;
-  } else {
-    groups = buildRoundGroups(encounters).sort((left, right) => right.round - left.round);
-  }
-
-  return groups.map((group) => {
-    const rows: MatchListRow[] = [];
-    for (const match of group.matches) {
-      const encounter = byId.get(match.id);
-      if (!encounter) continue;
-      const bo = `Bo${encounter.best_of}`;
-      if (isElimination) {
-        const number = matchNumbers.get(encounter.id);
-        // The group heading already names the round, so a trailing cell would
-        // only repeat it — wireframe §7: playoff rows carry no trailing text.
-        rows.push({ encounter, leading: number == null ? bo : `M${number} · ${bo}` });
-        continue;
-      }
-      // Wireframe §7 ⑥: the group letter leads, the format trails. The round is
-      // in the heading and the group is already the leading cell, so the
-      // trailing cell says only what neither of them does.
-      rows.push({ encounter, leading: encounter.stage_item?.name ?? bo, trailing: bo });
-    }
-
-    return {
-      key: `${stageKey(stage.id)}:${group.round}`,
-      heading: [
-        stage.name,
-        roundLabel(group.round, shape),
-        rows.length > 1 ? countLabel(rows.length) : null
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      rows
-    };
-  });
-}
-
-type DatedEncounter = { encounter: Encounter; at: Date };
-
-type TimeSections = {
-  live: Encounter[];
-  /** Day blocks in reading order: today's remaining matches, later days, then played days. */
-  days: MatchBlock[];
-};
-
-/**
- * The time view's sections: what is on air, what is still to come, then the
- * record by day.
- *
- * Note §7 ④ asks for the stage name in the day heading "from `phase_schedule`
- * when the day falls inside a phase". `phase_schedule` carries lifecycle phases
- * (registration / check-in / draft / live), never stage names — so the stage
- * comes from the day's own encounters when they unanimously share one, and the
- * phase is the fallback for a day whose matches carry no stage at all.
- *
- * The wireframe shows only "later today" ahead of the played days. Days further
- * out get their own section here rather than being dropped: a schedule
- * published a week ahead is the very data this view exists for.
- */
-function buildTimeSections(
-  encounters: Encounter[],
-  now: Date,
-  labels: {
-    day: (date: Date) => string;
-    time: (date: Date) => string;
-    laterToday: string;
-    unscheduled: string;
-    phase: (date: Date) => string | null;
-    trailing: (encounter: Encounter) => string | undefined;
-    count: (count: number) => string;
-  }
-): TimeSections {
-  const live: Encounter[] = [];
-  const upcoming = new Map<string, DatedEncounter[]>();
-  const past = new Map<string, DatedEncounter[]>();
-  const undated: Encounter[] = [];
-  const today = dayKey(now);
-
-  for (const encounter of encounters) {
-    if (isEncounterLive(encounter)) {
-      live.push(encounter);
-      continue;
-    }
-    const at = encounterInstant(encounter);
-    if (at === null) {
-      undated.push(encounter);
-      continue;
-    }
-    const ahead = !isEncounterCompleted(encounter) && at.getTime() > now.getTime();
-    const bucket = ahead ? upcoming : past;
-    const key = dayKey(at);
-    const existing = bucket.get(key);
-    if (existing) existing.push({ encounter, at });
-    else bucket.set(key, [{ encounter, at }]);
-  }
-
-  const toBlock = (key: string, dated: DatedEncounter[], ascending: boolean): MatchBlock => {
-    const ordered = [...dated].sort((left, right) =>
-      ascending ? left.at.getTime() - right.at.getTime() : right.at.getTime() - left.at.getTime()
-    );
-    const stageIds = new Set(ordered.map((row) => row.encounter.stage_id));
-    const unanimousStage =
-      stageIds.size === 1 ? ordered[0].encounter.stage?.name ?? null : null;
-    const date = ordered[0].at;
-    return {
-      key,
-      heading: [
-        key === today && ordered.some((row) => !isEncounterCompleted(row.encounter))
-          ? `${labels.laterToday} · ${labels.day(date)}`
-          : labels.day(date),
-        unanimousStage ?? labels.phase(date),
-        ordered.length > 1 ? labels.count(ordered.length) : null
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      rows: ordered.map((row) => ({
-        encounter: row.encounter,
-        leading: labels.time(row.at),
-        trailing: labels.trailing(row.encounter)
-      }))
-    };
-  };
-
-  const days: MatchBlock[] = [
-    ...[...upcoming.entries()]
-      .sort((left, right) => left[1][0].at.getTime() - right[1][0].at.getTime())
-      .map(([key, dated]) => toBlock(key, dated, true)),
-    ...[...past.entries()]
-      .sort((left, right) => right[1][0].at.getTime() - left[1][0].at.getTime())
-      .map(([key, dated]) => toBlock(key, dated, false))
-  ];
-
-  if (undated.length > 0) {
-    days.push({
-      key: "undated",
-      heading: [labels.unscheduled, labels.count(undated.length)].join(" · "),
-      rows: undated.map((encounter) => ({
-        encounter,
-        leading: "—",
-        trailing: labels.trailing(encounter)
-      }))
-    });
-  }
-
-  return { live, days };
-}
 
 interface TournamentEncountersPageProps {
   tournamentId: number;
@@ -417,6 +116,12 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
   });
 
   const stages = tournament ? collectStages(entityFiltered, tournament) : [];
+  const stageCounts = new Map(
+    stages.map((stage) => [
+      stageKey(stage.id),
+      entityFiltered.filter((encounter) => encounter.stage_id === stage.id).length
+    ])
+  );
   const stageFilter =
     stageParam !== null && stages.some((stage) => stageKey(stage.id) === stageParam)
       ? stageParam
@@ -474,7 +179,7 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
       type,
       encounters.filter((row) => row.stage_id === encounter.stage_id)
     );
-    if (IS_ELIMINATION[type ?? ""] === true) {
+    if (isEliminationStageType(type)) {
       return `${roundLabel(encounter.round, shape)} · ${bo}`;
     }
     return [
@@ -578,96 +283,19 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
         />
       ) : (
         <div className="min-w-0">
-          <SectionToolbar
-            label={t("tournamentDetail.matches.toolbarLabel")}
-            end={
-              hasSchedule ? (
-                <ViewSegment<MatchesView>
-                  param="view"
-                  defaultValue="round"
-                  label={t("tournamentDetail.matches.viewLabel")}
-                  options={[
-                    {
-                      value: "round",
-                      label: <ListOrdered aria-hidden width={14} height={14} />,
-                      ariaLabel: t("tournamentDetail.matches.viewRound")
-                    },
-                    {
-                      value: "time",
-                      label: <CalendarClock aria-hidden width={14} height={14} />,
-                      ariaLabel: t("tournamentDetail.matches.viewTime")
-                    }
-                  ]}
-                />
-              ) : undefined
-            }
-          >
-            {/* One stage is no choice: the chips appear only where they filter. */}
-            {stages.length > 1 ? (
-              <>
-                <FilterChip
-                  active={stageFilter === null}
-                  count={entityFiltered.length}
-                  onClick={() => setParams({ stage: null })}
-                >
-                  {t("tournamentDetail.matches.allStages")}
-                </FilterChip>
-                {stages.map((stage) => (
-                  <FilterChip
-                    key={stageKey(stage.id)}
-                    active={stageFilter === stageKey(stage.id)}
-                    count={
-                      entityFiltered.filter((encounter) => encounter.stage_id === stage.id).length
-                    }
-                    onClick={() => setParams({ stage: stageKey(stage.id) })}
-                  >
-                    {stage.name || t("common.stage")}
-                  </FilterChip>
-                ))}
-              </>
-            ) : null}
-            {teamFilter !== null ? (
-              <FilterChip
-                active
-                aria-label={t("tournamentDetail.matches.clearTeamFilter")}
-                onClick={() => setParams({ team: null })}
-              >
-                {t("tournamentDetail.matches.teamFilter", {
-                  name: teamName ?? String(teamFilter)
-                })}
-                <span aria-hidden>×</span>
-              </FilterChip>
-            ) : teamOptions.length > 0 ? (
-              /* Wireframe §7 ②: one "+ Team" chip, not a filter panel. The
-                 picker lists every team that played, and the chosen team
-                 becomes the removable chip above. */
-              <Select value="" onValueChange={(value) => setParams({ team: value })}>
-                <SelectTrigger
-                  aria-label={t("tournamentDetail.matches.pickTeam")}
-                  className="filter-sort h-8 w-auto gap-1.5 shadow-none focus:ring-0 focus:ring-offset-0"
-                >
-                  <SelectValue placeholder={t("tournamentDetail.matches.addTeam")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {teamOptions.map((team) => (
-                    <SelectItem key={team.id} value={String(team.id)}>
-                      {team.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            {mapFilter !== null ? (
-              <FilterChip
-                active
-                aria-label={t("tournamentDetail.matches.clearMapFilter")}
-                onClick={() => setParams({ map: null })}
-              >
-                {t("tournamentDetail.matches.mapFilter", { name: mapName ?? String(mapFilter) })}
-                <span aria-hidden>×</span>
-              </FilterChip>
-            ) : null}
-          </SectionToolbar>
+          <MatchesToolbar
+            stages={stages}
+            stageFilter={stageFilter}
+            stageCounts={stageCounts}
+            totalCount={entityFiltered.length}
+            hasSchedule={hasSchedule}
+            teamFilter={teamFilter}
+            teamName={teamName}
+            teamOptions={teamOptions}
+            mapFilter={mapFilter}
+            mapName={mapName}
+            setParams={setParams}
+          />
 
           {rows.length === 0 ? (
             <TournamentPageState

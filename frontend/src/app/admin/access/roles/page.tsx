@@ -22,6 +22,7 @@ import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { RbacRole } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 /** The `scope` chip's value for roles with `workspace_id IS NULL`. */
 const GLOBAL_SCOPE = "global";
@@ -115,12 +116,12 @@ export default function AccessAdminRolesPage() {
       : canAccessPermission("role.delete", workspaceId);
 
   const rolesQuery = useQuery({
-    queryKey: ["access-admin", "roles", "scope", scope],
+    queryKey: accessQueryKeys.rolesByScope(scope),
     queryFn: () => rbacService.listRolesAll({ workspace_id: workspaceId })
   });
 
   const permissionsQuery = useQuery({
-    queryKey: ["access-admin", "permissions", "scope", scope],
+    queryKey: accessQueryKeys.permissionsByScope(scope),
     queryFn: () =>
       rbacService.listPermissionsAll(workspaceId === null ? undefined : { workspace_id: workspaceId }),
     enabled: canReadPermissions
@@ -140,7 +141,7 @@ export default function AccessAdminRolesPage() {
         workspace_id: workspaceId
       }),
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] });
+      await queryClient.invalidateQueries({ queryKey: accessQueryKeys.roles() });
       setCreateOpen(false);
       setCreateName("");
       setCreateDescription("");
@@ -153,8 +154,8 @@ export default function AccessAdminRolesPage() {
     mutationFn: (roleId: number) => rbacService.deleteRole(roleId),
     onSuccess: async (_result, roleId) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] })
+        queryClient.invalidateQueries({ queryKey: accessQueryKeys.roles() }),
+        queryClient.invalidateQueries({ queryKey: accessQueryKeys.users() })
       ]);
       setPending(null);
       if (roleId === roleParam) setParams({ role: null });

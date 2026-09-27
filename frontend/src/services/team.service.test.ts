@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Call = {
   path: string;
@@ -10,14 +10,14 @@ type Call = {
 
 const calls: Call[] = [];
 
-mock.module("@/lib/api/fetch", () => ({
+vi.mock("@/lib/api/fetch", () => ({
   apiFetch: (path: string, options?: Call["options"]) => {
     calls.push({ path, options });
     return Promise.resolve({ json: async () => ({ results: [], total: 0 }) });
   },
 }));
 
-mock.module("@/lib/api/normalize-paginated-response", () => ({
+vi.mock("@/lib/api/normalize-paginated-response", () => ({
   normalizePaginatedResponse: (response: unknown) => response,
 }));
 

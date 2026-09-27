@@ -1,3 +1,5 @@
+import { describe, expect, it } from "vitest";
+
 import {
   derivePoolLane,
   formatBattleTagsForClipboard,
@@ -25,21 +27,6 @@ import type {
 import type { BalanceResponse, PlayerData } from "@/types/balancer.types";
 import { DEFAULT_DIVISION_GRID } from "@/lib/divisions/grid";
 import type { StatusMeta, StatusScope } from "@/types/registration.types";
-
-type TestFunction = () => void | Promise<void>;
-type Expectation<T> = {
-  toBe: (expected: T) => void;
-  toEqual: (expected: unknown) => void;
-  toBeNull: () => void;
-  toBeUndefined: () => void;
-};
-
-declare const describe: (name: string, fn: TestFunction) => void;
-declare const it: {
-  (name: string, fn: TestFunction): void;
-  each<TArgs extends readonly unknown[]>(cases: readonly TArgs[]): (name: string, fn: (...args: TArgs) => void | Promise<void>) => void;
-};
-declare const expect: <T>(actual: T) => Expectation<T>;
 
 function createPlayer(overrides: Partial<BalancerPlayerRecord>): BalancerPlayerRecord {
   return {

@@ -1,11 +1,11 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { buildTeamViews, filterSortTeams } from "@/lib/draft/room-model";
 import type { RosterShape } from "@/lib/roster/shape";
 import type { DraftBoard, DraftPick, DraftPlayer, DraftSession, DraftTeam } from "@/types/draft.types";
 
-mock.module("next-intl", () => ({
+vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key

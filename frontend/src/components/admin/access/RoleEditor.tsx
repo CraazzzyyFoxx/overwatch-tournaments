@@ -25,6 +25,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacPermission, RbacRole, RbacRoleDetail } from "@/types/rbac.types";
+import { accessQueryKeys } from "@/lib/access/query-keys";
 
 interface RoleDraft {
   name: string;
@@ -73,7 +74,7 @@ interface RoleEditorProps {
  */
 export function RoleEditor({ role, ...rest }: Readonly<RoleEditorProps>) {
   const detailQuery = useQuery({
-    queryKey: ["access-admin", "roles", role.id],
+    queryKey: accessQueryKeys.role(role.id),
     queryFn: () => rbacService.getRole(role.id)
   });
 
@@ -106,8 +107,8 @@ function RoleForm({
       rbacService.updateRole(detail.id, payload),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] })
+        queryClient.invalidateQueries({ queryKey: accessQueryKeys.roles() }),
+        queryClient.invalidateQueries({ queryKey: accessQueryKeys.users() })
       ]);
       setDraft(null);
       notify.success("Role updated");

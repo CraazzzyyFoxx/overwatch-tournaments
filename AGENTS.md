@@ -2,6 +2,10 @@
 
 Documentation map: [`docs/README.md`](docs/README.md). Contribution rules: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## Plans, specs, reviews
+
+Never commit them — not to `docs/`, `docs/plans/`, `docs/superpowers/` or anywhere else; `docs/` is documentation only. Draft in gitignored scratch (`.claude/`, `.superpowers/`). Record decisions and their reasons in Graphiti, group `anak-tournaments`; facts that must outlive the work go into the evergreen docs. Comments citing `docs/plans/…`, `docs/superpowers/…`, `docs/reviews/…` point at removed files: search Graphiti or `git show 50b83c88f537:<path>`.
+
 ## Frontend
 
 - Don't run `next build` for testing; `next lint` is enough.

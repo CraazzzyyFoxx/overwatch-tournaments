@@ -1,6 +1,6 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
-// Tables: 145
+// Tables: 149
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -1154,8 +1154,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
+    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1956,8 +1956,8 @@ Table division_grid_tier {
   ow_rank_min bigint
   ow_rank_max bigint
   indexes {
-    (version_id, sort_order) [unique]
     (version_id, slug) [unique]
+    (version_id, sort_order) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -2510,8 +2510,8 @@ Table tournament.encounter_game_result {
   game_id bigint [not null]
   encounter_id bigint [not null]
   team_id bigint [not null]
-  placement int [not null]
-  score int [not null, default: 0]
+  placement int
+  stats jsonb [not null, default: `'{}'::jsonb`]
   indexes {
     (game_id, team_id) [unique, name: "uq_encounter_game_result_game_team"]
     (encounter_id, team_id) [name: "ix_encounter_game_result_encounter_team"]
@@ -2836,8 +2836,8 @@ Table tournament.scrim_room {
   created_by_auth_user_id bigint [not null]
   closed_at timestamptz
   indexes {
-    (token) [unique, name: "uq_scrim_room_token"]
     (encounter_id) [unique, name: "uq_scrim_room_encounter"]
+    (token) [unique, name: "uq_scrim_room_token"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
     (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
     (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
@@ -2873,7 +2873,20 @@ Table tournament.stage {
   is_active boolean [not null, default: false]
   is_published boolean [not null, default: false]
   is_completed boolean [not null, default: false]
-  settings_json json
+  ranking_preset VARCHAR
+  tiebreak_order VARCHAR[]
+  win_points float
+  draw_points float
+  loss_points float
+  swiss_bye_points float
+  de_grand_final_type VARCHAR(16) [not null, default: `no_reset`]
+  seed_ranking VARCHAR(16) [not null, default: `slot`]
+  best_of_default int [not null, default: 3]
+  best_of_final int
+  ffa_placement_points FLOAT[] [not null, default: `{}`]
+  ffa_columns jsonb [not null, default: `'[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]'`]
+  ffa_formula VARCHAR(500) [not null, default: `score`]
+  challonge_group_id bigint
   indexes {
     (tournament_id) [name: "ix_tournament_stage_tournament_id"]
   }
@@ -2910,6 +2923,12 @@ Table tournament.stage_item_input {
   }
 }
 
+Table tournament.stage_round_best_of {
+  stage_id bigint [pk]
+  round int [pk, increment]
+  best_of int [not null]
+}
+
 Table tournament.standing {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -2930,6 +2949,7 @@ Table tournament.standing {
   tie_group int
   tb int
   score_differential int
+  is_pinned boolean [not null, default: false]
   indexes {
     (stage_id, stage_item_id, team_id) [name: "ix_standing_stage_stage_item_team"]
     (tournament_id, overall_position) [name: "ix_standing_tournament_position"]
@@ -2937,6 +2957,48 @@ Table tournament.standing {
     (stage_item_id) [name: "ix_tournament_standing_stage_item_id"]
     (team_id) [name: "ix_tournament_standing_team_id"]
     (tournament_id) [name: "ix_tournament_standing_tournament_id"]
+  }
+}
+
+Table tournament.standing_pin {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  tournament_id bigint [not null]
+  stage_id bigint [not null]
+  stage_item_id bigint
+  team_id bigint [not null]
+  position int [not null]
+  indexes {
+    (team_id) [name: "ix_tournament_standing_pin_team_id"]
+    (tournament_id) [name: "ix_tournament_standing_pin_tournament_id"]
+    (stage_id, stage_item_id, position) [unique, name: "uq_standing_pin_position"]
+    (stage_id, stage_item_id, team_id) [unique, name: "uq_standing_pin_team"]
+  }
+}
+
+Table tournament.swiss_bye {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  stage_id bigint [not null]
+  stage_item_id bigint
+  team_id bigint [not null]
+  round int
+  indexes {
+    (stage_id) [name: "ix_tournament_swiss_bye_stage_id"]
+    (team_id) [name: "ix_tournament_swiss_bye_team_id"]
+  }
+}
+
+Table tournament.swiss_stopped_scope {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  stage_id bigint [not null]
+  stage_item_id bigint
+  indexes {
+    (stage_id, stage_item_id) [unique, name: "uq_swiss_stopped_scope"]
   }
 }
 
@@ -3068,7 +3130,11 @@ TableGroup tournament {
   tournament.stage
   tournament.stage_item
   tournament.stage_item_input
+  tournament.stage_round_best_of
   tournament.standing
+  tournament.standing_pin
+  tournament.swiss_bye
+  tournament.swiss_stopped_scope
   tournament.team
   tournament.tournament
   tournament.tournament_link
@@ -3365,10 +3431,20 @@ Ref: tournament.stage_item.stage_id > tournament.stage.id [delete: cascade]
 Ref: tournament.stage_item_input.stage_item_id > tournament.stage_item.id [delete: cascade]
 Ref: tournament.stage_item_input.team_id > tournament.team.id [delete: set null]
 Ref: tournament.stage_item_input.source_stage_item_id > tournament.stage_item.id [delete: set null]
+Ref: tournament.stage_round_best_of.stage_id > tournament.stage.id [delete: cascade]
 Ref: tournament.standing.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.standing.team_id > tournament.team.id [delete: cascade]
 Ref: tournament.standing.stage_id > tournament.stage.id [delete: set null]
 Ref: tournament.standing.stage_item_id > tournament.stage_item.id [delete: set null]
+Ref: tournament.standing_pin.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: tournament.standing_pin.stage_id > tournament.stage.id [delete: cascade]
+Ref: tournament.standing_pin.stage_item_id > tournament.stage_item.id [delete: cascade]
+Ref: tournament.standing_pin.team_id > tournament.team.id [delete: cascade]
+Ref: tournament.swiss_bye.stage_id > tournament.stage.id [delete: cascade]
+Ref: tournament.swiss_bye.stage_item_id > tournament.stage_item.id [delete: cascade]
+Ref: tournament.swiss_bye.team_id > tournament.team.id [delete: cascade]
+Ref: tournament.swiss_stopped_scope.stage_id > tournament.stage.id [delete: cascade]
+Ref: tournament.swiss_stopped_scope.stage_item_id > tournament.stage_item.id [delete: cascade]
 Ref: tournament.team.captain_id > players.user.id [delete: set null]
 Ref: tournament.team.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.tournament.workspace_id > workspace.id [delete: cascade]

@@ -8,7 +8,7 @@ import { HeroStrip } from "@/components/hero/HeroImage";
 import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
 import { Hero } from "@/types/hero.types";
 import { cn } from "@/lib/utils";
-import { getPlayerSlug } from "@/utils/player";
+import { getPlayerSlug } from "@/lib/player";
 
 interface Props {
   encounters: EncounterWithUserStats[];

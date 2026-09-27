@@ -19,6 +19,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type { WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
+import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 interface WorkspaceBalancerConfigDialogProps {
   workspaceId: number;
@@ -67,7 +68,7 @@ export function WorkspaceBalancerConfigDialog({
         mix_discord_channel_id: mixChannel === "" ? null : mixChannel
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workspace-balancer-config", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: balancerQueryKeys.workspaceConfig(workspaceId) });
       notify.success("Workspace settings saved.");
       onOpenChange(false);
     },

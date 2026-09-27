@@ -6,17 +6,12 @@ import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
   pointerWithin,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
   type DragEndEvent,
   type DragStartEvent
 } from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -40,6 +35,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
+import { useDragSensors } from "@/hooks/useDragSensors";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { StageItemInputUpdateInput } from "@/types/admin.types";
@@ -165,10 +161,7 @@ export function StageItemsSection({
   const [editingInputId, setEditingInputId] = useState<number | null>(null);
   const [editingInputTeamDraft, setEditingInputTeamDraft] = useState("");
   const [activeDragInput, setActiveDragInput] = useState<StageItemInput | null>(null);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useDragSensors({ keyboard: true });
 
   const teamById = new Map(teams.map((team) => [team.id, team]));
   const assignedTeamIds = getAssignedTeamIds(stage);

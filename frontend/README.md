@@ -93,10 +93,10 @@ prefix; nothing else changes. Nothing in this app uses them any more, and
 `frontend/src/lib/api/fetch.ts` keys its per-domain behaviour off the domain segment, so a
 legacy path would silently lose workspace injection here even while the gateway still served it.
 
-The browser uses **relative same-origin paths**; SSR and middleware use `NEXT_INTERNAL_API_URL`
+The browser uses **relative same-origin paths**; SSR and the proxy use `NEXT_INTERNAL_API_URL`
 (the gateway, e.g. `http://gateway:8080`). The URL contract is documented once in
 `frontend/src/lib/api/routes.ts`. Multidomain / white-label tenancy is resolved in
-`frontend/src/middleware.ts`, which maps the request `Host` to a workspace.
+`frontend/src/proxy.ts`, which maps the request `Host` to a workspace.
 
 ## Notifications
 

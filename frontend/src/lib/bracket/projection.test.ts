@@ -14,7 +14,6 @@ import { describe, expect, test } from "vitest";
 import type { Stage, StageItem, StageItemType, StageType } from "@/types/tournament.types";
 
 import {
-  buildBestOfSettings,
   getStageStatus,
   projectStage,
   projectedBracketSeedCounts,
@@ -66,7 +65,14 @@ function stage(overrides: Partial<Stage> & { id: number; stage_type: StageType }
     is_active: false,
     is_published: false,
     is_completed: false,
-    settings_json: null,
+    ranking_preset: null,
+    tiebreak_order: null,
+    scoring: { win: null, draw: null, loss: null },
+    swiss_bye_points: null,
+    de_grand_final_type: "no_reset",
+    seed_ranking: "slot",
+    best_of: { default: 3, by_round: {}, final: null },
+    ffa_scoring: { placement_points: [], score_points: 1, score_label: null },
     challonge_id: null,
     challonge_slug: null,
     items: [],
@@ -351,7 +357,7 @@ describe("projectStage", () => {
       stageType: "double_elimination",
       splitLowerBracket: false,
       maxRounds: 5,
-      bestOf: {}
+      bestOf: { default: 3, by_round: {}, final: null }
     });
 
     expect(projection.rounds.map((round) => [round.section, round.label, round.round])).toEqual([
@@ -406,7 +412,7 @@ describe("projectStage", () => {
       stageType: "single_elimination",
       splitLowerBracket: false,
       maxRounds: 5,
-      bestOf: { default: 3, final: 5 }
+      bestOf: { default: 3, by_round: {}, final: 5 }
     });
 
     expect(projection.rounds.map((round) => round.label)).toEqual([
@@ -431,7 +437,7 @@ describe("projectStage", () => {
       stageType: "round_robin",
       splitLowerBracket: false,
       maxRounds: 3,
-      bestOf: {}
+      bestOf: { default: 3, by_round: {}, final: null }
     });
 
     expect(projection).toMatchObject({
@@ -459,27 +465,10 @@ describe("projectStage", () => {
       stageType: "round_robin",
       splitLowerBracket: false,
       maxRounds: 3,
-      bestOf: {}
+      bestOf: { default: 3, by_round: {}, final: null }
     });
 
     expect(projection.advancingTotal).toBe(5);
-  });
-});
-
-describe("buildBestOfSettings", () => {
-  test("drops empty fields so an untouched stage sends no `best_of` at all", () => {
-    expect(buildBestOfSettings({})).toBeUndefined();
-    expect(buildBestOfSettings({ by_round: {} })).toBeUndefined();
-  });
-
-  test("keeps only the numbers", () => {
-    expect(
-      buildBestOfSettings({
-        default: 3,
-        final: null,
-        by_round: { "1": 5, "2": undefined as unknown as number }
-      })
-    ).toEqual({ default: 3, by_round: { "1": 5 } });
   });
 });
 

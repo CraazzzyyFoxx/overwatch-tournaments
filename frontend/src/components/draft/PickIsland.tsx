@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import type { DraftAutopickPreview, DraftBoard, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { formatSubRoleLabel, getPlayerSlug } from "@/utils/player";
+import { formatSubRoleLabel, getPlayerSlug } from "@/lib/player";
 import { Spinner } from "@/components/ui/spinner";
 
 import { CareerStats, CareerTables } from "./island/PlayerCareer";

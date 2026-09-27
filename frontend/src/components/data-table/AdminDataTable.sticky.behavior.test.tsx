@@ -14,8 +14,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/data-table/AdminDataTable";
-import { adminColumnMeta } from "@/components/data-table/columns";
+import { DataTable } from "@/components/data-table/DataTable";
+import { columnMeta } from "@/components/data-table/columns";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -39,7 +39,7 @@ const column = (id: keyof Row, sticky: boolean, size?: number): ColumnDef<Row> =
   accessorKey: id,
   header: id,
   size,
-  meta: adminColumnMeta<Row>({ sticky })
+  meta: columnMeta<Row>({ sticky })
 });
 
 let container: HTMLElement;
@@ -53,7 +53,7 @@ async function render(columns: ColumnDef<Row>[], expandable = false) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <AdminDataTable<Row>
+        <DataTable<Row>
           rows={rows}
           columns={columns}
           renderExpanded={expandable ? () => <p>details</p> : undefined}
@@ -75,7 +75,7 @@ afterEach(() => {
   container.remove();
 });
 
-describe("AdminDataTable sticky columns", () => {
+describe("DataTable sticky columns", () => {
   it("pins the flagged column in the header and the body", async () => {
     await render([column("name", true), column("team", false)]);
 

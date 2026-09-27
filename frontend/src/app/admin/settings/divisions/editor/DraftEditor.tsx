@@ -38,6 +38,7 @@ import {
   tiersFromBands,
   type Band
 } from "./draftReducer";
+import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 
 /** The right rail becomes a sub-tab below this width (F12 ·8). */
 const RAIL_MEDIA_QUERY = "(min-width: 1280px)";
@@ -117,13 +118,13 @@ export function DraftEditor({
 
   const sourceQueries = useQueries({
     queries: sources.map((source) => ({
-      queryKey: ["division-grid-version", source.version_id],
+      queryKey: divisionGridQueryKeys.version(source.version_id),
       queryFn: () => workspaceService.getDivisionGridVersion(source.version_id)
     }))
   });
   const mappingQueries = useQueries({
     queries: sources.map((source) => ({
-      queryKey: ["division-grid-mapping", source.version_id, version.id],
+      queryKey: divisionGridQueryKeys.mapping(source.version_id, version.id),
       queryFn: () => workspaceService.getDivisionGridMapping(source.version_id, version.id),
       // A version pair with no mapping yet is the normal starting state, not a
       // failure to retry.
@@ -181,10 +182,10 @@ export function DraftEditor({
 
   const invalidate = useCallback(async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["division-grid-readiness"] }),
-      queryClient.invalidateQueries({ queryKey: ["division-grid-versions"] }),
-      queryClient.invalidateQueries({ queryKey: ["division-grids"] }),
-      queryClient.invalidateQueries({ queryKey: ["division-grid-mapping"] })
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.readinessAll() }),
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.versionsAll() }),
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.gridsAll() }),
+      queryClient.invalidateQueries({ queryKey: divisionGridQueryKeys.mappingAll() })
     ]);
   }, [queryClient]);
 
@@ -209,7 +210,7 @@ export function DraftEditor({
     onSuccess: async (updated) => {
       // Seed the cache before remounting, so the fresh editor reads the tiers
       // that were just saved rather than the ones it sent.
-      queryClient.setQueryData(["division-grid-version", version.id], updated);
+      queryClient.setQueryData(divisionGridQueryKeys.version(version.id), updated);
       setManualChoice({});
       await invalidate();
       notify.success(`v${updated.version} draft saved`);
@@ -221,7 +222,7 @@ export function DraftEditor({
   const publishMutation = useMutation({
     mutationFn: () => workspaceService.publishDivisionGridVersion(version.id),
     onSuccess: async (published) => {
-      queryClient.setQueryData(["division-grid-version", version.id], published);
+      queryClient.setQueryData(divisionGridQueryKeys.version(version.id), published);
       await invalidate();
       notify.success(`v${published.version} published`);
       onReload();
