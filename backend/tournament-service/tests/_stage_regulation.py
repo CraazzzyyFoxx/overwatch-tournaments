@@ -26,8 +26,8 @@ def stage_regulation(*, by_round: dict[int, int] | None = None, **overrides: Any
         "best_of_final": None,
         "round_best_of": [],
         "ffa_placement_points": [],
-        "ffa_score_points": 1.0,
-        "ffa_score_label": None,
+        "ffa_columns": [{"key": "score", "label": "Счёт", "public": True, "better": "higher"}],
+        "ffa_formula": "score",
         "challonge_group_id": None,
     }
     values.update(overrides)

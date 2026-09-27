@@ -131,16 +131,28 @@ class TieGroupTests(TestCase):
 
 
 class FfaTiebreakTests(TestCase):
-    """Plan §5.3: the lobby metrics, and what "no games yet" ranks as."""
+    """Plan §5.4: the lobby metrics, and what "no games yet" ranks as."""
 
     ORDER = ["points", "ffa_last_placement"]
 
     def test_ffa_metrics_are_known_and_garbage_is_still_dropped(self) -> None:
         self.assertEqual(["ffa_game_wins"], service.normalize_tiebreak_order(["ffa_game_wins", "bogus"]))
 
-    def test_every_ffa_metric_survives_normalization(self) -> None:
-        metrics = ["ffa_game_wins", "ffa_score", "ffa_best_placement", "ffa_last_placement"]
+    def test_every_built_in_ffa_metric_survives_normalization(self) -> None:
+        metrics = ["ffa_game_wins", "ffa_best_placement", "ffa_last_placement"]
         self.assertEqual(metrics, service.normalize_tiebreak_order(metrics))
+
+    def test_a_column_metric_survives_only_while_its_column_exists(self) -> None:
+        # The order is stored as text; deleting a column must not leave a
+        # tiebreaker that scores every team 0 -- indistinguishable from one
+        # that fired and separated nobody.
+        order = ["points", "ffa_stat:kills"]
+        self.assertEqual(order, service.normalize_tiebreak_order(order, ffa_columns=["kills", "deaths"]))
+        self.assertEqual(["points"], service.normalize_tiebreak_order(order, ffa_columns=["deaths"]))
+        self.assertEqual(["points"], service.normalize_tiebreak_order(order))
+
+    def test_the_retired_ffa_score_metric_is_dropped(self) -> None:
+        self.assertEqual([], service.normalize_tiebreak_order(["ffa_score"], ffa_columns=["score"]))
 
     def test_a_better_last_placement_breaks_a_points_tie(self) -> None:
         # Lower place is better, and the sort is descending -- the metric must
@@ -164,23 +176,36 @@ class FfaTiebreakTests(TestCase):
         )
         self.assertEqual([3, 2, 1], [team.team_id for team in ordered])
 
-    def test_ffa_score_and_game_wins_rank_higher_first(self) -> None:
-        by_score = service._sort_ranked_teams(
-            [_team(1, ffa_score=12), _team(2, ffa_score=30)],
-            tiebreak_order=["ffa_score"],
+    def test_a_column_sum_and_game_wins_rank_higher_first(self) -> None:
+        by_kills = service._sort_ranked_teams(
+            [_team(1, ffa_stats={"kills": 12.0}), _team(2, ffa_stats={"kills": 30.0})],
+            tiebreak_order=["ffa_stat:kills"],
         )
         by_wins = service._sort_ranked_teams(
             [_team(1, wins=0), _team(2, wins=3)],
             tiebreak_order=["ffa_game_wins"],
         )
-        self.assertEqual([2, 1], [team.team_id for team in by_score])
+        self.assertEqual([2, 1], [team.team_id for team in by_kills])
         self.assertEqual([2, 1], [team.team_id for team in by_wins])
 
-    def test_an_ffa_league_stage_defaults_to_the_ffa_preset(self) -> None:
-        stage = SimpleNamespace(**stage_regulation(), stage_type=service.StageType.FFA_LEAGUE)
+    def test_a_team_with_no_value_for_the_column_ranks_last_on_it(self) -> None:
+        ordered = service._sort_ranked_teams(
+            [_team(1, ffa_stats={}), _team(2, ffa_stats={"kills": 1.0})],
+            tiebreak_order=["ffa_stat:kills"],
+        )
+        self.assertEqual([2, 1], [team.team_id for team in ordered])
+
+    def test_an_ffa_league_stage_defaults_to_its_first_column(self) -> None:
+        stage = SimpleNamespace(
+            **stage_regulation(
+                ffa_columns=[{"key": "kills", "label": "K"}, {"key": "deaths", "label": "D", "better": "lower"}],
+                ffa_formula="kills * 2 - deaths",
+            ),
+            stage_type=service.StageType.FFA_LEAGUE,
+        )
         self.assertEqual("ffa_default", service._rule_profile(stage))
         self.assertEqual(
-            ["points", "ffa_game_wins", "ffa_score", "ffa_last_placement"],
+            ["points", "ffa_game_wins", "ffa_stat:kills", "ffa_last_placement"],
             service._tiebreak_order(stage),
         )
 
