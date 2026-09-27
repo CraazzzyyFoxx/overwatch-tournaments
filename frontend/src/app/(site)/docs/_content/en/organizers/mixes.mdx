@@ -39,6 +39,20 @@ One run can return several options — how many is up to your settings. The arro
 
 How evenly ranks are split versus how carefully preferred roles are honoured is the **Balancing (rank balance vs role comfort)** slider in your account settings: left for even ranks, right for more players on the role they asked for. **Line importance** sits next to it, so a tank mismatch can be made to cost more than a support one.
 
+## Two lobbies
+
+The **Lobbies: 1 / 2** switch in the mix header opens a second lobby. Lobbies run independently: each has its own teams, its own map, its own result and its own pace — the quick one never waits for the slow one. **Lobby A / Lobby B** tabs appear above the matchup; exactly one lobby is on screen, and everything under the tab (the option pager, the map roll, recording a result, dragging players between teams, posting to Discord) belongs to it.
+
+**Balance teams** under a tab balances that lobby alone. Its candidates exclude anyone already seated in the other lobby and anyone pinned to the other lobby. **Shuffle both lobbies** in the header splits the whole pool into two evenly matched lobbies at once — it only exists with two lobbies, and it needs enough players for both line-ups.
+
+A lobby whose balanced line-up has not been played into the log yet is marked **not recorded** on its tab, and anything that would overwrite that line-up asks first.
+
+A player's card (**Advanced settings**) gains **Lobby: Auto / Lobby A / Lobby B** — a pin. It takes effect at the next balance: a player pinned to A is never a candidate for B. Each lineup row shows where that player is right now: **A**, **B**, or **waiting** for a seat. With two lobbies the role-supply strip asks for twice as many people per role.
+
+In the match history every match carries its lobby letter, and the undo is offered on the newest match of **each** lobby — undoing in A never touches B.
+
+Going back to one lobby drops lobby B's teams and every pin; the matches lobby B already recorded stay in the history and in the leaderboard.
+
 ## The sit-out queue
 
 When there are more players than seats, the mix suggests who should sit. The rule runs in order:
@@ -70,7 +84,7 @@ Your account settings also hold **Points per win**. When it is filled in, record
 
 ## Map and result
 
-The **Next map** block rolls a map: **Any** rolls from all competitive maps, or you can limit it to a mode or choose a map by hand. The choice is shared — everyone watching the mix sees the same map.
+The **Next map** block rolls a map: **Any** rolls from all competitive maps, or you can limit it to a mode or choose a map by hand. The choice is shared — everyone watching the mix sees the same map. With two lobbies each has its own map: the block belongs to whichever lobby's tab is open, and the roll avoids maps played recently in either lobby.
 
 The result is recorded with three buttons under the rosters: the first team's win, **Draw**, and the second team's win. You can record as many matches in a row as you like; the mix does not close. After a result the map is cleared for a fresh roll, and the **Must play** pins of everyone who played are released: the promise covered one game, not the whole evening.
 

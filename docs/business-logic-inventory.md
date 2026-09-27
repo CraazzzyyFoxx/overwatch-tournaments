@@ -238,7 +238,34 @@ Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is delibera
 
 `MixStatus`: draft / balanced / completed / cancelled. Participation: `must_play` / `pool` / `benched`.
 
-Rotation (`mix_rotation.py`): longest sit-out streak → shortest played streak → fewest games → input order. `must_play` always seated. No history, or the whole pool fits → all `NEUTRAL` (do not invent fairness).
+**Lobbies.** A mix runs `lobby_count` lobbies (1 or 2, CHECK). Every per-match fact lives on
+`balancer.custom_game_lobby` keyed `(custom_game_id, lobby_index)`: `balance_result_json`,
+`balance_result_version`, `selected_variant_index`, `next_map_id`, `balanced_at`. The mix itself
+carries none of them. Team names stay in `CustomGameTeamName` at the global index
+`lobby_index * 2 + team` (A: 0-1, B: 2-3).
+
+Lobby membership is **not stored**: a player's `current_lobby` is derived from the selected variant
+of each lobby, `null` = waiting. Only the host's tie is stored — `custom_game_player.lobby_pin`
+(422 while `lobby_count = 1`). `set_lobby_count(1)` drops lobby B's row and every pin; its recorded
+matches stay.
+
+`balance` takes `{scope: "lobby", lobby_index} | {scope: "all"}`. Scope `lobby` excludes players
+seated in the other lobby and players pinned to it, then runs the unchanged `run_mix_balance` path.
+Scope `all` needs `lobby_count = 2` (422 `single_lobby`), splits the pool with
+`domain/mix_lobby_split.py` (422 `not_enough_for_two_lobbies` / `too_many_pinned` /
+`too_many_must_play` — more `must_play` than both lobbies have seats — / `roles_infeasible`) and
+solves each lobby. `set_variant_index` refuses a variant that would seat somebody the other lobby
+already seated: 409 `seat_conflict`.
+
+`record_outcome` stamps `casual.match.lobby_index` and writes one `casual.match_busy_player` row per
+member seated in the other lobby's selected variant. `undo_match` rolls back the newest match **of
+that match's lobby** (`newest_id_for_lobby`), not of the mix.
+
+Rotation (`mix_rotation.py`): longest sit-out streak → shortest played streak → fewest games → input
+order. `must_play` always seated. No history, or the whole pool fits → all `NEUTRAL` (do not invent
+fairness). **A match whose `match_busy_player` set contains the member is skipped entirely** — he was
+playing in the other lobby, which is neither "played" nor "sat out". An empty busy set reproduces the
+one-lobby behaviour exactly, so no backfill was needed.
 
 Self-signup (`custom_game.self_signup` = `closed` | `pool` | `benched`, `self_role_edit`): one policy,
 `mix_self_service.mix_self_policy`, gates Discord and the board alike. Check order is the reason order —
@@ -251,7 +278,7 @@ ordinary `custom_game_player` row — no separate application table. A player wr
 ranks stay the host's book, participation the host's decision, and an edit applies from the next balance
 (`balance_result_json` is a snapshot).
 
-Caps: 8 teams, 16 co-hosts, 100 roster rows for a self-signup (`roster_full`). Host role required (`custom_game.*`).
+Caps: 2 lobbies, 8 teams, 16 co-hosts, 100 roster rows for a self-signup (`roster_full`). Host role required (`custom_game.*`).
 
 ---
 
