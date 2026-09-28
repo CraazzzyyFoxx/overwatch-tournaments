@@ -89,8 +89,10 @@ class EncounterResultAudit(db.TimeStampIntegerMixin):
     game_result_version: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     # Admin's stated reason for a correction/cancel; NULL for automatic rows.
     reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    # Mirrors shared.services.encounter.finalize.FinalizeSource.
-    source: Mapped[str] = mapped_column(String(16))
+    # ``shared.services.encounter.finalize.FinalizeSource`` for a series-level
+    # row, ``enums.EncounterGameResultSource`` for a per-game one -- which is
+    # why 16 characters was not enough (``captain_agreement``).
+    source: Mapped[str] = mapped_column(String(32))
 
     encounter: Mapped[Encounter] = relationship(back_populates="result_audit")
     actor: Mapped[User | None] = relationship()

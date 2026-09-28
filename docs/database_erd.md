@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`mixlobby01`** (87 revisions in `backend/migrations/versions/`).
+Alembic head: **`auditsrc01`** (89 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -980,16 +980,6 @@ erDiagram
         bigint team_id FK
         int slot
     }
-    TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER {
-        bigint id PK
-        timestamptz created_at
-        timestamptz updated_at "nullable"
-        bigint encounter_id FK
-        pickbankind kind
-        int item_id
-        pickbanside banned_by_side
-        int round
-    }
     TOURNAMENT_ENCOUNTER_READINESS {
         bigint id PK
         timestamptz created_at
@@ -1024,7 +1014,7 @@ erDiagram
         bigint game_id FK "nullable"
         int game_result_version "nullable"
         text reason "nullable"
-        varchar(16) source
+        varchar(32) source
     }
     TOURNAMENT_PICK_BAN_CONFIG {
         bigint id PK
@@ -1037,12 +1027,7 @@ erDiagram
         pickbanmode mode
         pickbanfirstpickrule first_pick_rule
         pickbanrotation first_ban_rotation
-        int turn_timer_seconds "nullable"
-        varchar(32) preset "nullable"
-        json sequence_json
-        pickbannorepeatscope no_repeat_scope
-        varchar(32) unique_attribute_per_side_per_round "nullable"
-        boolean allow_protect
+        json ruleset_json
     }
     TOURNAMENT_PICK_BAN_CONFIG_ITEM {
         bigint id PK
@@ -1081,6 +1066,7 @@ erDiagram
         pickbanentrystatus status
         bigint team_id FK "nullable"
         pickbanside protected_by "nullable"
+        int carried_from_round "nullable"
     }
     TOURNAMENT_PICK_BAN_SESSION {
         bigint id PK
@@ -1095,7 +1081,7 @@ erDiagram
         int away_seed "nullable"
         json resolved_sequence_json
         json slot_reserves_json "nullable"
-        int turn_timer_seconds "nullable"
+        json ruleset_json
         pickbansessionstatus status
         boolean awaiting_choice
         pickbanside pending_loser_side "nullable"
@@ -1103,6 +1089,19 @@ erDiagram
         int undo_target_index "nullable"
         timestamptz started_at "nullable"
         timestamptz current_step_started_at "nullable"
+    }
+    TOURNAMENT_PICK_BAN_SUBMISSION {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint session_id FK
+        int step_index
+        varchar(8) side
+        int attempt
+        varchar(16) state
+        json items_json
+        timestamptz locked_at "nullable"
+        timestamptz revealed_at "nullable"
     }
     TOURNAMENT_PLAYER {
         bigint id PK
@@ -1353,7 +1352,6 @@ erDiagram
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : "source_encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : "target_encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PARTICIPANT : "encounter_id"
-    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_READINESS : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_PICK_BAN_SESSION : "encounter_id"
@@ -1369,6 +1367,7 @@ erDiagram
     TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT : "pick_ban_config_id"
     TOURNAMENT_PICK_BAN_CONFIG_SLOT ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM : "pick_ban_config_slot_id"
     TOURNAMENT_PICK_BAN_SESSION ||--o{ TOURNAMENT_PICK_BAN_ENTRY : "session_id"
+    TOURNAMENT_PICK_BAN_SESSION ||--o{ TOURNAMENT_PICK_BAN_SUBMISSION : "session_id"
     TOURNAMENT_PLAYER |o--o{ TOURNAMENT_PLAYER : "related_player_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_CHALLONGE_SOURCE : "stage_id"
     TOURNAMENT_STAGE |o--o{ TOURNAMENT_COMPUTATION_JOB : "stage_id"
@@ -1434,12 +1433,12 @@ Composite unique keys:
 - `TOURNAMENT_ENCOUNTER_MAP_REPORT` unique on (`game_id`, `side`)
 - `TOURNAMENT_ENCOUNTER_PARTICIPANT` unique on (`encounter_id`, `slot`)
 - `TOURNAMENT_ENCOUNTER_PARTICIPANT` unique on (`encounter_id`, `team_id`)
-- `TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER` unique on (`encounter_id`, `kind`, `item_id`, `banned_by_side`)
 - `TOURNAMENT_ENCOUNTER_READINESS` unique on (`encounter_id`, `side`)
 - `TOURNAMENT_PICK_BAN_CONFIG_ITEM` unique on (`pick_ban_config_id`, `item_id`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT` unique on (`pick_ban_config_id`, `position`)
 - `TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM` unique on (`pick_ban_config_slot_id`, `item_id`)
 - `TOURNAMENT_PICK_BAN_SESSION` unique on (`encounter_id`, `kind`)
+- `TOURNAMENT_PICK_BAN_SUBMISSION` unique on (`session_id`, `step_index`, `side`, `attempt`)
 - `TOURNAMENT_PLAYER_SUB_ROLE` unique on (`workspace_id`, `role`, `slug`)
 - `TOURNAMENT_STAGE_ITEM_INPUT` unique on (`stage_item_id`, `slot`)
 - `TOURNAMENT_TOURNAMENT_LINK` unique on (`tournament_id`, `kind`, `url`)
