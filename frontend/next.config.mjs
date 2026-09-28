@@ -91,12 +91,6 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "overfast.craazzzyyfoxx.me",
-        port: "",
-        pathname: "/static/**"
-      },
-      {
-        protocol: "https",
         hostname: "img.clerk.com",
         port: "",
         pathname: "/**"
