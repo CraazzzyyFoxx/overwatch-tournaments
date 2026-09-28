@@ -29,6 +29,7 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cashews import cache  # noqa: E402
+
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.oauth import OAuthConnection  # noqa: E402
 from shared.models.identity.rbac import Role, user_roles  # noqa: E402
@@ -401,9 +402,7 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         """
         self.account()
         self.link_discord(TARGET, DISCORD_TARGET)
-        mine = [
-            self.delivered(DISCORD_TARGET, created_at=PAST + timedelta(minutes=index)) for index in range(12)
-        ]
+        mine = [self.delivered(DISCORD_TARGET, created_at=PAST + timedelta(minutes=index)) for index in range(12)]
         self.delivered(DISCORD_STRANGER)
         self.delivered(DISCORD_TARGET, channel="discord_channel")
 
