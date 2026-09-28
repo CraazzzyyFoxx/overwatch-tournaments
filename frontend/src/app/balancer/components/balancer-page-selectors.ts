@@ -26,7 +26,6 @@ export type BalancerPageCollections = {
   playerValidationStates: PlayerValidationState[];
   readyPlayers: BalancerPlayerRecord[];
   invalidPlayerStates: PlayerValidationState[];
-  addableApplications: BalancerApplication[];
   flexPoolCount: number;
 };
 
@@ -61,9 +60,6 @@ export function buildBalancerPageCollections(
     .filter((state) => state.issues.length === 0)
     .map((state) => state.player);
   const invalidPlayerStates = playerValidationStates.filter((state) => state.issues.length > 0);
-  const addableApplications = applications.filter(
-    (application) => application.is_active && application.player === null,
-  );
   const flexPoolCount = poolPlayers.filter((player) => player.is_flex).length;
 
   return {
@@ -77,7 +73,6 @@ export function buildBalancerPageCollections(
     playerValidationStates,
     readyPlayers,
     invalidPlayerStates,
-    addableApplications,
     flexPoolCount,
   };
 }

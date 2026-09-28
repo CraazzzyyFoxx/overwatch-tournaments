@@ -85,7 +85,7 @@ export function buildRegistrationFacets(
     // has that role, so a row must count once for it.
     const codes = new Set<string>();
     for (const entry of registration.roles) {
-      if (entry.is_active) codes.add(entry.role);
+      if (entry.is_declared_active) codes.add(entry.role);
     }
     for (const code of codes) role.set(code, (role.get(code) ?? 0) + 1);
     status.set(registration.status, (status.get(registration.status) ?? 0) + 1);
@@ -126,7 +126,7 @@ export function filterRegistrations(
     if (admissionFilter && registration.admission.decision !== admissionFilter) return false;
     if (
       roleFilter &&
-      !registration.roles.some((role) => role.is_active && role.role === roleFilter)
+      !registration.roles.some((role) => role.is_declared_active && role.role === roleFilter)
     ) {
       return false;
     }

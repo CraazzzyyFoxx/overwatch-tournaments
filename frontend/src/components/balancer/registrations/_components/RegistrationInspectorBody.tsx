@@ -28,7 +28,9 @@ function RolesCell({
   roles: AdminRegistration["roles"];
   catalog?: SubroleCatalog;
 }>) {
-  const active = roles.filter((role) => role.is_active);
+  // Declared, not playable: a rankless role must stay visible (see `RolesCell`
+  // in registrationColumnCells.tsx).
+  const active = roles.filter((role) => role.is_declared_active);
   if (active.length === 0) {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -45,7 +47,10 @@ function RolesCell({
           return (
             <span
               key={`${role.role}-${role.subrole ?? "base"}-${role.priority}`}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs",
+                !role.is_active && "opacity-60"
+              )}
             >
               <span className={cn(role.is_primary && "font-medium text-foreground")}>
                 {ROLE_LABELS[role.role] ?? role.role}
@@ -55,7 +60,9 @@ function RolesCell({
               ) : null}
               {role.rank_value != null ? (
                 <span className="tabular-nums text-muted-foreground">{role.rank_value}</span>
-              ) : null}
+              ) : (
+                <span className="text-muted-foreground">No rank</span>
+              )}
             </span>
           );
         })}

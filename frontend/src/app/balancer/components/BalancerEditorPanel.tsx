@@ -26,7 +26,7 @@ type BalancerEditorPanelProps = {
   onChangePayload: (payload: InternalBalancePayload) => void;
   onSelectPlayer: (playerId: number | null) => void;
   onToggleTeam: (teamId: number) => void;
-  onBrowseAvailable: () => void;
+  onBrowseExcluded: () => void;
   onReviewConflicts: () => void;
   onRunBalance: () => void;
 };
@@ -47,7 +47,7 @@ export function BalancerEditorPanel({
   onChangePayload,
   onSelectPlayer,
   onToggleTeam,
-  onBrowseAvailable,
+  onBrowseExcluded,
   onReviewConflicts,
   onRunBalance
 }: Readonly<BalancerEditorPanelProps>) {
@@ -75,7 +75,7 @@ export function BalancerEditorPanel({
           invalidPlayerCount={invalidPlayerCount}
           canRunBalance={canRunBalance}
           isRunPending={isRunPending}
-          onBrowseAvailable={onBrowseAvailable}
+          onBrowseExcluded={onBrowseExcluded}
           onReviewConflicts={onReviewConflicts}
           onRunBalance={onRunBalance}
         />

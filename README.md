@@ -254,7 +254,7 @@ backend lint/test, frontend, gateway, and production deployment workflows from
 
 ## Operations
 
-- **Production:** [`docker-compose.production.yml`](./docker-compose.production.yml) and `make prod-*`. Production scaling requires pgBouncer; the limits and non-replicable workers are documented in the [`Makefile`](./Makefile).
+- **Production:** [`docker-compose.production.yml`](./docker-compose.production.yml) and `make prod-*`. Production scaling requires pgBouncer; the limits and non-replicable workers are documented in the [`Makefile`](./Makefile). Host sizing (minimum 4 vCPU / 8 GB RAM / 80 GB SSD) and the bundled Postgres + pgBouncer (`db` profile): [`docs/production-host.md`](./docs/production-host.md).
 - **Monitoring:** [`monitoring/README.md`](./monitoring/README.md) covers Prometheus, Alertmanager, Grafana, Loki, Tempo, Promtail, exporters, and OpenTelemetry.
 - **Backups:** [`docs/backup-rustfs.md`](./docs/backup-rustfs.md) covers PostgreSQL dumps, two-site S3 replication, verification, and restore.
 - **Load testing:** [`loadtests/README.md`](./loadtests/README.md) documents Locust configuration, seeding, and reports.

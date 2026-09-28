@@ -17,8 +17,7 @@ export type PlayerValidationState = {
 
 export type PoolLane = "excluded" | "needs_fix" | "ready";
 export type PoolDropPatch = { is_in_pool: boolean };
-/** `available` lists approved registrations that are not players yet, so it renders applications. */
-export type PoolView = "all" | "needs_fix" | "ready" | "excluded" | "rank_delta" | "available";
+export type PoolView = "all" | "needs_fix" | "ready" | "excluded" | "rank_delta";
 export type PoolSortValue =
   | "added_desc"
   | "added_asc"

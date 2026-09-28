@@ -198,8 +198,9 @@ and [`monitoring/README.md`](../monitoring/README.md)):
 - `docker-compose.yml` — dev/base (hot reload, local Postgres via the `db` profile, gateway
   published for direct testing). Profiles: `db`, `workers`, `monitoring`.
 - `docker-compose.production.yml` — GHCR images (`ghcr.io/craazzzyyfoxx/owt-*`, tag
-  `${IMAGE_TAG:-latest}`), external Postgres, `restart: always`, resource limits, gateway
-  reachable only through nginx.
+  `${IMAGE_TAG:-latest}`), external Postgres or the bundled Postgres 18 + pgBouncer via the
+  `db` profile ([`production-host.md`](./production-host.md)), `restart: always`, resource
+  limits, gateway reachable only through nginx.
 - `docker-compose.monitoring.yml` — a separate `owt-monitoring` project (Prometheus,
   Alertmanager, Grafana, Loki, Promtail, Tempo, OTel Collector, exporters).
 - `docker-compose.gpu.yml` — NVIDIA override for `analytics-worker`.

@@ -157,8 +157,11 @@ export function RolesCell({
     return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
+  // `is_declared_active`, not `is_active`: the latter is the resolver's "playable"
+  // verdict (declared AND ranked), and hiding a rankless role hides exactly what
+  // the organizer has to fix. Unplayable roles are shown dimmed instead.
   const sortedRoles = roles
-    .filter((role) => role.is_active)
+    .filter((role) => role.is_declared_active)
     .slice()
     .sort((left, right) => left.priority - right.priority);
 
@@ -173,11 +176,11 @@ export function RolesCell({
         return (
           <div
             key={`${role.role}-${role.subrole ?? "base"}-${role.priority}`}
-            className="inline-flex min-w-8 flex-col items-center gap-0.5"
+            className={cn("inline-flex min-w-8 flex-col items-center gap-0.5", !role.is_active && "opacity-50")}
             title={[
               ROLE_LABELS[role.role] ?? role.role,
               subroleLabel,
-              role.rank_value != null ? `${role.rank_value}` : null,
+              role.rank_value != null ? `${role.rank_value}` : "No rank",
               role.is_primary ? "Primary" : null,
             ]
               .filter(Boolean)

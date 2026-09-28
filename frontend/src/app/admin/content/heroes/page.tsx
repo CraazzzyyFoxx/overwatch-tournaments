@@ -275,7 +275,6 @@ export default function HeroesAdminPage() {
                 type="url"
                 value={formData.image_path || ""}
                 onChange={(e) => setFormData({ ...formData, image_path: e.target.value })}
-                placeholder="https://overfast.craazzzyyfoxx.me/static/heroes/ana.png"
                 className="flex-1"
               />
             </div>

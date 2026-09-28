@@ -7,7 +7,6 @@ import type { JobAction } from "./useBalancerJob";
 import { parseImportedBalancePayload } from "./balance-import";
 import { sanitizeBalancerConfig } from "./balancer-config-helpers";
 import {
-  buildRankHistoryFromAutofillPreview,
   buildVariantFromSavedBalance,
   type BalanceVariant
 } from "@/components/balancer/workspace-helpers";
@@ -16,12 +15,10 @@ import { buildRegistrationUpdateFromPlayerPayload } from "@/components/balancer/
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
 import type {
-  BalancerApplication,
   AdminRegistration,
   BalanceExportResponse,
   BalancerPlayerRecord,
   BalancerPlayerUpdateInput,
-  BalancerRoleCode,
   BalanceSaveInput,
   SavedBalance
 } from "@/types/balancer-admin.types";
@@ -37,8 +34,6 @@ type UseBalancerMutationsOptions = {
   workspaceId: number | null;
   queryClient: QueryClient;
   dispatchJob: React.Dispatch<JobAction>;
-  setSelectedPlayerId: (id: number | null) => void;
-  setPendingRankHistory: (history: Partial<Record<BalancerRoleCode, number>> | null) => void;
   setEditingPlayerId: (id: number | null) => void;
   setVariants: React.Dispatch<React.SetStateAction<BalanceVariant[]>>;
   setActiveVariantId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -125,8 +120,6 @@ export function useBalancerMutations({
   workspaceId,
   queryClient,
   dispatchJob,
-  setSelectedPlayerId,
-  setPendingRankHistory,
   setEditingPlayerId,
   setVariants,
   setActiveVariantId,
@@ -160,33 +153,6 @@ export function useBalancerMutations({
         )
     );
   };
-
-  const addPlayerMutation = useMutation({
-    mutationFn: async (application: BalancerApplication) => {
-      if (!tournamentId) throw new Error("Select a tournament first");
-      return balancerAdminService.includeInBalancer(application.id);
-    },
-    onSuccess: async (registration) => {
-      setSelectedPlayerId(registration.id);
-      patchRegistrationInCache(registration);
-      notify.success("Registration included in balancer");
-      // Autofill ranks for the just-included player using the balancer-first priority chain
-      // (previous balances → analytics → OW), reusing the backend's autofill logic.
-      if (tournamentId) {
-        balancerAdminService
-          .previewRegistrationRankAutofill(tournamentId, {
-            registration_ids: [registration.id],
-            mode: "balancer_first"
-          })
-          .then((preview) =>
-            setPendingRankHistory(buildRankHistoryFromAutofillPreview(preview, registration.id))
-          )
-          .catch(() => setPendingRankHistory(null));
-      } else {
-        setPendingRankHistory(null);
-      }
-    }
-  });
 
   const updatePlayerMutation = useMutation({
     mutationFn: async ({
@@ -511,7 +477,6 @@ export function useBalancerMutations({
   });
 
   return {
-    addPlayerMutation,
     updatePlayerMutation,
     removePlayerMutation,
     setPlayerPoolMembershipMutation,
