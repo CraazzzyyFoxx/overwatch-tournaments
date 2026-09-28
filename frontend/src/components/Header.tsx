@@ -11,7 +11,6 @@ import MobilePlayerSearchSheet from "@/components/MobilePlayerSearchSheet";
 import { useTranslations } from "next-intl";
 import { SITE_ICON } from "@/config/site";
 import UserMenu from "@/components/UserMenu";
-import NotificationBell from "@/components/notifications/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import WorkspaceSwitcher from "@/components/workspace/WorkspaceSwitcher";
 import WorkspaceBrandIcon from "@/components/workspace/WorkspaceBrandIcon";
@@ -163,10 +162,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
             <UserSearch />
           </div>
           {user ? (
-            <>
-              <NotificationBell />
-              <UserMenu user={user} />
-            </>
+            <UserMenu user={user} />
           ) : (
             <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-3 md:ml-0">
               <LanguageSwitcher className="hidden sm:inline-flex" />

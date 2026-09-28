@@ -233,6 +233,7 @@
     "searchLabel": "Search",
     "filters": "Filters",
     "openMenu": "Open account menu",
+    "openMenuUnread": "Open account menu, {count, plural, =0 {no unread notifications} one {# unread notification} other {# unread notifications}}",
     "signIn": "Sign in",
     "homeLink": "Go to the home page",
     "sourceOnGithub": "View the source on GitHub",
@@ -5924,7 +5925,6 @@
   },
   "notifications": {
     "title": "Notifications",
-    "bell": "Notifications, {count, plural, =0 {nothing unread} one {# unread} other {# unread}}",
     "newCount": "{count, plural, one {# new} other {# new}}",
     "unread": "Unread",
     "read": "Read",
