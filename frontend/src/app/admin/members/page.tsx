@@ -437,8 +437,7 @@ export default function WorkspaceMembersPage() {
           open={addOpen}
           onOpenChange={setAddOpen}
           workspaceId={currentWorkspaceId}
-          scopedRoles={scopedRoles ?? []}
-          defaultRoleId={systemRoleId("member")}
+          systemRoleId={systemRoleId}
           onAdded={() => {
             invalidateMembers();
             setAddOpen(false);
@@ -470,23 +469,21 @@ function AddMemberDialog({
   open,
   onOpenChange,
   workspaceId,
-  scopedRoles,
-  defaultRoleId,
+  systemRoleId,
   onAdded
 }: Readonly<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: number;
-  scopedRoles: RbacRole[];
-  defaultRoleId?: number;
+  systemRoleId: (name: WorkspaceSystemRole) => number | undefined;
   onAdded: () => void;
 }>) {
   const userFieldId = useId();
+  const roleFieldId = useId();
   const [userId, setUserId] = useState<string>("");
-  const [roleIds, setRoleIds] = useState<number[]>([]);
+  // One system role, same as the row's role select; custom roles are added from the row.
+  const [role, setRole] = useState<WorkspaceSystemRole>("member");
   const [userComboOpen, setUserComboOpen] = useState(false);
-
-  const effectiveRoleIds = roleIds.length > 0 ? roleIds : defaultRoleId != null ? [defaultRoleId] : [];
 
   const { data: allUsers } = useQuery({
     queryKey: workspaceQueryKeys.rbacUsersAll(workspaceId),
@@ -495,10 +492,10 @@ function AddMemberDialog({
   });
 
   const addMemberMutation = useMutation({
-    mutationFn: () => workspaceService.addMember(workspaceId, Number(userId), effectiveRoleIds),
+    mutationFn: (roleId: number) => workspaceService.addMember(workspaceId, Number(userId), roleId),
     onSuccess: () => {
       setUserId("");
-      setRoleIds([]);
+      setRole("member");
       notify.success("Member added");
       onAdded();
     },
@@ -514,11 +511,12 @@ function AddMemberDialog({
       notify.error("Pick the user you want to add first.");
       return;
     }
-    if (effectiveRoleIds.length === 0) {
-      notify.error("Pick at least one role for this member.");
+    const roleId = systemRoleId(role);
+    if (roleId == null) {
+      notify.error("That workspace role is not configured yet");
       return;
     }
-    addMemberMutation.mutate();
+    addMemberMutation.mutate(roleId);
   };
 
   return (
@@ -581,7 +579,21 @@ function AddMemberDialog({
             </Popover>
           </div>
 
-          <RoleMultiSelect roles={scopedRoles} value={effectiveRoleIds} onChange={setRoleIds} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={roleFieldId}>Role</Label>
+            <Select value={role} onValueChange={(value) => setRole(value as WorkspaceSystemRole)}>
+              <SelectTrigger id={roleFieldId}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SYSTEM_ROLES.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {SYSTEM_ROLE_LABEL[name]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <DialogFooter>
@@ -594,73 +606,5 @@ function AddMemberDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function RoleMultiSelect({
-  roles,
-  value,
-  onChange
-}: Readonly<{
-  roles: RbacRole[];
-  value: number[];
-  onChange: (roleIds: number[]) => void;
-}>) {
-  const fieldId = useId();
-  const [open, setOpen] = useState(false);
-  const selected = useMemo(() => roles.filter((role) => value.includes(role.id)), [roles, value]);
-
-  const toggleRole = (roleId: number) => {
-    onChange(value.includes(roleId) ? value.filter((id) => id !== roleId) : [...value, roleId]);
-  };
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={fieldId}>Roles</Label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id={fieldId}
-            variant="outline"
-            role="combobox"
-            aria-haspopup="listbox"
-            aria-expanded={open}
-            className="w-full justify-between"
-          >
-            <span className="truncate">
-              {selected.length > 0 ? selected.map((role) => role.name).join(", ") : "Select roles…"}
-            </span>
-            <ChevronsUpDown aria-hidden className="ml-2 size-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-          <Command>
-            <CommandInput placeholder="Search roles…" />
-            <CommandList>
-              <CommandEmpty>No role matches that search.</CommandEmpty>
-              <CommandGroup>
-                {roles.map((role) => {
-                  const checked = value.includes(role.id);
-                  return (
-                    <CommandItem key={role.id} value={role.name} onSelect={() => toggleRole(role.id)}>
-                      <Check
-                        aria-hidden
-                        className={cn("mr-2 size-4", checked ? "opacity-100" : "opacity-0")}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate">{role.name}</p>
-                        {role.description ? (
-                          <p className="truncate text-xs text-muted-foreground">{role.description}</p>
-                        ) : null}
-                      </div>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    </div>
   );
 }

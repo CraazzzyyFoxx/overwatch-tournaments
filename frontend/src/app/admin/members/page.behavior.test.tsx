@@ -8,7 +8,8 @@
 //     the chip, so a shared link lands on the same narrowed list;
 //  3. one role change end to end — the cell keeps its inline editor (the one
 //     deliberate exception to "details go in a dialog"), and picking a role
-//     PATCHes the member's whole role set.
+//     PATCHes the member's whole role set;
+//  4. Add member grants exactly one role — the backend stores a single role.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -26,6 +27,7 @@ const getMembers = vi.fn();
 const listRolesAll = vi.fn();
 const updateMemberRole = vi.fn();
 const removeMember = vi.fn();
+const addMember = vi.fn();
 
 let permitted = true;
 
@@ -57,13 +59,13 @@ vi.mock("@/stores/workspace.store", () => ({
 vi.mock("@/services/rbac.service", () => ({
   rbacService: {
     listRolesAll: (...args: unknown[]) => listRolesAll(...args),
-    listUsersAll: () => Promise.resolve([])
+    listUsersAll: () => Promise.resolve([{ id: 7, username: "nova" }])
   }
 }));
 vi.mock("@/services/workspace.service", () => ({
   default: {
     getMembers: (...args: unknown[]) => getMembers(...args),
-    addMember: vi.fn(),
+    addMember: (...args: unknown[]) => addMember(...args),
     removeMember: (...args: unknown[]) => removeMember(...args),
     updateMemberRole: (...args: unknown[]) => updateMemberRole(...args),
     autofillMemberRoles: vi.fn()
@@ -164,6 +166,7 @@ beforeEach(() => {
   listRolesAll.mockReset().mockResolvedValue(ROLES);
   updateMemberRole.mockReset().mockResolvedValue(undefined);
   removeMember.mockReset().mockResolvedValue(undefined);
+  addMember.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
@@ -226,6 +229,29 @@ describe("admin Members", () => {
     );
 
     expect(updateMemberRole).toHaveBeenCalledWith(1, 42, [3, 9]);
+  });
+
+  it("adds a member with the one role picked in the dialog", async () => {
+    await mount();
+    const button = (label: string, root: ParentNode = document) =>
+      Array.from(root.querySelectorAll("button")).find((item) => item.textContent?.trim() === label);
+
+    await click(button("Add member"));
+    const dialog = document.querySelector('[role="dialog"]')!;
+    await click(button("Select user…", dialog));
+    await click(commandItem("nova"));
+    const roleLabel = Array.from(dialog.querySelectorAll("label")).find(
+      (label) => label.textContent === "Role"
+    );
+    await click(document.getElementById(roleLabel!.htmlFor));
+    await click(
+      Array.from(document.querySelectorAll('[role="option"]')).find(
+        (option) => option.textContent?.trim() === "Admin"
+      )
+    );
+    await click(button("Add member", dialog));
+
+    expect(addMember).toHaveBeenCalledWith(1, 7, 3);
   });
 
   it("removes a member through the row menu and the shared confirmation", async () => {
