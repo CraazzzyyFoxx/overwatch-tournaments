@@ -1214,7 +1214,7 @@
       "summary": "Download match log"
     },
     "rpc.app.notification_admin_list": {
-      "description": "Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one keyset page of the notifications this workspace's own activity produced (`source_workspace_id`), newest first, expired ones included \u2014 the operator view exists to show what has already been retired, which the inbox's time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind` or a malformed cursor.",
+      "description": "Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one page (`page`/`per_page`, with `total`) of the notifications this workspace's own activity produced (`source_workspace_id`), newest first, expired ones included \u2014 the operator view exists to show what has already been retired, which the inbox's time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind`.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -1232,25 +1232,25 @@
           }
         },
         {
-          "name": "cursor",
+          "name": "page",
           "required": false,
           "schema": {
-            "description": "Opaque continuation from the previous page's next_cursor.",
-            "type": "string"
+            "description": "1-based page number (default 1).",
+            "type": "integer"
           }
         },
         {
-          "name": "limit",
+          "name": "per_page",
           "required": false,
           "schema": {
-            "description": "Page size (default 50, capped at 200).",
+            "description": "Page size (default 25, capped at 100).",
             "type": "integer"
           }
         }
       ],
       "response": {
         "array": false,
-        "ref": "app.NotificationAdminPage"
+        "ref": "app.Paginated_NotificationAdminItem_"
       },
       "summary": "List the notifications a workspace produced"
     },
@@ -14502,34 +14502,6 @@
       "title": "NotificationAdminItem",
       "type": "object"
     },
-    "app.NotificationAdminPage": {
-      "properties": {
-        "items": {
-          "items": {
-            "$ref": "#/components/schemas/app.NotificationAdminItem"
-          },
-          "title": "Items",
-          "type": "array"
-        },
-        "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Next Cursor"
-        }
-      },
-      "required": [
-        "items"
-      ],
-      "title": "NotificationAdminPage",
-      "type": "object"
-    },
     "app.NotificationDelete": {
       "description": "``ids=None`` deletes the whole visible inbox; ``only_read`` narrows it.\n\nThe two together are the \"clear read\" button, which must not be able to\nswallow a notification the user has not opened yet.",
       "properties": {
@@ -15355,6 +15327,37 @@
         "results"
       ],
       "title": "Paginated[MapRead]",
+      "type": "object"
+    },
+    "app.Paginated_NotificationAdminItem_": {
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/app.NotificationAdminItem"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "Paginated[NotificationAdminItem]",
       "type": "object"
     },
     "app.Paginated_PlayerStatistics_": {

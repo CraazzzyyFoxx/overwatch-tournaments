@@ -27,7 +27,6 @@ __all__ = (
     "NotificationDelete",
     "NotificationDeleteResult",
     "NotificationAdminItem",
-    "NotificationAdminPage",
     "NotificationRetire",
     "NotificationRetireResult",
     "NotificationDmGroups",
@@ -129,12 +128,6 @@ class NotificationAdminItem(BaseRead):
     published_at: datetime
     #: Set (and in the past) means retired: the row no longer reaches an inbox.
     expires_at: datetime | None = None
-
-
-class NotificationAdminPage(BaseModel):
-    items: list[NotificationAdminItem]
-    #: ``None`` on the last page; opaque, like the inbox cursor.
-    next_cursor: str | None = None
 
 
 class NotificationRetire(BaseModel):

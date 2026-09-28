@@ -75,6 +75,9 @@ class _AsyncSessionShim:
     async def execute(self, statement: Any) -> Any:
         return self._session.execute(statement)
 
+    async def scalar(self, statement: Any) -> Any:
+        return self._session.scalar(statement)
+
     async def get(self, entity: Any, ident: Any) -> Any:
         return self._session.get(entity, ident)
 
@@ -182,7 +185,7 @@ class NotificationAdminRpcTests(IsolatedAsyncioTestCase):
         result = await self.listed(OWNER)
 
         self.assertTrue(result["ok"], result)
-        self.assertEqual([item["id"] for item in result["data"]["items"]], [mine])
+        self.assertEqual([item["id"] for item in result["data"]["results"]], [mine])
 
     async def test_the_list_names_the_recipient_and_survives_a_deleted_account(self) -> None:
         self.recipient(username="told")
@@ -192,10 +195,23 @@ class NotificationAdminRpcTests(IsolatedAsyncioTestCase):
         result = await self.listed(OWNER)
 
         self.assertTrue(result["ok"], result)
-        rows = {item["id"]: item for item in result["data"]["items"]}
+        rows = {item["id"]: item for item in result["data"]["results"]}
         self.assertEqual(rows[named]["recipient_username"], "told")
         self.assertIsNone(rows[orphaned]["recipient_username"])
         self.assertEqual(rows[orphaned]["recipient_auth_user_id"], 999)
+
+    async def test_the_list_pages_by_number_and_counts_only_the_filtered_scope(self) -> None:
+        oldest, middle, newest = [self.produced(published_at=PAST - timedelta(minutes=n)) for n in (3, 2, 1)]
+        self.produced(kind="team_invite.received")
+        self.produced(source_workspace_id=OTHER_WORKSPACE)
+
+        first = await self.listed(OWNER, kind="registration.approved", per_page=2)
+        second = await self.listed(OWNER, kind="registration.approved", per_page=2, page=2)
+
+        self.assertTrue(first["ok"], first)
+        self.assertEqual(first["data"]["total"], 3)
+        self.assertEqual([item["id"] for item in first["data"]["results"]], [newest, middle])
+        self.assertEqual([item["id"] for item in second["data"]["results"]], [oldest])
 
     async def test_a_foreign_workspace_is_refused_even_for_a_workspace_owner(self) -> None:
         self.produced(source_workspace_id=OTHER_WORKSPACE)
@@ -219,7 +235,7 @@ class NotificationAdminRpcTests(IsolatedAsyncioTestCase):
         result = await self.listed(OWNER)
         retired = await self.retire(OWNER, ids=[announcement])
 
-        self.assertEqual([item["id"] for item in result["data"]["items"]], [system_row])
+        self.assertEqual([item["id"] for item in result["data"]["results"]], [system_row])
         self.assertEqual(retired["data"]["retired"], 0)
         self.assertIsNone(self.expires_at(announcement))
 

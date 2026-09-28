@@ -640,11 +640,11 @@ DOCS: dict[str, dict] = {
     "rpc.app.notification_admin_list": {
         "summary": "List the notifications a workspace produced",
         "description": (
-            "Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one keyset"
-            " page of the notifications this workspace's own activity produced (`source_workspace_id`), newest first,"
-            " expired ones included — the operator view exists to show what has already been retired, which the inbox's"
-            " time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind`"
-            " or a malformed cursor."
+            "Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one page"
+            " (`page`/`per_page`, with `total`) of the notifications this workspace's own activity produced"
+            " (`source_workspace_id`), newest first, expired ones included — the operator view exists to show what"
+            " has already been retired, which the inbox's time window hides. Announcements are not listed here, they"
+            " have their own CRUD. 422 on an unknown `kind`."
         ),
     },
     "rpc.app.notification_admin_retire": {

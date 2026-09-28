@@ -6433,7 +6433,7 @@ export interface paths {
         };
         /**
          * List the notifications a workspace produced
-         * @description Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one keyset page of the notifications this workspace's own activity produced (`source_workspace_id`), newest first, expired ones included — the operator view exists to show what has already been retired, which the inbox's time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind` or a malformed cursor.
+         * @description Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one page (`page`/`per_page`, with `total`) of the notifications this workspace's own activity produced (`source_workspace_id`), newest first, expired ones included — the operator view exists to show what has already been retired, which the inbox's time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind`.
          *
          *     RPC subject: `rpc.app.notification_admin_list`
          */
@@ -19161,16 +19161,6 @@ export interface components {
              */
             source_workspace_id: number | null;
         };
-        /** NotificationAdminPage */
-        "app.NotificationAdminPage": {
-            /** Items */
-            items: components["schemas"]["app.NotificationAdminItem"][];
-            /**
-             * Next Cursor
-             * @default null
-             */
-            next_cursor: string | null;
-        };
         /**
          * NotificationDeliveryItem
          * @description One row of the delivery ledger -- a message actually handed to Discord.
@@ -19249,6 +19239,17 @@ export interface components {
             per_page: number;
             /** Results */
             results: components["schemas"]["app.CatalogAliasMissRead"][];
+            /** Total */
+            total: number;
+        };
+        /** Paginated[NotificationAdminItem] */
+        "app.Paginated_NotificationAdminItem_": {
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: components["schemas"]["app.NotificationAdminItem"][];
             /** Total */
             total: number;
         };
@@ -49448,8 +49449,8 @@ export interface operations {
             query?: {
                 workspace_id?: number;
                 kind?: string;
-                cursor?: string;
-                limit?: number;
+                page?: number;
+                per_page?: number;
             };
             header?: never;
             path?: never;
@@ -49463,7 +49464,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app.NotificationAdminPage"];
+                    "application/json": components["schemas"]["app.Paginated_NotificationAdminItem_"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */

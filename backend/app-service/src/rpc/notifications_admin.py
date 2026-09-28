@@ -51,8 +51,8 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 kind=c.q1(data, "kind"),
-                cursor=c.q1(data, "cursor"),
-                limit=c.q1(data, "limit", int, admin_service.DEFAULT_LIST_LIMIT),
+                page=c.q1(data, "page", int, 1),
+                per_page=c.q1(data, "per_page", int, admin_service.DEFAULT_PER_PAGE),
             )
 
         return await c.envelope(logger, "notification_admin.list", op, session_factory=_SF)
