@@ -505,7 +505,12 @@ export function CataloguePicker(props: Readonly<CataloguePickerProps>) {
                   option={option}
                   selectionIndex={selectionOrder.get(option.id) ?? -1}
                   disabled={disabled}
-                  onToggle={() => onToggle(option.id)}
+                  onToggle={() => {
+                    onToggle(option.id);
+                    // A search finds one map; once it is picked, start the next search fresh.
+                    filter.setQuery("");
+                    document.getElementById(searchId)?.focus();
+                  }}
                 />
               ))}
             </div>

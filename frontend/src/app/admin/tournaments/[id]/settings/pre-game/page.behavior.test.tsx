@@ -847,6 +847,16 @@ describe("Settings › Pre-game phase's picker searches by name and adds/clears 
     expect(document.body.textContent).toContain("Nothing matches that name.");
   });
 
+  it("clears the search once a searched-for map is picked", async () => {
+    const field = await openMapPicker();
+    await type(field, "Bus");
+    await click(only("Busan"));
+
+    expect(field.value).toBe("");
+    expect(only("Ilios")).toBeTruthy();
+    expect(document.activeElement).toBe(field);
+  });
+
   it("select all adds only what the search currently shows; clear removes only that", async () => {
     const field = await openMapPicker();
     // Narrows Busan / King's Row / Ilios / Hollywood to the three with an "o".
