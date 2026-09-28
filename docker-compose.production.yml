@@ -12,6 +12,112 @@ x-logging: &log-rotate
     max-file: "3"
 
 services:
+  # ==========================================================================
+  # Bundled PostgreSQL + pgBouncer (profile `db`). Moscow and the dev site run
+  # Postgres outside this project (db_postgres + db_pgbouncer) and leave the
+  # profile off; a host with no database of its own sets COMPOSE_PROFILES=db
+  # (plus telemetry) in the root .env. Setup, sizing, backups:
+  # docs/production-host.md.
+  #
+  # Both read backend/env/common.env: the image takes the same POSTGRES_USER /
+  # POSTGRES_PASSWORD / POSTGRES_DB the services use, so there is one copy of
+  # the credentials. Nothing is published to the host.
+  # ==========================================================================
+  postgres:
+    profiles: ["db"]
+    image: postgres:18
+    logging: *log-rotate
+    restart: unless-stopped
+    env_file:
+      - ./backend/env/common.env
+    # Sized for the minimum host (docs/production-host.md). A bigger box raises
+    # the POSTGRES_* knobs in the root .env instead of editing this file: a
+    # release checkout must stay clean (ops/deploy/remote-deploy.sh). Keep
+    # shared_buffers ~25% and effective_cache_size ~75% of POSTGRES_MEMORY.
+    # random_page_cost / effective_io_concurrency assume SSD storage.
+    command: [
+      "postgres",
+      "-c", "shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}",
+      "-c", "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-1536MB}",
+      "-c", "work_mem=8MB",
+      "-c", "maintenance_work_mem=128MB",
+      "-c", "max_wal_size=2GB",
+      "-c", "random_page_cost=1.1",
+      "-c", "effective_io_concurrency=200",
+    ]
+    # Docker's 64 MB /dev/shm is too small for parallel query workers
+    # ("could not resize shared memory segment").
+    shm_size: 256m
+    # The image stops with SIGINT (fast shutdown); Docker's 10 s default then
+    # SIGKILLs a busy server mid-checkpoint and the next start replays WAL.
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: ${POSTGRES_MEMORY:-2G}
+        reservations:
+          cpus: '0.50'
+          memory: 768M
+    volumes:
+      # PG 18 images keep PGDATA at /var/lib/postgresql/18/docker under a
+      # VOLUME at /var/lib/postgresql. A volume on the pre-18 .../data path
+      # would leave the real data in an anonymous volume.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # -h 127.0.0.1: the entrypoint's initdb-time server listens on the unix
+      # socket only, so this passes once the real server is up.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
+  # Transaction pooling: every replica's DB_POOL_SIZE + DB_MAX_OVERFLOW client
+  # slots fan into DEFAULT_POOL_SIZE server backends, which is what lets
+  # `make prod-up` replicate workers. Services connect as POSTGRES_HOST=pgbouncer
+  # POSTGRES_PORT=6432 DB_PGBOUNCER=true. The upstream is DATABASE_URL (direct
+  # postgres:5432) — the same variable alembic prefers, so migrations bypass
+  # the pooler (backend/migrations/README). All in backend/env/common.env.
+  pgbouncer:
+    profiles: ["db"]
+    image: edoburu/pgbouncer:v1.25.2-p0
+    logging: *log-rotate
+    restart: unless-stopped
+    env_file:
+      - ./backend/env/common.env
+    environment:
+      LISTEN_PORT: "6432"
+      POOL_MODE: transaction
+      # With scram-sha-256 the entrypoint writes the plain password to
+      # userlist.txt, which pgBouncer needs to log in to the SCRAM-only server.
+      AUTH_TYPE: scram-sha-256
+      # Must cover replicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW) + GATEWAY_DB_MAX_CONNS:
+      # 14 processes x 30 + 16 = 436 at PROD_SIZE=large with the defaults.
+      MAX_CLIENT_CONN: "500"
+      DEFAULT_POOL_SIZE: "20"
+      RESERVE_POOL_SIZE: "5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 16M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   redis:
     image: 'redis/redis-stack:latest'
     logging: *log-rotate
@@ -868,6 +974,7 @@ services:
           memory: 16M
 
 volumes:
+  postgres-data:
   redis-data:
   rabbitmq-data:
   analytics-models:

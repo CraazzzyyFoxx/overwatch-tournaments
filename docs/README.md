@@ -63,6 +63,7 @@ Procedures for an operator. Commands are meant to be run verbatim.
 
 | Runbook | When |
 | --- | --- |
+| [`production-host.md`](./production-host.md) | Sizing a production host (minimum 4 vCPU / 8 GB / 80 GB SSD); running it with the bundled Postgres + pgBouncer (`db` profile) |
 | [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps to Timeweb S3 (Moscow cron), restore |
 | [`disk-cleanup.md`](./disk-cleanup.md) | Daily Moscow disk cleanup: stale docker images, build cache, compose-level log caps |
 | [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
