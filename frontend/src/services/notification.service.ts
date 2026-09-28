@@ -2,7 +2,7 @@ import { apiFetch } from "@/lib/api/fetch";
 import type {
   AdminUserNotifications,
   AnnouncementCreateBody,
-  NotificationAdminPage,
+  NotificationAdminItem,
   NotificationDeleteResult,
   NotificationInbox,
   NotificationItem,
@@ -13,6 +13,7 @@ import type {
   NotificationWorkspaceConfig,
   NotificationWorkspaceConfigUpdate
 } from "@/types/notification.types";
+import type { PaginatedResponse } from "@/types/pagination.types";
 
 export default class notificationService {
   /**
@@ -118,6 +119,7 @@ export default class notificationService {
   /**
    * The notifications one workspace's own activity produced, newest first and
    * including already-retired rows — the operator screen exists to show them.
+   * Numbered pages with a `total` (`per_page` capped at 100 server-side).
    *
    * `skipWorkspace` and an explicit `workspace_id` for the reason the
    * announcement reads give: the scope is the argument, not whatever the
@@ -126,15 +128,15 @@ export default class notificationService {
   static async listWorkspaceNotifications(params: {
     workspaceId: number;
     kind?: string | null;
-    cursor?: string | null;
-    limit?: number;
-  }): Promise<NotificationAdminPage> {
+    page?: number;
+    perPage?: number;
+  }): Promise<PaginatedResponse<NotificationAdminItem>> {
     return apiFetch("/api/v1/admin/notifications", {
       query: {
         workspace_id: params.workspaceId,
         kind: params.kind ?? undefined,
-        cursor: params.cursor ?? undefined,
-        limit: params.limit
+        page: params.page,
+        per_page: params.perPage
       },
       skipWorkspace: true
     }).then((response) => response.json());

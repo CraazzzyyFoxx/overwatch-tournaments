@@ -70,11 +70,6 @@ export interface NotificationAdminItem {
   expires_at: string | null;
 }
 
-export interface NotificationAdminPage {
-  items: NotificationAdminItem[];
-  next_cursor: string | null;
-}
-
 export interface NotificationRetireResult {
   /** Rows that were live and now are not; a repeat call answers 0. */
   retired: number;
