@@ -28,6 +28,7 @@ export default function DivisionDraftEditorPage() {
   const params = useParams<{ versionId: string }>();
   const versionId = Number(params.versionId);
   const [epoch, setEpoch] = useState(0);
+  const [carriedChoices, setCarriedChoices] = useState<Record<number, number>>({});
 
   const { isSuperuser, canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
@@ -115,7 +116,11 @@ export default function DivisionDraftEditorPage() {
       editable={version.status === "draft" && canUpdate}
       canPublish={canUpdate}
       canDelete={canDelete}
-      onReload={() => setEpoch((current) => current + 1)}
+      initialChoices={carriedChoices}
+      onReload={(carry) => {
+        setCarriedChoices(carry ?? {});
+        setEpoch((current) => current + 1);
+      }}
     />
   );
 }

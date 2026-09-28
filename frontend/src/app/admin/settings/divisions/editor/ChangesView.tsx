@@ -5,7 +5,10 @@ import type { ReactNode } from "react";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
-import { bandRangeLabel, diffBands, type Band } from "./draftReducer";
+import { diffBands, owShortLabel, rankRangeLabel, type Band } from "./draftReducer";
+
+/** Both coordinates of a band in one cell: "1900–1999 · GO1–GO3". */
+const spanLabel = (band: Band) => `${rankRangeLabel(band)} · ${owShortLabel(band)}`;
 
 export interface ChangesViewProps {
   base: Band[];
@@ -36,7 +39,8 @@ export function ChangesView({ base, bands, baseLabel }: Readonly<ChangesViewProp
   if (total === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        The draft is identical to {baseLabel}. Cut the ladder on the left to start changing it.
+        The draft is identical to {baseLabel}. Edit the ladder on the left or the divisions table
+        to start changing it.
       </p>
     );
   }
@@ -53,7 +57,7 @@ export function ChangesView({ base, bands, baseLabel }: Readonly<ChangesViewProp
             key={band.slug}
             left="—"
             right={`${band.number}. ${band.name}`}
-            detail={bandRangeLabel(band)}
+            detail={spanLabel(band)}
           />
         ))}
       </Group>
@@ -64,17 +68,17 @@ export function ChangesView({ base, bands, baseLabel }: Readonly<ChangesViewProp
             key={band.slug}
             left={`${band.number}. ${band.name}`}
             right="—"
-            detail={bandRangeLabel(band)}
+            detail={spanLabel(band)}
           />
         ))}
       </Group>
 
-      <Group title="Band moved" count={diff.moved.length}>
+      <Group title="Range or OW link moved" count={diff.moved.length}>
         {diff.moved.map(({ before, after }) => (
           <Row
             key={after.slug}
-            left={bandRangeLabel(before)}
-            right={bandRangeLabel(after)}
+            left={spanLabel(before)}
+            right={spanLabel(after)}
             detail={after.name}
           />
         ))}
@@ -86,7 +90,7 @@ export function ChangesView({ base, bands, baseLabel }: Readonly<ChangesViewProp
             key={after.slug}
             left={before.name}
             right={after.name}
-            detail={bandRangeLabel(after)}
+            detail={spanLabel(after)}
           />
         ))}
       </Group>

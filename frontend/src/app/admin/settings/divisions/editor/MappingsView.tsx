@@ -15,8 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DivisionGridReadinessSource, DivisionTier } from "@/types/workspace.types";
 
-import { autoMap, primaryTarget, unresolvedRows } from "./autoMap";
-import { bandShortLabel, type Band } from "./draftReducer";
+import { autoMap, primaryTarget, unresolvedRows, type MappingRow } from "./autoMap";
+import { rankRangeLabel, type Band } from "./draftReducer";
 
 export interface MappingSource {
   readiness: DivisionGridReadinessSource;
@@ -27,7 +27,7 @@ export interface MappingsViewProps {
   targetLabel: string;
   bands: Band[];
   sources: MappingSource[];
-  /** source tier id → chosen target tier id, for the rows AUTO cannot decide. */
+  /** source tier id → chosen target tier id: stored primaries, overlaid with this session's picks. */
   chosen: Record<number, number | undefined>;
   onChoose: (sourceTierId: number, targetTierId: number) => void;
   editable: boolean;
@@ -39,16 +39,22 @@ export interface MappingsViewProps {
   loading: boolean;
 }
 
+function matchLabel(row: MappingRow, primary: Band | null): string {
+  if (primary === null) return "SPLIT · choose";
+  const candidate = row.candidates.find((entry) => entry.band.slug === primary.slug);
+  const share = candidate ? `${Math.round(candidate.weight * 100)}%` : "no overlap";
+  const automatic = row.kind === "auto" && row.candidates[0]?.band.slug === primary.slug;
+  return `${automatic ? "AUTO" : "MANUAL"} · ${share}`;
+}
+
 /**
- * Mappings (F12b ·1) — the old `ConflictResolver`, promoted from a
- * post-failure step to a permanent view of the editor.
+ * Mappings (F12b ·1) — where the players of every version a tournament still
+ * reads land in this draft.
  *
- * Every tournament keeps the version it was played on, so each version another
- * tournament still reads needs a translation into this draft. Overlap decides
- * it: the new division holding most of an old band's ranks wins outright
- * (AUTO), and only a band cut evenly in two needs a person to say where its
- * players go (SPLIT). That is the same count as the tab badge and the
- * "Ready to publish?" blocker — one number, computed in one place.
+ * Overlap on the rank scale proposes a target (AUTO); a tie needs a person
+ * (SPLIT). Every row can be overridden: when an older version sits on another
+ * rank scale, overlap is only a guess and the organiser knows better. The
+ * unresolved count here is the tab badge and the "Ready to publish?" blocker.
  */
 export function MappingsView({
   targetLabel,
@@ -87,7 +93,7 @@ export function MappingsView({
   return (
     <div className="flex flex-col gap-6">
       {mapped.map(({ readiness, rows }) => {
-        const unresolved = unresolvedRows(rows, chosen);
+        const unresolved = unresolvedRows(rows, chosen, bands);
         return (
           <section key={readiness.version_id} className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -109,7 +115,7 @@ export function MappingsView({
                       {readiness.version_label} division
                     </th>
                     <th scope="col" className="px-3 py-2 font-medium">
-                      Band
+                      Rank range
                     </th>
                     <th scope="col" className="px-3 py-2 font-medium">
                       Players
@@ -124,13 +130,16 @@ export function MappingsView({
                 </thead>
                 <tbody>
                   {rows.map((row) => {
-                    const primary = primaryTarget(row, chosen);
+                    const primary = primaryTarget(row, chosen, bands);
                     const sourceTierId = row.source.id;
+                    const overlapBySlug = new Map(
+                      row.candidates.map((candidate) => [candidate.band.slug, candidate.weight])
+                    );
                     return (
                       <tr key={row.source.slug} className="border-b border-border last:border-b-0">
                         <td className="px-3 py-2">{row.source.name}</td>
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                          {bandShortLabel(row.source)}
+                          {rankRangeLabel(row.source)}
                         </td>
                         <td
                           className="px-3 py-2 text-muted-foreground"
@@ -139,36 +148,40 @@ export function MappingsView({
                           &mdash;
                         </td>
                         <td className="px-3 py-2">
-                          {row.kind === "split" && editable && sourceTierId !== undefined ? (
+                          {editable && sourceTierId !== undefined ? (
                             <Select
                               value={primary?.id === undefined ? undefined : String(primary.id)}
                               onValueChange={(value) => onChoose(sourceTierId, Number(value))}
                             >
                               <SelectTrigger
-                                className="h-8 w-full min-w-48"
+                                className="h-8 w-full min-w-56"
                                 aria-label={`Target division for ${row.source.name}`}
                               >
                                 <SelectValue placeholder="Choose a division" />
                               </SelectTrigger>
                               <SelectContent>
-                                {row.candidates.map((candidate) => (
-                                  <SelectItem
-                                    key={candidate.band.slug}
-                                    value={String(candidate.band.id ?? "")}
-                                  >
-                                    {candidate.band.name} ({bandShortLabel(candidate.band)})
-                                  </SelectItem>
-                                ))}
+                                {bands.map((band) => {
+                                  const weight = overlapBySlug.get(band.slug);
+                                  return (
+                                    <SelectItem key={band.slug} value={String(band.id ?? "")}>
+                                      {band.number}. {band.name} · {rankRangeLabel(band)}
+                                      {weight === undefined ? "" : ` · ${Math.round(weight * 100)}%`}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                           ) : (
                             (primary?.name ?? <span className="text-warning">unresolved</span>)
                           )}
                         </td>
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                          {row.kind === "auto"
-                            ? `AUTO · ${Math.round(row.coverage * 100)}%`
-                            : "SPLIT · choose"}
+                        <td
+                          className={cn(
+                            "px-3 py-2 font-mono text-xs",
+                            primary === null ? "text-warning" : "text-muted-foreground"
+                          )}
+                        >
+                          {matchLabel(row, primary)}
                         </td>
                       </tr>
                     );
