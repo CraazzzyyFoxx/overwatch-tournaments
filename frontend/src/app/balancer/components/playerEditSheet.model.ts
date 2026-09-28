@@ -44,31 +44,6 @@ export function normalizeRoleEntries(
   return normalized;
 }
 
-export function applyHistoryToSelectedRoles(
-  entries: BalancerPlayerRoleEntry[],
-  history: Partial<Record<BalancerRoleCode, number>> | null,
-  resolveDivision: (rankValue: number | null) => number | null
-): BalancerPlayerRoleEntry[] {
-  if (!history) {
-    return entries;
-  }
-
-  return normalizeRoleEntries(
-    entries.map((entry) => {
-      const rankValue = history[entry.role];
-      if (rankValue == null) {
-        return entry;
-      }
-
-      return {
-        ...entry,
-        rank_value: rankValue,
-        division_number: resolveDivision(rankValue)
-      };
-    })
-  );
-}
-
 export function applyHistoryPreviewToRoleEntries(
   entries: BalancerPlayerRoleEntry[],
   preview: PlayerRankHistoryPreview | null,

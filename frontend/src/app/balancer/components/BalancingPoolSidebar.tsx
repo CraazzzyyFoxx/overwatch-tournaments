@@ -20,14 +20,13 @@ import type { StatusMeta } from "@/types/registration.types";
 import type { PlayerValidationState, PoolView, PoolSortValue } from "@/components/balancer/balancer-page-helpers";
 import { ICON_BUTTON_CLASS, PANEL_CLASS, hasBlockingIssues, sortPlayerStates } from "@/components/balancer/balancer-page-helpers";
 import { buildPlayerSearchIndex } from "@/components/balancer/workspace-helpers";
-import { PoolAvailableList } from "./PoolAvailableList";
 import { PoolPlayerCompactList } from "./PoolPlayerCompactList";
 import { PoolTriageBoard } from "./PoolTriageBoard";
 import { WorkspaceBalancerConfigDialog } from "./WorkspaceBalancerConfigDialog";
 
 export type BalancingPoolSidebarHandle = {
   focusNeedsFixView: () => void;
-  focusBrowseAvailable: () => void;
+  focusExcludedView: () => void;
 };
 
 type PoolFilterOption = { value: PoolView; label: string; announcedLabel?: string; count: number };
@@ -46,17 +45,14 @@ type BalancingPoolSidebarProps = {
   onToggleCollapsed?: () => void;
   allPlayerValidationStates: PlayerValidationState[];
   applications: BalancerApplication[];
-  addableApplications: BalancerApplication[];
   registrationsById?: Map<number, AdminRegistration>;
   balancerStatusOptions?: StatusOptionGroups;
   selectedPlayerId: number | null;
   onSelectPlayer: (playerId: number | null) => void;
-  onAddFromApplication: (application: BalancerApplication) => void;
   onSetPoolMembership?: (playerId: number, isInPool: boolean) => unknown;
   onSetBalancerStatus?: (playerId: number, balancerStatus: string) => unknown;
   onBulkPoolMembership?: (playerIds: number[], isInPool: boolean) => unknown;
   onBulkBalancerStatus?: (playerIds: number[], balancerStatus: string) => unknown;
-  isAddingPlayer: boolean;
   actionsDisabled?: boolean;
   workspaceId?: number;
   workspaceBalancerConfig?: WorkspaceBalancerConfig | null;
@@ -114,17 +110,14 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       onToggleCollapsed,
       allPlayerValidationStates,
       applications,
-      addableApplications,
       registrationsById,
       balancerStatusOptions,
       selectedPlayerId,
       onSelectPlayer,
-      onAddFromApplication,
       onSetPoolMembership,
       onSetBalancerStatus,
       onBulkPoolMembership,
       onBulkBalancerStatus,
-      isAddingPlayer,
       actionsDisabled = false,
       workspaceId,
       workspaceBalancerConfig,
@@ -140,8 +133,8 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
 
     useImperativeHandle(ref, () => ({
       focusNeedsFixView: () => setPoolView("needs_fix"),
-      focusBrowseAvailable: () => {
-        setPoolView("available");
+      focusExcludedView: () => {
+        setPoolView("excluded");
         setSearchQuery("");
       },
     }));
@@ -196,8 +189,6 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       return sortPlayerStates(nextStates, poolSort);
     }, [allPlayerValidationStates, applicationsById, normalizedSearchQuery, poolSort, poolView, workspaceBalancerConfig]);
 
-    const isAvailableView = poolView === "available";
-
     const poolFilterOptions: PoolFilterOption[] = [
       { value: "all", label: "All", count: poolPlayers.length },
       { value: "ready", label: "Ready", count: readyPlayers.length },
@@ -206,7 +197,6 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
         ? [{ value: "rank_delta" as PoolView, label: "Rank Δ", announcedLabel: "Rank delta", count: rankDeltaPlayers.length }]
         : []),
       { value: "excluded", label: "Excluded", count: excludedPlayers.length },
-      { value: "available", label: "Available", count: addableApplications.length },
     ];
 
     const filteredPoolEmptyState = useMemo(() => {
@@ -225,7 +215,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       if (poolView === "rank_delta") {
         return { title: "No rank gaps flagged", description: "No pooled player exceeds the configured rank-delta threshold." };
       }
-      return { title: "No players in the pool", description: "Open the Available filter to include approved registrations." };
+      return { title: "No players in the pool", description: "Open the Excluded filter and change a player's balancer status to include them." };
     }, [normalizedSearchQuery, poolView]);
 
     const validPlayerIds = useMemo(
@@ -238,12 +228,11 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
     );
     const selectedPlayerIds = useMemo(() => Array.from(effectiveSelectedIds), [effectiveSelectedIds]);
     const selectedCount = effectiveSelectedIds.size;
-    const quickActionsDisabled = actionsDisabled || isAddingPlayer;
     const hasStatusActions =
       balancerStatusOptions != null &&
       balancerStatusOptions.system.length + balancerStatusOptions.custom.length > 0;
 
-    const visibleCount = isAvailableView ? addableApplications.length : filteredPoolPlayerStates.length;
+    const visibleCount = filteredPoolPlayerStates.length;
 
     // Stable identity keeps the memoized pool rows from re-rendering on every sidebar update.
     const toggleSelectedPlayer = useCallback((playerId: number) => {
@@ -389,23 +378,21 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
               autoComplete="off"
               className="h-9"
             />
-            {isAvailableView ? null : (
-              <Select value={poolSort} onValueChange={(value) => setPoolSort(value as PoolSortValue)}>
-                <SelectTrigger
-                  aria-label="Sort players"
-                  className="h-9 w-[10.5rem] shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-sm text-[color:var(--aqt-fg)]"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={poolSort} onValueChange={(value) => setPoolSort(value as PoolSortValue)}>
+              <SelectTrigger
+                aria-label="Sort players"
+                className="h-9 w-[10.5rem] shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-sm text-[color:var(--aqt-fg)]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* `FilterChip`/`FilterChipGroup` instead of a local pill: one chip
@@ -431,7 +418,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
             ))}
           </FilterChipGroup>
 
-          {selectedCount > 0 && !isAvailableView ? (
+          {selectedCount > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] p-1.5">
               <div className="flex items-center gap-1.5 px-1.5 text-label font-medium tabular-nums text-[color:var(--aqt-fg-muted)]">
                 <Check className="h-3.5 w-3.5 text-cyan-200" aria-hidden="true" />
@@ -452,7 +439,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={quickActionsDisabled || !onBulkPoolMembership}
+                disabled={actionsDisabled || !onBulkPoolMembership}
                 className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => runBulkPoolMembership(true)}
               >
@@ -463,7 +450,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={quickActionsDisabled || !onBulkPoolMembership}
+                disabled={actionsDisabled || !onBulkPoolMembership}
                 className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => runBulkPoolMembership(false)}
               >
@@ -472,7 +459,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
               </Button>
               <BulkStatusMenu
                 statusOptions={balancerStatusOptions}
-                disabled={quickActionsDisabled || !onBulkBalancerStatus || !hasStatusActions}
+                disabled={actionsDisabled || !onBulkBalancerStatus || !hasStatusActions}
                 onChange={runBulkBalancerStatus}
               />
               <Button
@@ -490,35 +477,24 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
         </div>
 
         <p role="status" aria-live="polite" className="sr-only">
-          {isAvailableView
-            ? `${visibleCount} available registrations`
-            : `${visibleCount} players shown`}
+          {`${visibleCount} players shown`}
         </p>
 
         <div className="mt-2.5 flex min-h-0 flex-1 flex-col">
-          {isAvailableView ? (
-            <PoolAvailableList
-              applications={addableApplications}
-              searchQuery={normalizedSearchQuery}
-              onAddFromApplication={onAddFromApplication}
-              disabled={isAddingPlayer}
-            />
-          ) : (
-            <PoolPlayerCompactList
-              playerStates={filteredPoolPlayerStates}
-              registrationsById={registrationsById}
-              statusOptions={balancerStatusOptions}
-              selectedPlayerId={selectedPlayerId}
-              selectedBulkIds={effectiveSelectedIds}
-              onToggleBulkSelection={toggleSelectedPlayer}
-              onSelectPlayer={onSelectPlayer}
-              onSetPoolMembership={onSetPoolMembership}
-              onSetBalancerStatus={onSetBalancerStatus}
-              actionsDisabled={quickActionsDisabled}
-              emptyTitle={filteredPoolEmptyState.title}
-              emptyDescription={filteredPoolEmptyState.description}
-            />
-          )}
+          <PoolPlayerCompactList
+            playerStates={filteredPoolPlayerStates}
+            registrationsById={registrationsById}
+            statusOptions={balancerStatusOptions}
+            selectedPlayerId={selectedPlayerId}
+            selectedBulkIds={effectiveSelectedIds}
+            onToggleBulkSelection={toggleSelectedPlayer}
+            onSelectPlayer={onSelectPlayer}
+            onSetPoolMembership={onSetPoolMembership}
+            onSetBalancerStatus={onSetBalancerStatus}
+            actionsDisabled={actionsDisabled}
+            emptyTitle={filteredPoolEmptyState.title}
+            emptyDescription={filteredPoolEmptyState.description}
+          />
         </div>
 
         <PoolTriageBoard
@@ -536,7 +512,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
           }}
           onSetPoolMembership={onSetPoolMembership}
           onSetBalancerStatus={onSetBalancerStatus}
-          actionsDisabled={quickActionsDisabled}
+          actionsDisabled={actionsDisabled}
         />
 
         {workspaceId != null ? (

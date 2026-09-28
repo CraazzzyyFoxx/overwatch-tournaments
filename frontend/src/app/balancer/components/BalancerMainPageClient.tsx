@@ -30,10 +30,7 @@ import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import type {
-  BalancerPlayerExportFormat,
-  BalancerRoleCode
-} from "@/types/balancer-admin.types";
+import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
 import type { BalancerConfig, BalancerConfigValue } from "@/types/balancer.types";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -111,9 +108,6 @@ export function BalancerMainPageClient() {
   const [presenceUserIds, setPresenceUserIds] = useState<number[]>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
   const [editingPlayerId, setEditingPlayerId] = useState<number | null>(null);
-  const [pendingRankHistory, setPendingRankHistory] = useState<Partial<
-    Record<BalancerRoleCode, number>
-  > | null>(null);
   const [excludeInvalidPlayers, setExcludeInvalidPlayers] = useState(false);
   const [collapsedTeamIds, setCollapsedTeamIds] = useState<number[]>([]);
   const [isPoolSidebarCollapsed, setIsPoolSidebarCollapsed] = useState(false);
@@ -193,7 +187,6 @@ export function BalancerMainPageClient() {
     setSelectedPlayerId(null);
     dispatchJob({ type: "clear" });
     setEditingPlayerId(null);
-    setPendingRankHistory(null);
     setExcludeInvalidPlayers(false);
     setIsPoolSidebarCollapsed(false);
     sidebarPanelRef.current?.expand();
@@ -255,7 +248,6 @@ export function BalancerMainPageClient() {
     registrationsById,
     applications,
     applicationsById,
-    addableApplications,
     allPlayerValidationStates,
     readyPlayers,
     poolPlayers,
@@ -428,7 +420,6 @@ export function BalancerMainPageClient() {
   });
 
   const {
-    addPlayerMutation,
     updatePlayerMutation,
     removePlayerMutation,
     setPlayerPoolMembershipMutation,
@@ -445,8 +436,6 @@ export function BalancerMainPageClient() {
     workspaceId,
     queryClient,
     dispatchJob,
-    setSelectedPlayerId,
-    setPendingRankHistory,
     setEditingPlayerId,
     setVariants,
     setActiveVariantId,
@@ -485,9 +474,9 @@ export function BalancerMainPageClient() {
     sidebarRef.current?.focusNeedsFixView();
   }, []);
 
-  const handleFocusBrowseAvailable = useCallback(() => {
+  const handleFocusExcludedView = useCallback(() => {
     setIsPoolSidebarCollapsed(false);
-    sidebarRef.current?.focusBrowseAvailable();
+    sidebarRef.current?.focusExcludedView();
   }, []);
   const handleToggleSidebarCollapsed = useCallback(() => {
     const panel = sidebarPanelRef.current;
@@ -672,17 +661,14 @@ export function BalancerMainPageClient() {
       onToggleCollapsed={isWideLayout ? handleToggleSidebarCollapsed : undefined}
       allPlayerValidationStates={enrichedPlayerValidationStates}
       applications={applications}
-      addableApplications={addableApplications}
       registrationsById={registrationsById}
       balancerStatusOptions={playerStatusOptions.balancer}
       selectedPlayerId={selectedPlayerId}
       onSelectPlayer={handleOpenPlayerEditor}
-      onAddFromApplication={(application) => addPlayerMutation.mutate(application)}
       onSetPoolMembership={handleSetPoolMembership}
       onSetBalancerStatus={handleSetBalancerStatus}
       onBulkPoolMembership={handleBulkPoolMembership}
       onBulkBalancerStatus={handleBulkBalancerStatus}
-      isAddingPlayer={addPlayerMutation.isPending}
       actionsDisabled={quickPoolActionsPending}
       workspaceId={workspaceId ?? undefined}
       workspaceBalancerConfig={workspaceBalancerConfig}
@@ -771,7 +757,7 @@ export function BalancerMainPageClient() {
         onChangePayload={handleBalancePayloadChange}
         onSelectPlayer={handleOpenPlayerEditor}
         onToggleTeam={handleToggleTeam}
-        onBrowseAvailable={handleFocusBrowseAvailable}
+        onBrowseExcluded={handleFocusExcludedView}
         onReviewConflicts={handleFocusNeedsFixView}
         onRunBalance={() => runBalanceMutation.mutate()}
       />
@@ -807,13 +793,11 @@ export function BalancerMainPageClient() {
           onOpenChange={(open) => {
             if (!open) {
               setEditingPlayerId(null);
-              setPendingRankHistory(null);
             }
           }}
           saving={updatePlayerMutation.isPending}
           onSave={(playerId, payload) => updatePlayerMutation.mutate({ playerId, payload })}
           onRemove={(playerId) => removePlayerMutation.mutate(playerId)}
-          rankHistory={pendingRankHistory}
         />
       ) : null}
 

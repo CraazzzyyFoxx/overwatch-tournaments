@@ -2,7 +2,7 @@
 
 import { memo, useRef, type MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Circle, Pencil, PlusCircle, ShieldX } from "lucide-react";
+import { Check, Circle, Pencil, ShieldX } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -187,25 +187,21 @@ const PoolPlayerRow = memo(function PoolPlayerRow({
 
                 <BattleTagCopyButton battleTag={primaryBattleTag} />
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled={actionsDisabled || !onSetPoolMembership}
-                  className={cn(
-                    "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
-                    !player.is_in_pool && "text-emerald-200/70",
-                  )}
-                  aria-label={
-                    player.is_in_pool
-                      ? `Exclude ${primaryBattleTag} from the balancer`
-                      : `Include ${primaryBattleTag} in the balancer`
-                  }
-                  title={player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}
-                  onClick={() => onSetPoolMembership?.(player.id, !player.is_in_pool)}
-                >
-                  {player.is_in_pool ? <ShieldX className="h-3.5 w-3.5" /> : <PlusCircle className="h-3.5 w-3.5" />}
-                </Button>
+                {/* Exclude only: an excluded player comes back through a balancer status change. */}
+                {player.is_in_pool ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={actionsDisabled || !onSetPoolMembership}
+                    className="h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
+                    aria-label={`Exclude ${primaryBattleTag} from the balancer`}
+                    title="Exclude from balancer"
+                    onClick={() => onSetPoolMembership?.(player.id, false)}
+                  >
+                    <ShieldX className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
               </div>
             </div>
 
@@ -237,12 +233,12 @@ const PoolPlayerRow = memo(function PoolPlayerRow({
           Edit full profile
         </ContextMenuItem>
         <BattleTagContextMenuItems battleTags={battleTags} />
-        {onSetPoolMembership ? (
+        {onSetPoolMembership && player.is_in_pool ? (
           <>
             <ContextMenuSeparator />
-            <ContextMenuItem disabled={actionsDisabled} onClick={() => onSetPoolMembership(player.id, !player.is_in_pool)}>
-              {player.is_in_pool ? <ShieldX className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
-              {player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}
+            <ContextMenuItem disabled={actionsDisabled} onClick={() => onSetPoolMembership(player.id, false)}>
+              <ShieldX className="h-4 w-4" />
+              Exclude from balancer
             </ContextMenuItem>
           </>
         ) : null}

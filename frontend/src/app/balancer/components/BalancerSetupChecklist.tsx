@@ -26,7 +26,7 @@ type BalancerSetupChecklistProps = {
   invalidPlayerCount: number;
   canRunBalance: boolean;
   isRunPending: boolean;
-  onBrowseAvailable: () => void;
+  onBrowseExcluded: () => void;
   onReviewConflicts: () => void;
   onRunBalance: () => void;
 };
@@ -106,7 +106,7 @@ export function BalancerSetupChecklist({
   invalidPlayerCount,
   canRunBalance,
   isRunPending,
-  onBrowseAvailable,
+  onBrowseExcluded,
   onReviewConflicts,
   onRunBalance,
 }: Readonly<BalancerSetupChecklistProps>) {
@@ -123,11 +123,11 @@ export function BalancerSetupChecklist({
           detail={
             hasPoolPlayers
               ? `${poolPlayerCount} player${poolPlayerCount !== 1 ? "s" : ""} included`
-              : "Use search to bring approved registrations into the pool"
+              : "Change a registration's balancer status to bring it into the pool"
           }
           action={
             !hasPoolPlayers
-              ? { label: "Browse available", onClick: onBrowseAvailable }
+              ? { label: "Browse excluded", onClick: onBrowseExcluded }
               : undefined
           }
         />

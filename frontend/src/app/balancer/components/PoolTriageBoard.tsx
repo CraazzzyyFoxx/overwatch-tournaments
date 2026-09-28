@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
-import { GripVertical, Pencil, PlusCircle, ShieldX } from "lucide-react";
+import { GripVertical, Pencil, ShieldX } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -118,7 +118,8 @@ function TriagePlayerCard({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `pool-player:${state.player.id}`,
     data: { playerId: state.player.id, lane },
-    disabled: actionsDisabled || !onSetPoolMembership,
+    // Dragging out of Excluded would include the player; that only happens through a status change.
+    disabled: actionsDisabled || !onSetPoolMembership || !state.player.is_in_pool,
   });
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -149,16 +150,18 @@ function TriagePlayerCard({
           title={primaryBattleTag}
         >
           <div className="flex items-start gap-2">
-            <button
-              type="button"
-              data-card-action
-              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
-              {...attributes}
-              {...listeners}
-            >
-              <GripVertical className="h-3.5 w-3.5" />
-              <span className="sr-only">Drag player</span>
-            </button>
+            {state.player.is_in_pool ? (
+              <button
+                type="button"
+                data-card-action
+                className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+                <span className="sr-only">Drag player</span>
+              </button>
+            ) : null}
 
             <div className="min-w-0 flex-1">
               <button
@@ -226,17 +229,19 @@ function TriagePlayerCard({
             />
             <div className="flex items-center gap-1">
               <BattleTagCopyButton battleTag={primaryBattleTag} className="h-7 w-7" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={actionsDisabled || !onSetPoolMembership}
-                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
-                onClick={() => onSetPoolMembership?.(state.player.id, !state.player.is_in_pool)}
-              >
-                {state.player.is_in_pool ? <ShieldX className="mr-1 h-3 w-3" /> : <PlusCircle className="mr-1 h-3 w-3" />}
-                {state.player.is_in_pool ? "Exclude" : "Include"}
-              </Button>
+              {state.player.is_in_pool ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={actionsDisabled || !onSetPoolMembership}
+                  className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
+                  onClick={() => onSetPoolMembership?.(state.player.id, false)}
+                >
+                  <ShieldX className="mr-1 h-3 w-3" />
+                  Exclude
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -248,12 +253,12 @@ function TriagePlayerCard({
           Edit full profile
         </ContextMenuItem>
         <BattleTagContextMenuItems battleTags={battleTags} />
-        {onSetPoolMembership ? (
+        {onSetPoolMembership && state.player.is_in_pool ? (
           <>
             <ContextMenuSeparator />
-            <ContextMenuItem disabled={actionsDisabled} onClick={() => onSetPoolMembership(state.player.id, !state.player.is_in_pool)}>
-              {state.player.is_in_pool ? <ShieldX className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
-              {state.player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}
+            <ContextMenuItem disabled={actionsDisabled} onClick={() => onSetPoolMembership(state.player.id, false)}>
+              <ShieldX className="h-4 w-4" />
+              Exclude from balancer
             </ContextMenuItem>
           </>
         ) : null}
@@ -405,7 +410,7 @@ export function PoolTriageBoard({
         <DialogHeader className="shrink-0 border-b border-[color:var(--aqt-border)] px-5 py-4">
           <DialogTitle className="text-base text-[color:var(--aqt-fg)]">Balancing Pool triage</DialogTitle>
           <DialogDescription className="text-xs text-[color:var(--aqt-fg-dim)]">
-            Drag players to include or exclude them. Need Fix and Ready are computed from validation, so included players settle into the correct lane automatically.
+            Drag players into Excluded to remove them from the run; excluded players come back through a balancer status change. Need Fix and Ready are computed from validation, so included players settle into the correct lane automatically.
           </DialogDescription>
         </DialogHeader>
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>

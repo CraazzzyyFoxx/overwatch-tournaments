@@ -8,7 +8,6 @@ import {
   BalancerRosterKey,
   InternalBalancePayload,
   InternalBalancePlayer,
-  RegistrationRankAutofillResponse,
   SavedBalance
 } from "@/types/balancer-admin.types";
 import { BalanceResponse, BalancerConfig, PlayerData } from "@/types/balancer.types";
@@ -729,28 +728,4 @@ export async function fetchPlayerRankHistoryPreview(
   } catch {
     return null;
   }
-}
-
-/**
- * Build a per-role rank map from a single registration's autofill preview. The backend already
- * applied the priority chain (e.g. balancer → analytics → OW for the balancer-first mode), so we
- * just collect the resolved `parsed_rank_value` per role. Returns null when nothing was resolved.
- */
-export function buildRankHistoryFromAutofillPreview(
-  preview: RegistrationRankAutofillResponse,
-  registrationId: number
-): Partial<Record<BalancerRoleCode, number>> | null {
-  const player = preview.players.find((entry) => entry.registration_id === registrationId);
-  if (!player) {
-    return null;
-  }
-
-  const history: Partial<Record<BalancerRoleCode, number>> = {};
-  for (const role of player.roles) {
-    if (role.parsed_rank_value != null) {
-      history[role.role] = role.parsed_rank_value;
-    }
-  }
-
-  return Object.keys(history).length > 0 ? history : null;
 }

@@ -28,8 +28,7 @@ import { cn } from "@/lib/utils";
 import type {
   AdminRegistration,
   BalancerPlayerRecord,
-  BalancerPlayerUpdateInput,
-  BalancerRoleCode
+  BalancerPlayerUpdateInput
 } from "@/types/balancer-admin.types";
 import { getRegistrationBattleTags } from "@/components/balancer/balancer-page-helpers";
 import { BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
@@ -59,7 +58,6 @@ type PlayerEditModalProps = {
   onSave: (playerId: number, payload: BalancerPlayerUpdateInput) => void;
   onRemove?: (playerId: number) => void;
   saving?: boolean;
-  rankHistory?: Partial<Record<BalancerRoleCode, number>> | null;
 };
 
 export function PlayerEditModal({
@@ -70,10 +68,9 @@ export function PlayerEditModal({
   onOpenChange,
   onSave,
   onRemove,
-  saving = false,
-  rankHistory = null
+  saving = false
 }: Readonly<PlayerEditModalProps>) {
-  const form = usePlayerEditForm({ player, registration, rankHistory, open, onSave });
+  const form = usePlayerEditForm({ player, registration, open, onSave });
   const { roleEntries, history } = form;
 
   const battleTags = getRegistrationBattleTags(registration, player.battle_tag);

@@ -29,7 +29,6 @@ import {
   MULTIPLE_WORKSPACES_COOKIE,
   ROLE_OPTIONS,
   applyHistoryPreviewToRoleEntries,
-  applyHistoryToSelectedRoles,
   normalizeRoleEntries
 } from "./playerEditSheet.model";
 
@@ -52,8 +51,6 @@ export interface PlayerRankHistoryState {
 interface UsePlayerEditFormInput {
   player: BalancerPlayerRecord;
   registration: AdminRegistration | null;
-  /** Ranks pre-resolved by the caller (the quick-edit flow), applied on open. */
-  rankHistory: Partial<Record<BalancerRoleCode, number>> | null;
   /** Sub-roles are only worth fetching while the sheet is on screen. */
   open: boolean;
   onSave: (playerId: number, payload: BalancerPlayerUpdateInput) => void;
@@ -66,7 +63,6 @@ interface UsePlayerEditFormInput {
 export function usePlayerEditForm({
   player,
   registration,
-  rankHistory,
   open,
   onSave
 }: UsePlayerEditFormInput) {
@@ -162,8 +158,8 @@ export function usePlayerEditForm({
     setHistoryPreviewRequested(false);
     setHistoryLoadError(null);
     setPinToTournament(false);
-    setRoleEntries(applyHistoryToSelectedRoles(normalized, rankHistory, resolveDivision));
-  }, [player, registration, rankHistory, divisionGrid]);
+    setRoleEntries(normalized);
+  }, [player, registration]);
 
   const readHistory = async (workspaceValue: string) => {
     setLoadingHistory(true);

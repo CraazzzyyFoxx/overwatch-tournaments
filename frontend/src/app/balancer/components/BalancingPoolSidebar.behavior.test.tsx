@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { BalancerApplication, BalancerPlayerRecord } from "@/types/balancer-admin.types";
+import type { BalancerPlayerRecord } from "@/types/balancer-admin.types";
 import type { PlayerValidationState } from "@/components/balancer/balancer-page-helpers";
 import { BalancingPoolSidebar } from "./BalancingPoolSidebar";
 
@@ -41,28 +41,6 @@ function player(id: number, battleTag: string, overrides: Partial<BalancerPlayer
   };
 }
 
-function application(id: number, battleTag: string): BalancerApplication {
-  return {
-    id,
-    tournament_id: 80,
-    tournament_sheet_id: 1,
-    battle_tag: battleTag,
-    battle_tag_normalized: battleTag.toLowerCase(),
-    smurf_tags_json: [],
-    twitch_nick: null,
-    discord_nick: null,
-    stream_pov: false,
-    last_tournament_text: null,
-    primary_role: "damage",
-    additional_roles_json: [],
-    notes: null,
-    submitted_at: null,
-    synced_at: "2026-03-14T00:00:00Z",
-    is_active: true,
-    player: null,
-  };
-}
-
 const POOL_STATES: PlayerValidationState[] = [
   { player: player(1, "Aria#1111"), issues: [] },
   { player: player(2, "Borys#2222"), issues: [] },
@@ -70,12 +48,10 @@ const POOL_STATES: PlayerValidationState[] = [
     player: player(3, "Cyrus#3333", { role_entries_json: [] }),
     issues: [{ code: "missing_ranked_role", message: "No ranked roles configured" }],
   },
+  { player: player(4, "Dita#4444", { is_in_pool: false }), issues: [] },
 ];
 
-const AVAILABLE = [application(90, "Dita#9090"), application(91, "Egor#9191")];
-
 const onSelectPlayer = vi.fn();
-const onAddFromApplication = vi.fn();
 
 function tick() {
   const { promise, resolve } = Promise.withResolvers<void>();
@@ -90,12 +66,9 @@ async function mount() {
     createRoot(container).render(
       <BalancingPoolSidebar
         allPlayerValidationStates={POOL_STATES}
-        applications={AVAILABLE}
-        addableApplications={AVAILABLE}
+        applications={[]}
         selectedPlayerId={null}
         onSelectPlayer={onSelectPlayer}
-        onAddFromApplication={onAddFromApplication}
-        isAddingPlayer={false}
       />,
     );
   });
@@ -133,7 +106,6 @@ function pill(scope: Element, label: string) {
 beforeEach(() => {
   document.body.innerHTML = "";
   onSelectPlayer.mockReset();
-  onAddFromApplication.mockReset();
 });
 
 describe("BalancingPoolSidebar", () => {
@@ -151,19 +123,14 @@ describe("BalancingPoolSidebar", () => {
     expect(scope.querySelectorAll("input[type='search']")).toHaveLength(1);
   });
 
-  it("reaches available registrations through a filter pill and keeps the search applied", async () => {
+  it("offers no one-click include for an excluded player", async () => {
     const scope = await mount();
-    const input = searchInput(scope);
-    if (!input) throw new Error("Expected the pool search field");
 
-    await type(input, "Egor");
-    await click(pill(scope, "Available"));
+    expect(pill(scope, "Available")).toBeUndefined();
+    await click(pill(scope, "Excluded"));
 
-    expect(scope.textContent).toContain("Egor#9191");
-    expect(scope.textContent).not.toContain("Dita#9090");
-    // The old "Pool / Add" mode toggle duplicated this pill and wiped the query on switch.
-    expect(input.value).toBe("Egor");
-    expect(pill(scope, "Add")).toBeUndefined();
+    expect(scope.textContent).toContain("Dita#4444");
+    expect(scope.querySelector("[aria-label^='Include']")).toBeNull();
   });
 
   it("exposes the active filter as pressed state rather than colour alone", async () => {
