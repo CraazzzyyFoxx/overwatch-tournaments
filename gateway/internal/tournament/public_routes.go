@@ -39,6 +39,12 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/act", Queue: "rpc.tournament.captain_pick_ban_act", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/elect-opener", Queue: "rpc.tournament.captain_pick_ban_elect_opener", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/undo", Queue: "rpc.tournament.captain_pick_ban_undo", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
+	// Ruleset v2 (docs/plans/2026-09-28-pick-ban-constructor.md §8): `submit`
+	// replaces a BLIND step's whole draft (act stays for open steps), `dispute`
+	// unilaterally re-opens the last revealed blind step. Both are captain
+	// writes, so AuthRequired like act.
+	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/submit", Queue: "rpc.tournament.captain_pick_ban_submit", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/dispute", Queue: "rpc.tournament.captain_pick_ban_dispute", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
 
 	// chat.py — the pregame room's chat, on the shared chat tables
 	// (docs/plans/2026-09-21-shared-room-chat.md). The GET is AuthOptional, not
@@ -68,6 +74,11 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	// the path id as `data["id"]` (see its module docstring). Declaring it as
 	// `Path` left `data["id"]` unset and 422'd every call.
 	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/pick-ban-configs", Queue: "rpc.tournament.get_pick_ban_configs", IDParam: "tournament_id", Auth: edge.AuthOptional},
+	// The ruleset constructor's catalog: the rules GRAMMAR plus the built-in
+	// presets, not any one tournament's config, so it carries no path param and
+	// no visibility gate. AuthOptional rather than public-only for consistency
+	// with the reads around it — the handler ignores the identity.
+	{Method: "GET", Pattern: "/api/v1/pick-ban-rules/catalog", Queue: "rpc.tournament.pick_ban_rules_catalog", Auth: edge.AuthOptional},
 
 	// The public "Teams" roster. AuthOptional like the participants list: anyone
 	// may see the field. Invites are omitted server-side, so this cannot leak who

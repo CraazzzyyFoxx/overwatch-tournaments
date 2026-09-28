@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from shared.core import enums
 from shared.models.tournament.pick_ban import PickBanConfig
 from src import models
@@ -42,10 +44,18 @@ def _bracket_seeds(stage, sorted_items, lb_item):
 
 def _pick_ban_config_signature(
     config: PickBanConfig,
-) -> tuple[tuple, tuple, enums.MapVetoMode, enums.FirstBanRotation | None, tuple]:
+) -> tuple[str, tuple, enums.MapVetoMode, enums.FirstBanRotation | None, tuple]:
+    """What makes two pick-ban configs "the same rules" for a stage merge.
+
+    The rules half is the ruleset document, canonically dumped: it is a nested
+    tree, so ``==`` on the dicts would be key-order-insensitive but unhashable,
+    and this value goes into a ``set``. ``sort_keys`` makes two configs that were
+    authored in a different field order compare equal, which is what an organizer
+    means by "identical rules".
+    """
     rotation = config.first_ban_rotation if config.mode == enums.MapVetoMode.SLOTS else None
     return (
-        tuple(config.sequence_json or []),
+        json.dumps(config.ruleset_json or {}, sort_keys=True, separators=(",", ":")),
         tuple(entry.item_id for entry in config.items),
         config.mode,
         rotation,

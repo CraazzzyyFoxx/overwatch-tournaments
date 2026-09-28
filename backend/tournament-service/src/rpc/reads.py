@@ -15,6 +15,7 @@ from faststream.rabbit.annotations import RabbitMessage
 
 from shared.core.enums import PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain import pick_ban_rules as pbr
 from shared.repository import TournamentRepository
 from shared.rpc.identity import rehydrate_user_optional
 from shared.rpc.query import build_query_model
@@ -27,7 +28,6 @@ from src.rpc._helpers import _bool, _q, _q1, _read, _require_id
 from src.services import visibility_resolvers
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_config
-from src.services.encounter import pick_ban_session as pick_ban_session_service
 from src.services.standings import flows as standings_flows
 from src.services.team import flows as team_flows
 from src.services.tournament import flows as tournament_flows
@@ -310,6 +310,24 @@ def register(broker: Any, logger: Any) -> None:
             configs = await pick_ban_config.pick_ban_config_service.list_configs(
                 session, tournament_id=tournament_id, kind=PickBanKind.MAP
             )
-            return {"configs": [pick_ban_session_service.serialize_pick_ban_config(config) for config in configs]}
+            return {"configs": [pick_ban_config.serialize_pick_ban_config(config) for config in configs]}
+
+        return await _read(logger, op)
+
+    @broker.subscriber("rpc.tournament.pick_ban_rules_catalog")
+    async def _pick_ban_rules_catalog(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            # No tournament, no workspace, no gate: the catalog is the ruleset
+            # GRAMMAR (which leaves exist, which params they take, which groups
+            # are selectable) plus the built-in presets. It describes the engine,
+            # not anyone's tournament, and the constructor needs it before a
+            # config exists to attach it to. The only DB read is the map-group
+            # vocabulary, which is public catalog data.
+            return pbr.catalog(
+                groups={
+                    "hero": await pick_ban_config.group_vocabulary(session, PickBanKind.HERO),
+                    "map": await pick_ban_config.group_vocabulary(session, PickBanKind.MAP),
+                }
+            )
 
         return await _read(logger, op)

@@ -25,10 +25,30 @@ from shared.core.enums import (  # noqa: E402
     FirstPickRule,
     MapVetoMode,
     PickBanKind,
-    PickBanNoRepeatScope,
 )
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.domain import pick_ban_rules as pbr  # noqa: E402
 from src.services.scrim import service as scrim  # noqa: E402
+
+#: Gamemode slugs the map kind's ``item_group`` vocabulary is read from; the
+#: custom-pool validator asks the catalog for them before it trusts a ruleset.
+GAMEMODE_SLUGS = ["control", "escort", "hybrid", "push"]
+
+
+def _ruleset(tokens: list[str], *, mode: str = "pool", kind: str = "map") -> dict:
+    """A v2 ruleset spelled as the v1 tokens it converts from."""
+    return pbr.ruleset_from_v1(
+        kind=kind,
+        mode=mode,
+        preset="bracket" if mode == "slots" else "custom",
+        sequence=tokens,
+        no_repeat_scope="none",
+        unique_attribute=None,
+        turn_timer_seconds=45,
+    ).to_json()
+
+
+MAP_RULESET = _ruleset(["ban_first", "ban_second", "decider"])
 
 WORKSPACE_ID = 5
 
@@ -95,6 +115,11 @@ class _ScalarSession:
         """Only the advisory lock goes through ``execute``; its result is unread."""
         return None
 
+    async def scalars(self, _statement: Any) -> Any:
+        """The item-group vocabulary read (``pick_ban_config.group_vocabulary``),
+        which is iterated rather than popped from the scalar queue."""
+        return list(GAMEMODE_SLUGS)
+
     async def flush(self) -> None:
         self.flushes += 1
 
@@ -155,12 +180,7 @@ def _source_config(*, mode: MapVetoMode = MapVetoMode.POOL) -> Any:
         mode=mode,
         first_pick_rule=FirstPickRule.HIGHER_SEED,
         first_ban_rotation=FirstBanRotation.FIXED,
-        turn_timer_seconds=45,
-        preset="bracket",
-        sequence_json=["ban_first", "ban_second", "decider"],
-        no_repeat_scope=PickBanNoRepeatScope.NONE,
-        unique_attribute_per_side_per_round="role",
-        allow_protect=True,
+        ruleset_json=_ruleset(["ban_first", "ban_second", "decider"]),
         items=[
             SimpleNamespace(item_id=30, sort_order=2),
             SimpleNamespace(item_id=10, sort_order=0),
@@ -181,8 +201,8 @@ class CopyingARoundReproducesItsPool(IsolatedAsyncioTestCase):
     """A copied pool must play identically to the round it came from.
 
     Every rule the engine reads off a config is checked field by field: a silent
-    omission here (say ``allow_protect`` or ``no_repeat_scope``) produces a room
-    that looks right and plays by different rules than the round it advertises.
+    omission here (the ruleset, the rotation) produces a room that looks right
+    and plays by different rules than the round it advertises.
     """
 
     def setUp(self) -> None:
@@ -197,24 +217,18 @@ class CopyingARoundReproducesItsPool(IsolatedAsyncioTestCase):
         self.assertIsNone(self.clone.round)
 
     def test_every_rule_field_is_carried(self) -> None:
-        for field in (
-            "kind",
-            "mode",
-            "first_pick_rule",
-            "first_ban_rotation",
-            "turn_timer_seconds",
-            "preset",
-            "no_repeat_scope",
-            "unique_attribute_per_side_per_round",
-            "allow_protect",
-        ):
+        for field in ("kind", "mode", "first_pick_rule", "first_ban_rotation"):
             self.assertEqual(getattr(self.source, field), getattr(self.clone, field), field)
-        self.assertEqual(self.source.sequence_json, self.clone.sequence_json)
+        self.assertEqual(self.source.ruleset_json, self.clone.ruleset_json)
 
-    def test_the_sequence_is_copied_not_shared(self) -> None:
-        """A room editing its own sequence must not rewrite the tournament's."""
-        self.clone.sequence_json.append("pick_first")
-        self.assertEqual(["ban_first", "ban_second", "decider"], self.source.sequence_json)
+    def test_the_ruleset_is_deep_copied_not_shared(self) -> None:
+        """A room editing its own rules must not rewrite the tournament's, and a
+        shallow copy would still share every phase and step dict."""
+        self.clone.ruleset_json["phases"][0]["steps"].append({"id": "x", "action": "ban", "actors": "first"})
+        self.clone.ruleset_json["timer_seconds"] = 5
+
+        self.assertEqual(3, len(self.source.ruleset_json["phases"][0]["steps"]))
+        self.assertEqual(45, self.source.ruleset_json["timer_seconds"])
 
     def test_items_arrive_in_sort_order(self) -> None:
         self.assertEqual([10, 20, 30], [item.item_id for item in self.clone.items])
@@ -230,69 +244,85 @@ class ACustomPoolIsValidatedBeforeItIsProvisioned(IsolatedAsyncioTestCase):
     """A room provisioned into an invalid config would strand its captains.
 
     The engine refuses to open a session for a bad config, and a scrim has no
-    organizer to fix it — so the refusal has to happen at create time.
+    organizer to fix it — so the refusal has to happen at create time, through
+    the SAME validator the organizer's config editor runs.
     """
 
-    def test_pool_mode_rejects_slots(self) -> None:
+    async def _build(self, payload: dict) -> Any:
+        return await scrim._config_from_input(_ScalarSession(), payload, tournament_id=99, stage_id=140)
+
+    async def test_pool_mode_rejects_slots(self) -> None:
         with self.assertRaises(HTTPException) as ctx:
-            scrim._config_from_input(
-                {"kind": "map", "mode": "pool", "slots": [{"candidates": [1, 2]}]},
-                tournament_id=99,
-                stage_id=140,
+            await self._build(
+                {"kind": "map", "mode": "pool", "ruleset": MAP_RULESET, "slots": [{"candidates": [1, 2]}]}
             )
         self.assertEqual(422, ctx.exception.status_code)
 
-    def test_slots_mode_rejects_a_flat_pool(self) -> None:
+    async def test_slots_mode_rejects_a_flat_pool(self) -> None:
         with self.assertRaises(HTTPException) as ctx:
-            scrim._config_from_input(
-                {"kind": "map", "mode": "slots", "item_ids": [1, 2], "slots": [{"candidates": [1, 2]}]},
-                tournament_id=99,
-                stage_id=140,
+            await self._build(
+                {
+                    "kind": "map",
+                    "mode": "slots",
+                    "ruleset": _ruleset([], mode="slots"),
+                    "item_ids": [1, 2],
+                    "slots": [{"candidates": [1, 2]}],
+                }
             )
         self.assertEqual(422, ctx.exception.status_code)
 
-    def test_an_unplayable_flat_sequence_is_refused(self) -> None:
-        """Delegated to the engine's own validator, not re-implemented here."""
-        with self.assertRaises(HTTPException):
-            scrim._config_from_input(
-                {"kind": "map", "mode": "pool", "sequence": ["nonsense_token"], "item_ids": [1, 2]},
-                tournament_id=99,
-                stage_id=140,
+    async def test_an_unplayable_ruleset_is_refused(self) -> None:
+        """Delegated to the engine's own validator, not re-implemented here: a
+        map phase that never picks or deciders settles no map."""
+        with self.assertRaises(HTTPException) as ctx:
+            await self._build(
+                {
+                    "kind": "map",
+                    "mode": "pool",
+                    "ruleset": _ruleset(["ban_first", "ban_second"]),
+                    "item_ids": [1, 2, 3],
+                }
             )
+        self.assertEqual(422, ctx.exception.status_code)
+        self.assertIn("map_phase_without_pick", [issue["code"] for issue in ctx.exception.detail["issues"]])
 
-    def test_absent_fields_leave_server_defaults_alone(self) -> None:
-        """Writing ``None`` over ``first_pick_rule``/``no_repeat_scope``/
-        ``first_ban_rotation`` would violate their NOT NULL, so a payload that
-        omits them must not touch them."""
-        config = scrim._config_from_input(
-            {"kind": "map", "mode": "pool", "sequence": ["ban_first", "ban_second", "decider"], "item_ids": [1, 2, 3]},
-            tournament_id=99,
-            stage_id=140,
-        )
-        self.assertIsNone(config.first_pick_rule)
-        self.assertIsNone(config.first_ban_rotation)
-        self.assertIsNone(config.no_repeat_scope)
-
-    def test_a_supplied_rule_is_applied(self) -> None:
-        config = scrim._config_from_input(
+    async def test_the_stored_ruleset_is_normalized(self) -> None:
+        config = await self._build(
             {
                 "kind": "map",
                 "mode": "pool",
-                "sequence": ["ban_first", "ban_second", "decider"],
+                "ruleset": {
+                    "version": 2,
+                    "phases": [{"id": "m", "when": {}, "steps": [{"id": "p", "action": "pick", "actors": "first"}]}],
+                },
                 "item_ids": [1, 2, 3],
-                "no_repeat_scope": PickBanNoRepeatScope.ENCOUNTER_SAME_SIDE.value,
-            },
-            tournament_id=99,
-            stage_id=140,
+            }
         )
-        self.assertEqual(PickBanNoRepeatScope.ENCOUNTER_SAME_SIDE.value, config.no_repeat_scope)
+        self.assertEqual("random_fill", config.ruleset_json["on_timeout"])
+        self.assertEqual(1, config.ruleset_json["phases"][0]["steps"][0]["count"])
 
-    def test_items_are_numbered_in_submitted_order(self) -> None:
-        config = scrim._config_from_input(
-            {"kind": "map", "mode": "pool", "sequence": ["ban_first", "ban_second", "decider"], "item_ids": [7, 3, 5]},
-            tournament_id=99,
-            stage_id=140,
+    async def test_absent_fields_leave_server_defaults_alone(self) -> None:
+        """Writing ``None`` over ``first_pick_rule``/``first_ban_rotation`` would
+        violate their NOT NULL, so a payload that omits them must not touch
+        them."""
+        config = await self._build({"kind": "map", "mode": "pool", "ruleset": MAP_RULESET, "item_ids": [1, 2, 3]})
+        self.assertIsNone(config.first_pick_rule)
+        self.assertIsNone(config.first_ban_rotation)
+
+    async def test_a_supplied_rule_is_applied(self) -> None:
+        config = await self._build(
+            {
+                "kind": "map",
+                "mode": "pool",
+                "ruleset": MAP_RULESET,
+                "item_ids": [1, 2, 3],
+                "first_ban_rotation": FirstBanRotation.ALTERNATE.value,
+            }
         )
+        self.assertEqual(FirstBanRotation.ALTERNATE.value, config.first_ban_rotation)
+
+    async def test_items_are_numbered_in_submitted_order(self) -> None:
+        config = await self._build({"kind": "map", "mode": "pool", "ruleset": MAP_RULESET, "item_ids": [7, 3, 5]})
         self.assertEqual([(7, 0), (3, 1), (5, 2)], [(i.item_id, i.sort_order) for i in config.items])
 
 

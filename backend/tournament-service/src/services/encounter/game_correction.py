@@ -25,7 +25,6 @@ from shared.core import http_status as status
 from shared.core.enums import (
     EncounterGameResultSource,
     EncounterGameState,
-    MapPickSide,
     PickBanKind,
 )
 from shared.core.errors import ApiExc
@@ -34,14 +33,14 @@ from shared.domain import pick_ban_engine as engine
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.pick_ban import PickBanSession
-from shared.repository import PickBanEntryRepository
+from shared.repository import PickBanEntryRepository, PickBanSubmissionRepository
 from shared.services.realtime import Resource, Scope, emit
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.map_report import MapReportService, map_report_service
 from src.services.encounter.pick_ban_session import (
     PickBanSessionService,
-    build_round_sequence,
     pick_ban_session_service,
+    resolved_steps,
     rounds_are_progressive,
 )
 from src.services.encounter.realtime_commit import emit_pick_ban_update
@@ -58,11 +57,13 @@ class GameCorrectionService:
         reports: MapReportService = map_report_service,
         sessions: PickBanSessionService = pick_ban_session_service,
         entry_repo: PickBanEntryRepository = PickBanEntryRepository(),
+        submission_repo: PickBanSubmissionRepository = PickBanSubmissionRepository(),
     ) -> None:
         self.games = games
         self.reports = reports
         self.sessions = sessions
         self.entry_repo = entry_repo
+        self.submission_repo = submission_repo
 
     # -- the dependent tail ------------------------------------------------
     async def _downstream_started(
@@ -96,12 +97,10 @@ class GameCorrectionService:
         the corrected outcome. Returns whether this session had such a round to
         scrap at all.
 
-        Both halves of the round have to go: its candidate entries AND the step
-        tokens it appended to ``resolved_sequence_json``, because
-        ``engine.get_current_step`` indexes entry count into that sequence — a
-        session whose tokens outlive its entries reports a step nobody can take.
-        The surviving prefix is recomputed rather than sliced blind: each closed
-        round contributed exactly the tokens its own candidate count resolves to.
+        All three halves of the round have to go: its resolved steps, the
+        submissions answering them, and its candidate entries. A step left
+        behind without its entries reports a turn nobody can take; a submission
+        left behind would be replayed onto the round that replaces it.
 
         A flat (round-less) map veto settles the whole series in one round and
         has nothing per-position to rebuild, which ``rounds_are_progressive``
@@ -110,22 +109,16 @@ class GameCorrectionService:
         config = await self.sessions.load_config(session, pick_ban.config_id) if pick_ban.config_id else None
         if config is None or not rounds_are_progressive(config, pick_ban.kind):
             return False
-        entries = list(await self.entry_repo.list_by_session(session, pick_ban.id))
-        await self.entry_repo.delete_for_round(session, session_id=pick_ban.id, round=position + 1)
-        kept = sum(
-            len(
-                build_round_sequence(
-                    config,
-                    pick_ban.kind,
-                    candidate_count=len([entry for entry in entries if entry.round == round_number]),
-                    # The opener only rotates WHICH side each token names; the
-                    # number of tokens — all this needs — is opener-independent.
-                    opener=MapPickSide.HOME,
-                )
+        steps = resolved_steps(pick_ban)
+        dropped = [step for step in steps if step.round is not None and step.round > position]
+        if dropped:
+            await self.submission_repo.delete_for_steps_from(
+                session, session_id=pick_ban.id, step_index=dropped[0].index
             )
-            for round_number in range(1, position + 1)
-        )
-        pick_ban.resolved_sequence_json = list(pick_ban.resolved_sequence_json)[:kept]
+            pick_ban.resolved_sequence_json = [
+                step.to_json() for step in steps if step.round is None or step.round <= position
+            ]
+        await self.entry_repo.delete_for_round(session, session_id=pick_ban.id, round=position + 1)
         # The scrapped round may have been suspended on a `result_loser_choice`
         # election; the outcome it was waiting on is the one being corrected.
         pick_ban.awaiting_choice = False

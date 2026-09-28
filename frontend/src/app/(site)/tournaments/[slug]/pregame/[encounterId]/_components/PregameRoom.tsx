@@ -35,7 +35,7 @@ import {
   buildHeroRounds,
   buildSeriesMaps,
   derivePregameLoop,
-  heroActionsForRound
+  heroBoardForRound
 } from "./pregameRoom.model";
 
 interface PregameRoomProps {
@@ -232,8 +232,8 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           homeTeam={encounter.home_team ?? null}
           awayTeam={encounter.away_team ?? null}
           game={reportGame}
-          heroActions={heroActionsForRound(
-            heroState.pool,
+          heroBoard={heroBoardForRound(
+            heroState,
             loop.reportRound,
             room.heroesById,
             heroName
@@ -265,7 +265,6 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
             kind="map"
             encounterId={encounterId}
             state={mapState}
-            allowProtect={false}
             selectedItemId={null}
             selectedItemName={null}
             onMutated={room.invalidateRoom}
@@ -282,7 +281,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           encounter={encounter}
           viewerSide={mapState.viewer_side ?? room.viewerSide}
           reportable={seriesReport}
-          heroRounds={buildHeroRounds(heroState.pool, series, room.heroesById, heroName)}
+          heroRounds={buildHeroRounds(heroState, series, room.heroesById, heroName)}
           homeName={sideNameOf("home")}
           awayName={sideNameOf("away")}
           header={header}

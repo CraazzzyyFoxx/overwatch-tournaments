@@ -138,7 +138,7 @@ export function ScrimCreateDialog({
     [copyStageId, encountersQuery.data, rounds, stages]
   );
 
-  const poolIssues = source === "custom" ? validateScrimPoolDraft(pool, bestOf) : [];
+  const poolIssues = source === "custom" ? validateScrimPoolDraft(pool) : [];
   const namesFilled = label.trim() !== "" && homeName.trim() !== "" && awayName.trim() !== "";
   const canSubmit =
     namesFilled && (source === "copy" ? copyTournamentId != null : poolIssues.length === 0);
@@ -177,7 +177,7 @@ export function ScrimCreateDialog({
                 stage_id: _stageId,
                 round: _round,
                 ...config
-              } = pickBanDraftToInput(draft, bestOf);
+              } = pickBanDraftToInput(draft);
               return config;
             })
           };
@@ -353,7 +353,6 @@ export function ScrimCreateDialog({
             ) : (
               <ScrimPoolEditor
                 pool={pool}
-                bestOf={bestOf}
                 disabled={createMutation.isPending}
                 onChange={setPool}
               />

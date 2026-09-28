@@ -1,99 +1,62 @@
+// The achievement registry's own half of the condition builder. The tree ↔
+// flat-graph conversion it used to own now lives in
+// `components/rule-builder/rule-tree.test.ts`, shared with the pick-ban
+// constructor; what is left here is what only achievements can answer: how a
+// backend node name reads, and what one leaf says at a glance.
 import { describe, expect, it } from "vitest";
 
-import {
-  appendChild,
-  appendPaletteItem,
-  buildNodePaths,
-  flatToTree,
-  removeSubtree,
-  treeToFlat,
-  type TreeNode,
-} from "./condition-flow.model";
+import { SIDEBAR_GROUPS, conditionLabel, formatParamsSummary } from "./condition-flow.model";
 
-/** Flat nodes only round-trip through a root, so every check goes through it. */
-function roundTrip(tree: TreeNode): TreeNode {
-  const flat = treeToFlat(tree);
-  const root = flat.find((node) => !node.parentId)!;
-  return flatToTree(flat, root.id);
-}
-
-describe("condition tree ↔ flat graph", () => {
-  it("round-trips a nested AND/OR/NOT tree unchanged", () => {
-    const tree: TreeNode = {
-      AND: [
-        { type: "match_win" },
-        {
-          OR: [
-            { type: "stat_threshold", params: { stat: "Eliminations", op: ">=", value: 20 } },
-            { NOT: { type: "is_newcomer" } },
-          ],
-        },
-      ],
-    };
-
-    expect(roundTrip(tree)).toEqual(tree);
+describe("node names read as English", () => {
+  it("keeps the acronyms a mechanical title-case would mangle", () => {
+    expect(conditionLabel("hero_kd_best")).toBe("Hero K/D best");
+    expect(conditionLabel("player_div")).toBe("Player division");
+    expect(conditionLabel("match_mvp_check")).toBe("Match MVP check");
   });
 
-  it("drops an empty params bag so a bare condition stays bare", () => {
-    expect(roundTrip({ type: "match_win", params: {} })).toEqual({ type: "match_win" });
+  it("derives a label for a node the editor has never heard of", () => {
+    // A node added on the backend shows up without an edit here.
+    expect(conditionLabel("brand_new_node")).toBe("Brand new node");
   });
 
-  it("turns an empty tree into a single empty AND group", () => {
-    expect(roundTrip({})).toEqual({ AND: [] });
-  });
-
-  it("defaults a leaf with no type to match_win", () => {
-    expect(roundTrip({ params: { foo: 1 } })).toEqual({ type: "match_win", params: { foo: 1 } });
-  });
-
-  it("keeps only the first child of a NOT group", () => {
-    const flat = treeToFlat({ NOT: { type: "match_win" } });
-    const withSecond = appendChild(flat, flat[0].id, "leaf");
-
-    expect(flatToTree(withSecond, flat[0].id)).toEqual({ NOT: { type: "match_win" } });
+  it("falls back to a generic noun for a typeless node", () => {
+    expect(conditionLabel(undefined)).toBe("condition");
   });
 });
 
-describe("editing the flat graph", () => {
-  it("wraps a bare leaf root in an AND group when a palette item is appended", () => {
-    const flat = treeToFlat({ type: "match_win" });
-
-    const updated = appendPaletteItem(flat, { type: "leaf", conditionType: "is_captain", label: "Is captain" });
-    const root = updated.find((node) => !node.parentId)!;
-
-    expect(root.type).toBe("logical");
-    expect(flatToTree(updated, root.id)).toEqual({
-      AND: [{ type: "match_win" }, { type: "is_captain" }],
-    });
+describe("one leaf at a glance", () => {
+  it("summarises a stat threshold as stat, operator and value", () => {
+    expect(
+      formatParamsSummary("stat_threshold", { stat: "Eliminations", op: ">=", value: 20 })
+    ).toBe("Eliminations, >= 20");
   });
 
-  it("appends to an existing logical root instead of wrapping it", () => {
-    const flat = treeToFlat({ AND: [{ type: "match_win" }] });
-
-    const updated = appendPaletteItem(flat, { type: "logical", logicalOp: "OR", label: "OR" });
-    const root = updated.find((node) => !node.parentId)!;
-
-    expect(flatToTree(updated, root.id)).toEqual({ AND: [{ type: "match_win" }, { OR: [] }] });
+  it("spells out a bracket path, whose params mean nothing raw", () => {
+    expect(
+      formatParamsSummary("bracket_path", {
+        played_upper_bracket: false,
+        min_lower_bracket_wins: 2,
+        lost_in_round: { op: ">=", value: 3 },
+      })
+    ).toBe("lower bracket, LB wins >= 2, lost round >= 3");
   });
 
-  it("deletes a group together with every descendant", () => {
-    const flat = treeToFlat({
-      AND: [{ OR: [{ type: "match_win" }, { type: "is_captain" }] }, { type: "is_newcomer" }],
-    });
-    const root = flat.find((node) => !node.parentId)!;
-    const orGroup = flat.find((node) => node.logicalOp === "OR")!;
+  it("is empty for a node with nothing to configure", () => {
+    expect(formatParamsSummary("match_win", {})).toBe("");
+  });
+});
 
-    const updated = removeSubtree(flat, orGroup.id);
+describe("the palette offers the engine's nodes", () => {
+  it("names every leaf item with a registered type", () => {
+    const leaves = SIDEBAR_GROUPS.flatMap((group) =>
+      group.items.filter((item) => item.type === "leaf")
+    );
 
-    expect(updated).toHaveLength(2);
-    expect(flatToTree(updated, root.id)).toEqual({ AND: [{ type: "is_newcomer" }] });
+    expect(leaves.length).toBeGreaterThan(0);
+    expect(leaves.every((item) => (item.leafType ?? "") !== "")).toBe(true);
   });
 
-  it("names every node by its position in the tree", () => {
-    const flat = treeToFlat({ AND: [{ OR: [{ type: "match_win" }] }, { type: "is_captain" }] });
-
-    const paths = buildNodePaths(flat);
-
-    expect(Object.values(paths).sort()).toEqual(["1", "1.1", "1.1.1", "1.2"]);
+  it("opens with the three logical operators, which every tree needs", () => {
+    expect(SIDEBAR_GROUPS[0].items.map((item) => item.logicalOp)).toEqual(["AND", "OR", "NOT"]);
   });
 });

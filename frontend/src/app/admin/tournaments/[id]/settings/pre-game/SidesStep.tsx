@@ -1,18 +1,10 @@
 "use client";
 
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldLabel,
-  FieldTitle
-} from "@/components/ui/field";
-import { NumberInput } from "@/components/ui/number-input";
+import { Field, FieldDescription, FieldLabel, FieldTitle } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -20,14 +12,8 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
-  PICK_BAN_NO_REPEAT_SCOPES,
-  PICK_BAN_ROTATIONS,
-  protectHasNoStep,
-  type PickBanDraft
-} from "@/lib/tournament/pick-ban-config";
-import type { PickBanFirstBanRotation, PickBanNoRepeatScope } from "@/types/tournament.types";
+import { PICK_BAN_ROTATIONS, type PickBanDraft } from "@/lib/tournament/pick-ban-config";
+import type { PickBanFirstBanRotation } from "@/types/tournament.types";
 
 /**
  * One rule field's provenance: what the scope above sets it to, and one click
@@ -68,12 +54,16 @@ function InheritedNote({
   );
 }
 
-/** Step 3: the rules the draft runs under, and where each of them comes from. */
+/**
+ * Step 3: who opens the pick-ban, and how that alternates down the series.
+ *
+ * Everything about HOW a round is played moved into the ruleset (step 2); what
+ * is left here is the one thing no step can decide for itself — which side the
+ * ruleset's `first` actor resolves to on each map.
+ */
 export function SidesStep({
   ids,
   draft,
-  isHero,
-  bestOf,
   inherited,
   inheritedLabel,
   canManage,
@@ -81,8 +71,6 @@ export function SidesStep({
 }: Readonly<{
   ids: string;
   draft: PickBanDraft;
-  isHero: boolean;
-  bestOf: number;
   /** Rules of the scope above, or null at the tournament level. */
   inherited: PickBanDraft | null;
   inheritedLabel: string | null;
@@ -90,7 +78,6 @@ export function SidesStep({
   patch: (values: Partial<PickBanDraft>) => void;
 }>) {
   const t = useTranslations("pickBan.admin");
-  const protectUnused = protectHasNoStep(draft, bestOf);
 
   return (
     <>
@@ -135,82 +122,6 @@ export function SidesStep({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor={`${ids}-norepeat`}>{t("noRepeatScope")}</FieldLabel>
-          <Select
-            value={draft.noRepeatScope}
-            disabled={!canManage}
-            onValueChange={(value) => patch({ noRepeatScope: value as PickBanNoRepeatScope })}
-          >
-            <SelectTrigger id={`${ids}-norepeat`} aria-describedby={`${ids}-norepeat-hint`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PICK_BAN_NO_REPEAT_SCOPES.map((scope) => (
-                <SelectItem key={scope} value={scope}>
-                  {t(`noRepeatScopeValue.${scope}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <FieldDescription id={`${ids}-norepeat-hint`}>
-            {t(`noRepeatScopeHint.${draft.noRepeatScope}`)}
-          </FieldDescription>
-          {inherited != null && inheritedLabel != null ? (
-            <InheritedNote
-              scope={inheritedLabel}
-              same={draft.noRepeatScope === inherited.noRepeatScope}
-              value={t(`noRepeatScopeValue.${inherited.noRepeatScope}`)}
-              canManage={canManage}
-              onReset={() => patch({ noRepeatScope: inherited.noRepeatScope })}
-            />
-          ) : null}
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor={`${ids}-timer`}>{t("turnTimer")}</FieldLabel>
-          <div className="flex items-center gap-2">
-            <NumberInput
-              id={`${ids}-timer`}
-              aria-describedby={`${ids}-timer-hint`}
-              min={1}
-              integer
-              disabled={!canManage}
-              placeholder={t("turnTimerPlaceholder")}
-              className="w-28"
-              value={draft.turnTimerSeconds}
-              onValueChange={(value) => patch({ turnTimerSeconds: value })}
-            />
-            <span className="text-sm text-muted-foreground">{t("turnTimerUnit")}</span>
-            {draft.turnTimerSeconds != null ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={!canManage}
-                onClick={() => patch({ turnTimerSeconds: null })}
-              >
-                <RotateCcw aria-hidden className="me-2 size-3.5" />
-                {t("turnTimerClear")}
-              </Button>
-            ) : null}
-          </div>
-          <FieldDescription id={`${ids}-timer-hint`}>{t("turnTimerHint")}</FieldDescription>
-          {inherited != null && inheritedLabel != null ? (
-            <InheritedNote
-              scope={inheritedLabel}
-              same={draft.turnTimerSeconds === inherited.turnTimerSeconds}
-              value={
-                inherited.turnTimerSeconds == null
-                  ? t("turnTimerPlaceholder")
-                  : `${inherited.turnTimerSeconds} ${t("turnTimerUnit")}`
-              }
-              canManage={canManage}
-              onReset={() => patch({ turnTimerSeconds: inherited.turnTimerSeconds })}
-            />
-          ) : null}
-        </Field>
-
-        <Field>
           <FieldTitle className="text-sm">{t("firstPickRule")}</FieldTitle>
           {/* One enum member exists server-side, so a control here would be a
               choice with nothing to choose. Stated instead of offered. */}
@@ -218,61 +129,6 @@ export function SidesStep({
           <FieldDescription>{t("firstPickRuleHint")}</FieldDescription>
         </Field>
       </div>
-
-      <Field orientation="horizontal">
-        <Switch
-          id={`${ids}-protect`}
-          aria-describedby={`${ids}-protect-hint`}
-          checked={draft.allowProtect}
-          disabled={!canManage}
-          onCheckedChange={(checked) => patch({ allowProtect: checked })}
-        />
-        <FieldContent>
-          <FieldLabel htmlFor={`${ids}-protect`}>{t("allowProtect")}</FieldLabel>
-          <FieldDescription id={`${ids}-protect-hint`}>{t("allowProtectHint")}</FieldDescription>
-          {inherited != null && inheritedLabel != null ? (
-            <InheritedNote
-              scope={inheritedLabel}
-              same={draft.allowProtect === inherited.allowProtect}
-              value={t(inherited.allowProtect ? "valueOn" : "valueOff")}
-              canManage={canManage}
-              onReset={() => patch({ allowProtect: inherited.allowProtect })}
-            />
-          ) : null}
-        </FieldContent>
-      </Field>
-
-      {protectUnused ? (
-        <Alert>
-          <AlertTriangle aria-hidden className="size-4" />
-          <AlertDescription>{t("protectWithoutStep")}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {isHero ? (
-        <Field orientation="horizontal">
-          <Switch
-            id={`${ids}-role`}
-            aria-describedby={`${ids}-role-hint`}
-            checked={draft.uniqueRolePerRound}
-            disabled={!canManage}
-            onCheckedChange={(checked) => patch({ uniqueRolePerRound: checked })}
-          />
-          <FieldContent>
-            <FieldLabel htmlFor={`${ids}-role`}>{t("uniqueRole")}</FieldLabel>
-            <FieldDescription id={`${ids}-role-hint`}>{t("uniqueRoleHint")}</FieldDescription>
-            {inherited != null && inheritedLabel != null ? (
-              <InheritedNote
-                scope={inheritedLabel}
-                same={draft.uniqueRolePerRound === inherited.uniqueRolePerRound}
-                value={t(inherited.uniqueRolePerRound ? "valueOn" : "valueOff")}
-                canManage={canManage}
-                onReset={() => patch({ uniqueRolePerRound: inherited.uniqueRolePerRound })}
-              />
-            ) : null}
-          </FieldContent>
-        </Field>
-      ) : null}
     </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 
-import { conditionLabel, formatParamsSummary, type FlatNode } from "./condition-flow.model";
+import type { FlatNode } from "./rule-tree";
 
 /**
  * Screen-reader outline of the tree.
@@ -14,12 +14,20 @@ import { conditionLabel, formatParamsSummary, type FlatNode } from "./condition-
  * It is deliberately read-only: the editable controls stay on the canvas and
  * each one is named with its path so the two views line up.
  */
-export function ConditionTreeOutline({
+export function RuleTreeOutline({
   nodes,
   paths,
+  title,
+  describeGroup,
+  labelForLeaf,
+  summarizeLeaf,
 }: Readonly<{
   nodes: FlatNode[];
   paths: Record<string, string>;
+  title: string;
+  describeGroup: (path: string, op: string) => string;
+  labelForLeaf: (type: string | undefined) => string;
+  summarizeLeaf: (type: string, params: Record<string, unknown>) => string;
 }>) {
   const headingId = useId();
 
@@ -34,10 +42,10 @@ export function ConditionTreeOutline({
           const path = paths[node.id] ?? "?";
           let description: string;
           if (node.type === "logical") {
-            description = `${path} ${node.logicalOp ?? "AND"} group`;
+            description = describeGroup(path, node.logicalOp ?? "AND");
           } else {
-            const label = conditionLabel(node.conditionType);
-            const summary = formatParamsSummary(node.conditionType ?? "", node.params ?? {});
+            const label = labelForLeaf(node.leafType);
+            const summary = summarizeLeaf(node.leafType ?? "", node.params ?? {});
             description = summary ? `${path} ${label} · ${summary}` : `${path} ${label}`;
           }
           return (
@@ -53,7 +61,7 @@ export function ConditionTreeOutline({
 
   return (
     <div className="sr-only">
-      <p id={headingId}>Condition tree outline</p>
+      <p id={headingId}>{title}</p>
       <div role="group" aria-labelledby={headingId}>
         {renderLevel(undefined)}
       </div>

@@ -1,18 +1,17 @@
-"""``rpc.tournament.admin_pick_ban_config_upsert`` accepts slot-mode configs.
+"""``rpc.tournament.admin_pick_ban_config_upsert`` — the organizer's config write.
 
-Ported from the legacy ``test_veto_admin_upsert_slots.py`` (deleted alongside
-``veto_admin.py``'s config CRUD when it moved to the generic, kind-partitioned
-``pick_ban_admin.py``). Same rationale, translated vocabulary: ``MapVetoConfig``
--> ``PickBanConfig`` (+ ``kind``), ``MapVetoConfigMap``/``MapVetoConfigSlotMap``
--> ``PickBanConfigItem``/``PickBanConfigSlotItem`` (``map_id`` -> ``item_id``),
-``map_ids`` -> ``item_ids``, ``reserve_map_id`` -> ``reserve_item_id``,
-``veto_sequence_json`` -> ``sequence_json``.
+Ported from the legacy ``test_veto_admin_upsert_slots.py`` and then rewritten
+onto ruleset v2 (``docs/plans/2026-09-28-pick-ban-constructor.md``): the flat
+token ``sequence`` and the ``preset``/``no_repeat_scope``/``allow_protect``/
+``unique_attribute_per_side_per_round``/``turn_timer_seconds`` columns are gone,
+replaced by one ``ruleset`` document the pure engine validates. What did NOT
+change is the POOL: slots, candidates, reserves and the cascade key are still
+this endpoint's own business, so their guards are still pinned here.
 
-This endpoint is the first and only writer of a slot-mode config, so every
-guard the rest of the feature added becomes reachable here for the first time:
-``validate_pick_ban_slot_config``'s guards, the
-``ck_pick_ban_config_slots_not_custom`` CHECK, and the two cross-mode clears
-that keep a converted config from leaving the other mode's rows behind.
+This endpoint is the only writer of a slot-mode config, so every pool guard the
+feature added becomes reachable here for the first time:
+``validate_pick_ban_slot_config``'s checks and the two cross-mode clears that
+keep a converted config from leaving the other mode's rows behind.
 
 Everything below drives the real subscriber through the real permission path
 against a session fake that answers by the entity each query targets, so a
@@ -27,9 +26,6 @@ the MIDDLE slot, and candidates listed in an order that is neither ascending nor
 descending by id. A handler that confused a position with an index, took the
 first or last slot for the reserved one, or re-sorted candidates cannot pass by
 coincidence.
-
-Every body in this file is ``kind: "map"``: it ports the MAP-mode-focused
-legacy suite, not the (untested here) hero-kind path.
 """
 
 from __future__ import annotations
@@ -37,6 +33,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
@@ -50,21 +47,21 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 os.environ["DEBUG"] = "true"
 
+from shared.domain import pick_ban_rules as pbr  # noqa: E402
 from shared.tests import eager_loading  # noqa: E402
 
 pick_ban_admin = importlib.import_module("src.rpc.pick_ban_admin")
 helpers = importlib.import_module("src.rpc._helpers")
 models = importlib.import_module("src.models")
 enums = importlib.import_module("shared.core.enums")
-# Referenced only for CUSTOM_PRESET/BRACKET_PRESET below: pick_ban_session.py
-# does not re-export or redefine them (confirmed by reading its imports), and
-# pick_ban_admin.py never references them either -- see
-# CustomPresetIsUnstorableInSlotMode's docstring for why.
-veto_session_service = importlib.import_module("src.services.encounter.veto_session")
+catalog_models = importlib.import_module("shared.models.catalog")
+pick_ban_config = importlib.import_module("src.services.encounter.pick_ban_config")
 pick_ban_models = importlib.import_module("shared.models.tournament.pick_ban")
 
 UPSERT = "rpc.tournament.admin_pick_ban_config_upsert"
 LIST = "rpc.tournament.admin_pick_ban_config_list"
+VALIDATE = "rpc.tournament.admin_pick_ban_rules_validate"
+PREVIEW = "rpc.tournament.admin_pick_ban_rules_preview"
 
 TOURNAMENT_ID = 7
 #: Unequal to ``TOURNAMENT_ID`` and to ``ROUND``: a handler that mixed any two of
@@ -80,6 +77,9 @@ POOL = enums.MapVetoMode.POOL
 FIXED = enums.FirstBanRotation.FIXED
 ALTERNATE = enums.FirstBanRotation.ALTERNATE
 
+#: The gamemode slugs the map kind's ``item_group`` vocabulary is read from.
+GAMEMODE_SLUGS = ["control", "escort", "flashpoint", "hybrid", "push"]
+
 #: Candidate counts 4/2/3: unequal to each other, to the slot count and to every
 #: position, and listed in an id order that is neither ascending nor descending.
 CANDIDATES = [[51, 12, 33, 24], [77, 15], [88, 42, 66]]
@@ -87,10 +87,36 @@ CANDIDATES = [[51, 12, 33, 24], [77, 15], [88, 42, 66]]
 #: neither "the first slot's" nor "any slot's" reserve is interchangeable with it.
 RESERVES: list[int | None] = [None, 99, None]
 
-FLAT_SEQUENCE = ["ban_first", "ban_second", "pick_first", "pick_second", "decider"]
-#: Six items for five steps, none of them shared with the slot fixture, so a pool
-#: that leaked into slot mode (or the reverse) is visible by value alone.
+#: Six items for a five-step map phase, none of them shared with the slot
+#: fixture, so a pool that leaked into slot mode (or the reverse) is visible by
+#: value alone.
 FLAT_ITEM_IDS = [101, 102, 103, 104, 105, 106]
+
+
+def _v1(*, mode: str, sequence: list[str], kind: str = "map", timer: int | None = 30) -> dict:
+    """A v2 ruleset built from the v1 tokens it converts from.
+
+    Spelling the fixtures as tokens keeps them readable AND pins the migration's
+    own converter: every config the 2026-10-03 tournament runs on came through
+    exactly this function inside the migration.
+    """
+    return pbr.ruleset_from_v1(
+        kind=kind,
+        mode=mode,
+        preset="bracket" if mode == "slots" else "custom",
+        sequence=sequence,
+        no_repeat_scope="none",
+        unique_attribute=None,
+        turn_timer_seconds=timer,
+    ).to_json()
+
+
+FLAT_TOKENS = ["ban_first", "ban_second", "pick_first", "pick_second", "decider"]
+FLAT_RULESET = _v1(mode="pool", sequence=FLAT_TOKENS)
+SLOT_RULESET = _v1(mode="slots", sequence=[], timer=45)
+HERO_RULESET = _v1(kind="hero", mode="pool", sequence=["ban_first", "ban_second"])
+#: Well-formed as a document, but says nothing: the engine's cheapest error.
+_EMPTY_RULESET = {"version": 2, "timer_seconds": 90, "on_timeout": "random_fill", "phases": []}
 
 #: Grants exactly the gate this subject checks (``match.update``) and nothing
 #: else, and is not a superuser, so the real permission path runs.
@@ -121,12 +147,7 @@ def slot_body(**overrides) -> dict:
         "mode": SLOTS.value,
         "first_pick_rule": enums.FirstPickRule.HIGHER_SEED.value,
         "first_ban_rotation": ALTERNATE.value,
-        "preset": "bracket",
-        "turn_timer_seconds": 45,
-        "no_repeat_scope": enums.PickBanNoRepeatScope.NONE.value,
-        "unique_attribute_per_side_per_round": None,
-        "allow_protect": False,
-        "sequence": [],
+        "ruleset": deepcopy(SLOT_RULESET),
         "item_ids": [],
         "slots": slot_payload(),
     }
@@ -139,12 +160,7 @@ def flat_body(**overrides) -> dict:
         "kind": MAP_KIND.value,
         "mode": POOL.value,
         "first_pick_rule": enums.FirstPickRule.HIGHER_SEED.value,
-        "preset": "bo5",
-        "turn_timer_seconds": 30,
-        "no_repeat_scope": enums.PickBanNoRepeatScope.NONE.value,
-        "unique_attribute_per_side_per_round": None,
-        "allow_protect": False,
-        "sequence": list(FLAT_SEQUENCE),
+        "ruleset": deepcopy(FLAT_RULESET),
         "item_ids": list(FLAT_ITEM_IDS),
     }
     body.update(overrides)
@@ -160,9 +176,7 @@ def _config(mode, *, slots: list[list[int]] | None = None, item_ids: list[int] |
         round=None,
         mode=mode,
         first_ban_rotation=FIXED,
-        preset="bo3",
-        turn_timer_seconds=15,
-        sequence_json=[],
+        ruleset_json=deepcopy(FLAT_RULESET),
     )
     config.id = CONFIG_ID
     config.items = [
@@ -183,22 +197,15 @@ def _config(mode, *, slots: list[list[int]] | None = None, item_ids: list[int] |
 def _slot_candidates(slots) -> list[list[int]]:
     """Candidate item ids per slot, in ``position`` order.
 
-    Mirrors what ``ensure_pick_ban_session`` itself reads off ``config.slots``
-    (``pick_ban_session.py``'s ``slots = [[item.item_id for item in
-    slot.items] for slot in ordered]``). There is no public accessor for this
-    on ``pick_ban_session`` the way legacy ``veto_session.slot_candidates`` is
-    one for ``MapVetoConfigSlot`` -- that legacy helper reads ``.maps``/
-    ``.map_id`` and so raises ``AttributeError`` against a
-    ``PickBanConfigSlot``'s ``.items``/``.item_id`` -- so this reimplements the
-    one expression rather than reaching for the wrong-shaped legacy helper.
+    Mirrors what ``ensure_pick_ban_session`` itself reads off ``config.slots``,
+    rather than reaching for a legacy helper shaped for ``MapVetoConfigSlot``.
     """
     return [[item.item_id for item in slot.items] for slot in sorted(slots, key=lambda s: s.position)]
 
 
 def _slot_reserves(slots) -> dict[str, int]:
     """String-keyed reserve snapshot in ``position`` order, mirroring
-    ``ensure_pick_ban_session``'s own derivation (same contract as legacy
-    ``veto_session.slot_reserves``, generalized to ``reserve_item_id``)."""
+    ``ensure_pick_ban_session``'s own derivation."""
     return {str(slot.position): slot.reserve_item_id for slot in slots if slot.reserve_item_id is not None}
 
 
@@ -214,6 +221,11 @@ class _Result:
 
     def all(self):
         return list(self._rows)
+
+    def __iter__(self):
+        # ``session.scalars(...)`` is consumed by iteration (the item-group
+        # vocabulary read), not through ``.all()``.
+        return iter(self._rows)
 
     def first(self):
         # ``PickBanConfigRepository.find_for_stage_round`` (the upsert's scope
@@ -231,7 +243,17 @@ class _FakeSession:
     instead of returning a row.
     """
 
-    def __init__(self, *, existing=None, configs: list | None = None, stage_tournament_id=TOURNAMENT_ID) -> None:
+    def __init__(
+        self,
+        *,
+        existing=None,
+        configs: list | None = None,
+        stage_tournament_id=TOURNAMENT_ID,
+        roster_slots: dict | None = None,
+        hero_types: list[str] | None = None,
+    ) -> None:
+        self._roster_slots = roster_slots
+        self._hero_types = hero_types or []
         self._existing = existing
         # One table described two ways: ``existing`` is the single row already
         # sitting at the scope the upsert targets, ``configs`` the tournament's
@@ -255,6 +277,8 @@ class _FakeSession:
         entity = self._record(query)
         if entity is models.Stage:
             return self._stage_tournament_id
+        if entity is models.Tournament:
+            return self._roster_slots
         if entity is pick_ban_models.PickBanConfig:
             return self._existing
         raise AssertionError(f"the handler queried an unexpected entity: {entity!r}")
@@ -263,6 +287,10 @@ class _FakeSession:
         entity = self._record(query)
         if entity is pick_ban_models.PickBanConfig:
             return _Result(self._configs)
+        if entity is catalog_models.Gamemode:
+            return _Result(list(GAMEMODE_SLUGS))
+        if entity is catalog_models.Hero:
+            return _Result(list(self._hero_types))
         raise AssertionError(f"the handler queried an unexpected entity: {entity!r}")
 
     async def scalars(self, query):
@@ -307,13 +335,14 @@ class _FakeSession:
         return False
 
 
-class _UpsertCase(IsolatedAsyncioTestCase):
-    async def invoke(self, body: dict, *, existing=None, stage_tournament_id=TOURNAMENT_ID):
+class _SubjectCase(IsolatedAsyncioTestCase):
+    """Drives one tournament-scoped subject through the real permission path."""
+
+    async def call(self, subject: str, data: dict, *, session: _FakeSession | None = None):
         broker = CapturingBroker()
         pick_ban_admin.register(broker, SimpleNamespace(exception=lambda *a, **k: None))
-        self.assertIn(UPSERT, broker.handlers, "subject is not registered")
-
-        session = _FakeSession(existing=existing, stage_tournament_id=stage_tournament_id)
+        self.assertIn(subject, broker.handlers, "subject is not registered")
+        session = session if session is not None else _FakeSession()
 
         async def _workspace_id(_session, tournament_id):
             self.assertEqual(TOURNAMENT_ID, tournament_id)
@@ -321,9 +350,13 @@ class _UpsertCase(IsolatedAsyncioTestCase):
 
         self.enterContext(patch.object(helpers.db, "async_session_maker", session))
         self.enterContext(patch.object(pick_ban_admin.auth, "get_tournament_workspace_id", _workspace_id))
+        return await broker.handlers[subject](data, None), session
 
-        envelope = await broker.handlers[UPSERT]({"identity": IDENTITY, "id": TOURNAMENT_ID, "payload": body}, None)
-        return envelope, session
+
+class _UpsertCase(_SubjectCase):
+    async def invoke(self, body: dict, *, existing=None, stage_tournament_id=TOURNAMENT_ID):
+        session = _FakeSession(existing=existing, stage_tournament_id=stage_tournament_id)
+        return await self.call(UPSERT, {"identity": IDENTITY, "id": TOURNAMENT_ID, "payload": body}, session=session)
 
     def assert_unprocessable(self, envelope: dict, *fragments: str) -> str:
         self.assertFalse(envelope["ok"], envelope)
@@ -332,6 +365,22 @@ class _UpsertCase(IsolatedAsyncioTestCase):
         for fragment in fragments:
             self.assertIn(fragment, message)
         return message
+
+    def assert_ruleset_issue(self, envelope: dict, code: str) -> list[dict]:
+        """A ruleset rejection, asserted where the constructor reads it.
+
+        ``pick_ban_config.validate_config_payload`` raises 422 with an attribute
+        BAG (no ``msg`` key), which is the only ``http_error`` branch that
+        carries extra keys through untouched -- so the issue list survives into
+        ``details.fields[0].issues`` instead of being flattened away.
+        """
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual("unprocessable", envelope["error"]["code"], envelope)
+        entry = envelope["error"]["details"]["fields"][0]
+        self.assertEqual(pick_ban_config.RULESET_INVALID, entry["code"], entry)
+        issues = entry["issues"]
+        self.assertIn(code, [issue["code"] for issue in issues], issues)
+        return issues
 
     def assert_field_error(self, envelope: dict, field: str, code: str) -> None:
         """A pydantic rejection, asserted where the client reads it.
@@ -368,8 +417,8 @@ class ModeIsRequired(_UpsertCase):
         #
         # The error CODE rather than a bare "mode" match: a defaulted ``mode``
         # would send this same body down the pool branch, where the message
-        # "sequence must be empty in pool mode" contains "mode" too and would
-        # let the mutant pass. Pydantic's own error type is what separates them.
+        # "slots must be empty in pool mode" contains "mode" too and would let
+        # the mutant pass. Pydantic's own error type is what separates them.
         body = slot_body()
         del body["mode"]
 
@@ -387,6 +436,17 @@ class ModeIsRequired(_UpsertCase):
         self.assert_field_error(envelope, "mode", "enum")
         self.assertEqual(0, session.commits)
 
+    async def test_the_ruleset_is_required(self) -> None:
+        # The rules and the pool share one row, and an omitted ruleset would
+        # otherwise default to "{}" and silently blank a tournament's rules.
+        body = flat_body()
+        del body["ruleset"]
+
+        envelope, session = await self.invoke(body)
+
+        self.assert_field_error(envelope, "ruleset", "missing")
+        self.assertEqual(0, session.commits)
+
     async def test_first_ban_rotation_defaults_to_fixed_when_omitted(self) -> None:
         body = slot_body()
         del body["first_ban_rotation"]
@@ -401,66 +461,196 @@ class ModeIsRequired(_UpsertCase):
 
 
 class ModeContradictions(_UpsertCase):
-    async def test_each_contradiction_is_refused_and_names_what_it_got_instead(self) -> None:
-        # Three payloads that pick one pool shape and then carry the other's
-        # data -- same hazard as the legacy suite's ModeContradictions.
-        #
-        # ``pick_ban_admin._reject_other_modes_field`` phrases its 422
-        # differently from ``veto_admin``'s legacy
-        # ``f"{name} must be empty in {mode.value} mode; send {name}: []"``:
-        # it is ``f"{name} must be empty in {mode.value} mode (got {other}
-        # instead)"``, read verbatim from the real source rather than assumed
-        # to match the legacy wording.
+    async def test_each_contradiction_is_refused(self) -> None:
+        # Two payloads that pick one pool shape and then carry the other's
+        # data -- same hazard as the legacy suite's ModeContradictions, minus
+        # the v1 ``sequence`` field that no longer exists.
         cases = {
-            "item_ids": (slot_body(item_ids=[101, 102]), "slots", "item_ids/sequence"),
-            "sequence": (slot_body(sequence=["ban_first"]), "slots", "item_ids/sequence"),
-            "slots": (flat_body(slots=slot_payload()), "pool", "slots"),
+            "item_ids": (slot_body(item_ids=[101, 102]), "item_ids must be empty in slots mode"),
+            "slots": (flat_body(slots=slot_payload()), "slots must be empty in pool mode"),
         }
-        for field, (body, mode_word, other) in cases.items():
+        for field, (body, message) in cases.items():
             with self.subTest(field=field):
                 envelope, session = await self.invoke(body)
-                message = self.assert_unprocessable(envelope, field)
-                self.assertIn(f"{field} must be empty in {mode_word} mode (got {other} instead)", message)
+                self.assert_unprocessable(envelope, message)
                 self.assertEqual(0, session.commits)
 
+    async def test_a_round_without_a_stage_is_refused(self) -> None:
+        envelope, session = await self.invoke(flat_body(round=ROUND))
 
-class CustomPresetIsUnstorableInSlotMode(_UpsertCase):
-    """``pick_ban_admin._admin_pick_ban_config_upsert`` 422s a custom preset
-    in slot mode itself, right before ``validate_pick_ban_slot_config``,
-    rather than leaving it to ``ck_pick_ban_config_slots_not_custom``'s
-    IntegrityError (which ``_run`` would map to an opaque 500). Ported from
-    ``veto_admin``'s legacy guard -- the generic engine's upsert originally
-    shipped without this check (a genuine regression found while porting this
-    suite), since fixed directly in ``pick_ban_admin.py``.
-    """
-
-    async def test_a_custom_preset_is_refused_rather_than_left_to_the_check(self) -> None:
-        envelope, session = await self.invoke(slot_body(preset=veto_session_service.CUSTOM_PRESET))
-
-        self.assert_unprocessable(
-            envelope,
-            "preset",
-            "custom",
-            f"send preset: '{veto_session_service.BRACKET_PRESET}' or null",
-        )
+        self.assert_unprocessable(envelope, "round requires stage_id")
         self.assertEqual(0, session.commits)
 
-    async def test_a_custom_preset_is_still_accepted_in_pool_mode(self) -> None:
-        # The (missing or present) slot-mode CHECK is irrelevant here; flat
-        # mode's hand-authored order is exactly what ``custom`` is for.
-        envelope, session = await self.invoke(flat_body(preset=veto_session_service.CUSTOM_PRESET))
+
+# ── the ruleset engine, reached through the endpoint ─────────────────────────
+
+
+class RulesetValidationBlocksTheWrite(_UpsertCase):
+    async def test_a_ruleset_with_no_phases_is_refused_with_its_issues(self) -> None:
+        envelope, session = await self.invoke(flat_body(ruleset=_EMPTY_RULESET))
+
+        issues = self.assert_ruleset_issue(envelope, "phases_empty")
+        self.assertEqual("phases", issues[0]["path"])
+        self.assertEqual(0, session.commits)
+
+    async def test_a_hero_ruleset_may_not_carry_a_decider(self) -> None:
+        # A hero phase bans out of a pool that stays playable: there is no
+        # survivor for a decider to resolve to.
+        ruleset = deepcopy(HERO_RULESET)
+        ruleset["phases"][0]["steps"].append(
+            {
+                "id": "dec",
+                "action": "decider",
+                "actors": "system",
+                "count": 1,
+                "min": None,
+                "blind": False,
+                "target": None,
+                "lifetime": None,
+                "timer_seconds": None,
+                "on_timeout": None,
+                "dispute": {"enabled": False, "max": 0},
+                "eligible": {},
+                "constraints": [],
+            }
+        )
+
+        envelope, session = await self.invoke(flat_body(kind="hero", ruleset=ruleset))
+
+        self.assert_ruleset_issue(envelope, "decider_map_only")
+        self.assertEqual(0, session.commits)
+
+    async def test_a_map_phase_must_settle_a_map(self) -> None:
+        envelope, session = await self.invoke(flat_body(ruleset=_v1(mode="pool", sequence=["ban_first", "ban_second"])))
+
+        self.assert_ruleset_issue(envelope, "map_phase_without_pick")
+        self.assertEqual(0, session.commits)
+
+    async def test_an_unknown_item_group_is_refused_against_the_catalog_vocabulary(self) -> None:
+        # The engine cannot know a map's groups -- they are gamemode slugs an
+        # admin edits -- so the handler feeds it the real vocabulary. A leaf
+        # naming a gamemode that does not exist would otherwise be saved and
+        # then silently match nothing in the room.
+        ruleset = deepcopy(FLAT_RULESET)
+        ruleset["phases"][0]["pool_filter"] = {"type": "item_group", "params": {"groups": ["bananamode"]}}
+
+        envelope, session = await self.invoke(flat_body(ruleset=ruleset))
+
+        self.assert_ruleset_issue(envelope, "unknown_group")
+        self.assertEqual(0, session.commits)
+
+    async def test_a_template_is_still_held_to_the_ruleset(self) -> None:
+        # A pool-less row is a rules TEMPLATE, but it is still rules: a broken
+        # document saved at a wide scope would break every scope inheriting it.
+        envelope, session = await self.invoke(flat_body(item_ids=[], ruleset=_EMPTY_RULESET))
+
+        self.assert_ruleset_issue(envelope, "phases_empty")
+        self.assertEqual(0, session.commits)
+
+    async def test_the_stored_ruleset_is_the_engines_normalized_form(self) -> None:
+        # Sent without the optional keys the schema defaults; what lands in the
+        # column must be the full document, or the stage-merge signature and the
+        # session snapshot compare two spellings of the same rules as different.
+        terse = {
+            "version": 2,
+            "phases": [
+                {
+                    "id": "main",
+                    "when": {},
+                    "steps": [
+                        {"id": "b1", "action": "ban", "actors": "first"},
+                        {"id": "p1", "action": "pick", "actors": "first"},
+                    ],
+                }
+            ],
+        }
+
+        envelope, session = await self.invoke(flat_body(ruleset=terse))
 
         config = self.written_config(envelope, session)
-        self.assertEqual("custom", config.preset)
+        self.assertEqual(pbr.parse_ruleset(terse).to_json(), config.ruleset_json)
+        step = config.ruleset_json["phases"][0]["steps"][0]
+        self.assertEqual({"enabled": False, "max": 0}, step["dispute"])
+        self.assertEqual(1, step["count"])
+        self.assertIs(False, step["blind"])
+        # The response carries exactly what was stored, not what was sent.
+        self.assertEqual(config.ruleset_json, envelope["data"]["ruleset"])
 
-    async def test_a_non_custom_preset_survives_a_slot_upsert(self) -> None:
-        envelope, session = await self.invoke(slot_body(preset="bracket"))
 
-        config = self.written_config(envelope, session)
-        self.assertEqual("bracket", config.preset)
+class PoolCapacityGuard(_UpsertCase):
+    async def test_a_map_phase_that_outgrows_its_pool_is_refused(self) -> None:
+        # Five steps against four maps: the room would run out of candidates
+        # mid-series and strand both captains.
+        envelope, session = await self.invoke(flat_body(item_ids=[101, 102, 103, 104]))
+
+        self.assert_unprocessable(envelope, "consumes 5 items per map but the pool has only 4")
+        self.assertEqual(0, session.commits)
+
+    async def test_a_simultaneous_step_counts_once_per_acting_side(self) -> None:
+        # ``actors: both`` spends ``count`` items on EACH side, so a 3+3 ban
+        # phase needs six items before the pick that follows it.
+        ruleset = deepcopy(FLAT_RULESET)
+        ruleset["phases"][0]["steps"] = [
+            {
+                "id": "b",
+                "action": "ban",
+                "actors": "both",
+                "count": 3,
+                "min": None,
+                "blind": True,
+                "target": None,
+                "lifetime": 1,
+                "timer_seconds": None,
+                "on_timeout": None,
+                "dispute": {"enabled": False, "max": 0},
+                "eligible": {},
+                "constraints": [],
+            },
+            {
+                "id": "p",
+                "action": "pick",
+                "actors": "first",
+                "count": 1,
+                "min": None,
+                "blind": False,
+                "target": None,
+                "lifetime": None,
+                "timer_seconds": None,
+                "on_timeout": None,
+                "dispute": {"enabled": False, "max": 0},
+                "eligible": {},
+                "constraints": [],
+            },
+        ]
+
+        envelope, session = await self.invoke(flat_body(ruleset=ruleset, item_ids=[1, 2, 3, 4, 5, 6]))
+        self.assert_unprocessable(envelope, "consumes 7 items per map but the pool has only 6")
+        self.assertEqual(0, session.commits)
+
+        envelope, session = await self.invoke(flat_body(ruleset=ruleset, item_ids=[1, 2, 3, 4, 5, 6, 7]))
+        self.assertTrue(envelope["ok"], envelope)
+
+    async def test_a_hero_pool_is_not_spent_by_its_steps(self) -> None:
+        # A hero phase replays per map against a pool that stays playable, so
+        # "more steps than items" is not a contradiction there.
+        envelope, session = await self.invoke(flat_body(kind="hero", ruleset=HERO_RULESET, item_ids=[1]))
+
+        self.assertTrue(envelope["ok"], envelope)
+        self.assertEqual(1, session.commits)
+
+    async def test_a_generator_phase_sizes_itself_to_the_pool(self) -> None:
+        # A bracket/slot generator derives its steps FROM the pool, so it can
+        # never outgrow it and must not be measured against it.
+        bracket = _v1(mode="pool", sequence=[]) | {
+            "phases": [{"id": "main", "when": {}, "generator": "bracket", "steps": []}]
+        }
+
+        envelope, session = await self.invoke(flat_body(ruleset=bracket, item_ids=[101, 102]))
+
+        self.assertTrue(envelope["ok"], envelope)
 
 
-# ── validate_pick_ban_slot_config, reached through the endpoint ─────────────
+# ── the pool guards (unchanged by v2) ────────────────────────────────────────
 
 
 class SlotValidationGuards(_UpsertCase):
@@ -524,13 +714,16 @@ class SlotValidationGuards(_UpsertCase):
         def _spy(slots, *, reserves):
             seen.append((slots, list(reserves)))
 
-        # ``validate_pick_ban_slot_config`` stayed a module-level function on
-        # ``pick_ban_session`` (it takes already-built lists and no session), and
-        # the handler calls it through that module -- not through the singleton.
-        self.enterContext(patch.object(pick_ban_admin.pick_ban_session, "validate_pick_ban_slot_config", _spy))
+        self.enterContext(patch.object(pick_ban_config, "validate_pick_ban_slot_config", _spy))
         await self.invoke(slot_body())
 
         self.assertEqual([(CANDIDATES, RESERVES)], seen)
+
+    async def test_a_flat_pool_may_not_repeat_an_item(self) -> None:
+        envelope, session = await self.invoke(flat_body(item_ids=[101, 102, 103, 104, 105, 101]))
+
+        self.assert_unprocessable(envelope, "item_ids must be unique")
+        self.assertEqual(0, session.commits)
 
 
 # ── the round trip ───────────────────────────────────────────────────────────
@@ -545,7 +738,7 @@ class SlotRoundTrip(_UpsertCase):
             {
                 "mode": SLOTS,
                 "first_ban_rotation": ALTERNATE,
-                "sequence": [],
+                "ruleset": SLOT_RULESET,
                 "item_ids": [],
                 "slots": [
                     {"position": 1, "candidates": [51, 12, 33, 24], "reserve_item_id": None},
@@ -553,7 +746,7 @@ class SlotRoundTrip(_UpsertCase):
                     {"position": 3, "candidates": [88, 42, 66], "reserve_item_id": None},
                 ],
             },
-            {key: envelope["data"][key] for key in ("mode", "first_ban_rotation", "sequence", "item_ids", "slots")},
+            {key: envelope["data"][key] for key in ("mode", "first_ban_rotation", "ruleset", "item_ids", "slots")},
         )
 
     async def test_positions_are_one_based_and_follow_payload_order(self) -> None:
@@ -591,9 +784,6 @@ class SlotRoundTrip(_UpsertCase):
         )
 
     async def test_the_written_slots_are_what_the_session_builder_would_read(self) -> None:
-        # The consumers' own reading shape (see ``_slot_candidates``/
-        # ``_slot_reserves`` above), not a re-implementation of unrelated
-        # logic.
         envelope, session = await self.invoke(slot_body())
 
         config = self.written_config(envelope, session)
@@ -607,10 +797,6 @@ class SlotRoundTrip(_UpsertCase):
 
         config = self.written_config(envelope, session)
         self.assertEqual([], list(config.items))
-        self.assertEqual([], list(config.sequence_json))
-
-
-# ── flat mode is untouched ───────────────────────────────────────────────────
 
 
 class FlatModeIsUnchanged(_UpsertCase):
@@ -621,71 +807,18 @@ class FlatModeIsUnchanged(_UpsertCase):
         self.assertEqual(POOL, config.mode)
         self.assertEqual(FLAT_ITEM_IDS, [entry.item_id for entry in config.items])
         self.assertEqual(list(range(len(FLAT_ITEM_IDS))), [entry.sort_order for entry in config.items])
-        self.assertEqual(FLAT_SEQUENCE, config.sequence_json)
+        self.assertEqual(FLAT_RULESET, config.ruleset_json)
         self.assertEqual([], list(config.slots))
-
-    async def test_the_flat_validator_still_runs(self) -> None:
-        envelope, session = await self.invoke(flat_body(sequence=["decider", "ban_first"]))
-
-        self.assert_unprocessable(envelope, "decider must be the last step of the sequence")
-        self.assertEqual(0, session.commits)
 
     async def test_an_empty_pool_is_kept_as_a_rules_template(self) -> None:
         """The rules and the pool share one row, so "author the rotation and the
         timer once for the whole tournament, pick the maps per stage" needs a
         pool-less row to exist. It plays nothing, so the pool-shaped rules (a
-        sequence that fits inside the pool, a pick or a decider to end on) are
-        not applied to it."""
+        pool big enough for one map's steps, unique ids) are not applied to it."""
         envelope, session = await self.invoke(flat_body(item_ids=[]))
 
         config = self.written_config(envelope, session)
         self.assertEqual([], config.items)
-
-    async def test_a_template_is_still_held_to_the_step_vocabulary(self) -> None:
-        envelope, session = await self.invoke(
-            flat_body(item_ids=[], sequence=["ban_first", "nonsense"], preset="custom")
-        )
-
-        self.assert_unprocessable(envelope, "Invalid sequence token(s): nonsense")
-        self.assertEqual(0, session.commits)
-
-    async def test_omitting_the_sequence_of_a_config_with_a_pool_is_still_refused(self) -> None:
-        # ``sequence`` and ``item_ids`` default to empty so that slot mode has
-        # one spelling of "this mode does not use it". A flat config that DOES
-        # carry a pool must not become laxer for it: the refusal moves from the
-        # schema to ``validate_pick_ban_config``, but it still refuses.
-        body = flat_body()
-        del body["sequence"]
-
-        envelope, session = await self.invoke(body)
-
-        self.assert_unprocessable(envelope, "sequence must not be empty")
-        self.assertEqual(0, session.commits)
-
-    async def test_a_hero_sequence_may_be_bans_only(self) -> None:
-        # A hero sequence is ONE round's steps, replayed per map of the series,
-        # and it bans out of a pool that stays playable — the map rule "must end
-        # in a pick or a decider" would make a hero config unauthorable.
-        envelope, session = await self.invoke(
-            flat_body(kind="hero", sequence=["ban_first", "ban_second"], preset="custom")
-        )
-
-        self.assertTrue(envelope["ok"], envelope)
-        self.assertEqual(1, session.commits)
-
-    async def test_a_hero_sequence_may_not_carry_a_decider(self) -> None:
-        envelope, session = await self.invoke(
-            flat_body(kind="hero", sequence=["ban_first", "decider"], preset="custom")
-        )
-
-        self.assert_unprocessable(envelope, "a hero sequence must not contain a decider step")
-        self.assertEqual(0, session.commits)
-
-    async def test_a_map_sequence_still_needs_a_pick_or_a_decider(self) -> None:
-        envelope, session = await self.invoke(flat_body(sequence=["ban_first", "ban_second"]))
-
-        self.assert_unprocessable(envelope, "sequence must contain at least one pick or a decider")
-        self.assertEqual(0, session.commits)
 
 
 # ── converting between the modes ─────────────────────────────────────────────
@@ -715,6 +848,7 @@ class CrossModeClearing(_UpsertCase):
         self.assertEqual(CANDIDATES, [[entry.item_id for entry in slot.items] for slot in existing.slots])
         self.assertEqual(SLOTS, existing.mode)
         self.assertEqual([], envelope["data"]["item_ids"])
+        self.assertEqual(SLOT_RULESET, existing.ruleset_json)
 
     async def test_editing_a_slot_config_replaces_its_slots_wholesale(self) -> None:
         existing = _config(SLOTS, slots=[[1, 2], [3, 4], [5, 6], [7, 8]])
@@ -811,18 +945,19 @@ class ReplacementRowsAreFlushedAfterTheClear(_UpsertCase):
 
 
 class RunningSessionsAreUntouched(_UpsertCase):
-    async def test_the_handler_reads_and_writes_only_config_rows(self) -> None:
-        # A session carries its own sequence and reserve snapshots and must
+    async def test_the_handler_reads_and_writes_only_config_and_catalog_rows(self) -> None:
+        # A session carries its own ruleset snapshot and resolved steps and must
         # not follow a config edit. The fake raises on any other entity, so
-        # this pins both halves -- nothing queried, and the only row added
-        # besides the config itself (untouched here, this is an update) is the
+        # this pins both halves -- the only reads are the config itself and the
+        # gamemode vocabulary the ruleset validator needs, and the only row
+        # added besides the config (untouched here, this is an update) is the
         # admin audit entry.
         existing = _config(SLOTS, slots=CANDIDATES)
 
         envelope, session = await self.invoke(slot_body(), existing=existing)
 
         self.assertTrue(envelope["ok"], envelope)
-        self.assertEqual(["PickBanConfig"], sorted(session.statements))
+        self.assertEqual(["Gamemode", "PickBanConfig"], sorted(session.statements))
         self.assertEqual(["AuditLog"], [type(obj).__name__ for obj in session.added])
 
 
@@ -844,17 +979,9 @@ class SerializeNeedsTheSlotChain(_UpsertCase):
         eager_loading.assert_eager_loads(self, statement, "PickBanConfig.items")
 
     async def test_the_admin_list_loads_the_slot_chain(self) -> None:
-        broker = CapturingBroker()
-        pick_ban_admin.register(broker, SimpleNamespace(exception=lambda *a, **k: None))
         session = _FakeSession(configs=[_config(SLOTS, slots=CANDIDATES)])
 
-        async def _workspace_id(_session, _tournament_id):
-            return WORKSPACE_ID
-
-        self.enterContext(patch.object(helpers.db, "async_session_maker", session))
-        self.enterContext(patch.object(pick_ban_admin.auth, "get_tournament_workspace_id", _workspace_id))
-
-        envelope = await broker.handlers[LIST]({"identity": IDENTITY, "id": TOURNAMENT_ID}, None)
+        envelope, session = await self.call(LIST, {"identity": IDENTITY, "id": TOURNAMENT_ID}, session=session)
 
         self.assertTrue(envelope["ok"], envelope)
         self.assertEqual(CANDIDATES, [slot["candidates"] for slot in envelope["data"]["configs"][0]["slots"]])
@@ -874,10 +1001,7 @@ class SerializedSlotsSurviveTheCommit(_UpsertCase):
     handler used to ``session.refresh(config, ["items"])`` first; a refresh that
     also named ``slots`` would have expired a correct collection and reloaded it
     with every slot's ``items`` lazy, i.e. the ``MissingGreenlet`` the rest of
-    this sweep exists to prevent. ``Session.refresh`` takes no loader options
-    (SQLAlchemy 2.0.45), so it can never express ``slots -> items``: if this
-    site ever does need re-reading, it takes a fresh SELECT carrying the
-    two-level chain, never a wider refresh.
+    this sweep exists to prevent.
     """
 
     async def test_the_response_carries_the_slots_across_the_commit(self) -> None:
@@ -889,16 +1013,12 @@ class SerializedSlotsSurviveTheCommit(_UpsertCase):
 
 
 class SerializeOrdersSlotsByPosition(TestCase):
-    """``pick_ban_session.serialize_pick_ban_config`` sorts slots by
-    ``position`` rather than trusting row order -- fixed directly (a genuine
-    regression found while porting this suite: the generic engine's
-    serializer originally iterated ``config.slots`` in whatever order the
-    collection held them, unlike ``map_veto.serialize_veto_config``, which
-    always ran ``ordered_slots(config.slots)`` first for exactly this reason).
-    Everything this endpoint itself writes is already in position order, so
-    the upsert's own round trip cannot pin this -- slot rows reach the
-    serializer from elsewhere too (the stage-merge copier builds them
-    directly), and play order is what the room labels its slots by.
+    """``serialize_pick_ban_config`` sorts slots by ``position`` rather than
+    trusting row order. Everything this endpoint itself writes is already in
+    position order, so the upsert's own round trip cannot pin this -- slot rows
+    reach the serializer from elsewhere too (the stage-merge copier and the
+    scrim cloner build them directly), and play order is what the room labels
+    its slots by.
     """
 
     def test_row_order_does_not_decide_play_order(self) -> None:
@@ -928,3 +1048,159 @@ class SerializeOrdersSlotsByPosition(TestCase):
             ],
             pick_ban_admin._serialize_config(config)["slots"],
         )
+
+
+# ── the constructor's two read-only probes ───────────────────────────────────
+
+
+class RulesValidateOp(_SubjectCase):
+    async def _validate(self, body: dict) -> dict:
+        envelope, _ = await self.call(VALIDATE, {"identity": IDENTITY, "id": TOURNAMENT_ID, "payload": body})
+        self.assertTrue(envelope["ok"], envelope)
+        return envelope["data"]
+
+    async def test_a_valid_ruleset_reports_no_errors(self) -> None:
+        data = await self._validate({"kind": "map", "mode": "pool", "ruleset": FLAT_RULESET})
+
+        self.assertTrue(data["valid"])
+        self.assertEqual([], [issue for issue in data["issues"] if issue["severity"] == "error"])
+
+    async def test_a_broken_ruleset_is_reported_rather_than_raised(self) -> None:
+        # The whole point of this op: the editor gets the issue list while the
+        # document is still being typed, instead of a 422 per keystroke.
+        data = await self._validate(
+            {"kind": "map", "mode": "pool", "ruleset": {"version": 2, "phases": [{"id": "a", "when": {}, "steps": []}]}}
+        )
+
+        self.assertFalse(data["valid"])
+        self.assertIn("phase_without_steps", [issue["code"] for issue in data["issues"]])
+        self.assertEqual(
+            ["code", "message", "path", "severity"], sorted(data["issues"][0]), "issue shape changed under the editor"
+        )
+
+    async def test_the_map_group_vocabulary_comes_from_the_catalog(self) -> None:
+        ruleset = deepcopy(FLAT_RULESET)
+        ruleset["phases"][0]["pool_filter"] = {"type": "item_group", "params": {"groups": [GAMEMODE_SLUGS[0]]}}
+
+        self.assertTrue((await self._validate({"kind": "map", "mode": "pool", "ruleset": ruleset}))["valid"])
+
+        ruleset["phases"][0]["pool_filter"]["params"]["groups"] = ["not-a-gamemode"]
+        data = await self._validate({"kind": "map", "mode": "pool", "ruleset": ruleset})
+
+        self.assertFalse(data["valid"])
+        self.assertIn("unknown_group", [issue["code"] for issue in data["issues"]])
+
+
+#: A hero pool big enough that every role survives a Bo5 of the anti-one-trick
+#: rules, and with three different sizes so a role read off the wrong key shows.
+HERO_POOL = {"Tank": 8, "Damage": 14, "Support": 12}
+HERO_TYPES = [role for role, count in HERO_POOL.items() for _ in range(count)]
+#: The 5v5 shape the 2026-10-03 tournament runs: one tank, two of each other
+#: role. All three numbers differ, so a preview that mixed two roles up cannot
+#: land on the right answer.
+ROSTER_SLOTS = {"tank": 1, "damage": 2, "support": 2, "flex": 0}
+
+
+class RulesPreviewOp(_SubjectCase):
+    async def _preview(self, session: _FakeSession, **payload) -> dict:
+        body = {
+            "kind": "hero",
+            "mode": "pool",
+            "ruleset": pbr.PRESETS_BY_ID["hero_anti_one_trick"].ruleset.to_json(),
+            "best_of": 5,
+            "item_ids": [],
+        }
+        body.update(payload)
+        envelope, _ = await self.call(
+            PREVIEW, {"identity": IDENTITY, "id": TOURNAMENT_ID, "payload": body}, session=session
+        )
+        self.assertTrue(envelope["ok"], envelope)
+        return envelope["data"]
+
+    async def test_the_anti_one_trick_preset_reaches_twenty_active_bans(self) -> None:
+        # The tournament these rules were written for: 2+2 blind bans on map 1
+        # (lifetime 1), then 5+5 per-player bans with lifetime 2 from map 2 on.
+        # 4 / 10 / 20 / 20 / 20 is the whole point of the preview — an organizer
+        # has to see that a Bo5 takes 20 heroes off the table before they run it.
+        maps = (await self._preview(_FakeSession()))["maps"]
+
+        self.assertEqual([1, 2, 3, 4, 5], [m["map_index"] for m in maps])
+        self.assertEqual([4, 10, 20, 20, 20], [m["max_active_bans"] for m in maps])
+        self.assertEqual(["map1", *["map2plus"] * 4], [m["phase_id"] for m in maps])
+
+    async def test_the_roster_shape_bounds_the_per_player_bans_per_role(self) -> None:
+        # A per-player ban names ONE opponent player and must match their role,
+        # so a 1/2/2 roster absorbs at most 1/2/2 bans per side per round -- 2/4/4
+        # across both sides. With lifetime 2 the map-3 board carries maps 2 and 3,
+        # i.e. 4 tank / 8 damage / 8 support bans, NOT the 20-on-one-role worst
+        # case the preview has to assume when the roster is unknown.
+        data = await self._preview(
+            _FakeSession(roster_slots=ROSTER_SLOTS, hero_types=HERO_TYPES),
+            item_ids=list(range(1, sum(HERO_POOL.values()) + 1)),
+        )
+
+        self.assertEqual(
+            {"tank": HERO_POOL["Tank"] - 4, "damage": HERO_POOL["Damage"] - 8, "support": HERO_POOL["Support"] - 8},
+            data["maps"][2]["worst_case_remaining"],
+        )
+
+    async def test_without_a_roster_shape_the_preview_assumes_the_worst(self) -> None:
+        # The refusal to guess: an organizer who never set a roster shape is
+        # shown the bleakest board the rules permit, not a flattering one.
+        unbounded = await self._preview(
+            _FakeSession(hero_types=HERO_TYPES), item_ids=list(range(1, sum(HERO_POOL.values()) + 1))
+        )
+        bounded = await self._preview(
+            _FakeSession(roster_slots=ROSTER_SLOTS, hero_types=HERO_TYPES),
+            item_ids=list(range(1, sum(HERO_POOL.values()) + 1)),
+        )
+
+        self.assertLess(
+            unbounded["maps"][2]["worst_case_remaining"]["support"],
+            bounded["maps"][2]["worst_case_remaining"]["support"],
+        )
+
+    async def test_a_flex_player_raises_every_roles_ban_ceiling(self) -> None:
+        # A role-less player matches EVERY hero under ``target_role_match``, so
+        # their per-player bans can land on any role. The roster map is handed to
+        # the engine raw for exactly this reason: filtering ``flex`` out here
+        # would make the preview optimistic and swallow a real warning.
+        ids = list(range(1, sum(HERO_POOL.values()) + 1))
+        strict = await self._preview(_FakeSession(roster_slots=ROSTER_SLOTS, hero_types=HERO_TYPES), item_ids=ids)
+        flexed = await self._preview(
+            _FakeSession(roster_slots={**ROSTER_SLOTS, "flex": 1}, hero_types=HERO_TYPES), item_ids=ids
+        )
+
+        self.assertLess(
+            flexed["maps"][2]["worst_case_remaining"]["tank"],
+            strict["maps"][2]["worst_case_remaining"]["tank"],
+        )
+
+
+# ── the public catalog read ──────────────────────────────────────────────────
+
+
+class CatalogOp(IsolatedAsyncioTestCase):
+    """``rpc.tournament.pick_ban_rules_catalog`` — the constructor's grammar.
+
+    Registered in ``reads.py`` rather than here because it is public: it
+    describes the ENGINE, not any tournament, and the editor loads it before a
+    config exists to attach it to.
+    """
+
+    async def test_the_catalog_carries_the_leaves_constraints_presets_and_both_group_vocabularies(self) -> None:
+        reads = importlib.import_module("src.rpc.reads")
+        broker = CapturingBroker()
+        reads.register(broker, SimpleNamespace(exception=lambda *a, **k: None))
+        session = _FakeSession()
+
+        with patch.object(helpers.db, "async_session_maker", session):
+            envelope = await broker.handlers["rpc.tournament.pick_ban_rules_catalog"]({}, None)
+
+        self.assertTrue(envelope["ok"], envelope)
+        data = envelope["data"]
+        self.assertEqual(sorted(pbr.LEAVES), sorted(leaf["type"] for leaf in data["leaves"]))
+        self.assertEqual(sorted(pbr.CONSTRAINTS), sorted(c["type"] for c in data["constraints"]))
+        self.assertEqual([preset.id for preset in pbr.PRESETS], [preset["id"] for preset in data["presets"]])
+        self.assertEqual(list(pbr.HERO_GROUPS), data["groups"]["hero"])
+        self.assertEqual(GAMEMODE_SLUGS, data["groups"]["map"])

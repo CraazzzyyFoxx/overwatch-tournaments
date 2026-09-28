@@ -75,6 +75,7 @@ from src.schemas.captain import (
     GameMapSelectInput,
     GameReportInput,
     PickBanActionInput,
+    PickBanSubmitInput,
     PickBanUndoInput,
     resolve_optional_viewer_side,
 )
@@ -334,10 +335,49 @@ def register(broker: Any, logger: Any) -> None:
             body = PickBanActionInput.model_validate(_payload(data))
             encounter = await captain_service._load_encounter(session, encounter_id)
             captain_side = await captain_service.resolve_captain_side(session, user, encounter)
-            entry = await pick_ban_action.pick_ban_action_service.perform_pick_ban_action(
-                session, encounter_id, kind, captain_side, body.item_id, body.action
+            # Returns the acting captain's own new state: the room re-renders
+            # from the response instead of racing its own refetch.
+            return await pick_ban_action.pick_ban_action_service.perform_pick_ban_action(
+                session,
+                encounter_id,
+                kind,
+                captain_side,
+                item_id=body.item_id,
+                action=body.action,
+                target_player_id=body.target_player_id,
             )
-            return pick_ban_action.serialize_pick_ban_entry(entry)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.captain_pick_ban_submit")
+    async def _captain_pick_ban_submit(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            kind = _parse_kind(data)
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            body = PickBanSubmitInput.model_validate(_payload(data))
+            encounter = await captain_service._load_encounter(session, encounter_id)
+            captain_side = await captain_service.resolve_captain_side(session, user, encounter)
+            return await pick_ban_action.pick_ban_action_service.submit_items(
+                session,
+                encounter_id,
+                kind,
+                captain_side,
+                items=[item.model_dump() for item in body.items],
+                lock=body.lock,
+            )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.captain_pick_ban_dispute")
+    async def _captain_pick_ban_dispute(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            kind = _parse_kind(data)
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            encounter = await captain_service._load_encounter(session, encounter_id)
+            captain_side = await captain_service.resolve_captain_side(session, user, encounter)
+            return await pick_ban_action.pick_ban_action_service.dispute_step(session, encounter_id, kind, captain_side)
 
         return await _run(logger, op)
 
@@ -356,7 +396,9 @@ def register(broker: Any, logger: Any) -> None:
             await pick_ban_session_service.elect_round_opener(
                 session, pick_ban, first_side=body.first_side, acting_side=captain_side
             )
-            return pick_ban_action.serialize_pick_ban_session(pick_ban)
+            return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
+                session, encounter_id, kind, viewer_side=captain_side
+            )
 
         return await _run(logger, op)
 

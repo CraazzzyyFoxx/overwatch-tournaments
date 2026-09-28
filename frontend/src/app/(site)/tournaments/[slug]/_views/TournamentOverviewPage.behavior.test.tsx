@@ -401,12 +401,21 @@ const POOL_CONFIG: PickBanConfig = {
   mode: "pool",
   first_pick_rule: "higher_seed",
   first_ban_rotation: "fixed",
-  turn_timer_seconds: null,
-  preset: null,
-  sequence: ["ban_first", "ban_second", "decider"],
-  no_repeat_scope: "none",
-  unique_attribute_per_side_per_round: null,
-  allow_protect: false,
+  ruleset: {
+    version: 2,
+    timer_seconds: null,
+    on_timeout: "random_fill",
+    phases: [
+      {
+        id: "main",
+        name: null,
+        when: {},
+        pool_filter: {},
+        generator: "bracket",
+        steps: []
+      }
+    ]
+  },
   item_ids: [41, 42, 43],
   slots: []
 };

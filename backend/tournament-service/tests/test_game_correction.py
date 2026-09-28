@@ -35,7 +35,7 @@ from src.services.encounter.game_correction import game_correction_service  # no
 from src.services.encounter.map_report import map_report_service  # noqa: E402
 from src.services.encounter.pick_ban_action import pick_ban_action_service  # noqa: E402
 from tests._pregame_store import _Store  # noqa: E402
-from tests.test_pregame_loop import _encounter, _hero_config, _map_config  # noqa: E402
+from tests.test_pregame_loop import _encounter, _hero_config, _map_config, _turn  # noqa: E402
 
 ADMIN_ID = 909
 
@@ -79,7 +79,7 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
                 if entry["status"] == MapPoolEntryStatus.AVAILABLE.value and entry["round"] == state["current_round"]
             ]
             await pick_ban_action_service.perform_pick_ban_action(
-                self.store, self.encounter_id, PickBanKind.MAP, state["turn_side"], available[0], "ban"
+                self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=available[0], action="ban"
             )
 
     async def ban_out_the_hero_round(self) -> None:
@@ -91,7 +91,7 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
                 if entry["status"] == MapPoolEntryStatus.AVAILABLE.value and entry["round"] == state["current_round"]
             ]
             await pick_ban_action_service.perform_pick_ban_action(
-                self.store, self.encounter_id, PickBanKind.HERO, state["turn_side"], available[0], "ban"
+                self.store, self.encounter_id, PickBanKind.HERO, _turn(state), item_id=available[0], action="ban"
             )
 
     async def game_id_at(self, position: int) -> int:
@@ -133,7 +133,7 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
         await self.play_position_one(2, 1)
         opened = await self.map_state()
         self.assertEqual(2, opened["current_round"])
-        self.assertEqual(MapPickSide.HOME.value, opened["turn_side"], "home won map 1 and opens map 2")
+        self.assertEqual(MapPickSide.HOME.value, _turn(opened), "home won map 1 and opens map 2")
         sequence_before = list(opened["sequence"])
 
         result = await self.correct(1, 3, 1)
@@ -145,14 +145,17 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
 
         state = await self.map_state()
         self.assertEqual(sequence_before, state["sequence"], "round 2's steps are untouched")
-        self.assertEqual(MapPickSide.HOME.value, state["turn_side"], "home still won map 1, so home still opens map 2")
+        self.assertEqual(MapPickSide.HOME.value, _turn(state), "home still won map 1, so home still opens map 2")
         self.assertEqual((1, 0), (self.encounter.home_score, self.encounter.away_score))
 
     # -- case 3: the winner changed, nothing downstream started ------------
     async def test_flipping_the_winner_rebuilds_the_untouched_next_round(self) -> None:
         await self.play_position_one(2, 1)
         before = await self.map_state()
-        self.assertEqual(["ban_home", "ban_away", "decider"], before["sequence"][-3:])
+        self.assertEqual(
+            [("ban", ["home"]), ("ban", ["away"]), ("decider", ["system"])],
+            [(step["action"], step["sides"]) for step in before["sequence"][-3:]],
+        )
 
         result = await self.correct(1, 1, 2)
 
@@ -162,9 +165,12 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
         state = await self.map_state()
         self.assertEqual(2, state["current_round"], "round 2 is open again, not lost")
         # Away now won map 1, so `result_winner_first` hands away the first ban.
-        self.assertEqual(["ban_away", "ban_home", "decider"], state["sequence"][-3:])
-        self.assertEqual(6, len(state["sequence"]), "the scrapped round's tokens were replaced, not appended to")
-        self.assertEqual(MapPickSide.AWAY.value, state["turn_side"])
+        self.assertEqual(
+            [("ban", ["away"]), ("ban", ["home"]), ("decider", ["system"])],
+            [(step["action"], step["sides"]) for step in state["sequence"][-3:]],
+        )
+        self.assertEqual(6, len(state["sequence"]), "the scrapped round's steps were replaced, not appended to")
+        self.assertEqual(MapPickSide.AWAY.value, _turn(state))
 
         round_two = [entry for entry in self.store.all_of(PickBanEntry) if entry.round == 2]
         self.assertEqual(3, len(round_two), "round 2 offers its slot's three candidates again")
@@ -180,7 +186,7 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
             if entry["round"] == 2 and entry["status"] == MapPoolEntryStatus.AVAILABLE.value
         )
         await pick_ban_action_service.perform_pick_ban_action(
-            self.store, self.encounter_id, PickBanKind.MAP, state["turn_side"], candidate, "ban"
+            self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=candidate, action="ban"
         )
 
         with self.assertRaises(HTTPException) as caught:
@@ -218,7 +224,7 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
 
         state = await self.map_state()
         self.assertEqual(2, state["current_round"], "the admin's decision opened map 2's bans")
-        self.assertEqual(MapPickSide.HOME.value, state["turn_side"])
+        self.assertEqual(MapPickSide.HOME.value, _turn(state))
         self.assertEqual((1, 0), (self.encounter.home_score, self.encounter.away_score))
 
 

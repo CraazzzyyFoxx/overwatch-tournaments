@@ -1,114 +1,115 @@
-"""Undo the last pick-ban action, once BOTH captains have agreed to it.
+"""Undo the last pick-ban step, once BOTH captains have agreed to it.
 
 A captain who banned the wrong hero used to have one way out: ask an organizer
 to reset the session, scrapping the whole round. This is the captains' own,
 surgical alternative -- and it is deliberately a two-sided consent rather than a
-unilateral take-back, because the last action is information the opponent has
-already acted on. Same shape as the two other agreements this room runs on
-(``EncounterReadiness``, ``EncounterMapReport``): one side records its consent,
-the other side's matching call is what applies it.
+unilateral take-back, because a settled step is information the opponent has
+already acted on. (The unilateral door exists too, but only for a BLIND step
+that both sides replay from scratch: ``pick_ban_action.dispute_step``.) Same
+shape as the two other agreements this room runs on (``EncounterReadiness``,
+``EncounterMapReport``): one side records its consent, the other side's
+matching call is what applies it.
 
-What "the last action" means -- and when there is none -- is
-``pick_ban_engine.undoable_entries``: the newest committed entry plus any
-``decider`` the engine resolved off the back of it, refused outright once the
-round has been played or a later round has opened.
-
-Reverting is the exact inverse of ``pick_ban_action.apply_pick_ban_action``:
-the entries go back to ``available`` with their action bookkeeping cleared, a
-ban's cross-round ledger row is deleted, a completed session reopens, and the
-restored turn gets a fresh timer -- without that last part
-``auto_resolve_timeout`` would re-take the action at random on the very next
-read, the clock having long since run out on the step being restored.
+What "the last step" means is ``pick_ban_rules.undo_target``: the latest step
+holding an applied item from a captain. Reverting VOIDS that step's live
+submissions and every later one -- a system step resolved off its back, a draft
+already started on the next step -- and re-projects the board from what is
+left, which is the whole revert: ``PickBanEntry`` is a projection, so nothing
+has to be un-set by hand. The restored step gets a fresh clock; without that
+``_settle`` would re-take it at random on the very next read, the timer having
+long since run out on the step being restored.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
-from shared.core.enums import EncounterGameState, MapPoolEntryStatus, MapVetoSessionStatus, PickBanKind
+from shared.core.enums import EncounterGameState, MapVetoSessionStatus, PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
-from shared.models.tournament.pick_ban import EncounterPickBanLedger, PickBanEntry, PickBanSession
-from shared.repository import EncounterPickBanLedgerRepository, EncounterRepository, PickBanEntryRepository
-from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
+from shared.domain import pick_ban_rules as pbr
+from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession
+from shared.repository import EncounterRepository, PickBanEntryRepository, PickBanSubmissionRepository
+from src.services.encounter.pick_ban_session import (
+    PickBanSessionService,
+    pick_ban_session_service,
+    resolved_steps,
+)
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 
 
 def clear_undo_request(pick_ban: PickBanSession) -> None:
     """Drop any open request. Called on every new action as well as after an
-    undo lands: a consent is given for ONE specific action, so it must never
-    outlive the pool state it was read against."""
+    undo lands: a consent is given for ONE specific step, so it must never
+    outlive the state it was read against."""
     pick_ban.undo_requested_by = None
     pick_ban.undo_target_index = None
 
 
-def undo_state(pick_ban: PickBanSession | None, pool: list[PickBanEntry]) -> dict:
+def undo_state(
+    pick_ban: PickBanSession | None,
+    steps: list[pbr.ResolvedStep],
+    submissions: list[pbr.SubmissionLike],
+) -> dict[str, Any]:
     """The room's undo block: what an undo would revert right now, and who has
     already agreed to it.
 
     ``item_ids`` empty means nothing is undoable -- the single signal the UI
     needs to decide whether the affordance exists at all. ``requested_by`` is
-    reported only while it still matches the action in play; a request left
-    behind by a since-superseded action reads as no request, exactly as the
-    consent check itself treats it.
+    reported only while it still matches the step in play; a request left behind
+    by a since-superseded step reads as no request, exactly as the consent check
+    itself treats it.
     """
-    entries = engine.undoable_entries(pool)
-    if not entries:
-        return {"requested_by": None, "item_ids": [], "action": None, "side": None}
-    primary = entries[-1]
-    requested_by = (
-        pick_ban.undo_requested_by
-        if pick_ban is not None and pick_ban.undo_target_index == entries[0].action_index
-        else None
-    )
+    target = pbr.undo_target(steps, submissions)
+    if target is None:
+        return {"requested_by": None, "step_index": None, "item_ids": [], "action": None, "side": None}
+    step = next(candidate for candidate in steps if candidate.index == target)
+    sides = step.acting_sides
+    requested_by = pick_ban.undo_requested_by if pick_ban is not None and pick_ban.undo_target_index == target else None
     return {
         "requested_by": requested_by,
-        # Play order, so the UI lists them the way they were committed.
-        "item_ids": [entry.item_id for entry in reversed(entries)],
-        "action": _action_of(primary),
-        "side": primary.picked_by or primary.protected_by,
+        "step_index": target,
+        # Play order, so the UI lists them the way they were committed -- the
+        # step itself plus everything resolved off its back.
+        "item_ids": [
+            applied.item_id for applied in pbr.applied_items(steps, submissions) if applied.step_index >= target
+        ],
+        "action": step.action,
+        # A multi-side (simultaneous) step belongs to nobody in particular.
+        "side": sides[0] if len(sides) == 1 else None,
     }
 
 
-def _action_of(entry: PickBanEntry) -> str:
-    if entry.status == MapPoolEntryStatus.BANNED.value:
-        return "ban"
-    if entry.status == MapPoolEntryStatus.PROTECTED.value:
-        return "protect"
-    return "pick"
-
-
-def ledger_keys(entries: list[PickBanEntry]) -> list[tuple[int, str]]:
-    """``(item_id, side)`` per undone action that wrote cross-round ban memory.
-
-    Read BEFORE ``apply_undo``, which clears the very fields this reads. Only
-    bans are in the ledger at all (a protect is round-local, by design), and a
-    decider pick never wrote one.
-    """
-    return [
-        (entry.item_id, entry.picked_by)
-        for entry in entries
-        if entry.status == MapPoolEntryStatus.BANNED.value and entry.picked_by is not None
-    ]
-
-
-def apply_undo(pick_ban: PickBanSession, entries: list[PickBanEntry], *, now: datetime) -> None:
-    """Pure step: revert `entries` and reopen the step that produced them."""
-    for entry in entries:
-        entry.status = MapPoolEntryStatus.AVAILABLE.value
-        entry.picked_by = None
-        entry.protected_by = None
-        entry.action_index = None
+def apply_undo(
+    pick_ban: PickBanSession,
+    steps: list[pbr.ResolvedStep],
+    submissions: list[pbr.SubmissionLike],
+    entries: list[PickBanEntry],
+    *,
+    target: int,
+    now: datetime,
+) -> None:
+    """Pure step: void the target step's live submissions and every later one,
+    re-project the board, and reopen the step."""
+    for step in steps:
+        if step.index < target:
+            continue
+        attempt = pbr.current_attempt(submissions, step.index)
+        for row in submissions:
+            if row.step_index == step.index and row.attempt == attempt and row.state != pbr.VOIDED:
+                row.state = pbr.VOIDED
+    pbr.project_entries(entries, steps, submissions)
     clear_undo_request(pick_ban)
     # A completed session ran out of sequence, which an undo puts back -- a
     # cancelled one is a different thing entirely and never gets here.
-    if pick_ban.status == MapVetoSessionStatus.COMPLETED.value:
-        pick_ban.status = MapVetoSessionStatus.ACTIVE.value
+    if str(pick_ban.status) == MapVetoSessionStatus.COMPLETED:
+        pick_ban.status = MapVetoSessionStatus.ACTIVE
     pick_ban.current_step_started_at = now
 
 
@@ -117,12 +118,12 @@ class PickBanUndoService:
         self,
         *,
         entry_repo: PickBanEntryRepository = PickBanEntryRepository(),
-        ledger_repo: EncounterPickBanLedgerRepository = EncounterPickBanLedgerRepository(),
+        submission_repo: PickBanSubmissionRepository = PickBanSubmissionRepository(),
         encounter_repo: EncounterRepository = EncounterRepository(),
         sessions: PickBanSessionService = pick_ban_session_service,
     ) -> None:
         self.entry_repo = entry_repo
-        self.ledger_repo = ledger_repo
+        self.submission_repo = submission_repo
         self.encounter_repo = encounter_repo
         self.sessions = sessions
 
@@ -134,63 +135,58 @@ class PickBanUndoService:
         captain_side: str,
         *,
         consent: bool = True,
-    ) -> dict:
-        """Record ``captain_side``'s consent to undo the last action, applying it
+    ) -> dict[str, Any]:
+        """Record ``captain_side``'s consent to undo the last step, applying it
         the moment both sides have given it. ``consent=False`` withdraws an open
         request (either side may: the asker changes their mind, or the opponent
         refuses).
 
-        Returns the resulting undo block, so the caller renders the outcome without
-        a second read.
+        Returns the resulting undo block, so the caller renders the outcome
+        without a second read.
         """
-        # Same lock every committing path takes: an undo REMOVES a committed entry,
-        # which moves the step cursor exactly as taking one does, and the consent
-        # it reads (`undo_target_index`) is compared against the pool it loads
-        # below (see `pick_ban_session.get_pick_ban_session`).
+        # Same lock every committing path takes: an undo moves the step cursor
+        # exactly as taking a step does, and the consent it reads
+        # (`undo_target_index`) is compared against the log it loads below.
         pick_ban = await self.sessions.get_pick_ban_session(session, encounter_id, kind, for_update=True)
         if pick_ban is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is not initialized")
-        if pick_ban.status == MapVetoSessionStatus.CANCELLED.value:
+        if str(pick_ban.status) == MapVetoSessionStatus.CANCELLED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is cancelled")
 
-        pool = await self._load_pool(session, pick_ban.id, refresh=True)
-        entries = engine.undoable_entries(pool)
-        if not entries:
+        steps = resolved_steps(pick_ban)
+        entries = list(
+            await self.entry_repo.list_by_session(session, pick_ban.id, ordered=True, populate_existing=True)
+        )
+        submissions = list(await self.submission_repo.list_by_session(session, pick_ban.id, populate_existing=True))
+        target = pbr.undo_target(steps, submissions)
+        if target is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="There is no action left to undo")
-        target_index = entries[0].action_index
+        step = next(candidate for candidate in steps if candidate.index == target)
         if kind == PickBanKind.MAP:
-            await self._assert_hero_round_unstarted(session, encounter_id, entries[-1].round)
-            await self._assert_positions_unclaimed(session, encounter_id, pool, entries)
+            await self._assert_hero_round_unstarted(session, encounter_id, step.round)
+            await self._assert_positions_unclaimed(session, encounter_id, entries, steps, submissions, target)
 
         if not consent:
             clear_undo_request(pick_ban)
         else:
-            # A request standing against a DIFFERENT action is stale, not an
+            # A request standing against a DIFFERENT step is stale, not an
             # agreement -- this call then opens a fresh one instead of applying it.
-            pending_side = pick_ban.undo_requested_by if pick_ban.undo_target_index == target_index else None
+            pending_side = pick_ban.undo_requested_by if pick_ban.undo_target_index == target else None
             if pending_side is None or pending_side == captain_side:
                 pick_ban.undo_requested_by = captain_side
-                pick_ban.undo_target_index = target_index
+                pick_ban.undo_target_index = target
             else:
-                keys = ledger_keys(entries)
-                apply_undo(pick_ban, entries, now=datetime.now(UTC))
-                await self._forget_ledger_rows(session, encounter_id, kind, keys)
+                apply_undo(pick_ban, steps, submissions, entries, target=target, now=datetime.now(UTC))
                 if kind == PickBanKind.MAP:
                     # The pick is gone, so the position it opened must go with it.
                     encounter = await self.encounter_repo.get(session, encounter_id)
                     if encounter is not None:
+                        await session.flush()
                         await self.sessions.games.sync_games_with_picks(session, encounter, pick_ban)
 
         await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
-        return undo_state(pick_ban, pool)
-
-    async def _load_pool(self, session: AsyncSession, pick_ban_id: int, *, refresh: bool = False) -> list[PickBanEntry]:
-        """The session's entries; ``refresh`` discards a pre-lock snapshot already
-        sitting in the identity map."""
-        return list(
-            await self.entry_repo.list_by_session(session, pick_ban_id, ordered=True, populate_existing=refresh)
-        )
+        return undo_state(pick_ban, steps, submissions)
 
     async def _assert_hero_round_unstarted(
         self, session: AsyncSession, encounter_id: int, round_number: int | None
@@ -208,7 +204,8 @@ class PickBanUndoService:
         if hero_session is None:
             return
         # Grouped count with a conditional round predicate, not a CRUD read: stays
-        # here rather than becoming a repository method.
+        # here rather than becoming a repository method. A carried ban never counts
+        # -- it carries no `action_index`, being a fixed copy of an earlier round's.
         committed = await session.scalar(
             select(sa.func.count())
             .select_from(PickBanEntry)
@@ -228,8 +225,10 @@ class PickBanUndoService:
         self,
         session: AsyncSession,
         encounter_id: int,
-        pool: list[PickBanEntry],
         entries: list[PickBanEntry],
+        steps: list[pbr.ResolvedStep],
+        submissions: list[pbr.SubmissionLike],
+        target: int,
     ) -> None:
         """Refuse to undo a MAP pick once its position has a result claim.
 
@@ -239,9 +238,15 @@ class PickBanUndoService:
         click, so the series score would move because two captains agreed to
         change a MAP. Corrections are the admin command, with a reason.
         """
-        undone = {id(entry) for entry in entries}
-        settled = engine.settled_in_order(pool)
-        positions = {index for index, entry in enumerate(settled, 1) if id(entry) in undone}
+        undone = {
+            (applied.round, applied.item_id)
+            for applied in pbr.applied_items(steps, submissions)
+            if applied.step_index >= target and applied.action in ("pick", "decider")
+        }
+        if not undone:
+            return
+        settled = engine.settled_in_order(entries)
+        positions = {index for index, entry in enumerate(settled, 1) if (entry.round, entry.item_id) in undone}
         if not positions:
             return
         games = [
@@ -252,27 +257,6 @@ class PickBanUndoService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Undo is not possible: this map already has a result claim",
-            )
-
-    async def _forget_ledger_rows(
-        self, session: AsyncSession, encounter_id: int, kind: PickBanKind, keys: list[tuple[int, str]]
-    ) -> None:
-        """Delete the cross-round ban memory the undone bans wrote.
-
-        Ledger rows are keyed by ``(encounter, kind, item_id, banned_by_side)`` --
-        the same tuple the reverted entry carried -- so this removes exactly what
-        those actions added and nothing an earlier round put there. A ledger-less
-        config (``no_repeat_scope=none``) simply has no matching row.
-        """
-        for item_id, side in keys:
-            await self.ledger_repo.delete_for_encounter(
-                session,
-                encounter_id=encounter_id,
-                kind=kind,
-                filters=[
-                    EncounterPickBanLedger.item_id == item_id,
-                    EncounterPickBanLedger.banned_by_side == side,
-                ],
             )
 
 

@@ -26,14 +26,15 @@ from shared.core.enums import (  # noqa: E402
     PickBanKind,
 )
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.domain import pick_ban_rules as pbr  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
-    EncounterPickBanLedger,
     EncounterReadiness,
     PickBanConfig,
     PickBanEntry,
     PickBanSession,
+    PickBanSubmission,
 )
 from shared.models.tournament.stage import Stage  # noqa: E402
 from src.services.encounter.pick_ban_session import (  # noqa: E402
@@ -69,7 +70,28 @@ def _entry(item_id: int, *, round: int | None = None, status: str = "available",
         action_index=None,
         picked_by=None,
         protected_by=None,
+        carried_from_round=None,
     )
+
+
+def _ruleset(
+    *,
+    kind: PickBanKind,
+    mode: MapVetoMode,
+    sequence: list[str] | None = None,
+    no_repeat_scope: str = "none",
+) -> dict:
+    """The ruleset the v1 migration produces for this shape, so every fixture
+    here is also a migrated-config regression check."""
+    return pbr.ruleset_from_v1(
+        kind=kind.value,
+        mode=mode.value,
+        preset="custom" if sequence else "bracket",
+        sequence=sequence or [],
+        no_repeat_scope=no_repeat_scope,
+        unique_attribute=None,
+        turn_timer_seconds=45,
+    ).to_json()
 
 
 def _config(
@@ -79,6 +101,8 @@ def _config(
     rotation: str = FirstBanRotation.FIXED,
     items: list[int] | None = None,
     slots: list[SimpleNamespace] | None = None,
+    sequence: list[str] | None = None,
+    no_repeat_scope: str = "none",
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=42,
@@ -86,13 +110,51 @@ def _config(
         stage_id=None,
         round=None,
         mode=mode,
-        preset="bracket",
         first_ban_rotation=rotation,
-        sequence_json=["pick_first", "pick_second"],
-        turn_timer_seconds=45,
-        no_repeat_scope="none",
+        ruleset_json=_ruleset(kind=kind, mode=mode, sequence=sequence, no_repeat_scope=no_repeat_scope),
         items=[SimpleNamespace(item_id=item_id, sort_order=idx) for idx, item_id in enumerate(items or [])],
         slots=slots or [],
+    )
+
+
+def _resolved(*specs: tuple[str, list[str]], round: int | None = 1, start: int = 0) -> list[dict]:
+    """Resolved steps as ``resolved_sequence_json`` holds them: ``(action, sides)``."""
+    return [
+        pbr.ResolvedStep(
+            index=start + offset,
+            round=round,
+            phase_id="main",
+            step_id=f"s{start + offset}",
+            action=action,
+            sides=sides,
+            count=1,
+            min=1,
+            blind=False,
+            target=None,
+            lifetime=1 if action == "ban" else None,
+            timer_seconds=None,
+            on_timeout="random_fill",
+            dispute=pbr.DisputeRule(enabled=False, max=0),
+            eligible={},
+            constraints=[],
+        ).to_json()
+        for offset, (action, sides) in enumerate(specs)
+    ]
+
+
+def _shape(sequence: list[dict]) -> list[tuple[str, list[str]]]:
+    return [(step["action"], step["sides"]) for step in sequence]
+
+
+def _submission(step_index: int, side: str, item_ids: list[int], *, state: str = "revealed") -> SimpleNamespace:
+    return SimpleNamespace(
+        step_index=step_index,
+        side=side,
+        attempt=1,
+        state=state,
+        items_json=[{"item_id": item_id, "target_player_id": None} for item_id in item_ids],
+        locked_at=None,
+        revealed_at=None,
     )
 
 
@@ -200,7 +262,7 @@ class _FakeSession:
         existing: Any = None,
         pool_count: int = 0,
         readiness: frozenset[str] = frozenset({"home", "away"}),
-        ledger: list[Any] | None = None,
+        submissions: list[Any] | None = None,
         entries: list[Any] | None = None,
         encounter: Any = None,
         map_session: Any = _INHERIT,
@@ -217,10 +279,9 @@ class _FakeSession:
         # logic unchanged; only tests that care about the gate pass a
         # narrower set.
         self.readiness = readiness
-        # `EncounterPickBanLedger` rows `advance_to_next_round` reads back to
-        # build a later round's candidate pool -- empty for every test that
-        # predates that call (round 1 never reads the ledger).
-        self.ledger = ledger or []
+        # The session's `PickBanSubmission` rows -- the action log every
+        # `banned_by` pool filter and the cursor itself are derived from.
+        self.submissions = submissions or []
         # The session's existing `PickBanEntry` rows. `advance_to_next_round`
         # reads them to decide whether the round in play is resolved (it never
         # stacks a round on an unfinished one) and which round already exists.
@@ -315,8 +376,12 @@ class _FakeSession:
             return _Result(sorted(self.readiness))
         if entity is PickBanEntry:
             return _Result(list(self.entries))
-        if entity is EncounterPickBanLedger:
-            return _Result(list(self.ledger))
+        if entity is PickBanSubmission:
+            return _Result(list(self.submissions))
+        if getattr(entity, "__name__", None) in ("Hero", "Map", "Gamemode"):
+            # The group vocabulary behind `item_group`/`target_role_match`; no
+            # fixture here uses a group condition, so an empty catalog is exact.
+            return _Result([])
         raise AssertionError(f"unexpected execute() entity: {entity}")
 
     async def scalar(self, statement: Any) -> Any:
@@ -586,15 +651,20 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
     def _hero_session(
         self, *, complete: bool, games: list[Any] | None = None
     ) -> tuple[SimpleNamespace, SimpleNamespace, _FakeSession]:
-        config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103, 104])
-        config.sequence_json = ["ban_first", "ban_second"]
+        config = _config(
+            mode=MapVetoMode.POOL,
+            kind=PickBanKind.HERO,
+            items=[101, 102, 103, 104],
+            sequence=["ban_first", "ban_second"],
+        )
         pick_ban = SimpleNamespace(
             id=900,
             encounter_id=500,
             kind=PickBanKind.HERO,
             config_id=config.id,
             first_side="home",
-            resolved_sequence_json=["ban_home", "ban_away"],
+            resolved_sequence_json=_resolved(("ban", ["home"]), ("ban", ["away"])),
+            ruleset_json=config.ruleset_json,
             awaiting_choice=False,
             pending_loser_side=None,
             status=MapVetoSessionStatus.COMPLETED if complete else MapVetoSessionStatus.ACTIVE,
@@ -612,6 +682,11 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
             entries=entries,
             games=games,
             encounter=_encounter(best_of=3),
+            submissions=(
+                [_submission(0, "home", [101]), _submission(1, "away", [102])]
+                if complete
+                else [_submission(0, "home", [101])]
+            ),
         )
         return config, pick_ban, session
 
@@ -681,28 +756,26 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
 
 
 class ResetPickBanSessionTests(IsolatedAsyncioTestCase):
-    """Delete + re-create, mirroring ``veto_session.reset_veto_session``:
-    the entries are not separately deleted here because
-    ``pick_ban_entry.session_id`` carries ``ON DELETE CASCADE`` at the DB
-    level (unlike legacy ``encounter_map_pool``, which is keyed by
-    ``encounter_id`` and needs its own bulk delete)."""
+    """Delete + re-create. Neither the entries nor the submission log are
+    deleted separately: both carry ``ON DELETE CASCADE`` on
+    ``session_id``, so dropping the session row genuinely forgets everything
+    the scrapped attempt banned."""
 
-    async def test_deletes_the_existing_session_and_its_kind_scoped_ledger(self) -> None:
+    async def test_deletes_the_existing_session_row_and_lets_its_children_cascade(self) -> None:
         existing = SimpleNamespace(id=900)
         session = _FakeSession(existing=existing, config=None)  # no config -> re-ensure no-ops
 
         result = await pick_ban_session_service.reset_pick_ban_session(session, _encounter(best_of=3), PickBanKind.MAP)
 
         self.assertIsNone(result)
-        self.assertEqual(
-            {PickBanSession.__tablename__, EncounterPickBanLedger.__tablename__},
-            set(session.deleted_tables()),
-        )
+        # One statement: entries AND the submission log (the cross-round ban
+        # memory every `banned_by` condition reads) cascade at the DB level.
+        self.assertEqual([PickBanSession.__tablename__], session.deleted_tables())
         # Two flushes: one retiring the series' games, one after the deletes.
         self.assertEqual(2, session.flushes)
         self.assertEqual(1, session.commits)
 
-    async def test_no_existing_session_still_clears_the_ledger_and_recreates(self) -> None:
+    async def test_no_existing_session_just_recreates(self) -> None:
         session = _FakeSession(existing=None, config=_config(mode=MapVetoMode.POOL, items=[11, 12, 13]))
 
         pick_ban = await pick_ban_session_service.reset_pick_ban_session(
@@ -710,8 +783,8 @@ class ResetPickBanSessionTests(IsolatedAsyncioTestCase):
         )
 
         self.assertIsNotNone(pick_ban)
-        # Only the ledger delete fires -- there was no session row to delete.
-        self.assertEqual([EncounterPickBanLedger.__tablename__], session.deleted_tables())
+        # Nothing to delete: there was no session row.
+        self.assertEqual([], session.deleted_tables())
 
     async def test_commit_false_flushes_instead_of_committing(self) -> None:
         session = _FakeSession(existing=None, config=_config(mode=MapVetoMode.POOL, items=[11, 12, 13]))
@@ -966,15 +1039,16 @@ class SyncAllPickBanSessionsAfterTeamChangeTests(IsolatedAsyncioTestCase):
 # Round 1 fully resolved: two non-available entries against the two-token
 # sequence `_pick_ban` carries, which is what lets the next round open.
 RESOLVED_ROUND_ONE = [_entry(11, round=1, status="banned"), _entry(12, round=1, status="picked")]
+#: The log behind it: home banned 11 on step 0, the decider awarded 12 on step 1.
+ROUND_ONE_SUBMISSIONS = [_submission(0, "home", [11]), _submission(1, "system", [12])]
 
 
 class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
-    """``advance_to_next_round`` must not build a round whose no-repeat
-    -filtered candidate pool falls below ``SLOT_CANDIDATE_FLOOR``. Left
-    unguarded, that round's ``PickBanEntry`` rows come up short of what
-    ``build_slot_sequence`` assumed, and it crashes far later and far less
-    clearly, inside ``auto_complete_decider_entry`` on the room's very next
-    state read."""
+    """``advance_to_next_round`` must not build a round whose pool-filtered
+    candidate set falls below ``SLOT_CANDIDATE_FLOOR``. Left unguarded, that
+    round's ``PickBanEntry`` rows come up short of what its generated steps
+    assume, and it crashes far later and far less clearly, on the room's very
+    next state read."""
 
     def _pick_ban(self, config: SimpleNamespace) -> SimpleNamespace:
         return SimpleNamespace(
@@ -983,7 +1057,8 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
             kind=PickBanKind.MAP,
             config_id=config.id,
             first_side="home",
-            resolved_sequence_json=["ban_home", "decider"],
+            resolved_sequence_json=_resolved(("ban", ["home"]), ("decider", ["system"])),
+            ruleset_json=config.ruleset_json,
             awaiting_choice=False,
             pending_loser_side=None,
             status="active",
@@ -998,11 +1073,11 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
             mode=MapVetoMode.SLOTS,
             rotation=FirstBanRotation.RESULT_WINNER_FIRST,
             slots=[_slot(1, [11, 12]), _slot(2, [11, 12])],
+            no_repeat_scope="encounter",
         )
-        config.no_repeat_scope = "encounter"
         session = _FakeSession(
             config=config,
-            ledger=[SimpleNamespace(item_id=11, banned_by_side="home")],
+            submissions=[_submission(0, "home", [11]), _submission(1, "system", [12])],
             entries=RESOLVED_ROUND_ONE,
             encounter=_encounter(best_of=2),
         )
@@ -1014,7 +1089,8 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(422, ctx.exception.status_code)
         self.assertIn(
-            f"1 candidate(s) left after no-repeat exclusion (needs >= {SLOT_CANDIDATE_FLOOR})", ctx.exception.detail
+            f"1 candidate(s) left after the phase's pool filter (needs >= {SLOT_CANDIDATE_FLOOR})",
+            ctx.exception.detail,
         )
         self.assertEqual(0, session.commits)
 
@@ -1025,11 +1101,11 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
             mode=MapVetoMode.SLOTS,
             rotation=FirstBanRotation.RESULT_WINNER_FIRST,
             slots=[_slot(1, [11, 12]), _slot(2, [21, 22])],
+            no_repeat_scope="encounter",
         )
-        config.no_repeat_scope = "encounter"
         session = _FakeSession(
             config=config,
-            ledger=[SimpleNamespace(item_id=11, banned_by_side="home")],
+            submissions=[_submission(0, "home", [11]), _submission(1, "system", [12])],
             entries=RESOLVED_ROUND_ONE,
             encounter=_encounter(best_of=2),
         )
@@ -1063,7 +1139,10 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
         self.assertEqual([1, 1, 1], [row.round for row in session.pool_rows])
         self.assertEqual([11, 12, 13], [row.item_id for row in session.pool_rows])
         # Slot 1 alone: two bans opened by the higher seed, then its decider.
-        self.assertEqual(["ban_home", "ban_away", "decider"], pick_ban.resolved_sequence_json)
+        self.assertEqual(
+            [("ban", ["home"]), ("ban", ["away"]), ("decider", ["system"])],
+            _shape(pick_ban.resolved_sequence_json),
+        )
 
     async def test_a_flat_map_config_still_settles_the_whole_series_at_once(self) -> None:
         # The legacy classic veto: one sequence, one round, `round IS NULL`.
@@ -1076,11 +1155,15 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
 
         assert pick_ban is not None
         self.assertEqual([None] * 5, [row.round for row in session.pool_rows])
-        self.assertIn("decider", pick_ban.resolved_sequence_json)
+        self.assertIn("decider", [step["action"] for step in pick_ban.resolved_sequence_json])
 
     async def test_a_hero_config_runs_its_own_sequence_per_round(self) -> None:
-        config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103, 104])
-        config.sequence_json = ["ban_first", "ban_second"]
+        config = _config(
+            mode=MapVetoMode.POOL,
+            kind=PickBanKind.HERO,
+            items=[101, 102, 103, 104],
+            sequence=["ban_first", "ban_second"],
+        )
         # `map_session` + `pool_count` stand in for the map phase: a map session
         # exists and one of its entries is picked, so round 1's map is settled
         # and its hero bans may open.
@@ -1091,7 +1174,7 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
         )
 
         assert pick_ban is not None
-        self.assertEqual(["ban_home", "ban_away"], pick_ban.resolved_sequence_json)
+        self.assertEqual([("ban", ["home"]), ("ban", ["away"])], _shape(pick_ban.resolved_sequence_json))
         # Every hero is a candidate of round 1 -- and only of round 1.
         self.assertEqual([1, 1, 1, 1], [row.round for row in session.pool_rows])
 
@@ -1100,8 +1183,12 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
         # no survivor to resolve to and would stall the room on a step nobody
         # can take. Legacy configs (authored when the flat validator demanded a
         # pick or a decider) carry one.
-        config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103])
-        config.sequence_json = ["ban_first", "ban_second", "decider"]
+        config = _config(
+            mode=MapVetoMode.POOL,
+            kind=PickBanKind.HERO,
+            items=[101, 102, 103],
+            sequence=["ban_first", "ban_second", "decider"],
+        )
         session = _FakeSession(config=config, map_session=SimpleNamespace(id=800), pool_count=1)
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
@@ -1109,13 +1196,14 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
         )
 
         assert pick_ban is not None
-        self.assertEqual(["ban_home", "ban_away"], pick_ban.resolved_sequence_json)
+        self.assertEqual([("ban", ["home"]), ("ban", ["away"])], _shape(pick_ban.resolved_sequence_json))
 
     async def test_hero_bans_wait_for_their_map(self) -> None:
         # The map session has settled nothing yet (`pool_count=0`), so round 1's
         # heroes cannot be banned: they are banned FOR a map.
-        config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103])
-        config.sequence_json = ["ban_first", "ban_second"]
+        config = _config(
+            mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103], sequence=["ban_first", "ban_second"]
+        )
         session = _FakeSession(config=config, map_session=SimpleNamespace(id=800), pool_count=0)
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
@@ -1142,7 +1230,10 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
             kind=kind,
             config_id=config.id,
             first_side="home",
-            resolved_sequence_json=sequence if sequence is not None else ["ban_home", "decider"],
+            resolved_sequence_json=(
+                sequence if sequence is not None else _resolved(("ban", ["home"]), ("decider", ["system"]))
+            ),
+            ruleset_json=config.ruleset_json,
             awaiting_choice=False,
             pending_loser_side=None,
             status="completed",
@@ -1154,14 +1245,19 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         # alone: every progressive config opens its rounds one map at a time,
         # or a `fixed` one would hand out the whole series' bans up front.
         config = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
-        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=2))
+        session = _FakeSession(
+            config=config,
+            entries=RESOLVED_ROUND_ONE,
+            submissions=ROUND_ONE_SUBMISSIONS,
+            encounter=_encounter(best_of=2),
+        )
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
         await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome=None)
 
         self.assertEqual([21, 22], [row.item_id for row in session.pool_rows])
-        self.assertEqual(["ban_home", "decider", "ban_home", "decider"], pick_ban.resolved_sequence_json)
+        self.assertEqual([("ban", ["home"]), ("decider", ["system"])] * 2, _shape(pick_ban.resolved_sequence_json))
         self.assertEqual("active", pick_ban.status)
 
     async def test_an_unfinished_round_is_never_stacked_on(self) -> None:
@@ -1177,12 +1273,17 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="home")
 
         self.assertEqual([], session.pool_rows)
-        self.assertEqual(["ban_home", "decider"], pick_ban.resolved_sequence_json)
+        self.assertEqual([("ban", ["home"]), ("decider", ["system"])], _shape(pick_ban.resolved_sequence_json))
 
     async def test_the_series_length_caps_the_rounds(self) -> None:
         # A Bo1 encounter plays one map, whatever the config's slot count says.
         config = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
-        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=1))
+        session = _FakeSession(
+            config=config,
+            entries=RESOLVED_ROUND_ONE,
+            submissions=ROUND_ONE_SUBMISSIONS,
+            encounter=_encounter(best_of=1),
+        )
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
@@ -1191,10 +1292,15 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         self.assertEqual([], session.pool_rows)
 
     async def test_a_hero_round_reopens_the_whole_pool_and_closes_the_last_one(self) -> None:
-        config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103, 104])
-        config.sequence_json = ["ban_first", "ban_second"]
+        config = _config(
+            mode=MapVetoMode.POOL,
+            kind=PickBanKind.HERO,
+            items=[101, 102, 103, 104],
+            sequence=["ban_first", "ban_second"],
+        )
         session = _FakeSession(
             config=config,
+            submissions=[_submission(0, "home", [101]), _submission(1, "away", [102])],
             entries=[
                 _entry(101, round=1, status="banned"),
                 _entry(102, round=1, status="banned"),
@@ -1203,7 +1309,9 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
             ],
             encounter=_encounter(best_of=3),
         )
-        pick_ban = self._pick_ban(config, kind=PickBanKind.HERO, sequence=["ban_home", "ban_away"])
+        pick_ban = self._pick_ban(
+            config, kind=PickBanKind.HERO, sequence=_resolved(("ban", ["home"]), ("ban", ["away"]))
+        )
         session.existing = pick_ban
 
         await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="away")
@@ -1224,13 +1332,21 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
             rotation=FirstBanRotation.RESULT_WINNER_FIRST,
             slots=[_slot(1, [11, 12]), _slot(2, [21, 22, 23])],
         )
-        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=2))
+        session = _FakeSession(
+            config=config,
+            entries=RESOLVED_ROUND_ONE,
+            submissions=ROUND_ONE_SUBMISSIONS,
+            encounter=_encounter(best_of=2),
+        )
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
         await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome="draw")
 
-        self.assertEqual(["ban_home", "decider", "ban_home", "ban_away", "decider"], pick_ban.resolved_sequence_json)
+        self.assertEqual(
+            [("ban", ["home"]), ("decider", ["system"]), ("ban", ["home"]), ("ban", ["away"]), ("decider", ["system"])],
+            _shape(pick_ban.resolved_sequence_json),
+        )
 
     async def test_an_unconfirmed_previous_map_owes_the_round_instead_of_inventing_an_opener(self) -> None:
         # `outcome=None` under a result-dependent rotation is not "no winner" --
@@ -1242,14 +1358,19 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
             rotation=FirstBanRotation.RESULT_LOSER_FIRST,
             slots=[_slot(1, [11, 12]), _slot(2, [21, 22, 23])],
         )
-        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=2))
+        session = _FakeSession(
+            config=config,
+            entries=RESOLVED_ROUND_ONE,
+            submissions=ROUND_ONE_SUBMISSIONS,
+            encounter=_encounter(best_of=2),
+        )
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
         await pick_ban_session_service.advance_to_next_round(session, pick_ban, completed_round=1, outcome=None)
 
         self.assertEqual([], session.pool_rows)
-        self.assertEqual(["ban_home", "decider"], pick_ban.resolved_sequence_json)
+        self.assertEqual([("ban", ["home"]), ("decider", ["system"])], _shape(pick_ban.resolved_sequence_json))
 
     async def test_the_next_round_loads_the_config_with_its_pool(self) -> None:
         # Regression, Sentry OWT-TOURNAMENTS-22Y: the config was fetched with
@@ -1258,7 +1379,12 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
         # async SQLAlchemy, 500ing every map report that closed a round and
         # stalling the series mid-way.
         config = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
-        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=2))
+        session = _FakeSession(
+            config=config,
+            entries=RESOLVED_ROUND_ONE,
+            submissions=ROUND_ONE_SUBMISSIONS,
+            encounter=_encounter(best_of=2),
+        )
         pick_ban = self._pick_ban(config)
         session.existing = pick_ban
 
@@ -1280,14 +1406,20 @@ class AdvanceLocksTheSessionTests(IsolatedAsyncioTestCase):
 
     async def test_it_locks_before_deciding_anything(self) -> None:
         config = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
-        session = _FakeSession(config=config, entries=RESOLVED_ROUND_ONE, encounter=_encounter(best_of=2))
+        session = _FakeSession(
+            config=config,
+            entries=RESOLVED_ROUND_ONE,
+            submissions=ROUND_ONE_SUBMISSIONS,
+            encounter=_encounter(best_of=2),
+        )
         pick_ban = SimpleNamespace(
             id=900,
             encounter_id=500,
             kind=PickBanKind.MAP,
             config_id=config.id,
             first_side="home",
-            resolved_sequence_json=["ban_home", "decider"],
+            resolved_sequence_json=_resolved(("ban", ["home"]), ("decider", ["system"])),
+            ruleset_json=config.ruleset_json,
             awaiting_choice=False,
             pending_loser_side=None,
             status="completed",

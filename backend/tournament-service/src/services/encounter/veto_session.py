@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import FirstBanRotation, MapPickSide, VetoSeedSource
+from shared.core.enums import MapPickSide, VetoSeedSource
 from src import models
 
 REASON_TEAMS_UNKNOWN = "teams_unknown"
@@ -21,41 +21,7 @@ REASON_SLOT_COUNT_MISMATCH = "slot_count_mismatch"
 REASON_SLOT_UNDERFILLED = "slot_underfilled"
 REASON_BRACKET_PREVIEW = "bracket_preview"
 
-CUSTOM_PRESET = "custom"
-BRACKET_PRESET = "bracket"
-LEAD_BANS = 2
 SLOT_CANDIDATE_FLOOR = 2
-
-
-def build_sequence_for_best_of(best_of: int, pool_size: int) -> list[str]:
-    """Generate a side-agnostic sequence that plays exactly ``best_of`` maps."""
-    if pool_size < 1:
-        return []
-    if best_of <= 1:
-        tokens = ["ban_first" if index % 2 == 0 else "ban_second" for index in range(pool_size - 1)]
-        tokens.append("decider")
-        return tokens
-
-    played = min(best_of, pool_size)
-    picks = played - 1 if played % 2 else played
-    bans = max(0, min(LEAD_BANS, pool_size - played))
-
-    tokens = ["ban_first" if index % 2 == 0 else "ban_second" for index in range(bans)]
-    tokens.extend("pick_first" if index % 2 == 0 else "pick_second" for index in range(picks))
-    if played % 2:
-        tokens.append("decider")
-    return tokens
-
-
-def build_slot_sequence(candidate_counts: list[int], *, rotation: str) -> list[str]:
-    """Generate the side-agnostic sequence for a slot-mode config."""
-    tokens: list[str] = []
-    for slot_index, candidate_count in enumerate(candidate_counts):
-        opens_first = rotation != FirstBanRotation.ALTERNATE or slot_index % 2 == 0
-        opener, responder = ("ban_first", "ban_second") if opens_first else ("ban_second", "ban_first")
-        tokens.extend(opener if ban_index % 2 == 0 else responder for ban_index in range(candidate_count - 1))
-        tokens.append("decider")
-    return tokens
 
 
 @dataclass(frozen=True)

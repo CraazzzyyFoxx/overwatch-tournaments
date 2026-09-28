@@ -17,10 +17,29 @@ from src.services.encounter import captain as captain_mod
 
 
 class PickBanActionInput(BaseModel):
-    """One ban/pick/protect against a hero- or map-kind pick-ban session."""
+    """One ban/pick/protect against an OPEN (non-blind) step of a hero- or
+    map-kind pick-ban session. ``target_player_id`` is required exactly when
+    the step names an opponent roster player (``step.target``)."""
 
     item_id: int
     action: str  # "ban" | "pick" | "protect"
+    target_player_id: int | None = None
+
+
+class PickBanSubmissionItemInput(BaseModel):
+    """One item of a blind draft: what is chosen, and for whom on a target step."""
+
+    item_id: int
+    target_player_id: int | None = None
+
+
+class PickBanSubmitInput(BaseModel):
+    """A blind step's whole draft, replacing whatever the side had. ``lock``
+    validates it in full and makes it final — the step reveals once every
+    acting side has locked."""
+
+    items: list[PickBanSubmissionItemInput] = Field(default_factory=list)
+    lock: bool = False
 
 
 class ElectOpenerInput(BaseModel):

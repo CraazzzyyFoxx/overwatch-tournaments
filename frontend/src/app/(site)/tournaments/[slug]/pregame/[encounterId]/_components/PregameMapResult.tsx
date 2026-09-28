@@ -13,7 +13,7 @@ import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import { cn } from "@/lib/utils";
 import type { PickBanGame, PickBanGameReport } from "@/types/tournament.types";
 
-import { PregameHeroBans, type PregameHeroAction } from "./PregameHeroBans";
+import { PregameHeroBans, type PregameHeroBoard } from "./PregameHeroBans";
 
 interface PregameMapResultProps {
   encounterId: number;
@@ -37,11 +37,11 @@ interface PregameMapResultProps {
    */
   game: PickBanGame | null;
   /**
-   * This map's committed hero bans/protects, from the hero pick-ban state.
-   * Empty when the encounter runs no hero phase — the section then renders
-   * nothing at all.
+   * This map's hero board — who banned or protected what, what is unavailable
+   * here and what is left. Its `actions` are empty when the encounter runs no
+   * hero phase, and the section then renders nothing at all.
    */
-  heroActions: PregameHeroAction[];
+  heroBoard: PregameHeroBoard;
   /**
    * The hero session's undo affordance, rendered under the bans it would take
    * back. Supplied as a node because the consent flow needs the room's query
@@ -88,7 +88,7 @@ export function PregameMapResult({
   homeTeam,
   awayTeam,
   game,
-  heroActions,
+  heroBoard,
   heroUndo,
   header,
   invalidateKeys,
@@ -168,13 +168,13 @@ export function PregameMapResult({
                 captains need it in: the bans belong to the map above (they are
                 set up in its lobby) and are read before there is any result to
                 file below. */}
-            {heroActions.length > 0 ? (
+            {heroBoard.actions.length > 0 || heroBoard.banned.length > 0 ? (
               <div className="flex flex-col gap-3 border-y border-[color:var(--aqt-border)] p-4">
                 {/* Same width as the claim row below, so the bans and the score
                     they belong to read as one column rather than two widths. */}
                 <div className="mx-auto w-full max-w-2xl">
                   <PregameHeroBans
-                    actions={heroActions}
+                    board={heroBoard}
                     homeName={homeName}
                     awayName={awayName}
                     homeTeam={homeTeam}

@@ -1,40 +1,53 @@
 "use client";
 
-import { Ban, Check, CircleDashed, Flag, Info, MapPin, Shield, Shuffle } from "lucide-react";
+import { Ban, Check, CircleDashed, EyeOff, Flag, Info, MapPin, Shield, Shuffle, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { PickBanEntry, PickBanKind, PickBanSession } from "@/types/tournament.types";
+import type {
+  PickBanKind,
+  PickBanResolvedStep,
+  PickBanSession,
+  PickBanSubmission
+} from "@/types/tournament.types";
 
-import { parseStepToken, roundState, stepRoundGroups, type PickBanSide } from "./pick-ban-model";
+import {
+  stepRoundGroups,
+  stepSubmissions,
+  stepSummary,
+  type PickBanSide,
+  type PickBanStepSummary
+} from "./pick-ban-model";
 import type { PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";
 
 interface PickBanStepTimelineProps {
   kind: PickBanKind;
-  sequence: string[];
-  pool: PickBanEntry[];
+  /** The session's resolved steps, in index order. */
+  sequence: PickBanResolvedStep[];
+  /** Visible submissions — what a finished step actually took. */
+  submissions: PickBanSubmission[];
   currentStepIndex: number | null;
   isComplete: boolean;
   /**
-   * The server's `current_round`. Null for a flat pool, a completed sequence
-   * and the unavailable state alike, so round mode is read off `pool[].round`
-   * instead.
+   * The server's `current_round`. Null for a flat sequence, a completed one
+   * and the unavailable state alike, so round mode is read off the steps'
+   * own `round` instead.
    */
   currentRound: number | null;
   itemsById: Record<number, PickBanItemLike | undefined>;
   sideName: (side: PickBanSide) => string;
-  /** Drives the "who goes first" line under the Steps title -- moved here from the room header, next to the sequence it explains. */
+  /** Drives the "who goes first" line under the Steps title. */
   session: PickBanSession;
 }
 
 export function PickBanStepTimeline({
   kind,
   sequence,
-  pool,
+  submissions,
   currentStepIndex,
   isComplete,
   currentRound,
@@ -43,52 +56,41 @@ export function PickBanStepTimeline({
   session
 }: Readonly<PickBanStepTimelineProps>) {
   const t = useTranslations("pickBan.room");
-  // Done-ness derives from committed pool actions, not from the step pointer:
-  // every acted entry carries a global action_index (bans, picks, protects, decider).
-  const actedCount = pool.reduce(
-    (count, entry) => (entry.action_index != null ? count + 1 : count),
-    0
-  );
   // The grid groups by round whenever the pool carries rounds, and the two
   // stack in one viewport, so the timeline groups on exactly the same
-  // condition — a flat timeline beside a grouped grid repeats "Decider" two to
-  // five times with nothing to say which round each one closes.
-  const stepGroups = stepRoundGroups(sequence, pool);
+  // condition — a flat timeline beside a grouped grid repeats one headline
+  // two to five times with nothing to say which round each one closes.
+  const stepGroups = stepRoundGroups(sequence);
 
-  const step = (index: number) => {
-    const token = sequence[index];
-    const parsed = parseStepToken(token);
-    const done = isComplete || index < actedCount;
-    const current = !done && currentStepIndex === index;
-    const actedEntry = done ? pool.find((entry) => entry.action_index === index) : undefined;
-    const actedItemName =
-      actedEntry != null
-        ? (itemsById[actedEntry.item_id]?.name ??
-          t(`${kind}.itemNumber`, { id: actedEntry.item_id }))
-        : null;
+  const renderStep = (resolved: PickBanResolvedStep) => {
+    const summary = stepSummary(resolved);
+    const current = !isComplete && currentStepIndex === resolved.index;
+    const done = isComplete || (currentStepIndex != null && resolved.index < currentStepIndex);
+    // A blind step says nothing until it reveals; an open one is public as it
+    // goes, which is exactly what `revealed`/non-blind submissions encode.
+    const taken = stepSubmissions(submissions, resolved.index)
+      .filter((submission) => submission.state === "revealed" || !resolved.blind)
+      .flatMap((submission) => submission.items);
+    // Who acts is a different sentence per shape, not a team name slotted into
+    // one: "Both teams ban" / "{team} bans" / "Random ban".
+    const shape = summary.system ? "system" : summary.sides.length > 1 ? "both" : "side";
+    const headlineKey = `step.${shape}.${summary.action}` as const;
 
     const Icon = done
       ? Check
-      : parsed.action === "decider"
+      : summary.system
         ? Shuffle
         : current
           ? MapPin
           : CircleDashed;
-    const actionLabel =
-      parsed.action === "decider"
-        ? t("steps.decider")
-        : parsed.action === "ban"
-          ? t("steps.ban")
-          : parsed.action === "protect"
-            ? t("steps.protect")
-            : t("steps.pick");
 
     return (
       <div
-        key={`${token}-${index}`}
+        key={resolved.index}
+        data-pick-ban-step={resolved.index}
         aria-current={current ? "step" : undefined}
         className={cn(
-          "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm",
+          "flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border px-3 py-2 text-sm",
           current
             ? "border-[color:var(--aqt-teal)]/45 bg-[color:var(--aqt-teal)]/10"
             : "border-[color:var(--aqt-border)]",
@@ -96,7 +98,7 @@ export function PickBanStepTimeline({
         )}
       >
         <span className="w-5 shrink-0 text-right text-xs text-[color:var(--aqt-fg-faint)]">
-          {index + 1}
+          {resolved.index + 1}
         </span>
         <Icon
           aria-label={done ? t("steps.done") : current ? t("steps.current") : t("steps.pending")}
@@ -112,15 +114,17 @@ export function PickBanStepTimeline({
         <span
           className={cn(
             "inline-flex items-center gap-1 font-medium",
-            parsed.action === "ban" ? "text-[color:var(--aqt-rose)]" : null,
-            parsed.action === "pick" ? "text-[color:var(--aqt-support)]" : null,
-            parsed.action === "protect" ? "text-[color:var(--aqt-amber)]" : null
+            summary.action === "ban" ? "text-[color:var(--aqt-rose)]" : null,
+            summary.action === "pick" ? "text-[color:var(--aqt-support)]" : null,
+            summary.action === "protect" ? "text-[color:var(--aqt-amber)]" : null
           )}
         >
-          {parsed.action === "ban" ? <Ban className="h-3.5 w-3.5" aria-hidden /> : null}
-          {parsed.action === "protect" ? <Shield className="h-3.5 w-3.5" aria-hidden /> : null}
-          {actionLabel}
-          {parsed.action === "decider" ? (
+          {summary.action === "ban" ? <Ban className="h-3.5 w-3.5" aria-hidden /> : null}
+          {summary.action === "protect" ? <Shield className="h-3.5 w-3.5" aria-hidden /> : null}
+          {t(headlineKey, {
+            team: summary.sides.length === 1 ? sideName(summary.sides[0]) : ""
+          })}
+          {summary.action === "decider" ? (
             <TooltipProvider delayDuration={150}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -139,21 +143,23 @@ export function PickBanStepTimeline({
             </TooltipProvider>
           ) : null}
         </span>
-        {parsed.side ? (
-          <span className="min-w-0 truncate text-[color:var(--aqt-fg-muted)]">
-            {sideName(parsed.side)}
-          </span>
-        ) : null}
-        {actedEntry != null && actedItemName != null ? (
-          <span className="ml-auto flex min-w-0 items-center gap-1.5">
-            <PickBanItemThumb
-              kind={kind}
-              item={itemsById[actedEntry.item_id]}
-              name={actedItemName}
-              size={22}
-              muted={actedEntry.status === "banned"}
-            />
-            <span className="min-w-0 truncate font-medium">{actedItemName}</span>
+        <StepChips summary={summary} />
+        {taken.length > 0 ? (
+          <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+            {taken.map((item, position) => {
+              const name =
+                itemsById[item.item_id]?.name ?? t(`${kind}.itemNumber`, { id: item.item_id });
+              return (
+                <PickBanItemThumb
+                  key={`${item.item_id}-${position}`}
+                  kind={kind}
+                  item={itemsById[item.item_id]}
+                  name={name}
+                  size={22}
+                  muted={summary.action === "ban"}
+                />
+              );
+            })}
           </span>
         ) : null}
       </div>
@@ -176,14 +182,13 @@ export function PickBanStepTimeline({
       </CardHeader>
       <CardContent className="flex flex-col gap-1.5">
         {stepGroups === null
-          ? sequence.map((_, index) => step(index))
+          ? sequence.map((resolved) => renderStep(resolved))
           : stepGroups.map((group) => {
-              const state = roundState(group, currentRound);
-              // Below `lg` a Bo5 round-mode sequence is 15 steps sitting above
-              // five item groups, so everything but the live round folds away
-              // there. When no round is live — a completed sequence — there is
-              // nothing to fold to, so the whole run stays visible.
-              const folded = currentRound != null && state !== "current";
+              // Below `lg` a Bo5 round-mode sequence is a long run sitting
+              // above five item groups, so everything but the live round folds
+              // away there. When no round is live — a completed sequence —
+              // there is nothing to fold to, so the whole run stays visible.
+              const folded = currentRound != null && group.round !== currentRound;
               return (
                 <div
                   key={group.round}
@@ -195,21 +200,59 @@ export function PickBanStepTimeline({
                       {t("round.label", { n: group.round })}
                     </span>
                     <Badge
-                      variant={state === "current" ? "default" : "outline"}
+                      variant={group.round === currentRound ? "default" : "outline"}
                       className="px-1.5 py-0 text-label font-normal"
                     >
-                      {state === "current"
+                      {group.round === currentRound
                         ? t("round.current")
-                        : state === "resolved"
+                        : currentRound != null && group.round < currentRound
                           ? t("round.resolved")
                           : t("round.upcoming")}
                     </Badge>
                   </div>
-                  {group.stepIndices.map((index) => step(index))}
+                  {group.steps.map((resolved) => renderStep(resolved))}
                 </div>
               );
             })}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The parameters that make a v2 step different from a v1 token: how many items
+ * each side takes, whether it is blind, whether every item names an opponent
+ * player, and how long its bans hold. Each one is omitted when it says nothing
+ * — a count of 1 and a one-map ban are the default shape.
+ */
+function StepChips({ summary }: Readonly<{ summary: PickBanStepSummary }>) {
+  const t = useTranslations("pickBan.room");
+  return (
+    <span className="flex flex-wrap items-center gap-1 text-[color:var(--aqt-fg-muted)]">
+      {summary.count != null ? (
+        <Badge variant="outline" className="px-1.5 py-0 text-label font-normal tabular-nums">
+          {t("step.count", { n: summary.count })}
+        </Badge>
+      ) : null}
+      {summary.blind ? (
+        <Badge variant="outline" className="gap-1 px-1.5 py-0 text-label font-normal">
+          <EyeOff className="h-3 w-3" aria-hidden />
+          {t("step.blind")}
+        </Badge>
+      ) : null}
+      {summary.targeted ? (
+        <Badge variant="outline" className="gap-1 px-1.5 py-0 text-label font-normal">
+          <Users className="h-3 w-3" aria-hidden />
+          {t("step.targeted")}
+        </Badge>
+      ) : null}
+      {summary.lifetime != null ? (
+        <Badge variant="outline" className="px-1.5 py-0 text-label font-normal">
+          {summary.lifetime === "series"
+            ? t("step.lifetimeSeries")
+            : t("step.lifetime", { n: summary.lifetime })}
+        </Badge>
+      ) : null}
+    </span>
   );
 }

@@ -27,7 +27,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { PickBanConfig, Stage } from "@/types/tournament.types";
+import type { PickBanConfig, PickBanRuleset, Stage } from "@/types/tournament.types";
 
 import PreGameSettingsPage from "./page";
 
@@ -39,6 +39,9 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const listConfigs = vi.fn();
 const upsertConfig = vi.fn();
 const deleteConfig = vi.fn();
+const getRulesCatalog = vi.fn();
+const validateRuleset = vi.fn();
+const previewRuleset = vi.fn();
 const getHeroes = vi.fn();
 const getMaps = vi.fn();
 const getStagePlannedRounds = vi.fn();
@@ -62,7 +65,10 @@ vi.mock("@/services/pickBan.service", () => ({
   default: {
     listConfigs: (...args: unknown[]) => listConfigs(...args),
     upsertConfig: (...args: unknown[]) => upsertConfig(...args),
-    deleteConfig: (...args: unknown[]) => deleteConfig(...args)
+    deleteConfig: (...args: unknown[]) => deleteConfig(...args),
+    getRulesCatalog: (...args: unknown[]) => getRulesCatalog(...args),
+    validateRuleset: (...args: unknown[]) => validateRuleset(...args),
+    previewRuleset: (...args: unknown[]) => previewRuleset(...args)
   }
 }));
 
@@ -197,6 +203,32 @@ const ENCOUNTERS = [
   { stage_id: 10, round: 2, best_of: 3 }
 ];
 
+/** One hand-authored step: both sides ban two heroes at once, privately. */
+const BLIND_BAN_STEP = {
+  id: "blind2",
+  action: "ban" as const,
+  actors: "both" as const,
+  count: 2,
+  min: null,
+  blind: true,
+  target: null,
+  lifetime: 1,
+  timer_seconds: null,
+  on_timeout: null,
+  dispute: { enabled: true, max: 1 },
+  eligible: {},
+  constraints: []
+};
+
+const HERO_RULESET: PickBanRuleset = {
+  version: 2,
+  timer_seconds: 45,
+  on_timeout: "random_fill",
+  phases: [
+    { id: "main", name: null, when: {}, pool_filter: {}, generator: null, steps: [BLIND_BAN_STEP] }
+  ]
+};
+
 const CUSTOM_HERO_CONFIG: PickBanConfig = {
   id: 7,
   tournament_id: 84,
@@ -206,12 +238,7 @@ const CUSTOM_HERO_CONFIG: PickBanConfig = {
   mode: "pool",
   first_pick_rule: "higher_seed",
   first_ban_rotation: "alternate",
-  turn_timer_seconds: 45,
-  preset: "custom",
-  sequence: ["ban_first", "ban_second", "ban_second", "ban_first"],
-  no_repeat_scope: "encounter",
-  unique_attribute_per_side_per_round: null,
-  allow_protect: false,
+  ruleset: HERO_RULESET,
   item_ids: [1, 2, 3, 4, 5],
   slots: []
 };
@@ -226,14 +253,82 @@ const TOURNAMENT_MAP_CONFIG: PickBanConfig = {
   mode: "pool",
   first_pick_rule: "higher_seed",
   first_ban_rotation: "alternate",
-  turn_timer_seconds: 30,
-  preset: "bracket",
-  sequence: ["ban_first", "ban_second", "pick_first", "pick_second", "decider"],
-  no_repeat_scope: "encounter",
-  unique_attribute_per_side_per_round: null,
-  allow_protect: false,
+  ruleset: {
+    version: 2,
+    timer_seconds: 30,
+    on_timeout: "random_fill",
+    phases: [
+      { id: "main", name: null, when: {}, pool_filter: {}, generator: "bracket", steps: [] }
+    ]
+  },
   item_ids: [1, 2, 3, 4],
   slots: []
+};
+
+/** The 2026-10-03 tournament preset, as the catalog serves it (plan §12). */
+const ANTI_ONE_TRICK: PickBanRuleset = {
+  version: 2,
+  timer_seconds: 90,
+  on_timeout: "random_fill",
+  phases: [
+    {
+      id: "map1",
+      name: "Map 1",
+      when: { type: "map_index", params: { op: "==", value: 1 } },
+      pool_filter: {},
+      generator: null,
+      steps: [BLIND_BAN_STEP]
+    },
+    {
+      id: "map2plus",
+      name: "Map 2+",
+      when: { type: "map_index", params: { op: ">=", value: 2 } },
+      pool_filter: {},
+      generator: null,
+      steps: [
+        {
+          ...BLIND_BAN_STEP,
+          id: "perplayer5",
+          count: 5,
+          target: "opponent_player" as const,
+          lifetime: 2,
+          eligible: { type: "target_role_match", params: {} },
+          constraints: [{ type: "one_per_target", params: {} }]
+        }
+      ]
+    }
+  ]
+};
+
+const CATALOG = {
+  leaves: [
+    {
+      type: "map_index",
+      contexts: ["round" as const],
+      kinds: ["map" as const, "hero" as const],
+      params: [
+        { name: "op", kind: "enum" as const, required: true, values: ["==", ">="], min: null, max: null, nullable: false },
+        { name: "value", kind: "int" as const, required: true, values: null, min: 1, max: null, nullable: false }
+      ],
+      requires_target: false,
+      relative: false
+    }
+  ],
+  constraints: [
+    { type: "one_per_target", params: [], requires_target: true },
+    {
+      type: "max_per_group",
+      params: [
+        { name: "max", kind: "int" as const, required: true, values: null, min: 1, max: null, nullable: false }
+      ],
+      requires_target: false
+    }
+  ],
+  groups: { hero: ["Tank", "Damage", "Support"], map: ["Control", "Hybrid"] },
+  presets: [
+    { id: "hero_anti_one_trick", kind: "hero" as const, modes: ["pool" as const], ruleset: ANTI_ONE_TRICK },
+    { id: "map_bracket", kind: "map" as const, modes: ["pool" as const], ruleset: TOURNAMENT_MAP_CONFIG.ruleset }
+  ]
 };
 
 let container: HTMLDivElement;
@@ -365,6 +460,19 @@ function editor(): HTMLElement {
   return found;
 }
 
+/** The input a visible `<label>` or an `aria-label` names. */
+function labelledInput(label: string): HTMLInputElement {
+  const named = document.querySelector(`input[aria-label="${label}"]`);
+  if (named instanceof HTMLInputElement) return named;
+  const found = [...editor().querySelectorAll("label")].find(
+    (element) => (element.textContent ?? "").trim() === label
+  );
+  const target = found?.getAttribute("for");
+  const input = target == null ? null : document.getElementById(target);
+  if (!(input instanceof HTMLInputElement)) throw new Error(`no field labelled "${label}"`);
+  return input;
+}
+
 function tree(): HTMLElement {
   const found = container.querySelector('nav[aria-label="Scope"]');
   if (!(found instanceof HTMLElement)) throw new Error("the scope tree is not rendered");
@@ -406,6 +514,9 @@ beforeEach(() => {
   upsertConfig.mockResolvedValue({});
   deleteConfig.mockResolvedValue({});
   getStagePlannedRounds.mockResolvedValue([]);
+  getRulesCatalog.mockResolvedValue(CATALOG);
+  validateRuleset.mockResolvedValue({ valid: true, issues: [] });
+  previewRuleset.mockResolvedValue({ maps: [], issues: [] });
 });
 
 describe("Settings › Pre-game phase — the section gate", () => {
@@ -449,7 +560,7 @@ describe("Settings › Pre-game phase — URL is the state", () => {
       ...TOURNAMENT_MAP_CONFIG,
       id: 4,
       stage_id: 10,
-      turn_timer_seconds: 15,
+      ruleset: { ...TOURNAMENT_MAP_CONFIG.ruleset, timer_seconds: 15 },
       item_ids: [1, 2]
     };
     await mount({
@@ -470,14 +581,14 @@ describe("Settings › Pre-game phase — URL is the state", () => {
     expect(editor().querySelector("h2")?.textContent).toBe("Playoffs — all rounds");
   });
 
-  it("switches Pool · Sequence · Sides through ?step=", async () => {
+  it("switches Pool · Rules · Sides through ?step=", async () => {
     await mount({ configs: [TOURNAMENT_MAP_CONFIG] });
 
     expect(editor().textContent).toContain(en.pickBan.admin.poolSection);
 
-    await click(stepButton(2, "Sequence"));
-    expect(new URLSearchParams(search).get("step")).toBe("sequence");
-    expect(editor().textContent).toContain(en.pickBan.admin.orderSection);
+    await click(stepButton(2, "Rules"));
+    expect(new URLSearchParams(search).get("step")).toBe("rules");
+    expect(editor().textContent).toContain(en.pickBan.rules.hint);
 
     await click(stepButton(3, "Sides"));
     expect(new URLSearchParams(search).get("step")).toBe("sides");
@@ -503,26 +614,25 @@ describe("Settings › Pre-game phase — URL is the state", () => {
 });
 
 describe("Settings › Pre-game phase asks for nothing an organizer has to look up", () => {
-  it("offers one text field, the turn timer, and says what leaving it empty does", async () => {
+  it("asks for nothing typed on the sides step — every control is a choice", async () => {
     await mount({ url: "?scope=tournament&kind=hero&step=sides" });
 
-    const inputs = [...editor().querySelectorAll<HTMLInputElement>("input")];
-    expect(inputs).toHaveLength(1);
+    expect([...editor().querySelectorAll("input")]).toEqual([]);
+  });
 
-    const timer = inputs[0];
-    const label = editor().querySelector<HTMLLabelElement>(`label[for="${timer.id}"]`);
-    expect(label?.textContent).toBe("Turn timer");
+  it("says what leaving the step timer empty does, rather than looking unset", async () => {
+    await mount({ url: "?scope=tournament&kind=hero&step=rules" });
 
-    // The hint is the ask: an empty timer is not an unset field, it is "no limit".
-    const hint = document.getElementById(timer.getAttribute("aria-describedby") ?? "");
-    expect(hint?.textContent).toContain("Leave it empty for no time limit");
-    expect(timer.placeholder).toBe("No limit");
+    const timer = labelledInput("Step timer");
+    expect(timer.value).toBe("");
+    expect(timer.placeholder).toBe(en.pickBan.rules.timerOff);
+    expect(editor().textContent).toContain(en.pickBan.rules.timerHint);
   });
 
   it("names every icon-only control", async () => {
     await mount({
       configs: [CUSTOM_HERO_CONFIG],
-      url: "?scope=stage:11&kind=hero&step=sequence"
+      url: "?scope=stage:11&kind=hero&step=rules"
     });
 
     const unnamed = [...container.querySelectorAll("button")].filter(
@@ -534,7 +644,7 @@ describe("Settings › Pre-game phase asks for nothing an organizer has to look 
 });
 
 describe("Settings › Pre-game phase will not send a config the server rejects", () => {
-  it("keeps save inert with the reason on screen until the pool and the steps are both there", async () => {
+  it("keeps save inert with the reason on screen until a phase actually runs something", async () => {
     await mount({ url: "?scope=tournament&kind=hero&step=pool" });
 
     // An empty pool is not a rejection any more: it is a rules template, saved
@@ -547,19 +657,19 @@ describe("Settings › Pre-game phase will not send a config the server rejects"
     await click(only("Reinhardt"));
 
     expect(editor().textContent).not.toContain("this is a rules template");
-    // A hero order is never generated — it is one round's steps, hand-authored —
-    // so an empty one is still a config the server would reject.
-    expect(editor().textContent).toContain("Add at least one step to the order.");
+    // A hero phase is never generated — a hero pool stays playable — so a
+    // phase with no steps is a config that would run nothing.
+    expect(editor().textContent).toContain("has no steps");
 
     // Save is visible but inert: the reason sits next to it rather than a
     // greyed-out button a viewport away from the explanation.
     await click(only("Save rules"));
     expect(upsertConfig).not.toHaveBeenCalled();
 
-    await click(stepButton(2, "Sequence"));
-    await click(only("Add step"));
+    await click(stepButton(2, "Rules"));
+    await click(only("Sequential ban"));
 
-    expect(editor().textContent).not.toContain("Add at least one step to the order.");
+    expect(editor().textContent).not.toContain("has no steps");
     await click(only("Save rules"));
     expect(upsertConfig).toHaveBeenCalledTimes(1);
   });
@@ -569,10 +679,9 @@ describe("Settings › Pre-game phase will not send a config the server rejects"
   // unauthorable -- a tournament-wide pool is exactly what a per-stage
   // regulation does not have, and the pool was required to save anything.
   it("saves tournament-wide rules with no pool, as a template to inherit", async () => {
-    await mount({ url: "?scope=tournament&kind=map&step=sides" });
+    await mount({ url: "?scope=tournament&kind=map&step=rules" });
 
-    const timer = editor().querySelector<HTMLInputElement>("input");
-    await type(timer as HTMLInputElement, "45");
+    await type(labelledInput("Step timer"), "45");
 
     await click(only("Save rules"));
 
@@ -581,18 +690,18 @@ describe("Settings › Pre-game phase will not send a config the server rejects"
     expect(body.stage_id).toBeNull();
     expect(body.item_ids).toEqual([]);
     expect(body.slots).toEqual([]);
-    expect(body.turn_timer_seconds).toBe(45);
+    expect(body.ruleset.timer_seconds).toBe(45);
   });
 
-  it("sends the pool in pick order, with the round's own steps and no turn limit", async () => {
+  it("sends the pool in pick order, with the phase's own steps and no time limit", async () => {
     await mount({ url: "?scope=tournament&kind=hero&step=pool" });
 
     await click(only("Add heroes"));
     await click(only("Genji"));
     await click(only("Tracer"));
     await click(only("Ana"));
-    await click(stepButton(2, "Sequence"));
-    await click(only("Add step"));
+    await click(stepButton(2, "Rules"));
+    await click(only("Simultaneous blind ban"));
     await click(only("Save rules"));
 
     expect(upsertConfig).toHaveBeenCalledTimes(1);
@@ -602,61 +711,115 @@ describe("Settings › Pre-game phase will not send a config the server rejects"
     expect(body.item_ids).toEqual([2, 1, 4]);
     expect(body.stage_id).toBeNull();
     expect(body.round).toBeNull();
-    expect(body.turn_timer_seconds).toBeNull();
-    // Hero steps are always the organizer's own: `custom` is what stops the
-    // engine from regenerating a map-shaped order over them.
-    expect(body.preset).toBe("custom");
-    expect(body.sequence).toEqual(["ban_first"]);
+    expect(body.ruleset.timer_seconds).toBeNull();
+    // The palette writes a real step, not a token: the shape the room runs.
+    expect(body.ruleset.phases[0].steps).toMatchObject([
+      { action: "ban", actors: "both", count: 2, blind: true, lifetime: 1 }
+    ]);
   });
 
   it("sends the timer as a number once one is typed", async () => {
-    await mount({ url: "?scope=tournament&kind=hero&step=pool" });
+    await mount({ url: "?scope=tournament&kind=hero&step=rules" });
 
-    await click(only("Add heroes"));
-    await click(only("Tracer"));
-    await click(only("Genji"));
-    await click(stepButton(2, "Sequence"));
-    await click(only("Add step"));
-    await click(stepButton(3, "Sides"));
-    await type(editor().querySelector<HTMLInputElement>("input")!, "30");
+    await click(only("Sequential ban"));
+    await type(labelledInput("Step timer"), "30");
     await click(only("Save rules"));
 
-    expect(upsertConfig.mock.calls[0][1].turn_timer_seconds).toBe(30);
+    expect(upsertConfig.mock.calls[0][1].ruleset.timer_seconds).toBe(30);
   });
 });
 
-describe("Settings › Pre-game phase keeps a stored custom order", () => {
-  it("reopens the authored steps and saves them back", async () => {
+describe("Settings › Pre-game phase keeps the stored rules", () => {
+  it("reopens the authored steps and saves the edited ruleset back", async () => {
     await mount({
       configs: [CUSTOM_HERO_CONFIG],
-      url: "?scope=stage:11&kind=hero&step=sequence"
+      url: "?scope=stage:11&kind=hero&step=rules"
     });
 
-    // No bracket/custom choice is offered for a hero config: its sequence is one
-    // round's steps either way, so the steps themselves are the whole control.
-    expect(editor().textContent).not.toContain(en.pickBan.admin.orderLabel);
-    expect(editor().textContent).toContain(en.pickBan.admin.orderSteps);
+    // The stored step is on the board, not a token list: its action, its
+    // actors and how many items it takes.
+    expect(editor().textContent).toContain("Ban · Both sides");
+    expect(editor().textContent).toContain("2 blind");
 
     // Nothing edited: the save bar is absent, so the round trip goes through a
     // real edit and back.
-    await click(only("Add step"));
+    await click(only("Pick"));
     await click(only("Save rules"));
 
     const body = upsertConfig.mock.calls[0][1];
-    // The regression that made the old editor lie: a custom sequence saved
-    // without `preset: "custom"` is regenerated from `best_of` and discarded.
-    expect(body.preset).toBe("custom");
-    expect(body.sequence).toEqual([
-      "ban_first",
-      "ban_second",
-      "ban_second",
-      "ban_first",
-      "ban_first"
+    // The regression this file exists for: what the organizer edited is what
+    // is sent, with nothing derived over the top of it.
+    expect(body.ruleset.phases[0].steps).toMatchObject([
+      { id: "blind2", action: "ban", actors: "both", count: 2, blind: true },
+      { action: "pick", lifetime: null }
     ]);
+    expect(body.ruleset.timer_seconds).toBe(45);
     expect(body.stage_id).toBe(11);
-    expect(body.turn_timer_seconds).toBe(45);
-    expect(body.no_repeat_scope).toBe("encounter");
     expect(body.first_ban_rotation).toBe("alternate");
+  });
+
+  // The 2026-10-03 regulation is a preset rather than a board an organizer
+  // rebuilds by hand under deadline; loading it has to land every phase.
+  it("loads a preset onto the board and saves it verbatim", async () => {
+    await mount({ url: "?scope=tournament&kind=hero&step=rules" });
+
+    await click(only(en.pickBan.rules.presets));
+    await click(option(en.pickBan.rules.preset.hero_anti_one_trick));
+
+    // Two phases: map 1, then every map after it.
+    expect(labelledInput("Name of phase 1").value).toBe("Map 1");
+    expect(labelledInput("Name of phase 2").value).toBe("Map 2+");
+    expect(editor().textContent).toContain("5 per player");
+    // The lifetime is the parameter nothing else on the card implies: these
+    // bans survive into the next map, which is what makes map 3 tight.
+    expect(editor().textContent).toContain("holds 2 maps");
+
+    await click(only("Save rules"));
+
+    const body = upsertConfig.mock.calls[0][1];
+    expect(body.ruleset).toEqual(ANTI_ONE_TRICK);
+  });
+});
+
+// The validator raises `group_nearly_exhausted` once per role, all on the same
+// path — and the per-CODE translation cannot say which role, so three warnings
+// used to render as one identical line (and collided as React keys).
+describe("Settings › Pre-game phase keeps repeated validator issues apart", () => {
+  it("shows the server's detail for every issue sharing a code", async () => {
+    validateRuleset.mockResolvedValue({
+      valid: true,
+      issues: [
+        { path: "", code: "group_nearly_exhausted", severity: "warning", message: "Tank: 1 left" },
+        { path: "", code: "group_nearly_exhausted", severity: "warning", message: "Support: 2 left" }
+      ]
+    });
+
+    await mount({ configs: [CUSTOM_HERO_CONFIG], url: "?scope=stage:11&kind=hero&step=rules" });
+
+    const text = editor().textContent ?? "";
+    expect(text).toContain("Tank: 1 left");
+    expect(text).toContain("Support: 2 left");
+  });
+
+  it("leaves a lone translated issue in the reader's own language", async () => {
+    validateRuleset.mockResolvedValue({
+      valid: false,
+      issues: [
+        { path: "phases[0].steps[0].count", code: "count_range", severity: "error", message: "count must be 1..20" }
+      ]
+    });
+
+    await mount({ configs: [CUSTOM_HERO_CONFIG], url: "?scope=stage:11&kind=hero&step=rules" });
+
+    const text = editor().textContent ?? "";
+    expect(text).toContain(en.pickBan.rules.issue.count_range);
+    expect(text).not.toContain("count must be 1..20");
+
+    // An error the engine refuses is an error the editor refuses to send.
+    // The save bar only appears once something is edited, so edit first.
+    await click(only("Sequential ban"));
+    await click(only("Save rules"));
+    expect(upsertConfig).not.toHaveBeenCalled();
   });
 });
 
@@ -860,9 +1023,8 @@ describe("Settings › Pre-game phase prefills a narrower scope from the rules a
     expect(body.stage_id).toBe(10);
     expect(body.round).toBeNull();
     expect(body.item_ids).toEqual([1, 2, 3, 4]);
-    expect(body.turn_timer_seconds).toBe(30);
+    expect(body.ruleset).toEqual(TOURNAMENT_MAP_CONFIG.ruleset);
     expect(body.first_ban_rotation).toBe("alternate");
-    expect(body.no_repeat_scope).toBe("encounter");
   });
 
   // The cascade the engine walks (`resolve_config_at_level`): a round takes its
@@ -872,7 +1034,7 @@ describe("Settings › Pre-game phase prefills a narrower scope from the rules a
       ...TOURNAMENT_MAP_CONFIG,
       id: 4,
       stage_id: 10,
-      turn_timer_seconds: 15,
+      ruleset: { ...TOURNAMENT_MAP_CONFIG.ruleset, timer_seconds: 15 },
       item_ids: [1, 2]
     };
     await mount({
@@ -890,7 +1052,7 @@ describe("Settings › Pre-game phase prefills a narrower scope from the rules a
       ...TOURNAMENT_MAP_CONFIG,
       id: 6,
       stage_id: 11,
-      turn_timer_seconds: 90
+      ruleset: { ...TOURNAMENT_MAP_CONFIG.ruleset, timer_seconds: 90 }
     };
     await mount({ configs: [TOURNAMENT_MAP_CONFIG, copy, different], url: "?kind=map" });
 
@@ -906,7 +1068,7 @@ describe("Settings › Pre-game phase prefills a narrower scope from the rules a
       ...TOURNAMENT_MAP_CONFIG,
       id: 4,
       stage_id: 10,
-      turn_timer_seconds: 15
+      ruleset: { ...TOURNAMENT_MAP_CONFIG.ruleset, timer_seconds: 15 }
     };
     await mount({
       configs: [TOURNAMENT_MAP_CONFIG, stageWide],
@@ -924,28 +1086,47 @@ describe("Settings › Pre-game phase prefills a narrower scope from the rules a
   // authored to change the pool, not the rules -- so a stage silently carried
   // whatever the tournament said the day it was created, and nothing on screen
   // distinguished "we chose this here" from "this came from above".
-  it("names what each rule inherits, and takes that value back in one click", async () => {
+  it("names what the rules inherit, and takes them back in one click", async () => {
     const stageWide: PickBanConfig = {
       ...TOURNAMENT_MAP_CONFIG,
       id: 4,
       stage_id: 10,
-      turn_timer_seconds: 15
+      first_ban_rotation: "fixed",
+      ruleset: { ...TOURNAMENT_MAP_CONFIG.ruleset, timer_seconds: 15 }
+    };
+    await mount({
+      configs: [TOURNAMENT_MAP_CONFIG, stageWide],
+      url: "?scope=stage:10&kind=map&step=rules"
+    });
+
+    // The ruleset is this scope's own choice, and the board says what it is
+    // overriding — inheritance is per config, so the whole document is the unit.
+    expect(labelledInput("Step timer").value).toBe("15");
+    expect(editor().textContent).toContain("Overrides the rules of Whole tournament");
+
+    await click(only(en.pickBan.rules.useInherited));
+
+    expect(labelledInput("Step timer").value).toBe("30");
+    expect(editor().textContent).toContain("Same rules as Whole tournament");
+  });
+
+  it("says per field on the sides step what the rotation inherits", async () => {
+    const stageWide: PickBanConfig = {
+      ...TOURNAMENT_MAP_CONFIG,
+      id: 4,
+      stage_id: 10,
+      first_ban_rotation: "fixed"
     };
     await mount({
       configs: [TOURNAMENT_MAP_CONFIG, stageWide],
       url: "?scope=stage:10&kind=map&step=sides"
     });
 
-    // The rotation still agrees with the tournament; the timer is this scope's
-    // own choice, and the field says what it is overriding.
-    expect(editor().textContent).toContain("Same as Whole tournament");
-    expect(editor().textContent).toContain("Whole tournament: 30 seconds");
-    expect(editor().querySelector<HTMLInputElement>("input")?.value).toBe("15");
+    expect(editor().textContent).toContain("Whole tournament: Alternating sides");
 
     await click(only("Use that"));
 
-    expect(editor().querySelector<HTMLInputElement>("input")?.value).toBe("30");
-    expect(editor().textContent).not.toContain("Whole tournament: 30 seconds");
+    expect(editor().textContent).toContain("Same as Whole tournament");
   });
 });
 

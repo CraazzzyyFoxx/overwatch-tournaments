@@ -1,28 +1,26 @@
 "use client";
 
-import { Ban, Shield } from "lucide-react";
+import { Ban, EyeOff, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { OverlayBar } from "@/components/ui/overlay-bar";
-import type {
-  PickBanAction,
-  PickBanKind,
-  PickBanSession,
-  PickBanState
-} from "@/types/tournament.types";
+import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
 import { Spinner } from "@/components/ui/spinner";
 
-import { turnDeadlineMs, type PickBanSide } from "./pick-ban-model";
+import { stepDeadlineMs, stepSummary, type PickBanSide } from "./pick-ban-model";
 import { PickBanCountdown } from "./PickBanCountdown";
 import type { PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";
 
 interface PickBanCommandBarProps {
   state: PickBanState;
-  session: PickBanSession;
   sideName: (side: PickBanSide) => string;
-  /** The viewer's own pending action this turn, or null when it's not their turn (or they aren't a captain). */
+  /**
+   * The viewer's own pending action on an OPEN step, or null — on a blind step
+   * nothing is confirmed here (the draft tray owns that), and a spectator never
+   * has one.
+   */
   captainAction: PickBanAction | null;
   kind: PickBanKind;
   selectedItemId: number | null;
@@ -36,14 +34,17 @@ interface PickBanCommandBarProps {
 
 /**
  * Fixed bottom overlay for the pregame room, anchored via the shared
- * `OverlayBar` shell. Always shows the turn/countdown status (every
- * viewer), and additionally the two-step ban/pick/protect confirmation when
- * the viewer is the captain on the clock. Replaces the room's previous
- * inline turn banner + `CaptainActionBar` section.
+ * `OverlayBar` shell. Always shows the step/countdown status (every viewer),
+ * and additionally the ban/pick/protect confirmation when the viewer is a
+ * captain on an OPEN step.
+ *
+ * "Whose turn" is no longer one side: a v2 step can put BOTH captains on the
+ * clock at once, and `acting_sides` is exactly the ones that have not locked —
+ * so the banner shrinks from "both teams" to "waiting for X" on its own as the
+ * first side finishes.
  */
 export function PickBanCommandBar({
   state,
-  session,
   sideName,
   captainAction,
   kind,
@@ -55,18 +56,25 @@ export function PickBanCommandBar({
   onCancel
 }: Readonly<PickBanCommandBarProps>) {
   const t = useTranslations("pickBan.room");
-  const deadline = turnDeadlineMs(state);
+  const deadline = stepDeadlineMs(state);
+  const step = state.current_step;
+  const summary = step != null ? stepSummary(step) : null;
+  const acting = state.acting_sides;
 
   const turnBanner = state.is_complete
     ? t("completedBanner")
-    : state.expected_action === "decider"
-      ? t("deciderResolving")
-      : state.turn_side && state.expected_action
-        ? t("turn", {
-            side: sideName(state.turn_side),
-            action: t(`action.${state.expected_action}`)
-          })
-        : null;
+    : summary == null
+      ? null
+      : summary.system
+        ? t("deciderResolving")
+        : acting.length === 0
+          ? t("turnRevealing")
+          : acting.length > 1
+            ? t("turnBoth", { action: t(`action.${summary.action}`) })
+            : t("turn", {
+                side: sideName(acting[0]),
+                action: t(`action.${summary.action}`)
+              });
 
   const confirmLabel =
     captainAction === "ban"
@@ -79,14 +87,19 @@ export function PickBanCommandBar({
     <OverlayBar tone={captainAction != null ? "active" : "neutral"} ariaLabel={t("commandBar")}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:contents">
-          {deadline != null && session.turn_timer_seconds != null ? (
-            <PickBanCountdown deadline={deadline} totalSeconds={session.turn_timer_seconds} />
+          {deadline != null && step?.timer_seconds != null ? (
+            <PickBanCountdown deadline={deadline} totalSeconds={step.timer_seconds} />
           ) : null}
           <div className="min-w-0 flex-1">
             <p className="text-label uppercase tracking-[0.15em] text-[color:var(--aqt-teal)]">
               {captainAction != null ? t("captain.yourTurn") : "\u00A0"}
             </p>
-            <p className="truncate text-sm font-medium">{turnBanner ?? "\u00A0"}</p>
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium">
+              {summary?.blind && !state.is_complete ? (
+                <EyeOff className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-teal)]" aria-hidden />
+              ) : null}
+              {turnBanner ?? "\u00A0"}
+            </p>
           </div>
         </div>
         {captainAction != null ? (

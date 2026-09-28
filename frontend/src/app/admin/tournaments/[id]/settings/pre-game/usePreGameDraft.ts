@@ -7,7 +7,6 @@ import { stageRoundShape } from "@/lib/bracket/view";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import {
   alignSlots,
-  effectiveSequence,
   emptyPickBanDraft,
   fanOutRoundDrafts,
   findInheritedConfig,
@@ -159,8 +158,7 @@ export function usePreGameDraft({
   }
 
   const series = resolveSeriesLength(scope.stageId, scope.round, stages, encounters);
-  const sequence = effectiveSequence(draft, series.bestOf);
-  const issues = validatePickBanDraft(draft, series.bestOf);
+  const issues = validatePickBanDraft(draft);
 
   const patch = (values: Partial<PickBanDraft>) =>
     setDraft((current) => ({ ...current, ...values }));
@@ -169,12 +167,25 @@ export function usePreGameDraft({
    * Switching into per-group mode used to land on an empty list and a
    * validation error. The bracket already says how many groups there are —
    * and, on a stage, which rounds they belong to — so they are there to fill.
+   *
+   * The two map generators are mode-specific (`bracket` reads a flat pool,
+   * `slot_veto` reads groups), so a generator phase follows the mode rather
+   * than becoming a ruleset the server refuses.
    */
   const changeMode = (mode: MapVetoMode) => {
-    if (mode !== "slots") return patch({ mode });
+    const ruleset = {
+      ...draft.ruleset,
+      phases: draft.ruleset.phases.map((phase) =>
+        phase.generator == null
+          ? phase
+          : { ...phase, generator: mode === "slots" ? ("slot_veto" as const) : ("bracket" as const) }
+      )
+    };
+    if (mode !== "slots") return patch({ mode, ruleset });
     if (isStageScope && rounds.length > 0) {
       return patch({
         mode,
+        ruleset,
         slots: [],
         roundSlots: roundSlotsForStage({
           kind,
@@ -186,7 +197,7 @@ export function usePreGameDraft({
         })
       });
     }
-    patch({ mode, slots: alignSlots(draft.slots, slotCount) });
+    patch({ mode, ruleset, slots: alignSlots(draft.slots, slotCount) });
   };
 
   const edited = hasUnsavedChanges(draft, baseDraft);
@@ -202,7 +213,6 @@ export function usePreGameDraft({
     rounds,
     roundsLoading,
     series,
-    sequence,
     issues,
     scopeState: scopeConfigState(kind, scope, configs),
     // Two different questions. `edited` is what the organizer has typed here —
@@ -253,16 +263,8 @@ export function usePreGameDraft({
       })),
     /**
      * One upsert per entry, in order. Slot-mode groups authored on a stage
-     * screen are one config per round, so a save is N writes rather than one —
-     * each against the series length of the round it lands on.
+     * screen are one config per round, so a save is N writes rather than one.
      */
-    saveJobs: () =>
-      fanOutRoundDrafts(draft).map((one) => ({
-        draft: one,
-        seriesLength:
-          one.round == null
-            ? series.bestOf
-            : resolveSeriesLength(scope.stageId, one.round, stages, encounters).bestOf
-      }))
+    saveJobs: () => fanOutRoundDrafts(draft)
   };
 }

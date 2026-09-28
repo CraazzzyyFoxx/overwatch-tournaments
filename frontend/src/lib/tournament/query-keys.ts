@@ -112,6 +112,28 @@ export const tournamentQueryKeys = {
     ["draft", "session", sessionId, "queue", teamId] as const,
   draftJournal: (sessionId: number) => ["draft", "session", sessionId, "journal"] as const,
   draftPlayerCard: (userId: number) => ["draft", "player-card", userId] as const,
+  /** The engine's leaf/constraint/preset registry. Tournament-independent, and
+   *  cached for the session: it only changes when the engine ships a new leaf. */
+  pickBanRulesCatalog: () => ["pick-ban-rules", "catalog"] as const,
+  /** The validator's verdict on one authored ruleset. The ruleset itself is
+   *  part of the key: every edit is a different question, and the answer to the
+   *  previous one must not stand in for it. */
+  pickBanRulesValidation: (
+    tournamentId: KeyPart,
+    kind: KeyPart,
+    mode: KeyPart,
+    ruleset: unknown,
+  ) => ["pick-ban-rules", "validate", tournamentId, kind, mode, ruleset] as const,
+  /** What one ruleset does to a whole series. Keyed by the pool too, since the
+   *  worst-case counts are computed against it. */
+  pickBanRulesPreview: (
+    tournamentId: KeyPart,
+    kind: KeyPart,
+    mode: KeyPart,
+    bestOf: KeyPart,
+    ruleset: unknown,
+    pool: unknown,
+  ) => ["pick-ban-rules", "preview", tournamentId, kind, mode, bestOf, ruleset, pool] as const,
   /** The public tournament list, and the bare prefix every admin write drops. */
   list: () => ["tournaments"] as const,
   listPage: (workspaceId: KeyPart, status: KeyPart, type: KeyPart, query: KeyPart, sort: KeyPart) =>

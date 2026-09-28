@@ -1,23 +1,16 @@
 /**
  * Form model of one `PickBanConfig`, and the pure logic the editor needs.
  *
- * The wire shape is deliberately not the form shape. Three of its fields are
- * traps an organizer cannot be expected to reason about, and each is resolved
- * here instead of being handed over raw:
+ * The rules themselves are a `PickBanRuleset` (ruleset v2,
+ * docs/plans/2026-09-28-pick-ban-constructor.md §1): phases decide which steps
+ * run on which map of the series, steps carry actors/count/blind/target/
+ * lifetime/timer/dispute, and condition trees decide what may be chosen. The
+ * draft holds that document verbatim — there is no second, flatter form model
+ * to keep in step with it, and the server validates the same JSON it is sent.
  *
- *   1. `preset` decides whether `sequence` is used at all. The engine rebuilds
- *      the step order from the match's `best_of` unless `preset === "custom"`
- *      (`pick_ban_session.ensure_pick_ban_session`), so a hand-authored
- *      sequence saved with any other preset is silently discarded. The form
- *      therefore exposes the choice as `orderMode` and derives `preset` from
- *      it — never the other way round.
- *   2. `sequence` must be non-empty and internally valid even in bracket order:
- *      `validate_pick_ban_config` runs regardless of preset. Bracket order
- *      stores a generated placeholder for the scope's series length, the same
- *      way the legacy veto editor does.
- *   3. `unique_attribute_per_side_per_round` only ever means `"role"`, and only
- *      for hero configs (`pick_ban_action._attribute_lookup` never resolves it
- *      for `kind=map`). The form models it as a boolean on hero configs alone.
+ * What the draft still owns beyond the ruleset is the scope key, the pool
+ * (`item_ids` or slot groups) and the rotation, because those are not rules
+ * about *how* a round is played.
  *
  * `first_pick_rule` is omitted entirely: its type has exactly one member, and
  * the server defaults to it, so a control would be a dead choice.
@@ -27,44 +20,26 @@
  * so the editor can say where they came from instead of presenting a copy of the
  * tournament's rules as if the organizer had typed it.
  */
-import {
-  DEFAULT_BEST_OF,
-  buildSequenceForBestOf,
-  hasPerRoundBestOf,
-  maxBestOf,
-  resolveBestOf,
-} from "@/lib/tournament/best-of";
+import { DEFAULT_BEST_OF, hasPerRoundBestOf, maxBestOf, resolveBestOf } from "@/lib/tournament/best-of";
 import { projectStage } from "@/lib/bracket/projection";
 import type {
   MapVetoMode,
+  PickBanActors,
+  PickBanCondition,
   PickBanConfig,
   PickBanConfigUpsertInput,
   PickBanFirstBanRotation,
   PickBanKind,
-  PickBanNoRepeatScope,
-  PickBanSequenceToken,
+  PickBanRuleset,
+  PickBanRulesetPhase,
+  PickBanRulesetStep,
+  PickBanStepAction,
+  PickBanTimeoutPolicy,
   Stage,
 } from "@/types/tournament.types";
 
 /** Candidates a slot needs to ban down to a survivor. Mirrors `pick_ban_session.SLOT_CANDIDATE_FLOOR`. */
 const SLOT_CANDIDATE_FLOOR = 2;
-
-/** The only `unique_attribute_per_side_per_round` value the engine implements. */
-const ROLE_ATTRIBUTE = "role";
-
-/** The `preset` value that opts a config out of bracket-driven step order. */
-const CUSTOM_PRESET = "custom";
-/** The `preset` value that opts a config into it. Any non-`custom` value would do. */
-const BRACKET_PRESET = "bracket";
-
-/** Where a config's step order comes from. */
-export type PickBanOrderMode = "bracket" | "custom";
-
-export type PickBanStepAction = "ban" | "pick" | "protect";
-export type PickBanStepSide = "first" | "second";
-
-export const PICK_BAN_STEP_ACTIONS: PickBanStepAction[] = ["ban", "pick", "protect"];
-export const PICK_BAN_STEP_SIDES: PickBanStepSide[] = ["first", "second"];
 
 export const PICK_BAN_MODES: MapVetoMode[] = ["pool", "slots"];
 export const PICK_BAN_ROTATIONS: PickBanFirstBanRotation[] = [
@@ -74,11 +49,21 @@ export const PICK_BAN_ROTATIONS: PickBanFirstBanRotation[] = [
   "result_loser_first",
   "result_loser_choice",
 ];
-export const PICK_BAN_NO_REPEAT_SCOPES: PickBanNoRepeatScope[] = [
-  "none",
-  "encounter",
-  "encounter_same_side",
+
+/** Every actor resolution the engine implements, in menu order (§1). */
+export const PICK_BAN_ACTORS: PickBanActors[] = [
+  "first",
+  "second",
+  "both",
+  "home",
+  "away",
+  "winner_prev",
+  "loser_prev",
+  "system",
 ];
+
+export const PICK_BAN_STEP_ACTIONS: PickBanStepAction[] = ["ban", "pick", "protect", "decider"];
+export const PICK_BAN_TIMEOUTS: PickBanTimeoutPolicy[] = ["random_fill", "lock_draft", "wait"];
 
 /** One slot as the editor holds it: no `position`, because list order is it. */
 export interface PickBanDraftSlot {
@@ -116,15 +101,9 @@ export interface PickBanDraft {
   stageId: number | null;
   round: number | null;
   mode: MapVetoMode;
-  orderMode: PickBanOrderMode;
   firstBanRotation: PickBanFirstBanRotation;
-  noRepeatScope: PickBanNoRepeatScope;
-  turnTimerSeconds: number | null;
-  allowProtect: boolean;
-  /** Hero configs only; a map config always sends null. */
-  uniqueRolePerRound: boolean;
-  /** Only read when `orderMode === "custom"` and `mode === "pool"`. */
-  sequence: PickBanSequenceToken[];
+  /** The whole rules document, exactly as it is stored and validated. */
+  ruleset: PickBanRuleset;
   /** Pool mode only. */
   itemIds: number[];
   /** Slots mode, one round's scope. */
@@ -142,6 +121,342 @@ export interface PickBanDraft {
   inheritedFrom: PickBanInheritedScope | null;
 }
 
+// ── ruleset factories ────────────────────────────────────────────────────────
+
+/** The default step timer a new ruleset offers, in seconds (§12 uses 90). */
+export const DEFAULT_TIMER_SECONDS = 90;
+
+/**
+ * A fresh ruleset for `kind`, in the shape that reproduces what the scope used
+ * to do by default.
+ *
+ * A map ruleset opens on the bracket generator — the server builds the veto
+ * order from the pool and the series length, which is what every map config
+ * did before the constructor existed. A hero ruleset has no generator (a hero
+ * pool stays playable, so there is nothing to ban down to) and opens on one
+ * empty phase the organizer fills from the step palette.
+ */
+export function emptyRuleset(kind: PickBanKind, mode: MapVetoMode = "pool"): PickBanRuleset {
+  return {
+    version: 2,
+    timer_seconds: null,
+    on_timeout: "random_fill",
+    phases: [
+      {
+        id: "main",
+        name: null,
+        when: {},
+        pool_filter: {},
+        generator: kind === "map" ? (mode === "slots" ? "slot_veto" : "bracket") : null,
+        steps: [],
+      },
+    ],
+  };
+}
+
+/**
+ * Mints ids no phase or step of `ruleset` carries, and remembers what it just
+ * handed out — duplicating a phase needs several at once.
+ */
+function idAllocator(ruleset: PickBanRuleset): (prefix: string) => string {
+  const taken = new Set<string>(
+    ruleset.phases.flatMap((phase) => [phase.id, ...phase.steps.map((step) => step.id)])
+  );
+  return (prefix) => {
+    for (let index = 1; ; index += 1) {
+      const candidate = `${prefix}${index}`;
+      if (!taken.has(candidate)) {
+        taken.add(candidate);
+        return candidate;
+      }
+    }
+  };
+}
+
+export function newPhase(ruleset: PickBanRuleset): PickBanRulesetPhase {
+  return {
+    id: idAllocator(ruleset)("phase"),
+    name: null,
+    when: {},
+    pool_filter: {},
+    generator: null,
+    steps: [],
+  };
+}
+
+/**
+ * The step shapes the palette offers (§13). Each is a real step with the
+ * defaults of §1 filled in — a "simultaneous blind ban" is not a mode, it is
+ * `actors: both, blind: true`, and the palette exists so an organizer does not
+ * have to know that.
+ */
+export type PickBanStepTemplate =
+  | "ban_sequential"
+  | "ban_blind"
+  | "ban_per_player"
+  | "pick"
+  | "protect"
+  | "decider"
+  | "roulette";
+
+export const PICK_BAN_STEP_TEMPLATES: PickBanStepTemplate[] = [
+  "ban_sequential",
+  "ban_blind",
+  "ban_per_player",
+  "pick",
+  "protect",
+  "decider",
+  "roulette",
+];
+
+/** The bare step every template starts from: one item, open, this map only. */
+function baseStep(id: string): PickBanRulesetStep {
+  return {
+    id,
+    action: "ban",
+    actors: "first",
+    count: 1,
+    min: null,
+    blind: false,
+    target: null,
+    lifetime: 1,
+    timer_seconds: null,
+    on_timeout: null,
+    dispute: { enabled: false, max: 0 },
+    eligible: {},
+    constraints: [],
+  };
+}
+
+export function newStep(ruleset: PickBanRuleset, template: PickBanStepTemplate): PickBanRulesetStep {
+  const step = baseStep(idAllocator(ruleset)("step"));
+  switch (template) {
+    case "ban_sequential":
+      return step;
+    case "ban_blind":
+      return { ...step, actors: "both", count: 2, blind: true, dispute: { enabled: true, max: 1 } };
+    case "ban_per_player":
+      // The 2026-10-03 anti-one-trick shape (§12): one ban per opponent player,
+      // hero class matching that player's role, alive for two maps.
+      return {
+        ...step,
+        actors: "both",
+        count: 5,
+        blind: true,
+        target: "opponent_player",
+        lifetime: 2,
+        dispute: { enabled: true, max: 1 },
+        eligible: { type: "target_role_match", params: {} },
+        constraints: [{ type: "one_per_target", params: {} }],
+      };
+    case "pick":
+      // A pick settles a map of the series; it has no lifetime to expire.
+      return { ...step, action: "pick", lifetime: null };
+    case "protect":
+      return { ...step, action: "protect", lifetime: null };
+    case "decider":
+      return { ...step, action: "decider", actors: "system", lifetime: null };
+    case "roulette":
+      // A system ban: the engine rolls it, nobody acts.
+      return { ...step, actors: "system" };
+  }
+}
+
+// ── ruleset editing ──────────────────────────────────────────────────────────
+
+/** `list` with the item at `index` moved by `delta`, or unchanged at an edge. */
+function moved<T>(list: T[], index: number, delta: number): T[] {
+  const target = index + delta;
+  if (target < 0 || target >= list.length) return list;
+  const next = [...list];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
+export function updatePhase(
+  ruleset: PickBanRuleset,
+  phaseId: string,
+  patch: Partial<PickBanRulesetPhase>
+): PickBanRuleset {
+  return {
+    ...ruleset,
+    phases: ruleset.phases.map((phase) => (phase.id === phaseId ? { ...phase, ...patch } : phase)),
+  };
+}
+
+export function movePhase(ruleset: PickBanRuleset, phaseId: string, delta: number): PickBanRuleset {
+  const index = ruleset.phases.findIndex((phase) => phase.id === phaseId);
+  if (index < 0) return ruleset;
+  return { ...ruleset, phases: moved(ruleset.phases, index, delta) };
+}
+
+export function removePhase(ruleset: PickBanRuleset, phaseId: string): PickBanRuleset {
+  return { ...ruleset, phases: ruleset.phases.filter((phase) => phase.id !== phaseId) };
+}
+
+export function duplicatePhase(ruleset: PickBanRuleset, phaseId: string): PickBanRuleset {
+  const index = ruleset.phases.findIndex((phase) => phase.id === phaseId);
+  if (index < 0) return ruleset;
+  const source = ruleset.phases[index];
+  // Ids are unique across the whole ruleset, so the copy's steps are renamed
+  // too — a duplicate that shared step ids would make `resolved_sequence_json`
+  // ambiguous about which phase a step came from.
+  const nextId = idAllocator(ruleset);
+  const copy: PickBanRulesetPhase = {
+    ...source,
+    id: nextId("phase"),
+    steps: source.steps.map((step) => ({ ...step, id: nextId("step") })),
+  };
+  const phases = [...ruleset.phases];
+  phases.splice(index + 1, 0, copy);
+  return { ...ruleset, phases };
+}
+
+export function addStep(
+  ruleset: PickBanRuleset,
+  phaseId: string,
+  template: PickBanStepTemplate
+): PickBanRuleset {
+  const step = newStep(ruleset, template);
+  return updatePhaseSteps(ruleset, phaseId, (steps) => [...steps, step]);
+}
+
+export function updateStep(
+  ruleset: PickBanRuleset,
+  phaseId: string,
+  stepId: string,
+  patch: Partial<PickBanRulesetStep>
+): PickBanRuleset {
+  return updatePhaseSteps(ruleset, phaseId, (steps) =>
+    steps.map((step) => (step.id === stepId ? { ...step, ...patch } : step))
+  );
+}
+
+export function moveStep(
+  ruleset: PickBanRuleset,
+  phaseId: string,
+  stepId: string,
+  delta: number
+): PickBanRuleset {
+  return updatePhaseSteps(ruleset, phaseId, (steps) => {
+    const index = steps.findIndex((step) => step.id === stepId);
+    return index < 0 ? steps : moved(steps, index, delta);
+  });
+}
+
+export function removeStep(ruleset: PickBanRuleset, phaseId: string, stepId: string): PickBanRuleset {
+  return updatePhaseSteps(ruleset, phaseId, (steps) => steps.filter((step) => step.id !== stepId));
+}
+
+export function duplicateStep(
+  ruleset: PickBanRuleset,
+  phaseId: string,
+  stepId: string
+): PickBanRuleset {
+  const id = idAllocator(ruleset)("step");
+  return updatePhaseSteps(ruleset, phaseId, (steps) => {
+    const index = steps.findIndex((step) => step.id === stepId);
+    if (index < 0) return steps;
+    const copy = [...steps];
+    copy.splice(index + 1, 0, { ...steps[index], id });
+    return copy;
+  });
+}
+
+function updatePhaseSteps(
+  ruleset: PickBanRuleset,
+  phaseId: string,
+  edit: (steps: PickBanRulesetStep[]) => PickBanRulesetStep[]
+): PickBanRuleset {
+  return {
+    ...ruleset,
+    phases: ruleset.phases.map((phase) =>
+      phase.id === phaseId ? { ...phase, steps: edit(phase.steps) } : phase
+    ),
+  };
+}
+
+/** Is this condition tree "anything"? `{}` is the DSL's always-true. */
+export function isEmptyCondition(condition: PickBanCondition): boolean {
+  return Object.keys(condition ?? {}).length === 0;
+}
+
+/**
+ * How one step reads on its card: a message key under `pickBan.rules.summary`
+ * plus its ICU arguments.
+ *
+ * Data rather than a string because the editor is translated and the summary is
+ * the one place a whole step has to be legible at a glance.
+ */
+export function stepSummary(step: PickBanRulesetStep): {
+  key: "open" | "blind" | "perTarget";
+  values: Record<string, string | number>;
+} {
+  if (step.target != null) {
+    return { key: "perTarget", values: { count: step.count } };
+  }
+  if (step.blind) {
+    return { key: "blind", values: { count: step.count } };
+  }
+  return { key: "open", values: { count: step.count } };
+}
+
+/**
+ * How long one step's bans stay in force, as a message key under
+ * `pickBan.rules.summary` — or null when the step has no lifetime to speak of.
+ *
+ * Only a ban expires; a pick, a protect and a decider settle something and are
+ * done. Worth its own line on the card because it is the parameter an
+ * organizer cannot infer: a five-ban step that holds for two maps is twenty
+ * heroes gone by map 3, and nothing else on the card says so.
+ */
+export function stepLifetimeSummary(
+  step: PickBanRulesetStep
+): { key: "lifetimeMaps" | "lifetimeSeries"; values: Record<string, number> } | null {
+  if (step.action !== "ban") return null;
+  if (step.lifetime == null) return { key: "lifetimeSeries", values: {} };
+  return { key: "lifetimeMaps", values: { count: step.lifetime } };
+}
+
+/**
+ * A ruleset parsed out of pasted JSON, or null when the text is not one.
+ *
+ * A shape check, not a validator: the server is the authority on whether a
+ * ruleset is playable (`validateRuleset`), and re-implementing §2's grammar
+ * here would be a second opinion that can only drift. What this rejects is
+ * text that would crash the editor before the server ever sees it.
+ */
+export function parseRulesetJson(text: string): PickBanRuleset | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (data == null || typeof data !== "object") return null;
+  const candidate = data as Partial<PickBanRuleset>;
+  if (candidate.version !== 2 || !Array.isArray(candidate.phases)) return null;
+  if (
+    !candidate.phases.every(
+      (phase) =>
+        phase != null &&
+        typeof phase === "object" &&
+        typeof phase.id === "string" &&
+        Array.isArray(phase.steps)
+    )
+  ) {
+    return null;
+  }
+  return {
+    version: 2,
+    timer_seconds: typeof candidate.timer_seconds === "number" ? candidate.timer_seconds : null,
+    on_timeout: candidate.on_timeout ?? "random_fill",
+    phases: candidate.phases,
+  };
+}
+
+// ── draft ────────────────────────────────────────────────────────────────────
+
 export function emptyPickBanDraft(kind: PickBanKind): PickBanDraft {
   return {
     configId: null,
@@ -149,13 +464,8 @@ export function emptyPickBanDraft(kind: PickBanKind): PickBanDraft {
     stageId: null,
     round: null,
     mode: "pool",
-    orderMode: kind === "hero" ? "custom" : "bracket",
     firstBanRotation: "fixed",
-    noRepeatScope: "none",
-    turnTimerSeconds: null,
-    allowProtect: false,
-    uniqueRolePerRound: false,
-    sequence: [],
+    ruleset: emptyRuleset(kind),
     itemIds: [],
     slots: [],
     roundSlots: [],
@@ -170,15 +480,8 @@ export function pickBanDraftFromConfig(config: PickBanConfig): PickBanDraft {
     stageId: config.stage_id,
     round: config.round,
     mode: config.mode,
-    // A hero config's steps are always hand-authored (see `effectiveSequence`),
-    // whatever preset an older row happens to carry.
-    orderMode: config.kind === "hero" || config.preset === CUSTOM_PRESET ? "custom" : "bracket",
     firstBanRotation: config.first_ban_rotation,
-    noRepeatScope: config.no_repeat_scope,
-    turnTimerSeconds: config.turn_timer_seconds,
-    allowProtect: config.allow_protect,
-    uniqueRolePerRound: config.unique_attribute_per_side_per_round === ROLE_ATTRIBUTE,
-    sequence: [...config.sequence],
+    ruleset: config.ruleset,
     itemIds: [...config.item_ids],
     slots: config.slots.map((slot) => ({
       candidates: [...slot.candidates],
@@ -189,31 +492,7 @@ export function pickBanDraftFromConfig(config: PickBanConfig): PickBanDraft {
   };
 }
 
-/**
- * The sequence a draft actually stores.
- *
- * Bracket order keeps a generated placeholder rather than an empty list: the
- * server validates `sequence` on every pool-mode upsert, and the engine
- * regenerates it per match anyway.
- *
- * A hero sequence is never generated: it is ONE round's steps, replayed for
- * every map of the series, while the generator answers a different question
- * ("how do we ban a pool of N down to `bestOf` maps") and emits picks and a
- * decider — steps a hero round cannot resolve, since its pool stays playable.
- */
-export function effectiveSequence(
-  draft: PickBanDraft,
-  seriesLength: number
-): PickBanSequenceToken[] {
-  if (draft.mode === "slots") return [];
-  if (draft.kind === "hero" || draft.orderMode === "custom") return draft.sequence;
-  return buildSequenceForBestOf(seriesLength, draft.itemIds.length);
-}
-
-export function pickBanDraftToInput(
-  draft: PickBanDraft,
-  seriesLength: number
-): PickBanConfigUpsertInput {
+export function pickBanDraftToInput(draft: PickBanDraft): PickBanConfigUpsertInput {
   const slotsMode = draft.mode === "slots";
   // A template's groups exist only because the bracket sized them; sending the
   // empty shells would trip the server's "a slot needs two candidates" rule,
@@ -225,15 +504,7 @@ export function pickBanDraftToInput(
     round: draft.stageId != null ? draft.round : null,
     mode: draft.mode,
     first_ban_rotation: draft.firstBanRotation,
-    // `ck_pick_ban_config_slots_not_custom` forbids the custom preset in slot
-    // mode, where there is no hand-authored order to protect anyway.
-    preset: slotsMode || (draft.kind !== "hero" && draft.orderMode === "bracket") ? BRACKET_PRESET : CUSTOM_PRESET,
-    turn_timer_seconds: draft.turnTimerSeconds,
-    no_repeat_scope: draft.noRepeatScope,
-    unique_attribute_per_side_per_round:
-      draft.kind === "hero" && draft.uniqueRolePerRound ? ROLE_ATTRIBUTE : null,
-    allow_protect: draft.allowProtect,
-    sequence: effectiveSequence(draft, seriesLength),
+    ruleset: draft.ruleset,
     item_ids: slotsMode ? [] : draft.itemIds,
     slots: slots.map((slot) => ({
       candidates: slot.candidates,
@@ -256,32 +527,6 @@ export function isRulesTemplate(draft: PickBanDraft): boolean {
   if (draft.mode !== "slots") return draft.itemIds.length === 0;
   const groups = draft.roundSlots.length > 0 ? draft.roundSlots.flatMap((round) => round.slots) : draft.slots;
   return groups.every((slot) => slot.candidates.length === 0);
-}
-
-// ── step tokens ──────────────────────────────────────────────────────────────
-
-export interface PickBanStep {
-  action: PickBanStepAction | "decider";
-  /** Null only for `decider`. */
-  side: PickBanStepSide | null;
-}
-
-export function parseStepToken(token: PickBanSequenceToken): PickBanStep {
-  if (token === "decider") return { action: "decider", side: null };
-  const [action, side] = token.split("_") as [PickBanStepAction, PickBanStepSide];
-  return { action, side };
-}
-
-export function buildStepToken(
-  action: PickBanStepAction | "decider",
-  side: PickBanStepSide
-): PickBanSequenceToken {
-  return action === "decider" ? "decider" : (`${action}_${side}` as PickBanSequenceToken);
-}
-
-/** Rounds a sequence actually plays: every pick plus the decider. */
-export function roundsPlayed(sequence: PickBanSequenceToken[]): number {
-  return sequence.filter((token) => token !== "ban_first" && token !== "ban_second").length;
 }
 
 // ── scope ────────────────────────────────────────────────────────────────────
@@ -330,22 +575,12 @@ export function findInheritedConfig(
 /**
  * Every value the editor authors, minus scope and identity: what "the same
  * rules" means.
- *
- * A bracket-order sequence is deliberately out. It is a placeholder the engine
- * regenerates per match from the series length (see `effectiveSequence`), so two
- * scopes that play by identical rules still store different tokens whenever
- * their brackets disagree on Bo.
  */
 function ruleValues(draft: PickBanDraft): unknown[] {
   return [
     draft.mode,
-    draft.orderMode,
     draft.firstBanRotation,
-    draft.noRepeatScope,
-    draft.turnTimerSeconds,
-    draft.allowProtect,
-    draft.uniqueRolePerRound,
-    draft.kind === "hero" || draft.orderMode === "custom" ? draft.sequence : [],
+    draft.ruleset,
     draft.itemIds,
     draft.slots.map((slot) => [slot.candidates, slot.reserveItemId]),
     draft.roundSlots.map((round) => [
@@ -606,104 +841,63 @@ export function fanOutRoundDrafts(draft: PickBanDraft): PickBanDraft[] {
 // ── validation ───────────────────────────────────────────────────────────────
 
 /**
- * A rejection the editor can actually produce, as data: `key` resolves under
- * `pickBan.admin.validation.*` and `values` feeds its ICU arguments.
+ * A rejection the editor can produce without asking the server, as data: `key`
+ * resolves under `pickBan.admin.validation.*` and `values` feeds its ICU
+ * arguments.
  *
- * Mirrors `validate_pick_ban_config` / `validate_pick_ban_slot_config`, minus
- * the rejections this editor makes unreachable — ids come from toggles, so they
- * can neither repeat nor be unparseable, and a reserve picker never offers its
- * own slot's candidates.
+ * Deliberately shallow. Everything about the ruleset itself — unknown leaves,
+ * wrong contexts, counts past the pool, a map index no phase covers — is
+ * `validateRuleset`'s answer (§6), and a second opinion here could only drift
+ * from the engine that actually runs the draft. What is left is the pool
+ * shape, which the editor owns outright, plus the two ways a ruleset can be
+ * empty enough that no round would ever run.
  */
 export type PickBanValidationIssue =
-  | { key: "emptySequence"; values?: undefined }
-  | { key: "multipleDeciders"; values?: undefined }
-  | { key: "deciderNotLast"; values?: undefined }
-  | { key: "noPickOrDecider"; values?: undefined }
-  | { key: "heroDecider"; values?: undefined }
-  | { key: "sequenceLongerThanPool"; values: { steps: number; items: number } }
+  | { key: "noPhases"; values?: undefined }
+  | { key: "phaseWithoutSteps"; values: { phase: string } }
   | { key: "slotTooFewCandidates"; values: { slot: number } }
   | { key: "roundSlotTooFewCandidates"; values: { round: number; slot: number } };
 
-export function validatePickBanDraft(
-  draft: PickBanDraft,
-  seriesLength: number
-): PickBanValidationIssue[] {
-  // A pool-less draft is a rules template (`isRulesTemplate`): the server takes
-  // it, and the pool-shaped rules -- a sequence that fits inside the pool, two
-  // candidates per group -- have nothing to hold. What it cannot do is open a
-  // room, which the editor says outright rather than as a validation error.
-  if (isRulesTemplate(draft)) return [];
-  if (draft.mode === "slots") {
-    // A stage-wide draft authors every round of the stage at once; each round
-    // is saved as its own config, so each one has to stand on its own.
-    if (draft.roundSlots.length > 0) {
-      return draft.roundSlots.flatMap((round) =>
-        round.slots.flatMap((slot, index) =>
-          slot.candidates.length < SLOT_CANDIDATE_FLOOR
-            ? [
-                {
-                  key: "roundSlotTooFewCandidates" as const,
-                  values: { round: round.round, slot: index + 1 },
-                },
-              ]
-            : []
-        )
-      );
-    }
-    // An empty group list cannot reach here: no candidates anywhere IS a
-    // template, handled above.
-    return draft.slots.flatMap((slot, index) =>
-      slot.candidates.length < SLOT_CANDIDATE_FLOOR
-        ? [{ key: "slotTooFewCandidates" as const, values: { slot: index + 1 } }]
-        : []
-    );
-  }
-
+export function validatePickBanDraft(draft: PickBanDraft): PickBanValidationIssue[] {
   const issues: PickBanValidationIssue[] = [];
 
-  const sequence = effectiveSequence(draft, seriesLength);
-  if (sequence.length === 0) {
-    // Reachable in custom order only: bracket order generates from the pool,
-    // and an empty pool is already reported above.
-    if (draft.itemIds.length > 0) issues.push({ key: "emptySequence" });
-  } else if (draft.kind === "hero") {
-    // A hero round bans out of a pool that stays playable, so there is no
-    // survivor for a decider to resolve to, and no "must end in a pick" rule
-    // to satisfy either (mirrors `validate_pick_ban_config`'s hero branch).
-    if (sequence.includes("decider")) issues.push({ key: "heroDecider" });
-  } else {
-    const deciders = sequence.filter((token) => token === "decider").length;
-    if (deciders > 1) {
-      issues.push({ key: "multipleDeciders" });
-    } else if (deciders === 1 && sequence[sequence.length - 1] !== "decider") {
-      issues.push({ key: "deciderNotLast" });
-    }
-    if (!sequence.some((token) => token.startsWith("pick") || token === "decider")) {
-      issues.push({ key: "noPickOrDecider" });
+  if (draft.ruleset.phases.length === 0) {
+    issues.push({ key: "noPhases" });
+  }
+  for (const phase of draft.ruleset.phases) {
+    // A generator phase has no steps by construction: the server expands it.
+    if (phase.generator == null && phase.steps.length === 0) {
+      issues.push({ key: "phaseWithoutSteps", values: { phase: phase.name ?? phase.id } });
     }
   }
 
-  if (draft.itemIds.length > 0 && sequence.length > draft.itemIds.length) {
-    issues.push({
-      key: "sequenceLongerThanPool",
-      values: { steps: sequence.length, items: draft.itemIds.length },
-    });
+  // A pool-less draft is a rules template (`isRulesTemplate`): the server takes
+  // it, and the pool-shaped rules have nothing to hold. What it cannot do is
+  // open a room, which the editor says outright rather than as an error.
+  if (isRulesTemplate(draft) || draft.mode !== "slots") return issues;
+
+  // A stage-wide draft authors every round of the stage at once; each round is
+  // saved as its own config, so each one has to stand on its own.
+  if (draft.roundSlots.length > 0) {
+    for (const round of draft.roundSlots) {
+      round.slots.forEach((slot, index) => {
+        if (slot.candidates.length < SLOT_CANDIDATE_FLOOR) {
+          issues.push({
+            key: "roundSlotTooFewCandidates",
+            values: { round: round.round, slot: index + 1 },
+          });
+        }
+      });
+    }
+    return issues;
   }
+
+  draft.slots.forEach((slot, index) => {
+    if (slot.candidates.length < SLOT_CANDIDATE_FLOOR) {
+      issues.push({ key: "slotTooFewCandidates", values: { slot: index + 1 } });
+    }
+  });
   return issues;
-}
-
-/**
- * Whether `allowProtect` is on but no step will ever run it.
- *
- * The toggle alone changes nothing: the engine only offers a protect action
- * where the resolved sequence carries a `protect_*` token, and a
- * bracket-generated order never does. Surfaced as a notice rather than a
- * validation error, because the server accepts the combination.
- */
-export function protectHasNoStep(draft: PickBanDraft, seriesLength: number): boolean {
-  if (!draft.allowProtect) return false;
-  if (draft.mode === "slots") return true;
-  return !effectiveSequence(draft, seriesLength).some((token) => token.startsWith("protect"));
 }
 
 /** The existing config a draft would overwrite on save, if any. */

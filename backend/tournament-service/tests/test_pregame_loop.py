@@ -42,9 +42,9 @@ from shared.core.enums import (  # noqa: E402
     MapPoolEntryStatus,
     MapVetoMode,
     PickBanKind,
-    PickBanNoRepeatScope,
 )
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.domain import pick_ban_rules as pbr  # noqa: E402
 from shared.models.matches.match import Match  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
@@ -75,6 +75,32 @@ HEROES = list(range(101, 117))
 HOME_TEAM, AWAY_TEAM = 10, 20
 
 
+def _turn(state: dict) -> str:
+    """The one side on the clock. Every config in this suite is a migrated v1
+    one, so every step has exactly one actor -- a multi-side step would make
+    this ambiguous, which is precisely what ``acting_sides`` replaced
+    ``turn_side`` for."""
+    acting = state["acting_sides"]
+    assert len(acting) == 1, f"expected a single-actor step, got {acting}"
+    return acting[0]
+
+
+def v1_ruleset(**kwargs) -> dict:
+    """A ruleset exactly as the v1 migration produced it, so every assertion
+    below is also a check that a migrated config still plays as before."""
+    payload = {
+        "kind": "map",
+        "mode": "pool",
+        "preset": "custom",
+        "sequence": [],
+        "no_repeat_scope": "none",
+        "unique_attribute": None,
+        "turn_timer_seconds": None,
+    }
+    payload.update(kwargs)
+    return pbr.ruleset_from_v1(**payload).to_json()
+
+
 def _map_config(*, rotation: str = FirstBanRotation.RESULT_WINNER_FIRST) -> PickBanConfig:
     config = PickBanConfig(
         tournament_id=7,
@@ -83,12 +109,7 @@ def _map_config(*, rotation: str = FirstBanRotation.RESULT_WINNER_FIRST) -> Pick
         round=None,
         mode=MapVetoMode.SLOTS,
         first_ban_rotation=rotation,
-        preset="bracket",
-        sequence_json=[],
-        turn_timer_seconds=None,
-        no_repeat_scope=PickBanNoRepeatScope.NONE,
-        unique_attribute_per_side_per_round=None,
-        allow_protect=False,
+        ruleset_json=v1_ruleset(kind="map", mode="slots", preset="bracket"),
     )
     config.items = []
     config.slots = [
@@ -107,14 +128,13 @@ def _hero_config() -> PickBanConfig:
         round=None,
         mode=MapVetoMode.POOL,
         first_ban_rotation=FirstBanRotation.FIXED,
-        preset="custom",
-        # Two bans per side, per map of the series.
-        sequence_json=["ban_first", "ban_second", "ban_second", "ban_first"],
-        turn_timer_seconds=None,
-        # Doc 1's rule: nobody re-bans a hero anywhere in the series.
-        no_repeat_scope=PickBanNoRepeatScope.ENCOUNTER,
-        unique_attribute_per_side_per_round=None,
-        allow_protect=False,
+        ruleset_json=v1_ruleset(
+            kind="hero",
+            # Two bans per side, per map of the series.
+            sequence=["ban_first", "ban_second", "ban_second", "ban_first"],
+            # Doc 1's rule: nobody re-bans a hero anywhere in the series.
+            no_repeat_scope="encounter",
+        ),
     )
     config.slots = []
     config.items = [PickBanConfigItem(item_id=item_id, sort_order=index) for index, item_id in enumerate(HEROES)]
@@ -169,7 +189,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
 
     async def act(self, kind: PickBanKind, side: str, item_id: int, action: str = "ban") -> None:
         await pick_ban_action_service.perform_pick_ban_action(
-            self.store, self.encounter_id, kind, side, item_id, action
+            self.store, self.encounter_id, kind, side, item_id=item_id, action=action
         )
 
     async def ban_out_the_map_round(self) -> int:
@@ -180,9 +200,9 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
             entry["item_id"] for entry in state["pool"] if entry["status"] == MapPoolEntryStatus.AVAILABLE.value
         ]
         self.assertEqual(3, len(available), "a map round offers its slot's three candidates")
-        await self.act(PickBanKind.MAP, state["turn_side"], available[0])
+        await self.act(PickBanKind.MAP, _turn(state), available[0])
         state = await self.map_state()
-        await self.act(PickBanKind.MAP, state["turn_side"], available[1])
+        await self.act(PickBanKind.MAP, _turn(state), available[1])
         state = await self.map_state()
         self.assertTrue(state["is_complete"], "the decider closes the round as soon as one candidate is left")
         return available[2]
@@ -198,7 +218,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
                 for entry in state["pool"]
                 if entry["status"] == MapPoolEntryStatus.AVAILABLE.value and entry["round"] == state["current_round"]
             ]
-            await self.act(PickBanKind.HERO, state["turn_side"], available[0])
+            await self.act(PickBanKind.HERO, _turn(state), available[0])
             banned.append(available[0])
         self.assertTrue((await self.hero_state())["is_complete"])
         return banned
@@ -231,7 +251,10 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
     async def test_a_bo3_runs_map_then_heroes_then_the_result_each_round(self) -> None:
         # ── round 1 ──────────────────────────────────────────────────────
         state = await self.map_state()
-        self.assertEqual(["ban_home", "ban_away", "decider"], state["sequence"])
+        self.assertEqual(
+            [("ban", ["home"]), ("ban", ["away"]), ("decider", ["system"])],
+            [(step["action"], step["sides"]) for step in state["sequence"]],
+        )
         self.assertEqual(3, len(state["pool"]), "only round 1 exists yet")
 
         # Heroes are banned FOR a map, so the hero phase is closed until this
@@ -271,7 +294,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         self.assertFalse(state["is_complete"], "position 1's result opened map 2's bans")
         self.assertEqual(2, state["current_round"])
         # `result_winner_first`: home won map 1, so home opens map 2's bans.
-        self.assertEqual(MapPickSide.HOME.value, state["turn_side"])
+        self.assertEqual(MapPickSide.HOME.value, _turn(state))
         # A settled pick is never re-stamped: `picked` is the whole settled set,
         # and the result lives on the game.
         self.assertEqual(
@@ -294,7 +317,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         state = await self.map_state()
         self.assertEqual(3, state["current_round"])
         # Away won map 2, so away opens map 3's bans.
-        self.assertEqual(MapPickSide.AWAY.value, state["turn_side"])
+        self.assertEqual(MapPickSide.AWAY.value, _turn(state))
 
         await self.ban_out_the_map_round()
         round_three_heroes = await self.ban_out_the_hero_round()
@@ -502,7 +525,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         state = await self.map_state()
         self.assertEqual(2, state["current_round"])
         # Away won position 1, so the LOSER (home) opens map 2's bans.
-        self.assertEqual(MapPickSide.HOME.value, state["turn_side"])
+        self.assertEqual(MapPickSide.HOME.value, _turn(state))
         self.assertEqual([], self.store.all_of(Match), "the series loop writes no match row")
 
     async def test_result_loser_choice_after_a_draw_opens_the_next_round_on_the_snapshot_side_without_a_choice(
@@ -522,7 +545,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         self.assertIsNone(map_session.pending_loser_side)
         state = await self.map_state()
         self.assertEqual(2, state["current_round"])
-        self.assertEqual(MapPickSide.HOME.value, state["turn_side"], "the session's snapshot side opens")
+        self.assertEqual(MapPickSide.HOME.value, _turn(state), "the session's snapshot side opens")
         # The draw still consumed a position: 0:0 with one map played.
         self.assertEqual(
             {"home_wins": 0, "away_wins": 0, "played": 1, "complete": False},
@@ -576,7 +599,7 @@ class LoserChoiceStallTests(IsolatedAsyncioTestCase):
                 entry["item_id"] for entry in state["pool"] if entry["status"] == MapPoolEntryStatus.AVAILABLE.value
             ]
             await pick_ban_action_service.perform_pick_ban_action(
-                self.store, self.encounter_id, PickBanKind.MAP, state["turn_side"], available[0], "ban"
+                self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=available[0], action="ban"
             )
         for _ in range(4):
             state = await self.state(PickBanKind.HERO)
@@ -586,7 +609,7 @@ class LoserChoiceStallTests(IsolatedAsyncioTestCase):
                 if entry["status"] == MapPoolEntryStatus.AVAILABLE.value and entry["round"] == state["current_round"]
             ]
             await pick_ban_action_service.perform_pick_ban_action(
-                self.store, self.encounter_id, PickBanKind.HERO, state["turn_side"], available[0], "ban"
+                self.store, self.encounter_id, PickBanKind.HERO, _turn(state), item_id=available[0], action="ban"
             )
         game_id = next(game["id"] for game in (await self.state(PickBanKind.MAP))["games"] if game["position"] == 1)
         for side in (MapPickSide.HOME.value, MapPickSide.AWAY.value):
@@ -607,7 +630,7 @@ class LoserChoiceStallTests(IsolatedAsyncioTestCase):
                 if entry["status"] == MapPoolEntryStatus.AVAILABLE.value and entry["round"] == state["current_round"]
             ]
             await pick_ban_action_service.perform_pick_ban_action(
-                self.store, self.encounter_id, PickBanKind.MAP, state["turn_side"], available[0], "ban"
+                self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=available[0], action="ban"
             )
         # The hero session catches up with the map phase on a READ
         # (`sync_hero_rounds`), which is where the choice gate is reached.
@@ -651,7 +674,7 @@ class LoserChoiceStallTests(IsolatedAsyncioTestCase):
         hero = await self.state(PickBanKind.HERO)
         self.assertEqual(2, hero["current_round"])
         self.assertFalse(hero["is_complete"])
-        self.assertEqual(MapPickSide.AWAY.value, hero["turn_side"], "the elected side opens the round")
+        self.assertEqual(MapPickSide.AWAY.value, _turn(hero), "the elected side opens the round")
         self.assertFalse(hero["session"]["awaiting_choice"])
         self.assertIsNone(hero["session"]["pending_loser_side"])
 
@@ -706,7 +729,7 @@ class DeletedConfigStallTests(IsolatedAsyncioTestCase):
                 self.store, self.encounter_id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
             )
             await pick_ban_action_service.perform_pick_ban_action(
-                self.store, self.encounter_id, PickBanKind.MAP, state["turn_side"], item_id, "ban"
+                self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=item_id, action="ban"
             )
         pick_ban.config_id = None
 

@@ -527,23 +527,6 @@ class PickBanKind(StrEnum):
     HERO = "hero"
 
 
-class PickBanNoRepeatScope(StrEnum):
-    """Cross-round BAN memory rule for :class:`EncounterPickBanLedger`
-    exclusion. Protects are never recorded there, so they neither exclude nor
-    are excluded by anything under any scope.
-
-    ``NONE``: no cross-round memory (today's flat/slot veto behavior).
-    ``ENCOUNTER``: an item banned by EITHER side, anywhere earlier in this
-    encounter's series, is excluded from every later round's pool.
-    ``ENCOUNTER_SAME_SIDE``: excluded only for the side that banned it; the
-    opponent may still target it.
-    """
-
-    NONE = "none"
-    ENCOUNTER = "encounter"
-    ENCOUNTER_SAME_SIDE = "encounter_same_side"
-
-
 class MatchSource(StrEnum):
     """Provenance of a :class:`~shared.models.matches.match.Match` row.
 
@@ -670,7 +653,6 @@ __all__ = [
     "MapVetoMode",
     "FirstBanRotation",
     "PickBanKind",
-    "PickBanNoRepeatScope",
     "EncounterStatus",
     "EncounterLinkRole",
     "EncounterLinkSlot",

@@ -1,11 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Ban, Shield } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Ban, Check, ClipboardCopy, History, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
+import { Button } from "@/components/ui/button";
 import type { AqtRoleKey } from "@/lib/roster/player-role";
+import { lobbyCopyText, type PickBanRoleGroup } from "@/components/pick-ban/pick-ban-model";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import { cn } from "@/lib/utils";
@@ -22,17 +24,31 @@ export interface PregameHeroAction {
   action: "ban" | "protect";
   /** The side that committed it. */
   side: "home" | "away";
+  /**
+   * The earlier map this ban was spent on, when its `lifetime` still covers
+   * this one. Nobody acted on it here, so it is badged with its origin rather
+   * than read as a ban of this round.
+   */
+  carriedFromRound: number | null;
+}
+
+/** One map's hero board: who banned what, what is gone, and what is left. */
+export interface PregameHeroBoard {
+  /** Null for a flat (round-less) pool: one set of bans covered every map. */
+  round: number | null;
+  actions: PregameHeroAction[];
+  /** Everything unavailable on this map, role-grouped — the lobby list. */
+  banned: PickBanRoleGroup[];
+  /** What each role still has, after every ban that applies to this map. */
+  remaining: PickBanRoleGroup[];
 }
 
 /** One map's worth of hero actions, for replaying a finished series. */
-export interface PregameHeroRound {
-  /** Null for a flat (round-less) pool: one set of bans covered every map. */
-  round: number | null;
+export interface PregameHeroRound extends PregameHeroBoard {
   /** Null alongside a null round — there is no single map to name. */
   mapName: string | null;
   /** The map's catalog entry, for its still. Undefined until the catalog loads. */
   mapItem: PickBanItemLike | undefined;
-  actions: PregameHeroAction[];
 }
 
 /** Tank-damage-support, the order the game's own hero list uses. */
@@ -49,18 +65,18 @@ const SIDE_ACCENT = {
  *
  * The room renders one phase at a time, so the moment the hero grid closes it
  * is gone — and that is exactly when the bans are needed, because they have to
- * be set up in the game lobby before the map starts. Without this the captains
- * had to memorise them (or reopen the room in another tab and read the finished
- * grid) with no screen left showing what was banned.
+ * be set up in the game lobby before the map starts.
  *
- * Split by side, not by role: a round commits two to four actions in total, so
- * per-side grouping names who banned what once, in the same home/away geometry
- * (and the same teal/rose accents) as the score claims directly below. Within a
- * side the rows follow the game's role order, and a protect is marked with a
- * shield rather than mixed in as a ban — a protected hero must stay enabled.
+ * Split by side, because a blind step is two independent lists and a captain
+ * needs to see that theirs landed: duplicates MERGE into one banned hero on
+ * the board, so reading the board alone would show one side a ban short. A ban
+ * carried from an earlier map wears its origin instead of a side's colour —
+ * nobody spent it here. Under the two columns sits what the lobby actually
+ * needs: the flat "unavailable on this map" list, what is left per role, and a
+ * button that puts the first on the clipboard.
  */
 export function PregameHeroBans({
-  actions,
+  board,
   homeName,
   awayName,
   homeTeam,
@@ -68,7 +84,7 @@ export function PregameHeroBans({
   eyebrow,
   hint
 }: Readonly<{
-  actions: PregameHeroAction[];
+  board: PregameHeroBoard;
   homeName: string;
   awayName: string;
   /** The side's team, for its logo — undefined when the encounter has none. */
@@ -84,6 +100,8 @@ export function PregameHeroBans({
   hint?: string | null;
 }>) {
   const t = useTranslations("pickBan.room");
+  const tCommon = useTranslations("common");
+  const [copied, setCopied] = useState(false);
   const note = hint === undefined ? t("heroBans.hint") : hint;
   const caption =
     eyebrow === undefined ? (
@@ -94,14 +112,17 @@ export function PregameHeroBans({
       eyebrow
     );
 
-  if (actions.length === 0) {
+  // Nothing to transfer to the lobby at all — not even an engine-rolled ban.
+  if (board.actions.length === 0 && board.banned.length === 0) {
     return null;
   }
 
+  const roleLabel = (role: AqtRoleKey | null) =>
+    role == null ? t("heroBans.roleUnknown") : tCommon(`roles.${role}`);
+  const bannedNames = board.banned.flatMap((group) => group.items.map((item) => item.name));
+
   // Width is the caller's call: the result screen aligns this with its claim
-  // row, the closing screen gives each map a row of its own. Owning a `max-w`
-  // here centred the block under a left-aligned heading and left a third of
-  // the card empty.
+  // row, the closing screen gives each map a row of its own.
   return (
     <section className="flex w-full flex-col gap-2">
       {caption != null || note != null ? (
@@ -119,22 +140,69 @@ export function PregameHeroBans({
           side="home"
           name={homeName}
           team={homeTeam}
-          actions={actions.filter((action) => action.side === "home")}
+          actions={board.actions.filter((action) => action.side === "home")}
         />
         <SideBans
           side="away"
           name={awayName}
           team={awayTeam}
-          actions={actions.filter((action) => action.side === "away")}
+          actions={board.actions.filter((action) => action.side === "away")}
         />
       </div>
+
+      {bannedNames.length > 0 ? (
+        <div
+          data-hero-unavailable
+          className="flex flex-col gap-1.5 rounded-xl border border-dashed border-[color:var(--aqt-rose)]/40 bg-[color:var(--aqt-card-2)]/30 p-2.5"
+        >
+          <p className="text-xs leading-relaxed">
+            <span className="font-semibold text-[color:var(--aqt-rose)]">
+              {board.round != null
+                ? t("heroBans.unavailableOn", { n: board.round })
+                : t("heroBans.unavailable")}
+            </span>{" "}
+            <span className="text-[color:var(--aqt-fg-muted)]">{bannedNames.join(", ")}</span>
+          </p>
+          {board.remaining.length > 0 ? (
+            <ul data-hero-remaining className="flex flex-col gap-0.5">
+              {board.remaining.map((group) => (
+                <li key={group.role ?? "unknown"} className="text-xs text-[color:var(--aqt-fg-muted)]">
+                  <span className="font-medium text-[color:var(--aqt-fg)]">
+                    {t("heroBans.remainingRole", {
+                      role: roleLabel(group.role),
+                      count: group.items.length
+                    })}
+                  </span>{" "}
+                  {group.items.map((item) => item.name).join(", ")}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            onClick={() => {
+              void navigator.clipboard?.writeText(lobbyCopyText(board.banned, roleLabel));
+              setCopied(true);
+            }}
+          >
+            {copied ? (
+              <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <ClipboardCopy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            )}
+            {copied ? t("heroBans.copied") : t("heroBans.copy")}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }
 
 /**
- * One side's committed actions. Rendered even when empty — a sequence can give
- * a side no ban this round, and a missing column would read as data still
+ * One side's committed actions. Rendered even when empty — a step can give a
+ * side no ban this round, and a missing column would read as data still
  * loading rather than as nothing to transfer.
  */
 function SideBans({
@@ -212,6 +280,15 @@ function SideBans({
                 >
                   {action.name}
                 </span>
+                {action.carriedFromRound != null ? (
+                  <span
+                    data-carried-from={action.carriedFromRound}
+                    className="ml-auto flex shrink-0 items-center gap-1 text-label text-[color:var(--aqt-fg-faint)]"
+                  >
+                    <History className="h-3 w-3" aria-hidden />
+                    {t("carried.badge", { n: action.carriedFromRound })}
+                  </span>
+                ) : null}
               </li>
             );
           })}

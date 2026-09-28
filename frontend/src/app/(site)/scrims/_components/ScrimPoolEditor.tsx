@@ -19,11 +19,11 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { PickBanSequenceToken } from "@/types/tournament.types";
+import type { PickBanRuleset, PickBanRulesetStep } from "@/types/tournament.types";
 
 import {
-  effectiveSequence,
   emptyPickBanDraft,
+  emptyRuleset,
   matchesItemName,
   validatePickBanDraft,
   type PickBanDraft,
@@ -38,7 +38,7 @@ import { useMapsCatalog } from "@/hooks/useMapsCatalog";
  *
  * Holds the organizer editor's `PickBanDraft` verbatim — same model, same
  * converter, same validator (`pickBanConfig.helpers`) — so a form this editor
- * accepts is a payload the server's `validate_pick_ban_config` accepts too.
+ * accepts is a payload the server accepts too.
  *
  * Two drafts, because a room configures at most two kinds and the hero one is
  * optional: `hero == null` ships a map-only room.
@@ -53,26 +53,62 @@ const DEFAULT_HERO_BANS_PER_SIDE = 2;
 const MAX_HERO_BANS_PER_SIDE = 6;
 
 /**
- * A hero round's steps: `n` bans per side, alternating, no picks and no decider.
+ * A hero round's ruleset: `n` bans per side, alternating, no picks and no
+ * decider, each ban alive for the map it was taken on.
  *
  * A hero pool stays playable after its bans, so there is nothing for a decider
- * to resolve to and no "must end in a pick" rule to satisfy — exactly the shape
- * `validate_pick_ban_config`'s hero branch expects. Generated from one number
- * rather than authored step by step: every hero order a scrim would want is
- * this one with a different `n`.
+ * to resolve to. Generated from one number rather than authored step by step:
+ * every hero order a scrim would want is this one with a different `n`, and the
+ * organizer constructor is where anything else belongs.
+ *
+ * `uniqueRole` is the `max_per_group` constraint the tournament rules call
+ * "one hero per role per round" — the same shape v1's
+ * `unique_attribute_per_side_per_round` converts to.
  */
-function heroBanSequence(bansPerSide: number): PickBanSequenceToken[] {
-  return Array.from({ length: Math.max(0, bansPerSide) }, () => [
-    "ban_first" as const,
-    "ban_second" as const
-  ]).flat();
+function heroBanRuleset(bansPerSide: number, uniqueRole: boolean): PickBanRuleset {
+  const constraints = uniqueRole
+    ? [{ type: "max_per_group", params: { max: 1, scope: "round", group: null } }]
+    : [];
+  const steps: PickBanRulesetStep[] = Array.from(
+    { length: Math.max(0, bansPerSide) * 2 },
+    (_, index) => ({
+      id: `ban${index + 1}`,
+      action: "ban",
+      actors: index % 2 === 0 ? "first" : "second",
+      count: 1,
+      min: null,
+      blind: false,
+      target: null,
+      lifetime: 1,
+      timer_seconds: null,
+      on_timeout: null,
+      dispute: { enabled: false, max: 0 },
+      eligible: {},
+      constraints
+    })
+  );
+  const base = emptyRuleset("hero");
+  return { ...base, phases: [{ ...base.phases[0], steps }] };
+}
+
+/** Bans each side takes in a hero round, when hero bans are enabled. */
+function heroBansPerSide(ruleset: PickBanRuleset): number {
+  return Math.ceil((ruleset.phases[0]?.steps.length ?? 0) / 2);
+}
+
+/** Whether the hero rules carry the one-per-role constraint. */
+function heroUniqueRole(ruleset: PickBanRuleset): boolean {
+  return (ruleset.phases[0]?.steps ?? []).some((step) =>
+    step.constraints.some((constraint) => constraint.type === "max_per_group")
+  );
 }
 
 /**
- * A room's starting rules: an empty map pool in bracket order, no hero bans.
+ * A room's starting rules: an empty map pool on the bracket generator, no hero
+ * bans.
  *
- * Bracket order is the right default here and nowhere else — it generates the
- * step list from the pool and the series length, and a scrim knows its
+ * The generator is the right default here and nowhere else — the server builds
+ * the step list from the pool and the series length, and a scrim knows its
  * `best_of` exactly, so the generated order is the real order rather than the
  * preview it is for a tournament-wide config.
  */
@@ -82,17 +118,13 @@ export function emptyScrimPoolDraft(): ScrimPoolDraft {
 
 /** Every rejection the two drafts carry, tagged with the kind that produced it. */
 export function validateScrimPoolDraft(
-  pool: ScrimPoolDraft,
-  bestOf: number
+  pool: ScrimPoolDraft
 ): { kind: "map" | "hero"; issue: PickBanValidationIssue }[] {
-  const issues = validatePickBanDraft(pool.map, bestOf).map((issue) => ({
-    kind: "map" as const,
-    issue
-  }));
+  const issues = validatePickBanDraft(pool.map).map((issue) => ({ kind: "map" as const, issue }));
   if (pool.hero == null) return issues;
   return [
     ...issues,
-    ...validatePickBanDraft(pool.hero, bestOf).map((issue) => ({ kind: "hero" as const, issue }))
+    ...validatePickBanDraft(pool.hero).map((issue) => ({ kind: "hero" as const, issue }))
   ];
 }
 
@@ -194,12 +226,10 @@ function ItemPicker({
 
 export function ScrimPoolEditor({
   pool,
-  bestOf,
   disabled,
   onChange
 }: Readonly<{
   pool: ScrimPoolDraft;
-  bestOf: number;
   disabled?: boolean;
   onChange: (next: ScrimPoolDraft) => void;
 }>) {
@@ -225,14 +255,23 @@ export function ScrimPoolEditor({
   );
 
   const heroDraft = pool.hero;
-  const mapSteps = effectiveSequence(pool.map, bestOf).length;
+
+  /** The step timer is one setting of the room, so it lands on both rulesets. */
+  const setTimer = (seconds: number | null) =>
+    onChange({
+      map: { ...pool.map, ruleset: { ...pool.map.ruleset, timer_seconds: seconds } },
+      hero:
+        heroDraft == null
+          ? null
+          : { ...heroDraft, ruleset: { ...heroDraft.ruleset, timer_seconds: seconds } }
+    });
 
   return (
     <FieldSet disabled={disabled}>
       <FieldGroup>
         <div>
           <FieldTitle className="text-sm">{t("mapSection")}</FieldTitle>
-          <FieldDescription>{t("mapSectionHint", { steps: mapSteps })}</FieldDescription>
+          <FieldDescription>{t("mapSectionHint")}</FieldDescription>
         </div>
 
         <ItemPicker
@@ -266,10 +305,8 @@ export function ScrimPoolEditor({
             integer
             min={5}
             max={600}
-            value={pool.map.turnTimerSeconds}
-            onValueChange={(value) =>
-              onChange({ ...pool, map: { ...pool.map, turnTimerSeconds: value } })
-            }
+            value={pool.map.ruleset.timer_seconds}
+            onValueChange={setTimer}
             placeholder={t("turnTimerPlaceholder")}
             aria-describedby={`${ids}-timer-hint`}
           />
@@ -287,7 +324,10 @@ export function ScrimPoolEditor({
                 hero: checked
                   ? {
                       ...emptyPickBanDraft("hero"),
-                      sequence: heroBanSequence(DEFAULT_HERO_BANS_PER_SIDE)
+                      ruleset: {
+                        ...heroBanRuleset(DEFAULT_HERO_BANS_PER_SIDE, false),
+                        timer_seconds: pool.map.ruleset.timer_seconds
+                      }
                     }
                   : null
               })
@@ -332,13 +372,19 @@ export function ScrimPoolEditor({
                 integer
                 min={1}
                 max={MAX_HERO_BANS_PER_SIDE}
-                value={heroDraft.sequence.filter((token) => token === "ban_first").length}
+                value={heroBansPerSide(heroDraft.ruleset)}
                 onValueChange={(value) =>
                   onChange({
                     ...pool,
                     hero: {
                       ...heroDraft,
-                      sequence: heroBanSequence(value ?? DEFAULT_HERO_BANS_PER_SIDE)
+                      ruleset: {
+                        ...heroBanRuleset(
+                          value ?? DEFAULT_HERO_BANS_PER_SIDE,
+                          heroUniqueRole(heroDraft.ruleset)
+                        ),
+                        timer_seconds: heroDraft.ruleset.timer_seconds
+                      }
                     }
                   })
                 }
@@ -351,9 +397,18 @@ export function ScrimPoolEditor({
               <Switch
                 id={`${ids}-hero-role`}
                 aria-describedby={`${ids}-hero-role-hint`}
-                checked={heroDraft.uniqueRolePerRound}
+                checked={heroUniqueRole(heroDraft.ruleset)}
                 onCheckedChange={(checked) =>
-                  onChange({ ...pool, hero: { ...heroDraft, uniqueRolePerRound: checked } })
+                  onChange({
+                    ...pool,
+                    hero: {
+                      ...heroDraft,
+                      ruleset: {
+                        ...heroBanRuleset(heroBansPerSide(heroDraft.ruleset), checked),
+                        timer_seconds: heroDraft.ruleset.timer_seconds
+                      }
+                    }
+                  })
                 }
               />
               <FieldContent>
