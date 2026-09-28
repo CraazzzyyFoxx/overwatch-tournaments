@@ -76,10 +76,19 @@ export function formatDateRange(
   start: Date | string,
   end: Date | string
 ): string {
-  return format.dateTimeRange(new Date(start), new Date(end), {
+  const range = format.dateTimeRange(new Date(start), new Date(end), {
     day: "numeric",
     month: "short",
     year: "numeric",
     timeZone: "UTC"
   });
+  // Same string on the server and in the browser, byte for byte. CLDR moved the
+  // spaces around a range dash from U+0020 to U+2009 THIN SPACE, so the Node
+  // runtime and the viewer's Chromium disagree on a glyph nobody can see
+  // (node 25 / CLDR 47: "Oct 1\u2009–\u20093, 2026"; Chromium 153: "Oct 1 – 3, 2026")
+  // — which React reports as a hydration text mismatch and repairs by throwing
+  // the whole shell away and re-rendering it on the client. Folding the exotic
+  // spaces (thin, narrow no-break — the two CLDR churns) to a plain one costs
+  // nothing visually and makes the output ICU-version independent.
+  return range.replace(/[\u2009\u202f]/g, " ");
 }

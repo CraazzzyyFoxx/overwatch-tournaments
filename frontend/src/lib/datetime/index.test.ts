@@ -35,10 +35,22 @@ describe("resolveTimeZone", () => {
 describe("formatDateRange", () => {
   it("prints tournament days as stored, whatever the viewer's zone", () => {
     const format = createFormatter({ locale: "en", timeZone: "America/New_York" });
-    // `\u2009` is the thin space ICU puts around the range dash — spelled as an
-    // escape so a mismatch reads as a separator change, not an invisible diff.
     expect(formatDateRange(format, "2026-10-03T00:00:00Z", "2026-10-04T00:00:00Z")).toBe(
-      "Oct 3\u2009\u2013\u20094, 2026"
+      "Oct 3 \u2013 4, 2026"
     );
+  });
+
+  it("separates the range with plain spaces, whatever CLDR this runtime ships", () => {
+    // The server renders this string and the browser hydrates it, and the two
+    // run different ICU builds: CLDR 47 (node 25) puts U+2009 THIN SPACE around
+    // the dash where Chromium still puts U+0020. Letting that through is a
+    // React hydration mismatch on an invisible character, which throws the
+    // whole tournament shell away and re-renders it client-side.
+    const range = formatDateRange(
+      createFormatter({ locale: "en", timeZone: "UTC" }),
+      "2026-10-01T18:00:00Z",
+      "2026-10-03T22:00:00Z"
+    );
+    expect(range).not.toMatch(/[\u2009\u202f]/);
   });
 });
