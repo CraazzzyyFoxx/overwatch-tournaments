@@ -1,18 +1,17 @@
-"""Pick-ban session lifecycle: generalizes ``veto_session.py``'s
-``ensure_veto_session``/``reset_veto_session`` to be pool-agnostic (``kind``)
-and able to grow a session's sequence round by round.
+"""Pick-ban session lifecycle: creates an encounter's room for one ``kind``
+and grows it round by round.
 
-Round 1 is created exactly like today's flat/slot veto (cascade-resolved
-config, seed resolution, ``effective_sequence``/``build_slot_sequence`` —
-reused verbatim from ``veto_session.py``, unchanged). Round 2+ is appended
-lazily by :meth:`PickBanSessionService.advance_to_next_round`, called once a
-map's result is resolved (see ``map_report.py``): it resolves the new round's
-opener via ``pick_ban_engine.resolve_round_opener`` and extends
-``PickBanSession.resolved_sequence_json`` + creates that round's
-``PickBanEntry`` rows, filtered through the encounter's
-``EncounterPickBanLedger`` per the config's ``no_repeat_scope``.
+Round 1 resolves the config's ruleset (``shared.domain.pick_ban_rules``) for
+the first map of the series and creates that round's candidate entries. Round
+N+1 is appended lazily by
+:meth:`PickBanSessionService.advance_to_next_round` once map N's result is
+known -- compiled from the session's ruleset SNAPSHOT (design D6: an organizer
+editing the config mid-series must not change a running room's rules), with
+the still-active bans of earlier rounds re-created as fixed ``carried``
+entries (``lifetime``) and the rest of the pool filtered through the matched
+phase's ``pool_filter``.
 
-Design: docs/plans/2026-08-09-generic-pickban-engine.md
+Design: docs/plans/2026-09-28-pick-ban-constructor.md §5
 """
 
 from __future__ import annotations
@@ -34,10 +33,13 @@ from shared.core.enums import (
     MapVetoMode,
     MapVetoSessionStatus,
     PickBanKind,
-    PickBanNoRepeatScope,
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
+from shared.domain import pick_ban_rules as pbr
+from shared.models.catalog.gamemode import Gamemode
+from shared.models.catalog.hero import Hero
+from shared.models.catalog.map import Map
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.pick_ban import (
     EncounterReadiness,
@@ -47,26 +49,22 @@ from shared.models.tournament.pick_ban import (
     PickBanSession,
 )
 from shared.repository import (
-    EncounterPickBanLedgerRepository,
     EncounterReadinessRepository,
     PickBanConfigRepository,
     PickBanEntryRepository,
     PickBanSessionRepository,
+    PickBanSubmissionRepository,
 )
 from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.veto_session import (
-    BRACKET_PRESET,
-    CUSTOM_PRESET,
     REASON_BRACKET_PREVIEW,
     REASON_NOT_CONFIGURED,
     REASON_SLOT_COUNT_MISMATCH,
     REASON_SLOT_UNDERFILLED,
     REASON_TEAMS_UNKNOWN,
     SLOT_CANDIDATE_FLOOR,
-    build_sequence_for_best_of,
-    build_slot_sequence,
     resolve_seeds,
 )
 
@@ -106,36 +104,49 @@ def rounds_are_progressive(config: PickBanConfig, kind: PickBanKind) -> bool:
     return config.mode == MapVetoMode.SLOTS or kind == PickBanKind.HERO
 
 
-def _resolved_sequence(tokens: list[str], opener: MapPickSide | str) -> list[str]:
-    """``resolve_sequence_tokens`` as a 422 — the engine raises ValueError,
-    and ``_run`` would otherwise turn that into a 500 on the state-read path
-    that creates or advances a session."""
-    try:
-        return engine.resolve_sequence_tokens(tokens, opener)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+def parse_ruleset(data: object) -> pbr.Ruleset:
+    """The config's/session's ruleset as a parsed document, or a 422.
 
-
-def build_round_sequence(
-    config: PickBanConfig, kind: PickBanKind, *, candidate_count: int, opener: MapPickSide | str
-) -> list[str]:
-    """The resolved step tokens for ONE round of a progressive session.
-
-    Slot mode spends ``candidates - 1`` bans and closes on a ``decider``, which
-    is what makes the round's step count equal its candidate count. A hero
-    round instead runs the config's own sequence verbatim, once per map --
-    minus any ``decider``, which asks "whatever survived the bans is the pick"
-    and is a map-veto idea: a hero round leaves the whole unbanned pool
-    playable, and handing that survivor set to ``auto_complete_decider_entry``
-    would auto-pick ONE hero at random and take the rest out of captains'
-    control -- exactly what a hero round must never do.
+    The engine raises ``RulesetError``; ``_run`` would turn that into a 500 on
+    the state read that lazily creates or grows a session, which is exactly the
+    path an organizer hits after saving a broken ruleset.
     """
-    tokens = (
-        build_slot_sequence([candidate_count], rotation=FirstBanRotation.FIXED.value)
-        if config.mode == MapVetoMode.SLOTS
-        else [token for token in config.sequence_json if token != "decider"]
-    )
-    return _resolved_sequence(tokens, opener)
+    try:
+        return pbr.parse_ruleset(data)
+    except pbr.RulesetError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"This pick-ban ruleset cannot be played: {exc}",
+        ) from exc
+
+
+def resolved_steps(pick_ban: PickBanSession) -> list[pbr.ResolvedStep]:
+    """``resolved_sequence_json`` as engine objects."""
+    return pbr.resolved_steps_from_json(list(pick_ban.resolved_sequence_json or []))
+
+
+async def load_item_groups(session: AsyncSession, kind: PickBanKind, item_ids: list[int]) -> dict[int, str | None]:
+    """``{item_id: group}`` for the ``item_group``/``target_role_match`` leaves:
+    a hero's class, a map's gamemode slug.
+
+    Two flat selects rather than one join for the map kind: the projection a
+    join would return is not what any repository exposes, and the second query
+    only ever runs for a map room (a handful of gamemodes).
+    """
+    if not item_ids:
+        return {}
+    if kind == PickBanKind.HERO:
+        rows = await session.execute(select(Hero.id, Hero.type).where(Hero.id.in_(item_ids)))
+        # A bare column select can yield the stored string instead of the enum
+        # member depending on the result processor -- `.value` on a str raises.
+        return {row[0]: getattr(row[1], "value", row[1]) for row in rows.all()}
+    maps = (await session.execute(select(Map.id, Map.gamemode_id).where(Map.id.in_(item_ids)))).all()
+    gamemode_ids = sorted({row[1] for row in maps if row[1] is not None})
+    slugs: dict[int, str] = {}
+    if gamemode_ids:
+        rows = await session.execute(select(Gamemode.id, Gamemode.slug).where(Gamemode.id.in_(gamemode_ids)))
+        slugs = {row[0]: row[1] for row in rows.all()}
+    return {row[0]: slugs.get(row[1]) for row in maps}
 
 
 class PickBanSessionService:
@@ -153,14 +164,14 @@ class PickBanSessionService:
         entry_repo: PickBanEntryRepository = PickBanEntryRepository(),
         config_repo: PickBanConfigRepository = PickBanConfigRepository(),
         readiness_repo: EncounterReadinessRepository = EncounterReadinessRepository(),
-        ledger_repo: EncounterPickBanLedgerRepository = EncounterPickBanLedgerRepository(),
+        submission_repo: PickBanSubmissionRepository = PickBanSubmissionRepository(),
         games: EncounterGameService = encounter_game_service,
     ) -> None:
         self.session_repo = session_repo
         self.entry_repo = entry_repo
         self.config_repo = config_repo
         self.readiness_repo = readiness_repo
-        self.ledger_repo = ledger_repo
+        self.submission_repo = submission_repo
         self.games = games
 
     async def current_round_of(self, session: AsyncSession, pick_ban: PickBanSession) -> int | None:
@@ -193,15 +204,13 @@ class PickBanSessionService:
         """The encounter's ``kind``-scoped session, optionally locked for writing.
 
         ``for_update`` is REQUIRED of every path that commits a step, and it is the
-        only thing serializing them. The step cursor is derived from a read --
-        ``engine.get_current_step`` counts the session's committed entries and
-        indexes that into the cumulative sequence -- and written back as a new
-        committed entry. Two unlocked requests overlapping on one step therefore
-        both resolve it, both pass the turn check, and both commit: the count jumps
-        by two, one side gets an extra action and the opposite side's step is
-        silently swallowed. Landing on a round's LAST step it is worse still, since
-        the session then holds one entry MORE than its sequence and every later
-        round of the series loses an action.
+        only thing serializing them. The cursor is derived from a read --
+        ``pick_ban_rules.current_step`` walks the submission log -- and written
+        back as a new submission. Two unlocked requests overlapping on one step
+        therefore both resolve it, both pass the turn check, and both commit: one
+        side gets an extra action and the opposite side's step is silently
+        swallowed, or the unique ``(step, side, attempt)`` key rejects the second
+        writer with a 500 instead of a turn error.
 
         ``populate_existing`` matters as much as the lock: the row is usually
         already in the identity map (the read path loaded it before deciding it had
@@ -413,15 +422,19 @@ class PickBanSessionService:
     ) -> PickBanSession | None:
         """Idempotently create the FIRST round of the encounter's pick-ban session.
 
-        Round 1 resolves exactly as it always did (same cascade-resolved config,
-        same seed resolution, same slot validation). What the progressive loop
-        changed is what the session is created holding: when its rounds are
-        progressive (``rounds_are_progressive``) it gets round 1 and nothing else,
-        and every later round is appended one at a time by
-        ``advance_to_next_round`` as the series is played — so round 2's bans
-        cannot be taken before round 1's map has been played (design Decisions
-        4/5). A flat ``kind=map`` config is untouched: it still gets its whole
-        sequence and pool up front, because that IS the legacy classic veto.
+        Round 1 resolves the cascade-resolved config the way it always did (same
+        seed resolution, same slot validation), but through the ruleset: the
+        phase whose ``when`` matches map 1 supplies both the steps and the
+        ``pool_filter`` its candidates must pass. The parsed ruleset is
+        SNAPSHOTTED onto the session (design D6) -- every later round compiles
+        from that copy, never from the config's live document.
+
+        When the rounds are progressive (``rounds_are_progressive``) the session
+        gets round 1 and nothing else, and every later round is appended one at a
+        time by ``advance_to_next_round`` as the series is played -- so round 2's
+        bans cannot be taken before round 1's map has been played. A flat
+        ``kind=map`` config is untouched: one round (``round IS NULL``) whose
+        sequence settles the whole series, because that IS the classic veto.
         """
         existing = await self.get_pick_ban_session(session, encounter.id, kind)
         if existing is not None:
@@ -470,9 +483,35 @@ class PickBanSessionService:
         now = datetime.now(UTC)
         flat_item_ids = [item.item_id for item in sorted(config.items, key=lambda item: item.sort_order)]
         progressive = rounds_are_progressive(config, kind)
+        ruleset = parse_ruleset(config.ruleset_json)
         # Round 1's candidates: its slot in slot mode, the whole configured pool in
         # a (per-round) flat one.
         round_one_item_ids = slots[0] if slots is not None else flat_item_ids
+        round_number = 1 if progressive else None
+
+        # Round 1 has no history, so only the absolute leaves of `pool_filter`
+        # (`item_in`/`item_group`) can exclude anything here -- but they can, and
+        # a candidate the phase refuses must never become an entry.
+        groups = await load_item_groups(session, kind, round_one_item_ids)
+        pool_ctx = pbr.RuntimeCtx(kind=kind.value, round=round_number, best_of=encounter.best_of, groups=groups)
+        phase = pbr.select_phase(
+            ruleset, pbr.RoundCtx(round=round_number or 1, best_of=max(encounter.best_of, 1), kind=kind.value)
+        )
+        candidates = (
+            pbr.filter_pool(phase.pool_filter, round_one_item_ids, pool_ctx)
+            if phase is not None
+            else list(round_one_item_ids)
+        )
+        steps = pbr.resolve_round(
+            ruleset,
+            kind=kind.value,
+            round=round_number,
+            start_index=0,
+            opener=seeds.first_side.value,
+            best_of=encounter.best_of,
+            pool_size=pool_size,
+            candidate_count=len(candidates),
+        )
 
         pick_ban = PickBanSession(
             encounter_id=encounter.id,
@@ -482,47 +521,29 @@ class PickBanSessionService:
             seed_source=seeds.seed_source,
             home_seed=seeds.home_seed,
             away_seed=seeds.away_seed,
-            resolved_sequence_json=(
-                build_round_sequence(config, kind, candidate_count=len(round_one_item_ids), opener=seeds.first_side)
-                if progressive
-                else _resolved_sequence(
-                    build_sequence_for_best_of(encounter.best_of, pool_size)
-                    if config.preset != "custom"
-                    else list(config.sequence_json),
-                    seeds.first_side,
-                )
-            ),
-            turn_timer_seconds=config.turn_timer_seconds,
+            resolved_sequence_json=[step.to_json() for step in steps],
+            ruleset_json=ruleset.to_json(),
             slot_reserves_json=slot_reserves,
-            status=MapVetoSessionStatus.ACTIVE,
+            # A round whose phase resolved to no steps is already settled; the
+            # first read then advances straight to the next one instead of
+            # hanging on a cursor that can never move.
+            status=MapVetoSessionStatus.ACTIVE if steps else MapVetoSessionStatus.COMPLETED,
             awaiting_choice=False,
             started_at=now,
             current_step_started_at=now,
         )
         session.add(pick_ban)
 
-        if progressive:
-            for offset, item_id in enumerate(round_one_item_ids):
-                session.add(
-                    PickBanEntry(
-                        session=pick_ban,
-                        item_id=item_id,
-                        order=offset,
-                        round=1,
-                        status=MapPoolEntryStatus.AVAILABLE,
-                    )
+        for offset, item_id in enumerate(candidates):
+            session.add(
+                PickBanEntry(
+                    session=pick_ban,
+                    item_id=item_id,
+                    order=offset,
+                    round=round_number,
+                    status=MapPoolEntryStatus.AVAILABLE,
                 )
-        else:
-            for idx, item_id in enumerate(flat_item_ids):
-                session.add(
-                    PickBanEntry(
-                        session=pick_ban,
-                        item_id=item_id,
-                        order=idx,
-                        round=None,
-                        status=MapPoolEntryStatus.AVAILABLE,
-                    )
-                )
+            )
 
         await emit_pick_ban_update(session, encounter.id, kind=kind.value)
         if commit:
@@ -543,13 +564,11 @@ class PickBanSessionService:
         *,
         commit: bool = True,
     ) -> PickBanSession | None:
-        """Hard reset: delete this encounter's `kind`-scoped pick-ban session (its
-        entries cascade via the DB FK) and its exclusion ledger, then recreate
-        round 1 from scratch. Mirrors ``veto_session.reset_veto_session`` exactly,
-        generalized: the ledger clear has no legacy equivalent because
-        ``EncounterVetoSession`` never had cross-round memory -- a genuine
-        from-scratch reset must also forget what an earlier, scrapped session
-        banned, or a later round would wrongly still exclude it.
+        """Hard reset: delete this encounter's `kind`-scoped pick-ban session and
+        recreate round 1 from scratch. Its entries AND its submission log -- the
+        cross-round memory every `banned_by` condition reads -- cascade with it
+        via the DB FK, so a from-scratch reset genuinely forgets what the
+        scrapped session banned.
 
         A MAP reset also retires the series' live games: they were opened by the
         picks this is about to scrap, so leaving them would let a position of the
@@ -566,7 +585,6 @@ class PickBanSessionService:
         existing = await self.get_pick_ban_session(session, encounter.id, kind)
         if existing is not None:
             await self.session_repo.delete_by_id(session, existing.id)
-        await self.ledger_repo.delete_for_encounter(session, encounter_id=encounter.id, kind=kind)
         await session.flush()
         # Unconditional even if the re-ensure below no-ops: the room just lost its
         # session (same reasoning as veto_session.reset_veto_session).
@@ -633,8 +651,8 @@ class PickBanSessionService:
         loser_choice: MapPickSide | None = None,
         commit: bool = True,
     ) -> PickBanSession:
-        """Append the round after ``completed_round``: its step tokens and its
-        candidate entries.
+        """Append the round after ``completed_round``: its resolved steps, the
+        earlier rounds' still-active bans as carried entries, and its candidates.
 
         This is the barrier between two maps of a series (design Decision 5). It
         is a no-op, returning ``pick_ban`` unchanged, unless all of:
@@ -643,11 +661,14 @@ class PickBanSessionService:
           flat ``kind=map`` veto settles the whole series at once and has no later
           round to open;
         - the round currently in play is fully resolved — a new round is never
-          stacked on top of an unfinished one, which is what keeps
-          ``get_current_step``'s "index into the sequence" arithmetic honest;
+          stacked on top of an unfinished one;
         - the next round has not been appended already (idempotent re-entry);
         - the config still describes that round (slot count) and the series still
           has that many maps (``best_of``).
+
+        The steps come from the session's ruleset SNAPSHOT, not the config's live
+        one (D6); the POOL is still read from the config, which is what lets an
+        organizer fix a mis-typed slot mid-series.
 
         ``outcome`` is the previous position's CONFIRMED result (``"home"``,
         ``"away"`` or ``"draw"``), or ``None`` while it has none. A drawn map
@@ -696,7 +717,9 @@ class PickBanSessionService:
         if not rounds_are_progressive(config, pick_ban.kind):
             return pick_ban
 
-        if engine.get_current_step(pick_ban.resolved_sequence_json, entries) is not None:
+        steps = resolved_steps(pick_ban)
+        submissions = list(await self.submission_repo.list_by_session(session, pick_ban.id, populate_existing=True))
+        if pbr.current_step(steps, submissions) is not None:
             return pick_ban  # the round in play still has steps left to take
 
         next_round = completed_round + 1
@@ -739,58 +762,73 @@ class PickBanSessionService:
             previous_round_loser_choice=loser_choice,
         )
 
-        ledger_rows = [
-            engine.LedgerRow(item_id=row.item_id, banned_by_side=row.banned_by_side)
-            for row in await self.ledger_repo.list_for_encounter(
-                session, encounter_id=pick_ban.encounter_id, kind=pick_ban.kind
-            )
-        ]
-        # Only the side-blind scope can be applied to a pool both sides draw from;
-        # `encounter_same_side` is per-side by definition and is enforced when an
-        # action is taken instead (`pick_ban_action.apply_pick_ban_action`).
-        excluded = (
-            engine.excluded_item_ids(ledger_rows, scope=config.no_repeat_scope)
-            if config.no_repeat_scope == PickBanNoRepeatScope.ENCOUNTER
-            else set()
+        ruleset = parse_ruleset(pick_ban.ruleset_json)
+        round_ctx = pbr.RoundCtx(round=next_round, best_of=max(encounter.best_of, 1), kind=str(pick_ban.kind))
+        phase = pbr.select_phase(ruleset, round_ctx)
+
+        # Bans of earlier rounds whose `lifetime` still covers this one. They are
+        # created as FIXED entries (never re-projected) so the board shows them
+        # banned with their origin map, and they are excluded from the round's
+        # own candidates rather than competing with them.
+        carried = pbr.carried_bans(steps, submissions, next_round)
+        carried_ids = {ban.item_id for ban in carried}
+
+        groups = await load_item_groups(session, PickBanKind(pick_ban.kind), candidate_item_ids)
+        pool_ctx = pbr.RuntimeCtx(
+            kind=str(pick_ban.kind),
+            round=next_round,
+            best_of=encounter.best_of,
+            groups=groups,
+            history=pbr.history_of(steps, submissions),
         )
-        candidates = [item_id for item_id in candidate_item_ids if item_id not in excluded]
-        if config.mode == MapVetoMode.SLOTS and len(candidates) < SLOT_CANDIDATE_FLOOR:
-            # `ensure_pick_ban_session` re-checks this floor against the raw slot
-            # size before round 1 starts; nothing re-checked it here once
-            # no-repeat exclusion (`no_repeat_scope != none`) has eaten into a
-            # emits a bare `decider` for < 2 candidates and the round's entries
-            # come up short, so `auto_complete_decider_entry` failed later with
-            # an opaque "has no available item" instead of naming the actual
-            # cause here, at round-creation time.
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Round {next_round} of the {pick_ban.kind} pick-ban has only {len(candidates)} "
-                    f"candidate(s) left after no-repeat exclusion (needs >= {SLOT_CANDIDATE_FLOOR}) -- fix "
-                    "this tournament's pick-ban config (slot candidates or no_repeat_scope)."
-                ),
-            )
+        filtered = (
+            pbr.filter_pool(phase.pool_filter, candidate_item_ids, pool_ctx)
+            if phase is not None
+            else list(candidate_item_ids)
+        )
+        candidates = [item_id for item_id in filtered if item_id not in carried_ids]
 
-        new_tokens = build_round_sequence(config, pick_ban.kind, candidate_count=len(candidates), opener=opener)
-        if len(candidates) < len(new_tokens):
-            # A round with more steps than candidates cannot resolve: the last
-            # steps would have nothing left to act on and the room would stall on
-            # a turn nobody can take.
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Round {next_round} of the {pick_ban.kind} pick-ban has {len(candidates)} "
-                    f"candidate(s) for {len(new_tokens)} step(s) -- fix this tournament's pick-ban config "
-                    "(pool size, sequence length or no_repeat_scope)."
-                ),
-            )
+        new_steps = pbr.resolve_round(
+            ruleset,
+            kind=str(pick_ban.kind),
+            round=next_round,
+            start_index=len(steps),
+            opener=str(getattr(opener, "value", opener)),
+            prev_outcome=outcome,
+            best_of=encounter.best_of,
+            pool_size=len(candidate_item_ids),
+            candidate_count=len(candidates),
+        )
+        if pick_ban.kind == PickBanKind.MAP:
+            # Map rounds must END on a decided map, so a round that cannot spend
+            # its steps is a config error the organizer has to see NOW, at round
+            # creation, not as an opaque stall on the room's next read. A hero
+            # round has no such floor: it leaves the unbanned pool playable, and
+            # `effective_min` already caps a lock against what is left.
+            if config.mode == MapVetoMode.SLOTS and len(candidates) < SLOT_CANDIDATE_FLOOR:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Round {next_round} of the {pick_ban.kind} pick-ban has only {len(candidates)} "
+                        f"candidate(s) left after the phase's pool filter (needs >= {SLOT_CANDIDATE_FLOOR}) "
+                        "-- fix this tournament's pick-ban config (slot candidates or pool_filter)."
+                    ),
+                )
+            needed = sum(step.count * max(len(step.sides), 1) for step in new_steps)
+            if len(candidates) < needed:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Round {next_round} of the {pick_ban.kind} pick-ban has {len(candidates)} "
+                        f"candidate(s) for {needed} item(s) of steps -- fix this tournament's pick-ban config "
+                        "(pool size, step counts or pool_filter)."
+                    ),
+                )
 
-        # Closing the finished round drops the candidates nobody acted on: the
-        # round in play is the lowest one with anything AVAILABLE, so leftovers (a
-        # hero round bans 4 of 40) would keep naming the finished round as current
-        # and scope every later action to it. Nothing is lost — an untouched
-        # candidate carries no state — and the step arithmetic is untouched, since
-        # `get_current_step` only ever counts entries that are NOT available.
+        # Closing the finished round drops the candidates nobody acted on: an
+        # untouched candidate carries no state, and leaving a hero round's 30
+        # unbanned heroes behind would keep the board showing a finished map's
+        # pool next to the new one.
         await self.entry_repo.delete_round_by_status(
             session,
             session_id=pick_ban.id,
@@ -798,11 +836,11 @@ class PickBanSessionService:
             statuses=(MapPoolEntryStatus.AVAILABLE,),
         )
 
-        pick_ban.resolved_sequence_json = [*pick_ban.resolved_sequence_json, *new_tokens]
+        pick_ban.resolved_sequence_json = [*pick_ban.resolved_sequence_json, *(step.to_json() for step in new_steps)]
         pick_ban.awaiting_choice = False
         pick_ban.pending_loser_side = None
         pick_ban.current_step_started_at = datetime.now(UTC)
-        if pick_ban.status == MapVetoSessionStatus.COMPLETED:
+        if pick_ban.status == MapVetoSessionStatus.COMPLETED and new_steps:
             pick_ban.status = MapVetoSessionStatus.ACTIVE
 
         base_order = next_round * 1000  # generous per-round spacing; order is a display/tiebreak field only
@@ -814,6 +852,18 @@ class PickBanSessionService:
                     order=base_order + offset,
                     round=next_round,
                     status=MapPoolEntryStatus.AVAILABLE,
+                )
+            )
+        for offset, ban in enumerate(carried, start=len(candidates)):
+            session.add(
+                PickBanEntry(
+                    session=pick_ban,
+                    item_id=ban.item_id,
+                    order=base_order + offset,
+                    round=next_round,
+                    status=MapPoolEntryStatus.BANNED,
+                    picked_by=ban.side,
+                    carried_from_round=ban.from_round,
                 )
             )
 
@@ -948,161 +998,3 @@ class PickBanSessionService:
 
 
 pick_ban_session_service = PickBanSessionService()
-
-
-# ── admin config validation + serialization ──────────────────────────────────
-
-
-def _validate_sequence_tokens(sequence: list[str], *, kind: PickBanKind) -> None:
-    """Vocabulary and decider placement -- the checks that hold whether or not
-    this config carries a pool of its own."""
-    invalid = sorted({token for token in sequence if token not in engine.PICK_BAN_SEQUENCE_TOKENS})
-    if invalid:
-        raise HTTPException(status_code=422, detail=f"Invalid sequence token(s): {', '.join(invalid)}")
-    decider_positions = [idx for idx, token in enumerate(sequence) if token == "decider"]
-    if kind == PickBanKind.HERO and decider_positions:
-        raise HTTPException(status_code=422, detail="a hero sequence must not contain a decider step")
-    if len(decider_positions) > 1:
-        raise HTTPException(status_code=422, detail="sequence may contain at most one decider step")
-    if decider_positions and decider_positions[0] != len(sequence) - 1:
-        raise HTTPException(status_code=422, detail="decider must be the last step of the sequence")
-
-
-def validate_pick_ban_config(
-    sequence: list[str], item_ids: list[int], *, kind: PickBanKind, pool_optional: bool = False
-) -> None:
-    """Validate a flat-mode :class:`PickBanConfig` upsert body: same shape as
-    ``veto_session.validate_veto_config``, generalized over the wider
-    ``PICK_BAN_SEQUENCE_TOKENS`` vocabulary (adds ``protect_first``/
-    ``protect_second``) and over ``kind``.
-
-    A ``kind=hero`` sequence is ONE round's worth of steps, replayed for every
-    map of the series (``rounds_are_progressive``), and it bans out of a pool
-    that stays playable: there is no survivor for a ``decider`` to resolve to,
-    so the map rule "must end in a pick or a decider" does not apply and a
-    ``decider`` is refused outright rather than stalling the room later.
-
-    ``pool_optional`` admits a pool-less row: a rules TEMPLATE, authored at a
-    wide scope so narrower ones inherit its rotation, timer and steps instead of
-    retyping them. It plays nothing itself -- ``ensure_pick_ban_session`` refuses
-    to open a room on a config with no pool -- so the pool-shaped rules (a
-    non-empty sequence that fits inside the pool, a pick or a decider to end on)
-    have nothing to hold and are not checked.
-    """
-    if pool_optional and not item_ids:
-        _validate_sequence_tokens(sequence, kind=kind)
-        return
-    if not sequence:
-        raise HTTPException(status_code=422, detail="sequence must not be empty")
-    _validate_sequence_tokens(sequence, kind=kind)
-    if not item_ids:
-        raise HTTPException(status_code=422, detail="item_ids must not be empty")
-    if len(set(item_ids)) != len(item_ids):
-        raise HTTPException(status_code=422, detail="item_ids must be unique")
-    if len(sequence) > len(item_ids):
-        raise HTTPException(status_code=422, detail="sequence has more steps than items in the pool")
-    if kind == PickBanKind.MAP and not any(token.startswith("pick") or token == "decider" for token in sequence):
-        raise HTTPException(status_code=422, detail="sequence must contain at least one pick or a decider")
-
-
-def validate_pick_ban_slot_config(slots: list[list[int]], *, reserves: list[int | None]) -> None:
-    """Validate a slot-mode :class:`PickBanConfig` upsert body. Mirrors
-    ``veto_session.validate_slot_config`` verbatim, generalized to "item"
-    (map or hero id, per the config's ``kind``) instead of "map"."""
-    if not slots:
-        raise HTTPException(status_code=422, detail="slots must not be empty")
-    if len(reserves) != len(slots):
-        raise HTTPException(status_code=422, detail="reserves must have one entry per slot")
-    for index, (candidates, reserve) in enumerate(zip(slots, reserves, strict=True), start=1):
-        if len(candidates) < SLOT_CANDIDATE_FLOOR:
-            raise HTTPException(status_code=422, detail=f"slot {index} must have at least two candidate items")
-        if len(set(candidates)) != len(candidates):
-            repeated = ", ".join(str(m) for m in sorted({m for m in candidates if candidates.count(m) > 1}))
-            raise HTTPException(status_code=422, detail=f"slot {index} must not repeat candidate item(s): {repeated}")
-        if reserve is not None and reserve in candidates:
-            raise HTTPException(status_code=422, detail=f"slot {index} reserve must not be one of its own candidates")
-
-
-def validate_pick_ban_upsert(
-    *,
-    mode: MapVetoMode,
-    preset: str | None,
-    kind: PickBanKind,
-    sequence: list[str],
-    item_ids: list[int],
-    slots: list[tuple[list[int], int | None]],
-    stage_id: int | None,
-    round: int | None,
-) -> None:
-    """Cross-field upsert rules that used to live in the RPC handler.
-
-    Mode-vs-field emptiness, slots-vs-custom preset, and round-requires-stage
-    belong with the other config validators so a second write path cannot skip
-    them.
-    """
-    if mode == MapVetoMode.SLOTS:
-        if item_ids:
-            raise HTTPException(
-                status_code=422,
-                detail="item_ids must be empty in slots mode (got item_ids/sequence instead)",
-            )
-        if sequence:
-            raise HTTPException(
-                status_code=422,
-                detail="sequence must be empty in slots mode (got item_ids/sequence instead)",
-            )
-        if preset == CUSTOM_PRESET:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "preset 'custom' is not valid in slots mode; the slots derive the sequence, "
-                    f"so send preset: '{BRACKET_PRESET}' or null"
-                ),
-            )
-        if slots:
-            validate_pick_ban_slot_config(
-                [candidates for candidates, _ in slots],
-                reserves=[reserve for _, reserve in slots],
-            )
-    else:
-        if slots:
-            raise HTTPException(
-                status_code=422,
-                detail="slots must be empty in pool mode (got slots instead)",
-            )
-        validate_pick_ban_config(sequence, item_ids, kind=kind, pool_optional=True)
-    if round is not None and stage_id is None:
-        raise HTTPException(status_code=422, detail="round requires stage_id")
-
-
-def serialize_pick_ban_config(config: PickBanConfig) -> dict:
-    return {
-        "id": config.id,
-        "tournament_id": config.tournament_id,
-        "kind": config.kind,
-        "stage_id": config.stage_id,
-        "round": config.round,
-        "mode": config.mode,
-        "first_pick_rule": config.first_pick_rule,
-        "first_ban_rotation": config.first_ban_rotation,
-        "turn_timer_seconds": config.turn_timer_seconds,
-        "preset": config.preset,
-        "sequence": list(config.sequence_json),
-        "no_repeat_scope": config.no_repeat_scope,
-        "unique_attribute_per_side_per_round": config.unique_attribute_per_side_per_round,
-        "allow_protect": config.allow_protect,
-        "item_ids": [item.item_id for item in config.items],
-        "slots": [
-            {
-                "position": slot.position,
-                "reserve_item_id": slot.reserve_item_id,
-                "candidates": [item.item_id for item in slot.items],
-            }
-            # Play order, not row order -- the relationship's own order_by
-            # already sorts a DB-loaded config, but this must not depend on
-            # that: a transient/in-memory config (stage-merge copier, tests)
-            # is not guaranteed sorted (mirrors map_veto.serialize_veto_config's
-            # ordered_slots() guard).
-            for slot in sorted(config.slots, key=lambda s: s.position)
-        ],
-    }

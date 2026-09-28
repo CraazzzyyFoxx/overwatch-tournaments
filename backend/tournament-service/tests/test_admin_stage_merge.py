@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -228,10 +229,27 @@ def _slot_row(
     )
 
 
+#: Two rulesets that differ only in what their one step does. The signature
+#: never parses them -- it canonically dumps them -- so plain documents keep
+#: these tests about the SIGNATURE rather than about the engine.
+RULES_BAN = {
+    "version": 2,
+    "timer_seconds": 30,
+    "on_timeout": "random_fill",
+    "phases": [{"id": "main", "when": {}, "steps": [{"id": "s1", "action": "ban", "actors": "first"}]}],
+}
+RULES_PICK = {
+    "version": 2,
+    "timer_seconds": 30,
+    "on_timeout": "random_fill",
+    "phases": [{"id": "main", "when": {}, "steps": [{"id": "s1", "action": "pick", "actors": "first"}]}],
+}
+
+
 def _pick_ban_config(
     *,
     mode: enums.MapVetoMode,
-    sequence: list[str] | None = None,
+    ruleset: dict | None = None,
     pool: tuple[int, ...] = (),
     slots: list[SimpleNamespace] | None = None,
     stage_id: int | None = None,
@@ -240,7 +258,7 @@ def _pick_ban_config(
     return SimpleNamespace(
         kind=MAP_KIND,
         mode=mode,
-        sequence_json=sequence,
+        ruleset_json=ruleset,
         items=[SimpleNamespace(item_id=item_id) for item_id in pool],
         slots=list(slots or []),
         stage_id=stage_id,
@@ -248,10 +266,12 @@ def _pick_ban_config(
     )
 
 
-def _pre_slot_signature(config: SimpleNamespace) -> tuple[tuple, tuple]:
-    """``_pick_ban_config_signature`` exactly as it read before slot mode existed."""
+def _rules_and_pool(config: SimpleNamespace) -> tuple[str, tuple]:
+    """The half of the signature that predates slot mode: the rules and the
+    flat pool. Spelled out independently so the pairwise-verdict test below
+    compares the real signature against the property it must preserve."""
     return (
-        tuple(config.sequence_json or []),
+        json.dumps(config.ruleset_json or {}, sort_keys=True, separators=(",", ":")),
         tuple(entry.item_id for entry in config.items),
     )
 
@@ -270,54 +290,77 @@ class PickBanConfigSignatureTests(TestCase):
     refuses, so anything it leaves out is merged away in silence. Generalizes
     the legacy ``_map_veto_signature`` test suite onto ``PickBanConfig``."""
 
-    def test_flat_signature_keeps_the_pre_slot_pair_as_its_prefix(self) -> None:
+    def test_flat_signature_is_the_ruleset_dump_and_the_pool(self) -> None:
         config = _pick_ban_config(
             mode=POOL_MODE,
-            sequence=["ban_home", "pick_away", "decider"],
+            ruleset=RULES_PICK,
             # items is ordered by sort_order at the ORM layer.
             pool=(7, 3, 11),
         )
         self.assertEqual(
             stage_service._pick_ban_config_signature(config),
-            (("ban_home", "pick_away", "decider"), (7, 3, 11), POOL_MODE, None, ()),
+            (json.dumps(RULES_PICK, sort_keys=True, separators=(",", ":")), (7, 3, 11), POOL_MODE, None, ()),
+        )
+
+    def test_key_order_inside_the_ruleset_is_not_significant(self) -> None:
+        # The reason the dump sorts keys: two configs authored through different
+        # client versions hold the same rules with their JSON keys in different
+        # order, and refusing to merge those would be a lie.
+        reordered = {
+            "phases": [{"steps": [{"actors": "first", "action": "pick", "id": "s1"}], "when": {}, "id": "main"}],
+            "on_timeout": "random_fill",
+            "timer_seconds": 30,
+            "version": 2,
+        }
+        self.assertEqual(
+            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK)),
+            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=reordered)),
+        )
+
+    def test_a_changed_rule_is_significant(self) -> None:
+        # The whole reason the ruleset is in the signature at all: merging two
+        # stages that ban differently would silently pick one rulebook.
+        self.assertNotEqual(
+            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN)),
+            stage_service._pick_ban_config_signature(_pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK)),
         )
 
     def test_flat_pairs_keep_their_pre_slot_merge_verdicts(self) -> None:
         flats = [
-            _pick_ban_config(mode=POOL_MODE, sequence=["ban_home"], pool=(1, 2)),
-            _pick_ban_config(mode=POOL_MODE, sequence=["ban_home"], pool=(1, 2)),
-            _pick_ban_config(mode=POOL_MODE, sequence=["ban_home"], pool=(2, 1)),
-            _pick_ban_config(mode=POOL_MODE, sequence=["ban_home", "decider"], pool=(1, 2)),
+            _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(1, 2)),
+            _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(1, 2)),
+            _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(2, 1)),
+            _pick_ban_config(mode=POOL_MODE, ruleset=RULES_PICK, pool=(1, 2)),
             # A flat config's rotation is inert, so this one must stay verdict-equal
             # to the two identical FIXED ones above.
-            _pick_ban_config(mode=POOL_MODE, sequence=["ban_home"], pool=(1, 2), rotation=ALTERNATE),
-            _pick_ban_config(mode=POOL_MODE, sequence=None, pool=()),
+            _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(1, 2), rotation=ALTERNATE),
+            _pick_ban_config(mode=POOL_MODE, ruleset=None, pool=()),
         ]
         for index, config in enumerate(flats):
             with self.subTest(prefix=index):
-                self.assertEqual(stage_service._pick_ban_config_signature(config)[:2], _pre_slot_signature(config))
+                self.assertEqual(stage_service._pick_ban_config_signature(config)[:2], _rules_and_pool(config))
         for left_index, left in enumerate(flats):
             for right_index, right in enumerate(flats):
                 with self.subTest(left=left_index, right=right_index):
                     self.assertEqual(
                         stage_service._pick_ban_config_signature(left)
                         == stage_service._pick_ban_config_signature(right),
-                        _pre_slot_signature(left) == _pre_slot_signature(right),
+                        _rules_and_pool(left) == _rules_and_pool(right),
                     )
 
-    def test_signature_handles_empty_pool_and_sequence(self) -> None:
+    def test_signature_handles_an_empty_pool_and_no_ruleset(self) -> None:
         config = _pick_ban_config(mode=POOL_MODE)
-        self.assertEqual(stage_service._pick_ban_config_signature(config), ((), (), POOL_MODE, None, ()))
+        self.assertEqual(stage_service._pick_ban_config_signature(config), ("{}", (), POOL_MODE, None, ()))
 
     def test_slot_partition_is_significant_where_the_union_is_not(self) -> None:
         left = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "ban_second"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])],
         )
         right = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "ban_second"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, [(0, 4), (1, 9), (2, 6)]), _slot_row(2, [(0, 2)])],
         )
         self.assertEqual(_slot_union(left), _slot_union(right))
@@ -329,11 +372,9 @@ class PickBanConfigSignatureTests(TestCase):
     def test_slot_row_arrival_order_is_not_significant(self) -> None:
         rows = [_slot_row(1, [(0, 4), (1, 9)], reserve_item_id=13), _slot_row(2, [(0, 6), (1, 2)])]
         self.assertEqual(
+            stage_service._pick_ban_config_signature(_pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=rows)),
             stage_service._pick_ban_config_signature(
-                _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=rows)
-            ),
-            stage_service._pick_ban_config_signature(
-                _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=list(reversed(rows)))
+                _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=list(reversed(rows)))
             ),
         )
 
@@ -344,12 +385,12 @@ class PickBanConfigSignatureTests(TestCase):
         candidates = [[(0, 4), (1, 9)], [(0, 6), (1, 2)]]
         adjacent = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, candidates[0]), _slot_row(2, candidates[1])],
         )
         gapped = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, candidates[0]), _slot_row(3, candidates[1])],
         )
         self.assertNotEqual(
@@ -359,7 +400,7 @@ class PickBanConfigSignatureTests(TestCase):
 
     def test_candidates_are_read_in_sort_order_not_arrival_order(self) -> None:
         def config(candidates: list[tuple[int, int]]) -> SimpleNamespace:
-            return _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=[_slot_row(2, candidates)])
+            return _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=[_slot_row(2, candidates)])
 
         self.assertEqual(
             stage_service._pick_ban_config_signature(config([(0, 4), (1, 9)])),
@@ -375,7 +416,7 @@ class PickBanConfigSignatureTests(TestCase):
         # hold ties and Postgres may hand two copies of one structure back in
         # different orders. That must not read as a difference.
         def config(candidates: list[tuple[int, int]]) -> SimpleNamespace:
-            return _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=[_slot_row(1, candidates)])
+            return _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=[_slot_row(1, candidates)])
 
         self.assertEqual(
             stage_service._pick_ban_config_signature(config([(0, 4), (0, 9)])),
@@ -386,7 +427,7 @@ class PickBanConfigSignatureTests(TestCase):
         def config(reserve_item_id: int | None) -> SimpleNamespace:
             return _pick_ban_config(
                 mode=SLOTS_MODE,
-                sequence=["ban_first"],
+                ruleset=RULES_BAN,
                 slots=[
                     _slot_row(1, [(0, 4), (1, 9)], reserve_item_id=reserve_item_id),
                     _slot_row(2, [(0, 6), (1, 2)]),
@@ -403,10 +444,10 @@ class PickBanConfigSignatureTests(TestCase):
         # inequality alone would still hold if mode itself were dropped.
         slots = [_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])]
         flat = stage_service._pick_ban_config_signature(
-            _pick_ban_config(mode=POOL_MODE, sequence=["ban_first"], pool=(7, 3), slots=slots)
+            _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(7, 3), slots=slots)
         )
         slotted = stage_service._pick_ban_config_signature(
-            _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], pool=(7, 3), slots=slots)
+            _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, pool=(7, 3), slots=slots)
         )
         self.assertIn(POOL_MODE, flat)
         self.assertIn(SLOTS_MODE, slotted)
@@ -415,7 +456,7 @@ class PickBanConfigSignatureTests(TestCase):
     def test_slot_signature_shape_is_pinned(self) -> None:
         config = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "decider"],
+            ruleset=RULES_PICK,
             slots=[
                 # Arrival order reversed on both levels; the pin is the sorted result.
                 _slot_row(2, [(1, 2), (0, 6)]),
@@ -426,7 +467,7 @@ class PickBanConfigSignatureTests(TestCase):
         self.assertEqual(
             stage_service._pick_ban_config_signature(config),
             (
-                ("ban_first", "decider"),
+                json.dumps(RULES_PICK, sort_keys=True, separators=(",", ":")),
                 (),
                 SLOTS_MODE,
                 ALTERNATE,
@@ -440,10 +481,10 @@ class PickBanConfigSignatureTests(TestCase):
         slots = [_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])]
         self.assertNotEqual(
             stage_service._pick_ban_config_signature(
-                _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=slots, rotation=FIXED)
+                _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=FIXED)
             ),
             stage_service._pick_ban_config_signature(
-                _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=slots, rotation=ALTERNATE)
+                _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=ALTERNATE)
             ),
         )
 
@@ -452,10 +493,10 @@ class PickBanConfigSignatureTests(TestCase):
         # two flat configs over something that changes nothing for them.
         self.assertEqual(
             stage_service._pick_ban_config_signature(
-                _pick_ban_config(mode=POOL_MODE, sequence=["ban_home"], pool=(7, 3), rotation=FIXED)
+                _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(7, 3), rotation=FIXED)
             ),
             stage_service._pick_ban_config_signature(
-                _pick_ban_config(mode=POOL_MODE, sequence=["ban_home"], pool=(7, 3), rotation=ALTERNATE)
+                _pick_ban_config(mode=POOL_MODE, ruleset=RULES_BAN, pool=(7, 3), rotation=ALTERNATE)
             ),
         )
 
@@ -482,13 +523,13 @@ class PickBanConfigMergeDedupTests(IsolatedAsyncioTestCase):
     async def test_merge_refuses_sources_that_differ_only_in_slot_partition(self) -> None:
         left = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "ban_second"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])],
             stage_id=11,
         )
         right = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "ban_second"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, [(0, 4), (1, 9), (2, 6)]), _slot_row(2, [(0, 2)])],
             stage_id=12,
         )
@@ -504,13 +545,13 @@ class PickBanConfigMergeDedupTests(IsolatedAsyncioTestCase):
         # read as a conflict either.
         left = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "ban_second"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(1, [(0, 4), (1, 9)], reserve_item_id=13), _slot_row(2, [(0, 6), (1, 2)])],
             stage_id=11,
         )
         right = _pick_ban_config(
             mode=SLOTS_MODE,
-            sequence=["ban_first", "ban_second"],
+            ruleset=RULES_BAN,
             slots=[_slot_row(2, [(1, 2), (0, 6)]), _slot_row(1, [(1, 9), (0, 4)], reserve_item_id=13)],
             stage_id=12,
         )
@@ -521,8 +562,8 @@ class PickBanConfigMergeDedupTests(IsolatedAsyncioTestCase):
 
     async def test_merge_refuses_sources_that_differ_only_in_ban_rotation(self) -> None:
         slots = [_slot_row(1, [(0, 4), (1, 9)]), _slot_row(2, [(0, 6), (1, 2)])]
-        left = _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=slots, rotation=FIXED, stage_id=11)
-        right = _pick_ban_config(mode=SLOTS_MODE, sequence=["ban_first"], slots=slots, rotation=ALTERNATE, stage_id=12)
+        left = _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=FIXED, stage_id=11)
+        right = _pick_ban_config(mode=SLOTS_MODE, ruleset=RULES_BAN, slots=slots, rotation=ALTERNATE, stage_id=12)
         session = self._session([left, right])
         with self.assertRaises(stage_service.HTTPException) as caught:
             await self._merge(session)

@@ -8,21 +8,18 @@
  * the veto config editor, the public map-pool page — reads it from here so the
  * three cannot drift.
  *
- * `resolveBestOf` mirrors the backend's `services/admin/best_of.py`, and
- * `buildSequenceForBestOf` mirrors `services/encounter/veto_session.py`. Keep
- * them in step: the veto room runs the backend's sequence, so a divergence here
- * is a UI that previews steps the captains will not be asked to take.
+ * `resolveBestOf` mirrors the backend's `services/admin/best_of.py`. Keep them
+ * in step: a divergence here is a UI that previews a series length the bracket
+ * will not play.
  */
 import { bracketRoundLabelEn, type BracketRoundShape } from "@/lib/bracket/round-name";
-import type { StageBestOfConfig, StageType, VetoSequenceToken } from "@/types/tournament.types";
+import type { StageBestOfConfig, StageType } from "@/types/tournament.types";
 
 export const DEFAULT_BEST_OF = 3;
 
 /** Series lengths the stage editor offers. Bo4/Bo6 are legal but unused. */
 export const BEST_OF_OPTIONS = [1, 2, 3, 5, 7] as const;
 
-/** Opening bans a generated sequence uses when the pool can spare them. */
-const LEAD_BANS = 2;
 
 /**
  * Resolve the series length for one round. Precedence matches the backend:
@@ -206,40 +203,4 @@ function withUnlistedRounds(
       rounds: labelRounds(unlisted, shape)
     }
   ];
-}
-
-/**
- * Generate the veto step sequence that plays exactly `bestOf` maps.
- *
- * A pair of opening bans, then alternating picks, then a decider when the
- * series length is odd. This reproduces the Bo2/Bo3/Bo5 shapes the editor used
- * to hardcode and extends to any N, so a bracket configured Bo7 has a sequence.
- * Bo1 is the exception: its standard veto bans the pool down to one map.
- *
- * Opening bans are dropped as needed to keep the sequence no longer than the
- * pool, which is what the server validates on upsert.
- */
-export function buildSequenceForBestOf(bestOf: number, poolSize: number): VetoSequenceToken[] {
-  if (poolSize < 1) return [];
-  if (bestOf <= 1) {
-    const bans: VetoSequenceToken[] = Array.from({ length: poolSize - 1 }, (_, index) =>
-      index % 2 === 0 ? "ban_first" : "ban_second"
-    );
-    return [...bans, "decider"];
-  }
-
-  // A pool smaller than the series cannot play the whole series; clamp rather
-  // than preview steps the engine would run off the end of.
-  const played = Math.min(bestOf, poolSize);
-  const pickCount = played % 2 === 1 ? played - 1 : played;
-  const banCount = Math.max(0, Math.min(LEAD_BANS, poolSize - played));
-
-  const tokens: VetoSequenceToken[] = Array.from({ length: banCount }, (_, index) =>
-    index % 2 === 0 ? "ban_first" : "ban_second"
-  );
-  for (let index = 0; index < pickCount; index += 1) {
-    tokens.push(index % 2 === 0 ? "pick_first" : "pick_second");
-  }
-  if (played % 2 === 1) tokens.push("decider");
-  return tokens;
 }

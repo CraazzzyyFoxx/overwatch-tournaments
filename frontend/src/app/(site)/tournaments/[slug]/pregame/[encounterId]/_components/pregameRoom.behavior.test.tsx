@@ -16,8 +16,10 @@ import type { Encounter } from "@/types/encounter.types";
 import type {
   PickBanEntry,
   PickBanGame,
+  PickBanResolvedStep,
   PickBanSession,
-  PickBanState
+  PickBanState,
+  PickBanSubmission
 } from "@/types/tournament.types";
 import { pickedItemsInOrder } from "@/components/pick-ban/pick-ban-model";
 
@@ -31,6 +33,10 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const getPickBanState = vi.fn();
 const performPickBanAction = vi.fn();
 const undoLastAction = vi.fn();
+const submitDraft = vi.fn();
+const disputeStep = vi.fn();
+const adminPickBanSubmit = vi.fn();
+const adminPickBanReopen = vi.fn();
 const markReady = vi.fn();
 const getEncounter = vi.fn();
 const getAllMaps = vi.fn();
@@ -56,6 +62,8 @@ vi.mock("@/services/pickBan.service", () => ({
     performPickBanAction: (...args: unknown[]) => performPickBanAction(...args),
     markReady: (...args: unknown[]) => markReady(...args),
     undoLastAction: (...args: unknown[]) => undoLastAction(...args),
+    submitDraft: (...args: unknown[]) => submitDraft(...args),
+    disputeStep: (...args: unknown[]) => disputeStep(...args),
     electOpener: vi.fn(),
     reportGame: (...args: unknown[]) => reportGame(...args),
     selectGameMap: (...args: unknown[]) => selectGameMap(...args),
@@ -67,6 +75,15 @@ vi.mock("@/services/captain.service", () => ({
     getMyRole: (...args: unknown[]) => getMyRole(...args),
     getReports: (...args: unknown[]) => getReports(...args),
     submitReport: (...args: unknown[]) => submitReport(...args)
+  }
+}));
+vi.mock("@/services/admin.service", () => ({
+  default: {
+    resetPickBanSession: vi.fn(),
+    adminPickBanAct: vi.fn(),
+    adminPickBanElectOpener: vi.fn(),
+    adminPickBanSubmit: (...args: unknown[]) => adminPickBanSubmit(...args),
+    adminPickBanReopen: (...args: unknown[]) => adminPickBanReopen(...args)
   }
 }));
 vi.mock("@/services/encounter.service", () => ({
@@ -115,6 +132,13 @@ const HEROES = [101, 102, 103].map((id) => ({
   role: "damage"
 }));
 
+/** Three heroes with two distinct roles: enough to tell a role rule from an item one. */
+const HERO_CATALOG = [
+  { id: 201, name: "Tank A", type: "Tank", role: "tank", image_path: "" },
+  { id: 202, name: "Tank B", type: "Tank", role: "tank", image_path: "" },
+  { id: 203, name: "Support A", type: "Support", role: "support", image_path: "" }
+];
+
 function encounter(): Encounter {
   return {
     id: 4242,
@@ -135,6 +159,7 @@ function entry(overrides: Partial<PickBanEntry>): PickBanEntry {
     protected_by: null,
     team_id: null,
     status: "available",
+    carried_from_round: null,
     ...overrides
   };
 }
@@ -183,11 +208,102 @@ function session(overrides: Partial<PickBanSession> = {}): PickBanSession {
     seed_source: "bracket_slot",
     home_seed: 1,
     away_seed: 4,
-    turn_timer_seconds: null,
     slot_reserves: null,
     started_at: "2026-08-01T10:00:00Z",
     current_step_started_at: null,
     ...overrides
+  };
+}
+
+/** One resolved step of a v2 session: an open single-item ban by home unless told otherwise. */
+function step(overrides: Partial<PickBanResolvedStep> & { index: number }): PickBanResolvedStep {
+  return {
+    round: 1,
+    phase_id: "main",
+    step_id: `s${overrides.index}`,
+    action: "ban",
+    sides: ["home"],
+    count: 1,
+    min: 1,
+    blind: false,
+    target: null,
+    lifetime: 1,
+    timer_seconds: null,
+    on_timeout: "random_fill",
+    dispute: { enabled: false, max: 0 },
+    eligible: {},
+    constraints: [],
+    ...overrides
+  };
+}
+
+function submission(
+  overrides: Partial<PickBanSubmission> & { step_index: number; side: PickBanSubmission["side"] }
+): PickBanSubmission {
+  return { attempt: 1, state: "revealed", items: [], ...overrides };
+}
+
+/**
+ * A run of finished one-item steps: the sequence AND the submissions behind it.
+ *
+ * Both, because the board and the per-side lists are two different reads now —
+ * entries say what is banned, submissions say who spent it (and a duplicate
+ * merges into one entry while staying on both sides' submissions).
+ */
+function acts(
+  specs: {
+    side: "home" | "away";
+    itemId: number;
+    action?: "ban" | "protect";
+    round?: number | null;
+  }[]
+): { sequence: PickBanResolvedStep[]; submissions: PickBanSubmission[] } {
+  return {
+    sequence: specs.map((spec, index) =>
+      step({
+        index,
+        round: spec.round === undefined ? 1 : spec.round,
+        action: spec.action ?? "ban",
+        sides: [spec.side]
+      })
+    ),
+    submissions: specs.map((spec, index) =>
+      submission({
+        step_index: index,
+        side: spec.side,
+        items: [{ item_id: spec.itemId, target_player_id: null }]
+      })
+    )
+  };
+}
+
+/**
+ * The 2026-10-03 shape: one simultaneous blind step both captains fill at
+ * once, over a round-1 pool of the three catalog heroes.
+ */
+function blindRound(
+  overrides: Partial<PickBanResolvedStep> = {}
+): Pick<
+  PickBanState,
+  "sequence" | "current_step" | "current_step_index" | "acting_sides" | "current_round" | "pool"
+> {
+  const blind = step({
+    index: 0,
+    sides: ["home", "away"],
+    count: 2,
+    min: 2,
+    blind: true,
+    ...overrides
+  });
+  return {
+    sequence: [blind],
+    current_step: blind,
+    current_step_index: 0,
+    acting_sides: ["home", "away"],
+    current_round: 1,
+    pool: HERO_CATALOG.map((hero, index) =>
+      entry({ id: 30 + index, item_id: hero.id, round: 1 })
+    )
   };
 }
 
@@ -197,15 +313,23 @@ function readyState(overrides: Partial<PickBanState>): PickBanState {
     readiness: { home: true, away: true },
     sequence: [],
     pool: [],
+    submissions: [],
     viewer_side: "home",
     viewer_can_act: false,
     allowed_actions: [],
     current_step_index: 0,
     current_step: null,
     expected_action: null,
-    turn_side: null,
+    acting_sides: [],
+    step_progress: null,
+    step_deadline: null,
     current_round: null,
     is_complete: false,
+    eligible: null,
+    draft_issues: [],
+    targets: null,
+    dispute: { available: false, step_index: null, attempts_used: 0, max: 0 },
+    undo: { requested_by: null, step_index: null, item_ids: [], action: null, side: null },
     ...overrides
   };
 }
@@ -220,15 +344,23 @@ function unavailableState(
     readiness,
     sequence: [],
     pool: [],
+    submissions: [],
     viewer_side: null,
     viewer_can_act: false,
     allowed_actions: [],
     current_step_index: null,
     current_step: null,
     expected_action: null,
-    turn_side: null,
+    acting_sides: [],
+    step_progress: null,
+    step_deadline: null,
     current_round: null,
-    is_complete: false
+    is_complete: false,
+    eligible: null,
+    draft_issues: [],
+    targets: null,
+    dispute: { available: false, step_index: null, attempts_used: 0, max: 0 },
+    undo: { requested_by: null, step_index: null, item_ids: [], action: null, side: null }
   };
 }
 
@@ -270,6 +402,16 @@ async function settle(ticks = 3) {
       await promise;
     });
   }
+}
+
+/** Past the blind draft's ~300ms autosave debounce, then let the response land. */
+async function debounce() {
+  await act(async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 400);
+    await promise;
+  });
+  await settle();
 }
 
 async function render(props: { seriesReport?: boolean } = {}) {
@@ -410,7 +552,7 @@ describe("phase selection", () => {
     mockStates(
       readyState({
         session: session({ kind: "map" }),
-        sequence: ["ban_home", "ban_away"],
+        sequence: [step({ index: 0 }), step({ index: 1, sides: ["away"] })],
         pool: [entry({ id: 1, item_id: 21 }), entry({ id: 2, item_id: 22 })]
       }),
       readyState({ session: session({ kind: "hero" }) })
@@ -434,7 +576,7 @@ describe("phase selection", () => {
       }),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1 })]
       })
     );
@@ -459,7 +601,7 @@ describe("phase selection", () => {
       }),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["ban_home", "ban_away"],
+        sequence: [step({ index: 0 }), step({ index: 1, sides: ["away"] })],
         viewer_side: "away",
         pool: [
           entry({
@@ -472,7 +614,7 @@ describe("phase selection", () => {
           }),
           entry({ id: 4, item_id: 102, round: 1 })
         ],
-        undo: { requested_by: null, item_ids: [101], action: "ban", side: "home" }
+        undo: { requested_by: null, step_index: 0, item_ids: [101], action: "ban", side: "home" }
       })
     );
     await render();
@@ -489,14 +631,14 @@ describe("phase selection", () => {
     expect(undoLastAction).toHaveBeenCalledWith("hero", 4242, true);
   });
 
-  it("greys out and disables the roles the ban rule has spent, but never the protect", async () => {
-    // `unique_attribute: "role"` = one action per role per side per round. Home
-    // has banned a tank, so its second tank ban is a click the server would
-    // reject -- the tile says so instead of letting the captain find out.
+  it("greys what the step's own rules leave out of `eligible`", async () => {
+    // v2 rules are arbitrary condition trees (class must match the target
+    // player's role, not banned by this side earlier in the series, one per
+    // role...), so the room does not re-derive them: the server names what may
+    // be chosen and everything else is inert instead of a 400 after a click.
     getAllHeroes.mockResolvedValue({
       results: [
         { id: 201, name: "Tank A", type: "Tank", role: "tank", image_path: "" },
-        { id: 202, name: "Tank B", type: "Tank", role: "tank", image_path: "" },
         { id: 203, name: "Support A", type: "Support", role: "support", image_path: "" }
       ]
     });
@@ -509,119 +651,17 @@ describe("phase selection", () => {
       }),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["ban_home", "ban_home"],
+        sequence: [step({ index: 0 })],
+        current_step: step({ index: 0 }),
+        current_step_index: 0,
+        acting_sides: ["home"],
         viewer_side: "home",
         viewer_can_act: true,
         allowed_actions: ["ban"],
         expected_action: "ban",
-        turn_side: "home",
         current_round: 1,
-        unique_attribute: "role",
-        pool: [
-          entry({
-            id: 3,
-            item_id: 201,
-            round: 1,
-            status: "banned",
-            picked_by: "home",
-            action_index: 0
-          }),
-          entry({ id: 4, item_id: 202, round: 1 }),
-          entry({ id: 5, item_id: 203, round: 1 })
-        ]
-      })
-    );
-    await render();
-
-    const tile = (name: string) =>
-      document.body.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
-    // The second tank is inert and greyed; the support is untouched.
-    expect(tile("Tank B")?.disabled).toBe(true);
-    expect(tile("Tank B")?.className).toContain("grayscale");
-    expect(tile("Tank B")?.title).toBe(ROOM.rule.blocked);
-    expect(tile("Support A")?.disabled).toBe(false);
-    expect(tile("Support A")?.className).not.toContain("grayscale");
-  });
-
-  it("greys a pointless protect without taking the click away", async () => {
-    // Away banned a tank, so they cannot ban a second one: home protecting a
-    // tank defends against nothing. A hint, not a rule -- still clickable.
-    getAllHeroes.mockResolvedValue({
-      results: [
-        { id: 201, name: "Tank A", type: "Tank", role: "tank", image_path: "" },
-        { id: 202, name: "Tank B", type: "Tank", role: "tank", image_path: "" },
-        { id: 203, name: "Support A", type: "Support", role: "support", image_path: "" }
-      ]
-    });
-    getMyRole.mockResolvedValue({ side: "home" });
-    mockStates(
-      readyState({
-        session: session({ kind: "map" }),
-        is_complete: true,
-        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
-      }),
-      readyState({
-        session: session({ kind: "hero" }),
-        sequence: ["ban_away", "protect_home"],
-        viewer_side: "home",
-        viewer_can_act: true,
-        allowed_actions: ["protect"],
-        expected_action: "protect",
-        turn_side: "home",
-        current_round: 1,
-        unique_attribute: "role",
-        pool: [
-          entry({
-            id: 3,
-            item_id: 201,
-            round: 1,
-            status: "banned",
-            picked_by: "away",
-            action_index: 0
-          }),
-          entry({ id: 4, item_id: 202, round: 1 }),
-          entry({ id: 5, item_id: 203, round: 1 })
-        ]
-      })
-    );
-    await render();
-
-    const tank = document.body.querySelector<HTMLButtonElement>('button[aria-label^="Tank B"]');
-    expect(tank?.disabled).toBe(false);
-    expect(tank?.className).toContain("grayscale");
-    expect(tank?.title).toBe(ROOM.rule.pointless);
-  });
-
-  it("greys out and disables a hero this side already banned earlier in the series", async () => {
-    // `no_repeat_scope=encounter_same_side`: one pool, two sides, and only the
-    // side that spent the ban is barred -- so the item STAYS in the round's pool
-    // and the rule is enforced per action. Without this the only feedback was
-    // the 400 that arrives after the click.
-    getAllHeroes.mockResolvedValue({
-      results: [
-        { id: 201, name: "Tank A", type: "Tank", role: "tank", image_path: "" },
-        { id: 203, name: "Support A", type: "Support", role: "support", image_path: "" }
-      ]
-    });
-    getMyRole.mockResolvedValue({ side: "home" });
-    mockStates(
-      readyState({
-        session: session({ kind: "map" }),
-        is_complete: true,
-        pool: [entry({ id: 1, item_id: 22, round: 2, status: "picked", action_index: 5 })]
-      }),
-      readyState({
-        session: session({ kind: "hero" }),
-        sequence: ["ban_home"],
-        viewer_side: "home",
-        viewer_can_act: true,
-        allowed_actions: ["ban"],
-        expected_action: "ban",
-        turn_side: "home",
-        current_round: 2,
-        // Home banned Tank A back in round 1; round 2's pool offers it again.
-        repeat_banned: [201],
-        pool: [entry({ id: 3, item_id: 201, round: 2 }), entry({ id: 4, item_id: 203, round: 2 })]
+        eligible: { item_ids: [203], by_target: null },
+        pool: [entry({ id: 3, item_id: 201, round: 1 }), entry({ id: 4, item_id: 203, round: 1 })]
       })
     );
     await render();
@@ -630,47 +670,234 @@ describe("phase selection", () => {
       document.body.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
     expect(tile("Tank A")?.disabled).toBe(true);
     expect(tile("Tank A")?.className).toContain("grayscale");
-    expect(tile("Tank A")?.title).toBe(ROOM.rule.repeat);
+    expect(tile("Tank A")?.title).toBe(ROOM.rule.ineligible);
     expect(tile("Support A")?.disabled).toBe(false);
     expect(tile("Support A")?.className).not.toContain("grayscale");
   });
 
-  it("still lets this side protect a hero it already banned earlier in the series", async () => {
-    // The ledger is BAN memory: `repeat_banned` bars a second ban by this side,
-    // never a protect. The OPPONENT can still ban the hero, so protecting it is
-    // both legal and the whole point -- the grid used to grey it out on every
-    // step, protect included, leaving the immunity unreachable.
-    getAllHeroes.mockResolvedValue({
-      results: [
-        { id: 201, name: "Tank A", type: "Tank", role: "tank", image_path: "" },
-        { id: 203, name: "Support A", type: "Support", role: "support", image_path: "" }
-      ]
-    });
+  it("shows the opponent's blind progress as a count, never as items", async () => {
+    // A blind step is the one place privacy is the rule: the server never
+    // serializes the other side's unrevealed draft, and the room must not
+    // invent a stand-in for it either. A filled count is all there is.
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
     getMyRole.mockResolvedValue({ side: "home" });
     mockStates(
-      readyState({
-        session: session({ kind: "map" }),
-        is_complete: true,
-        pool: [entry({ id: 1, item_id: 22, round: 2, status: "picked", action_index: 5 })]
-      }),
+      unavailableState("not_configured", { home: true, away: true }),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["protect_home"],
+        ...blindRound(),
         viewer_side: "home",
         viewer_can_act: true,
-        allowed_actions: ["protect"],
-        expected_action: "protect",
-        turn_side: "home",
-        current_round: 2,
-        repeat_banned: [201],
-        pool: [entry({ id: 3, item_id: 201, round: 2 }), entry({ id: 4, item_id: 203, round: 2 })]
+        allowed_actions: ["ban"],
+        step_progress: { home: { locked: false, filled: 1 }, away: { locked: false, filled: 2 } },
+        submissions: [
+          submission({
+            step_index: 0,
+            side: "home",
+            state: "draft",
+            items: [{ item_id: 201, target_player_id: null }]
+          })
+        ]
       })
     );
     await render();
 
-    const tank = document.body.querySelector<HTMLButtonElement>('button[aria-label^="Tank A"]');
-    expect(tank?.disabled).toBe(false);
-    expect(tank?.className).not.toContain("grayscale");
+    const tray = document.body.querySelector<HTMLElement>("[data-pick-ban-draft]");
+    expect(tray).toBeTruthy();
+    // The viewer's own pick is spelled out...
+    expect(tray?.querySelector('[data-draft-item="201"]')).toBeTruthy();
+    // ...the opponent's is a number, and their heroes are nowhere on screen.
+    expect(document.body.textContent).toContain("Quiet Foxes: 2/2");
+    expect(tray?.textContent).not.toContain("Tank B");
+    expect(tray?.textContent).not.toContain("Support A");
+  });
+
+  it("refuses the lock while the server still has an objection to the draft", async () => {
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound(),
+        viewer_side: "home",
+        viewer_can_act: true,
+        allowed_actions: ["ban"],
+        draft_issues: ["one hero per opponent player"],
+        submissions: [
+          submission({
+            step_index: 0,
+            side: "home",
+            state: "draft",
+            items: [
+              { item_id: 201, target_player_id: null },
+              { item_id: 202, target_player_id: null }
+            ]
+          })
+        ]
+      })
+    );
+    await render();
+
+    const lock = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(ROOM.draft.lock)
+    );
+    expect(lock?.disabled).toBe(true);
+    // And the reason is on screen, rather than waiting behind a rejected click.
+    expect(document.body.querySelector("[data-draft-issues]")?.textContent).toContain(
+      "one hero per opponent player"
+    );
+  });
+
+  it("bans for the opponent player the captain chose, and says so on the wire", async () => {
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    submitDraft.mockResolvedValue(readyState({ session: session({ kind: "hero" }) }));
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound({ target: "opponent_player" }),
+        viewer_side: "home",
+        viewer_can_act: true,
+        allowed_actions: ["ban"],
+        eligible: { item_ids: [201, 202], by_target: { "55": [201], "56": [202] } },
+        targets: {
+          home: [],
+          away: [
+            { player_id: 55, name: "Foxy", role: "tank", sub_role: null, is_substitution: false },
+            { player_id: 56, name: "Vixen", role: "tank", sub_role: null, is_substitution: true }
+          ]
+        }
+      })
+    );
+    await render();
+
+    // The hero is not the whole choice: WHO it is banned for comes first, and
+    // it narrows which heroes are legal at all.
+    const row = document.body.querySelector<HTMLButtonElement>('[data-target-player="56"]');
+    expect(row).toBeTruthy();
+    await act(async () => row!.click());
+    await settle();
+
+    // 201 is Foxy's hero, not Vixen's: with Vixen selected it is inert.
+    const tile = (name: string) =>
+      document.body.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
+    expect(tile("Tank A")?.disabled).toBe(true);
+
+    await act(async () => tile("Tank B")!.click());
+    await debounce();
+
+    expect(submitDraft).toHaveBeenCalledWith("hero", 4242, {
+      items: [{ item_id: 202, target_player_id: 56 }],
+      lock: false
+    });
+  });
+
+  it("marks the heroes both sides banned once the blind step reveals", async () => {
+    // Duplicates merge into ONE banned entry, so without the mark a captain
+    // reads the board and finds a ban they paid for missing from their column.
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        sequence: [
+          step({ index: 0, sides: ["home", "away"], count: 2, min: 2, blind: true }),
+          step({ index: 1 })
+        ],
+        current_step_index: 1,
+        current_step: step({ index: 1 }),
+        current_round: 1,
+        submissions: [
+          submission({
+            step_index: 0,
+            side: "home",
+            items: [
+              { item_id: 201, target_player_id: null },
+              { item_id: 202, target_player_id: null }
+            ]
+          }),
+          submission({
+            step_index: 0,
+            side: "away",
+            items: [
+              { item_id: 202, target_player_id: null },
+              { item_id: 203, target_player_id: null }
+            ]
+          })
+        ],
+        pool: [
+          entry({ id: 3, item_id: 201, round: 1, status: "banned", picked_by: "home" }),
+          entry({ id: 4, item_id: 202, round: 1, status: "banned", picked_by: "home" }),
+          entry({ id: 5, item_id: 203, round: 1, status: "banned", picked_by: "away" })
+        ]
+      })
+    );
+    await render();
+
+    const reveal = document.body.querySelector<HTMLElement>("[data-pick-ban-reveal]");
+    expect(reveal).toBeTruthy();
+    const sides = Array.from(reveal!.querySelectorAll<HTMLElement>("[data-reveal-side]"));
+    expect(sides.map((side) => side.dataset.revealSide)).toEqual(["home", "away"]);
+    // Tank B is on both columns and marked on both; the rest are not.
+    expect(reveal!.querySelectorAll('[data-reveal-item="202"][data-matched="true"]')).toHaveLength(2);
+    expect(reveal!.querySelector('[data-reveal-item="201"]')?.dataset.matched).toBeUndefined();
+    expect(reveal!.textContent).toContain(ROOM.reveal.matched);
+  });
+
+  /** A revealed blind step with one more step still to come, so the room stays on the board. */
+  function revealedBlind(dispute: PickBanState["dispute"]): PickBanState {
+    return readyState({
+      session: session({ kind: "hero" }),
+      sequence: [
+        step({ index: 0, sides: ["home", "away"], count: 1, min: 1, blind: true }),
+        step({ index: 1 })
+      ],
+      current_step_index: 1,
+      current_step: step({ index: 1 }),
+      current_round: 1,
+      viewer_side: "home",
+      dispute,
+      submissions: [
+        submission({ step_index: 0, side: "home", items: [{ item_id: 201, target_player_id: null }] }),
+        submission({ step_index: 0, side: "away", items: [{ item_id: 203, target_player_id: null }] })
+      ],
+      pool: [entry({ id: 3, item_id: 201, round: 1, status: "banned", picked_by: "home" })]
+    });
+  }
+
+  const DISPUTE_LABEL = ROOM.dispute.button.replace("{used}", "0").replace("{max}", "1");
+
+  it("offers the redo when the server says this viewer may ask for it", async () => {
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    disputeStep.mockResolvedValue(readyState({ session: session({ kind: "hero" }) }));
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      revealedBlind({ available: true, step_index: 0, attempts_used: 0, max: 1 })
+    );
+    await render();
+
+    const redo = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(DISPUTE_LABEL)
+    );
+    expect(redo).toBeTruthy();
+  });
+
+  it("withholds the redo from a viewer who has spent their attempts", async () => {
+    // `available` is the server's whole answer — enabled, attempts left, and
+    // nothing played on top of the step. The room never second-guesses it.
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      revealedBlind({ available: false, step_index: 0, attempts_used: 1, max: 1 })
+    );
+    await render();
+
+    expect(document.body.querySelector("[data-pick-ban-reveal]")).toBeTruthy();
+    expect(document.body.textContent).not.toContain(DISPUTE_LABEL);
   });
 
   it("charts the series' play order once, in the header", async () => {
@@ -681,7 +908,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "map" }),
         viewer_side: "home",
-        sequence: ["ban_home", "ban_away", "decider"],
+        sequence: [step({ index: 0 }), step({ index: 1, sides: ["away"] }), step({ index: 2, action: "decider", sides: ["system"] })],
         current_round: 2,
         games: [confirmed(1, 21, 2, 1)],
         pool: [
@@ -693,7 +920,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 4, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -722,7 +949,7 @@ describe("phase selection", () => {
       }),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["protect_home", "ban_away"],
+        sequence: [step({ index: 0, action: "protect" }), step({ index: 1, sides: ["away"] })],
         current_round: 1,
         pool: [
           entry({
@@ -772,7 +999,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -800,7 +1027,12 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home", "ban_away", "protect_away"],
+        ...acts([
+          { side: "home", itemId: 101 },
+          { side: "away", itemId: 102 },
+          { side: "away", itemId: 103, action: "protect" },
+          { side: "home", itemId: 104, round: 2 }
+        ]),
         pool: [
           entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "home" }),
           entry({ id: 4, item_id: 102, round: 1, status: "banned", picked_by: "away" }),
@@ -825,6 +1057,73 @@ describe("phase selection", () => {
     const awayRows = Array.from(sides[1].querySelectorAll<HTMLElement>("[data-hero-action]"));
     expect(awayRows.map((row) => row.dataset.heroAction)).toEqual(["ban", "protect"]);
     expect(awayRows[1].textContent).toContain(ROOM.heroBans.state.protect);
+  });
+
+  it("badges a carried ban with the map it came from, and copies the lobby list", async () => {
+    // A 2-map ban spent on map 1 is still in force on map 2, but nobody acted
+    // on it here — so it is not a ban of this round, it is a leftover with an
+    // origin. And the list the captains actually need is the flat one they
+    // tick off in the custom game, grouped the way that hero list is.
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true
+    });
+    mockStates(
+      readyState({
+        session: session({ kind: "map" }),
+        is_complete: true,
+        viewer_side: "home",
+        games: [confirmed(1, 21, 2, 1), game({ position: 2, map_id: 22 })],
+        pool: [
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
+          entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
+        ]
+      }),
+      readyState({
+        session: session({ kind: "hero" }),
+        is_complete: true,
+        viewer_side: "home",
+        ...acts([{ side: "away", itemId: 202, round: 2 }]),
+        pool: [
+          entry({
+            id: 3,
+            item_id: 201,
+            round: 2,
+            status: "banned",
+            picked_by: "home",
+            carried_from_round: 1
+          }),
+          entry({ id: 4, item_id: 202, round: 2, status: "banned", picked_by: "away" }),
+          entry({ id: 5, item_id: 203, round: 2, status: "available" })
+        ]
+      })
+    );
+    await render();
+
+    // The carried ban sits in the column of the side that spent it, wearing
+    // the map it was spent on rather than passing as this round's work.
+    const sides = Array.from(document.body.querySelectorAll<HTMLElement>("[data-hero-bans]"));
+    expect(sides[0].textContent).toContain("Tank A");
+    expect(sides[0].querySelector('[data-carried-from="1"]')).toBeTruthy();
+    expect(sides[1].querySelector("[data-carried-from]")).toBeNull();
+
+    // The lobby needs one flat statement of what is off, and what is left.
+    const unavailable = document.body.querySelector<HTMLElement>("[data-hero-unavailable]");
+    expect(unavailable?.textContent).toContain(ROOM.heroBans.unavailableOn.replace("{n}", "2"));
+    expect(unavailable?.textContent).toContain("Tank A, Tank B");
+    expect(
+      document.body.querySelector<HTMLElement>("[data-hero-remaining]")?.textContent
+    ).toContain("Support A");
+
+    const copy = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === ROOM.heroBans.copy
+    );
+    await act(async () => copy!.click());
+    await settle();
+
+    expect(writeText).toHaveBeenCalledWith("Tank: Tank A, Tank B");
   });
 
   it("leaves the result screen without a bans block when no heroes were banned", async () => {
@@ -857,9 +1156,9 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: "home",
-        sequence: ["ban_home"],
+        ...acts([{ side: "home", itemId: 101 }]),
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "home" })],
-        undo: { requested_by: null, item_ids: [101], action: "ban", side: "home" }
+        undo: { requested_by: null, step_index: 0, item_ids: [101], action: "ban", side: "home" }
       })
     );
     await render();
@@ -890,9 +1189,9 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: "home",
-        sequence: ["ban_away"],
+        ...acts([{ side: "away", itemId: 101 }]),
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "away" })],
-        undo: { requested_by: "away", item_ids: [101], action: "ban", side: "away" }
+        undo: { requested_by: "away", step_index: 0, item_ids: [101], action: "ban", side: "away" }
       })
     );
     await render();
@@ -926,9 +1225,9 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: "home",
-        sequence: ["ban_home"],
+        ...acts([{ side: "home", itemId: 101 }]),
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "home" })],
-        undo: { requested_by: "home", item_ids: [101], action: "ban", side: "home" }
+        undo: { requested_by: "home", step_index: 0, item_ids: [101], action: "ban", side: "home" }
       })
     );
     await render();
@@ -950,9 +1249,9 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: "home",
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "home" })],
-        undo: { requested_by: null, item_ids: [], action: null, side: null }
+        undo: { requested_by: null, step_index: null, item_ids: [], action: null, side: null }
       })
     );
     await render();
@@ -981,7 +1280,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1021,7 +1320,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1062,7 +1361,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 2, status: "banned" })]
       })
     );
@@ -1111,7 +1410,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 4, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1159,7 +1458,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 4, item_id: 101, round: 3, status: "banned" })]
       })
     );
@@ -1196,7 +1495,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1225,7 +1524,7 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "hero" }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1261,7 +1560,7 @@ describe("phase selection", () => {
         }),
         is_complete: true,
         viewer_side: null,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1286,7 +1585,7 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: viewerSide,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1368,7 +1667,10 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: null,
-        sequence: ["ban_home", "ban_away"],
+        ...acts([
+          { side: "home", itemId: 101 },
+          { side: "away", itemId: 102, round: 2 }
+        ]),
         pool: [
           entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "home" }),
           entry({ id: 4, item_id: 102, round: 2, status: "banned", picked_by: "away" })
@@ -1417,7 +1719,7 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: null,
-        sequence: ["ban_home"],
+        ...acts([{ side: "home", itemId: 101, round: null }]),
         pool: [entry({ id: 3, item_id: 101, round: null, status: "banned", picked_by: "home" })]
       })
     );
@@ -1448,7 +1750,7 @@ describe("phase selection", () => {
             session: session({ kind: "hero" }),
             is_complete: true,
             viewer_side: null,
-            sequence: ["ban_home"],
+            sequence: [step({ index: 0 })],
             pool: [entry({ id: 3, item_id: 101, round: 1, status: "available" })]
           })
     );
@@ -1484,7 +1786,7 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: "home",
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [
           entry({ id: 3, item_id: 101, round: 1, status: "banned" }),
           entry({ id: 4, item_id: 102, round: 2, status: "banned" })
@@ -1533,7 +1835,7 @@ describe("phase selection", () => {
         session: session({ kind: "hero" }),
         is_complete: true,
         viewer_side: "home",
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1582,7 +1884,7 @@ describe("phase selection", () => {
     mockStates(
       readyState({
         session: session({ kind: "map" }),
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         is_complete: true,
         pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 1 })]
       }),
@@ -1602,7 +1904,7 @@ describe("return navigation", () => {
     mockStates(
       readyState({
         session: session({ kind: "map" }),
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 1, item_id: 21 })]
       }),
       unavailableState("not_configured", { home: true, away: true })
@@ -1638,7 +1940,7 @@ describe("merged header layout", () => {
     mockStates(
       readyState({
         session: session({ kind: "map" }),
-        sequence: ["ban_home", "ban_away"],
+        sequence: [step({ index: 0 }), step({ index: 1, sides: ["away"] })],
         pool: [entry({ id: 1, item_id: 21 }), entry({ id: 2, item_id: 22 })]
       }),
       readyState({ session: session({ kind: "hero" }) })
@@ -1683,7 +1985,7 @@ describe("Hero Pool tile redesign", () => {
       unavailableState("not_configured"),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["ban_home", "ban_away"],
+        sequence: [step({ index: 0 }), step({ index: 1, sides: ["away"] })],
         pool: [entry({ id: 1, item_id: 101 }), entry({ id: 2, item_id: 102 })]
       })
     );
@@ -1736,16 +2038,21 @@ describe("captain actions", () => {
     mockStates(
       readyState({
         session: session({ kind: "map" }),
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0, round: null })],
+        current_step: step({ index: 0, round: null }),
+        current_step_index: 0,
+        acting_sides: ["home"],
         pool: [entry({ id: 1, item_id: 21 })],
-        turn_side: "home",
         expected_action: "ban",
         viewer_can_act: true,
-        allowed_actions: ["ban"]
+        allowed_actions: ["ban"],
+        eligible: { item_ids: [21], by_target: null }
       }),
       unavailableState("not_configured")
     );
-    performPickBanAction.mockResolvedValue(entry({ id: 1, item_id: 21, status: "banned" }));
+    performPickBanAction.mockResolvedValue(
+      readyState({ session: session({ kind: "map" }), is_complete: true })
+    );
     await render();
 
     const tile = Array.from(container.querySelectorAll("button")).find((b) =>
@@ -1769,7 +2076,9 @@ describe("captain actions", () => {
 });
 
 describe("admin controls", () => {
-  it("renders the reset/act panel for a workspace admin, with protect offered when the sequence uses it", async () => {
+  it("names the step's own action instead of offering the organizer a choice of three", async () => {
+    // A v2 step names what it accepts, so "ban / pick / protect" next to a
+    // protect step was three buttons of which two produced a 400.
     usePermissionsMock.mockReturnValue({
       isSuperuser: true,
       isWorkspaceAdmin: () => true,
@@ -1779,14 +2088,85 @@ describe("admin controls", () => {
       unavailableState("not_configured"),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["ban_home", "protect_away", "pick_home"],
-        pool: [entry({ id: 1, item_id: 101 })]
+        sequence: [step({ index: 0, action: "protect", sides: ["away"] })],
+        current_step: step({ index: 0, action: "protect", sides: ["away"] }),
+        current_step_index: 0,
+        acting_sides: ["away"],
+        current_round: 1,
+        pool: [entry({ id: 1, item_id: 101, round: 1 })]
       })
     );
     await render();
 
     expect(document.body.textContent).toContain(ROOM.admin.title);
-    expect(document.body.textContent).toContain(ROOM.action.protect);
+    const actionField = Array.from(document.body.querySelectorAll("div")).find(
+      (node) => node.firstElementChild?.textContent === ROOM.admin.actionLabel
+    );
+    expect(actionField?.textContent).toBe(`${ROOM.admin.actionLabel}${ROOM.action.protect}`);
+    // No picker: the organizer cannot ask this step for a ban.
+    expect(
+      Array.from(document.body.querySelectorAll("button")).filter(
+        (button) => button.textContent?.trim() === ROOM.action.ban
+      )
+    ).toHaveLength(0);
+  });
+
+  it("offers a submit-for-side form and a reopen on a blind step", async () => {
+    // A blind step has no tile-by-tile path for a side the organizer is not,
+    // and a reveal that has to be redone is not the captains' dispute.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    adminPickBanSubmit.mockResolvedValue(readyState({ session: session({ kind: "hero" }) }));
+    mockStates(
+      unavailableState("not_configured"),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound(),
+        dispute: { available: false, step_index: 0, attempts_used: 0, max: 1 }
+      })
+    );
+    await render();
+
+    const field = document.body.querySelector<HTMLInputElement>(
+      `input[aria-label="${ROOM.admin.submitLabel}"]`
+    );
+    expect(field).toBeTruthy();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(field!, "201, 203");
+      field!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+
+    const submit = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === ROOM.admin.submitConfirm
+    );
+    await act(async () => submit!.click());
+    await settle();
+
+    expect(adminPickBanSubmit).toHaveBeenCalledWith(4242, {
+      kind: "hero",
+      side: "home",
+      items: [
+        { item_id: 201, target_player_id: null },
+        { item_id: 203, target_player_id: null }
+      ],
+      lock: true
+    });
+
+    const reopen = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(ROOM.admin.reopen)
+    );
+    await act(async () => reopen!.click());
+    await settle();
+    expect(adminPickBanReopen).toHaveBeenCalledWith(4242, "hero");
   });
 
   it("lets an admin elect the round's opener when the losing captain is unreachable", async () => {
@@ -1815,7 +2195,7 @@ describe("admin controls", () => {
           pending_loser_side: "away"
         }),
         is_complete: true,
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 1, item_id: 101, round: 1, status: "banned" })]
       })
     );
@@ -1832,7 +2212,7 @@ describe("admin controls", () => {
       unavailableState("not_configured"),
       readyState({
         session: session({ kind: "hero" }),
-        sequence: ["ban_home"],
+        sequence: [step({ index: 0 })],
         pool: [entry({ id: 1, item_id: 101 })]
       })
     );

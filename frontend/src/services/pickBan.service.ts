@@ -1,17 +1,40 @@
 import { apiFetch } from "@/lib/api/fetch";
 import type {
+  MapVetoMode,
   PickBanConfig,
   PickBanConfigUpsertInput,
-  PickBanEntry,
   PickBanGame,
   PickBanKind,
+  PickBanRuleset,
+  PickBanRulesCatalog,
+  PickBanRulesPreview,
+  PickBanRulesValidation,
   PickBanState,
+  PickBanSubmissionItem,
   PickBanUndo
 } from "@/types/tournament.types";
 
 export interface PickBanActionInput {
   item_id: number;
   action: "ban" | "pick" | "protect";
+  /** Required on a step with a `target`: the opponent player the item is banned for. */
+  target_player_id?: number | null;
+}
+
+export interface PickBanSubmitInput {
+  /** Replaces the side's whole draft for the current (blind) step. */
+  items: PickBanSubmissionItem[];
+  /** true = final; the step reveals once every acting side locked. */
+  lock: boolean;
+}
+
+export interface PickBanRulesPreviewInput {
+  kind: PickBanKind;
+  mode: MapVetoMode;
+  ruleset: PickBanRuleset;
+  best_of: number;
+  item_ids: number[];
+  slots: { candidates: number[]; reserve_item_id?: number | null }[];
 }
 
 interface ElectOpenerInput {
@@ -48,14 +71,41 @@ class PickBanService {
     return response.json();
   }
 
+  /** One item on an OPEN step (applied and public immediately). Returns the new state. */
   async performPickBanAction(
     kind: PickBanKind,
     encounterId: number,
     data: PickBanActionInput
-  ): Promise<PickBanEntry> {
+  ): Promise<PickBanState> {
     const response = await apiFetch(`/api/v1/encounters/${encounterId}/pick-ban/${kind}/act`, {
       method: "POST",
       body: data
+    });
+    return response.json();
+  }
+
+  /** Save (or lock) the calling captain's draft on a BLIND step. Returns the new state. */
+  async submitDraft(
+    kind: PickBanKind,
+    encounterId: number,
+    data: PickBanSubmitInput
+  ): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/pick-ban/${kind}/submit`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /**
+   * Reopen the last revealed blind step for BOTH sides (unilateral, limited by
+   * the step's `dispute.max`). Each side's new draft is prefilled with its
+   * previous items. Returns the new state.
+   */
+  async disputeStep(kind: PickBanKind, encounterId: number): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/pick-ban/${kind}/dispute`, {
+      method: "POST",
+      body: {}
     });
     return response.json();
   }
@@ -172,6 +222,31 @@ class PickBanService {
     const response = await apiFetch(`/api/v1/admin/pick-ban-configs/${configId}`, {
       method: "DELETE"
     });
+    return response.json();
+  }
+
+  /** Leaf/constraint specs, groups and presets the constructor builds forms from. */
+  async getRulesCatalog(): Promise<PickBanRulesCatalog> {
+    const response = await apiFetch(`/api/v1/pick-ban-rules/catalog`, { skipWorkspace: true });
+    return response.json();
+  }
+
+  async validateRuleset(
+    tournamentId: number,
+    data: { kind: PickBanKind; mode: MapVetoMode; ruleset: PickBanRuleset }
+  ): Promise<PickBanRulesValidation> {
+    const response = await apiFetch(
+      `/api/v1/admin/tournaments/${tournamentId}/pick-ban-rules/validate`,
+      { method: "POST", body: data }
+    );
+    return response.json();
+  }
+
+  async previewRuleset(tournamentId: number, data: PickBanRulesPreviewInput): Promise<PickBanRulesPreview> {
+    const response = await apiFetch(
+      `/api/v1/admin/tournaments/${tournamentId}/pick-ban-rules/preview`,
+      { method: "POST", body: data }
+    );
     return response.json();
   }
 }

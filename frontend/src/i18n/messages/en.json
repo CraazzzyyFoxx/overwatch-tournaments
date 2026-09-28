@@ -233,6 +233,7 @@
     "searchLabel": "Search",
     "filters": "Filters",
     "openMenu": "Open account menu",
+    "openMenuUnread": "Open account menu, {count, plural, =0 {no unread notifications} one {# unread notification} other {# unread notifications}}",
     "signIn": "Sign in",
     "homeLink": "Go to the home page",
     "sourceOnGithub": "View the source on GitHub",
@@ -3093,17 +3094,42 @@
       },
       "steps": {
         "title": "Steps",
-        "ban": "Ban",
-        "pick": "Pick",
-        "protect": "Protect",
-        "decider": "Decider",
         "deciderHint": "If more than one item is still available at this step, one is chosen at random.",
         "done": "done",
         "current": "current step",
         "pending": "pending"
       },
+      "step": {
+        "count": "×{n}",
+        "blind": "blind",
+        "targeted": "per player",
+        "lifetime": "holds {n} maps",
+        "lifetimeSeries": "holds all series",
+        "both": {
+          "ban": "Both teams ban",
+          "pick": "Both teams pick",
+          "protect": "Both teams protect",
+          "decider": "Decider"
+        },
+        "side": {
+          "ban": "{team} bans",
+          "pick": "{team} picks",
+          "protect": "{team} protects",
+          "decider": "Decider"
+        },
+        "system": {
+          "ban": "Random ban",
+          "pick": "Random pick",
+          "protect": "Random protect",
+          "decider": "Decider"
+        }
+      },
+      "carried": {
+        "badge": "from map {n}",
+        "tooltip": "Banned on map {n} and still in force here"
+      },
       "timer": {
-        "label": "Turn timer",
+        "label": "Step timer",
         "expired": "Time expired"
       },
       "status": {
@@ -3124,10 +3150,13 @@
         "away": "protected by away"
       },
       "turn": "Turn: {side} — {action}",
+      "turnBoth": "Both teams — {action}",
+      "turnRevealing": "Revealing both drafts",
       "action": {
         "ban": "ban",
         "pick": "pick",
-        "protect": "protect"
+        "protect": "protect",
+        "decider": "decide"
       },
       "deciderResolving": "Decider is being resolved",
       "completedBanner": "Sequence completed",
@@ -3141,6 +3170,53 @@
         "cancel": "Cancel",
         "sending": "Sending...",
         "actionFailed": "Action failed"
+      },
+      "draft": {
+        "title": "Your draft",
+        "filled": "{filled}/{count}",
+        "saving": "saving…",
+        "empty": "Choose in the pool below. The opponent only sees how many you have.",
+        "remove": "Remove {item}",
+        "forPlayer": "for {player}",
+        "lock": "Lock the draft",
+        "lockedWaiting": "Locked — waiting for {team}",
+        "opponentFilled": "{team}: {filled}/{count}",
+        "opponentLocked": "{team} has locked",
+        "saveFailed": "Failed to save the draft"
+      },
+      "draftIssue": {
+        "too_many_items": "More items than this step takes",
+        "duplicate_item": "The same item twice",
+        "item_not_available": "Something in the draft is no longer available",
+        "item_not_eligible": "The step's rules do not allow one of these",
+        "item_not_in_pool": "Something in the draft is not in this map's pool",
+        "target_required": "Every item has to name an opponent player",
+        "target_unknown": "One of the named players is not on the opponent's roster",
+        "target_not_allowed": "This step does not ban for a player",
+        "one_per_target": "One item per opponent player",
+        "max_per_group": "Too many items of one group",
+        "not_enough_items": "Not enough chosen yet",
+        "min_per_group": "A group is short of its minimum"
+      },
+      "target": {
+        "eyebrow": "One ban per opponent player",
+        "hint": "Choose a player of {team}, then the hero you ban for them.",
+        "sub": "sub",
+        "empty": "not set",
+        "selectFirst": "Choose the player first"
+      },
+      "reveal": {
+        "title": "Both drafts",
+        "none": "nothing",
+        "matched": "matched",
+        "matchedCount": "{count} matched"
+      },
+      "dispute": {
+        "button": "Redo the step ({used}/{max})",
+        "confirmTitle": "Redo this step?",
+        "confirmHint": "Both drafts reopen, prefilled with what each side chose. The opponent does not have to agree.",
+        "confirmAction": "Redo",
+        "failed": "Failed to redo the step"
       },
       "round": {
         "label": "Round {n}",
@@ -3199,6 +3275,14 @@
         "correctSubmit": "Save result",
         "correctSuccess": "Result corrected",
         "correctFailed": "Failed to correct the result",
+        "submitLabel": "Items for the side",
+        "submitPlaceholder": "101, 102",
+        "submitLock": "lock it",
+        "submitConfirm": "Submit draft",
+        "submitFailed": "Failed to submit the draft",
+        "reopen": "Reopen step",
+        "reopenSuccess": "Step reopened",
+        "reopenFailed": "Failed to reopen the step",
         "downstreamStarted": "A later match has already started on this result. Roll that one back first."
       },
       "waitingMapTitle": "Waiting for this round's map",
@@ -3231,6 +3315,12 @@
         "seriesTitle": "Hero bans of this series",
         "seriesEyebrow": "Bans for the whole series",
         "none": "No bans this map",
+        "unavailableOn": "Unavailable on map {n}:",
+        "unavailable": "Unavailable this series:",
+        "remainingRole": "{role} ({count}):",
+        "roleUnknown": "Other",
+        "copy": "Copy for the lobby",
+        "copied": "Copied",
         "state": {
           "ban": "Banned:",
           "protect": "Protected:"
@@ -3247,9 +3337,7 @@
         "failed": "Could not undo the last action"
       },
       "rule": {
-        "blocked": "This side has already used its one action on this role this round",
-        "pointless": "The opponent has already banned this role — protecting it changes nothing",
-        "repeat": "Your side already banned this earlier in the series"
+        "ineligible": "The rules of this step do not allow it"
       },
       "finalReport": {
         "title": "Report the match",
@@ -3326,45 +3414,8 @@
       "slotReserveAria": "Reserve for match {n}",
       "slotReserveNone": "None",
       "slotReserveHint": "Stands in if this match's candidates are all used up. It cannot be one of them.",
-      "orderSection": "3 · The order of steps",
-      "orderSectionHint": "Who acts when, from the first ban to the last pick.",
-      "orderLabel": "Step order",
-      "orderBracket": "From the bracket",
-      "orderCustom": "Custom",
-      "orderBracketHint": "Generated for each match from its series length: two opening bans, then alternating picks, then a decider when the length is odd. If the pool holds more maps than the series needs, the decider is chosen at random among whatever is left instead of blocking the room.",
-      "orderCustomHint": "Your exact list of steps, used as written for every match in this scope regardless of its series length.",
-      "orderPreview": "Generated order",
-      "orderSteps": "Steps",
-      "orderRoundsPlayed": "{count, plural, one {# round played} other {# rounds played}}",
-      "orderNeedsPool": "The order is generated from the pool — add candidates above to see it.",
-      "orderCustomMismatch": "This order plays {played, plural, one {# round} other {# rounds}}, but matches in this scope play {expected, plural, one {# round} other {# rounds}}.",
-      "seriesSource": {
-        "round": "This round plays Bo{bestOf}.",
-        "stage": "Every round of this stage plays Bo{bestOf}.",
-        "variesByRound": "Series length differs per round in this stage; the preview shows Bo{bestOf}. Each match still gets its own order.",
-        "variesByMatch": "Series length differs per match; the preview shows Bo{bestOf}. Each match still gets its own order."
-      },
-      "sequenceEmpty": "No steps yet.",
-      "stepNumber": "Step {n}",
-      "stepActionLabel": "Action for step {n}",
-      "stepSideLabel": "Team for step {n}",
-      "stepMoveUp": "Move step {n} earlier",
-      "stepMoveDown": "Move step {n} later",
-      "stepRemove": "Remove step {n}",
-      "addStep": "Add step",
-      "deciderAuto": "Last candidate remaining",
-      "action": {
-        "ban": "Ban",
-        "pick": "Pick",
-        "protect": "Protect",
-        "decider": "Decider"
-      },
-      "side": {
-        "first": "Team 1",
-        "second": "Team 2"
-      },
-      "rulesSection": "4 · Rules of the room",
-      "rulesSectionHint": "Who opens, what carries over between rounds, and how long a turn lasts.",
+      "rulesSection": "Sides",
+      "rulesSectionHint": "Who opens the pick-ban, and how that alternates down the series.",
       "firstPickRule": "Round 1 opener",
       "firstPickRuleHint": "How the opening side of round 1 is decided, before any result exists to react to. Later rounds follow the rotation below.",
       "firstPickRuleValue": {
@@ -3385,38 +3436,13 @@
         "result_loser_first": "The previous loser",
         "result_loser_choice": "The previous loser's choice"
       },
-      "noRepeatScope": "Repeats across rounds",
-      "noRepeatScopeHint": {
-        "none": "Nothing carries over: the same map or hero can be banned again in a later round.",
-        "encounter": "Only bans carry over: once either side bans a candidate, it is out for both sides for the rest of the series. Protects are round-local and never carry over.",
-        "encounter_same_side": "Only bans carry over: once a side bans a candidate, that side may not ban it again; the opponent still can. Protects are round-local and never carry over."
-      },
-      "noRepeatScopeValue": {
-        "none": "Allowed",
-        "encounter": "Blocked for both sides",
-        "encounter_same_side": "Blocked for the same side only"
-      },
-      "turnTimer": "Turn timer",
-      "turnTimerUnit": "seconds",
-      "turnTimerPlaceholder": "No limit",
-      "turnTimerClear": "Remove the limit",
-      "turnTimerHint": "Countdown shown to captains on their turn. Leave it empty for no time limit — captains then take as long as they need.",
-      "allowProtect": "Allow a protect step",
-      "allowProtectHint": "Lets a side shield one candidate for the round so the opponent cannot ban it. It only runs where a step of the order says Protect.",
-      "protectWithoutStep": "The protect step is on, but no step in this order uses it, so nothing changes. Switch the step order to Custom and add a Protect step.",
-      "uniqueRole": "One hero per role per side each round",
-      "uniqueRoleHint": "Stops a side from picking two heroes of the same role in the same round.",
       "rulesTemplate": "The pool is empty, so this is a rules template: it saves, and narrower scopes open prefilled from it, but no room opens here until candidates are added.",
       "validationTitle": "Fix these before saving",
       "validation": {
-        "emptySequence": "Add at least one step to the order.",
-        "multipleDeciders": "Only one decider step is allowed.",
-        "deciderNotLast": "The decider must be the last step.",
-        "noPickOrDecider": "The order needs at least one pick or a decider.",
-        "sequenceLongerThanPool": "The order has {steps} steps but the pool only has {items} candidates.",
         "slotTooFewCandidates": "Match {slot} needs at least two candidates.",
         "roundSlotTooFewCandidates": "Round {round}, match {slot} needs at least two candidates.",
-        "heroDecider": "A hero order has no decider: nothing is left to decide once the bans are in."
+        "noPhases": "These rules have no phases, so no map would run anything.",
+        "phaseWithoutSteps": "Phase “{phase}” has no steps, so no map it covers would run anything."
       },
       "save": "Save rules",
       "saving": "Saving…",
@@ -3432,11 +3458,6 @@
       "deleteFailed": "Unable to delete the rule set",
       "summaryPool": "{count, plural, =0 {empty pool} one {# candidate} other {# candidates}}",
       "summarySlots": "{slots, plural, one {# round} other {# rounds}}, {candidates, plural, one {# candidate} other {# candidates}}",
-      "summaryOrderBracket": "Order from the bracket",
-      "summaryOrderCustom": "Custom order",
-      "summaryTimerOff": "No turn limit",
-      "summaryTimerOn": "{seconds}s per turn",
-      "orderHeroHint": "One round's worth of steps — hero bans repeat for every map of the series, so this list is replayed per map, not spread across it.",
       "scopeTreeLabel": "Scope",
       "scopeState": {
         "own": "overridden",
@@ -3447,7 +3468,7 @@
       },
       "step": {
         "pool": "Pool",
-        "sequence": "Sequence",
+        "rules": "Rules",
         "sides": "Sides"
       },
       "stepsLabel": "Configuration steps",
@@ -3460,7 +3481,298 @@
       "resetConfirmDescription": "The rules saved for “{scope}” are removed, and its matches fall back to {source}.",
       "pickScopeTitle": "Pick a scope",
       "pickScopeHint": "Choose the tournament, a stage or a round on the left to see and edit the rules its matches play by.",
-      "orderSlotsMode": "One group per match resolves its own order, so there is no series-wide list of steps to author."
+      "rulesetInvalid": "The rules have {count, plural, one {# problem} other {# problems}} the engine refuses. Open the Rules step to see them."
+    },
+    "rules": {
+      "title": "Rules",
+      "hint": "Phases decide which steps run on which map of the series. The first phase whose condition matches the map wins.",
+      "presets": "Templates",
+      "validating": "Checking the rules…",
+      "inspector": "{phase} · {action}",
+      "closeInspector": "Close",
+      "anything": "anything",
+      "anyValue": "any",
+      "noParams": "No settings.",
+      "clearCondition": "Clear",
+      "leafUnknown": "condition",
+      "sameAsScope": "Same rules as {scope}",
+      "overridesScope": "Overrides the rules of {scope}",
+      "useInherited": "Use the inherited rules",
+      "timer": "Step timer",
+      "timerOff": "no limit",
+      "timerHint": "Seconds a step allows before the timeout policy fires. Empty means no limit. A step may override it.",
+      "onTimeoutLabel": "On timeout",
+      "onTimeout": {
+        "random_fill": "Fill at random",
+        "lock_draft": "Lock what is chosen",
+        "wait": "Wait for an admin"
+      },
+      "onTimeoutHint": {
+        "random_fill": "Fills the missing choices at random and locks the step.",
+        "lock_draft": "Locks whatever the side already chose, even if it is nothing.",
+        "wait": "Nothing happens automatically; an admin unblocks the room."
+      },
+      "action": {
+        "ban": "Ban",
+        "pick": "Pick",
+        "protect": "Protect",
+        "decider": "Decider"
+      },
+      "actors": {
+        "first": "Opener",
+        "second": "Second side",
+        "both": "Both sides",
+        "home": "Home",
+        "away": "Away",
+        "winner_prev": "Winner of the previous map",
+        "loser_prev": "Loser of the previous map",
+        "system": "Engine"
+      },
+      "actorsHint": {
+        "first": "The side that opens this map, per the rotation on the Sides step.",
+        "second": "The other side of this map.",
+        "both": "Both sides act on the same step.",
+        "home": "Always the home team, whatever the rotation says.",
+        "away": "Always the away team, whatever the rotation says.",
+        "winner_prev": "The winner of the previous map; the opener on the first map.",
+        "loser_prev": "The loser of the previous map; the opener on the first map.",
+        "system": "Nobody acts: the engine rolls this step itself."
+      },
+      "summary": {
+        "open": "{count, plural, one {# item} other {# items}}",
+        "blind": "{count, plural, one {# blind} other {# blind}}",
+        "perTarget": "{count, plural, one {# per player} other {# per player}}",
+        "lifetimeMaps": "holds {count, plural, one {# map} other {# maps}}",
+        "lifetimeSeries": "holds all series"
+      },
+      "template": {
+        "ban_sequential": {
+          "label": "Sequential ban",
+          "hint": "One side bans one item, in turn."
+        },
+        "ban_blind": {
+          "label": "Simultaneous blind ban",
+          "hint": "Both sides ban at once; the choices stay private until everyone locks."
+        },
+        "ban_per_player": {
+          "label": "Ban per opponent player",
+          "hint": "Each ban names an opponent player and matches their role. The anti-one-trick shape."
+        },
+        "pick": {
+          "label": "Pick",
+          "hint": "One side picks the map this position plays."
+        },
+        "protect": {
+          "label": "Protect",
+          "hint": "One side makes an item unbannable."
+        },
+        "decider": {
+          "label": "Decider",
+          "hint": "The engine settles the last map from what is left."
+        },
+        "roulette": {
+          "label": "Roulette",
+          "hint": "The engine bans at random; nobody chooses."
+        }
+      },
+      "phase": {
+        "add": "Add phase",
+        "name": "Name of phase {n}",
+        "namePlaceholder": "Phase name",
+        "moveUp": "Move phase {n} up",
+        "moveDown": "Move phase {n} down",
+        "duplicate": "Duplicate phase {n}",
+        "remove": "Delete phase {n}",
+        "when": "Runs when",
+        "whenHint": "Which maps of the series this phase covers. Empty means every map.",
+        "poolFilter": "Pool",
+        "poolFilterHint": "Items that fail this never enter the map at all.",
+        "generator": "Generated order",
+        "generatorValue": {
+          "none": "Own steps",
+          "bracket": "Map veto from the pool",
+          "slot_veto": "Veto per map group"
+        },
+        "generatedHint": "The server builds this phase's steps from the pool and the series length.",
+        "noSteps": "No steps yet. Add one below."
+      },
+      "step": {
+        "action": "Action",
+        "actors": "Who acts",
+        "count": "Items per side",
+        "countHint": "How many items each acting side takes on this step.",
+        "min": "Required to lock",
+        "minAuto": "all of them",
+        "minHint": "Fewest items a side must choose before it can lock. Empty means all of them.",
+        "blind": "Blind",
+        "blindHint": "Drafts stay private until every acting side locks, then reveal together.",
+        "target": "Ban per opponent player",
+        "targetHint": "Each item names an opponent roster player it is banned for.",
+        "lifetime": "Ban lifetime, maps",
+        "lifetimeSeries": "rest of the series",
+        "lifetimeHint": "How many maps the ban stays active. 1 is this map only; empty is the rest of the series.",
+        "timer": "Timer override, s",
+        "timerInherit": "inherited",
+        "timerHint": "Overrides the ruleset's step timer for this step alone.",
+        "onTimeout": "On timeout",
+        "onTimeoutInherit": "Inherited",
+        "disputeMax": "Disputes allowed",
+        "disputeHint": "Lets the other captain reopen this step once it is revealed, up to this many times.",
+        "eligible": "May be chosen",
+        "eligibleHint": "Which items this step may take. Empty means anything still available.",
+        "constraints": "Constraints",
+        "addConstraint": "Add constraint",
+        "noConstraints": "No constraints.",
+        "removeConstraint": "Remove the {constraint} constraint",
+        "moveUp": "Move step {n} up",
+        "moveDown": "Move step {n} down",
+        "duplicate": "Duplicate step {n}",
+        "remove": "Delete step {n}"
+      },
+      "constraint": {
+        "one_per_target": "One ban per player",
+        "max_per_group": "At most N per group",
+        "min_per_group": "At least N of a group"
+      },
+      "leaf": {
+        "map_index": "Map number",
+        "best_of": "Series length",
+        "is_last_map": "Last map of the series",
+        "item_in": "One of these items",
+        "item_group": "Item group",
+        "target_role_match": "Matches the player's role",
+        "banned_by": "Already banned",
+        "picked_by": "Already picked"
+      },
+      "param": {
+        "op": "Comparison",
+        "value": "Value",
+        "item_ids": "Items",
+        "groups": "Groups",
+        "group": "Group",
+        "by": "By whom",
+        "scope": "Over what",
+        "max": "At most",
+        "min": "At least"
+      },
+      "paramValue": {
+        "by": {
+          "self": "This side",
+          "opponent": "The opponent",
+          "any": "Either side"
+        },
+        "scope": {
+          "series": "the whole series",
+          "round": "this map",
+          "previous_round": "the previous map",
+          "step": "this step"
+        }
+      },
+      "context": {
+        "round": "Map of the series",
+        "item": "One item",
+        "pool": "The pool"
+      },
+      "issue": {
+        "blind_system": "The engine cannot act blind.",
+        "condition_invalid": "This condition is not valid.",
+        "condition_too_deep": "This condition nests too deeply.",
+        "condition_too_large": "This condition has too many nodes.",
+        "constraint_requires_target": "This constraint only works on a step that bans per opponent player.",
+        "count_range": "Items per side must be between 1 and 20.",
+        "decider_actors": "A decider is always resolved by the engine.",
+        "decider_count": "A decider settles exactly one map.",
+        "decider_duplicate": "Only one decider is allowed.",
+        "decider_map_only": "A decider only exists in a map veto.",
+        "decider_not_last": "The decider has to be the last step.",
+        "dispute_range": "Disputes allowed must be between 0 and 5.",
+        "duplicate_phase_id": "Two phases share an id.",
+        "duplicate_step_id": "Two steps share an id.",
+        "generator_map_only": "A generated order only exists in a map veto.",
+        "generator_requires_pool_mode": "The map veto generator needs one shared pool.",
+        "generator_requires_slots_mode": "The group veto generator needs map groups.",
+        "generator_with_steps": "A generated phase cannot carry its own steps.",
+        "invalid_id": "Ids may use a-z, 0-9, - and _, up to 32 characters.",
+        "invalid_param": "This setting's value is not allowed.",
+        "leaf_context": "This condition cannot be used here.",
+        "leaf_kind": "This condition does not apply to this kind of pick-ban.",
+        "leaf_relative_in_pool": "A pool filter cannot depend on which side is acting.",
+        "leaf_requires_target": "This condition needs a step that bans per opponent player.",
+        "lifetime_ban_only": "Only a ban has a lifetime.",
+        "lifetime_range": "A ban lifetime is at least one map.",
+        "map_phase_without_pick": "This phase never settles a map: add a pick or a decider.",
+        "min_range": "The lock minimum must be between 0 and the items per side.",
+        "missing_param": "This setting is required.",
+        "name_too_long": "A phase name is at most 64 characters.",
+        "param_range": "This value is outside the allowed range.",
+        "phase_without_steps": "This phase has no steps.",
+        "phases_empty": "The rules need at least one phase.",
+        "target_action": "Only a ban can be made per opponent player.",
+        "target_hero_only": "Only hero bans can target a player.",
+        "target_system": "The engine cannot ban per opponent player.",
+        "timer_range": "A timer must be at least 5 seconds.",
+        "unknown_constraint": "Unknown constraint.",
+        "unknown_group": "Unknown group.",
+        "unknown_leaf": "Unknown condition.",
+        "unknown_param": "Unknown setting.",
+        "map_not_covered": "No phase covers this map of the series.",
+        "previous_round_on_first_map": "There is no previous map on map 1, so this falls back to the opener.",
+        "group_nearly_exhausted": "This group can be banned down to almost nothing."
+      },
+      "preset": {
+        "hero_classic": "Classic: one ban each",
+        "hero_protect_ban": "Protect, then bans",
+        "hero_blind_2": "Two blind bans each",
+        "hero_role_bans": "Three blind bans, one per role",
+        "hero_anti_one_trick": "Anti-one-trick (tournament)",
+        "map_bracket": "Standard map veto",
+        "map_slot_veto": "Veto per map group"
+      },
+      "preview": {
+        "title": "Over the series",
+        "bestOf": "Bo{bestOf}",
+        "map": "Map {n}",
+        "noPhase": "no phase covers this map",
+        "bans": "{added} new bans, {active} active · {steps, plural, one {# step} other {# steps}}",
+        "remaining": "{group}: {count} left",
+        "failed": "The preview is unavailable right now."
+      },
+      "json": {
+        "export": "Copy JSON",
+        "copied": "Rules copied.",
+        "import": "Paste JSON",
+        "importTitle": "Paste rules",
+        "importHint": "Replaces the whole rule set with the pasted one.",
+        "importFailed": "That is not a rule set. Expected JSON with \"version\": 2 and a list of phases.",
+        "cancel": "Cancel",
+        "apply": "Replace"
+      },
+      "builder": {
+        "logicGroup": "Logic",
+        "leafGroup": "Conditions",
+        "noLeaves": "No condition applies here.",
+        "outlineTitle": "Condition tree outline",
+        "outlineGroup": "{path} group {op}",
+        "searchPlaceholder": "Search…",
+        "searchLabel": "Search conditions",
+        "paletteHint": "Drag onto the canvas, or click to append to the top-level group.",
+        "paletteEmpty": "Nothing matches “{query}”.",
+        "paletteAdd": "Add {item} to the condition tree",
+        "groupName": "group {path}",
+        "operatorLabel": "Logic operator for {group}",
+        "addLeaf": "Add condition",
+        "addLeafLabel": "Add a condition inside {group}",
+        "addGroup": "Add group",
+        "addGroupLabel": "Add a nested group inside {group}",
+        "deleteGroupLabel": "Delete {group} and everything inside it",
+        "deleteLeafLabel": "Delete the {leaf} condition {path}",
+        "leafTypeLabel": "Condition type for condition {path}",
+        "leafFieldLabel": "{field} for {leaf} condition {path}",
+        "fullscreen": "Fullscreen",
+        "fullscreenLabel": "Show the condition tree fullscreen",
+        "exitFullscreen": "Exit fullscreen (Esc)",
+        "exitFullscreenLabel": "Exit fullscreen, or press Escape"
+      }
     }
   },
   "chat": {
@@ -4263,16 +4575,36 @@
       "play": "Play"
     },
     "items": {
-      "tournaments": { "title": "Tournaments" },
-      "encounters": { "title": "Encounters" },
-      "analytics": { "title": "Analytics" },
-      "users": { "title": "Players" },
-      "compare": { "title": "Compare" },
-      "heroesLeaderboard": { "title": "Heroes leaderboard" },
-      "achievements": { "title": "Achievements" },
-      "scrims": { "title": "Scrims" },
-      "mixes": { "title": "Mixes" },
-      "admin": { "title": "Admin" }
+      "tournaments": {
+        "title": "Tournaments"
+      },
+      "encounters": {
+        "title": "Encounters"
+      },
+      "analytics": {
+        "title": "Analytics"
+      },
+      "users": {
+        "title": "Players"
+      },
+      "compare": {
+        "title": "Compare"
+      },
+      "heroesLeaderboard": {
+        "title": "Heroes leaderboard"
+      },
+      "achievements": {
+        "title": "Achievements"
+      },
+      "scrims": {
+        "title": "Scrims"
+      },
+      "mixes": {
+        "title": "Mixes"
+      },
+      "admin": {
+        "title": "Admin"
+      }
     },
     "workspaces": "Workspaces",
     "switchWorkspace": "Switch workspace",
@@ -5827,7 +6159,7 @@
     },
     "pool": {
       "mapSection": "Map veto",
-      "mapSectionHint": "The order is generated from the pool and the series length: {steps, plural, =0 {no steps yet} one {# step} other {# steps}}.",
+      "mapSectionHint": "The room bans this pool down to the maps the series plays.",
       "mapsLabel": "Map pool",
       "mapsHint": "Search to narrow the list, then tap a map to add or remove it.",
       "searchMaps": "Search maps",
@@ -5924,7 +6256,6 @@
   },
   "notifications": {
     "title": "Notifications",
-    "bell": "Notifications, {count, plural, =0 {nothing unread} one {# unread} other {# unread}}",
     "newCount": "{count, plural, one {# new} other {# new}}",
     "unread": "Unread",
     "read": "Read",

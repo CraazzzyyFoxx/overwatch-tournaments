@@ -1,4 +1,4 @@
-"""Pick/ban CRUD: config, session, entry, ledger, readiness."""
+"""Pick/ban CRUD: config, session, entry, submission, readiness."""
 
 from __future__ import annotations
 
@@ -259,58 +259,55 @@ class PickBanEntryRepository(BaseRepository[models.PickBanEntry]):
         )
 
 
-class EncounterPickBanLedgerRepository(BaseRepository[models.EncounterPickBanLedger]):
-    """``encounter_pick_ban_ledger`` — cross-round already-banned memory."""
+class PickBanSubmissionRepository(BaseRepository[models.PickBanSubmission]):
+    """``pick_ban_submission`` — the action log every board state is projected from."""
 
     def __init__(self) -> None:
-        super().__init__(models.EncounterPickBanLedger)
+        super().__init__(models.PickBanSubmission)
 
-    async def list_for_encounter(
+    async def list_by_session(
         self,
         session: AsyncSession,
+        session_id: int,
         *,
-        encounter_id: int,
-        kind: Any,
-    ) -> Sequence[models.EncounterPickBanLedger]:
-        result = await session.execute(
-            self.select().where(
-                models.EncounterPickBanLedger.encounter_id == encounter_id,
-                models.EncounterPickBanLedger.kind == kind,
+        populate_existing: bool = False,
+        options: Sequence[_AbstractLoad] | None = None,
+    ) -> Sequence[models.PickBanSubmission]:
+        """Every submission of the session in replay order.
+
+        ``(step_index, attempt, side)`` IS the order the projection walks: steps in
+        sequence order, the latest attempt last, and within one attempt the sides in a
+        stable order so a blind step's duplicate merge resolves the same way on every
+        recomputation. ``populate_existing`` for callers that already mutated rows in
+        this transaction and must not be served the identity map's stale copies.
+        """
+        query = self._apply_options(
+            self.select().where(models.PickBanSubmission.session_id == session_id),
+            options,
+        )
+        query = query.order_by(
+            models.PickBanSubmission.step_index,
+            models.PickBanSubmission.attempt,
+            models.PickBanSubmission.side,
+        )
+        if populate_existing:
+            query = query.execution_options(populate_existing=True)
+        result = await session.execute(query)
+        return result.unique().scalars().all()
+
+    async def delete_for_steps_from(self, session: AsyncSession, *, session_id: int, step_index: int) -> None:
+        """Drop the log of this step and every later one.
+
+        Used when a round is rebuilt (admin correction): the steps of the scrapped
+        round are recompiled from scratch, so their submissions must go rather than
+        be re-pointed at steps that may no longer mean the same thing.
+        """
+        await session.execute(
+            sa.delete(models.PickBanSubmission).where(
+                models.PickBanSubmission.session_id == session_id,
+                models.PickBanSubmission.step_index >= step_index,
             )
         )
-        return result.scalars().all()
-
-    async def list_item_ids(
-        self,
-        session: AsyncSession,
-        *,
-        encounter_id: int,
-        kind: Any,
-        filters: Sequence[sa.ColumnElement[bool]] | None = None,
-    ) -> Sequence[int]:
-        query = sa.select(models.EncounterPickBanLedger.item_id).where(
-            models.EncounterPickBanLedger.encounter_id == encounter_id,
-            models.EncounterPickBanLedger.kind == kind,
-        )
-        query = self._apply_filters(query, filters)
-        result = await session.execute(query)
-        return result.scalars().all()
-
-    async def delete_for_encounter(
-        self,
-        session: AsyncSession,
-        *,
-        encounter_id: int,
-        kind: Any,
-        filters: Sequence[sa.ColumnElement[bool]] | None = None,
-    ) -> None:
-        statement = sa.delete(models.EncounterPickBanLedger).where(
-            models.EncounterPickBanLedger.encounter_id == encounter_id,
-            models.EncounterPickBanLedger.kind == kind,
-        )
-        if filters:
-            statement = statement.where(*filters)
-        await session.execute(statement)
 
 
 class EncounterReadinessRepository(BaseRepository[models.EncounterReadiness]):
@@ -335,7 +332,6 @@ class EncounterReadinessRepository(BaseRepository[models.EncounterReadiness]):
 
 
 __all__ = (
-    "EncounterPickBanLedgerRepository",
     "EncounterReadinessRepository",
     "PickBanConfigItemRepository",
     "PickBanConfigRepository",
@@ -343,4 +339,5 @@ __all__ = (
     "PickBanConfigSlotRepository",
     "PickBanEntryRepository",
     "PickBanSessionRepository",
+    "PickBanSubmissionRepository",
 )

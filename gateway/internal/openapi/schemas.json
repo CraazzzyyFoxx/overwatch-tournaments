@@ -7206,7 +7206,11 @@
       "summary": "List parsed matches"
     },
     "rpc.tournament.admin_pick_ban_act": {
-      "description": "Permission: workspace `match.update` on the encounter's workspace. Performs a ban, pick, or protect on behalf of the given side (admin override of the captain flow) and returns the updated pool entry.",
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Performs one ban, pick or protect on behalf of the given side (admin override of the captain flow) against the current OPEN step, optionally naming the opponent roster player a per-player ban is spent on, and returns the full room state with nothing hidden. 400 when the current step is blind \u2014 use admin_pick_ban_submit for those.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminAct"
+      },
       "summary": "Act for a side"
     },
     "rpc.tournament.admin_pick_ban_config_delete": {
@@ -7218,28 +7222,64 @@
       "summary": "List pick-ban configs"
     },
     "rpc.tournament.admin_pick_ban_config_upsert": {
-      "description": "Permission: workspace `match.update` on the tournament's workspace. Creates or replaces the pick-ban config for one (kind, tournament, stage or stage+round) cascade level after validating the step sequence and item pool.",
+      "description": "Permission: workspace `match.update` on the tournament's workspace. Creates or replaces the pick-ban config for one (kind, tournament, stage or stage+round) cascade level after validating the ruleset document and the item pool. A ruleset with validation errors is a 422 whose `details.fields[0]` carries `code: \"ruleset_invalid\"` plus an `issues` array of `{path, code, severity, message}` \u2014 the same issue objects admin_pick_ban_rules_validate returns \u2014 so the constructor can highlight the offending fields.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanConfigUpsert"
+      },
       "summary": "Upsert pick-ban config"
     },
     "rpc.tournament.admin_pick_ban_elect_opener": {
       "description": "Permission: workspace `match.update` on the encounter's workspace. Names who opens the round a `result_loser_choice` rotation is holding and appends it, on behalf of a losing captain who is unreachable; returns the new room state.",
       "summary": "Elect a round's opener for a side"
     },
+    "rpc.tournament.admin_pick_ban_reopen": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Voids the last fully revealed step's submissions and re-opens it for a fresh attempt \u2014 the organizer's version of a captain dispute, with no attempt budget and no `dispute.enabled` requirement. Returns the new room state. 400 when there is no revealed step to reopen or a later step has already been acted in.",
+      "summary": "Reopen the last revealed step"
+    },
+    "rpc.tournament.admin_pick_ban_rules_preview": {
+      "description": "Permission: workspace `match.update` on the tournament's workspace (gated like the upsert it precedes). Resolves every map of a best-of series against a candidate ruleset and the pool it would be played out of, returning per map the resolved steps, the new and cumulative active ban counts, and (hero kind) the fewest items that can be left per group \u2014 the answer to \"how many supports survive map 5\" before a tournament runs on the rules.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanRulesPreviewInput"
+      },
+      "summary": "Preview a pick-ban series"
+    },
+    "rpc.tournament.admin_pick_ban_rules_validate": {
+      "description": "Permission: workspace `match.update` on the tournament's workspace (gated like the upsert it precedes). Runs the ruleset engine over a candidate document for the given `kind`/`mode` and returns `{valid, issues}`; unlike the upsert it never errors on a bad ruleset \u2014 warnings ride along with the errors and only errors clear `valid`.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanRulesValidateInput"
+      },
+      "summary": "Validate a pick-ban ruleset"
+    },
     "rpc.tournament.admin_pick_ban_session_reset": {
       "description": "Permission: workspace `match.update` on the encounter's workspace. Drops an encounter's pick-ban session (map or hero, per the body's `kind`) and its entries, re-creates them with freshly resolved seeds and returns the new room state.",
       "summary": "Reset pick-ban session"
+    },
+    "rpc.tournament.admin_pick_ban_submit": {
+      "description": "Permission: workspace `match.update` on the encounter's workspace. Replaces one side's draft on a BLIND step on behalf of an absent captain and, with `lock: true`, locks it; every side locked reveals the step. Returns the full room state with nothing hidden. 400 when the current step is not blind, when the side already locked, or when the items break the step's rules.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminSubmit"
+      },
+      "summary": "Submit a blind draft for a side"
     },
     "rpc.tournament.captain_my_role": {
       "description": "Permission: authenticated user; self-service \u2014 the answer is only about the caller's own captaincy. Returns the calling user's captain side (home/away) for an encounter, or null if they are not a captain.",
       "summary": "Get my captain side"
     },
     "rpc.tournament.captain_pick_ban_act": {
-      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Applies one ban, pick or protect to the encounter's live pick/ban session of the given `kind`, under the session's row lock, and returns the resulting pool entry. Only allowed on the caller's own turn: acting out of turn, sending the wrong action for the current step, naming an item that is not a candidate this round, or re-banning something this side already banned earlier in the series is a 400, as is a session that is not initialized or no longer active.",
+      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Applies one ban, pick or protect to the encounter's live pick/ban session of the given `kind`, under the session's row lock, and returns the caller's new room state. OPEN steps only: a blind step is a 400 that says to use the submit route. Acting when the caller's side does not owe the current step, sending the wrong action for it, naming an item the step's rules do not allow, or omitting the opponent player a per-player ban must name is a 400, as is a session that is not initialized or no longer active.",
       "request": {
         "array": false,
         "ref": "tournament.PickBanActionInput"
       },
       "summary": "Ban, pick or protect"
+    },
+    "rpc.tournament.captain_pick_ban_dispute": {
+      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Unilateral, no opponent consent: voids the last fully revealed BLIND step and re-opens it for a fresh attempt with each side's previous items prefilled, so a captain who named the wrong opponent player can redo it. Allowed only while that step's `dispute` is enabled, its attempt budget is not spent, no later step has been acted in, and the map that round settled has no result yet; anything else is a 400. Returns the caller's new room state.",
+      "summary": "Dispute the last revealed step"
     },
     "rpc.tournament.captain_pick_ban_elect_opener": {
       "description": "Permission: authenticated user who captains one of the encounter's two teams, and only the side that LOST the previous round may choose (403 otherwise). Resolves a round the `result_loser_choice` rotation is holding by naming which side opens it, then appends that round and returns the session. 400 when no round is awaiting a choice. An organizer overrides an unreachable captain through admin_pick_ban_elect_opener.",
@@ -7250,8 +7290,16 @@
       "summary": "Elect the next round's opener"
     },
     "rpc.tournament.captain_pick_ban_state": {
-      "description": "Permission: public; no authentication required \u2014 gated only by the tournament's visibility rule. Returns the live pick/ban room for an encounter and the `kind` path segment ('map' or 'hero', 422 otherwise): the resolved sequence, the candidate pool, whose turn it is, both sides' readiness, any open undo request, and for maps the captains' per-map result claims. A captain additionally gets their own side annotated. When no session can exist yet the payload names why (teams unknown, bracket still a preview, no pick-ban configured, slot count mismatch, sides not ready, waiting on the map round) instead of erroring.",
+      "description": "Permission: public; no authentication required \u2014 gated only by the tournament's visibility rule. Returns the live pick/ban room for an encounter and the `kind` path segment ('map' or 'hero', 422 otherwise): the resolved steps, the candidate pool, which sides still owe the current step, both sides' readiness, any open undo request, and for maps the captains' per-map result claims. A captain additionally gets their own side annotated, their eligible items, why their draft cannot be locked yet, and their own unrevealed draft \u2014 a blind step never serializes the other side's. When no session can exist yet the payload names why (teams unknown, bracket still a preview, no pick-ban configured, slot count mismatch, sides not ready, waiting on the map round) instead of erroring.",
       "summary": "Get pick-ban room state"
+    },
+    "rpc.tournament.captain_pick_ban_submit": {
+      "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Replaces the caller's whole draft for the current BLIND step and, with `lock: true`, locks it \u2014 a locked submission is final, and once every acting side has locked the step reveals for both. Returns the caller's new room state; while the step is unrevealed it carries the caller's own items and only the opponent's progress counts. 400 when the current step is not blind, when the caller already locked, or when the items break the step's rules (the reasons are also listed in the state's `draft_issues`).",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanSubmitInput"
+      },
+      "summary": "Submit a blind draft"
     },
     "rpc.tournament.captain_pick_ban_undo": {
       "description": "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Records the calling captain's consent to undo the session's last action and applies it the moment the opposing captain consents too; `consent=false` withdraws an open request (either side may). Returns the resulting undo block. 400 when the session is not initialized or cancelled, when there is nothing left to undo, or when the target is a map pick whose hero round has already started -- undo those hero actions first.",
@@ -8861,6 +8909,10 @@
         "ref": "tournament.LookupItem"
       },
       "summary": "Lookup tournaments"
+    },
+    "rpc.tournament.pick_ban_rules_catalog": {
+      "description": "Permission: public; no authentication required \u2014 the catalog describes the rules ENGINE (which condition leaves and constraints exist, what parameters they take, which item groups are selectable per kind) plus the built-in presets, not anyone's tournament. The pick-ban constructor loads it before a config exists to attach it to.",
+      "summary": "Get the pick-ban ruleset catalog"
     },
     "rpc.tournament.preview_access_add": {
       "description": "Permission: workspace `owner`/`admin` role on the tournament's workspace (403 otherwise). Allowlists one account (body `auth_user_id`, 422 when absent) to view a tournament before it is public and invalidates the cached tournament read so the change lands immediately.",
@@ -41065,7 +41117,7 @@
       "type": "object"
     },
     "tournament.PickBanActionInput": {
-      "description": "One ban/pick/protect against a hero- or map-kind pick-ban session.",
+      "description": "One ban/pick/protect against an OPEN (non-blind) step of a hero- or\nmap-kind pick-ban session. ``target_player_id`` is required exactly when\nthe step names an opponent roster player (``step.target``).",
       "properties": {
         "action": {
           "title": "Action",
@@ -41074,6 +41126,18 @@
         "item_id": {
           "title": "Item Id",
           "type": "integer"
+        },
+        "target_player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Player Id"
         }
       },
       "required": [
@@ -41081,6 +41145,187 @@
         "action"
       ],
       "title": "PickBanActionInput",
+      "type": "object"
+    },
+    "tournament.PickBanAdminAct": {
+      "description": "Body for the admin act-for-a-side route: perform one step on behalf of\nan absent captain. ``target_player_id`` names the opponent roster player a\nper-player ban is spent on (ruleset v2 target steps); ``null`` everywhere\nelse.",
+      "properties": {
+        "action": {
+          "enum": [
+            "pick",
+            "ban",
+            "protect"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "target_player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Player Id"
+        }
+      },
+      "required": [
+        "kind",
+        "side",
+        "item_id",
+        "action"
+      ],
+      "title": "PickBanAdminAct",
+      "type": "object"
+    },
+    "tournament.PickBanAdminSubmit": {
+      "description": "Body for the admin submit-for-a-side route: replace a BLIND step's draft\non behalf of a captain who is not there to author it. Items reuse the\ncaptain schema so the two surfaces cannot drift.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PickBanSubmissionItemInput"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "lock": {
+          "default": false,
+          "title": "Lock",
+          "type": "boolean"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Side",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "side"
+      ],
+      "title": "PickBanAdminSubmit",
+      "type": "object"
+    },
+    "tournament.PickBanConfigSlotUpsert": {
+      "description": "One slot of a slot-mode upsert body. No ``position``: list order IS the\nplay order (same rationale as ``veto_admin.VetoConfigSlotUpsert``).",
+      "properties": {
+        "candidates": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "reserve_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reserve Item Id"
+        }
+      },
+      "required": [
+        "candidates"
+      ],
+      "title": "PickBanConfigSlotUpsert",
+      "type": "object"
+    },
+    "tournament.PickBanConfigUpsert": {
+      "description": "Body for the generic pick-ban config upsert route (ruleset v2).",
+      "properties": {
+        "first_ban_rotation": {
+          "$ref": "#/components/schemas/tournament.FirstBanRotation",
+          "default": "fixed"
+        },
+        "first_pick_rule": {
+          "$ref": "#/components/schemas/tournament.FirstPickRule",
+          "default": "higher_seed"
+        },
+        "item_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Item Ids",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/tournament.MapVetoMode"
+        },
+        "round": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Round"
+        },
+        "ruleset": {
+          "additionalProperties": true,
+          "title": "Ruleset",
+          "type": "object"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PickBanConfigSlotUpsert"
+          },
+          "title": "Slots",
+          "type": "array"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Id"
+        }
+      },
+      "required": [
+        "kind",
+        "mode",
+        "ruleset"
+      ],
+      "title": "PickBanConfigUpsert",
       "type": "object"
     },
     "tournament.PickBanKind": {
@@ -41092,15 +41337,117 @@
       "title": "PickBanKind",
       "type": "string"
     },
-    "tournament.PickBanNoRepeatScope": {
-      "description": "Cross-round BAN memory rule for :class:`EncounterPickBanLedger`\nexclusion. Protects are never recorded there, so they neither exclude nor\nare excluded by anything under any scope.\n\n``NONE``: no cross-round memory (today's flat/slot veto behavior).\n``ENCOUNTER``: an item banned by EITHER side, anywhere earlier in this\nencounter's series, is excluded from every later round's pool.\n``ENCOUNTER_SAME_SIDE``: excluded only for the side that banned it; the\nopponent may still target it.",
-      "enum": [
-        "none",
-        "encounter",
-        "encounter_same_side"
+    "tournament.PickBanRulesPreviewInput": {
+      "description": "Body for the constructor's series preview: the rules plus the pool they\nwould be played out of, since \"how many supports survive map 5\" is only\nanswerable against real items.",
+      "properties": {
+        "best_of": {
+          "default": 3,
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Best Of",
+          "type": "integer"
+        },
+        "item_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Item Ids",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/tournament.MapVetoMode",
+          "default": "pool"
+        },
+        "ruleset": {
+          "additionalProperties": true,
+          "title": "Ruleset",
+          "type": "object"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PickBanConfigSlotUpsert"
+          },
+          "title": "Slots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "ruleset"
       ],
-      "title": "PickBanNoRepeatScope",
-      "type": "string"
+      "title": "PickBanRulesPreviewInput",
+      "type": "object"
+    },
+    "tournament.PickBanRulesValidateInput": {
+      "description": "Body for the constructor's live validation: a ruleset in the shape it\nwould be saved at, without the pool or the cascade coordinates.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "mode": {
+          "$ref": "#/components/schemas/tournament.MapVetoMode",
+          "default": "pool"
+        },
+        "ruleset": {
+          "additionalProperties": true,
+          "title": "Ruleset",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "ruleset"
+      ],
+      "title": "PickBanRulesValidateInput",
+      "type": "object"
+    },
+    "tournament.PickBanSubmissionItemInput": {
+      "description": "One item of a blind draft: what is chosen, and for whom on a target step.",
+      "properties": {
+        "item_id": {
+          "title": "Item Id",
+          "type": "integer"
+        },
+        "target_player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Player Id"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "title": "PickBanSubmissionItemInput",
+      "type": "object"
+    },
+    "tournament.PickBanSubmitInput": {
+      "description": "A blind step's whole draft, replacing whatever the side had. ``lock``\nvalidates it in full and makes it final \u2014 the step reveals once every\nacting side has locked.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PickBanSubmissionItemInput"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "lock": {
+          "default": false,
+          "title": "Lock",
+          "type": "boolean"
+        }
+      },
+      "title": "PickBanSubmitInput",
+      "type": "object"
     },
     "tournament.PickBanUndoInput": {
       "description": "One captain's consent to undo the session's last action. ``consent=False``\nwithdraws an open request \u2014 the asker changing their mind and the opponent\nrefusing are the same outcome, so they share one field.",
@@ -43896,11 +44243,6 @@
     },
     "tournament.ScrimPoolConfigInput": {
       "properties": {
-        "allow_protect": {
-          "default": false,
-          "title": "Allow Protect",
-          "type": "boolean"
-        },
         "first_ban_rotation": {
           "$ref": "#/components/schemas/tournament.FirstBanRotation",
           "default": "fixed"
@@ -43923,29 +44265,10 @@
           "$ref": "#/components/schemas/tournament.MapVetoMode",
           "default": "pool"
         },
-        "no_repeat_scope": {
-          "$ref": "#/components/schemas/tournament.PickBanNoRepeatScope",
-          "default": "none"
-        },
-        "preset": {
-          "anyOf": [
-            {
-              "maxLength": 32,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Preset"
-        },
-        "sequence": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Sequence",
-          "type": "array"
+        "ruleset": {
+          "additionalProperties": true,
+          "title": "Ruleset",
+          "type": "object"
         },
         "slots": {
           "items": {
@@ -43953,36 +44276,11 @@
           },
           "title": "Slots",
           "type": "array"
-        },
-        "turn_timer_seconds": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Turn Timer Seconds"
-        },
-        "unique_attribute_per_side_per_round": {
-          "anyOf": [
-            {
-              "maxLength": 32,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Unique Attribute Per Side Per Round"
         }
       },
       "required": [
-        "kind"
+        "kind",
+        "ruleset"
       ],
       "title": "ScrimPoolConfigInput",
       "type": "object"

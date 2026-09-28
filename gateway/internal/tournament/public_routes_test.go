@@ -71,3 +71,58 @@ func TestRequireIDWorkersUseIDParam(t *testing.T) {
 		}
 	}
 }
+
+// TestPickBanV2RouteContracts pins the surface ruleset v2 added
+// (docs/plans/2026-09-28-pick-ban-constructor.md §8). A missing or mis-shaped
+// entry here is a 404 or a 422 in the live pick-ban room, which is exactly
+// where nobody can afford one: the captain writes must carry the `kind` path
+// segment AND a body, and the admin probes must hand the worker `data["id"]`.
+func TestPickBanV2RouteContracts(t *testing.T) {
+	type want struct {
+		method  string
+		idParam string
+		path    []string
+		body    bool
+		auth    edge.AuthMode
+	}
+	captain := want{method: "POST", idParam: "encounter_id", path: []string{"kind"}, body: true, auth: edge.AuthRequired}
+	adminEncounter := want{method: "POST", idParam: "encounter_id", body: true, auth: edge.AuthRequired}
+	adminTournament := want{method: "POST", idParam: "tournament_id", body: true, auth: edge.AuthRequired}
+	expected := map[string]want{
+		"rpc.tournament.captain_pick_ban_submit":       captain,
+		"rpc.tournament.captain_pick_ban_dispute":      captain,
+		"rpc.tournament.pick_ban_rules_catalog":        {method: "GET", auth: edge.AuthOptional},
+		"rpc.tournament.admin_pick_ban_submit":         adminEncounter,
+		"rpc.tournament.admin_pick_ban_reopen":         adminEncounter,
+		"rpc.tournament.admin_pick_ban_rules_validate": adminTournament,
+		"rpc.tournament.admin_pick_ban_rules_preview":  adminTournament,
+	}
+
+	seen := map[string]bool{}
+	for _, table := range [][]edge.RouteSpec{PublicWriteRoutes, AdminMiscRoutes} {
+		for _, r := range table {
+			exp, ok := expected[r.Queue]
+			if !ok {
+				continue
+			}
+			seen[r.Queue] = true
+			if r.Method != exp.method || r.IDParam != exp.idParam || r.Body != exp.body || r.Auth != exp.auth {
+				t.Errorf("%s: unexpected contract %#v", r.Queue, r)
+			}
+			if len(r.Path) != len(exp.path) {
+				t.Errorf("%s: Path=%v, want %v", r.Queue, r.Path, exp.path)
+				continue
+			}
+			for i := range exp.path {
+				if r.Path[i] != exp.path[i] {
+					t.Errorf("%s: Path=%v, want %v", r.Queue, r.Path, exp.path)
+				}
+			}
+		}
+	}
+	for q := range expected {
+		if !seen[q] {
+			t.Errorf("route %s is not registered", q)
+		}
+	}
+}

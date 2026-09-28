@@ -318,14 +318,16 @@ export interface Standings {
   matches_history: Encounter[];
 }
 
-// ─── Generic pick-ban engine (map + hero) ───────────────────────────────────
+// ─── Generic pick-ban engine (map + hero), ruleset v2 ───────────────────────
 //
-// Mirrors backend `PickBanSession`/`PickBanEntry`/`build_pick_ban_state`.
-
+// Mirrors backend `PickBanSession`/`PickBanEntry`/`PickBanSubmission` and the
+// state builder. Design + semantics: docs/plans/2026-09-28-pick-ban-constructor.md.
 
 export type PickBanKind = "map" | "hero";
 export type PickBanAction = "ban" | "pick" | "protect";
+export type PickBanStepAction = PickBanAction | "decider";
 export type PickBanEntryStatus = "available" | "picked" | "banned" | "protected";
+export type PickBanSide = "home" | "away";
 
 export interface PickBanEntry {
   id: number;
@@ -337,6 +339,148 @@ export interface PickBanEntry {
   protected_by: "home" | "away" | null;
   status: PickBanEntryStatus;
   team_id: number | null;
+  /** Set when this entry is an active ban carried over from an earlier round
+   * (the ban's `lifetime` still covers this map). Fixed: never undone here. */
+  carried_from_round: number | null;
+}
+
+// ─── Ruleset (the constructor's document) ───────────────────────────────────
+
+/** Achievements-style condition tree: `{}` is "always true". */
+export type PickBanCondition =
+  | Record<string, never>
+  | { AND: PickBanCondition[] }
+  | { OR: PickBanCondition[] }
+  | { NOT: PickBanCondition }
+  | { type: string; params: Record<string, unknown> };
+
+export interface PickBanConstraint {
+  type: string;
+  params: Record<string, unknown>;
+}
+
+export type PickBanActors =
+  | "first"
+  | "second"
+  | "both"
+  | "home"
+  | "away"
+  | "winner_prev"
+  | "loser_prev"
+  | "system";
+export type PickBanTimeoutPolicy = "random_fill" | "lock_draft" | "wait";
+export type PickBanStepTarget = "opponent_player";
+export type PickBanGenerator = "bracket" | "slot_veto";
+
+export interface PickBanDisputeRule {
+  enabled: boolean;
+  /** How many times a revealed step may be reopened. */
+  max: number;
+}
+
+export interface PickBanRulesetStep {
+  id: string;
+  action: PickBanStepAction;
+  actors: PickBanActors;
+  /** Items per acting side. */
+  count: number;
+  /** Items required to lock; null = `count`. */
+  min: number | null;
+  /** Drafts stay private until every acting side locked. */
+  blind: boolean;
+  target: PickBanStepTarget | null;
+  /** Ban only: maps the ban stays active (1 = this map only); null = rest of series. */
+  lifetime: number | null;
+  /** null = inherit `PickBanRuleset.timer_seconds`. */
+  timer_seconds: number | null;
+  /** null = inherit `PickBanRuleset.on_timeout`. */
+  on_timeout: PickBanTimeoutPolicy | null;
+  dispute: PickBanDisputeRule;
+  eligible: PickBanCondition;
+  constraints: PickBanConstraint[];
+}
+
+export interface PickBanRulesetPhase {
+  id: string;
+  name: string | null;
+  when: PickBanCondition;
+  pool_filter: PickBanCondition;
+  /** Map kind only; when set, `steps` is empty. */
+  generator: PickBanGenerator | null;
+  steps: PickBanRulesetStep[];
+}
+
+export interface PickBanRuleset {
+  version: 2;
+  timer_seconds: number | null;
+  on_timeout: PickBanTimeoutPolicy;
+  phases: PickBanRulesetPhase[];
+}
+
+/** One step as the session resolved it for a concrete round (`resolved_sequence_json`). */
+export interface PickBanResolvedStep {
+  index: number;
+  round: number | null;
+  phase_id: string;
+  step_id: string;
+  action: PickBanStepAction;
+  /** `["system"]` for engine-resolved steps; `both` resolves to `[opener, other]`. */
+  sides: (PickBanSide | "system")[];
+  count: number;
+  min: number;
+  blind: boolean;
+  target: PickBanStepTarget | null;
+  lifetime: number | null;
+  timer_seconds: number | null;
+  on_timeout: PickBanTimeoutPolicy;
+  dispute: PickBanDisputeRule;
+  eligible: PickBanCondition;
+  constraints: PickBanConstraint[];
+}
+
+export interface PickBanSubmissionItem {
+  item_id: number;
+  target_player_id: number | null;
+}
+
+export type PickBanSubmissionState = "draft" | "locked" | "revealed";
+
+/** A submission the viewer may see: revealed ones, any of an open step, and the viewer's own drafts. */
+export interface PickBanSubmission {
+  step_index: number;
+  side: PickBanSide | "system";
+  attempt: number;
+  state: PickBanSubmissionState;
+  items: PickBanSubmissionItem[];
+}
+
+/** An opponent roster player a target step bans "for". */
+export interface PickBanTarget {
+  player_id: number;
+  name: string;
+  role: "tank" | "damage" | "support" | "flex" | null;
+  sub_role: string | null;
+  is_substitution: boolean;
+}
+
+export interface PickBanStepProgress {
+  locked: boolean;
+  /** Item count, reported even while the draft itself is hidden. */
+  filled: number;
+}
+
+export interface PickBanEligible {
+  item_ids: number[];
+  /** Keyed by `PickBanTarget.player_id` when the step has a target. */
+  by_target: Record<string, number[]> | null;
+}
+
+export interface PickBanDisputeState {
+  /** Whether the VIEWER may reopen `step_index` right now. */
+  available: boolean;
+  step_index: number | null;
+  attempts_used: number;
+  max: number;
 }
 
 export interface PickBanSession {
@@ -351,7 +495,6 @@ export interface PickBanSession {
   seed_source: VetoSeedSource;
   home_seed: number | null;
   away_seed: number | null;
-  turn_timer_seconds: number | null;
   /**
    * The reserve item each in-play slot named, snapshotted when the session
    * was created — same string-keyed-by-position contract as
@@ -425,20 +568,23 @@ export interface PickBanSeries {
 }
 
 /**
- * What both captains could agree to take back right now (`undo_state`).
+ * What both captains could agree to take back right now (`undo_state`): the
+ * latest step with an applied captain item, plus every later step (a decider
+ * resolved off its back, drafts of the step after it).
  *
  * `item_ids` empty means nothing is undoable — the only signal needed to decide
- * whether the affordance exists. It can hold more than one id: a `decider` the
- * engine resolved off the back of the action is reverted with it, since undoing
- * the action alone would have the next read resolve the decider straight back.
+ * whether the affordance exists.
  */
 export interface PickBanUndo {
   /** The side that already asked; null while nobody has, or once it landed. */
   requested_by: "home" | "away" | null;
-  /** Everything the undo reverts, in the order it was committed. */
+  /** The resolved step the undo reopens. */
+  step_index: number | null;
+  /** Everything the undo reverts, in the order it was applied. */
   item_ids: number[];
-  /** The primary action — the one a captain actually took. */
+  /** The reopened step's action. */
   action: PickBanAction | null;
+  /** The step's single acting side; null for a multi-side step. */
   side: "home" | "away" | "decider" | null;
 }
 
@@ -450,17 +596,32 @@ export interface PickBanState {
    * encounter's pre-game phase — set regardless of `session`, so the room
    * can render "waiting for the other captain" even before a session exists. */
   readiness: { home: boolean; away: boolean };
-  sequence: string[];
+  sequence: PickBanResolvedStep[];
   pool: PickBanEntry[];
+  /** Visible submissions: revealed ones, any of an open step, the viewer's own drafts. */
+  submissions: PickBanSubmission[];
   viewer_side: "home" | "away" | null;
   viewer_can_act: boolean;
   allowed_actions: PickBanAction[];
   current_step_index: number | null;
-  current_step: string | null;
-  expected_action: PickBanAction | "decider" | null;
-  turn_side: "home" | "away" | null;
+  current_step: PickBanResolvedStep | null;
+  expected_action: PickBanStepAction | null;
+  /** Non-system sides of the current step that have not locked yet. */
+  acting_sides: PickBanSide[];
+  /** Per side of the current step; null when no step is in play. */
+  step_progress: Partial<Record<PickBanSide, PickBanStepProgress>> | null;
+  /** ISO deadline of the current step's timer; null = no timer. */
+  step_deadline: string | null;
   current_round: number | null;
   is_complete: boolean;
+  /** What the VIEWER may choose on the current step; null when they cannot act. */
+  eligible: PickBanEligible | null;
+  /** Why the viewer's current draft cannot be locked yet; empty = lockable. */
+  draft_issues: string[];
+  /** Roster players per team when any resolved step targets a player. `home`
+   * are the home team's players — the ones the away side bans for. */
+  targets: { home: PickBanTarget[]; away: PickBanTarget[] } | null;
+  dispute: PickBanDisputeState;
   /**
    * One entry per position of the series, `kind: "map"` only (a hero session
    * has no results of its own). Drives the loop's third phase: a map is
@@ -471,43 +632,12 @@ export interface PickBanState {
   games?: PickBanGame[];
   /** The live series score over those games, and the official one once set. */
   series?: PickBanSeries;
-  /**
-   * The configured attribute-uniqueness rule (`"role"` or null), from
-   * `PickBanConfig.unique_attribute_per_side_per_round`. The room greys out what
-   * it forbids the side on the clock — see `attributeLocks`.
-   */
-  unique_attribute?: string | null;
-  /**
-   * Items the side on the clock may no longer BAN, because it already banned
-   * them earlier in this series. Non-empty only under
-   * `PickBanConfig.no_repeat_scope = "encounter_same_side"`, the one scope that
-   * leaves them in the pool (one pool, two sides, only one of them barred) —
-   * the room greys them out instead of letting a captain find out from the 400.
-   */
-  repeat_banned?: number[];
-  /** Never absent in practice; optional for the same reason `games` is —
-   * a client reading an older payload must not crash on its absence. */
-  undo?: PickBanUndo;
+  undo: PickBanUndo;
 }
-
-/** Side-agnostic step tokens, adds `protect_*` to the legacy veto vocabulary. */
-export type PickBanSequenceToken =
-  | "ban_first"
-  | "ban_second"
-  | "pick_first"
-  | "pick_second"
-  | "protect_first"
-  | "protect_second"
-  | "decider";
 
 /** Only `"higher_seed"` exists today; kept as a union (not a literal) since
  * the backend models it as an extensible enum. */
 type PickBanFirstPickRule = "higher_seed";
-/** Cross-round BAN memory only — a protect is round-local and never recorded,
- * so it neither excludes nor is excluded. `encounter_same_side` excludes an
- * item only for the side that banned it — the opponent may still target it.
- * `encounter` excludes it for BOTH sides once anyone has. */
-export type PickBanNoRepeatScope = "none" | "encounter" | "encounter_same_side";
 /**
  * Wider than the legacy veto config's `FirstBanRotation` (`fixed`|`alternate`
  * only, backed by its own narrower `tournament.firstbanrotation` PG enum) —
@@ -534,17 +664,7 @@ export interface PickBanConfig {
   mode: MapVetoMode;
   first_pick_rule: PickBanFirstPickRule;
   first_ban_rotation: PickBanFirstBanRotation;
-  turn_timer_seconds: number | null;
-  preset: string | null;
-  sequence: PickBanSequenceToken[];
-  no_repeat_scope: PickBanNoRepeatScope;
-  /**
-   * Only `"role"` is implemented server-side today; null disables the check.
-   * Scoped per action kind: a side's bans constrain its bans and its protects
-   * constrain its protects, never each other.
-   */
-  unique_attribute_per_side_per_round: string | null;
-  allow_protect: boolean;
+  ruleset: PickBanRuleset;
   item_ids: number[];
   slots: PickBanConfigSlot[];
 }
@@ -556,12 +676,81 @@ export interface PickBanConfigUpsertInput {
   mode: MapVetoMode;
   first_pick_rule?: PickBanFirstPickRule;
   first_ban_rotation?: PickBanFirstBanRotation;
-  preset?: string | null;
-  turn_timer_seconds?: number | null;
-  no_repeat_scope?: PickBanNoRepeatScope;
-  unique_attribute_per_side_per_round?: string | null;
-  allow_protect?: boolean;
-  sequence?: PickBanSequenceToken[];
+  ruleset: PickBanRuleset;
   item_ids?: number[];
   slots?: { candidates: number[]; reserve_item_id?: number | null }[];
+}
+
+// ─── Constructor catalog / validation / preview ─────────────────────────────
+
+export type PickBanConditionContext = "round" | "item" | "pool";
+
+export interface PickBanParamSpec {
+  name: string;
+  kind: "enum" | "int" | "bool" | "item_list" | "group_list" | "group";
+  required: boolean;
+  values: string[] | null;
+  min: number | null;
+  max: number | null;
+  nullable: boolean;
+}
+
+export interface PickBanLeafSpec {
+  type: string;
+  contexts: PickBanConditionContext[];
+  kinds: PickBanKind[];
+  params: PickBanParamSpec[];
+  /** Only valid in a step that has a `target`. */
+  requires_target: boolean;
+  /** Reads the acting side (`self`/`opponent`): not usable in a pool filter. */
+  relative: boolean;
+}
+
+export interface PickBanConstraintSpec {
+  type: string;
+  params: PickBanParamSpec[];
+  requires_target: boolean;
+}
+
+export interface PickBanPreset {
+  id: string;
+  kind: PickBanKind;
+  modes: MapVetoMode[];
+  ruleset: PickBanRuleset;
+}
+
+export interface PickBanRulesCatalog {
+  leaves: PickBanLeafSpec[];
+  constraints: PickBanConstraintSpec[];
+  groups: { hero: string[]; map: string[] };
+  presets: PickBanPreset[];
+}
+
+export interface PickBanRulesIssue {
+  /** JSON-ish path, e.g. `phases[1].steps[0].count`. */
+  path: string;
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+}
+
+export interface PickBanRulesValidation {
+  valid: boolean;
+  issues: PickBanRulesIssue[];
+}
+
+export interface PickBanPreviewMap {
+  map_index: number;
+  /** null when no phase matches this map. */
+  phase_id: string | null;
+  steps: PickBanResolvedStep[];
+  max_new_bans: number;
+  max_active_bans: number;
+  /** Hero kind: per role, the fewest heroes that can be left; null for maps. */
+  worst_case_remaining: Record<string, number> | null;
+}
+
+export interface PickBanRulesPreview {
+  maps: PickBanPreviewMap[];
+  issues: PickBanRulesIssue[];
 }

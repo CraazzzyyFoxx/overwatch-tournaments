@@ -1,13 +1,19 @@
 """Generic pick-ban admin methods over typed RPC (``PickBanConfig`` CRUD for
-both ``map`` and ``hero`` kinds).
+both ``map`` and ``hero`` kinds, plus the live-session organizer overrides).
 
 Mirrors ``veto_admin.py``'s FORMER upsert/list/delete shape exactly — same
 cascade key ``(tournament_id, stage_id, round)``, now additionally
 partitioned by ``kind`` (design: docs/plans/2026-08-09-generic-pickban-engine.md)
 — plus a ``kind`` field on every route so one admin surface configures both
 map veto and hero bans. Since the map-veto cutover, this IS the sole config
-CRUD surface for both kinds; ``veto_admin.py`` keeps only the two
-live-session operations (reset/act) that have no pick-ban equivalent.
+CRUD surface for both kinds.
+
+Ruleset v2 (docs/plans/2026-09-28-pick-ban-constructor.md) replaced the flat
+token sequence with a rules DOCUMENT, so this module also carries the two
+constructor-support ops — ``rules_validate`` and ``rules_preview`` — which
+answer "would this save?" and "what would a Bo5 look like?" without writing
+anything. They are gated exactly like the upsert they precede: an organizer
+who may not save a config may not probe the engine with one either.
 """
 
 from __future__ import annotations
@@ -17,7 +23,6 @@ from typing import Any, Literal
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from shared.core import http_status as status
 from shared.core.enums import (
@@ -25,28 +30,21 @@ from shared.core.enums import (
     FirstPickRule,
     MapVetoMode,
     PickBanKind,
-    PickBanNoRepeatScope,
 )
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.tournament.pick_ban import (
-    PickBanConfig,
-    PickBanConfigSlot,
-)
+from shared.domain import pick_ban_rules as pbr
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from src import models
 from src.core import auth
 from src.rpc._helpers import _identity, _path_int, _payload, _require_id, _run
+from src.schemas import captain as captain_schemas
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter import pick_ban_config
 from src.services.encounter import pick_ban_session as pick_ban_session
 from src.services.encounter.game_correction import game_correction_service
 
-_CONFIG_LOAD = (
-    selectinload(PickBanConfig.items),
-    selectinload(PickBanConfig.slots).selectinload(PickBanConfigSlot.items),
-)
-_serialize_config = pick_ban_session.serialize_pick_ban_config
+_serialize_config = pick_ban_config.serialize_pick_ban_config
 
 
 async def _load_encounter(session: Any, encounter_id: int) -> models.Encounter:
@@ -80,13 +78,34 @@ class PickBanAdminReset(BaseModel):
 
 class PickBanAdminAct(BaseModel):
     """Body for the admin act-for-a-side route: perform one step on behalf of
-    an absent captain. Generalizes ``veto_admin.AdminVetoAct`` with ``kind``
-    and the ``protect`` action the generic engine adds."""
+    an absent captain. ``target_player_id`` names the opponent roster player a
+    per-player ban is spent on (ruleset v2 target steps); ``null`` everywhere
+    else."""
 
     kind: PickBanKind
     side: Literal["home", "away"]
     item_id: int
     action: Literal["pick", "ban", "protect"]
+    target_player_id: int | None = None
+
+
+class PickBanAdminSubmit(BaseModel):
+    """Body for the admin submit-for-a-side route: replace a BLIND step's draft
+    on behalf of a captain who is not there to author it. Items reuse the
+    captain schema so the two surfaces cannot drift."""
+
+    kind: PickBanKind
+    side: Literal["home", "away"]
+    items: list[captain_schemas.PickBanSubmissionItemInput] = Field(default_factory=list)
+    lock: bool = False
+
+
+class PickBanAdminReopen(BaseModel):
+    """Body for the admin reopen route: re-open the last revealed step for a
+    fresh attempt. The organizer's version of a captain dispute -- no attempt
+    budget, no ``dispute.enabled`` requirement."""
+
+    kind: PickBanKind
 
 
 class PickBanAdminElectOpener(BaseModel):
@@ -117,7 +136,7 @@ class PickBanConfigSlotUpsert(BaseModel):
 
 
 class PickBanConfigUpsert(BaseModel):
-    """Body for the generic pick-ban config upsert route."""
+    """Body for the generic pick-ban config upsert route (ruleset v2)."""
 
     kind: PickBanKind
     stage_id: int | None = None
@@ -125,14 +144,44 @@ class PickBanConfigUpsert(BaseModel):
     mode: MapVetoMode
     first_pick_rule: FirstPickRule = FirstPickRule.HIGHER_SEED
     first_ban_rotation: FirstBanRotation = FirstBanRotation.FIXED
-    preset: str | None = Field(default=None, max_length=32)
-    turn_timer_seconds: int | None = Field(default=None, ge=1)
-    no_repeat_scope: PickBanNoRepeatScope = PickBanNoRepeatScope.NONE
-    unique_attribute_per_side_per_round: str | None = Field(default=None, max_length=32)
-    allow_protect: bool = False
-    sequence: list[str] = Field(default_factory=list)
+    ruleset: dict[str, Any]
     item_ids: list[int] = Field(default_factory=list)
     slots: list[PickBanConfigSlotUpsert] = Field(default_factory=list)
+
+
+class PickBanRulesValidateInput(BaseModel):
+    """Body for the constructor's live validation: a ruleset in the shape it
+    would be saved at, without the pool or the cascade coordinates."""
+
+    kind: PickBanKind
+    mode: MapVetoMode = MapVetoMode.POOL
+    ruleset: dict[str, Any]
+
+
+class PickBanRulesPreviewInput(PickBanRulesValidateInput):
+    """Body for the constructor's series preview: the rules plus the pool they
+    would be played out of, since "how many supports survive map 5" is only
+    answerable against real items."""
+
+    best_of: int = Field(default=3, ge=1, le=9)
+    item_ids: list[int] = Field(default_factory=list)
+    slots: list[PickBanConfigSlotUpsert] = Field(default_factory=list)
+
+
+def _pool_item_ids(mode: MapVetoMode, item_ids: list[int], slots: list[PickBanConfigSlotUpsert]) -> list[int]:
+    """The items a preview may draw on, whichever mode authored them.
+
+    Slot mode has no flat pool: its playable set is the union of every slot's
+    candidates plus the reserves, deduplicated -- an item may sit in two slots.
+    """
+    if mode != MapVetoMode.SLOTS:
+        return list(dict.fromkeys(item_ids))
+    pooled: list[int] = []
+    for slot in slots:
+        pooled.extend(slot.candidates)
+        if slot.reserve_item_id is not None:
+            pooled.append(slot.reserve_item_id)
+    return list(dict.fromkeys(pooled))
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -156,15 +205,15 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "match", "update")
             body = PickBanConfigUpsert.model_validate(_payload(data))
-            pick_ban_session.validate_pick_ban_upsert(
-                mode=body.mode,
-                preset=body.preset,
+            pick_ban_config.validate_config_payload(
                 kind=body.kind,
-                sequence=body.sequence,
+                mode=body.mode,
+                ruleset=body.ruleset,
                 item_ids=body.item_ids,
                 slots=[(slot.candidates, slot.reserve_item_id) for slot in body.slots],
                 stage_id=body.stage_id,
                 round=body.round,
+                groups=await pick_ban_config.group_vocabulary(session, body.kind),
             )
             config = await pick_ban_config.pick_ban_config_service.upsert_config(
                 session,
@@ -175,12 +224,7 @@ def register(broker: Any, logger: Any) -> None:
                 mode=body.mode,
                 first_pick_rule=body.first_pick_rule,
                 first_ban_rotation=body.first_ban_rotation,
-                preset=body.preset,
-                turn_timer_seconds=body.turn_timer_seconds,
-                no_repeat_scope=body.no_repeat_scope,
-                unique_attribute_per_side_per_round=body.unique_attribute_per_side_per_round,
-                allow_protect=body.allow_protect,
-                sequence=body.sequence,
+                ruleset=body.ruleset,
                 item_ids=body.item_ids,
                 slots=[
                     pick_ban_config.SlotSpec(candidates=list(slot.candidates), reserve_item_id=slot.reserve_item_id)
@@ -203,15 +247,10 @@ def register(broker: Any, logger: Any) -> None:
                     "mode": body.mode,
                     "first_pick_rule": body.first_pick_rule,
                     "first_ban_rotation": body.first_ban_rotation,
-                    "preset": body.preset,
-                    "turn_timer_seconds": body.turn_timer_seconds,
-                    "no_repeat_scope": body.no_repeat_scope,
-                    "unique_attribute_per_side_per_round": body.unique_attribute_per_side_per_round,
-                    "allow_protect": body.allow_protect,
-                    # Counts, not the pools themselves: a slots-mode config can
-                    # carry hundreds of candidate ids and the journal is not a
-                    # config store.
-                    "sequence_length": len(body.sequence),
+                    # Counts, not the documents themselves: a ruleset is a tree
+                    # and a slots-mode config can carry hundreds of candidate
+                    # ids -- the journal is not a config store.
+                    "phase_count": len(body.ruleset.get("phases") or []),
                     "item_count": len(body.item_ids),
                     "slot_count": len(body.slots),
                 },
@@ -254,11 +293,62 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
+    # ── constructor support: validate + preview (no writes) ─────────────────
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_rules_validate")
+    async def _admin_pick_ban_rules_validate(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            body = PickBanRulesValidateInput.model_validate(_payload(data))
+            # Unlike the upsert this NEVER raises on a bad ruleset: the whole
+            # point is to hand the editor the issue list while it is still being
+            # typed. Warnings ride along with the errors; only errors decide
+            # ``valid``.
+            issues = pbr.validate_ruleset(
+                body.ruleset,
+                kind=body.kind.value,
+                mode=body.mode.value,
+                groups=await pick_ban_config.group_vocabulary(session, body.kind),
+            )
+            return {
+                "valid": not any(issue.severity == "error" for issue in issues),
+                "issues": [issue.to_json() for issue in issues],
+            }
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_rules_preview")
+    async def _admin_pick_ban_rules_preview(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            body = PickBanRulesPreviewInput.model_validate(_payload(data))
+            return pbr.preview_series(
+                body.ruleset,
+                kind=body.kind.value,
+                mode=body.mode.value,
+                best_of=body.best_of,
+                pool_groups=await pick_ban_config.pool_group_counts(
+                    session, body.kind, _pool_item_ids(body.mode, body.item_ids, body.slots)
+                ),
+                # The tournament's own roster shape, not a workspace default:
+                # it bounds how many of a per-player ban step's bans can land
+                # on one role.
+                roster_slots=await pick_ban_config.roster_slot_counts(session, tournament_id),
+            )
+
+        return await _run(logger, op)
+
     # ── live-session admin overrides (map + hero) ───────────────────────────
     # Generalizes veto_admin.py's two live-session operations (reset + act
     # for an absent captain), which had no pick-ban equivalent before the
-    # room unification. Both kinds share these two routes via a ``kind``
-    # body field instead of two kind-hardcoded handlers.
+    # room unification. Both kinds share these routes via a ``kind`` body
+    # field instead of kind-hardcoded handlers.
 
     @broker.subscriber("rpc.tournament.admin_pick_ban_session_reset")
     async def _admin_pick_ban_session_reset(data: dict, msg: RabbitMessage) -> dict:
@@ -310,19 +400,80 @@ def register(broker: Any, logger: Any) -> None:
                     "side": body.side,
                     "action": body.action,
                     "item_id": body.item_id,
+                    "target_player_id": body.target_player_id,
                 },
             )
             # Same engine as the captain act route, side supplied explicitly
             # (bypasses captain-side resolution); commits internally.
-            entry = await pick_ban_action.pick_ban_action_service.perform_pick_ban_action(
+            # ``viewer_side=None``: an organizer sees the whole board, including
+            # the other side's unrevealed draft, which a captain must not.
+            return await pick_ban_action.pick_ban_action_service.perform_pick_ban_action(
                 session,
                 encounter_id,
                 body.kind,
                 body.side,
-                body.item_id,
-                body.action,
+                item_id=body.item_id,
+                action=body.action,
+                target_player_id=body.target_player_id,
+                viewer_side=None,
             )
-            return pick_ban_action.serialize_pick_ban_entry(entry)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_submit")
+    async def _admin_pick_ban_submit(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            body = PickBanAdminSubmit.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="pick_ban.submit",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter_id,
+                after={
+                    "kind": body.kind,
+                    "side": body.side,
+                    "lock": body.lock,
+                    "item_ids": [item.item_id for item in body.items],
+                },
+            )
+            return await pick_ban_action.pick_ban_action_service.submit_items(
+                session,
+                encounter_id,
+                body.kind,
+                body.side,
+                items=[item.model_dump() for item in body.items],
+                lock=body.lock,
+                viewer_side=None,
+            )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_reopen")
+    async def _admin_pick_ban_reopen(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            body = PickBanAdminReopen.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="pick_ban.reopen",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter_id,
+                after={"kind": body.kind},
+            )
+            return await pick_ban_action.pick_ban_action_service.admin_reopen_step(session, encounter_id, body.kind)
 
         return await _run(logger, op)
 

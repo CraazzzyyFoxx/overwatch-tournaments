@@ -18,7 +18,7 @@ import type { PickBanSide } from "./pick-ban-model";
 interface PickBanUndoControlProps {
   kind: PickBanKind;
   encounterId: number;
-  /** `state.undo`. Absent or with no `item_ids` renders nothing. */
+  /** `state.undo`. Absent, stepless or with no `item_ids` renders nothing. */
   undo: PickBanUndo | undefined;
   /** Null for anyone who captains neither side — they read, they never consent. */
   viewerSide: PickBanSide | null;
@@ -69,7 +69,9 @@ export function PickBanUndoControl({
     }
   });
 
-  if (undo == null || undo.item_ids.length === 0) {
+  // `step_index` is the resolved step the undo reopens; without one there is
+  // nothing to take back, whatever else the block carries.
+  if (undo == null || undo.step_index == null || undo.item_ids.length === 0) {
     return null;
   }
 

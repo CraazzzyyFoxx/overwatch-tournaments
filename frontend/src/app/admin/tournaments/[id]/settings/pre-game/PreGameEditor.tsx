@@ -18,12 +18,14 @@ import type { PickBanConfig, PickBanKind, Stage } from "@/types/tournament.types
 
 import { type CatalogueItem } from "./CataloguePicker";
 import { PoolStep } from "./PoolStep";
-import { SequenceStep } from "./SequenceStep";
+import { RulesStep } from "./RulesStep";
 import { SidesStep } from "./SidesStep";
+import { useRulesetValidation } from "./rules/useRulesetValidation";
 import { PRE_GAME_STEPS, type PreGameScope, type PreGameStep } from "./pre-game-scope";
 import { usePreGameDraft } from "./usePreGameDraft";
 
 export interface PreGameEditorProps {
+  tournamentId: number;
   scope: PreGameScope;
   kind: PickBanKind;
   step: PreGameStep;
@@ -31,7 +33,7 @@ export interface PreGameEditorProps {
    * Writes `?step=`. The steps are URL state, but NOT links: they are sections
    * of one form, and `SaveBar`'s unsaved guard intercepts every in-app anchor
    * while the form is dirty — so a link here would demand a discard prompt to
-   * look at the sequence you just edited the pool for.
+   * look at the rules you just edited the pool for.
    */
   onStepChange: (step: PreGameStep) => void;
   stages: Stage[];
@@ -44,10 +46,10 @@ export interface PreGameEditorProps {
   saving: boolean;
   resetting: boolean;
   /**
-   * One upsert per entry, in order. Slot-mode groups authored on a stage screen
+   * One upsert per draft, in order. Slot-mode groups authored on a stage screen
    * are one config per round, so a save is N writes rather than one.
    */
-  onSave: (jobs: Array<{ draft: PickBanDraft; seriesLength: number }>) => void;
+  onSave: (drafts: PickBanDraft[]) => void;
   /** Drops this scope's own config so it inherits again. */
   onResetToInherited: (configId: number) => void;
 }
@@ -55,15 +57,16 @@ export interface PreGameEditorProps {
 /**
  * The rules of one scope, as three steps rather than one 700-line form.
  *
- * Pool → Sequence → Sides are sections of the same form addressed by `?step=`,
- * not dialogs and not a wizard: an organizer changing a turn timer must not
- * walk through a pool picker to reach it, and every step saves the same config.
+ * Pool → Rules → Sides are sections of the same form addressed by `?step=`,
+ * not dialogs and not a wizard: an organizer changing a rotation must not walk
+ * through a pool picker to reach it, and every step saves the same config.
  *
  * The draft and everything derived from it live in `usePreGameDraft`; each step
  * is its own file. What is left here is the frame: the step strip, the cascade
  * line, the validation summary and the save bar they all share.
  */
 export function PreGameEditor({
+  tournamentId,
   scope,
   kind,
   step,
@@ -82,11 +85,21 @@ export function PreGameEditor({
 }: Readonly<PreGameEditorProps>) {
   const t = useTranslations("pickBan.admin");
   const ids = useId();
-  const isHero = kind === "hero";
 
   const form = usePreGameDraft({ scope, kind, stages, encounters, configs });
   const { draft, inheritedConfig, savedConfig, series } = form;
   const [resetOpen, setResetOpen] = useState(false);
+
+  // The engine's own verdict on the ruleset, debounced. Run here rather than
+  // inside the Rules step because it is the SAVE that it gates — an organizer
+  // must not be able to store a ruleset the room refuses to open by pressing
+  // save from the Pool step.
+  const validation = useRulesetValidation({
+    tournamentId,
+    kind,
+    mode: draft.mode,
+    ruleset: draft.ruleset
+  });
 
   const catalogueById = useMemo(
     () => new Map(catalogue.map((option) => [option.id, option])),
@@ -98,6 +111,8 @@ export function PreGameEditor({
     inheritedConfig == null
       ? null
       : describeScope({ stage_id: inheritedConfig.stage_id, round: inheritedConfig.round });
+
+  const blocked = form.issues.length > 0 || validation.errors.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -159,13 +174,17 @@ export function PreGameEditor({
             />
           ) : null}
 
-          {step === "sequence" ? (
-            <SequenceStep
-              ids={ids}
+          {step === "rules" ? (
+            <RulesStep
+              tournamentId={tournamentId}
               draft={draft}
-              isHero={isHero}
+              kind={kind}
               series={series}
-              sequence={form.sequence}
+              issues={validation.issues}
+              validating={validation.pending}
+              inherited={form.inheritedDraft}
+              inheritedLabel={inheritedLabel}
+              catalogue={catalogue}
               canManage={canManage}
               patch={form.patch}
             />
@@ -175,8 +194,6 @@ export function PreGameEditor({
             <SidesStep
               ids={ids}
               draft={draft}
-              isHero={isHero}
-              bestOf={series.bestOf}
               inherited={form.inheritedDraft}
               inheritedLabel={inheritedLabel}
               canManage={canManage}
@@ -193,9 +210,22 @@ export function PreGameEditor({
             <p className="font-medium">{t("validationTitle")}</p>
             <ul className="mt-1 list-inside list-disc">
               {form.issues.map((issue) => (
-                <li key={issue.key}>{t(`validation.${issue.key}`, issue.values)}</li>
+                <li key={`${issue.key}-${JSON.stringify(issue.values ?? {})}`}>
+                  {t(`validation.${issue.key}`, issue.values)}
+                </li>
               ))}
             </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {/* The engine's rejections, summarised outside the Rules step so the
+          reason a save does nothing is on screen wherever it was pressed. */}
+      {validation.errors.length > 0 && step !== "rules" ? (
+        <Alert variant="destructive">
+          <AlertTriangle aria-hidden className="size-4" />
+          <AlertDescription>
+            {t("rulesetInvalid", { count: validation.errors.length })}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -242,7 +272,7 @@ export function PreGameEditor({
         // Save stays clickable with the reason on screen rather than greying
         // out a viewport away from the alert that explains it.
         onSave={() => {
-          if (form.issues.length > 0) return;
+          if (blocked) return;
           onSave(form.saveJobs());
         }}
       />

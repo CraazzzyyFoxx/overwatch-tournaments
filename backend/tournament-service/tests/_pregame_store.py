@@ -25,18 +25,22 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
+from shared.models.catalog.gamemode import Gamemode  # noqa: E402
+from shared.models.catalog.hero import Hero  # noqa: E402
+from shared.models.catalog.map import Map  # noqa: E402
 from shared.models.matches.match import Match  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.models.tournament.encounter_report import EncounterMapReport  # noqa: E402
 from shared.models.tournament.encounter_result_audit import EncounterResultAudit  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
-    EncounterPickBanLedger,
     EncounterReadiness,
     PickBanConfig,
     PickBanEntry,
     PickBanSession,
+    PickBanSubmission,
 )
+from shared.models.tournament.team import Player  # noqa: E402
 
 __all__ = ("staged_topics", "_matches", "_Result", "_Store")
 
@@ -44,14 +48,18 @@ __all__ = ("staged_topics", "_matches", "_Result", "_Store")
 KNOWN_MODELS = (
     PickBanSession,
     PickBanEntry,
+    PickBanSubmission,
     PickBanConfig,
     EncounterReadiness,
-    EncounterPickBanLedger,
     EncounterMapReport,
     EncounterGame,
     EncounterResultAudit,
     Match,
     Encounter,
+    Player,
+    Hero,
+    Map,
+    Gamemode,
 )
 
 
@@ -73,9 +81,13 @@ def staged_topics(session: Any) -> list[str]:
 def _bound_value(clause: Any) -> Any:
     """The right-hand literal of a comparison, unwrapped from its bind."""
     right = clause.right
-    value = getattr(right, "value", right)
+    # `col.is_not(None)` binds a SQL NULL element, not a bind parameter, and it
+    # carries no `.value` -- left as-is it would compare as a clause object and
+    # produce a BinaryExpression instead of a bool.
+    if isinstance(right, sa.sql.elements.Null):
+        return None
     # `col.in_([...])` binds one expanding parameter whose value is the list.
-    return value
+    return getattr(right, "value", right)
 
 
 def _matches(row: Any, clause: Any) -> bool:
@@ -111,6 +123,13 @@ def _matches(row: Any, clause: Any) -> bool:
         return actual is None if expected is None else actual == expected
     if operator in ("is_not", "isnot"):
         return actual is not None if expected is None else actual != expected
+    # `delete_for_steps_from` scraps a step index and everything after it.
+    if operator in ("ge", "gt", "le", "lt"):
+        if actual is None or expected is None:
+            return False
+        return {"ge": actual >= expected, "gt": actual > expected, "le": actual <= expected}.get(
+            operator, actual < expected
+        )
     raise AssertionError(f"unsupported operator in fake store: {operator}")
 
 

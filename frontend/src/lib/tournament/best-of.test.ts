@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BEST_OF_OPTIONS,
-  buildSequenceForBestOf,
   hasPerRoundBestOf,
   resolveBestOf,
   stageBestOfRoundSections,
@@ -11,14 +9,10 @@ import {
 
 /**
  * These cases are deliberately the same ones as the backend's
- * `tests/test_best_of.py` and `tests/test_veto_session.py`. The veto room runs
- * the sequence the SERVER generates, so any divergence here is a UI previewing
- * steps the captains will never be asked to take — the tests exist to catch
- * that drift, not just to exercise the functions.
+ * `tests/test_best_of.py`. The bracket generator resolves the series length
+ * server-side, so any divergence here is a UI previewing a length the matches
+ * will not play — the tests exist to catch that drift.
  */
-
-const playedMaps = (sequence: string[]) =>
-  sequence.filter((token) => !token.startsWith("ban")).length;
 
 describe("resolveBestOf", () => {
   it("falls back to the default", () => {
@@ -211,79 +205,5 @@ describe("stageBestOfRoundSections", () => {
       { round: 4, label: "Grand Final Reset" },
       { round: 3, label: "Grand Final" }
     ]);
-  });
-});
-
-describe("buildSequenceForBestOf", () => {
-  it("reproduces the presets the editor used to hardcode", () => {
-    expect(buildSequenceForBestOf(2, 4)).toEqual([
-      "ban_first",
-      "ban_second",
-      "pick_first",
-      "pick_second"
-    ]);
-    expect(buildSequenceForBestOf(3, 5)).toEqual([
-      "ban_first",
-      "ban_second",
-      "pick_first",
-      "pick_second",
-      "decider"
-    ]);
-    expect(buildSequenceForBestOf(5, 7)).toEqual([
-      "ban_first",
-      "ban_second",
-      "pick_first",
-      "pick_second",
-      "pick_first",
-      "pick_second",
-      "decider"
-    ]);
-  });
-
-  it("bans the pool down to one map for Bo1", () => {
-    expect(buildSequenceForBestOf(1, 5)).toEqual([
-      "ban_first",
-      "ban_second",
-      "ban_first",
-      "ban_second",
-      "decider"
-    ]);
-  });
-
-  it("covers Bo7, which had no preset at all", () => {
-    const sequence = buildSequenceForBestOf(7, 9);
-    expect(sequence).toHaveLength(9);
-    expect(playedMaps(sequence)).toBe(7);
-    expect(sequence[sequence.length - 1]).toBe("decider");
-  });
-
-  it("plays exactly bestOf maps and never outgrows the pool", () => {
-    for (let bestOf = 1; bestOf <= 7; bestOf += 1) {
-      const poolSize = bestOf + 2;
-      const sequence = buildSequenceForBestOf(bestOf, poolSize);
-      expect(playedMaps(sequence), `bestOf=${bestOf}`).toBe(bestOf);
-      expect(sequence.length, `bestOf=${bestOf}`).toBeLessThanOrEqual(poolSize);
-    }
-  });
-
-  it("drops the opening bans rather than outgrow a tight pool", () => {
-    expect(buildSequenceForBestOf(3, 3)).toEqual(["pick_first", "pick_second", "decider"]);
-  });
-
-  it("clamps a series longer than the pool", () => {
-    const sequence = buildSequenceForBestOf(7, 3);
-    expect(sequence.length).toBeLessThanOrEqual(3);
-  });
-
-  it("yields nothing for an empty pool", () => {
-    expect(buildSequenceForBestOf(3, 0)).toEqual([]);
-  });
-
-  it("has a sequence for every length the stage editor offers", () => {
-    for (const bestOf of BEST_OF_OPTIONS) {
-      const sequence = buildSequenceForBestOf(bestOf, bestOf + 2);
-      expect(sequence.length, `Bo${bestOf}`).toBeGreaterThan(0);
-      expect(playedMaps(sequence), `Bo${bestOf}`).toBe(bestOf);
-    }
   });
 });

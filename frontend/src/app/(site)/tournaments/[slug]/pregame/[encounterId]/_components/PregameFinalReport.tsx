@@ -154,7 +154,7 @@ export function PregameFinalReport({
                     </div>
                   )}
                   <PregameHeroBans
-                    actions={block.actions}
+                    board={block}
                     homeName={homeName ?? t("side.home")}
                     awayName={awayName ?? t("side.away")}
                     homeTeam={encounter.home_team ?? null}

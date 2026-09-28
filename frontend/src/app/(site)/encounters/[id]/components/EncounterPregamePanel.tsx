@@ -161,8 +161,10 @@ function PregameSection({
               </span>
             </Fact>
           ) : null}
-          {!state.is_complete && state.turn_side ? (
-            <Fact label={t("encounters.detail.pregameTurn")}>{sideName(state.turn_side)}</Fact>
+          {!state.is_complete && state.acting_sides.length > 0 ? (
+            <Fact label={t("encounters.detail.pregameTurn")}>
+              {state.acting_sides.map((side) => sideName(side)).join(" · ")}
+            </Fact>
           ) : null}
         </div>
       ) : null}

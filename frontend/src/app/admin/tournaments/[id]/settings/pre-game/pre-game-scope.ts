@@ -15,7 +15,7 @@ export interface PreGameScope {
 export const TOURNAMENT_SCOPE_VALUE = "tournament";
 
 /** Steps of one scope's configuration, in the order they are authored (F9 ·3). */
-export const PRE_GAME_STEPS = ["pool", "sequence", "sides"] as const;
+export const PRE_GAME_STEPS = ["pool", "rules", "sides"] as const;
 export type PreGameStep = (typeof PRE_GAME_STEPS)[number];
 
 export const PRE_GAME_KINDS = ["map", "hero"] as const;

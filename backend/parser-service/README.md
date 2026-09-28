@@ -271,11 +271,14 @@ attaches the alias and closes the miss in one request.
   `LOG_REAPER_PENDING_AFTER_SECONDS`, `LOG_REAPER_PROCESSING_AFTER_SECONDS`,
   `LOG_REAPER_MAX_ATTEMPTS`, `LOG_REAPER_BATCH_SIZE`.
 - **OverFast** — `OVERFAST_BASE_URL`, `OVERFAST_TIMEOUT`, `OVERFAST_MAX_RETRIES`,
-  `OVERFAST_PROXY_URL` (production: `socks5://proxy:1080` — the instance runs on the Amsterdam
-  host, which Moscow cannot reach directly), `RANK_FETCH_WORKER_PREFETCH` (kept low to protect
-  the upstream). The operational collection
-  parameters — interval, scope, per-minute limit, backoff base, max consecutive failures, rank
-  mapping — live in `public.settings`, editable at runtime, not in the env file.
+  `OVERFAST_PROXY_URL` (production: `socks5://proxy:1080`), `RANK_FETCH_WORKER_PREFETCH` (kept
+  low to protect the upstream). The instance runs on the Amsterdam host (`/root/overfast-api`),
+  which Moscow cannot open TCP to, and the VPN node behind the sidecar sends any
+  `*.craazzzyyfoxx.me` SNI out directly. So Moscow's host-local `proxy/xray.json` routes
+  `overfast.craazzzyyfoxx.me` to an `overfast-ams` shadowsocks outbound chained through the
+  VPN exit (`dialerProxy`), landing on the `tunnel` container next to OverFast. The operational
+  collection parameters — interval, scope, per-minute limit, backoff base, max consecutive
+  failures, rank mapping — live in `public.settings`, editable at runtime, not in the env file.
 - **Outbound proxy** — `PROXY_TYPE`, `PROXY_IP`, `PROXY_PORT`, `PROXY_USERNAME`, `PROXY_PASSWORD`.
 - **Subscription verification** — `DISCORD_TOKEN`, `TWITCH_CLIENT_ID`. Unset means every live check
   resolves `unknown` and fails open: the sweep runs and proves nothing.

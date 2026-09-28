@@ -7,7 +7,7 @@ pool editor are the same UI, so a diverging body would fork it.
 """
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -16,7 +16,6 @@ from shared.core.enums import (
     FirstPickRule,
     MapVetoMode,
     PickBanKind,
-    PickBanNoRepeatScope,
 )
 
 __all__ = (
@@ -82,12 +81,9 @@ class ScrimPoolConfigInput(BaseModel):
     mode: MapVetoMode = MapVetoMode.POOL
     first_pick_rule: FirstPickRule = FirstPickRule.HIGHER_SEED
     first_ban_rotation: FirstBanRotation = FirstBanRotation.FIXED
-    preset: str | None = Field(default=None, max_length=32)
-    turn_timer_seconds: int | None = Field(default=None, ge=1)
-    no_repeat_scope: PickBanNoRepeatScope = PickBanNoRepeatScope.NONE
-    unique_attribute_per_side_per_round: str | None = Field(default=None, max_length=32)
-    allow_protect: bool = False
-    sequence: list[str] = Field(default_factory=list)
+    #: Ruleset v2 document (docs/plans/2026-09-28-pick-ban-constructor.md §1),
+    #: validated by the same engine call the organizer's upsert runs.
+    ruleset: dict[str, Any]
     item_ids: list[int] = Field(default_factory=list)
     slots: list[ScrimPoolSlotInput] = Field(default_factory=list)
 

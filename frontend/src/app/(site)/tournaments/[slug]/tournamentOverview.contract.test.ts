@@ -117,7 +117,7 @@ describe("tournament overview server contract", () => {
     expect(source).not.toContain("getStages");
   });
 
-  it("wraps only the overview hydration boundary in Suspense, decoupled from the client shell", () => {
+  it("renders the overview seed and the client shell in that order, inside one Suspense", () => {
     const sourceFile = parsedSource("layout.tsx");
     const source = sourceFor("layout.tsx");
     const suspense = jsxElements(sourceFile, "Suspense");
@@ -134,11 +134,28 @@ describe("tournament overview server contract", () => {
     expect(layoutFunction?.getText(sourceFile)).not.toContain("getTournamentOverviewState");
     expect(overviewBoundaryEl).toHaveLength(1);
     expect(suspense).toHaveLength(1);
-    expect(hasJsxAttribute(sourceFile, suspense[0], "fallback", "null")).toBe(true);
-    // Self-closing: takes no children, so a re-suspended overview fetch (this
-    // segment is force-dynamic) can never unmount TournamentClientLayout —
-    // it's a sibling, not a descendant, of this Suspense boundary.
-    expect(ts.isJsxSelfClosingElement(overviewBoundaryEl[0])).toBe(true);
+
+    // The seed renders first and the shell that reads it second, both inside
+    // the SAME boundary. React hydrates a boundary's children as one unit in
+    // order; a shell outside it hydrates in an earlier pass, against a cache
+    // the seed has not written yet, and mismatches the server's HTML.
+    const suspenseElement = nodesMatching(sourceFile, ts.isJsxElement).find(
+      (element) => element.openingElement.tagName.getText(sourceFile) === "Suspense"
+    );
+    const childTags = (suspenseElement?.children ?? [])
+      .filter((child) => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child))
+      .map((child) =>
+        ts.isJsxElement(child)
+          ? child.openingElement.tagName.getText(sourceFile)
+          : (child as ts.JsxSelfClosingElement).tagName.getText(sourceFile)
+      );
+    expect(childTags).toEqual(["TournamentOverviewBoundary", "TournamentClientLayout"]);
+    // Nothing under this layout can paint before the overview resolves, so the
+    // fallback is the shell's own skeleton — streamed, rather than appearing
+    // after hydration as the client shell's pending branch.
+    expect(
+      hasJsxAttribute(sourceFile, suspense[0], "fallback", "<TournamentShellSkeleton />")
+    ).toBe(true);
   });
 
   it("resolves the same raw slug ref across layout, metadata, and index route", () => {

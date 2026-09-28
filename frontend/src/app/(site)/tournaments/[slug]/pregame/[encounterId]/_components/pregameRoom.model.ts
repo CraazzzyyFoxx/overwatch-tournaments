@@ -1,15 +1,24 @@
 import { normalizeRole } from "@/lib/roster/player-role";
 import {
   acceptedScore,
+  appliedItemsBySide,
+  bannedEntries,
+  carriedBanEntries,
   gameAtPosition,
+  groupItemsByRole,
   highestPoolRound,
-  pickedItemsInOrder
+  pickedItemsInOrder,
+  remainingEntries
 } from "@/components/pick-ban/pick-ban-model";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import type { Encounter } from "@/types/encounter.types";
 import type { PickBanEntry, PickBanGame, PickBanKind, PickBanState } from "@/types/tournament.types";
 
-import type { PregameHeroAction, PregameHeroRound } from "./PregameHeroBans";
+import type {
+  PregameHeroAction,
+  PregameHeroBoard,
+  PregameHeroRound
+} from "./PregameHeroBans";
 import type { PregamePhase, PregamePhaseStatus, PregameSeriesMap } from "./PregameHeader";
 
 type ItemLookup = Record<number, PickBanItemLike | undefined>;
@@ -175,37 +184,71 @@ export function buildSeriesMaps(
 }
 
 /**
- * The hero bans that apply to one map of the series, resolved against the
- * catalog. The room shows one phase at a time, so once the hero grid closes
- * nothing on screen names what was banned -- which is precisely when the
- * captains have to enter it into the game lobby. A flat (round-less) hero pool
- * has one set of bans for the whole series, so it applies to every map.
+ * The hero board of one map of the series: who banned or protected what, the
+ * flat list of everything unavailable there, and what is left per role.
+ *
+ * Per-side lists come from the SUBMISSIONS, not from the pool: a blind step
+ * where both captains ban the same hero projects ONE banned entry carrying one
+ * `picked_by`, so reading the board would credit that ban to a single side and
+ * leave the other one a ban short of what it actually spent. Bans carried over
+ * from an earlier map have no submission of this round at all — they come off
+ * the entries, badged with the map they were spent on.
  */
-export function heroActionsForRound(
-  pool: PickBanEntry[],
+export function heroBoardForRound(
+  state: PickBanState,
   round: number | null,
   heroesById: ItemLookup,
   heroName: (itemId: number) => string
-): PregameHeroAction[] {
-  return pool
-    .filter(
-      (entry) =>
-        (round == null ? entry.round == null : entry.round == null || entry.round === round) &&
-        (entry.status === "banned" || entry.status === "protected")
-    )
-    .map((entry) => {
+): PregameHeroBoard {
+  const describe = (
+    itemId: number,
+    action: "ban" | "protect",
+    side: "home" | "away",
+    carriedFromRound: number | null
+  ): PregameHeroAction => {
+    const item = heroesById[itemId];
+    return {
+      itemId,
+      name: item?.name ?? heroName(itemId),
+      item,
+      role: normalizeRole(item?.type ?? item?.role),
+      action,
+      side,
+      carriedFromRound
+    };
+  };
+
+  const actions: PregameHeroAction[] = [];
+  for (const entry of carriedBanEntries(state.pool, round)) {
+    // A system-resolved (roulette) ban projects `picked_by: "decider"`: it
+    // belongs to no captain, so it stays out of the side columns and is named
+    // only by the flat "unavailable here" list below.
+    if (entry.picked_by !== "home" && entry.picked_by !== "away") continue;
+    actions.push(describe(entry.item_id, "ban", entry.picked_by, entry.carried_from_round));
+  }
+  for (const action of ["ban", "protect"] as const) {
+    const bySide = appliedItemsBySide(state.sequence, state.submissions, { round, action });
+    for (const side of ["home", "away"] as const) {
+      for (const item of bySide[side]) actions.push(describe(item.item_id, action, side, null));
+    }
+  }
+
+  const toRoleItems = (entries: PickBanEntry[]) =>
+    entries.map((entry) => {
       const item = heroesById[entry.item_id];
-      const side = entry.status === "banned" ? entry.picked_by : entry.protected_by;
       return {
         itemId: entry.item_id,
         name: item?.name ?? heroName(entry.item_id),
-        item,
-        role: normalizeRole(item?.type ?? item?.role),
-        action: entry.status === "banned" ? ("ban" as const) : ("protect" as const),
-        // `picked_by` also carries `"decider"`, which no ban can be.
-        side: side === "away" ? ("away" as const) : ("home" as const)
+        role: normalizeRole(item?.type ?? item?.role)
       };
     });
+
+  return {
+    round,
+    actions,
+    banned: groupItemsByRole(toRoleItems(bannedEntries(state.pool, round))),
+    remaining: groupItemsByRole(toRoleItems(remainingEntries(state.pool, round)))
+  };
 }
 
 /**
@@ -216,26 +259,26 @@ export function heroActionsForRound(
  * map, so repeating it per map would invent per-map decisions nobody made.
  */
 export function buildHeroRounds(
-  pool: PickBanEntry[],
+  state: PickBanState,
   series: PregameSeriesMap[],
   heroesById: ItemLookup,
   heroName: (itemId: number) => string
 ): PregameHeroRound[] {
   return (
-    pool.some((entry) => entry.round != null)
+    state.pool.some((entry) => entry.round != null)
       ? series.map((map) => ({
-          round: map.round,
+          ...heroBoardForRound(state, map.round, heroesById, heroName),
           mapName: map.name,
-          mapItem: map.item,
-          actions: heroActionsForRound(pool, map.round, heroesById, heroName)
+          mapItem: map.item
         }))
       : [
           {
-            round: null,
+            ...heroBoardForRound(state, null, heroesById, heroName),
             mapName: null,
-            mapItem: undefined,
-            actions: heroActionsForRound(pool, null, heroesById, heroName)
+            mapItem: undefined
           }
         ]
-  ).filter((block) => block.actions.length > 0);
+    // A map whose only bans were rolled by the engine has no side column to
+    // show and still has a lobby to set up.
+  ).filter((block) => block.actions.length > 0 || block.banned.length > 0);
 }

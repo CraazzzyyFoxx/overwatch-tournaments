@@ -478,7 +478,15 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.admin_pick_ban_act": {
         "summary": "Act for a side",
-        "description": "Permission: workspace `match.update` on the encounter's workspace. Performs a ban, pick, or protect on behalf of the given side (admin override of the captain flow) and returns the updated pool entry.",
+        "description": "Permission: workspace `match.update` on the encounter's workspace. Performs one ban, pick or protect on behalf of the given side (admin override of the captain flow) against the current OPEN step, optionally naming the opponent roster player a per-player ban is spent on, and returns the full room state with nothing hidden. 400 when the current step is blind — use admin_pick_ban_submit for those.",
+    },
+    "rpc.tournament.admin_pick_ban_submit": {
+        "summary": "Submit a blind draft for a side",
+        "description": "Permission: workspace `match.update` on the encounter's workspace. Replaces one side's draft on a BLIND step on behalf of an absent captain and, with `lock: true`, locks it; every side locked reveals the step. Returns the full room state with nothing hidden. 400 when the current step is not blind, when the side already locked, or when the items break the step's rules.",
+    },
+    "rpc.tournament.admin_pick_ban_reopen": {
+        "summary": "Reopen the last revealed step",
+        "description": "Permission: workspace `match.update` on the encounter's workspace. Voids the last fully revealed step's submissions and re-opens it for a fresh attempt — the organizer's version of a captain dispute, with no attempt budget and no `dispute.enabled` requirement. Returns the new room state. 400 when there is no revealed step to reopen or a later step has already been acted in.",
     },
     "rpc.tournament.admin_pick_ban_elect_opener": {
         "summary": "Elect a round's opener for a side",
@@ -496,7 +504,15 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.admin_pick_ban_config_upsert": {
         "summary": "Upsert pick-ban config",
-        "description": "Permission: workspace `match.update` on the tournament's workspace. Creates or replaces the pick-ban config for one (kind, tournament, stage or stage+round) cascade level after validating the step sequence and item pool.",
+        "description": 'Permission: workspace `match.update` on the tournament\'s workspace. Creates or replaces the pick-ban config for one (kind, tournament, stage or stage+round) cascade level after validating the ruleset document and the item pool. A ruleset with validation errors is a 422 whose `details.fields[0]` carries `code: "ruleset_invalid"` plus an `issues` array of `{path, code, severity, message}` — the same issue objects admin_pick_ban_rules_validate returns — so the constructor can highlight the offending fields.',
+    },
+    "rpc.tournament.admin_pick_ban_rules_validate": {
+        "summary": "Validate a pick-ban ruleset",
+        "description": "Permission: workspace `match.update` on the tournament's workspace (gated like the upsert it precedes). Runs the ruleset engine over a candidate document for the given `kind`/`mode` and returns `{valid, issues}`; unlike the upsert it never errors on a bad ruleset — warnings ride along with the errors and only errors clear `valid`.",
+    },
+    "rpc.tournament.admin_pick_ban_rules_preview": {
+        "summary": "Preview a pick-ban series",
+        "description": 'Permission: workspace `match.update` on the tournament\'s workspace (gated like the upsert it precedes). Resolves every map of a best-of series against a candidate ruleset and the pool it would be played out of, returning per map the resolved steps, the new and cumulative active ban counts, and (hero kind) the fewest items that can be left per group — the answer to "how many supports survive map 5" before a tournament runs on the rules.',
     },
     "rpc.tournament.admin_pick_ban_config_delete": {
         "summary": "Delete pick-ban config",
@@ -1043,12 +1059,13 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: public; no authentication required — gated only by the tournament's visibility rule. "
             "Returns the live pick/ban room for an encounter and the `kind` path segment ('map' or 'hero', "
-            "422 otherwise): the resolved sequence, the candidate pool, whose turn it is, both sides' "
-            "readiness, any open undo request, and for maps the captains' per-map result claims. A captain "
-            "additionally gets their own side annotated. When "
-            "no session can exist yet the payload names why (teams unknown, bracket still a preview, no "
-            "pick-ban configured, slot count mismatch, sides not ready, waiting on the map round) instead of "
-            "erroring."
+            "422 otherwise): the resolved steps, the candidate pool, which sides still owe the current step, "
+            "both sides' readiness, any open undo request, and for maps the captains' per-map result claims. "
+            "A captain additionally gets their own side annotated, their eligible items, why their draft "
+            "cannot be locked yet, and their own unrevealed draft — a blind step never serializes the other "
+            "side's. When no session can exist yet the payload names why (teams unknown, bracket still a "
+            "preview, no pick-ban configured, slot count mismatch, sides not ready, waiting on the map round) "
+            "instead of erroring."
         ),
     },
     "rpc.tournament.captain_pick_ban_act": {
@@ -1056,11 +1073,34 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). "
             "Applies one ban, pick or protect to the encounter's live pick/ban session of the given `kind`, "
-            "under the session's row lock, and returns the resulting pool entry. Only allowed "
-            "on the caller's own turn: acting out of turn, sending the wrong "
-            "action for the current step, naming an item that is not a candidate this round, or re-banning "
-            "something this side already banned earlier in the series is a 400, as is a session that is not "
+            "under the session's row lock, and returns the caller's new room state. OPEN steps only: a blind "
+            "step is a 400 that says to use the submit route. Acting when the caller's side does not owe the "
+            "current step, sending the wrong action for it, naming an item the step's rules do not allow, or "
+            "omitting the opponent player a per-player ban must name is a 400, as is a session that is not "
             "initialized or no longer active."
+        ),
+    },
+    "rpc.tournament.captain_pick_ban_submit": {
+        "summary": "Submit a blind draft",
+        "description": (
+            "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). "
+            "Replaces the caller's whole draft for the current BLIND step and, with `lock: true`, locks it "
+            "— a locked submission is final, and once every acting side has locked the step reveals for "
+            "both. Returns the caller's new room state; while the step is unrevealed it carries the caller's "
+            "own items and only the opponent's progress counts. 400 when the current step is not blind, when "
+            "the caller already locked, or when the items break the step's rules (the reasons are also "
+            "listed in the state's `draft_issues`)."
+        ),
+    },
+    "rpc.tournament.captain_pick_ban_dispute": {
+        "summary": "Dispute the last revealed step",
+        "description": (
+            "Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). "
+            "Unilateral, no opponent consent: voids the last fully revealed BLIND step and re-opens it for a "
+            "fresh attempt with each side's previous items prefilled, so a captain who named the wrong "
+            "opponent player can redo it. Allowed only while that step's `dispute` is enabled, its attempt "
+            "budget is not spent, no later step has been acted in, and the map that round settled has no "
+            "result yet; anything else is a 400. Returns the caller's new room state."
         ),
     },
     "rpc.tournament.captain_pick_ban_elect_opener": {
@@ -1173,6 +1213,10 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.get_pick_ban_configs": {
         "summary": "List public map pick-ban configs",
         "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's map pick-ban configs in cascade order.",
+    },
+    "rpc.tournament.pick_ban_rules_catalog": {
+        "summary": "Get the pick-ban ruleset catalog",
+        "description": "Permission: public; no authentication required — the catalog describes the rules ENGINE (which condition leaves and constraints exist, what parameters they take, which item groups are selectable per kind) plus the built-in presets, not anyone's tournament. The pick-ban constructor loads it before a config exists to attach it to.",
     },
     "rpc.tournament.reg_pub_form": {
         "summary": "Get public registration form",

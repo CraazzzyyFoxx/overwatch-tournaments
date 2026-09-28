@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 //
-// The bell is the only surface an in-app notification exists on: nothing else
-// tells a user that an invite arrived, that their registration was decided or
-// that a report they filed is disputed. So these tests pin the four claims that
-// make it a working inbox rather than an icon — the unread count is *announced*,
-// the realtime signal actually refetches, "mark all read" clears the badge, and
-// an anonymous visitor gets nothing at all — plus the one message that cannot be
-// written as a plain interpolation: a disputed report with no pick-ban session
-// carries `map_index: 0`, and "map 0" is not a thing that exists.
+// The account menu is the only surface an in-app notification exists on:
+// nothing else tells a user that an invite arrived, that their registration was
+// decided or that a report they filed is disputed. So these tests pin the claims
+// that make its inbox a working one rather than an icon — the unread count is
+// *announced*, the realtime signal actually refetches, and "mark all read"
+// clears the badge — plus the one message that cannot be written as a plain
+// interpolation: a disputed report with no pick-ban session carries
+// `map_index: 0`, and "map 0" is not a thing that exists.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -16,9 +16,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
+import type { AuthProfile } from "@/stores/auth-profile.store";
 import type { NotificationInbox, NotificationItem } from "@/types/notification.types";
 
-import NotificationBell from "./NotificationBell";
+import UserMenu from "./UserMenu";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -28,7 +29,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const list = vi.fn();
 const markRead = vi.fn();
 const remove = vi.fn();
-let authUser: unknown = { id: 1, username: "alice" };
+const USER = { id: 1, username: "alice" } as AuthProfile;
 const mounted: { root: Root; client: QueryClient }[] = [];
 
 // Topic -> the invalidation consumer's callbacks, so a test can fire the push
@@ -40,8 +41,10 @@ type InvalidationConsumer = {
 };
 const realtimeHandlers = new Map<string, InvalidationConsumer>();
 
-vi.mock("@/hooks/useAuthProfile", () => ({
-  useAuthProfile: () => ({ status: authUser ? "authenticated" : "anonymous", user: authUser })
+// The language switch in the panel's footer refreshes through the router.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useRouter: () => ({ refresh: vi.fn() })
 }));
 vi.mock("@/hooks/useRealtimeCoalescedRefetch", () => ({
   useRealtimeCoalescedRefetch: (topic: string | null | undefined, options: InvalidationConsumer) => {
@@ -144,7 +147,7 @@ async function mount(locale: "en" | "ru" = "en"): Promise<HTMLElement> {
     root.render(
       <NextIntlClientProvider locale={locale} messages={MESSAGES[locale]}>
         <QueryClientProvider client={client}>
-          <NotificationBell />
+          <UserMenu user={USER} />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );
@@ -185,7 +188,6 @@ afterEach(async () => {
 });
 
 beforeEach(() => {
-  authUser = { id: 1, username: "alice" };
   realtimeHandlers.clear();
   list.mockReset().mockResolvedValue(inbox([INVITE, DISPUTED_WITH_MAP]));
   markRead.mockReset().mockResolvedValue({ marked: 2, unread_count: 0 });
@@ -193,7 +195,7 @@ beforeEach(() => {
   document.body.innerHTML = "";
 });
 
-describe("notification bell", () => {
+describe("account menu inbox", () => {
   it("announces the unread count instead of only colouring a dot", async () => {
     const container = await mount();
     const trigger = container.querySelector("button");
@@ -217,9 +219,7 @@ describe("notification bell", () => {
     list.mockReturnValueOnce(request.promise);
     const container = await mount();
     await openPanel();
-    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(
-      en.notifications.title
-    );
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(en.common.openMenu);
     expect(document.body.textContent).not.toContain(en.notifications.empty);
     expect(document.body.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(buttonNamed(en.notifications.markAllRead).getAttribute("aria-disabled")).toBe("true");
@@ -228,9 +228,7 @@ describe("notification bell", () => {
     await flush();
     expect(document.body.textContent).toContain(en.notifications.loadError);
     expect(document.body.textContent).not.toContain(en.notifications.empty);
-    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(
-      en.notifications.title
-    );
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe(en.common.openMenu);
 
     list.mockResolvedValue(inbox([], 0));
     await click(buttonNamed(en.notifications.retry));
@@ -445,7 +443,7 @@ describe("notification bell", () => {
     list.mockResolvedValue(inbox([ANNOUNCEMENT]));
     await mount();
     await openPanel();
-    // Scoped to the row: the panel header also carries a link, to the settings tab.
+    // Scoped to the row: the panel also carries links to the profile and the settings tab.
     const link = document.body.querySelector("li a")!;
     expect(link.getAttribute("href")).toBe("/changelog");
     await click(link);
@@ -608,17 +606,5 @@ describe("notification bell", () => {
     expect(remove).toHaveBeenLastCalledWith({ ids: [INVITE.id] });
     expect(document.body.textContent).not.toContain(en.notifications.deleteError);
     expect(document.body.textContent).toContain(en.notifications.deleted);
-  });
-
-  it("renders nothing for an anonymous visitor", async () => {
-    authUser = undefined;
-
-    const container = await mount();
-
-    expect(container.textContent).toBe("");
-    expect(list).not.toHaveBeenCalled();
-    // No identity, no topic: `user:undefined:notifications` would be a
-    // subscription the gateway ACL rejects on every reconnect.
-    expect([...realtimeHandlers.keys()]).toEqual([]);
   });
 });

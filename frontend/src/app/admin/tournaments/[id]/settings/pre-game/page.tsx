@@ -118,7 +118,7 @@ function PreGamePhase({
 
   const catalogueLoading = kind === "map" ? mapsQuery.isPending : heroesQuery.isPending;
 
-  const stages = stagesQuery.data ?? [];
+  const stages = useMemo(() => stagesQuery.data ?? [], [stagesQuery.data]);
   const stagesById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
   const describeScope = (target: Pick<PickBanConfig, "stage_id" | "round">): string => {
     if (target.stage_id == null) return t("tournamentLevel");
@@ -132,12 +132,9 @@ function PreGamePhase({
     // One write per job, sequentially: a stage-wide slot pool is one config per
     // round of that stage, and a half-written stage is easier to reason about
     // in order than out of it.
-    mutationFn: async (jobs: Array<{ draft: PickBanDraft; seriesLength: number }>) => {
-      for (const job of jobs) {
-        await pickBanService.upsertConfig(
-          tournamentId,
-          pickBanDraftToInput(job.draft, job.seriesLength)
-        );
+    mutationFn: async (drafts: PickBanDraft[]) => {
+      for (const one of drafts) {
+        await pickBanService.upsertConfig(tournamentId, pickBanDraftToInput(one));
       }
     },
     onSuccess: async () => {
@@ -219,6 +216,7 @@ function PreGamePhase({
         detail={
           scope == null ? null : (
             <PreGameEditor
+              tournamentId={tournamentId}
               scope={scope}
               kind={kind}
               step={step}
@@ -232,7 +230,7 @@ function PreGamePhase({
               describeScope={describeScope}
               saving={upsertMutation.isPending}
               resetting={deleteMutation.isPending}
-              onSave={(jobs) => upsertMutation.mutate(jobs)}
+              onSave={(drafts) => upsertMutation.mutate(drafts)}
               onResetToInherited={(configId) => deleteMutation.mutate(configId)}
             />
           )

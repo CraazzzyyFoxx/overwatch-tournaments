@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { FolderPlus, Plus, Trash2 } from "lucide-react";
 
@@ -12,26 +12,89 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ConditionTypeInfo } from "@/types/admin.types";
 
-import { ConditionLeafFields } from "./ConditionLeafFields";
 import {
   HANDLE_COLOR,
   LEAF_COLOR,
   LOGICAL_COLORS,
-  conditionLabel,
-  formatParamsSummary,
+  LOGICAL_OPS,
   type FlatNode,
-} from "./condition-flow.model";
+} from "./rule-tree";
+
+/** One leaf type the builder offers, as the type `<Select>` renders it. */
+export interface RuleLeafOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+/** The props a caller's parameter form receives for one leaf node. */
+export interface RuleLeafFieldsProps {
+  nodeId: string;
+  leafType: string | undefined;
+  params: Record<string, unknown>;
+  setParam: (key: string, value: unknown) => void;
+  /**
+   * Accessible name for one field inside this node. Param controls across the
+   * canvas share the same handful of field names ("Operator", "Value"), so
+   * each one has to carry both its own field and the leaf it belongs to.
+   */
+  controlName: (field: string) => string;
+}
+
+/** Every string the canvas itself renders. The builder is engine-agnostic, so
+ *  its chrome is the caller's to translate. */
+export interface RuleBuilderLabels {
+  outlineTitle: string;
+  /** How the outline names one group row, e.g. "1.2 AND group". */
+  outlineGroup: (path: string, op: string) => string;
+  paletteSearchPlaceholder: string;
+  paletteSearchLabel: string;
+  paletteHint: string;
+  paletteEmpty: (query: string) => string;
+  paletteAdd: (item: string) => string;
+  /** "group 1.2" — the noun the group-scoped names below are built from. */
+  groupName: (path: string) => string;
+  operatorLabel: (group: string) => string;
+  addLeaf: string;
+  addLeafLabel: (group: string) => string;
+  addGroup: string;
+  addGroupLabel: (group: string) => string;
+  deleteGroupLabel: (group: string) => string;
+  deleteLeafLabel: (leafLabel: string, path: string) => string;
+  leafTypeLabel: (path: string) => string;
+  /** Accessible name of one parameter control inside a leaf node. */
+  leafFieldLabel: (field: string, leafLabel: string, path: string) => string;
+  fullscreen: string;
+  fullscreenLabel: string;
+  exitFullscreen: string;
+  exitFullscreenLabel: string;
+}
 
 /**
- * The node types the engine actually implements, served by
- * `achievements/rules/condition-types`. The editor used to keep its own copy,
- * which drifted eight nodes behind the backend; the palette now shows whatever
- * the engine registered, and `required`/`optional` come from the same place the
- * validator reads.
+ * Everything one builder instance shares with its nodes.
+ *
+ * React Flow only hands a node its `data`, and injecting the registry into
+ * every node would rebuild the whole layout whenever the catalogue query
+ * resolves — so the per-instance registry travels by context, while the
+ * per-node callbacks travel in `data`.
  */
-export const ConditionTypesContext = createContext<ConditionTypeInfo[]>([]);
+export interface RuleBuilderConfig {
+  leafOptions: RuleLeafOption[];
+  defaultLeafType: string;
+  labelForLeaf: (type: string | undefined) => string;
+  summarizeLeaf: (type: string, params: Record<string, unknown>) => string;
+  renderLeafFields: (props: RuleLeafFieldsProps) => ReactNode;
+  labels: RuleBuilderLabels;
+}
+
+export const RuleBuilderContext = createContext<RuleBuilderConfig | null>(null);
+
+export function useRuleBuilderConfig(): RuleBuilderConfig {
+  const config = useContext(RuleBuilderContext);
+  if (config == null) throw new Error("RuleBuilder node rendered outside its provider");
+  return config;
+}
 
 /** The flat node plus the callbacks and view flags React Flow carries in `data`. */
 type LogicalNodeData = FlatNode & {
@@ -51,12 +114,13 @@ type LeafNodeData = FlatNode & {
 };
 
 export function LogicalNode({ data, id }: NodeProps) {
+  const { labels } = useRuleBuilderConfig();
   const d = data as unknown as LogicalNodeData;
   const op = d.logicalOp ?? "AND";
   const color = LOGICAL_COLORS[op];
   // Every control below is named by tree position, never by `id` — a node id
   // like "node_7" is a DOM detail and says nothing about which group is meant.
-  const groupName = `group ${d.path ?? "1"}`;
+  const groupName = labels.groupName(d.path ?? "1");
 
   return (
     <div
@@ -73,14 +137,16 @@ export function LogicalNode({ data, id }: NodeProps) {
             <SelectTrigger
               className="w-20 h-8 text-xs font-bold"
               style={{ color }}
-              aria-label={`Logic operator for ${groupName}`}
+              aria-label={labels.operatorLabel(groupName)}
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="AND">AND</SelectItem>
-              <SelectItem value="OR">OR</SelectItem>
-              <SelectItem value="NOT">NOT</SelectItem>
+              {LOGICAL_OPS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
@@ -92,8 +158,8 @@ export function LogicalNode({ data, id }: NodeProps) {
               size="icon"
               className="h-6 w-6"
               onClick={() => d.onAddChild?.(id, "leaf")}
-              title="Add condition"
-              aria-label={`Add condition inside ${groupName}`}
+              title={labels.addLeaf}
+              aria-label={labels.addLeafLabel(groupName)}
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
             </Button>
@@ -102,8 +168,8 @@ export function LogicalNode({ data, id }: NodeProps) {
               size="icon"
               className="h-6 w-6"
               onClick={() => d.onAddChild?.(id, "logical")}
-              title="Add group"
-              aria-label={`Add nested group inside ${groupName}`}
+              title={labels.addGroup}
+              aria-label={labels.addGroupLabel(groupName)}
             >
               <FolderPlus className="h-3.5 w-3.5" aria-hidden />
             </Button>
@@ -113,7 +179,7 @@ export function LogicalNode({ data, id }: NodeProps) {
                 size="icon"
                 className="h-6 w-6"
                 onClick={() => d.onDelete?.(id)}
-                aria-label={`Delete ${groupName} and every condition inside it`}
+                aria-label={labels.deleteGroupLabel(groupName)}
               >
                 <Trash2 className="h-3.5 w-3.5 text-destructive" aria-hidden />
               </Button>
@@ -127,31 +193,24 @@ export function LogicalNode({ data, id }: NodeProps) {
 }
 
 export function LeafNode({ data, id }: NodeProps) {
+  const config = useRuleBuilderConfig();
   const d = data as unknown as LeafNodeData;
-  const registry = useContext(ConditionTypesContext);
-  // Sub-condition-only predicates (`player_role`, `player_div`) are rejected at
-  // the top level by the validator, so they are not offered here. Before the
-  // query resolves the list is empty — keep the node's own type selectable so
-  // the control never renders blank.
-  const options = useMemo(() => {
-    const selectable = registry.filter((option) => !option.subcondition_only);
-    if (selectable.length > 0) return selectable;
-    return d.conditionType ? [{ name: d.conditionType } as ConditionTypeInfo] : [];
-  }, [registry, d.conditionType]);
+  const leafType = d.leafType ?? config.defaultLeafType;
+  // Before the catalogue resolves the list is empty — keep the node's own type
+  // selectable so the control never renders blank.
+  const options =
+    config.leafOptions.length > 0
+      ? config.leafOptions
+      : [{ value: leafType, label: config.labelForLeaf(leafType) }];
   const params = d.params ?? {};
 
   const setParam = (key: string, value: unknown) => d.onChangeParam?.(id, key, value);
-  const label = conditionLabel(d.conditionType);
+  const label = config.labelForLeaf(d.leafType);
   const path = d.path ?? "1";
-  /**
-   * Accessible name for one field inside this node. Thirty-odd param controls
-   * share the same handful of field names ("Operator", "Value"), so each one
-   * has to carry both its own field and the condition it belongs to.
-   */
-  const controlName = (field: string) => `${field} for ${label} condition ${path}`;
+  const controlName = (field: string) => config.labels.leafFieldLabel(field, label, path);
 
   if (d.readOnly) {
-    const summary = formatParamsSummary(d.conditionType ?? "", params);
+    const summary = config.summarizeLeaf(leafType, params);
     return (
       <div
         className="rounded-lg border-2 px-3 py-2 bg-card shadow-md"
@@ -175,17 +234,14 @@ export function LeafNode({ data, id }: NodeProps) {
       <Handle type="target" position={Position.Left} aria-hidden style={{ background: LEAF_COLOR }} />
       <div className="flex items-center gap-2">
         <span className="text-xs tabular-nums text-muted-foreground">{path}</span>
-        <Select
-          value={d.conditionType ?? "match_win"}
-          onValueChange={(val) => d.onChangeType?.(id, val)}
-        >
-          <SelectTrigger className="h-7 text-xs flex-1" aria-label={`Condition type for condition ${path}`}>
+        <Select value={leafType} onValueChange={(val) => d.onChangeType?.(id, val)}>
+          <SelectTrigger className="h-7 text-xs flex-1" aria-label={config.labels.leafTypeLabel(path)}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {options.map((option) => (
-              <SelectItem key={option.name} value={option.name}>
-                {conditionLabel(option.name)}
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -196,20 +252,14 @@ export function LeafNode({ data, id }: NodeProps) {
             size="icon"
             className="h-6 w-6"
             onClick={() => d.onDelete?.(id)}
-            aria-label={`Delete ${label} condition ${path}`}
+            aria-label={config.labels.deleteLeafLabel(label, path)}
           >
             <Trash2 className="h-3.5 w-3.5 text-destructive" aria-hidden />
           </Button>
         )}
       </div>
 
-      <ConditionLeafFields
-        nodeId={id}
-        conditionType={d.conditionType}
-        params={params}
-        setParam={setParam}
-        controlName={controlName}
-      />
+      {config.renderLeafFields({ nodeId: id, leafType: d.leafType, params, setParam, controlName })}
     </div>
   );
 }

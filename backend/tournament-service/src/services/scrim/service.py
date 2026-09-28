@@ -22,6 +22,7 @@ Two invariants this module owns, because nothing downstream can enforce them:
 from __future__ import annotations
 
 import secrets
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -60,11 +61,8 @@ from shared.repository import (
 from shared.services.settings_provider import settings_provider
 from shared.services.tournament.visibility import assert_tournament_viewable
 from src import models
-from src.services.encounter.pick_ban_session import (
-    pick_ban_session_service,
-    validate_pick_ban_config,
-    validate_pick_ban_slot_config,
-)
+from src.services.encounter import pick_ban_config as pick_ban_config_service
+from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.veto_session import (
     REASON_NOT_CONFIGURED,
     REASON_SLOT_COUNT_MISMATCH,
@@ -113,7 +111,9 @@ def _clone_config(source: PickBanConfig, *, tournament_id: int, stage_id: int) -
     A copy, not a reference: the room must keep playing the pool it opened with
     even if the organizer edits the tournament's config afterwards — the same
     "a running session is never silently rewritten" rule the engine already
-    holds for tournament play.
+    holds for tournament play. That includes the ruleset document, which is
+    deep-copied rather than shared: two ORM rows pointing at one dict would let
+    an edit to either rewrite both.
     """
     clone = PickBanConfig(
         tournament_id=tournament_id,
@@ -123,12 +123,7 @@ def _clone_config(source: PickBanConfig, *, tournament_id: int, stage_id: int) -
         mode=source.mode,
         first_pick_rule=source.first_pick_rule,
         first_ban_rotation=source.first_ban_rotation,
-        turn_timer_seconds=source.turn_timer_seconds,
-        preset=source.preset,
-        sequence_json=list(source.sequence_json),
-        no_repeat_scope=source.no_repeat_scope,
-        unique_attribute_per_side_per_round=source.unique_attribute_per_side_per_round,
-        allow_protect=source.allow_protect,
+        ruleset_json=deepcopy(source.ruleset_json),
     )
     clone.items = [
         PickBanConfigItem(item_id=item.item_id, sort_order=item.sort_order)
@@ -148,10 +143,12 @@ def _clone_config(source: PickBanConfig, *, tournament_id: int, stage_id: int) -
     return clone
 
 
-def _config_from_input(payload: dict[str, Any], *, tournament_id: int, stage_id: int) -> PickBanConfig:
+async def _config_from_input(
+    session: AsyncSession, payload: dict[str, Any], *, tournament_id: int, stage_id: int
+) -> PickBanConfig:
     """Build one room-scoped config from a custom-pool entry.
 
-    Validated with the SAME validators the organizer's config editor uses, so a
+    Validated with the SAME validator the organizer's config editor uses, so a
     room cannot be provisioned into a shape the engine would later refuse to
     open a session for — which would strand the room in ``misconfigured`` with no
     way for its captains to fix it.
@@ -160,19 +157,18 @@ def _config_from_input(payload: dict[str, Any], *, tournament_id: int, stage_id:
     mode = MapVetoMode(payload.get("mode") or MapVetoMode.POOL.value)
     slots = payload.get("slots") or []
     item_ids = payload.get("item_ids") or []
-    sequence = payload.get("sequence") or []
+    ruleset = payload.get("ruleset") or {}
 
-    if mode == MapVetoMode.SLOTS:
-        if item_ids or sequence:
-            raise HTTPException(status_code=422, detail="item_ids/sequence must be empty in slots mode")
-        validate_pick_ban_slot_config(
-            [list(slot.get("candidates") or []) for slot in slots],
-            reserves=[slot.get("reserve_item_id") for slot in slots],
-        )
-    else:
-        if slots:
-            raise HTTPException(status_code=422, detail="slots must be empty in pool mode")
-        validate_pick_ban_config(list(sequence), list(item_ids), kind=kind)
+    pick_ban_config_service.validate_config_payload(
+        kind=kind,
+        mode=mode,
+        ruleset=ruleset,
+        item_ids=item_ids,
+        slots=[(list(slot.get("candidates") or []), slot.get("reserve_item_id")) for slot in slots],
+        stage_id=stage_id,
+        round=None,
+        groups=await pick_ban_config_service.group_vocabulary(session, kind),
+    )
 
     config = PickBanConfig(
         tournament_id=tournament_id,
@@ -180,15 +176,11 @@ def _config_from_input(payload: dict[str, Any], *, tournament_id: int, stage_id:
         stage_id=stage_id,
         round=None,
         mode=mode,
-        turn_timer_seconds=payload.get("turn_timer_seconds"),
-        preset=payload.get("preset"),
-        sequence_json=list(sequence),
-        unique_attribute_per_side_per_round=payload.get("unique_attribute_per_side_per_round"),
-        allow_protect=bool(payload.get("allow_protect", False)),
+        ruleset_json=pick_ban_config_service.normalized_ruleset(ruleset),
     )
     # Only assign what the caller actually sent: these columns carry server
     # defaults, and writing ``None`` over them would violate NOT NULL.
-    for field in ("first_pick_rule", "first_ban_rotation", "no_repeat_scope"):
+    for field in ("first_pick_rule", "first_ban_rotation"):
         value = payload.get(field)
         if value is not None:
             setattr(config, field, value)
@@ -381,7 +373,10 @@ class ScrimService:
             kinds = [entry.get("kind") for entry in entries]
             if len(set(kinds)) != len(kinds):
                 raise HTTPException(status_code=422, detail="pool.configs must carry at most one entry per kind")
-            return [_config_from_input(entry, tournament_id=tournament_id, stage_id=stage_id) for entry in entries]
+            return [
+                await _config_from_input(session, entry, tournament_id=tournament_id, stage_id=stage_id)
+                for entry in entries
+            ]
 
         raise HTTPException(status_code=422, detail="pool.source must be 'copy' or 'custom'")
 

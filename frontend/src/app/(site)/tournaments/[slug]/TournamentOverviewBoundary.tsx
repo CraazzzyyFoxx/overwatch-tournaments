@@ -11,9 +11,11 @@ type TournamentOverviewBoundaryProps = {
 // Hydration-only: seeds the shared React Query cache with the SSR-fetched
 // overview so `useTournamentQuery` resolves instantly wherever it's called
 // (TournamentClientLayout and every tab page share the same query key).
-// Deliberately renders no children of its own — TournamentClientLayout is a
-// sibling in layout.tsx, not a descendant, so a re-suspend here (this segment
-// is `force-dynamic`) never unmounts the client shell/nav on tab navigation.
+// Deliberately renders no children of its own; it is the FIRST child of the
+// layout's Suspense boundary and `TournamentClientLayout` is the second, which
+// is what makes the seed land before the read in both renderers (see
+// layout.tsx). Anything that moves the shell out of that boundary reintroduces
+// the hydration mismatch this ordering exists to prevent.
 export default async function TournamentOverviewBoundary({
   slug
 }: Readonly<TournamentOverviewBoundaryProps>) {

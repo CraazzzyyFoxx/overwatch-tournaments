@@ -137,12 +137,7 @@ function config(overrides: Partial<PickBanConfig>): PickBanConfig {
     mode: "pool",
     first_pick_rule: "higher_seed",
     first_ban_rotation: "alternate",
-    turn_timer_seconds: null,
-    preset: null,
-    sequence: [],
-    no_repeat_scope: "none",
-    unique_attribute_per_side_per_round: null,
-    allow_protect: false,
+    ruleset: { version: 2, timer_seconds: null, on_timeout: "random_fill", phases: [] },
     item_ids: [],
     slots: [],
     ...overrides

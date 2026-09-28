@@ -1,716 +1,428 @@
+"""The live pick-ban runtime: the cursor, the two ways a side answers a step,
+and the self-healing every read performs.
+
+Driven through the REAL services against ``tests/_pickban_room.Room`` -- the
+v1 suite pinned pure helpers (``apply_pick_ban_action``,
+``auto_complete_decider_entry``) that ruleset v2 replaced with
+``shared.domain.pick_ban_rules``, which has its own unit suites. What is worth
+pinning HERE is the service behaviour those helpers used to carry: a system
+step resolving as soon as it becomes current, a timer expiring under each
+``on_timeout`` policy, the turn/step refusals, and the state payload's blind
+privacy.
+"""
+
 from __future__ import annotations
 
-import sys
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from types import SimpleNamespace
-from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import patch
+from unittest import IsolatedAsyncioTestCase
 
-backend_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / "tournament-service"))
-
-
-from shared.core.enums import MapPickSide, MapPoolEntryStatus, MapVetoSessionStatus, PickBanKind  # noqa: E402
+from shared.core.enums import MapVetoSessionStatus, PickBanKind  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
-from src.services.encounter import pick_ban_action  # noqa: E402
-from src.services.encounter.pick_ban_action import (  # noqa: E402
-    apply_pick_ban_action,
-    auto_complete_decider_entry,
-    pick_ban_action_service,
-    serialize_pick_ban_session,
-)
+from src.services.encounter.pick_ban_action import pick_ban_action_service  # noqa: E402
+from tests._pickban_room import AWAY, HOME, Room, available_of, v1_ruleset  # noqa: E402
+
+# One ban per side, then a decider: the shortest sequence with a system step.
+BAN_BAN_DECIDER = v1_ruleset(kind="map", mode="pool", sequence=["ban_first", "ban_second", "decider"])
+SEQUENTIAL_BANS = v1_ruleset(sequence=["ban_first", "ban_second"])
 
 
-def make_entry(
-    item_id: int,
-    *,
-    status: MapPoolEntryStatus = MapPoolEntryStatus.AVAILABLE,
-    order: int = 0,
-    action_index: int | None = None,
-    picked_by: MapPickSide | None = None,
-    protected_by: MapPickSide | None = None,
-    round: int | None = None,
-    team_id: int | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=item_id,
-        item_id=item_id,
-        order=order,
-        action_index=action_index,
-        status=status,
-        picked_by=picked_by,
-        protected_by=protected_by,
-        round=round,
-        team_id=team_id,
-    )
+def blind_ruleset(*, count: int = 2, on_timeout: str = "random_fill", timer: int | None = 30) -> dict:
+    """Both sides ban ``count`` heroes at once, privately."""
+    return {
+        "version": 2,
+        "timer_seconds": timer,
+        "on_timeout": on_timeout,
+        "phases": [
+            {
+                "id": "main",
+                "name": None,
+                "when": {},
+                "pool_filter": {},
+                "generator": None,
+                "steps": [
+                    {
+                        "id": "blind",
+                        "action": "ban",
+                        "actors": "both",
+                        "count": count,
+                        "min": None,
+                        "blind": True,
+                        "target": None,
+                        "lifetime": 1,
+                        "timer_seconds": None,
+                        "on_timeout": None,
+                        "dispute": {"enabled": True, "max": 1},
+                        "eligible": {},
+                        "constraints": [],
+                    }
+                ],
+            }
+        ],
+    }
 
 
-class AutoCompleteDeciderEntryTests(TestCase):
-    """Generalizes ``map_veto.auto_complete_decider_entry``'s own suite:
-    ``slot`` -> ``round``, ``map_id`` -> ``item_id``."""
-
-    def test_marks_last_available_item_as_decider_pick(self) -> None:
-        pool = [
-            make_entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, order=0),
-            make_entry(2, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.AWAY, order=1),
-            make_entry(3, status=MapPoolEntryStatus.AVAILABLE, order=2),
-        ]
-
-        resolved = auto_complete_decider_entry(["ban_home", "pick_away", "decider"], pool)
-
-        self.assertIsNotNone(resolved)
-        self.assertEqual(MapPoolEntryStatus.PICKED.value, resolved.status)
-        self.assertEqual(MapPickSide.DECIDER.value, resolved.picked_by)
-        self.assertEqual(2, resolved.order)
-        self.assertEqual(2, resolved.action_index)
-
-    def test_no_pending_decider_step_returns_none(self) -> None:
-        pool = [make_entry(1, status=MapPoolEntryStatus.AVAILABLE)]
-
-        self.assertIsNone(auto_complete_decider_entry(["ban_home"], pool))
-
-    def test_sequence_already_complete_returns_none(self) -> None:
-        pool = [make_entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME)]
-
-        self.assertIsNone(auto_complete_decider_entry(["ban_home"], pool))
-
-    def test_round_scoped_decider_ignores_other_rounds_candidates(self) -> None:
-        """The decider closes one round at a time: another round's untouched
-        candidates must not count toward this round's "exactly one
-        available". A whole-pool count would see 4 available (1 in round 1,
-        3 in round 2) and 400 instead of resolving round 1's decider."""
-        pool = [
-            make_entry(1, round=1, status=MapPoolEntryStatus.BANNED),
-            make_entry(2, round=1, status=MapPoolEntryStatus.BANNED),
-            make_entry(3, round=1),
-            make_entry(4, round=2),
-            make_entry(5, round=2),
-            make_entry(6, round=2),
-        ]
-        sequence = ["ban_home", "ban_away", "decider", "ban_home", "ban_away", "decider"]
-
-        entry = auto_complete_decider_entry(sequence, pool)
-
-        self.assertEqual(3, entry.item_id)
-        self.assertEqual(MapPoolEntryStatus.PICKED.value, entry.status)
-
-    def test_zero_available_candidates_raises(self) -> None:
-        pool = [
-            make_entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME),
-            make_entry(2, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.AWAY),
-        ]
-
-        with self.assertRaises(HTTPException) as ctx:
-            auto_complete_decider_entry(["ban_home", "ban_away", "decider"], pool)
-        self.assertEqual(400, ctx.exception.status_code)
-        self.assertEqual("Decider step has no available item", ctx.exception.detail)
-
-    def test_multiple_available_candidates_picks_one_at_random(self) -> None:
-        """A pool oversized for its series length (config mistake, not a
-        captain's) must not 400 the room dead forever -- it resolves the
-        decider the same way an abandoned captain step already does:
-        uniformly at random among the survivors, leaving the rest untouched,
-        and every survivor gets a turn across enough draws."""
-        chosen_ids: set[int] = set()
-        for _ in range(50):
-            pool = [
-                make_entry(1, status=MapPoolEntryStatus.AVAILABLE),
-                make_entry(2, status=MapPoolEntryStatus.AVAILABLE),
-                make_entry(3, status=MapPoolEntryStatus.AVAILABLE),
-            ]
-
-            entry = auto_complete_decider_entry(["decider"], pool)
-
-            self.assertIn(entry, pool)
-            self.assertEqual(MapPoolEntryStatus.PICKED.value, entry.status)
-            self.assertEqual(MapPickSide.DECIDER.value, entry.picked_by)
-            untouched = [candidate for candidate in pool if candidate is not entry]
-            self.assertEqual(2, len(untouched))
-            for candidate in untouched:
-                self.assertEqual(MapPoolEntryStatus.AVAILABLE, candidate.status)
-            chosen_ids.add(entry.item_id)
-
-        self.assertEqual({1, 2, 3}, chosen_ids)
-
-    def test_protected_entries_still_count_as_available_for_the_floor(self) -> None:
-        # `protected_by` only blocks a `ban`; a decider auto-resolve does not
-        # go through `is_entry_bannable`, so a protected-but-AVAILABLE entry is
-        # exactly as eligible as any other survivor.
-        pool = [make_entry(1, status=MapPoolEntryStatus.AVAILABLE, protected_by=MapPickSide.HOME)]
-
-        entry = auto_complete_decider_entry(["decider"], pool)
-
-        self.assertEqual(1, entry.item_id)
+async def expire(room: Room, kind: PickBanKind = PickBanKind.HERO) -> None:
+    """Open the room if it is not open yet, then wind the step's clock back
+    past its deadline."""
+    await room.open(kind)
+    room.session(kind).current_step_started_at = datetime.now(UTC) - timedelta(hours=1)
 
 
-class _FakeAutoCompleteSession:
-    """Just enough ``AsyncSession`` for the self-healing resolvers.
+class SystemStepTests(IsolatedAsyncioTestCase):
+    """A ``system`` step resolves itself the moment it becomes current -- the
+    v1 ``decider`` auto-complete, now just another step of the sequence.
 
-    Both of them re-read the session row and its pool once their cheap check
-    says there is work — that re-read is where the ``FOR UPDATE`` lives — so the
-    double has to answer it. ``pick_ban``/``pool`` are the stored state; passing
-    them to the resolver as well only supplies its unlocked pre-check.
-    """
+    Map kind only: a hero round leaves the unbanned pool playable, so
+    ``resolve_round`` drops a decider a legacy hero config still carries."""
 
-    def __init__(self, pick_ban: object | None = None, pool: list | None = None) -> None:
-        self.commits = 0
-        self.refreshed: list[object] = []
-        self.pick_ban = pick_ban
-        self.pool = pool if pool is not None else []
+    def _room(self, items: list[int]) -> Room:
+        return Room(map_ruleset=BAN_BAN_DECIDER, map_items=items)
 
-    async def execute(self, statement: object) -> object:
-        entity = statement.column_descriptions[0]["entity"]
-        name = getattr(entity, "__name__", "")
-        if name == "PickBanEntry":
-            rows = list(self.pool)
-        elif name == "PickBanSession":
-            rows = [self.pick_ban]
-        else:
-            # The config read: this double holds no PickBanConfig, i.e. a session
-            # with neither attribute-uniqueness nor cross-round ban memory.
-            rows = []
-        rows = [row for row in rows if row is not None]
+    async def act(self, room: Room, side: str, item_id: int) -> dict:
+        return await room.act(side, item_id, kind=PickBanKind.MAP)
 
-        class _Result:
-            def unique(self_inner) -> object:
-                return self_inner
+    async def test_the_decider_awards_the_survivor_as_soon_as_the_bans_are_in(self) -> None:
+        room = self._room([11, 12, 13])
+        await self.act(room, HOME, 11)
+        state = await self.act(room, AWAY, 12)
 
-            def scalars(self_inner) -> object:
-                return self_inner
+        self.assertTrue(state["is_complete"])
+        picked = [entry for entry in state["pool"] if entry["status"] == "picked"]
+        self.assertEqual([(13, "decider", 1)], [(e["item_id"], e["picked_by"], e["order"]) for e in picked])
+        self.assertEqual(MapVetoSessionStatus.COMPLETED, room.session(PickBanKind.MAP).status)
 
-            def first(self_inner) -> object | None:
-                return rows[0] if rows else None
+    async def test_it_does_not_fire_before_its_turn(self) -> None:
+        room = self._room([11, 12, 13])
+        state = await self.act(room, HOME, 11)
 
-            def all(self_inner) -> list:
-                return list(rows)
+        self.assertFalse(state["is_complete"])
+        self.assertEqual([], [entry for entry in state["pool"] if entry["status"] == "picked"])
+        self.assertEqual(1, state["current_step_index"])
 
-        return _Result()
-
-    async def commit(self) -> None:
-        self.commits += 1
-
-    async def refresh(self, instance: object) -> None:
-        self.refreshed.append(instance)
+    async def test_it_picks_among_every_survivor_rather_than_stalling_on_an_oversized_pool(self) -> None:
+        """A pool oversized for its sequence (a config mistake, not a captain's)
+        reaches the decider with several survivors. Resolving one at random
+        beats freezing the room on a step nobody can take -- and across enough
+        draws every survivor gets a turn."""
+        chosen: set[int] = set()
+        for _ in range(40):
+            room = self._room([11, 12, 13, 14, 15])
+            await self.act(room, HOME, 11)
+            state = await self.act(room, AWAY, 12)
+            picked = [entry for entry in state["pool"] if entry["status"] == "picked"]
+            self.assertEqual(1, len(picked), "a decider settles exactly one item")
+            chosen.add(picked[0]["item_id"])
+        self.assertEqual({13, 14, 15}, chosen)
 
 
-class AutoCompleteDeciderTests(IsolatedAsyncioTestCase):
-    async def test_resolves_and_commits_when_a_decider_is_pending(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            resolved_sequence_json=["ban_home", "ban_away", "decider"],
-            status=MapVetoSessionStatus.ACTIVE.value,
-            current_step_started_at=None,
+class TurnAndStepRefusalTests(IsolatedAsyncioTestCase):
+    async def test_the_wrong_side_is_refused(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.act(AWAY, 1)
+
+        self.assertEqual(400, caught.exception.status_code)
+        self.assertIn("home team's turn", caught.exception.detail)
+
+    async def test_the_wrong_action_is_refused(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.act(HOME, 1, action="pick")
+
+        self.assertEqual("Expected action 'ban', got 'pick'", caught.exception.detail)
+
+    async def test_an_exhausted_sequence_is_refused(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+        await room.act(HOME, 1)
+        await room.act(AWAY, 2)
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.act(HOME, 3)
+
+        self.assertEqual("Pick-ban sequence is already complete", caught.exception.detail)
+
+    async def test_an_already_banned_item_is_refused_by_code(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+        await room.act(HOME, 1)
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.act(AWAY, 1)
+
+        self.assertEqual("item_not_available", caught.exception.detail)
+
+    async def test_a_blind_step_refuses_act_and_an_open_step_refuses_submit(self) -> None:
+        blind = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4])
+        with self.assertRaises(HTTPException) as caught:
+            await blind.act(HOME, 1)
+        self.assertIn("submit the whole draft", caught.exception.detail)
+
+        open_room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+        with self.assertRaises(HTTPException) as caught:
+            await open_room.submit(HOME, [1])
+        self.assertIn("one item at a time", caught.exception.detail)
+
+
+class BlindStepTests(IsolatedAsyncioTestCase):
+    async def test_the_opponent_sees_progress_but_never_the_draft(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4, 5, 6])
+        await room.submit(HOME, [1, 2], lock=True)
+
+        opponent = await room.state(viewer=AWAY)
+
+        self.assertEqual(
+            {"home": {"locked": True, "filled": 2}, "away": {"locked": False, "filled": 0}}, opponent["step_progress"]
         )
-        pool = [
-            make_entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME),
-            make_entry(2, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.AWAY),
-            make_entry(3, status=MapPoolEntryStatus.AVAILABLE),
-        ]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
+        self.assertEqual([], opponent["submissions"], "an unrevealed blind draft is never serialized")
+        self.assertEqual(["home"], [side for side in ("home", "away") if side not in opponent["acting_sides"]])
+        self.assertEqual([], [entry for entry in opponent["pool"] if entry["status"] != "available"])
 
-        entry = await pick_ban_action_service.auto_complete_decider(
-            session, 500, PickBanKind.MAP, pick_ban=pick_ban, pool=pool
+    async def test_both_locks_reveal_and_project_the_board(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4, 5, 6])
+        await room.submit(HOME, [1, 2], lock=True)
+        state = await room.submit(AWAY, [3, 4], lock=True)
+
+        self.assertTrue(state["is_complete"])
+        self.assertEqual(
+            {(1, "home"), (2, "home"), (3, "away"), (4, "away")},
+            {(entry["item_id"], entry["picked_by"]) for entry in state["pool"] if entry["status"] == "banned"},
+        )
+        self.assertEqual({"revealed"}, {row["state"] for row in state["submissions"]})
+
+    async def test_a_duplicate_ban_is_merged_into_one_banned_entry(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4, 5, 6])
+        await room.submit(HOME, [1, 2], lock=True)
+        state = await room.submit(AWAY, [2, 3], lock=True)
+
+        banned = [entry for entry in state["pool"] if entry["status"] == "banned"]
+        self.assertEqual({1, 2, 3}, {entry["item_id"] for entry in banned})
+        self.assertEqual("home", next(e["picked_by"] for e in banned if e["item_id"] == 2), "first side wins")
+        # Both submissions still list it: the merge is on the BOARD, not the log.
+        self.assertEqual(
+            {("home", (1, 2)), ("away", (2, 3))},
+            {(row["side"], tuple(item["item_id"] for item in row["items"])) for row in state["submissions"]},
         )
 
-        self.assertIsNotNone(entry)
-        self.assertEqual(3, entry.item_id)
-        self.assertEqual(MapVetoSessionStatus.COMPLETED.value, pick_ban.status)
-        self.assertEqual(1, session.commits)
-        self.assertIn(entry, session.refreshed)
+    async def test_an_unlocked_draft_is_visible_to_its_own_side_only(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4])
+        await room.submit(HOME, [1], lock=False)
 
-    async def test_inactive_session_is_a_no_op(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            resolved_sequence_json=["decider"],
-            status=MapVetoSessionStatus.COMPLETED.value,
-            current_step_started_at=None,
+        own = await room.state(viewer=HOME)
+        self.assertEqual(
+            [("home", "draft", [1])],
+            [(r["side"], r["state"], [i["item_id"] for i in r["items"]]) for r in own["submissions"]],
         )
-        session = _FakeAutoCompleteSession(pick_ban)
+        self.assertEqual(["not_enough_items"], own["draft_issues"], "a short draft names why it cannot lock")
 
-        entry = await pick_ban_action_service.auto_complete_decider(
-            session, 500, PickBanKind.MAP, pick_ban=pick_ban, pool=[make_entry(1)]
+        self.assertEqual([], (await room.state(viewer=AWAY))["submissions"])
+
+    async def test_locking_a_short_draft_is_refused_with_the_engine_code(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4])
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.submit(HOME, [1], lock=True)
+
+        self.assertEqual("not_enough_items", caught.exception.detail)
+
+
+class TimeoutTests(IsolatedAsyncioTestCase):
+    async def test_random_fill_completes_the_draft_and_reveals(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4, 5, 6])
+        await room.submit(HOME, [1], lock=False)
+        await expire(room)
+
+        state = await room.state()
+
+        self.assertTrue(state["is_complete"])
+        self.assertEqual(
+            [2, 2],
+            [len(row["items"]) for row in sorted(state["submissions"], key=lambda row: row["side"])],
+            "both sides end with a full draft",
         )
+        banned = {entry["item_id"] for entry in state["pool"] if entry["status"] == "banned"}
+        # 3 or 4 distinct entries: the two sides may have filled the same hero,
+        # which the board merges (D8).
+        self.assertIn(len(banned), (3, 4))
+        self.assertIn(1, banned, "the draft the captain HAD is kept, not replaced")
 
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
+    async def test_lock_draft_seals_what_was_there_and_ignores_min(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(on_timeout="lock_draft"), hero_items=[1, 2, 3, 4, 5, 6])
+        await room.submit(HOME, [1], lock=False)
+        await expire(room)
 
-    async def test_no_session_is_a_no_op(self) -> None:
-        session = _FakeAutoCompleteSession()
+        state = await room.state()
 
-        entry = await pick_ban_action_service.auto_complete_decider(
-            session, 500, PickBanKind.MAP, pick_ban=None, pool=[]
+        self.assertTrue(state["is_complete"])
+        self.assertEqual({1}, {entry["item_id"] for entry in state["pool"] if entry["status"] == "banned"})
+
+    async def test_wait_leaves_the_step_open_for_an_organizer(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(on_timeout="wait"), hero_items=[1, 2, 3, 4])
+        await room.submit(HOME, [1], lock=False)
+        await expire(room)
+
+        state = await room.state()
+
+        self.assertFalse(state["is_complete"])
+        self.assertEqual(["away", "home"], sorted(state["acting_sides"]))
+
+    async def test_a_timer_less_step_never_expires(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(timer=None), hero_items=[1, 2, 3, 4])
+        await expire(room)
+
+        state = await room.state()
+
+        self.assertFalse(state["is_complete"])
+        self.assertIsNone(state["step_deadline"])
+
+    async def test_an_open_step_is_auto_banned_for_the_side_that_never_answered(self) -> None:
+        room = Room(
+            hero_ruleset=v1_ruleset(sequence=["ban_first", "ban_second"], turn_timer_seconds=30),
+            hero_items=[1, 2, 3],
         )
+        await expire(room)
 
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
+        state = await room.state()
 
-    async def test_not_yet_at_a_decider_step_is_a_no_op(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            resolved_sequence_json=["ban_home", "decider"],
-            status=MapVetoSessionStatus.ACTIVE.value,
-            current_step_started_at=None,
+        # The first step resolved at random; the SECOND is now on the clock with
+        # a fresh deadline, not carrying the expired one.
+        self.assertEqual(1, state["current_step_index"])
+        self.assertEqual(1, len([entry for entry in state["pool"] if entry["status"] == "banned"]))
+        self.assertIsNotNone(state["step_deadline"])
+        # The very next read must NOT burn the new step on the old clock.
+        again = await room.state()
+        self.assertEqual(1, again["current_step_index"])
+        self.assertEqual(1, len([entry for entry in again["pool"] if entry["status"] == "banned"]))
+
+    async def test_only_the_step_that_was_on_the_clock_expires(self) -> None:
+        """The deadline belongs to ONE step. Cascading it would burn a whole
+        sequence on a single stale read."""
+        room = Room(
+            hero_ruleset=v1_ruleset(sequence=["ban_first", "ban_second", "ban_first"], turn_timer_seconds=30),
+            hero_items=[1, 2, 3, 4, 5],
         )
-        session = _FakeAutoCompleteSession(pick_ban)
+        await expire(room)
 
-        entry = await pick_ban_action_service.auto_complete_decider(
-            session,
-            500,
-            PickBanKind.MAP,
-            pick_ban=pick_ban,
-            pool=[make_entry(1), make_entry(2)],
-        )
+        state = await room.state()
 
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
+        self.assertEqual(1, len([entry for entry in state["pool"] if entry["status"] == "banned"]))
 
-    async def test_a_stale_reader_no_longer_awards_the_decider_twice(self) -> None:
-        """Same race, same shape: the survivor is a committed step too, so two
-        readers resolving it would consume two positions of the sequence. The
-        award is decided under the lock against a re-read, so a caller holding
-        the pre-award pool finds nothing to do."""
-        stored = SimpleNamespace(
-            id=1,
-            resolved_sequence_json=["ban_home", "decider", "ban_home"],
-            status=MapVetoSessionStatus.ACTIVE.value,
-            current_step_started_at=None,
-        )
-        pool = [
-            make_entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            make_entry(2),
-            make_entry(3),
-        ]
-        session = _FakeAutoCompleteSession(stored, pool)
-        stale_pool = [SimpleNamespace(**vars(candidate)) for candidate in pool]
 
-        awarded = await pick_ban_action_service.auto_complete_decider(
-            session, 500, PickBanKind.MAP, pick_ban=stored, pool=pool
-        )
-        self.assertIsNotNone(awarded)
-        commits = session.commits
+class StatePayloadTests(IsolatedAsyncioTestCase):
+    async def test_the_payload_carries_what_the_room_renders(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
 
-        second = await pick_ban_action_service.auto_complete_decider(
-            session, 500, PickBanKind.MAP, pick_ban=stored, pool=stale_pool
-        )
+        state = await room.state(viewer=HOME)
 
-        self.assertIsNone(second)
-        self.assertEqual(commits, session.commits)
-        self.assertEqual(1, len([e for e in pool if e.status == MapPoolEntryStatus.PICKED.value]))
-
-
-class AutoResolveTimeoutTests(IsolatedAsyncioTestCase):
-    """``auto_resolve_timeout`` stands in for a captain who let their turn
-    timer run out: it picks uniformly at random among every candidate the
-    step's action would otherwise accept, then chains into
-    ``auto_complete_decider`` the same way ``perform_pick_ban_action`` does."""
-
-    def _expired_pick_ban(self, sequence: list[str], *, timer: int | None = 30) -> SimpleNamespace:
-        return SimpleNamespace(
-            id=1,
-            resolved_sequence_json=sequence,
-            status=MapVetoSessionStatus.ACTIVE.value,
-            turn_timer_seconds=timer,
-            current_step_started_at=datetime.now(UTC) - timedelta(seconds=(timer or 0) + 1),
-            config_id=None,
-        )
-
-    async def test_auto_bans_a_random_available_item_once_expired(self) -> None:
-        pick_ban = self._expired_pick_ban(["ban_home", "decider"])
-        pool = [make_entry(1), make_entry(2)]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNotNone(entry)
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, entry.status)
-        self.assertEqual("home", entry.picked_by)
-        self.assertIn(entry.item_id, (1, 2))
-        # The ban leaves exactly one candidate, so the chained
-        # `auto_complete_decider` call resolves the round in the same pass.
-        survivor = next(e for e in pool if e.item_id != entry.item_id)
-        self.assertEqual(MapPoolEntryStatus.PICKED.value, survivor.status)
-        self.assertEqual(MapPickSide.DECIDER.value, survivor.picked_by)
-        self.assertEqual(MapVetoSessionStatus.COMPLETED.value, pick_ban.status)
-
-    async def test_not_yet_expired_is_a_no_op(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            resolved_sequence_json=["ban_home", "decider"],
-            status=MapVetoSessionStatus.ACTIVE.value,
-            turn_timer_seconds=30,
-            current_step_started_at=datetime.now(UTC),
-            config_id=None,
-        )
-        pool = [make_entry(1), make_entry(2)]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
-        self.assertTrue(all(e.status == MapPoolEntryStatus.AVAILABLE.value for e in pool))
-
-    async def test_no_timer_configured_is_a_no_op(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            resolved_sequence_json=["ban_home", "decider"],
-            status=MapVetoSessionStatus.ACTIVE.value,
-            turn_timer_seconds=None,
-            current_step_started_at=datetime.now(UTC) - timedelta(days=1),
-            config_id=None,
-        )
-        pool = [make_entry(1), make_entry(2)]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
-
-    async def test_inactive_session_is_a_no_op(self) -> None:
-        pick_ban = self._expired_pick_ban(["ban_home", "decider"])
-        pick_ban.status = MapVetoSessionStatus.COMPLETED.value
-        session = _FakeAutoCompleteSession(pick_ban, [make_entry(1), make_entry(2)])
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
-
-    async def test_decider_step_is_out_of_scope(self) -> None:
-        """A decider has no captain to time out -- `auto_complete_decider`
-        owns it, unconditionally, not this function."""
-        pick_ban = self._expired_pick_ban(["decider"])
-        pool = [make_entry(1)]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNone(entry)
-        self.assertEqual(0, session.commits)
-        self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, pool[0].status)
-
-    async def test_only_the_side_on_the_clock_is_picked(self) -> None:
-        pick_ban = self._expired_pick_ban(["ban_away", "ban_home", "decider"])
-        pool = [make_entry(1), make_entry(2), make_entry(3)]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNotNone(entry)
-        self.assertEqual("away", entry.picked_by)
-
-    async def test_skips_a_protected_candidate_when_banning(self) -> None:
-        pick_ban = self._expired_pick_ban(["protect_away", "ban_home", "decider"])
-        pool = [
-            make_entry(1, status=MapPoolEntryStatus.PROTECTED, protected_by=MapPickSide.AWAY),
-            make_entry(2),
-            make_entry(3),
-        ]
-        session = _FakeAutoCompleteSession(pick_ban, pool)
-
-        entry = await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=pick_ban)
-
-        self.assertIsNotNone(entry)
-        self.assertIn(entry.item_id, (2, 3))
-
-    async def test_a_stale_reader_no_longer_re_resolves_the_same_turn(self) -> None:
-        """The room is polled by every client in it, and they all refetch at
-        once on a realtime event. One expired turn was therefore resolved by
-        every reader that got its read in before the first commit -- each
-        auto-action landing on the SAME side and eating the opposite side's
-        next step. The resolver now decides under the session lock, against a
-        re-read: a reader holding a pre-commit snapshot finds the clock already
-        bumped and does nothing."""
-        stored = self._expired_pick_ban(["ban_home", "ban_away", "decider"])
-        pool = [make_entry(1), make_entry(2), make_entry(3)]
-        session = _FakeAutoCompleteSession(stored, pool)
-        stale = SimpleNamespace(**vars(stored))
-
-        self.assertIsNotNone(
-            await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=stored)
-        )
-        commits = session.commits
-
-        self.assertIsNone(
-            await pick_ban_action_service.auto_resolve_timeout(session, 500, PickBanKind.MAP, pick_ban=stale)
-        )
-        self.assertEqual(commits, session.commits)
-        self.assertEqual(1, len([e for e in pool if e.status == MapPoolEntryStatus.BANNED.value]))
-
-
-class _StopAfterLookup(Exception):
-    """Cuts a service short the moment it has asked for its session row."""
-
-
-class SessionLockContractTests(IsolatedAsyncioTestCase):
-    """Every path that COMMITS a step must ask for the session row locked.
-
-    White-box on purpose: the lock is the whole correctness argument, and a
-    committing path that quietly drops ``for_update`` reintroduces the raced
-    step with no other visible symptom until a room comes out lopsided.
-    """
-
-    async def _for_update_flag(self, run) -> list[bool]:
-        seen: list[bool] = []
-
-        async def spy(_session, _encounter_id, _kind, *, for_update: bool = False):
-            seen.append(for_update)
-            raise _StopAfterLookup
-
-        with patch.object(pick_ban_action.pick_ban_session_service, "get_pick_ban_session", spy):
-            with self.assertRaises(_StopAfterLookup):
-                await run()
-        return seen
-
-    async def test_the_captain_act_path_locks_before_it_reads_anything(self) -> None:
-        flags = await self._for_update_flag(
-            lambda: pick_ban_action_service.perform_pick_ban_action(
-                _FakeAutoCompleteSession(), 500, PickBanKind.MAP, "home", 1, "ban"
-            )
-        )
-
-        self.assertEqual([True], flags)
-
-
-class ApplyPickBanActionUniquenessTests(TestCase):
-    """``unique_attribute_per_side_per_round`` is scoped PER ACTION KIND: a
-    side's bans constrain its bans and its protects constrain its protects,
-    never each other. Banning a tank used to spend that side's tank protect
-    too, because both statuses were counted into one history."""
-
-    ROLES = {101: "tank", 102: "tank", 103: "support"}
-
-    def _apply(self, sequence: list[str], pool: list, *, item_id: int, action: str):
-        pick_ban = SimpleNamespace(
-            resolved_sequence_json=sequence,
-            status=MapVetoSessionStatus.ACTIVE.value,
-            current_step_started_at=None,
-        )
-        return apply_pick_ban_action(
-            pick_ban,
-            pool,
-            captain_side="home",
-            item_id=item_id,
-            action=action,
-            attribute_lookup=self.ROLES,
-            unique_attribute="role",
-            now=datetime.now(UTC),
-        )
-
-    def _pool(self, *, first_status: MapPoolEntryStatus) -> list:
-        """101 (tank) already committed by home; 102 (tank) and 103 (support)
-        still open."""
-        first = make_entry(101, status=first_status, action_index=0, round=1)
-        if first_status == MapPoolEntryStatus.BANNED:
-            first.picked_by = MapPickSide.HOME
-        else:
-            first.protected_by = MapPickSide.HOME
-        return [first, make_entry(102, round=1), make_entry(103, round=1)]
-
-    def test_protect_allowed_after_the_same_side_banned_that_role(self) -> None:
-        pool = self._pool(first_status=MapPoolEntryStatus.BANNED)
-
-        entry = self._apply(["ban_home", "protect_home", "decider"], pool, item_id=102, action="protect")
-
-        self.assertEqual(MapPoolEntryStatus.PROTECTED.value, entry.status)
-        self.assertEqual("home", entry.protected_by)
-
-    def test_ban_allowed_after_the_same_side_protected_that_role(self) -> None:
-        pool = self._pool(first_status=MapPoolEntryStatus.PROTECTED)
-
-        entry = self._apply(["protect_home", "ban_home", "decider"], pool, item_id=102, action="ban")
-
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, entry.status)
-        self.assertEqual("home", entry.picked_by)
-
-    def test_second_ban_of_the_same_role_is_still_rejected(self) -> None:
-        pool = self._pool(first_status=MapPoolEntryStatus.BANNED)
-
-        with self.assertRaises(HTTPException) as ctx:
-            self._apply(["ban_home", "ban_home", "decider"], pool, item_id=102, action="ban")
-
-        self.assertEqual(400, ctx.exception.status_code)
-        self.assertEqual("Your side already banned an item with this attribute this round", ctx.exception.detail)
-
-    def test_second_protect_of_the_same_role_is_still_rejected(self) -> None:
-        pool = self._pool(first_status=MapPoolEntryStatus.PROTECTED)
-
-        with self.assertRaises(HTTPException) as ctx:
-            self._apply(["protect_home", "protect_home", "decider"], pool, item_id=102, action="protect")
-
-        self.assertEqual(400, ctx.exception.status_code)
-        self.assertEqual("Your side already protected an item with this attribute this round", ctx.exception.detail)
-
-    def test_a_ban_is_not_barred_by_the_sides_own_earlier_protect_in_the_series(self) -> None:
-        """``excluded_for_side`` is BAN memory: it never carried protects, so a
-        protect cannot bar a later ban of the same item. The reverse (an actual
-        earlier ban) still rejects."""
-        pool = [make_entry(101, round=1), make_entry(102, round=1)]
-
-        with self.assertRaises(HTTPException) as ctx:
-            apply_pick_ban_action(
-                SimpleNamespace(
-                    resolved_sequence_json=["ban_home", "decider"],
-                    status=MapVetoSessionStatus.ACTIVE.value,
-                    current_step_started_at=None,
-                ),
-                pool,
-                captain_side="home",
-                item_id=101,
-                action="ban",
-                attribute_lookup={},
-                unique_attribute=None,
-                excluded_for_side=frozenset({101}),
-                now=datetime.now(UTC),
-            )
-
-        self.assertEqual("Your side already banned this item earlier in the series", ctx.exception.detail)
-
-
-class ProtectIsRoundLocalAcrossRoundsTests(TestCase):
-    """A round's PROTECTED entry survives that round's close (only its untouched
-    `available` leftovers are dropped), so a series pool holds the same item
-    twice: the finished round's protected row and the new round's fresh
-    candidate. The step must resolve against the round IN PLAY -- a protect on
-    map 1 must not bar a ban of that hero on map 2."""
-
-    def _series_pool(self) -> list:
-        """Round 1 settled (101 protected by home, 102 banned by home), round 2
-        freshly appended with 101 back as a candidate."""
-        return [
-            make_entry(
-                101, status=MapPoolEntryStatus.PROTECTED, protected_by=MapPickSide.HOME, action_index=0, round=1
-            ),
-            make_entry(102, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=1, round=1),
-            make_entry(101, round=2),
-            make_entry(103, round=2),
-        ]
-
-    def _ban(self, pool: list, *, item_id: int, side: str = "home"):
-        return apply_pick_ban_action(
-            SimpleNamespace(
-                # Two rounds' worth of steps: round 1's are spent, round 2 opens.
-                resolved_sequence_json=["protect_home", "ban_home", "ban_home", "ban_away"],
-                status=MapVetoSessionStatus.ACTIVE.value,
-                current_step_started_at=None,
-            ),
-            pool,
-            captain_side=side,
-            item_id=item_id,
-            action="ban",
-            attribute_lookup={},
-            unique_attribute=None,
-            now=datetime.now(UTC),
-        )
-
-    def test_the_side_that_protected_a_hero_may_ban_it_the_next_round(self) -> None:
-        pool = self._series_pool()
-
-        entry = self._ban(pool, item_id=101)
-
-        self.assertEqual(2, entry.round)
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, entry.status)
-        # The finished round's protected row is untouched -- it is history.
-        self.assertEqual(MapPoolEntryStatus.PROTECTED.value, pool[0].status)
-
-    def test_the_role_rule_ignores_a_finished_rounds_protect(self) -> None:
-        """Role uniqueness is round-local, so round 1's tank protect must not
-        spend round 2's tank budget for that side."""
-        pool = self._series_pool()
-
-        entry = apply_pick_ban_action(
-            SimpleNamespace(
-                resolved_sequence_json=["protect_home", "ban_home", "protect_home", "ban_away"],
-                status=MapVetoSessionStatus.ACTIVE.value,
-                current_step_started_at=None,
-            ),
-            pool,
-            captain_side="home",
-            item_id=101,
-            action="protect",
-            attribute_lookup={101: "tank", 102: "tank", 103: "support"},
-            unique_attribute="role",
-            now=datetime.now(UTC),
-        )
-
-        self.assertEqual(2, entry.round)
-        self.assertEqual(MapPoolEntryStatus.PROTECTED.value, entry.status)
-
-
-class SerializePickBanSessionSlotReservesTests(TestCase):
-    """Pins the ``slot_reserves`` wire key -- the byte-identical-shape
-    requirement for the map-veto cutover (Decision #12)."""
-
-    def test_exposes_slot_reserves_json_under_the_legacy_key_name(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            kind=PickBanKind.MAP,
-            status=MapVetoSessionStatus.ACTIVE.value,
-            first_side=MapPickSide.HOME.value,
-            awaiting_choice=False,
-            pending_loser_side=None,
-            seed_source="fallback_home",
-            home_seed=None,
-            away_seed=None,
-            turn_timer_seconds=45,
-            slot_reserves_json={"2": 99},
-            started_at=None,
-            current_step_started_at=None,
-        )
-
-        wire = serialize_pick_ban_session(pick_ban)
-
-        self.assertEqual({"2": 99}, wire["slot_reserves"])
-
-    def test_hero_sessions_report_none_harmlessly(self) -> None:
-        pick_ban = SimpleNamespace(
-            id=1,
-            kind=PickBanKind.HERO,
-            status=MapVetoSessionStatus.ACTIVE.value,
-            first_side=MapPickSide.HOME.value,
-            awaiting_choice=False,
-            pending_loser_side=None,
-            seed_source="fallback_home",
-            home_seed=None,
-            away_seed=None,
-            turn_timer_seconds=None,
-            slot_reserves_json=None,
-            started_at=None,
-            current_step_started_at=None,
-        )
-
-        wire = serialize_pick_ban_session(pick_ban)
-
-        self.assertIsNone(wire["slot_reserves"])
-
-
-class BuildPickBanStateTests(TestCase):
-    def test_a_token_without_separator_does_not_500_the_poll(self) -> None:
-        state = pick_ban_action.build_pick_ban_state(
-            ["ban"],
-            [make_entry(1)],
-            viewer_side="home",
-            pick_ban=None,
-            readiness={"home": True, "away": True},
-        )
+        self.assertEqual(["home"], state["acting_sides"])
+        self.assertTrue(state["viewer_can_act"])
+        self.assertEqual(["ban"], state["allowed_actions"])
         self.assertEqual("ban", state["expected_action"])
-        self.assertEqual("home", state["turn_side"])
+        self.assertEqual({"item_ids": [1, 2, 3], "by_target": None}, state["eligible"])
+        self.assertIsNone(state["targets"], "no resolved step names a player")
+        self.assertEqual({"available": False, "step_index": None, "attempts_used": 0, "max": 0}, state["dispute"])
+        self.assertNotIn("turn_timer_seconds", state["session"])
+        self.assertEqual([None, None, None], [entry["carried_from_round"] for entry in state["pool"]])
+
+    async def test_a_spectator_may_not_act_and_gets_no_eligibility(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+
+        state = await room.state(viewer=None)
+
+        self.assertFalse(state["viewer_can_act"])
+        self.assertIsNone(state["eligible"])
+        self.assertEqual([], state["draft_issues"])
+
+    async def test_the_side_that_is_not_on_the_clock_cannot_act(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+
+        state = await room.state(viewer=AWAY)
+
+        self.assertFalse(state["viewer_can_act"])
+        self.assertEqual([], state["allowed_actions"])
+        self.assertIsNone(state["eligible"])
+
+    async def test_an_unconfigured_room_still_answers_the_full_shape(self) -> None:
+        room = Room()  # no config at all
+
+        state = await room.state()
+
+        self.assertIsNone(state["session"])
+        self.assertEqual("not_configured", state["reason"])
+        for key in ("sequence", "pool", "submissions", "acting_sides", "draft_issues", "allowed_actions"):
+            self.assertEqual([], state[key], key)
+        for key in ("step_progress", "step_deadline", "eligible", "targets", "current_step"):
+            self.assertIsNone(state[key], key)
+        self.assertEqual(
+            {"requested_by": None, "step_index": None, "item_ids": [], "action": None, "side": None}, state["undo"]
+        )
 
 
-class AttributeLookupTests(IsolatedAsyncioTestCase):
-    """``select(Hero.type)`` can yield a raw string, not a HeroClass member."""
+class AdminReopenTests(IsolatedAsyncioTestCase):
+    async def test_it_reopens_the_last_settled_step_with_the_drafts_prefilled(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4, 5, 6])
+        await room.submit(HOME, [1, 2], lock=True)
+        await room.submit(AWAY, [3, 4], lock=True)
 
-    async def test_it_accepts_a_stored_string_without_dot_value(self) -> None:
-        class _Rows:
-            def all(self):
-                return [(1, "tank"), (2, SimpleNamespace(value="support"))]
+        state = await room.admin_reopen()
 
-        class _Session:
-            async def execute(self, _stmt):
-                return _Rows()
+        self.assertFalse(state["is_complete"])
+        self.assertEqual(0, state["current_step_index"])
+        self.assertEqual([], [entry for entry in state["pool"] if entry["status"] != "available"])
+        home = await room.state(viewer=HOME)
+        self.assertEqual(
+            [("home", "draft", [1, 2])],
+            [(r["side"], r["state"], [i["item_id"] for i in r["items"]]) for r in home["submissions"]],
+        )
 
-        lookup = await pick_ban_action_service._attribute_lookup(_Session(), PickBanKind.HERO, [1, 2])
-        self.assertEqual({1: "tank", 2: "support"}, lookup)
+    async def test_it_is_refused_when_nothing_has_settled(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4])
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.admin_reopen()
+
+        self.assertEqual("There is no settled step to reopen", caught.exception.detail)
+
+    async def test_it_ignores_the_attempt_limit_a_dispute_respects(self) -> None:
+        room = Room(hero_ruleset=blind_ruleset(), hero_items=[1, 2, 3, 4, 5, 6])
+        for _ in range(3):
+            await room.submit(HOME, [1, 2], lock=True)
+            await room.submit(AWAY, [3, 4], lock=True)
+            await room.admin_reopen()
+
+        # Three reopens past a `dispute.max` of 1: only the live attempt 4 is
+        # answerable, and the three it replaced are voided history.
+        self.assertEqual(4, max(row.attempt for row in room.submissions()))
+        live = [row for row in room.submissions() if row.attempt == 4]
+        self.assertEqual({"draft"}, {row.state for row in live})
+        self.assertEqual({"voided"}, {row.state for row in room.submissions() if row.attempt < 4})
+        with self.assertRaises(HTTPException) as caught:
+            await room.dispute(HOME)
+        self.assertEqual("This step cannot be reopened", caught.exception.detail)
+
+
+class AvailabilityHelperTests(IsolatedAsyncioTestCase):
+    async def test_available_of_tracks_the_round_in_play(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+        state = await room.state()
+        self.assertEqual([1, 2, 3], available_of(state))
+
+        state = await room.act(HOME, 2)
+        self.assertEqual([1, 3], available_of(state))
+
+
+class CancelledSessionTests(IsolatedAsyncioTestCase):
+    async def test_a_cancelled_session_refuses_every_mutation(self) -> None:
+        room = Room(hero_ruleset=SEQUENTIAL_BANS, hero_items=[1, 2, 3])
+        await room.state()
+        room.session().status = MapVetoSessionStatus.CANCELLED
+
+        for call in (
+            lambda: room.act(HOME, 1),
+            lambda: room.submit(HOME, [1]),
+            lambda: room.dispute(HOME),
+            lambda: pick_ban_action_service.admin_reopen_step(room.store, room.encounter_id, PickBanKind.HERO),
+        ):
+            with self.assertRaises(HTTPException) as caught:
+                await call()
+            self.assertEqual("Pick-ban session is cancelled", caught.exception.detail)

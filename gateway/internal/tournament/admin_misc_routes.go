@@ -40,6 +40,11 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-session/reset", Queue: "rpc.tournament.admin_pick_ban_session_reset", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-act", Queue: "rpc.tournament.admin_pick_ban_act", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-elect-opener", Queue: "rpc.tournament.admin_pick_ban_elect_opener", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// Ruleset v2 (docs/plans/2026-09-28-pick-ban-constructor.md §8): submit a
+	// BLIND step's draft for an absent captain, and reopen the last revealed
+	// step (the organizer's dispute, without the attempt budget).
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-submit", Queue: "rpc.tournament.admin_pick_ban_submit", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-reopen", Queue: "rpc.tournament.admin_pick_ban_reopen", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	// encounter_game correction — one series position's result, admin-decided and
 	// always reasoned (spec §6.5). Same worker-side "match"/"update" gate.
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/games/{game_id}/result", Queue: "rpc.tournament.admin_game_result", IDParam: "encounter_id", Path: []string{"game_id"}, Body: true, Auth: edge.AuthRequired},
@@ -62,6 +67,12 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pick-ban-configs", Queue: "rpc.tournament.admin_pick_ban_config_list", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pick-ban-configs", Queue: "rpc.tournament.admin_pick_ban_config_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/admin/pick-ban-configs/{config_id}", Queue: "rpc.tournament.admin_pick_ban_config_delete", IDParam: "config_id", Auth: edge.AuthRequired},
+	// The constructor's two read-only engine probes: "would this ruleset save?"
+	// and "what would a Bo5 of it look like?". Keyed by tournament_id because
+	// they gate on the same workspace "match"/"update" as the upsert they
+	// precede, not because they read the tournament.
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pick-ban-rules/validate", Queue: "rpc.tournament.admin_pick_ban_rules_validate", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pick-ban-rules/preview", Queue: "rpc.tournament.admin_pick_ban_rules_preview", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	// match report form (docs/plans/2026-08-04-configurable-match-report-form.md) —
 	// the per-tournament captain-report field config. Worker enforces workspace
 	// "match"/"read" for the get and "match"/"update" for the upsert.

@@ -1,32 +1,77 @@
-// The three wire fields an organizer must never be handed raw, pinned here.
+// The form model of one `PickBanConfig` under ruleset v2.
 //
-// `preset` is the important one: the engine only reads `sequence` when
-// `preset === "custom"` (`pick_ban_session.ensure_pick_ban_session`), so a form
-// that lets the two drift silently discards a hand-authored order. The rest of
-// the file covers the scope key the server validates and the rejections the
-// editor has to surface before save rather than after a 422.
+// What is pinned here is the behaviour an organizer can lose: the ruleset the
+// editor holds is the ruleset that is SENT (the v1 model had three wire fields
+// that silently discarded a hand-authored order, which is the class of bug this
+// file exists to prevent); ids stay unique through duplication, so a copied
+// phase cannot shadow the one it came from; the cascade prefills a narrower
+// scope from what it inherits; and the pool shape the editor owns is validated
+// before a 422.
 import { describe, expect, it } from "vitest";
 
-import type { PickBanConfig, Stage } from "@/types/tournament.types";
+import type { PickBanConfig, PickBanRuleset, Stage } from "@/types/tournament.types";
 
 import {
+  addStep,
   alignSlots,
-  effectiveSequence,
+  duplicatePhase,
+  duplicateStep,
   emptyPickBanDraft,
+  emptyRuleset,
   fanOutRoundDrafts,
   findScopeCollision,
   isRulesTemplate,
+  moveStep,
+  newPhase,
+  newStep,
+  parseRulesetJson,
   pickBanDraftFromConfig,
   pickBanDraftToInput,
-  protectHasNoStep,
+  removeStep,
+  rescopePickBanDraft,
   resolveSeriesLength,
   resolveSlotCount,
   roundSlotsForStage,
-  roundsPlayed,
   stageRoundOptions,
+  stepLifetimeSummary,
+  stepSummary,
+  updateStep,
   validatePickBanDraft,
   type PickBanDraft,
 } from "@/lib/tournament/pick-ban-config";
+
+/** The 2026-10-03 anti-one-trick ruleset (plan §12), trimmed to one phase. */
+const BLIND_RULESET: PickBanRuleset = {
+  version: 2,
+  timer_seconds: 90,
+  on_timeout: "random_fill",
+  phases: [
+    {
+      id: "map1",
+      name: "Map 1",
+      when: { type: "map_index", params: { op: "==", value: 1 } },
+      pool_filter: {},
+      generator: null,
+      steps: [
+        {
+          id: "blind2",
+          action: "ban",
+          actors: "both",
+          count: 2,
+          min: null,
+          blind: true,
+          target: null,
+          lifetime: 1,
+          timer_seconds: null,
+          on_timeout: null,
+          dispute: { enabled: true, max: 1 },
+          eligible: {},
+          constraints: [],
+        },
+      ],
+    },
+  ],
+};
 
 function draft(overrides: Partial<PickBanDraft> = {}): PickBanDraft {
   return { ...emptyPickBanDraft("map"), itemIds: [1, 2, 3, 4, 5], ...overrides };
@@ -70,165 +115,222 @@ function config(overrides: Partial<PickBanConfig> = {}): PickBanConfig {
     mode: "pool",
     first_pick_rule: "higher_seed",
     first_ban_rotation: "fixed",
-    turn_timer_seconds: null,
-    preset: "bracket",
-    sequence: ["ban_first", "ban_second", "pick_first", "pick_second", "decider"],
-    no_repeat_scope: "none",
-    unique_attribute_per_side_per_round: null,
-    allow_protect: false,
+    ruleset: emptyRuleset("map"),
     item_ids: [1, 2, 3, 4, 5],
     slots: [],
     ...overrides,
   };
 }
 
-describe("step order is only stored when it will be read", () => {
-  it("marks a hand-authored order custom, so the engine stops regenerating it", () => {
-    const input = pickBanDraftToInput(
-      draft({ orderMode: "custom", sequence: ["ban_first", "pick_second", "decider"] }),
-      3
-    );
+describe("the ruleset the editor holds is the ruleset that is sent", () => {
+  it("ships the edited ruleset verbatim, not a shape derived from it", () => {
+    const input = pickBanDraftToInput(draft({ kind: "hero", ruleset: BLIND_RULESET }));
 
-    expect(input.preset).toBe("custom");
-    expect(input.sequence).toEqual(["ban_first", "pick_second", "decider"]);
+    expect(input.ruleset).toEqual(BLIND_RULESET);
+    expect(input.kind).toBe("hero");
   });
 
-  it("ships a generated order under bracket mode, never an empty sequence", () => {
-    // `validate_pick_ban_config` rejects an empty sequence whatever the preset,
-    // so bracket mode has to store a placeholder rather than nothing.
-    const input = pickBanDraftToInput(draft({ orderMode: "bracket" }), 3);
+  it("round-trips a stored ruleset back out unchanged", () => {
+    const restored = pickBanDraftFromConfig(config({ kind: "hero", ruleset: BLIND_RULESET }));
 
-    expect(input.preset).not.toBe("custom");
-    expect(input.sequence).toEqual(["ban_first", "ban_second", "pick_first", "pick_second", "decider"]);
+    expect(pickBanDraftToInput(restored).ruleset).toEqual(BLIND_RULESET);
   });
 
-  it("ignores a stale custom sequence once bracket order is chosen", () => {
-    const stale: PickBanDraft = draft({
-      orderMode: "bracket",
-      sequence: ["pick_first", "pick_first", "pick_first"],
-    });
-
-    expect(effectiveSequence(stale, 3)).toEqual([
-      "ban_first",
-      "ban_second",
-      "pick_first",
-      "pick_second",
-      "decider",
-    ]);
-  });
-
-  it("never sends the custom preset in slot mode, which the database forbids", () => {
-    // `ck_pick_ban_config_slots_not_custom`.
-    const input = pickBanDraftToInput(
-      draft({
-        mode: "slots",
-        orderMode: "custom",
-        sequence: ["pick_first"],
-        slots: [{ candidates: [1, 2], reserveItemId: null }],
-      }),
-      1
-    );
-
-    expect(input.preset).not.toBe("custom");
-    expect(input.sequence).toEqual([]);
-    expect(input.item_ids).toEqual([]);
-    expect(input.slots).toEqual([{ candidates: [1, 2], reserve_item_id: null }]);
-  });
-
-  it("round-trips a stored custom config back into custom order", () => {
-    const restored = pickBanDraftFromConfig(
-      config({ preset: "custom", sequence: ["ban_first", "decider"] })
-    );
-
-    expect(restored.orderMode).toBe("custom");
-    expect(pickBanDraftToInput(restored, 3).sequence).toEqual(["ban_first", "decider"]);
-  });
-
-  it("counts the rounds a sequence plays, ignoring bans", () => {
-    expect(roundsPlayed(["ban_first", "ban_second", "pick_first", "pick_second", "decider"])).toBe(3);
-  });
-});
-
-describe("options the engine only implements in one shape", () => {
-  it("drops the role restriction on a map config, where it has no meaning", () => {
-    const asMap = pickBanDraftToInput(draft({ kind: "map", uniqueRolePerRound: true }), 3);
-    const asHero = pickBanDraftToInput(draft({ kind: "hero", uniqueRolePerRound: true }), 3);
-
-    expect(asMap.unique_attribute_per_side_per_round).toBeNull();
-    expect(asHero.unique_attribute_per_side_per_round).toBe("role");
+  it("opens a map config on the bracket generator, which is what v1 configs did", () => {
+    // Every map config used to regenerate its order from the pool and the
+    // series length; the generator phase is that behaviour, spelled out.
+    expect(emptyRuleset("map").phases[0].generator).toBe("bracket");
+    expect(emptyRuleset("map", "slots").phases[0].generator).toBe("slot_veto");
+    // A hero pool stays playable, so there is nothing to generate down to.
+    expect(emptyRuleset("hero").phases[0].generator).toBeNull();
   });
 
   it("drops a round that no stage scopes it, which the server rejects", () => {
     // `admin_pick_ban_config_upsert`: "round requires stage_id".
-    expect(pickBanDraftToInput(draft({ stageId: null, round: 4 }), 3).round).toBeNull();
-    expect(pickBanDraftToInput(draft({ stageId: 10, round: 4 }), 3).round).toBe(4);
+    expect(pickBanDraftToInput(draft({ stageId: null, round: 4 })).round).toBeNull();
+    expect(pickBanDraftToInput(draft({ stageId: 10, round: 4 })).round).toBe(4);
   });
 
-  it("reports a protect toggle that no step will ever run", () => {
-    expect(protectHasNoStep(draft({ allowProtect: true, orderMode: "bracket" }), 3)).toBe(true);
-    expect(
-      protectHasNoStep(
-        draft({ allowProtect: true, orderMode: "custom", sequence: ["protect_first", "decider"] }),
-        3
-      )
-    ).toBe(false);
-    expect(protectHasNoStep(draft({ allowProtect: false }), 3)).toBe(false);
+  it("never sends slot groups and a flat pool at once", () => {
+    const input = pickBanDraftToInput(
+      draft({ mode: "slots", slots: [{ candidates: [1, 2], reserveItemId: null }] })
+    );
+
+    expect(input.item_ids).toEqual([]);
+    expect(input.slots).toEqual([{ candidates: [1, 2], reserve_item_id: null }]);
   });
 });
 
-describe("validation mirrors what the server would reject", () => {
-  it("accepts a pool config the server accepts", () => {
-    expect(validatePickBanDraft(draft(), 3)).toEqual([]);
+describe("the step palette writes real steps", () => {
+  const base = emptyRuleset("hero");
+
+  it("makes a simultaneous blind ban both sides act at once, privately", () => {
+    const step = newStep(base, "ban_blind");
+
+    expect(step).toMatchObject({ action: "ban", actors: "both", blind: true, count: 2 });
+    // A blind step is the one an opponent can ask to redo after the reveal.
+    expect(step.dispute.enabled).toBe(true);
+  });
+
+  it("makes a per-player ban target a player, one each, matching their role", () => {
+    const step = newStep(base, "ban_per_player");
+
+    expect(step.target).toBe("opponent_player");
+    expect(step.lifetime).toBe(2);
+    expect(step.eligible).toEqual({ type: "target_role_match", params: {} });
+    expect(step.constraints).toEqual([{ type: "one_per_target", params: {} }]);
+  });
+
+  it("leaves a pick and a decider without a ban lifetime to expire", () => {
+    expect(newStep(base, "pick").lifetime).toBeNull();
+    expect(newStep(base, "decider")).toMatchObject({ action: "decider", actors: "system" });
+    // The roulette is a ban nobody takes: the engine rolls it.
+    expect(newStep(base, "roulette")).toMatchObject({ action: "ban", actors: "system" });
+  });
+
+  // The step card is the only place a whole step is legible at a glance, and
+  // the lifetime is the parameter an organizer cannot infer from the rest: a
+  // five-ban step holding for two maps is twenty heroes gone by map 3.
+  it("says on the card how many items a step takes, and how long its bans hold", () => {
+    expect(stepSummary(newStep(base, "ban_per_player"))).toEqual({
+      key: "perTarget",
+      values: { count: 5 },
+    });
+    expect(stepSummary(newStep(base, "ban_blind"))).toEqual({
+      key: "blind",
+      values: { count: 2 },
+    });
+    expect(stepSummary(newStep(base, "ban_sequential"))).toEqual({
+      key: "open",
+      values: { count: 1 },
+    });
+
+    expect(stepLifetimeSummary(newStep(base, "ban_per_player"))).toEqual({
+      key: "lifetimeMaps",
+      values: { count: 2 },
+    });
+    expect(
+      stepLifetimeSummary({ ...newStep(base, "ban_sequential"), lifetime: null })
+    ).toEqual({ key: "lifetimeSeries", values: {} });
+    // Only a ban expires; a pick settles a map and is done.
+    expect(stepLifetimeSummary(newStep(base, "pick"))).toBeNull();
+    expect(stepLifetimeSummary(newStep(base, "decider"))).toBeNull();
+  });
+});
+
+describe("ids stay unique, so no two steps can claim the same resolved slot", () => {
+  it("never reuses an id a phase or a step already carries", () => {
+    let ruleset = addStep(emptyRuleset("hero"), "main", "ban_blind");
+    ruleset = addStep(ruleset, "main", "pick");
+    const second = newPhase(ruleset);
+
+    const ids = [
+      ...ruleset.phases.map((phase) => phase.id),
+      ...ruleset.phases.flatMap((phase) => phase.steps.map((step) => step.id)),
+      second.id,
+    ];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("renames every step of a duplicated phase", () => {
+    const ruleset = duplicatePhase(addStep(emptyRuleset("hero"), "main", "ban_blind"), "main");
+
+    expect(ruleset.phases).toHaveLength(2);
+    const ids = ruleset.phases.flatMap((phase) => [phase.id, ...phase.steps.map((s) => s.id)]);
+    expect(new Set(ids).size).toBe(ids.length);
+    // The copy is the same rules, placed right after the original.
+    expect(ruleset.phases[1].steps[0]).toMatchObject({ actors: "both", blind: true });
+  });
+
+  it("places a duplicated step directly after the one it copies", () => {
+    let ruleset = addStep(emptyRuleset("hero"), "main", "ban_sequential");
+    ruleset = addStep(ruleset, "main", "pick");
+    const firstId = ruleset.phases[0].steps[0].id;
+
+    const steps = duplicateStep(ruleset, "main", firstId).phases[0].steps;
+
+    expect(steps.map((step) => step.action)).toEqual(["ban", "ban", "pick"]);
+    expect(steps[1].id).not.toBe(firstId);
+  });
+});
+
+describe("reordering and editing steps", () => {
+  let ruleset = addStep(emptyRuleset("hero"), "main", "ban_sequential");
+  ruleset = addStep(ruleset, "main", "pick");
+  const [first, second] = ruleset.phases[0].steps.map((step) => step.id);
+
+  it("swaps a step with its neighbour and stops at the edges", () => {
+    expect(moveStep(ruleset, "main", second, -1).phases[0].steps.map((s) => s.id)).toEqual([
+      second,
+      first,
+    ]);
+    expect(moveStep(ruleset, "main", first, -1).phases[0].steps.map((s) => s.id)).toEqual([
+      first,
+      second,
+    ]);
+  });
+
+  it("patches one step and leaves its siblings alone", () => {
+    const edited = updateStep(ruleset, "main", first, { count: 3, actors: "both" });
+
+    expect(edited.phases[0].steps[0]).toMatchObject({ count: 3, actors: "both" });
+    expect(edited.phases[0].steps[1]).toEqual(ruleset.phases[0].steps[1]);
+  });
+
+  it("removes a step without touching the rest of the ruleset", () => {
+    const trimmed = removeStep(ruleset, "main", first);
+
+    expect(trimmed.phases[0].steps.map((step) => step.id)).toEqual([second]);
+    expect(trimmed.timer_seconds).toBe(ruleset.timer_seconds);
+  });
+});
+
+describe("pasted JSON", () => {
+  it("accepts a ruleset an organizer exported", () => {
+    expect(parseRulesetJson(JSON.stringify(BLIND_RULESET))).toEqual(BLIND_RULESET);
+  });
+
+  it("refuses text that is not a v2 ruleset, rather than crashing the board", () => {
+    expect(parseRulesetJson("not json")).toBeNull();
+    expect(parseRulesetJson("[]")).toBeNull();
+    expect(parseRulesetJson(JSON.stringify({ version: 1, phases: [] }))).toBeNull();
+    expect(parseRulesetJson(JSON.stringify({ version: 2 }))).toBeNull();
+    // A phase with no id could never be addressed by a validation issue path.
+    expect(parseRulesetJson(JSON.stringify({ version: 2, phases: [{ steps: [] }] }))).toBeNull();
+  });
+});
+
+describe("validation mirrors what the editor itself owns", () => {
+  it("accepts a generator phase, whose steps the server expands", () => {
+    expect(validatePickBanDraft(draft())).toEqual([]);
+  });
+
+  it("reports a hand-authored phase with no steps, which would run nothing", () => {
+    expect(validatePickBanDraft(draft({ kind: "hero", ruleset: emptyRuleset("hero") }))).toEqual([
+      { key: "phaseWithoutSteps", values: { phase: "main" } },
+    ]);
+    expect(validatePickBanDraft(draft({ kind: "hero", ruleset: BLIND_RULESET }))).toEqual([]);
+  });
+
+  it("reports a ruleset with no phases at all", () => {
+    const empty = { ...emptyRuleset("hero"), phases: [] };
+
+    expect(validatePickBanDraft(draft({ ruleset: empty }))).toEqual([{ key: "noPhases" }]);
   });
 
   // A pool-less draft is a rules template, not a rejection: it is how the rules
   // of a whole tournament are authored once for narrower scopes to inherit.
   it("accepts an empty pool as a rules template", () => {
-    expect(validatePickBanDraft(draft({ itemIds: [] }), 3)).toEqual([]);
+    expect(validatePickBanDraft(draft({ itemIds: [] }))).toEqual([]);
     expect(isRulesTemplate(draft({ itemIds: [] }))).toBe(true);
     expect(isRulesTemplate(draft())).toBe(false);
   });
 
-  it("reports a custom order with no steps", () => {
-    expect(validatePickBanDraft(draft({ orderMode: "custom", sequence: [] }), 3)).toEqual([
-      { key: "emptySequence" },
-    ]);
-  });
-
-  it("reports a decider that is not the last step, and duplicated deciders", () => {
-    expect(
-      validatePickBanDraft(draft({ orderMode: "custom", sequence: ["decider", "pick_first"] }), 3)
-    ).toEqual([{ key: "deciderNotLast" }]);
-    expect(
-      validatePickBanDraft(draft({ orderMode: "custom", sequence: ["decider", "decider"] }), 3)
-    ).toEqual([{ key: "multipleDeciders" }]);
-  });
-
-  it("reports an order of bans alone, which resolves nothing", () => {
-    expect(
-      validatePickBanDraft(draft({ orderMode: "custom", sequence: ["ban_first", "ban_second"] }), 3)
-    ).toEqual([{ key: "noPickOrDecider" }]);
-  });
-
-  it("reports an order longer than the pool it draws from", () => {
-    expect(
-      validatePickBanDraft(
-        draft({
-          itemIds: [1, 2],
-          orderMode: "custom",
-          sequence: ["ban_first", "pick_first", "pick_second"],
-        }),
-        3
-      )
-    ).toEqual([{ key: "sequenceLongerThanPool", values: { steps: 3, items: 2 } }]);
-  });
-
   it("accepts groups with no candidates as a template, and reports a half-filled one", () => {
-    expect(validatePickBanDraft(draft({ mode: "slots", slots: [] }), 3)).toEqual([]);
+    expect(validatePickBanDraft(draft({ mode: "slots", slots: [] }))).toEqual([]);
     expect(
       validatePickBanDraft(
-        draft({ mode: "slots", slots: [{ candidates: [], reserveItemId: null }] }),
-        3
+        draft({ mode: "slots", slots: [{ candidates: [], reserveItemId: null }] })
       )
     ).toEqual([]);
     expect(
@@ -239,10 +341,36 @@ describe("validation mirrors what the server would reject", () => {
             { candidates: [1, 2], reserveItemId: null },
             { candidates: [3], reserveItemId: null },
           ],
-        }),
-        2
+        })
       )
     ).toEqual([{ key: "slotTooFewCandidates", values: { slot: 2 } }]);
+  });
+});
+
+describe("the cascade", () => {
+  const tournamentWide = config({ id: 3, kind: "map", ruleset: BLIND_RULESET });
+
+  it("prefills a narrower scope from the rules it inherits, and says so", () => {
+    const moved = rescopePickBanDraft(emptyPickBanDraft("map"), 10, null, [tournamentWide]);
+
+    expect(moved.ruleset).toEqual(BLIND_RULESET);
+    expect(moved.inheritedFrom).toEqual({ stageId: null, round: null });
+    expect(moved.configId).toBeNull();
+  });
+
+  it("never overwrites rules someone authored", () => {
+    const authored = { ...emptyPickBanDraft("map"), ruleset: emptyRuleset("hero") };
+
+    expect(rescopePickBanDraft(authored, 10, null, [tournamentWide]).ruleset).toEqual(
+      authored.ruleset
+    );
+  });
+
+  it("drops values carried over to a scope that inherits nothing", () => {
+    const prefilled = rescopePickBanDraft(emptyPickBanDraft("hero"), 10, null, [tournamentWide]);
+
+    expect(prefilled.inheritedFrom).toBeNull();
+    expect(prefilled.ruleset).toEqual(emptyRuleset("hero"));
   });
 });
 
@@ -437,7 +565,9 @@ describe("a stage's rounds each carry their own groups", () => {
     // Each one is a config of its own, and none of them carries the round
     // dimension any further.
     expect(fanned.every((one) => one.configId == null && one.roundSlots.length === 0)).toBe(true);
-    expect(pickBanDraftToInput(fanned[1], 3).round).toBe(-1);
+    expect(pickBanDraftToInput(fanned[1]).round).toBe(-1);
+    // Same rules in every round: only the groups differ.
+    expect(fanned.map((one) => one.ruleset)).toEqual([stageDraft.ruleset, stageDraft.ruleset]);
   });
 
   it("leaves a draft with no round dimension alone", () => {
@@ -456,7 +586,7 @@ describe("a stage's rounds each carry their own groups", () => {
       ],
     });
 
-    expect(validatePickBanDraft(stageDraft, 3)).toEqual([
+    expect(validatePickBanDraft(stageDraft)).toEqual([
       { key: "roundSlotTooFewCandidates", values: { round: 2, slot: 1 } },
     ]);
   });

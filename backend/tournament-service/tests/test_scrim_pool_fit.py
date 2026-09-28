@@ -41,6 +41,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB  # noqa: E402
 
 from shared.core.enums import MapVetoMode, PickBanKind  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.domain import pick_ban_rules as pbr  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
     PickBanConfig,
     PickBanConfigItem,
@@ -49,6 +50,12 @@ from shared.models.tournament.pick_ban import (  # noqa: E402
 )
 from src import models  # noqa: E402
 from src.services.scrim import service as scrim  # noqa: E402
+
+#: The rulesets a copied tournament round carries: a slot-veto generator and a
+#: plain bracket. Both are what the v1 -> v2 migration produced for the configs
+#: this check was written against.
+SLOT_RULESET = pbr.PRESETS_BY_ID["map_slot_veto"].ruleset.to_json()
+FLAT_RULESET = pbr.PRESETS_BY_ID["map_bracket"].ruleset.to_json()
 
 
 @compiles(JSONB, "sqlite")
@@ -214,7 +221,7 @@ class _Fixture:
             round=None,
             kind=kind.value,
             mode=MapVetoMode.SLOTS.value,
-            sequence_json=[],
+            ruleset_json=SLOT_RULESET,
         )
         for position, candidates in enumerate(slots, start=1):
             slot_id = self._id()
@@ -244,7 +251,7 @@ class _Fixture:
             round=None,
             kind=kind.value,
             mode=MapVetoMode.POOL.value,
-            sequence_json=[],
+            ruleset_json=FLAT_RULESET,
         )
         for order, item_id in enumerate(item_ids):
             self.insert(

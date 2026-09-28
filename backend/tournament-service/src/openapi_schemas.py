@@ -446,11 +446,22 @@ OPERATIONS: dict[str, Op] = {
     # one serialized entry, the undo block, the reconciliation verdict -- not a
     # model, so they map their inputs and leave the response generic.
     "rpc.tournament.captain_pick_ban_act": Op(request=captain_schemas.PickBanActionInput),
+    "rpc.tournament.captain_pick_ban_submit": Op(request=captain_schemas.PickBanSubmitInput),
     "rpc.tournament.captain_pick_ban_elect_opener": Op(request=captain_schemas.ElectOpenerInput),
     "rpc.tournament.captain_pick_ban_undo": Op(request=captain_schemas.PickBanUndoInput),
     "rpc.tournament.captain_report_game": Op(request=captain_schemas.GameReportInput),
     "rpc.tournament.captain_select_game_map": Op(request=captain_schemas.GameMapSelectInput),
     "rpc.tournament.admin_game_result": Op(request=pick_ban_admin.AdminGameResultInput),
+    # ── organizer pick-ban: config CRUD, the constructor, live overrides ───
+    # Same rationale: the config upsert answers a serialized config dict and the
+    # live-session ops answer the room state, so only the bodies are mapped.
+    # captain_pick_ban_dispute and admin_pick_ban_reopen take no body worth a
+    # model (`{}` / `{kind}`), so they live in DOCS only.
+    "rpc.tournament.admin_pick_ban_config_upsert": Op(request=pick_ban_admin.PickBanConfigUpsert),
+    "rpc.tournament.admin_pick_ban_rules_validate": Op(request=pick_ban_admin.PickBanRulesValidateInput),
+    "rpc.tournament.admin_pick_ban_rules_preview": Op(request=pick_ban_admin.PickBanRulesPreviewInput),
+    "rpc.tournament.admin_pick_ban_act": Op(request=pick_ban_admin.PickBanAdminAct),
+    "rpc.tournament.admin_pick_ban_submit": Op(request=pick_ban_admin.PickBanAdminSubmit),
     # ── pre-game room chat (shared chat service; same shapes in balancer) ──
     # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
     # documented in DOCS only — this module maps whole models.

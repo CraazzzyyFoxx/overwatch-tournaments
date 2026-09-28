@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { RotateCcw, ShieldCheck } from "lucide-react";
+import { RotateCcw, ShieldCheck, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,8 @@ import type {
   PickBanAction,
   PickBanGame,
   PickBanKind,
-  PickBanState
+  PickBanState,
+  PickBanSubmissionItem
 } from "@/types/tournament.types";
 
 import type { PickBanSide } from "@/components/pick-ban/pick-ban-model";
@@ -28,7 +30,6 @@ interface PregameAdminControlsProps {
   kind: PickBanKind;
   encounterId: number;
   state: PickBanState;
-  allowProtect: boolean;
   selectedItemId: number | null;
   selectedItemName: string | null;
   onMutated: () => void;
@@ -36,42 +37,38 @@ interface PregameAdminControlsProps {
 
 /**
  * Workspace-admin overrides: reset the whole pick-ban session (drop +
- * re-create with seeds re-resolved), perform a step on behalf of either side,
- * and correct the accepted result of a game that is already confirmed or stuck
- * in a dispute — the one command allowed to overwrite a confirmed score, and
- * the only way a disputed position ever clears.
+ * re-create with seeds re-resolved), act or submit a draft on behalf of either
+ * side, reopen a revealed step, and correct the accepted result of a game that
+ * is already confirmed or stuck in a dispute — the one command allowed to
+ * overwrite a confirmed score, and the only way a disputed position ever
+ * clears.
+ *
+ * Which action an override performs is NOT the organizer's choice any more: a
+ * v2 step names its own action, so offering "ban / pick / protect" next to a
+ * step that only accepts one of them was three buttons where two produced a
+ * 400.
  */
 export function PregameAdminControls({
   kind,
   encounterId,
   state,
-  allowProtect,
   selectedItemId,
   selectedItemName,
   onMutated
 }: Readonly<PregameAdminControlsProps>) {
   const t = useTranslations("pickBan.room");
-  const defaultSide: PickBanSide = state.turn_side ?? "home";
-  const defaultAction: PickBanAction =
-    state.expected_action === "pick"
-      ? "pick"
-      : state.expected_action === "protect"
-        ? "protect"
-        : "ban";
-  // The override is stored WITH the step it was made for, so a new step
-  // automatically falls back to what the sequence expects.
-  const step = state.current_step_index;
+  const step = state.current_step;
+  // The step names the action; the override only chooses WHOSE turn is being
+  // taken, and it is stored with the step it was made for so the next step
+  // falls back to whoever is actually on the clock.
+  const action: PickBanAction =
+    step?.action === "pick" ? "pick" : step?.action === "protect" ? "protect" : "ban";
+  const defaultSide: PickBanSide = state.acting_sides[0] ?? "home";
   const [resetOpen, setResetOpen] = useState(false);
-  const [override, setOverride] = useState<{
-    step: number | null;
-    side: PickBanSide;
-    action: PickBanAction;
-  } | null>(null);
-  const isOverridden = override?.step === step;
-  const side = isOverridden ? override.side : defaultSide;
-  const action = isOverridden ? override.action : defaultAction;
-  const setSide = (next: PickBanSide) => setOverride({ step, side: next, action });
-  const setAction = (next: PickBanAction) => setOverride({ step, side, action: next });
+  const [override, setOverride] = useState<{ step: number | null; side: PickBanSide } | null>(null);
+  const side = override?.step === (step?.index ?? null) ? override.side : defaultSide;
+  const [draftInput, setDraftInput] = useState("");
+  const [lockSubmission, setLockSubmission] = useState(true);
 
   const resetMutation = useMutation({
     mutationFn: () => adminService.resetPickBanSession(encounterId, kind),
@@ -90,6 +87,25 @@ export function PregameAdminControls({
     onError: (error) => notify.apiError(error, { title: t("admin.actFailed") })
   });
 
+  const submitMutation = useMutation({
+    mutationFn: (input: { side: PickBanSide; items: PickBanSubmissionItem[]; lock: boolean }) =>
+      adminService.adminPickBanSubmit(encounterId, { kind, ...input }),
+    onSuccess: () => {
+      setDraftInput("");
+      onMutated();
+    },
+    onError: (error) => notify.apiError(error, { title: t("admin.submitFailed") })
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: () => adminService.adminPickBanReopen(encounterId, kind),
+    onSuccess: () => {
+      notify.success(t("admin.reopenSuccess"));
+      onMutated();
+    },
+    onError: (error) => notify.apiError(error, { title: t("admin.reopenFailed") })
+  });
+
   const electMutation = useMutation({
     mutationFn: (first_side: PickBanSide) =>
       adminService.adminPickBanElectOpener(encounterId, { kind, first_side }),
@@ -102,14 +118,22 @@ export function PregameAdminControls({
   // the room has nothing to click, so the organizer names it for them.
   const awaitingChoice = state.session?.awaiting_choice === true;
 
-  const canAct = state.session?.status === "active" && !state.is_complete && selectedItemId != null;
-  const pending = resetMutation.isPending || actMutation.isPending || electMutation.isPending;
-
-  const actionOptions: { value: PickBanAction; label: string }[] = [
-    { value: "ban", label: t("action.ban") },
-    { value: "pick", label: t("action.pick") },
-    ...(allowProtect ? [{ value: "protect" as const, label: t("action.protect") }] : [])
-  ];
+  const active = state.session?.status === "active" && !state.is_complete;
+  const canAct = active && selectedItemId != null;
+  const pending =
+    resetMutation.isPending ||
+    actMutation.isPending ||
+    electMutation.isPending ||
+    submitMutation.isPending ||
+    reopenMutation.isPending;
+  // "101, 102" -> the submission payload. A blind step is the one place an
+  // organizer has to name several items at once, and there is no tile-by-tile
+  // path for a side they are not.
+  const draftItems: PickBanSubmissionItem[] = draftInput
+    .split(/[,\s]+/)
+    .map((token) => Number(token))
+    .filter((itemId) => Number.isInteger(itemId) && itemId > 0)
+    .map((itemId) => ({ item_id: itemId, target_player_id: null }));
   // Only a settled position can be corrected: `planned`/`awaiting_result` have
   // no accepted score to overwrite, and a captain claim is the normal path
   // there. A dispute is here because it is the ONLY way one ever clears.
@@ -125,7 +149,7 @@ export function PregameAdminControls({
       </div>
 
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-        {state.session?.status === "active" && !state.is_complete ? (
+        {active ? (
           <>
             <ChoiceGroup
               label={t("admin.sideLabel")}
@@ -134,32 +158,81 @@ export function PregameAdminControls({
                 { value: "away", label: t("side.away") }
               ]}
               value={side}
-              onChange={setSide}
+              onChange={(next) => setOverride({ step: step?.index ?? null, side: next })}
             />
-            <ChoiceGroup
-              label={t("admin.actionLabel")}
-              options={actionOptions}
-              value={action}
-              onChange={setAction}
-            />
-            <Button
-              size="sm"
-              disabled={!canAct || pending}
-              onClick={() => {
-                if (selectedItemId == null) return;
-                actMutation.mutate({ side, item_id: selectedItemId, action });
-              }}
-            >
-              {actMutation.isPending ? (
-                <Spinner className="mr-2" />
-              ) : null}
-              {t("admin.confirm")}
-              {selectedItemName ? `: ${selectedItemName}` : ""}
-            </Button>
-            {selectedItemId == null ? (
-              <span className="text-xs text-[color:var(--aqt-fg-muted)]">
-                {t("admin.selectItemFirst")}
+            <div className="flex flex-col gap-1">
+              <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                {t("admin.actionLabel")}
               </span>
+              <span className="text-sm font-medium capitalize">{t(`action.${action}`)}</span>
+            </div>
+            {step?.blind ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                    {t("admin.submitLabel")}
+                  </span>
+                  <Input
+                    className="w-48"
+                    aria-label={t("admin.submitLabel")}
+                    placeholder={t("admin.submitPlaceholder")}
+                    value={draftInput}
+                    onChange={(event) => setDraftInput(event.target.value)}
+                  />
+                </div>
+                <label className="flex items-center gap-2 pb-1.5 text-xs">
+                  <Checkbox
+                    checked={lockSubmission}
+                    onCheckedChange={(checked) => setLockSubmission(checked === true)}
+                  />
+                  {t("admin.submitLock")}
+                </label>
+                <Button
+                  size="sm"
+                  disabled={draftItems.length === 0 || pending}
+                  onClick={() =>
+                    submitMutation.mutate({ side, items: draftItems, lock: lockSubmission })
+                  }
+                >
+                  {submitMutation.isPending ? <Spinner className="mr-2" /> : null}
+                  {t("admin.submitConfirm")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  disabled={!canAct || pending}
+                  onClick={() => {
+                    if (selectedItemId == null) return;
+                    actMutation.mutate({ side, item_id: selectedItemId, action });
+                  }}
+                >
+                  {actMutation.isPending ? <Spinner className="mr-2" /> : null}
+                  {t("admin.confirm")}
+                  {selectedItemName ? `: ${selectedItemName}` : ""}
+                </Button>
+                {selectedItemId == null ? (
+                  <span className="text-xs text-[color:var(--aqt-fg-muted)]">
+                    {t("admin.selectItemFirst")}
+                  </span>
+                ) : null}
+              </>
+            )}
+            {state.dispute.step_index != null ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => reopenMutation.mutate()}
+              >
+                {reopenMutation.isPending ? (
+                  <Spinner className="mr-2" />
+                ) : (
+                  <Undo2 className="mr-2 h-4 w-4" aria-hidden />
+                )}
+                {t("admin.reopen")}
+              </Button>
             ) : null}
           </>
         ) : null}

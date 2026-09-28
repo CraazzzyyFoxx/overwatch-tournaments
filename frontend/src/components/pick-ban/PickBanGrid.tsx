@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Ban, Shield } from "lucide-react";
+import { Ban, History, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +13,7 @@ import HeroImage from "@/components/hero/HeroImage";
 import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import type { PickBanEntry, PickBanEntryStatus, PickBanKind } from "@/types/tournament.types";
 
-import {
-  isEntrySelectable,
-  poolRoundGroups,
-  roundState,
-  statusLabelKey,
-  type PickBanAttributeLocks
-} from "./pick-ban-model";
+import { poolRoundGroups, roundState, statusLabelKey, tileStatus } from "./pick-ban-model";
 
 /** Generic catalog entry the grid needs to render one item's tile — either a
  * `MapRead` or a `Hero`, reduced to the fields both shapes carry. */
@@ -49,19 +43,14 @@ interface PickBanGridProps {
    */
   slotReserves: Map<number, number>;
   /**
-   * Items the side on the clock may no longer BAN, because it already banned
-   * them earlier in this series (`PickBanState.repeat_banned`). Empty under
-   * every no-repeat scope but `encounter_same_side` — the only one that leaves
-   * them in the pool for the other side to still take — and empty on any step
-   * that is not a `ban`: the ledger is ban memory, so protecting an item this
-   * side already banned is legal (see `PregameRoom`).
+   * What the SERVER says the viewer may choose on the step in play
+   * (`PickBanState.eligible`, narrowed to the selected target on a target
+   * step), or null when they cannot act. Anything outside it is greyed and
+   * inert rather than left to be discovered through a 400.
    */
-  repeatBanned: Set<number>;
-  /**
-   * What the attribute-uniqueness rule forbids (disabled) and what it makes
-   * moot (greyed only) for the side on the clock — see `attributeLocks`.
-   */
-  locks: PickBanAttributeLocks;
+  eligibleIds: Set<number> | null;
+  /** The viewer's own blind draft: those tiles are marked, and a click removes them. */
+  draftItemIds: ReadonlySet<number>;
   onSelect: (itemId: number) => void;
   /** Room-level header (back link, status, team matchup) merged into this card's top. */
   header: React.ReactNode;
@@ -83,15 +72,6 @@ const ROLE_ORDER: AqtRoleKey[] = ["tank", "damage", "support"];
 /** Ties a locked round's tiles to the paragraph that explains why they are inert. */
 const lockedHintId = (round: number) => `pick-ban-round-${round}-locked`;
 
-/**
- * Why a tile is out of reach for the side on the clock. `blocked` and `repeat`
- * are clicks the server would reject — the round's attribute budget is spent
- * (`attributeLocks`), or this side already banned the item earlier in the series
- * (`PickBanState.repeat_banned`). `pointless` is a legal click that achieves
- * nothing, so it is greyed but never disabled.
- */
-type PickBanTileLock = "blocked" | "pointless" | "repeat";
-
 export function PickBanGrid({
   kind,
   pool,
@@ -100,8 +80,8 @@ export function PickBanGrid({
   canSelect,
   currentRound,
   slotReserves,
-  repeatBanned,
-  locks,
+  eligibleIds,
+  draftItemIds,
   onSelect,
   header
 }: Readonly<PickBanGridProps>) {
@@ -113,17 +93,6 @@ export function PickBanGrid({
     itemsById[itemId]?.name ?? t(`${kind}.itemNumber`, { id: itemId });
   const roleOf = (itemId: number): AqtRoleKey | null =>
     normalizeRole(itemsById[itemId]?.type ?? itemsById[itemId]?.role);
-  /** Only `available` entries can be locked; anything already taken is out of
-   * play for its own reasons. */
-  const lockOf = (entry: PickBanEntry): PickBanTileLock | null => {
-    if (entry.status !== "available") return null;
-    if (repeatBanned.has(entry.item_id)) return "repeat";
-    const attribute = roleOf(entry.item_id);
-    if (attribute == null) return null;
-    if (locks.blocked.has(attribute)) return "blocked";
-    if (locks.pointless.has(attribute)) return "pointless";
-    return null;
-  };
 
   const currentRoundRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -160,11 +129,8 @@ export function PickBanGrid({
   /** `lockedRound` is the group's round when that round has not opened yet, else null. */
   const tile = (entry: PickBanEntry, lockedRound: number | null) => {
     const item = itemsById[entry.item_id];
-    const lock = lockOf(entry);
-    // `pointless` stays clickable — a captain may still have their own reasons.
-    const selectable =
-      isEntrySelectable(entry, { canSelect, currentRound }) && (lock == null || lock === "pointless");
-    const selected = selectedItemId === entry.item_id;
+    const status = tileStatus(entry, { canSelect, currentRound, eligibleIds, draftItemIds });
+    const selected = selectedItemId === entry.item_id || status.drafted;
     const dimmed = entry.status === "banned";
     const initials = itemName(entry.item_id)
       .split(/\s+/)
@@ -177,14 +143,16 @@ export function PickBanGrid({
       <button
         key={entry.id}
         type="button"
-        disabled={!selectable}
+        disabled={!status.selectable}
         aria-pressed={selected}
         title={
           lockedRound != null
             ? t("round.locked", { n: lockedRound })
-            : lock != null
-              ? t(`rule.${lock}`)
-              : undefined
+            : status.ineligible
+              ? t("rule.ineligible")
+              : entry.carried_from_round != null
+                ? t("carried.tooltip", { n: entry.carried_from_round })
+                : undefined
         }
         aria-describedby={lockedRound != null ? lockedHintId(lockedRound) : undefined}
         onClick={() => onSelect(entry.item_id)}
@@ -193,11 +161,11 @@ export function PickBanGrid({
           selected
             ? "border-[color:var(--aqt-teal)] ring-2 ring-[color:var(--aqt-teal)]/45"
             : "border-[color:var(--aqt-border)]",
-          selectable
+          status.selectable
             ? "cursor-pointer hover:border-[color:var(--aqt-teal)]/60 focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
             : "cursor-default",
           lockedRound != null ? "border-dashed opacity-55" : null,
-          lock != null ? "opacity-55 grayscale" : null
+          status.ineligible ? "opacity-55 grayscale" : null
         )}
       >
         <div className="relative h-20 w-full bg-[color:var(--aqt-card-2)] sm:h-24">
@@ -237,7 +205,15 @@ export function PickBanGrid({
             <Badge variant={STATUS_BADGE_VARIANT[entry.status]} className="px-1.5 py-0 text-label">
               {t(statusLabelKey(entry))}
             </Badge>
-            {entry.picked_by ? (
+            {entry.carried_from_round != null ? (
+              <Badge
+                variant="outline"
+                data-carried-from={entry.carried_from_round}
+                className="px-1.5 py-0 text-label font-normal text-[color:var(--aqt-fg-muted)]"
+              >
+                {t("carried.badge", { n: entry.carried_from_round })}
+              </Badge>
+            ) : entry.picked_by ? (
               <Badge
                 variant="outline"
                 className="px-1.5 py-0 text-label font-normal text-[color:var(--aqt-fg-muted)]"
@@ -262,38 +238,40 @@ export function PickBanGrid({
   /**
    * Icon-only Hero Pool tile: a bare round portrait, no name/status text on the
    * card. The hero name lives in `title`/`aria-label` instead of visible copy —
-   * this tile optimizes for density, not for a status legend (the pick-order
-   * list below still spells out who took what).
+   * this tile optimizes for density, not for a status legend.
    *
-   * A `protected` hero is NOT drawn as a taken one. It used to collapse into the
-   * same crossed-out glyph every non-`available` status got, which read as
-   * "banned" — the opposite of what a protect means: the hero is safe from the
-   * opponent's ban and stays perfectly playable. It keeps its colour and wears
-   * an amber shield instead, so the two never look alike.
+   * A `protected` hero is NOT drawn as a taken one: the hero is safe from the
+   * opponent's ban and stays perfectly playable, so it keeps its colour and
+   * wears an amber shield. A ban CARRIED from an earlier map wears a clock
+   * instead — nobody spent it here, and a captain hunting for who banned it
+   * would otherwise find no step that did.
    */
   const heroTile = (entry: PickBanEntry, lockedRound: number | null) => {
     const item = itemsById[entry.item_id];
-    const lock = lockOf(entry);
-    const selectable =
-      isEntrySelectable(entry, { canSelect, currentRound }) && (lock == null || lock === "pointless");
-    const selected = selectedItemId === entry.item_id;
+    const status = tileStatus(entry, { canSelect, currentRound, eligibleIds, draftItemIds });
+    const selected = selectedItemId === entry.item_id || status.drafted;
     const shielded = entry.status === "protected";
     // Out of play for the rest of the round, whoever took it and however.
     const taken = entry.status !== "available" && !shielded;
+    const carried = entry.carried_from_round;
     const name = itemName(entry.item_id);
-    // Only the RULE gets to replace the name in the tooltip: a not-yet-open
-    // round already explains itself through `aria-describedby` and the visible
-    // hint under the group, and the name is this tile's only label.
-    const ruleReason = lock != null ? t(`rule.${lock}`) : null;
+    // Only a RULE or an origin gets to replace the name in the tooltip: a
+    // not-yet-open round already explains itself through `aria-describedby`,
+    // and the name is this tile's only label.
+    const note = status.ineligible
+      ? t("rule.ineligible")
+      : carried != null
+        ? t("carried.tooltip", { n: carried })
+        : null;
 
     return (
       <button
         key={entry.id}
         type="button"
-        disabled={!selectable}
+        disabled={!status.selectable}
         aria-pressed={selected}
-        aria-label={`${name} — ${t(statusLabelKey(entry))}${ruleReason != null ? ` — ${ruleReason}` : ""}`}
-        title={ruleReason ?? name}
+        aria-label={`${name} — ${t(statusLabelKey(entry))}${note != null ? ` — ${note}` : ""}`}
+        title={note ?? name}
         aria-describedby={lockedRound != null ? lockedHintId(lockedRound) : undefined}
         onClick={() => onSelect(entry.item_id)}
         className={cn(
@@ -303,11 +281,11 @@ export function PickBanGrid({
             : shielded
               ? "border-[color:var(--aqt-amber)]/70"
               : "border-[color:var(--aqt-border)]",
-          selectable
+          status.selectable
             ? "cursor-pointer hover:border-[color:var(--aqt-teal)]/60 focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
             : "cursor-default",
           lockedRound != null ? "border-dashed opacity-55" : null,
-          lock != null ? "opacity-55 grayscale" : null
+          status.ineligible ? "opacity-55 grayscale" : null
         )}
       >
         <HeroImage
@@ -332,6 +310,15 @@ export function PickBanGrid({
             className="absolute -bottom-0.5 -left-0.5 grid h-4 w-4 place-items-center rounded-full bg-[color:var(--aqt-card)] ring-1 ring-[color:var(--aqt-amber)]/70"
           >
             <Shield className="h-2.5 w-2.5 text-[color:var(--aqt-amber)]" />
+          </span>
+        ) : null}
+        {carried != null ? (
+          <span
+            aria-hidden
+            data-carried-from={carried}
+            className="absolute -bottom-0.5 -left-0.5 grid h-4 w-4 place-items-center rounded-full bg-[color:var(--aqt-card)] ring-1 ring-[color:var(--aqt-fg-faint)]/70"
+          >
+            <History className="h-2.5 w-2.5 text-[color:var(--aqt-fg-muted)]" />
           </span>
         ) : null}
         {entry.action_index != null ? (

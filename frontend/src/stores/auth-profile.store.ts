@@ -155,12 +155,16 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
         lastFetchedAt: fetchedAt
       });
     } catch (e) {
-      set({
-        status: "error",
-        user: undefined,
-        error: e instanceof Error ? e.message : "Failed to fetch profile",
-        lastFetchedAt: Date.now()
-      });
+      // A thrown fetch (offline, dropped connection) says nothing about WHO the
+      // user is either — same rule as the 5xx branch above.
+      if (isInitialLoad) {
+        set({
+          status: "error",
+          user: undefined,
+          error: e instanceof Error ? e.message : "Failed to fetch profile",
+          lastFetchedAt: Date.now()
+        });
+      }
     }
   }
 }));

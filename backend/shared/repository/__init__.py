@@ -63,7 +63,6 @@ from .match_logs import (
     MatchStatisticsRepository,
 )
 from .pick_ban import (
-    EncounterPickBanLedgerRepository,
     EncounterReadinessRepository,
     PickBanConfigItemRepository,
     PickBanConfigRepository,
@@ -71,6 +70,7 @@ from .pick_ban import (
     PickBanConfigSlotRepository,
     PickBanEntryRepository,
     PickBanSessionRepository,
+    PickBanSubmissionRepository,
 )
 from .preferences import FavoritePlayerRepository
 from .ranks import (
@@ -223,7 +223,6 @@ __all__ = (
     "EncounterMapCodeRepository",
     "EncounterMapReportRepository",
     "EncounterParticipantRepository",
-    "EncounterPickBanLedgerRepository",
     "EncounterReadinessRepository",
     "EncounterReportFormRepository",
     "EncounterRepository",
@@ -250,6 +249,7 @@ __all__ = (
     "PickBanConfigSlotRepository",
     "PickBanEntryRepository",
     "PickBanSessionRepository",
+    "PickBanSubmissionRepository",
     "PlayerRepository",
     "PlayerSubRoleRepository",
     "QuotaApiKeyLimitRepository",

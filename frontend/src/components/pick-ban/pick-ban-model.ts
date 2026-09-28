@@ -1,45 +1,32 @@
 /**
- * Pure helpers for the generic pick-ban room (map + hero kinds).
+ * Pure helpers for the generic pick-ban room (map + hero kinds), ruleset v2.
  *
- * Successor to the retired slot-based map-veto model: this engine is
- * round-based (`PickBanEntry.round`), adds `protect` as a third action, and
- * drops the `map_id`/`slot` naming for the pool-agnostic `item_id`/`round`
- * (design: docs/plans/2026-08-09-generic-pickban-engine.md).
+ * The session no longer carries a flat token sequence: it carries RESOLVED
+ * STEPS (`PickBanResolvedStep`), each naming its acting sides, how many items
+ * they choose, whether the choice is blind, whether every item names an
+ * opponent player, and how long a ban lives. What a side actually chose lives
+ * in `PickBanSubmission`s — the board (`PickBanEntry`) is a projection of them,
+ * and a blind step's submissions merge duplicates into ONE banned entry, so
+ * per-side lists have to be read off the submissions rather than the board
+ * (design: docs/plans/2026-09-28-pick-ban-constructor.md).
  */
+import type { AqtRoleKey } from "@/lib/roster/player-role";
 import type {
   EncounterGame,
-  PickBanAction,
+  PickBanEligible,
   PickBanEntry,
   PickBanEntryStatus,
   PickBanGame,
+  PickBanResolvedStep,
   PickBanSession,
   PickBanState,
+  PickBanStepAction,
+  PickBanSubmission,
+  PickBanSubmissionItem,
   VetoUnavailableReason
 } from "@/types/tournament.types";
 
 export type PickBanSide = "home" | "away";
-type PickBanStepAction = PickBanAction | "decider";
-
-export interface ParsedPickBanStep {
-  token: string;
-  action: PickBanStepAction;
-  side: PickBanSide | null;
-}
-
-/** Resolved sequence tokens are "ban_home" / "pick_away" / "protect_home" / "decider". */
-export function parseStepToken(token: string): ParsedPickBanStep {
-  if (token === "decider") {
-    return { token, action: "decider", side: null };
-  }
-  const [action, side] = token.split("_");
-  const resolvedAction: PickBanAction =
-    action === "pick" ? "pick" : action === "protect" ? "protect" : "ban";
-  return {
-    token,
-    action: resolvedAction,
-    side: side === "away" ? "away" : "home"
-  };
-}
 
 /**
  * Picked items in their final play order (action_index, legacy `order`
@@ -142,18 +129,24 @@ export function highestPoolRound(pool: PickBanEntry[]): number | null {
   return highest;
 }
 
+/** Session presence gate shared by every action affordance in the room. */
+export function isSessionActive(session: PickBanSession | null): boolean {
+  return session != null && session.status === "active";
+}
+
 /**
- * Epoch-ms deadline of the current turn, or null when the timer indicator
- * should not be shown (no timer configured, session inactive, sequence
- * complete).
+ * Epoch-ms deadline of the step on the clock, or null when no countdown should
+ * be shown (no timer on the step, session inactive, sequence complete).
+ *
+ * The server computes it — `step_deadline` already accounts for the step's own
+ * `timer_seconds` and for every reopen that reset the clock, so the room never
+ * adds a start time to a duration itself.
  */
-export function turnDeadlineMs(state: PickBanState): number | null {
-  const session = state.session;
-  if (!session || session.status !== "active" || state.is_complete) return null;
-  if (session.turn_timer_seconds == null || !session.current_step_started_at) return null;
-  const startedAt = Date.parse(session.current_step_started_at);
-  if (Number.isNaN(startedAt)) return null;
-  return startedAt + session.turn_timer_seconds * 1000;
+export function stepDeadlineMs(state: PickBanState): number | null {
+  if (!isSessionActive(state.session) || state.is_complete) return null;
+  if (!state.step_deadline) return null;
+  const deadline = Date.parse(state.step_deadline);
+  return Number.isNaN(deadline) ? null : deadline;
 }
 
 /** Which empty-room icon a cause warrants; the room resolves it to a component. */
@@ -227,6 +220,78 @@ export function pickBanReserveMap(session: PickBanSession | null): Map<number, n
   );
 }
 
+// ─── Resolved steps ─────────────────────────────────────────────────────────
+
+/**
+ * Everything a step's headline says, reduced to the pieces a label is built
+ * from: "Both teams ban · 5 · blind · one per opponent player · holds for 2
+ * maps". Each piece is null/false when it adds nothing, so the caller never
+ * renders "×1" or a lifetime on a step that has no ban to outlive the map.
+ */
+export interface PickBanStepSummary {
+  action: PickBanStepAction;
+  /** The acting sides, in resolved order; empty for an engine-resolved step. */
+  sides: PickBanSide[];
+  /** No captain acts here — the engine rolls it (`sides: ["system"]`). */
+  system: boolean;
+  /** Items per acting side; null when a step takes exactly one. */
+  count: number | null;
+  blind: boolean;
+  /** Every item names an opponent roster player. */
+  targeted: boolean;
+  /**
+   * How long the ban outlives this map: a number of maps, `"series"` for the
+   * rest of it, null when there is nothing to say (a one-map ban, or a step
+   * that is not a ban at all).
+   */
+  lifetime: number | "series" | null;
+}
+
+export function stepSummary(step: PickBanResolvedStep): PickBanStepSummary {
+  const sides = step.sides.filter((side): side is PickBanSide => side !== "system");
+  return {
+    action: step.action,
+    sides,
+    system: sides.length === 0,
+    count: step.count > 1 ? step.count : null,
+    blind: step.blind,
+    targeted: step.target != null,
+    lifetime:
+      step.action !== "ban" || step.lifetime === 1 ? null : (step.lifetime ?? "series")
+  };
+}
+
+export interface PickBanStepRoundGroup {
+  /** The round (map-of-the-series) these steps resolve; 1-based. */
+  round: number;
+  steps: PickBanResolvedStep[];
+}
+
+/**
+ * The resolved sequence split across the rounds it resolves, or null for a
+ * flat (non-progressive) session.
+ *
+ * Each step carries its own `round` now, so the grouping is read straight off
+ * the sequence instead of being inferred from how many pool entries a round
+ * has — a blind step takes five items from each side in ONE step, and the old
+ * entry-counting split would have torn that round apart.
+ */
+export function stepRoundGroups(
+  sequence: PickBanResolvedStep[]
+): PickBanStepRoundGroup[] | null {
+  const byRound = new Map<number, PickBanResolvedStep[]>();
+  for (const step of sequence) {
+    if (step.round == null) continue;
+    const bucket = byRound.get(step.round);
+    if (bucket) bucket.push(step);
+    else byRound.set(step.round, [step]);
+  }
+  if (byRound.size === 0) return null;
+  return [...byRound.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([round, steps]) => ({ round, steps }));
+}
+
 export interface PickBanRoundGroup {
   /** The round (map-of-the-series) this group resolves; 1-based. */
   round: number;
@@ -255,33 +320,6 @@ export function poolRoundGroups(pool: PickBanEntry[]): PickBanRoundGroup[] | nul
     .map(([round, entries]) => ({ round, entries }));
 }
 
-export interface PickBanStepRoundGroup extends PickBanRoundGroup {
-  /** Positions in the session `sequence` that resolve this round, ascending. */
-  stepIndices: number[];
-}
-
-/**
- * The session `sequence` split across the rounds it resolves, or null for a
- * flat pool. Each round claims as many consecutive steps as it has pool
- * entries, riding the entries along so the timeline can ask `roundState`
- * about a group directly.
- */
-export function stepRoundGroups(
-  sequence: string[],
-  pool: PickBanEntry[]
-): PickBanStepRoundGroup[] | null {
-  const groups = poolRoundGroups(pool);
-  if (groups === null) return null;
-  let cursor = 0;
-  return groups.map((group) => {
-    const end = Math.min(cursor + group.entries.length, sequence.length);
-    const stepIndices: number[] = [];
-    for (let index = cursor; index < end; index += 1) stepIndices.push(index);
-    cursor = end;
-    return { ...group, stepIndices };
-  });
-}
-
 export type PickBanRoundState = "current" | "resolved" | "upcoming";
 
 /**
@@ -299,97 +337,151 @@ export function roundState(
   return group.entries.some((entry) => entry.status === "available") ? "upcoming" : "resolved";
 }
 
+// ─── Submissions ────────────────────────────────────────────────────────────
+
 /**
- * Whether the viewer may select `entry` right now.
+ * The visible submissions of one step, at its CURRENT attempt only.
  *
- * A protected entry is never selectable by a `ban` (the grid still shows it as
- * `available`-looking to no one, since `protect` is
- * a same-side immunity, not a public "safe" marker other sides can act around
- * differently — the server is the single source of truth for what a click
- * resolves to, this only gates whether the click fires at all).
+ * A disputed step keeps its earlier attempts on the wire so the room can tell
+ * how many reopens are left; only the newest one is the board.
  */
-export function isEntrySelectable(
-  entry: PickBanEntry,
-  { canSelect, currentRound }: { canSelect: boolean; currentRound: number | null }
-): boolean {
-  if (!canSelect || entry.status !== "available") return false;
-  return entry.round == null || entry.round === currentRound;
+export function stepSubmissions(
+  submissions: PickBanSubmission[],
+  stepIndex: number
+): PickBanSubmission[] {
+  const rows = submissions.filter((submission) => submission.step_index === stepIndex);
+  if (rows.length === 0) return [];
+  const attempt = rows.reduce((max, row) => Math.max(max, row.attempt), 1);
+  return rows.filter((row) => row.attempt === attempt);
+}
+
+/** The viewer's own submission on the step in play, or null (no step, spectator, nothing sent). */
+export function viewerSubmission(state: PickBanState): PickBanSubmission | null {
+  if (state.current_step_index == null || state.viewer_side == null) return null;
+  return (
+    stepSubmissions(state.submissions, state.current_step_index).find(
+      (submission) => submission.side === state.viewer_side
+    ) ?? null
+  );
 }
 
 /**
- * How the configured attribute-uniqueness rule
- * (`PickBanConfig.unique_attribute_per_side_per_round`, exposed as
- * `PickBanState.unique_attribute`) constrains the step in play.
+ * The newest blind step whose drafts are all out in the open — the one the
+ * reveal panel prints and the one a dispute reopens.
  *
- * Two very different things, deliberately kept apart:
- *
- * - `blocked` — the rule REJECTS it. The side on the clock already took an
- *   action of this kind on that attribute value this round, so the server
- *   answers a 400. The grid disables those tiles rather than letting a captain
- *   discover it by clicking.
- * - `pointless` — perfectly legal, but it buys nothing: on a `protect` step,
- *   an attribute the OPPONENT has already banned this round is one they can no
- *   longer ban again, so protecting it defends against nothing. Greyed as a
- *   hint, never disabled — a captain may still have their own reasons.
+ * Walked from the end rather than read off `dispute.step_index`: the panel is
+ * shown to everyone (a spectator, the side that cannot dispute any more), and
+ * `dispute.available` is the VIEWER's own permission, not a statement about
+ * which step just resolved.
  */
-export interface PickBanAttributeLocks {
-  blocked: Set<string>;
-  pointless: Set<string>;
-}
-
-const NO_ATTRIBUTE_LOCKS: PickBanAttributeLocks = {
-  blocked: new Set(),
-  pointless: new Set()
-};
-
-/**
- * Resolve the locks for the current step. Empty for every kind/config without
- * the rule, and for a `pick`/`decider` step — neither rulebook restricts those
- * by attribute.
- *
- * Bans and protects never constrain each other (backend:
- * `pick_ban_engine.committed_attributes`), so `blocked` reads only the acting
- * side's OWN actions of the SAME kind.
- */
-export function attributeLocks({
-  pool,
-  uniqueAttribute,
-  action,
-  side,
-  currentRound,
-  attributeOf
-}: {
-  pool: PickBanEntry[];
-  uniqueAttribute: string | null | undefined;
-  /** The step's expected action — `state.expected_action`. */
-  action: PickBanAction | "decider" | null;
-  /** The side on the clock — `state.turn_side`, not the viewer's. */
-  side: PickBanSide | null;
-  currentRound: number | null;
-  /** The item's attribute value (hero role today), or null when unknown. */
-  attributeOf: (itemId: number) => string | null;
-}): PickBanAttributeLocks {
-  if (!uniqueAttribute || side == null || (action !== "ban" && action !== "protect")) {
-    return NO_ATTRIBUTE_LOCKS;
+export function lastRevealedBlindStep(
+  sequence: PickBanResolvedStep[],
+  submissions: PickBanSubmission[]
+): PickBanResolvedStep | null {
+  for (let index = sequence.length - 1; index >= 0; index -= 1) {
+    const step = sequence[index];
+    if (!step.blind) continue;
+    const rows = stepSubmissions(submissions, step.index);
+    if (rows.length > 0 && rows.every((row) => row.state === "revealed")) return step;
   }
-  const opponent: PickBanSide = side === "home" ? "away" : "home";
-  const blocked = new Set<string>();
-  const pointless = new Set<string>();
+  return null;
+}
 
-  for (const entry of pool) {
-    if (entry.round != null && entry.round !== currentRound) continue;
-    const attribute = attributeOf(entry.item_id);
-    if (attribute == null) continue;
-    if (action === "ban") {
-      if (entry.status === "banned" && entry.picked_by === side) blocked.add(attribute);
-      continue;
+/**
+ * The viewer's own draft for the step in play — what the tray shows and what
+ * `submitDraft` replaces. Empty once they locked nothing, and also the seed a
+ * dispute prefills.
+ */
+export function viewerDraftItems(state: PickBanState): PickBanSubmissionItem[] {
+  return viewerSubmission(state)?.items ?? [];
+}
+
+/**
+ * Items both sides named in the same (blind) step. Each side banned it
+ * independently and the board merges them into one entry, so the reveal marks
+ * them rather than silently showing one side a ban it did not spend.
+ */
+export function duplicateItemIds(submissions: PickBanSubmission[]): Set<number> {
+  const sidesByItem = new Map<number, Set<string>>();
+  for (const submission of submissions) {
+    for (const item of submission.items) {
+      const sides = sidesByItem.get(item.item_id) ?? new Set<string>();
+      sides.add(submission.side);
+      sidesByItem.set(item.item_id, sides);
     }
-    if (entry.status === "protected" && entry.protected_by === side) blocked.add(attribute);
-    // The opponent's ban is what makes a protect moot: they cannot spend a
-    // second one on this attribute, so there is nothing left to protect from.
-    if (entry.status === "banned" && entry.picked_by === opponent) pointless.add(attribute);
   }
-  return { blocked, pointless };
+  return new Set(
+    [...sidesByItem.entries()].filter(([, sides]) => sides.size > 1).map(([itemId]) => itemId)
+  );
+}
+
+export interface PickBanSideItems {
+  home: PickBanSubmissionItem[];
+  away: PickBanSubmissionItem[];
+}
+
+/**
+ * What each side applied, in step then item order — optionally narrowed to one
+ * round and one action.
+ *
+ * Read from the submissions, never from the board: a blind step where both
+ * sides banned the same hero writes ONE banned entry with one `picked_by`, so
+ * the board alone would credit the ban to whichever side the projection walked
+ * first and leave the other side a ban short.
+ */
+export function appliedItemsBySide(
+  sequence: PickBanResolvedStep[],
+  submissions: PickBanSubmission[],
+  filter: { round?: number | null; action?: PickBanStepAction } = {}
+): PickBanSideItems {
+  const items: PickBanSideItems = { home: [], away: [] };
+  for (const step of sequence) {
+    if (filter.round !== undefined && step.round !== filter.round) continue;
+    if (filter.action !== undefined && step.action !== filter.action) continue;
+    for (const submission of stepSubmissions(submissions, step.index)) {
+      // Applied = revealed, or any draft of an OPEN step: an open step's
+      // choices are public the moment they are made (spec §5).
+      if (submission.side === "system") continue;
+      if (step.blind && submission.state !== "revealed") continue;
+      items[submission.side].push(...submission.items);
+    }
+  }
+  return items;
+}
+
+// ─── The board ──────────────────────────────────────────────────────────────
+
+/**
+ * Whether `entry` belongs to `round`. Non-obvious on its own: a FLAT pool's
+ * entries carry no round and belong to every one of them, so this is not a
+ * plain equality and both readers below depend on that.
+ */
+function inRound(entry: PickBanEntry, round: number | null): boolean {
+  return round == null ? entry.round == null : entry.round == null || entry.round === round;
+}
+
+/**
+ * Bans of `round` that were spent on an EARLIER map and are still in force
+ * (their `lifetime` covers this one). They are fixed: no undo, no dispute and
+ * no projection ever touches them, and the room badges them with the map they
+ * came from so a captain does not go looking for who banned them here.
+ */
+export function carriedBanEntries(pool: PickBanEntry[], round: number | null): PickBanEntry[] {
+  return pool.filter((entry) => entry.carried_from_round != null && inRound(entry, round));
+}
+
+/** Everything banned for `round`, carried bans included — what the lobby has to disable. */
+export function bannedEntries(pool: PickBanEntry[], round: number | null): PickBanEntry[] {
+  return pool.filter((entry) => entry.status === "banned" && inRound(entry, round));
+}
+
+/**
+ * What `round` still has to play with: the round's pool minus its bans. A
+ * protected entry counts — a protect keeps a hero IN the game, which is
+ * exactly the distinction the lobby has to get right.
+ */
+export function remainingEntries(pool: PickBanEntry[], round: number | null): PickBanEntry[] {
+  return pool.filter((entry) => entry.status !== "banned" && inRound(entry, round));
 }
 
 export type PickBanStatusLabelKey = `status.${PickBanEntryStatus | "remaining"}`;
@@ -407,7 +499,118 @@ export function statusLabelKey(entry: PickBanEntry): PickBanStatusLabelKey {
   return `status.${entry.status}`;
 }
 
-/** Session presence gate shared by every action affordance in the room. */
-export function isSessionActive(session: PickBanSession | null): boolean {
-  return session != null && session.status === "active";
+/**
+ * The item ids the viewer may choose right now, or null when the server said
+ * nothing (they cannot act, so nothing is greyed as "illegal for you").
+ *
+ * On a target step the legal set differs per opponent player — a hero whose
+ * class matches one player is not a legal ban for another — so naming the
+ * selected target narrows it to that player's own set.
+ */
+export function eligibleItemIds(
+  eligible: PickBanEligible | null,
+  targetPlayerId: number | null
+): Set<number> | null {
+  if (eligible == null) return null;
+  if (targetPlayerId != null && eligible.by_target != null) {
+    return new Set(eligible.by_target[String(targetPlayerId)] ?? []);
+  }
+  return new Set(eligible.item_ids);
+}
+
+export interface PickBanTileStatus {
+  /** A click fires: it acts, or adds/removes the item from a blind draft. */
+  selectable: boolean;
+  /** The viewer may act, but this item is not a legal choice — greyed, inert. */
+  ineligible: boolean;
+  /** Already in the viewer's own draft for this blind step. */
+  drafted: boolean;
+  /** Belongs to a round that has not opened yet. */
+  locked: boolean;
+}
+
+/**
+ * How one tile stands for the viewer, given what the server says they may
+ * choose (`eligible`) and what they have drafted so far.
+ *
+ * Legality is the SERVER's answer, never re-derived here: v2 rules are
+ * arbitrary condition trees (class must match the target player's role, not
+ * banned by this side earlier in the series, at most one per role), and the
+ * room's job is to grey what `eligible` omits rather than to reimplement the
+ * engine. A drafted item stays clickable — that click takes it back out.
+ */
+export function tileStatus(
+  entry: PickBanEntry,
+  {
+    canSelect,
+    currentRound,
+    eligibleIds,
+    draftItemIds
+  }: {
+    canSelect: boolean;
+    currentRound: number | null;
+    eligibleIds: Set<number> | null;
+    draftItemIds: ReadonlySet<number>;
+  }
+): PickBanTileStatus {
+  const locked = entry.round != null && entry.round !== currentRound;
+  const drafted = draftItemIds.has(entry.item_id);
+  if (!canSelect || entry.status !== "available" || locked) {
+    return { selectable: false, ineligible: false, drafted, locked };
+  }
+  const allowed = drafted || eligibleIds == null || eligibleIds.has(entry.item_id);
+  return { selectable: allowed, ineligible: !allowed, drafted, locked };
+}
+
+// ─── Lobby copy ─────────────────────────────────────────────────────────────
+
+/** One item as the lobby list names it: its role decides which line it lands on. */
+export interface PickBanRoleItem {
+  itemId: number;
+  name: string;
+  role: AqtRoleKey | null;
+}
+
+export interface PickBanRoleGroup {
+  /** Null is the "role unknown" bucket — rendered last, never dropped. */
+  role: AqtRoleKey | null;
+  items: PickBanRoleItem[];
+}
+
+/** Tank-damage-support, the order the game's own hero list uses. */
+const ROLE_ORDER: AqtRoleKey[] = ["tank", "damage", "support"];
+
+/**
+ * Items grouped by role in the game's own order, names sorted inside each
+ * group. Empty roles are dropped; the unknown-role bucket comes last so a
+ * catalog that has not loaded yet never hides an item.
+ */
+export function groupItemsByRole(items: PickBanRoleItem[]): PickBanRoleGroup[] {
+  const byRole = new Map<AqtRoleKey | null, PickBanRoleItem[]>();
+  for (const item of items) {
+    const bucket = byRole.get(item.role) ?? [];
+    bucket.push(item);
+    byRole.set(item.role, bucket);
+  }
+  const order: (AqtRoleKey | null)[] = [...ROLE_ORDER, null];
+  return order
+    .filter((role) => (byRole.get(role)?.length ?? 0) > 0)
+    .map((role) => ({
+      role,
+      items: [...byRole.get(role)!].sort((left, right) => left.name.localeCompare(right.name))
+    }));
+}
+
+/**
+ * The text the "copy for the lobby" button puts on the clipboard: one line per
+ * role, so a captain reads it off while ticking heroes off in the custom-game
+ * hero list, which is itself grouped by role.
+ */
+export function lobbyCopyText(
+  groups: PickBanRoleGroup[],
+  roleLabel: (role: AqtRoleKey | null) => string
+): string {
+  return groups
+    .map((group) => `${roleLabel(group.role)}: ${group.items.map((item) => item.name).join(", ")}`)
+    .join("\n");
 }

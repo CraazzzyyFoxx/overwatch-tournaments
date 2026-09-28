@@ -2193,11 +2193,33 @@ export interface paths {
         put?: never;
         /**
          * Ban, pick or protect
-         * @description Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Applies one ban, pick or protect to the encounter's live pick/ban session of the given `kind`, under the session's row lock, and returns the resulting pool entry. Only allowed on the caller's own turn: acting out of turn, sending the wrong action for the current step, naming an item that is not a candidate this round, or re-banning something this side already banned earlier in the series is a 400, as is a session that is not initialized or no longer active.
+         * @description Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Applies one ban, pick or protect to the encounter's live pick/ban session of the given `kind`, under the session's row lock, and returns the caller's new room state. OPEN steps only: a blind step is a 400 that says to use the submit route. Acting when the caller's side does not owe the current step, sending the wrong action for it, naming an item the step's rules do not allow, or omitting the opponent player a per-player ban must name is a 400, as is a session that is not initialized or no longer active.
          *
          *     RPC subject: `rpc.tournament.captain_pick_ban_act`
          */
         post: operations["post__api_v1_encounters__encounter_id__pick_ban__kind__act"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispute the last revealed step
+         * @description Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Unilateral, no opponent consent: voids the last fully revealed BLIND step and re-opens it for a fresh attempt with each side's previous items prefilled, so a captain who named the wrong opponent player can redo it. Allowed only while that step's `dispute` is enabled, its attempt budget is not spent, no later step has been acted in, and the map that round settled has no result yet; anything else is a 400. Returns the caller's new room state.
+         *
+         *     RPC subject: `rpc.tournament.captain_pick_ban_dispute`
+         */
+        post: operations["post__api_v1_encounters__encounter_id__pick_ban__kind__dispute"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2235,13 +2257,35 @@ export interface paths {
         };
         /**
          * Get pick-ban room state
-         * @description Permission: public; no authentication required — gated only by the tournament's visibility rule. Returns the live pick/ban room for an encounter and the `kind` path segment ('map' or 'hero', 422 otherwise): the resolved sequence, the candidate pool, whose turn it is, both sides' readiness, any open undo request, and for maps the captains' per-map result claims. A captain additionally gets their own side annotated. When no session can exist yet the payload names why (teams unknown, bracket still a preview, no pick-ban configured, slot count mismatch, sides not ready, waiting on the map round) instead of erroring.
+         * @description Permission: public; no authentication required — gated only by the tournament's visibility rule. Returns the live pick/ban room for an encounter and the `kind` path segment ('map' or 'hero', 422 otherwise): the resolved steps, the candidate pool, which sides still owe the current step, both sides' readiness, any open undo request, and for maps the captains' per-map result claims. A captain additionally gets their own side annotated, their eligible items, why their draft cannot be locked yet, and their own unrevealed draft — a blind step never serializes the other side's. When no session can exist yet the payload names why (teams unknown, bracket still a preview, no pick-ban configured, slot count mismatch, sides not ready, waiting on the map round) instead of erroring.
          *
          *     RPC subject: `rpc.tournament.captain_pick_ban_state`
          */
         get: operations["get__api_v1_encounters__encounter_id__pick_ban__kind__state"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a blind draft
+         * @description Permission: authenticated user who captains one of the encounter's two teams (403 otherwise). Replaces the caller's whole draft for the current BLIND step and, with `lock: true`, locks it — a locked submission is final, and once every acting side has locked the step reveals for both. Returns the caller's new room state; while the step is unrevealed it carries the caller's own items and only the opponent's progress counts. 400 when the current step is not blind, when the caller already locked, or when the items break the step's rules (the reasons are also listed in the state's `draft_issues`).
+         *
+         *     RPC subject: `rpc.tournament.captain_pick_ban_submit`
+         */
+        post: operations["post__api_v1_encounters__encounter_id__pick_ban__kind__submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2754,6 +2798,28 @@ export interface paths {
          *     RPC subject: `rpc.app.notifications_mark_read`
          */
         post: operations["post__api_v1_notifications_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pick-ban-rules/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the pick-ban ruleset catalog
+         * @description Permission: public; no authentication required — the catalog describes the rules ENGINE (which condition leaves and constraints exist, what parameters they take, which item groups are selectable per kind) plus the built-in presets, not anyone's tournament. The pick-ban constructor loads it before a config exists to attach it to.
+         *
+         *     RPC subject: `rpc.tournament.pick_ban_rules_catalog`
+         */
+        get: operations["get__api_v1_pick_ban_rules_catalog"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5797,7 +5863,7 @@ export interface paths {
         put?: never;
         /**
          * Act for a side
-         * @description Permission: workspace `match.update` on the encounter's workspace. Performs a ban, pick, or protect on behalf of the given side (admin override of the captain flow) and returns the updated pool entry.
+         * @description Permission: workspace `match.update` on the encounter's workspace. Performs one ban, pick or protect on behalf of the given side (admin override of the captain flow) against the current OPEN step, optionally naming the opponent roster player a per-player ban is spent on, and returns the full room state with nothing hidden. 400 when the current step is blind — use admin_pick_ban_submit for those.
          *
          *     RPC subject: `rpc.tournament.admin_pick_ban_act`
          */
@@ -5830,6 +5896,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/encounters/{encounter_id}/pick-ban-reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen the last revealed step
+         * @description Permission: workspace `match.update` on the encounter's workspace. Voids the last fully revealed step's submissions and re-opens it for a fresh attempt — the organizer's version of a captain dispute, with no attempt budget and no `dispute.enabled` requirement. Returns the new room state. 400 when there is no revealed step to reopen or a later step has already been acted in.
+         *
+         *     RPC subject: `rpc.tournament.admin_pick_ban_reopen`
+         */
+        post: operations["post__api_v1_admin_encounters__encounter_id__pick_ban_reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/encounters/{encounter_id}/pick-ban-session/reset": {
         parameters: {
             query?: never;
@@ -5846,6 +5934,28 @@ export interface paths {
          *     RPC subject: `rpc.tournament.admin_pick_ban_session_reset`
          */
         post: operations["post__api_v1_admin_encounters__encounter_id__pick_ban_session_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/encounters/{encounter_id}/pick-ban-submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a blind draft for a side
+         * @description Permission: workspace `match.update` on the encounter's workspace. Replaces one side's draft on a BLIND step on behalf of an absent captain and, with `lock: true`, locks it; every side locked reveals the step. Returns the full room state with nothing hidden. 400 when the current step is not blind, when the side already locked, or when the items break the step's rules.
+         *
+         *     RPC subject: `rpc.tournament.admin_pick_ban_submit`
+         */
+        post: operations["post__api_v1_admin_encounters__encounter_id__pick_ban_submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7598,12 +7708,56 @@ export interface paths {
         get: operations["get__api_v1_admin_tournaments__tournament_id__pick_ban_configs"];
         /**
          * Upsert pick-ban config
-         * @description Permission: workspace `match.update` on the tournament's workspace. Creates or replaces the pick-ban config for one (kind, tournament, stage or stage+round) cascade level after validating the step sequence and item pool.
+         * @description Permission: workspace `match.update` on the tournament's workspace. Creates or replaces the pick-ban config for one (kind, tournament, stage or stage+round) cascade level after validating the ruleset document and the item pool. A ruleset with validation errors is a 422 whose `details.fields[0]` carries `code: "ruleset_invalid"` plus an `issues` array of `{path, code, severity, message}` — the same issue objects admin_pick_ban_rules_validate returns — so the constructor can highlight the offending fields.
          *
          *     RPC subject: `rpc.tournament.admin_pick_ban_config_upsert`
          */
         put: operations["put__api_v1_admin_tournaments__tournament_id__pick_ban_configs"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/pick-ban-rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a pick-ban series
+         * @description Permission: workspace `match.update` on the tournament's workspace (gated like the upsert it precedes). Resolves every map of a best-of series against a candidate ruleset and the pool it would be played out of, returning per map the resolved steps, the new and cumulative active ban counts, and (hero kind) the fewest items that can be left per group — the answer to "how many supports survive map 5" before a tournament runs on the rules.
+         *
+         *     RPC subject: `rpc.tournament.admin_pick_ban_rules_preview`
+         */
+        post: operations["post__api_v1_admin_tournaments__tournament_id__pick_ban_rules_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/pick-ban-rules/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate a pick-ban ruleset
+         * @description Permission: workspace `match.update` on the tournament's workspace (gated like the upsert it precedes). Runs the ruleset engine over a candidate document for the given `kind`/`mode` and returns `{valid, issues}`; unlike the upsert it never errors on a bad ruleset — warnings ride along with the errors and only errors clear `valid`.
+         *
+         *     RPC subject: `rpc.tournament.admin_pick_ban_rules_validate`
+         */
+        post: operations["post__api_v1_admin_tournaments__tournament_id__pick_ban_rules_validate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9513,7 +9667,7 @@ export interface paths {
         put?: never;
         /**
          * Balance custom game
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Balances the non-benched lineup, reading the host's own rank book above the workspace canon, stores the resulting options on the mix and returns it; 422 when the lineup is empty or a seated player has no ranked role.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). With `scope="lobby"` (the default) balances the non-benched lineup of ONE lobby (`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin on is left out. With `scope="all"` it splits the whole pool into two equally strong lobbies and balances both. Ranks come from the host's own book above the workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, `too_many_must_play`, `too_many_pinned`, `roles_infeasible`).
          *
          *     RPC subject: `rpc.balancer.custom.balance`
          */
@@ -9601,11 +9755,33 @@ export interface paths {
         put?: never;
         /**
          * Post custom game lineup to Discord
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and numbers the match within that lobby. 409 when the workspace has no mix channel configured and 404 when the balance option is missing.
          *
          *     RPC subject: `rpc.balancer.custom.post_discord`
          */
         post: operations["post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open custom game signup in Discord
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. 409 when the workspace has no mix channel configured.
+         *
+         *     RPC subject: `rpc.balancer.custom.post_signup`
+         */
+        post: operations["post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_signup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9627,6 +9803,28 @@ export interface paths {
          *     RPC subject: `rpc.balancer.custom.transfer_host`
          */
         put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__host"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/lobbies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set custom game lobby count
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the first untouched; going back to one deletes the second lobby together with its stored matchup and clears every player's lobby pin. Matches already recorded for the second lobby stay in the history and in the statistics.
+         *
+         *     RPC subject: `rpc.balancer.custom.set_lobby_count`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__lobbies"];
         post?: never;
         delete?: never;
         options?: never;
@@ -9668,7 +9866,7 @@ export interface paths {
         post?: never;
         /**
          * Undo custom game match
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the mix's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match exists, since the rank book compounds. must_play pins the recording redeemed are not restored.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.
          *
          *     RPC subject: `rpc.balancer.custom.undo_match`
          */
@@ -9676,6 +9874,46 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my mix seat
+         * @description Permission: any authenticated account; workspace membership is NOT required. Returns the caller's own seat in the mix (participation, role order, the ranks the host's book resolves for them) plus what they may do next: join, leave, edit roles, and the blocker code for each. `seat` is null when the caller is not on the roster.
+         *
+         *     RPC subject: `rpc.balancer.custom.self_get`
+         */
+        get: operations["get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me"];
+        put?: never;
+        /**
+         * Join a mix myself
+         * @description Permission: any authenticated account with both Discord and Battle.net linked and `custom_game.self_join` not denied; workspace membership is created on the way in. Seats the caller according to the mix's signup mode (pool or bench) and returns the same state as the read. Idempotent: an existing row is left untouched, bench included. 403 for an unlinked account, 409 when signup is closed, the mix is over or the roster is full.
+         *
+         *     RPC subject: `rpc.balancer.custom.self_join`
+         */
+        post: operations["post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me"];
+        /**
+         * Leave a mix myself
+         * @description Permission: any authenticated account holding a seat in this mix -- the account links are deliberately NOT required, so unlinking one cannot trap somebody in a lineup. Removes the caller's own roster row; the stored balance is kept until the host re-balances. 404 when the caller has no seat, 409 once the mix is over.
+         *
+         *     RPC subject: `rpc.balancer.custom.self_leave`
+         */
+        delete: operations["delete__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me"];
+        options?: never;
+        head?: never;
+        /**
+         * Update my mix seat
+         * @description Permission: a seated account, while the host's 'players edit their own roles' switch is on. Re-orders the caller's own roles (null = every role they have a rank for) and flips their flex flag; participation and ranks stay the host's. The shown balance is not recomputed -- the change applies to the next one. 409 when the switch is off, 404 when the caller has no seat.
+         *
+         *     RPC subject: `rpc.balancer.custom.self_update`
+         */
+        patch: operations["patch__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me"];
         trace?: never;
     };
     "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map": {
@@ -9688,7 +9926,7 @@ export interface paths {
         get?: never;
         /**
          * Set custom game next map
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. 404 when the map is not in the catalogue.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Names the map the lobby's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. The lobby_index field names which lobby's roll this is; a single-lobby mix leaves it at 0. 404 when the map is not in the catalogue.
          *
          *     RPC subject: `rpc.balancer.custom.set_next_map`
          */
@@ -9711,7 +9949,7 @@ export interface paths {
         put?: never;
         /**
          * Record custom game match
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Repeatable until the mix is closed.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.
          *
          *     RPC subject: `rpc.balancer.custom.record_outcome`
          */
@@ -9797,12 +10035,34 @@ export interface paths {
         };
         /**
          * Get custom game rotation hints
-         * @description Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only.
+         * @description Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the other lobby or pinned to it is left out -- and splits at that lobby's seat count.
          *
          *     RPC subject: `rpc.balancer.custom.rotation`
          */
         get: operations["get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__rotation"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/self-service": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set custom game self-service switches
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Sets whether players may seat themselves (closed, into the pool, or onto the bench) and whether a seated player may re-order their own roles, then returns the refreshed mix.
+         *
+         *     RPC subject: `rpc.balancer.custom.set_self_service`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__self_service"];
         post?: never;
         delete?: never;
         options?: never;
@@ -9864,7 +10124,7 @@ export interface paths {
         get?: never;
         /**
          * Set custom game shown balance option
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages the mix to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the mix, not about one browser. 404 when the index points past the stored options. Re-balancing resets it to the first option.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Pages one lobby to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the lobby, not about one browser. 404 when the index points past the stored options, and 409 seat_conflict when the option would seat somebody the mix's other lobby has already put on the floor. Re-balancing resets it to the first option.
          *
          *     RPC subject: `rpc.balancer.custom.set_variant_index`
          */
@@ -16493,13 +16753,20 @@ export interface components {
         };
         /**
          * PickBanActionInput
-         * @description One ban/pick/protect against a hero- or map-kind pick-ban session.
+         * @description One ban/pick/protect against an OPEN (non-blind) step of a hero- or
+         *     map-kind pick-ban session. ``target_player_id`` is required exactly when
+         *     the step names an opponent roster player (``step.target``).
          */
         "tournament.PickBanActionInput": {
             /** Action */
             action: string;
             /** Item Id */
             item_id: number;
+            /**
+             * Target Player Id
+             * @default null
+             */
+            target_player_id: number | null;
         };
         /**
          * PickBanKind
@@ -16508,19 +16775,33 @@ export interface components {
          */
         "tournament.PickBanKind": TournamentPickBanKind;
         /**
-         * PickBanNoRepeatScope
-         * @description Cross-round BAN memory rule for :class:`EncounterPickBanLedger`
-         *     exclusion. Protects are never recorded there, so they neither exclude nor
-         *     are excluded by anything under any scope.
-         *
-         *     ``NONE``: no cross-round memory (today's flat/slot veto behavior).
-         *     ``ENCOUNTER``: an item banned by EITHER side, anywhere earlier in this
-         *     encounter's series, is excluded from every later round's pool.
-         *     ``ENCOUNTER_SAME_SIDE``: excluded only for the side that banned it; the
-         *     opponent may still target it.
-         * @enum {string}
+         * PickBanSubmissionItemInput
+         * @description One item of a blind draft: what is chosen, and for whom on a target step.
          */
-        "tournament.PickBanNoRepeatScope": TournamentPickBanNoRepeatScope;
+        "tournament.PickBanSubmissionItemInput": {
+            /** Item Id */
+            item_id: number;
+            /**
+             * Target Player Id
+             * @default null
+             */
+            target_player_id: number | null;
+        };
+        /**
+         * PickBanSubmitInput
+         * @description A blind step's whole draft, replacing whatever the side had. ``lock``
+         *     validates it in full and makes it final — the step reveals once every
+         *     acting side has locked.
+         */
+        "tournament.PickBanSubmitInput": {
+            /** Items */
+            items?: components["schemas"]["tournament.PickBanSubmissionItemInput"][];
+            /**
+             * Lock
+             * @default false
+             */
+            lock: boolean;
+        };
         /**
          * PickBanUndoInput
          * @description One captain's consent to undo the session's last action. ``consent=False``
@@ -17411,11 +17692,6 @@ export interface components {
         };
         /** ScrimPoolConfigInput */
         "tournament.ScrimPoolConfigInput": {
-            /**
-             * Allow Protect
-             * @default false
-             */
-            allow_protect: boolean;
             /** @default fixed */
             first_ban_rotation: components["schemas"]["tournament.FirstBanRotation"];
             /** @default higher_seed */
@@ -17425,27 +17701,12 @@ export interface components {
             kind: components["schemas"]["tournament.PickBanKind"];
             /** @default pool */
             mode: components["schemas"]["tournament.MapVetoMode"];
-            /** @default none */
-            no_repeat_scope: components["schemas"]["tournament.PickBanNoRepeatScope"];
-            /**
-             * Preset
-             * @default null
-             */
-            preset: string | null;
-            /** Sequence */
-            sequence?: string[];
+            /** Ruleset */
+            ruleset: {
+                [key: string]: unknown;
+            };
             /** Slots */
             slots?: components["schemas"]["tournament.ScrimPoolSlotInput"][];
-            /**
-             * Turn Timer Seconds
-             * @default null
-             */
-            turn_timer_seconds: number | null;
-            /**
-             * Unique Attribute Per Side Per Round
-             * @default null
-             */
-            unique_attribute_per_side_per_round: string | null;
         };
         /**
          * ScrimPoolCopy
@@ -19282,6 +19543,25 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * CustomGameBalanceRequest
+         * @description What to balance. An empty body is the first lobby, as before there was a second.
+         *
+         *     ``scope="all"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.
+         */
+        "balancer.CustomGameBalanceRequest": {
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
+            /**
+             * Scope
+             * @default lobby
+             * @enum {string}
+             */
+            scope: BalancerCustomGameBalanceRequestScope;
+        };
         /** CustomGameCoHostPatch */
         "balancer.CustomGameCoHostPatch": {
             /** Co Host User Id */
@@ -19305,10 +19585,26 @@ export interface components {
             new_host_user_id: number;
         };
         /**
+         * CustomGameLobbyCountPatch
+         * @description How many lobbies the mix runs at once.
+         */
+        "balancer.CustomGameLobbyCountPatch": {
+            /**
+             * Lobby Count
+             * @enum {integer}
+             */
+            lobby_count: BalancerCustomGameLobbyCountPatchLobby_count;
+        };
+        /**
          * CustomGameNextMapPatch
          * @description ``null`` clears the pick; the next match then records with no map.
          */
         "balancer.CustomGameNextMapPatch": {
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
             /** Map Id */
             map_id: number | null;
         };
@@ -19330,6 +19626,11 @@ export interface components {
              * @default null
              */
             is_flex: boolean | null;
+            /**
+             * Lobby Pin
+             * @default null
+             */
+            lobby_pin: number | null;
             /** @default null */
             participation: components["schemas"]["balancer.MixParticipation"] | null;
             /**
@@ -19359,11 +19660,33 @@ export interface components {
              * @default null
              */
             image_b64: string | null;
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
             /** Variant Index */
             variant_index: number;
         };
+        /**
+         * CustomGamePostSignup
+         * @description Which signup mode the posted card opens. ``closed`` is not a choice here:
+         *     posting a card that refuses every click is never the intent.
+         */
+        "balancer.CustomGamePostSignup": {
+            /**
+             * Self Signup
+             * @enum {string}
+             */
+            self_signup: BalancerCustomGamePostSignupSelf_signup;
+        };
         /** CustomGameRecordOutcome */
         "balancer.CustomGameRecordOutcome": {
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
             /**
              * Map Id
              * @default null
@@ -19382,10 +19705,48 @@ export interface components {
         "balancer.CustomGameSeatSwap": {
             /** First Uuid */
             first_uuid: string;
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
             /** Second Uuid */
             second_uuid: string;
             /** Variant Index */
             variant_index: number;
+        };
+        /**
+         * CustomGameSelfServicePatch
+         * @description The host's self-service switches: the signup mode and the role-edit flag.
+         */
+        "balancer.CustomGameSelfServicePatch": {
+            /**
+             * Self Role Edit
+             * @default null
+             */
+            self_role_edit: boolean | null;
+            /** @default null */
+            self_signup: components["schemas"]["balancer.MixSelfSignup"] | null;
+        };
+        /**
+         * CustomGameSelfUpdate
+         * @description What a PLAYER may change about their own seat.
+         *
+         *     ``roles`` absent means "leave my role order alone"; ``roles: null`` means
+         *     "every role I have a rank for". The two are distinguished by
+         *     ``model_fields_set``, so a flex toggle cannot silently reset a role order.
+         */
+        "balancer.CustomGameSelfUpdate": {
+            /**
+             * Is Flex
+             * @default null
+             */
+            is_flex: boolean | null;
+            /**
+             * Roles
+             * @default null
+             */
+            roles: string[] | null;
         };
         /** CustomGameTeamNamesPatch */
         "balancer.CustomGameTeamNamesPatch": {
@@ -19396,9 +19757,14 @@ export interface components {
         };
         /**
          * CustomGameVariantIndexPatch
-         * @description Which stored balance option the mix shows, for every viewer at once.
+         * @description Which stored balance option the lobby shows, for every viewer at once.
          */
         "balancer.CustomGameVariantIndexPatch": {
+            /**
+             * Lobby Index
+             * @default 0
+             */
+            lobby_index: number;
             /** Variant Index */
             variant_index: number;
         };
@@ -19407,6 +19773,17 @@ export interface components {
          * @enum {string}
          */
         "balancer.MixParticipation": BalancerMixParticipation;
+        /**
+         * MixSelfSignup
+         * @description Who may put themselves on a mix roster, and where they land.
+         *
+         *     One column, three states: ``closed`` is no self-signup at all, ``pool``
+         *     seats a self-signed player straight into the pool, ``benched`` parks them
+         *     for the host to promote. A bool plus a destination enum would admit a
+         *     fourth, meaningless pair ("closed, but onto the bench").
+         * @enum {string}
+         */
+        "balancer.MixSelfSignup": BalancerMixSelfSignup;
         /**
          * UserMixPreferencesRead
          * @description What is stored, plus the shape it resolves to.
@@ -23735,6 +24112,136 @@ export interface components {
             results: components["schemas"]["tournament.EncounterReportsRow"][];
             /** Total */
             total: number;
+        };
+        /**
+         * PickBanAdminAct
+         * @description Body for the admin act-for-a-side route: perform one step on behalf of
+         *     an absent captain. ``target_player_id`` names the opponent roster player a
+         *     per-player ban is spent on (ruleset v2 target steps); ``null`` everywhere
+         *     else.
+         */
+        "tournament.PickBanAdminAct": {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: TournamentPickBanAdminActAction;
+            /** Item Id */
+            item_id: number;
+            kind: components["schemas"]["tournament.PickBanKind"];
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: TournamentPickBanAdminActSide;
+            /**
+             * Target Player Id
+             * @default null
+             */
+            target_player_id: number | null;
+        };
+        /**
+         * PickBanAdminSubmit
+         * @description Body for the admin submit-for-a-side route: replace a BLIND step's draft
+         *     on behalf of a captain who is not there to author it. Items reuse the
+         *     captain schema so the two surfaces cannot drift.
+         */
+        "tournament.PickBanAdminSubmit": {
+            /** Items */
+            items?: components["schemas"]["tournament.PickBanSubmissionItemInput"][];
+            kind: components["schemas"]["tournament.PickBanKind"];
+            /**
+             * Lock
+             * @default false
+             */
+            lock: boolean;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: TournamentPickBanAdminSubmitSide;
+        };
+        /**
+         * PickBanConfigSlotUpsert
+         * @description One slot of a slot-mode upsert body. No ``position``: list order IS the
+         *     play order (same rationale as ``veto_admin.VetoConfigSlotUpsert``).
+         */
+        "tournament.PickBanConfigSlotUpsert": {
+            /** Candidates */
+            candidates: number[];
+            /**
+             * Reserve Item Id
+             * @default null
+             */
+            reserve_item_id: number | null;
+        };
+        /**
+         * PickBanConfigUpsert
+         * @description Body for the generic pick-ban config upsert route (ruleset v2).
+         */
+        "tournament.PickBanConfigUpsert": {
+            /** @default fixed */
+            first_ban_rotation: components["schemas"]["tournament.FirstBanRotation"];
+            /** @default higher_seed */
+            first_pick_rule: components["schemas"]["tournament.FirstPickRule"];
+            /** Item Ids */
+            item_ids?: number[];
+            kind: components["schemas"]["tournament.PickBanKind"];
+            mode: components["schemas"]["tournament.MapVetoMode"];
+            /**
+             * Round
+             * @default null
+             */
+            round: number | null;
+            /** Ruleset */
+            ruleset: {
+                [key: string]: unknown;
+            };
+            /** Slots */
+            slots?: components["schemas"]["tournament.PickBanConfigSlotUpsert"][];
+            /**
+             * Stage Id
+             * @default null
+             */
+            stage_id: number | null;
+        };
+        /**
+         * PickBanRulesPreviewInput
+         * @description Body for the constructor's series preview: the rules plus the pool they
+         *     would be played out of, since "how many supports survive map 5" is only
+         *     answerable against real items.
+         */
+        "tournament.PickBanRulesPreviewInput": {
+            /**
+             * Best Of
+             * @default 3
+             */
+            best_of: number;
+            /** Item Ids */
+            item_ids?: number[];
+            kind: components["schemas"]["tournament.PickBanKind"];
+            /** @default pool */
+            mode: components["schemas"]["tournament.MapVetoMode"];
+            /** Ruleset */
+            ruleset: {
+                [key: string]: unknown;
+            };
+            /** Slots */
+            slots?: components["schemas"]["tournament.PickBanConfigSlotUpsert"][];
+        };
+        /**
+         * PickBanRulesValidateInput
+         * @description Body for the constructor's live validation: a ruleset in the shape it
+         *     would be saved at, without the pool or the cascade coordinates.
+         */
+        "tournament.PickBanRulesValidateInput": {
+            kind: components["schemas"]["tournament.PickBanKind"];
+            /** @default pool */
+            mode: components["schemas"]["tournament.MapVetoMode"];
+            /** Ruleset */
+            ruleset: {
+                [key: string]: unknown;
+            };
         };
         /**
          * PlayerCreate
@@ -33522,6 +34029,89 @@ export interface operations {
             };
         };
     };
+    post__api_v1_encounters__encounter_id__pick_ban__kind__dispute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_encounters__encounter_id__pick_ban__kind__elect_opener: {
         parameters: {
             query?: never;
@@ -33624,6 +34214,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_encounters__encounter_id__pick_ban__kind__submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.PickBanSubmitInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -35272,6 +35945,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_pick_ban_rules_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -46232,7 +46963,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": components["schemas"]["tournament.PickBanAdminAct"];
             };
         };
         responses: {
@@ -46385,6 +47116,88 @@ export interface operations {
             };
         };
     };
+    post__api_v1_admin_encounters__encounter_id__pick_ban_reopen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_admin_encounters__encounter_id__pick_ban_session_reset: {
         parameters: {
             query?: never;
@@ -46397,6 +47210,88 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_admin_encounters__encounter_id__pick_ban_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.PickBanAdminSubmit"];
             };
         };
         responses: {
@@ -54242,7 +55137,171 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": components["schemas"]["tournament.PickBanConfigUpsert"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_admin_tournaments__tournament_id__pick_ban_rules_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.PickBanRulesPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_admin_tournaments__tournament_id__pick_ban_rules_validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.PickBanRulesValidateInput"];
             };
         };
         responses: {
@@ -62700,7 +63759,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameBalanceRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -63094,6 +64157,89 @@ export interface operations {
             };
         };
     };
+    post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_signup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGamePostSignup"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__host: {
         parameters: {
             query?: never;
@@ -63107,6 +64253,89 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["balancer.CustomGameHostTransfer"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__lobbies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameLobbyCountPatch"];
             };
         };
         responses: {
@@ -63250,6 +64479,326 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameSelfUpdate"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -63736,7 +65285,9 @@ export interface operations {
     };
     get__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__rotation: {
         parameters: {
-            query?: never;
+            query?: {
+                lobby_index?: number;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -63753,6 +65304,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__self_service: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameSelfServicePatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -68457,11 +70091,6 @@ export enum TournamentPickBanKind {
     map = "map",
     hero = "hero"
 }
-export enum TournamentPickBanNoRepeatScope {
-    none = "none",
-    encounter = "encounter",
-    encounter_same_side = "encounter_same_side"
-}
 export enum TournamentRegistrationTeamCreateRequestSlot_code {
     tank = "tank",
     damage = "damage",
@@ -68602,12 +70231,29 @@ export enum AppUserMergeFieldPolicyName {
     source = "source",
     target = "target"
 }
+export enum BalancerCustomGameBalanceRequestScope {
+    lobby = "lobby",
+    all = "all"
+}
+export enum BalancerCustomGameLobbyCountPatchLobby_count {
+    Value1 = 1,
+    Value2 = 2
+}
 export enum BalancerCustomGameOutcomeWinnerAnyOf0 {
     Value1 = 1,
     Value2 = 2
 }
+export enum BalancerCustomGamePostSignupSelf_signup {
+    pool = "pool",
+    benched = "benched"
+}
 export enum BalancerMixParticipation {
     must_play = "must_play",
+    pool = "pool",
+    benched = "benched"
+}
+export enum BalancerMixSelfSignup {
+    closed = "closed",
     pool = "pool",
     benched = "benched"
 }
@@ -68783,6 +70429,19 @@ export enum TournamentMappingValueCategoryReadCategory {
     subroles = "subroles",
     role_subroles = "role_subroles",
     divisions = "divisions"
+}
+export enum TournamentPickBanAdminActAction {
+    pick = "pick",
+    ban = "ban",
+    protect = "protect"
+}
+export enum TournamentPickBanAdminActSide {
+    home = "home",
+    away = "away"
+}
+export enum TournamentPickBanAdminSubmitSide {
+    home = "home",
+    away = "away"
 }
 export enum TournamentRegistrationFormReadSubscription_scope {
     player = "player",

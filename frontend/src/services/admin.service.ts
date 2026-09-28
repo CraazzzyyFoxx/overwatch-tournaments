@@ -9,6 +9,7 @@ import {
   StageItemType,
   PickBanKind,
   PickBanState,
+  PickBanSubmissionItem,
   TournamentImageSlot
 } from "@/types/tournament.types";
 import { Team, Player } from "@/types/team.types";
@@ -1724,14 +1725,52 @@ class AdminService {
     return response.json();
   }
 
-  /** Perform a ban/pick/protect on behalf of a side (admin override). */
+  /**
+   * Perform one ban/pick/protect on behalf of a side on an OPEN step (admin
+   * override). `target_player_id` is required when the step names an opponent
+   * player. Returns the new room state, like every other pick-ban mutation.
+   */
   async adminPickBanAct(
     encounterId: number,
-    data: { kind: PickBanKind; side: "home" | "away"; item_id: number; action: "pick" | "ban" | "protect" }
-  ): Promise<{ id: number; item_id: number; status: string; picked_by: string | null }> {
+    data: {
+      kind: PickBanKind;
+      side: "home" | "away";
+      item_id: number;
+      action: "pick" | "ban" | "protect";
+      target_player_id?: number | null;
+    }
+  ): Promise<PickBanState> {
     const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-act`, {
       method: "POST",
       body: data
+    });
+    return response.json();
+  }
+
+  /** Replace (and optionally lock) a side's whole draft on a BLIND step, for a
+   * captain who cannot submit it themselves. */
+  async adminPickBanSubmit(
+    encounterId: number,
+    data: {
+      kind: PickBanKind;
+      side: "home" | "away";
+      items: PickBanSubmissionItem[];
+      lock: boolean;
+    }
+  ): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-submit`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /** Reopen the last revealed step for both sides — the captains' `dispute`
+   * without its attempt limit, for when a reveal has to be redone. */
+  async adminPickBanReopen(encounterId: number, kind: PickBanKind): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-reopen`, {
+      method: "POST",
+      body: { kind }
     });
     return response.json();
   }

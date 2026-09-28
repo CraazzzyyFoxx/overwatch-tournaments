@@ -1,512 +1,277 @@
-"""Undo-by-consent for the pick-ban room (``services.encounter.pick_ban_undo``).
+"""Undoing the last pick-ban step: the two-sided consent, what it reverts, and
+the two map guards that refuse it outright.
 
-DB-free: ``perform_undo``'s only queries are the session lookup, the pool load,
-one count and one ledger delete, so a fake session that serves those four is
-enough to exercise the whole consent state machine -- which is where the
-behavior lives (who may apply an undo, and what a revert restores).
+``PickBanEntry`` is a projection now, so an undo is not "put these rows back":
+it VOIDS the step's live submissions (and every later one) and re-projects.
+These tests drive the real service against ``tests/_pickban_room.Room`` so the
+projection is what they read back.
 """
 
 from __future__ import annotations
 
-import sys
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from types import SimpleNamespace
-from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import patch
+from unittest import IsolatedAsyncioTestCase
 
-backend_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(backend_root))
-sys.path.insert(0, str(backend_root / "tournament-service"))
-
-
-from shared.core.enums import (  # noqa: E402
-    EncounterGameState,
-    EncounterStatus,
-    MapPickSide,
-    MapPoolEntryStatus,
-    MapVetoSessionStatus,
-    PickBanKind,
-)
+from shared.core.enums import MapPickSide, MapVetoSessionStatus, PickBanKind  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from src.services.encounter import pick_ban_undo  # noqa: E402
-from src.services.encounter.pick_ban_action import apply_pick_ban_action  # noqa: E402
+from tests._pickban_room import AWAY, HOME, Room, v1_ruleset  # noqa: E402
+
+TWO_BANS = v1_ruleset(sequence=["ban_first", "ban_second"])
+BAN_THEN_DECIDER = v1_ruleset(kind="map", mode="pool", sequence=["ban_first", "decider"])
 
 
-def staged_topics(session: object) -> list[str]:
-    """The realtime topics ``emit`` staged on this session, in call order.
-
-    The topic is the whole contract for a pick-ban signal: it names the room
-    that must refetch, and the payload adds nothing a subscriber branches on.
-    """
-    staged = getattr(session, "info", {}).get("realtime_staged")
-    if staged is None:
-        return []
-    return [scope.domain_topic(data.domain) for scope, data, _actor in staged.domain]
+def _room() -> Room:
+    return Room(hero_ruleset=TWO_BANS, hero_items=[101, 102, 103])
 
 
-def entry(
-    item_id: int,
-    *,
-    status: MapPoolEntryStatus = MapPoolEntryStatus.AVAILABLE,
-    picked_by: MapPickSide | str | None = None,
-    protected_by: MapPickSide | str | None = None,
-    round: int | None = 1,
-    action_index: int | None = None,
-    order: int = 0,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=item_id,
-        item_id=item_id,
-        status=status.value if isinstance(status, MapPoolEntryStatus) else status,
-        picked_by=picked_by.value if isinstance(picked_by, MapPickSide) else picked_by,
-        protected_by=protected_by.value if isinstance(protected_by, MapPickSide) else protected_by,
-        round=round,
-        action_index=action_index,
-        order=order,
-    )
-
-
-def pick_ban_session(**overrides) -> SimpleNamespace:
-    base = {
-        "id": 9,
-        "resolved_sequence_json": ["ban_home", "ban_away", "decider"],
-        "status": MapVetoSessionStatus.ACTIVE.value,
-        "undo_requested_by": None,
-        "undo_target_index": None,
-        "current_step_started_at": datetime.now(UTC) - timedelta(minutes=5),
-    }
-    base.update(overrides)
-    return SimpleNamespace(**base)
-
-
-class _FakeSession:
-    """Serves the statements ``perform_undo`` issues, and records the ledger
-    deletes so a revert's cross-round cleanup is observable.
-
-    A MAP undo additionally reads the series' positions (``EncounterGame``) and
-    their claims (``EncounterMapReport``) -- an undo that would strand a played
-    map is refused -- and, once applied, re-syncs the games against what is left
-    picked.
-    """
-
-    def __init__(
-        self,
-        pool: list[SimpleNamespace],
-        *,
-        hero_committed: int = 0,
-        games: list[SimpleNamespace] | None = None,
-        reports: list[SimpleNamespace] | None = None,
-        encounter: SimpleNamespace | None = None,
-    ) -> None:
-        self.pool = pool
-        self.hero_committed = hero_committed
-        self.games = games or []
-        self.reports = reports or []
-        self.encounter = encounter
-        self.commits = 0
-        self.deletes: list[object] = []
-        self.info: dict = {}
-
-    def _rows_for(self, statement: object) -> list:
-        name = getattr(statement.column_descriptions[0]["entity"], "__name__", "")
-        if name == "EncounterGame":
-            return [game for game in self.games if game.state != EncounterGameState.CANCELLED]
-        if name == "EncounterMapReport":
-            return list(self.reports)
-        if name == "Encounter":
-            return [self.encounter] if self.encounter is not None else []
-        return list(self.pool)
-
-    async def execute(self, statement: object) -> object:
-        if statement.__class__.__name__ == "Delete":
-            self.deletes.append(statement)
-            return SimpleNamespace()
-        rows = self._rows_for(statement)
-
-        class _Result:
-            def unique(self_inner) -> object:
-                return self_inner
-
-            def scalars(self_inner) -> object:
-                return SimpleNamespace(all=lambda: list(rows), first=lambda: rows[0] if rows else None)
-
-        return _Result()
-
-    async def scalar(self, statement: object) -> int:
-        return self.hero_committed
-
-    async def flush(self) -> None:
-        return None
-
-    async def commit(self) -> None:
-        self.commits += 1
-
-
-def _game(position: int, *, state: EncounterGameState = EncounterGameState.AWAITING_RESULT) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=700 + position,
-        encounter_id=500,
-        position=position,
-        map_id=20 + position,
-        state=state,
-        accepted_home_score=None,
-        accepted_away_score=None,
-    )
-
-
-async def _run_undo(
-    pool: list[SimpleNamespace],
-    pick_ban: SimpleNamespace,
-    side: str,
-    *,
-    consent: bool = True,
-    kind: PickBanKind = PickBanKind.HERO,
-    hero_session: SimpleNamespace | None = None,
-    hero_committed: int = 0,
-    games: list[SimpleNamespace] | None = None,
-    reports: list[SimpleNamespace] | None = None,
-) -> tuple[_FakeSession, dict]:
-    """`perform_undo` against a fake session, with the session lookup stubbed
-    per kind (a map undo also asks for the hero session)."""
-    session = _FakeSession(
-        pool,
-        hero_committed=hero_committed,
-        games=games,
-        reports=reports,
-        encounter=SimpleNamespace(id=500, best_of=3, status=EncounterStatus.OPEN, home_score=0, away_score=0),
-    )
-
-    async def get_pick_ban_session(_session, _encounter_id, wanted_kind, *, for_update: bool = False):
-        if wanted_kind == kind:
-            return pick_ban
-        return hero_session
-
-    with patch.object(pick_ban_undo.pick_ban_session_service, "get_pick_ban_session", get_pick_ban_session):
-        state = await pick_ban_undo.pick_ban_undo_service.perform_undo(session, 500, kind, side, consent=consent)
-    return session, state
-
-
-class UndoStateTests(TestCase):
-    def test_reports_nothing_undoable_on_a_fresh_pool(self) -> None:
-        state = pick_ban_undo.undo_state(pick_ban_session(), [entry(1), entry(2)])
+class UndoStateTests(IsolatedAsyncioTestCase):
+    async def test_reports_nothing_undoable_on_a_fresh_room(self) -> None:
+        state = await _room().state()
 
         self.assertEqual(
-            {"requested_by": None, "item_ids": [], "action": None, "side": None},
-            state,
+            {"requested_by": None, "step_index": None, "item_ids": [], "action": None, "side": None},
+            state["undo"],
         )
 
-    def test_names_the_last_action_and_who_asked(self) -> None:
-        pool = [
-            entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(2),
-        ]
-        state = pick_ban_undo.undo_state(pick_ban_session(undo_requested_by="away", undo_target_index=0), pool)
+    async def test_names_the_last_step_and_who_asked(self) -> None:
+        room = _room()
+        state = await room.act(HOME, 101)
 
-        self.assertEqual("away", state["requested_by"])
-        self.assertEqual([1], state["item_ids"])
-        self.assertEqual("ban", state["action"])
-        self.assertEqual("home", state["side"])
-
-    def test_a_request_against_a_superseded_action_reads_as_no_request(self) -> None:
-        # The consent was given when action 0 was last; action 1 has landed since.
-        pool = [
-            entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(2, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.AWAY, action_index=1),
-        ]
-        state = pick_ban_undo.undo_state(pick_ban_session(undo_requested_by="away", undo_target_index=0), pool)
-
-        self.assertIsNone(state["requested_by"])
-        self.assertEqual([2], state["item_ids"])
-
-    def test_lists_a_decider_it_would_revert_alongside_the_action(self) -> None:
-        pool = [
-            entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(2, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.DECIDER, action_index=1),
-        ]
-        state = pick_ban_undo.undo_state(pick_ban_session(), pool)
-
-        # Play order, so the room reads them the way they were committed.
-        self.assertEqual([1, 2], state["item_ids"])
-        self.assertEqual("ban", state["action"])
-
-
-class ApplyUndoTests(TestCase):
-    def test_reverts_the_entries_and_reopens_a_completed_session(self) -> None:
-        banned = entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0)
-        pick_ban = pick_ban_session(
-            status=MapVetoSessionStatus.COMPLETED.value,
-            undo_requested_by="away",
-            undo_target_index=0,
+        self.assertEqual(
+            {"requested_by": None, "step_index": 0, "item_ids": [101], "action": "ban", "side": "home"},
+            state["undo"],
         )
-        before = pick_ban.current_step_started_at
 
-        pick_ban_undo.apply_undo(pick_ban, [banned], now=datetime.now(UTC))
+        await room.undo(HOME)
+        self.assertEqual("home", (await room.state())["undo"]["requested_by"])
 
-        self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, banned.status)
-        self.assertIsNone(banned.picked_by)
-        self.assertIsNone(banned.action_index)
-        self.assertEqual(MapVetoSessionStatus.ACTIVE.value, pick_ban.status)
-        self.assertIsNone(pick_ban.undo_requested_by)
-        self.assertIsNone(pick_ban.undo_target_index)
-        # A fresh turn clock: the restored step's old deadline is long gone, and
-        # `auto_resolve_timeout` would otherwise re-take the action at random on
-        # the very next read.
-        self.assertGreater(pick_ban.current_step_started_at, before)
+    async def test_a_request_against_a_superseded_step_reads_as_no_request(self) -> None:
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
+        state = await room.act(AWAY, 102)
 
-    def test_ledger_keys_name_only_the_bans(self) -> None:
-        bans = [
-            entry(1, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(2, status=MapPoolEntryStatus.PROTECTED, protected_by=MapPickSide.HOME, action_index=1),
-            entry(3, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.DECIDER, action_index=2),
-        ]
+        self.assertEqual(1, state["undo"]["step_index"])
+        self.assertIsNone(state["undo"]["requested_by"], "the consent was given against step 0")
 
-        self.assertEqual([(1, "home")], pick_ban_undo.ledger_keys(bans))
+    async def test_it_lists_the_system_step_it_would_revert_alongside_the_action(self) -> None:
+        room = Room(map_ruleset=BAN_THEN_DECIDER, map_items=[11, 12, 13])
+        state = await room.act(HOME, 11, kind=PickBanKind.MAP)
+
+        # The decider is not an action anybody took -- the engine resolved it
+        # off the back of the ban, so it is reverted together with it.
+        self.assertEqual(0, state["undo"]["step_index"])
+        self.assertEqual("ban", state["undo"]["action"])
+        self.assertEqual({11}, {state["undo"]["item_ids"][0]})
+        self.assertEqual(2, len(state["undo"]["item_ids"]), "the ban plus the map the decider awarded")
+
+    async def test_a_multi_side_step_names_no_single_side(self) -> None:
+        room = Room(
+            hero_ruleset={
+                "version": 2,
+                "timer_seconds": None,
+                "on_timeout": "wait",
+                "phases": [
+                    {
+                        "id": "main",
+                        "name": None,
+                        "when": {},
+                        "pool_filter": {},
+                        "generator": None,
+                        "steps": [
+                            {
+                                "id": "both",
+                                "action": "ban",
+                                "actors": "both",
+                                "count": 1,
+                                "min": None,
+                                "blind": False,
+                                "target": None,
+                                "lifetime": 1,
+                                "timer_seconds": None,
+                                "on_timeout": None,
+                                "dispute": {"enabled": False, "max": 0},
+                                "eligible": {},
+                                "constraints": [],
+                            }
+                        ],
+                    }
+                ],
+            },
+            hero_items=[101, 102, 103],
+        )
+        await room.act(HOME, 101)
+        state = await room.act(AWAY, 102)
+
+        self.assertEqual(0, state["undo"]["step_index"])
+        self.assertIsNone(state["undo"]["side"])
+        self.assertEqual([101, 102], state["undo"]["item_ids"])
 
 
 class PerformUndoTests(IsolatedAsyncioTestCase):
-    def _banned_pool(self) -> list[SimpleNamespace]:
-        return [
-            entry(101, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(102),
-            entry(103),
-        ]
-
     async def test_the_first_call_only_records_the_request(self) -> None:
-        pool = self._banned_pool()
-        pick_ban = pick_ban_session()
+        room = _room()
+        await room.act(HOME, 101)
 
-        session, state = await _run_undo(pool, pick_ban, "home")
+        undo = await room.undo(HOME)
 
-        self.assertEqual("home", pick_ban.undo_requested_by)
-        self.assertEqual(0, pick_ban.undo_target_index)
-        self.assertEqual("home", state["requested_by"])
-        # Nothing reverted yet -- one side is not an agreement.
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, pool[0].status)
-        self.assertEqual(1, session.commits)
-        self.assertEqual(["encounter:500:pick-ban:hero"], staged_topics(session))
+        self.assertEqual("home", undo["requested_by"])
+        self.assertEqual([101], undo["item_ids"])
+        state = await room.state()
+        self.assertEqual("banned", next(e["status"] for e in state["pool"] if e["item_id"] == 101))
 
     async def test_the_same_side_asking_twice_changes_nothing(self) -> None:
-        pool = self._banned_pool()
-        pick_ban = pick_ban_session(undo_requested_by="home", undo_target_index=0)
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
 
-        _session, _state = await _run_undo(pool, pick_ban, "home")
+        await room.undo(HOME)
 
-        self.assertEqual("home", pick_ban.undo_requested_by)
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, pool[0].status)
+        self.assertEqual("banned", next(e["status"] for e in (await room.state())["pool"] if e["item_id"] == 101))
 
     async def test_the_opponent_agreeing_applies_the_undo(self) -> None:
-        pool = self._banned_pool()
-        pick_ban = pick_ban_session(undo_requested_by="home", undo_target_index=0)
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
 
-        session, state = await _run_undo(pool, pick_ban, "away")
+        undo = await room.undo(AWAY)
 
-        self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, pool[0].status)
-        self.assertIsNone(pool[0].picked_by)
-        self.assertIsNone(pool[0].action_index)
-        self.assertIsNone(pick_ban.undo_requested_by)
-        # The reverted ban's cross-round memory goes with it, or a later round
-        # would still be excluding a hero nobody banned.
-        self.assertEqual(1, len(session.deletes))
-        # Nothing is undoable any more: the pool is back to untouched.
-        self.assertEqual([], state["item_ids"])
+        self.assertEqual({"requested_by": None, "step_index": None, "item_ids": [], "action": None, "side": None}, undo)
+        state = await room.state()
+        self.assertEqual([], [e for e in state["pool"] if e["status"] != "available"])
+        self.assertEqual(0, state["current_step_index"], "the step it reopened is on the clock again")
+        self.assertEqual(MapVetoSessionStatus.ACTIVE, room.session().status)
+
+    async def test_the_reopened_step_can_be_answered_again(self) -> None:
+        """The voided attempt must not collide with the answer replacing it --
+        ``(session, step, side, attempt)`` is unique."""
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
+        await room.undo(AWAY)
+
+        state = await room.act(HOME, 102)
+
+        self.assertEqual("banned", next(e["status"] for e in state["pool"] if e["item_id"] == 102))
+        self.assertEqual("available", next(e["status"] for e in state["pool"] if e["item_id"] == 101))
+        self.assertEqual(1, state["current_step_index"])
+        # The replacement goes onto attempt 2: reusing the voided attempt's
+        # number collides with the row it voided on
+        # `uq_pick_ban_submission_step_side_attempt`.
+        step_zero = [row for row in room.submissions() if row.step_index == 0]
+        self.assertEqual({(1, "voided"), (2, "revealed")}, {(row.attempt, row.state) for row in step_zero})
 
     async def test_withdrawing_clears_the_request_without_reverting(self) -> None:
-        pool = self._banned_pool()
-        pick_ban = pick_ban_session(undo_requested_by="home", undo_target_index=0)
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
 
-        session, state = await _run_undo(pool, pick_ban, "home", consent=False)
+        undo = await room.undo(HOME, consent=False)
 
-        self.assertIsNone(pick_ban.undo_requested_by)
-        self.assertIsNone(state["requested_by"])
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, pool[0].status)
-        self.assertEqual([], session.deletes)
+        self.assertIsNone(undo["requested_by"])
+        self.assertEqual([101], undo["item_ids"], "the step is still undoable, just unrequested")
+        self.assertEqual("banned", next(e["status"] for e in (await room.state())["pool"] if e["item_id"] == 101))
 
     async def test_declining_from_the_other_side_clears_it_too(self) -> None:
-        pool = self._banned_pool()
-        pick_ban = pick_ban_session(undo_requested_by="home", undo_target_index=0)
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
 
-        _session, _state = await _run_undo(pool, pick_ban, "away", consent=False)
+        undo = await room.undo(AWAY, consent=False)
 
-        self.assertIsNone(pick_ban.undo_requested_by)
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, pool[0].status)
+        self.assertIsNone(undo["requested_by"])
+        self.assertEqual("banned", next(e["status"] for e in (await room.state())["pool"] if e["item_id"] == 101))
 
     async def test_a_stale_request_is_replaced_rather_than_applied(self) -> None:
-        # home's consent was given against action 0; action 1 landed since, so
-        # away's call must open a fresh request for action 1, not undo it.
-        pool = [
-            entry(101, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(102, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.AWAY, action_index=1),
-            entry(103),
-        ]
-        pick_ban = pick_ban_session(undo_requested_by="home", undo_target_index=0)
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
+        await room.act(AWAY, 102)  # a new step supersedes the consent
 
-        _session, state = await _run_undo(pool, pick_ban, "away")
+        undo = await room.undo(AWAY)
 
-        self.assertEqual("away", pick_ban.undo_requested_by)
-        self.assertEqual(1, pick_ban.undo_target_index)
-        self.assertEqual([102], state["item_ids"])
-        self.assertEqual(MapPoolEntryStatus.BANNED.value, pool[1].status)
+        self.assertEqual("away", undo["requested_by"], "away opened a FRESH request against step 1")
+        self.assertEqual("banned", next(e["status"] for e in (await room.state())["pool"] if e["item_id"] == 102))
 
     async def test_nothing_to_undo_is_a_400(self) -> None:
-        pool = [entry(101), entry(102)]
+        room = _room()
 
-        with self.assertRaises(HTTPException) as ctx:
-            await _run_undo(pool, pick_ban_session(), "home")
+        with self.assertRaises(HTTPException) as caught:
+            await room.undo(HOME)
 
-        self.assertEqual(400, ctx.exception.status_code)
-        self.assertEqual("There is no action left to undo", ctx.exception.detail)
+        self.assertEqual(400, caught.exception.status_code)
+        self.assertEqual("There is no action left to undo", caught.exception.detail)
 
-    async def test_a_map_undo_waits_on_this_rounds_hero_bans(self) -> None:
-        # The hero round opened off this map pick and is never withdrawn, so
-        # taking the pick back with bans standing would orphan them.
-        pool = [
-            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(22),
-        ]
-        with self.assertRaises(HTTPException) as ctx:
-            await _run_undo(
-                pool,
-                pick_ban_session(),
-                "home",
-                kind=PickBanKind.MAP,
-                hero_session=pick_ban_session(id=10),
-                hero_committed=1,
-            )
 
-        self.assertEqual(400, ctx.exception.status_code)
-        self.assertIn("hero bans first", ctx.exception.detail)
+class MapUndoGuardTests(IsolatedAsyncioTestCase):
+    """Two things a map undo must never quietly destroy: hero bans made for the
+    map it takes back, and a result claim standing on the position it opened."""
 
-    async def test_a_map_undo_goes_through_once_no_hero_ban_stands(self) -> None:
-        pool = [
-            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(22),
-        ]
-        await _run_undo(
-            pool,
-            pick_ban_session(undo_requested_by="away", undo_target_index=0),
-            "home",
-            kind=PickBanKind.MAP,
-            hero_session=pick_ban_session(id=10),
-            hero_committed=0,
+    async def _played_map_one(self) -> Room:
+        room = Room(hero_ruleset=TWO_BANS, hero_items=[1, 2, 3], with_map_veto=True)
+        await room.ban_out_the_map_round()
+        return room
+
+    async def test_it_waits_on_this_rounds_hero_bans(self) -> None:
+        room = await self._played_map_one()
+        await room.act(HOME, 1)  # a hero ban for map 1
+
+        with self.assertRaises(HTTPException) as caught:
+            await room.undo(HOME, kind=PickBanKind.MAP)
+
+        self.assertEqual(400, caught.exception.status_code)
+        self.assertIn("hero bans first", caught.exception.detail)
+
+    async def test_it_goes_through_once_no_hero_ban_stands(self) -> None:
+        room = await self._played_map_one()
+
+        await room.undo(HOME, kind=PickBanKind.MAP)
+        undo = await room.undo(AWAY, kind=PickBanKind.MAP)
+
+        # Away's ban AND the decider that resolved off it are gone; home's
+        # opening ban stands, and is now what an undo would reach next.
+        self.assertEqual({"step_index": 0, "item_ids": [11]}, {k: undo[k] for k in ("step_index", "item_ids")})
+        state = await room.state(PickBanKind.MAP)
+        self.assertEqual([], [e for e in state["pool"] if e["status"] == "picked"])
+        self.assertEqual([11], [e["item_id"] for e in state["pool"] if e["status"] == "banned"])
+
+    async def test_it_is_refused_once_the_game_has_a_claim(self) -> None:
+        room = await self._played_map_one()
+        state = await room.state(PickBanKind.MAP)
+        game_id = next(game["id"] for game in state["games"] if game["position"] == 1)
+        from src.services.encounter.map_report import map_report_service
+
+        await map_report_service.submit_map_report(
+            room.store,
+            room.encounter,
+            game_id=game_id,
+            side=MapPickSide.HOME.value,
+            reporter_user_id=None,
+            home_score=2,
+            away_score=1,
         )
 
-        self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, pool[0].status)
+        with self.assertRaises(HTTPException) as caught:
+            await room.undo(HOME, kind=PickBanKind.MAP)
 
-    async def test_map_undo_is_refused_once_the_game_has_a_claim(self) -> None:
-        """A pick opens a series position. Taking it back cancels that position,
-        so a captain's claim already standing on it would be dropped on a click
-        -- two captains agreeing to change a MAP must never move a result."""
-        pool = [
-            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(22),
-        ]
-
-        with self.assertRaises(HTTPException) as ctx:
-            await _run_undo(
-                pool,
-                pick_ban_session(undo_requested_by="away", undo_target_index=0),
-                "home",
-                kind=PickBanKind.MAP,
-                hero_session=None,
-                games=[_game(1)],
-                reports=[SimpleNamespace(id=1, game_id=701, side="home", home_score=2, away_score=1)],
-            )
-
-        self.assertEqual(400, ctx.exception.status_code)
-        self.assertIn("already has a result claim", ctx.exception.detail)
-        self.assertEqual(MapPoolEntryStatus.PICKED.value, pool[0].status, "the pick stands")
-
-    async def test_map_undo_is_refused_once_the_game_is_confirmed(self) -> None:
-        pool = [
-            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(22),
-        ]
-
-        with self.assertRaises(HTTPException) as ctx:
-            await _run_undo(
-                pool,
-                pick_ban_session(undo_requested_by="away", undo_target_index=0),
-                "home",
-                kind=PickBanKind.MAP,
-                hero_session=None,
-                games=[_game(1, state=EncounterGameState.CONFIRMED)],
-            )
-
-        self.assertEqual(400, ctx.exception.status_code)
-
-    async def test_map_undo_cancels_the_unclaimed_game(self) -> None:
-        """Nothing was claimed, so the position the pick opened is retired with
-        it -- leaving it would let captains report a map that is no longer in
-        the series."""
-        pool = [
-            entry(21, status=MapPoolEntryStatus.PICKED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(22),
-        ]
-        game = _game(1)
-
-        session, _state = await _run_undo(
-            pool,
-            pick_ban_session(undo_requested_by="away", undo_target_index=0),
-            "home",
-            kind=PickBanKind.MAP,
-            hero_session=None,
-            games=[game],
-        )
-
-        self.assertEqual(MapPoolEntryStatus.AVAILABLE.value, pool[0].status)
-        self.assertEqual(EncounterGameState.CANCELLED, game.state)
-        self.assertEqual(1, session.commits)
+        self.assertEqual(400, caught.exception.status_code)
+        self.assertIn("result claim", caught.exception.detail)
 
 
-class ConsentLifetimeTests(TestCase):
-    def test_a_new_action_drops_an_open_request(self) -> None:
-        """A consent is given for ONE action. The next action supersedes it, so
-        the agreement must not survive into a state nobody read."""
-        pick_ban = pick_ban_session(
-            resolved_sequence_json=["ban_home", "ban_away", "decider"],
-            undo_requested_by="away",
-            undo_target_index=0,
-        )
-        pool = [
-            entry(101, status=MapPoolEntryStatus.BANNED, picked_by=MapPickSide.HOME, action_index=0),
-            entry(102),
-            entry(103),
-        ]
+class ClearUndoRequestTests(IsolatedAsyncioTestCase):
+    async def test_a_new_action_drops_an_open_request(self) -> None:
+        room = _room()
+        await room.act(HOME, 101)
+        await room.undo(HOME)
 
-        apply_pick_ban_action(
-            pick_ban,
-            pool,
-            captain_side="away",
-            item_id=102,
-            action="ban",
-            attribute_lookup={},
-            unique_attribute=None,
-            now=datetime.now(UTC),
-        )
+        await room.act(AWAY, 102)
 
-        self.assertIsNone(pick_ban.undo_requested_by)
-        self.assertIsNone(pick_ban.undo_target_index)
+        session = room.session()
+        self.assertIsNone(session.undo_requested_by)
+        self.assertIsNone(session.undo_target_index)
 
-
-class UndoLocksTheSessionTests(IsolatedAsyncioTestCase):
-    """An undo REMOVES a committed entry, which moves the step cursor exactly
-    as taking one does -- so it belongs behind the same lock, and the consent
-    it compares (``undo_target_index`` against the pool's trailing action) is
-    read under it."""
-
-    async def test_perform_undo_asks_for_the_row_locked(self) -> None:
-        seen: list[bool] = []
-
-        class _Stop(Exception):
-            pass
-
-        async def spy(_session, _encounter_id, _kind, *, for_update: bool = False):
-            seen.append(for_update)
-            raise _Stop
-
-        with patch.object(pick_ban_undo.pick_ban_session_service, "get_pick_ban_session", spy):
-            with self.assertRaises(_Stop):
-                await pick_ban_undo.pick_ban_undo_service.perform_undo(_FakeSession([]), 500, PickBanKind.HERO, "home")
-
-        self.assertEqual([True], seen)
+    def test_clear_undo_request_is_idempotent(self) -> None:
+        session = type("S", (), {"undo_requested_by": "home", "undo_target_index": 3})()
+        pick_ban_undo.clear_undo_request(session)
+        pick_ban_undo.clear_undo_request(session)
+        self.assertEqual((None, None), (session.undo_requested_by, session.undo_target_index))

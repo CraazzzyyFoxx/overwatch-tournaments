@@ -1,5 +1,5 @@
-"""Generic pick-ban engine: config, session, pool entries, and the cross-round
-exclusion ledger shared by map veto and hero bans.
+"""Generic pick-ban engine: config, session, pool entries and the submission
+log shared by map veto and hero bans.
 """
 
 from datetime import datetime
@@ -14,7 +14,6 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,7 +25,6 @@ from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 
 __all__ = (
-    "EncounterPickBanLedger",
     "EncounterReadiness",
     "PickBanConfig",
     "PickBanConfigItem",
@@ -34,6 +32,7 @@ __all__ = (
     "PickBanConfigSlotItem",
     "PickBanEntry",
     "PickBanSession",
+    "PickBanSubmission",
 )
 
 
@@ -90,13 +89,6 @@ PICK_BAN_ROTATION_ENUM = Enum(
     schema="tournament",
 )
 
-PICK_BAN_NO_REPEAT_SCOPE_ENUM = Enum(
-    enums.PickBanNoRepeatScope,
-    values_callable=lambda e: [x.value for x in e],
-    name="pickbannorepeatscope",
-    schema="tournament",
-)
-
 
 class PickBanConfig(db.TimeStampIntegerMixin):
     """Organizer config for one pick-ban flow (map veto or hero bans).
@@ -109,7 +101,9 @@ class PickBanConfig(db.TimeStampIntegerMixin):
     __tablename__ = "pick_ban_config"
     __table_args__ = (
         CheckConstraint("round IS NULL OR stage_id IS NOT NULL", name="ck_pick_ban_config_round_requires_stage"),
-        CheckConstraint("NOT (mode = 'slots' AND preset = 'custom')", name="ck_pick_ban_config_slots_not_custom"),
+        # No ``slots``/``preset`` cross-check any more: v2 expresses a slot veto
+        # as a phase generator, so mode and ruleset cannot disagree the way the
+        # v1 preset column could.
         Index(
             "uq_pick_ban_config_level",
             "tournament_id",
@@ -146,32 +140,11 @@ class PickBanConfig(db.TimeStampIntegerMixin):
         default=enums.FirstBanRotation.FIXED,
         server_default=enums.FirstBanRotation.FIXED.value,
     )
-    turn_timer_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    preset: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    # Side-agnostic step tokens: ban_first/ban_second/pick_first/pick_second/
-    # protect_first/protect_second/decider. Same shape as MapVetoConfig's
-    # ``veto_sequence_json``, plus the new ``protect_*`` tokens.
-    sequence_json: Mapped[list] = mapped_column(JSON, nullable=False)
-    # How many rounds (maps of the series) this config's per-round bans repeat
-    # for. NULL means "resolve from the encounter's best_of at session time",
-    # matching today's flat-mode behavior; slot-mode/per-round configs set it
-    # implicitly via their slot count.
-    no_repeat_scope: Mapped[enums.PickBanNoRepeatScope] = mapped_column(
-        PICK_BAN_NO_REPEAT_SCOPE_ENUM,
-        default=enums.PickBanNoRepeatScope.NONE,
-        server_default=enums.PickBanNoRepeatScope.NONE.value,
-    )
-    # Generic attribute-uniqueness rule: reject a ban/protect that shares this
-    # attribute's value with another action already taken by the SAME side in
-    # the SAME round. NULL disables the check. Only "role" (hero catalog) is
-    # implemented today; the column stays a free string so a future kind can
-    # name its own attribute without a schema change.
-    unique_attribute_per_side_per_round: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    # Whether this config's rounds run through the "protect" step (see
-    # ``sequence_json``'s ``protect_*`` tokens) at all — kept separate from the
-    # sequence itself so the admin UI can offer the toggle before the organizer
-    # has authored a sequence with protect steps in it.
-    allow_protect: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
+    # Ruleset v2 (docs/plans/2026-09-28-pick-ban-constructor.md §1): phases with
+    # a ``when`` round condition, a ``pool_filter``, and either a generator
+    # (bracket/slot_veto, map kind) or explicit steps. Parsed and validated by
+    # ``shared.domain.pick_ban_rules``; the DB keeps it opaque.
+    ruleset_json: Mapped[dict] = mapped_column(JSON, nullable=False)
 
     tournament: Mapped[Tournament] = relationship()
     stage: Mapped[Stage | None] = relationship()
@@ -278,9 +251,18 @@ class PickBanSession(db.TimeStampIntegerMixin):
     seed_source: Mapped[enums.VetoSeedSource] = mapped_column(PICK_BAN_SEED_SOURCE_ENUM)
     home_seed: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     away_seed: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # The resolved steps appended so far (design doc §3): one object per step,
+    # ``index`` global in the session, ``round`` the map of the series it
+    # belongs to (NULL in flat mode), with every inherited value already
+    # resolved (``min``, ``timer_seconds``, ``on_timeout``). Compiled from
+    # ``ruleset_json`` round by round, never from the config's live ruleset.
     resolved_sequence_json: Mapped[list] = mapped_column(JSON, nullable=False)
     slot_reserves_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    turn_timer_seconds: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # Snapshot of the config's ruleset taken when the session was created
+    # (design doc D6): later rounds compile from this, so an organizer editing
+    # the config mid-series cannot change a running room's rules. The pools are
+    # still read live from the config.
+    ruleset_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[enums.MapVetoSessionStatus] = mapped_column(
         PICK_BAN_SESSION_STATUS_ENUM,
         default=enums.MapVetoSessionStatus.ACTIVE,
@@ -299,10 +281,10 @@ class PickBanSession(db.TimeStampIntegerMixin):
     # Undo consent. A captain may ask for the session's last action to be taken
     # back; the OPPONENT's matching call applies it (both sides agree, which is
     # what keeps a mistake from becoming a re-pick nobody consented to). The
-    # request names the ``PickBanEntry.action_index`` it was made against, so an
-    # action landing in between cannot be undone by a consent meant for a
-    # different one -- a new action clears the request outright
-    # (``pick_ban_action.apply_pick_ban_action``). Both NULL = no request open.
+    # request names the ``resolved_sequence_json`` STEP INDEX it was made
+    # against, so an action landing in between cannot be undone by a consent
+    # meant for a different one -- a new action clears the request outright.
+    # Both NULL = no request open.
     undo_requested_by: Mapped[enums.MapPickSide | None] = mapped_column(PICK_BAN_SIDE_ENUM, nullable=True)
     undo_target_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
@@ -310,6 +292,12 @@ class PickBanSession(db.TimeStampIntegerMixin):
 
     encounter: Mapped[Encounter] = relationship()
     config: Mapped[PickBanConfig | None] = relationship()
+    submissions: Mapped[list[PickBanSubmission]] = relationship(
+        back_populates="session",
+        order_by="[PickBanSubmission.step_index, PickBanSubmission.attempt, PickBanSubmission.side]",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class PickBanEntry(db.TimeStampIntegerMixin):
@@ -321,34 +309,28 @@ class PickBanEntry(db.TimeStampIntegerMixin):
 
     __tablename__ = "pick_ban_entry"
     __table_args__ = (
-        # One committed step, one entry. ``action_index`` IS the position in the
-        # session's resolved sequence that produced this entry, so two rows
-        # claiming the same position means one step was resolved twice -- the
-        # shape a lost race leaves behind (see
-        # ``pick_ban_session.get_pick_ban_session``). Locking is what prevents
-        # it; this is the backstop that turns a slipped-through duplicate into a
-        # failed write instead of a silently lopsided ban phase. Partial,
-        # because an AVAILABLE candidate (and an undone action) carries no
-        # position at all and there are many of those per session.
-        Index(
-            "uq_pick_ban_entry_session_action_index",
-            "session_id",
-            "action_index",
-            unique=True,
-            postgresql_where=text("action_index IS NOT NULL"),
-        ),
+        # No one-entry-per-step unique index any more. ``action_index`` is now
+        # assigned by ``runtime.project_entries``, which rebuilds every
+        # non-carried entry of the session from the submission log in one pass,
+        # so a duplicated position cannot survive a projection -- and the
+        # backstop against a step being resolved twice moved to
+        # ``pick_ban_submission``'s (session, step, side, attempt) unique
+        # constraint, which is where the actual write race now lands.
         {"schema": "tournament"},
     )
 
     session_id: Mapped[int] = mapped_column(ForeignKey(PickBanSession.id, ondelete="CASCADE"), index=True)
     item_id: Mapped[int] = mapped_column(Integer(), index=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
+    # Position in the session's applied-action order, renumbered from scratch
+    # by every projection pass (one step may apply several items now, so this
+    # is no longer the step index). NULL for an untouched candidate.
     action_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     # Which map-of-the-series this entry belongs to. For map-kind entries this
     # IS the slot/round number (1-based); for hero-kind entries it is the same
     # round number of the map whose hero-ban phase this entry is part of — the
-    # two kinds' sessions stay in lockstep by round number, which is how the
-    # ledger correlates "map N's hero bans" across a series.
+    # two kinds' sessions stay in lockstep by round number, which is what lets
+    # a ban's ``lifetime`` be counted in maps across both kinds alike.
     round: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     picked_by: Mapped[enums.MapPickSide | None] = mapped_column(PICK_BAN_SIDE_ENUM, nullable=True)
     status: Mapped[enums.MapPoolEntryStatus] = mapped_column(
@@ -358,48 +340,58 @@ class PickBanEntry(db.TimeStampIntegerMixin):
     )
     team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="SET NULL"), nullable=True, index=True)
     # Set together with status=PROTECTED: which side protected it. The entry is
-    # then out of ban range for the rest of the round (``is_entry_bannable``) --
-    # that immunity IS the action. Nothing else about it is remembered: a
-    # protect never enters ``EncounterPickBanLedger`` (entries are per-round
-    # rows, so protection is round-local) and it does not spend that side's
-    # ban budget under ``unique_attribute_per_side_per_round`` -- bans and
-    # protects never restrict each other.
+    # then out of ban range for the rest of the round -- that immunity IS the
+    # action. Protects are round-local: nothing carries one into a later round
+    # the way an active ban's ``carried_from_round`` does.
     protected_by: Mapped[enums.MapPickSide | None] = mapped_column(PICK_BAN_SIDE_ENUM, nullable=True)
+    # Set on an entry the projection must NOT touch: an active ban carried into
+    # this round from round N (``lifetime`` had not expired), created once when
+    # the round opened with status BANNED and the original banner in
+    # ``picked_by``. NULL for every entry the current round's submissions own.
+    carried_from_round: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     session: Mapped[PickBanSession] = relationship()
     team: Mapped[Team | None] = relationship()
 
 
-class EncounterPickBanLedger(db.TimeStampIntegerMixin):
-    """Cross-round BAN memory: every item banned anywhere in this encounter's
-    series, for a given ``kind``.
+class PickBanSubmission(db.TimeStampIntegerMixin):
+    """One side's answer to one resolved step -- the pick-ban action log.
 
-    Read when a new round's candidate pool is built (excluded per the owning
-    config's ``no_repeat_scope``); written once when a round's bans commit.
-    Never read or written mid-round. Protects are deliberately NOT recorded:
-    a remembered protect would exclude its item from later rounds exactly as a
-    ban does.
+    Source of truth for the room (design doc D2/D3): :class:`PickBanEntry` is a
+    projection recomputed from these rows after every mutation, and the cursor
+    is derived from them rather than stored. A step may be answered more than
+    once: a dispute or an admin reopen voids the current attempt's rows and
+    opens ``attempt + 1``, which is why the unique key carries the attempt.
+
+    ``side`` is a plain string rather than ``PICK_BAN_SIDE_ENUM`` because a
+    system-resolved step (a decider, a random fill) writes ``system``, which is
+    not a captain side and must never be selectable as one.
     """
 
-    __tablename__ = "encounter_pick_ban_ledger"
+    __tablename__ = "pick_ban_submission"
     __table_args__ = (
+        CheckConstraint("side IN ('home', 'away', 'system')", name="ck_pick_ban_submission_side"),
+        CheckConstraint("state IN ('draft', 'locked', 'revealed', 'voided')", name="ck_pick_ban_submission_state"),
         UniqueConstraint(
-            "encounter_id", "kind", "item_id", "banned_by_side", name="uq_encounter_pick_ban_ledger_entry"
+            "session_id", "step_index", "side", "attempt", name="uq_pick_ban_submission_step_side_attempt"
         ),
         {"schema": "tournament"},
     )
 
-    encounter_id: Mapped[int] = mapped_column(ForeignKey(Encounter.id, ondelete="CASCADE"), index=True)
-    kind: Mapped[enums.PickBanKind] = mapped_column(PICK_BAN_KIND_ENUM)
-    item_id: Mapped[int] = mapped_column(Integer(), index=True)
-    # The side that banned it. Required (not nullable) even for a
-    # ``no_repeat_scope=encounter`` (global) rule: the scope decides at READ
-    # time whether to filter by side or ignore it, so one ledger shape serves
-    # both scopes without a second nullable-vs-not column pair.
-    banned_by_side: Mapped[enums.MapPickSide] = mapped_column(PICK_BAN_SIDE_ENUM)
-    round: Mapped[int] = mapped_column(Integer())
+    session_id: Mapped[int] = mapped_column(ForeignKey(PickBanSession.id, ondelete="CASCADE"), index=True)
+    # Position in the owning session's ``resolved_sequence_json``.
+    step_index: Mapped[int] = mapped_column(Integer())
+    side: Mapped[str] = mapped_column(String(8))
+    attempt: Mapped[int] = mapped_column(Integer(), default=1, server_default="1")
+    state: Mapped[str] = mapped_column(String(16))
+    # ``[{"item_id": int, "target_player_id": int | null}]`` in submission
+    # order. Empty until the side names something; a blind step keeps it
+    # private (never serialized to the opponent) until every side has locked.
+    items_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    locked_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    revealed_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 
-    encounter: Mapped[Encounter] = relationship()
+    session: Mapped[PickBanSession] = relationship(back_populates="submissions")
 
 
 class EncounterReadiness(db.TimeStampIntegerMixin):

@@ -15,6 +15,7 @@ function entry(overrides: Partial<PickBanEntry>): PickBanEntry {
     protected_by: null,
     status: "available",
     team_id: null,
+    carried_from_round: null,
     ...overrides,
   };
 }
@@ -22,17 +23,26 @@ function entry(overrides: Partial<PickBanEntry>): PickBanEntry {
 function poolState(pool: PickBanEntry[]): PickBanState {
   return {
     session: null,
+    readiness: { home: true, away: true },
     sequence: [],
     pool,
+    submissions: [],
     viewer_side: null,
     viewer_can_act: false,
     allowed_actions: [],
     current_step_index: null,
     current_step: null,
     expected_action: null,
-    turn_side: null,
+    acting_sides: [],
+    step_progress: null,
+    step_deadline: null,
     current_round: null,
     is_complete: false,
+    eligible: null,
+    draft_issues: [],
+    targets: null,
+    dispute: { available: false, step_index: null, attempts_used: 0, max: 0 },
+    undo: { requested_by: null, step_index: null, item_ids: [], action: null, side: null },
   };
 }
 

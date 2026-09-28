@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HydrationBoundary } from "@tanstack/react-query";
-import { Fragment, isValidElement, Suspense, type ReactElement } from "react";
+import { isValidElement, Suspense, type ReactElement } from "react";
 
 import { ApiError } from "@/lib/api/error";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
 
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
+import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
 
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key
@@ -85,7 +86,7 @@ afterEach(() => {
 });
 
 describe("TournamentLayout streaming overview", () => {
-  it("keeps the overview hydration boundary decoupled from the client shell while unresolved", async () => {
+  it("seeds the overview before the client shell reads it, without awaiting it itself", async () => {
     const pendingOverview = deferred<Tournament>();
     const overviewSpy = vi.spyOn(tournamentService, "getPublicOverview").mockReturnValue(
       pendingOverview.promise
@@ -104,25 +105,34 @@ describe("TournamentLayout streaming overview", () => {
 
     expect(firstResult.kind).toBe("layout");
     if (firstResult.kind !== "layout") return;
-    expect(firstResult.result.type).toBe(Fragment);
-    const [suspenseEl, clientLayoutEl] = (
-      firstResult.result.props as { children: ReactElement[] }
-    ).children;
-    expect(suspenseEl.type).toBe(Suspense);
-    const suspenseProps = suspenseEl.props as { fallback: unknown; children: ReactElement };
-    // A re-suspended overview fetch must never blank/replace the client shell,
-    // so the Suspense carries no fallback of its own.
-    expect(suspenseProps.fallback).toBeNull();
+    expect(firstResult.result.type).toBe(Suspense);
+    const suspenseProps = firstResult.result.props as {
+      fallback: ReactElement;
+      children: ReactElement[];
+    };
+    const [overviewBoundaryEl, clientLayoutEl] = suspenseProps.children;
+    // The whole point of the boundary: the layout hands back its tree without
+    // ever touching the overview itself, so the document streams immediately.
     expect(overviewSpy).not.toHaveBeenCalled();
-    // TournamentClientLayout is a sibling of the Suspense, not wrapped by it.
+    // Order is the contract. The boundary seeds the request's query cache and
+    // the shell reads it, and React hydrates a boundary's children as one unit
+    // in order — a shell rendered before the seed (or outside this boundary
+    // entirely) reads an empty cache in the browser and mismatches the HTML
+    // the server produced from a warm one.
+    expect(overviewBoundaryEl.type).toBe(TournamentOverviewBoundary);
     expect(clientLayoutEl.type).not.toBe(Suspense);
     expect((clientLayoutEl.props as { children: unknown }).children).toBeNull();
+    // Nothing can paint before the overview resolves (the tab below awaits the
+    // same read), so the fallback is the shell's own skeleton rather than a
+    // blank — streamed by the server instead of appearing after hydration.
+    expect(suspenseProps.fallback.type).toBe(TournamentShellSkeleton);
     // Both the boundary and the client shell resolve the SAME URL segment --
     // neither pre-parses or coerces it.
+    expect((overviewBoundaryEl.props as { slug: unknown }).slug).toBe("summer-clash");
     expect((clientLayoutEl.props as { slug: unknown }).slug).toBe("summer-clash");
 
     const boundaryPromise = TournamentOverviewBoundary(
-      suspenseProps.children.props as Parameters<typeof TournamentOverviewBoundary>[0]
+      overviewBoundaryEl.props as Parameters<typeof TournamentOverviewBoundary>[0]
     );
     const boundaryBeforeOverview = await Promise.race([
       boundaryPromise.then(() => "resolved" as const),
@@ -193,7 +203,7 @@ describe("TournamentLayout streaming overview", () => {
 
       const result = await TournamentLayout({ children: null, params: paramsFor(ref) });
 
-      expect(result.type).toBe(Fragment);
+      expect(result.type).toBe(Suspense);
       expect(overviewSpy).not.toHaveBeenCalled();
     });
   }
