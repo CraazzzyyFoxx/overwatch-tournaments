@@ -24,7 +24,10 @@ from src.core.config import settings
 class OverFastCatalogClient:
     def __init__(self, *, base_url: str | None = None, timeout: float = 15.0, max_retries: int = 3) -> None:
         self._http = ResilientHttpClient(
-            base_url=base_url or settings.overfast_base_url, timeout=timeout, max_retries=max_retries
+            base_url=base_url or settings.overfast_base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            proxy=settings.overfast_proxy_url,
         )
 
     async def start(self) -> None:

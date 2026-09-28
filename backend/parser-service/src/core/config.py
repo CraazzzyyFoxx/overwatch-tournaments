@@ -37,6 +37,11 @@ class AppConfig(BaseServiceSettings):
     overfast_base_url: str = "https://overfast.craazzzyyfoxx.me"
     overfast_timeout: float = 15.0
     overfast_max_retries: int = 3
+    # Egress for OverFast calls, e.g. socks5://proxy:1080 (the xray sidecar). Set
+    # when the host has no direct route to the OverFast instance: Moscow cannot
+    # open TCP to the Amsterdam box. Scoped to OverFast so Discord/Twitch keep
+    # following the generic PROXY_* settings.
+    overfast_proxy_url: str | None = None
     # FastStream prefetch for the rank-fetch worker (keep low to protect OverFast).
     rank_fetch_worker_prefetch: int = 3
 

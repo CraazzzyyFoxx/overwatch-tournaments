@@ -271,7 +271,9 @@ attaches the alias and closes the miss in one request.
   `LOG_REAPER_PENDING_AFTER_SECONDS`, `LOG_REAPER_PROCESSING_AFTER_SECONDS`,
   `LOG_REAPER_MAX_ATTEMPTS`, `LOG_REAPER_BATCH_SIZE`.
 - **OverFast** — `OVERFAST_BASE_URL`, `OVERFAST_TIMEOUT`, `OVERFAST_MAX_RETRIES`,
-  `RANK_FETCH_WORKER_PREFETCH` (kept low to protect the upstream). The operational collection
+  `OVERFAST_PROXY_URL` (production: `socks5://proxy:1080` — the instance runs on the Amsterdam
+  host, which Moscow cannot reach directly), `RANK_FETCH_WORKER_PREFETCH` (kept low to protect
+  the upstream). The operational collection
   parameters — interval, scope, per-minute limit, backoff base, max consecutive failures, rank
   mapping — live in `public.settings`, editable at runtime, not in the env file.
 - **Outbound proxy** — `PROXY_TYPE`, `PROXY_IP`, `PROXY_PORT`, `PROXY_USERNAME`, `PROXY_PASSWORD`.
