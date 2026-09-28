@@ -255,16 +255,21 @@ OPERATIONS: dict[str, Op] = {
     ),
     # ── notifications admin (workspace-scoped operator screen) ─────────────
     "rpc.app.notification_admin_list": Op(
-        response=schemas.NotificationAdminPage,
+        response=Paginated[schemas.NotificationAdminItem],
         query_params=(
             _WS,
             QueryParam("kind", description="One notification kind; omitted lists every kind."),
-            QueryParam("cursor", description="Opaque continuation from the previous page's next_cursor."),
-            QueryParam("limit", "integer", description="Page size (default 50, capped at 200)."),
+            QueryParam("page", "integer", description="1-based page number (default 1)."),
+            QueryParam("per_page", "integer", description="Page size (default 25, capped at 100)."),
         ),
     ),
     "rpc.app.notification_admin_retire": Op(
         request=schemas.NotificationRetire, response=schemas.NotificationRetireResult
+    ),
+    # ── notifications admin (one account's own notification state) ─────────
+    "rpc.app.admin_user_notifications_get": Op(response=schemas.AdminUserNotificationsRead),
+    "rpc.app.admin_user_notification_preferences_update": Op(
+        request=schemas.NotificationPreferencesUpdate, response=schemas.AdminUserNotificationsRead
     ),
     "rpc.app.active_announcements": Op(response=schemas.NotificationItem, response_array=True),
     # ── announcements admin (operator CRUD) ────────────────────────────────

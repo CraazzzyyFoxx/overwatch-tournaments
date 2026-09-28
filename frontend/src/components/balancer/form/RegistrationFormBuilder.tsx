@@ -482,6 +482,7 @@ export function SchemaEditor({
             serverErrors={{}}
             step={previewStep}
             onStepChange={setPreviewStep}
+            onStepSelect={setPreviewStep}
             showErrors={false}
             footer={({ canGoBack, isLast }) => (
               <div className="flex items-center justify-between gap-2">

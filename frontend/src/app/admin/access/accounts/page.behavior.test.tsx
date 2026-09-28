@@ -8,8 +8,11 @@
 //  2. chips are the URL: the Status chip narrows the request and a deep link
 //     restores it, rather than living in component state;
 //  3. one permission toggle end to end, through the shared `PermissionPicker`:
-//     checking a capability in the inspector's restrictions panel POSTs a deny;
-//  4. six columns do not fit a phone, so rows render as cards below `md`.
+//     checking a capability in the inspector's (collapsed) restrictions block
+//     POSTs a deny;
+//  4. picking a role in the inspector assigns it — no second "Assign" click —
+//     and a DM switch writes the inspected account, not the caller's;
+//  5. six columns do not fit a phone, so rows render as cards below `md`.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -34,6 +37,9 @@ const getUserDenies = vi.fn();
 const addUserDeny = vi.fn();
 const removeUserDeny = vi.fn();
 const deleteUser = vi.fn();
+const assignRole = vi.fn();
+const adminUserNotifications = vi.fn();
+const updateAdminUserPreferences = vi.fn();
 
 /** The permissions the mocked profile holds globally. */
 let globalPermissions: string[] = [
@@ -93,10 +99,17 @@ vi.mock("@/services/rbac.service", () => ({
     addUserDeny: (...args: unknown[]) => addUserDeny(...args),
     removeUserDeny: (...args: unknown[]) => removeUserDeny(...args),
     deleteUser: (...args: unknown[]) => deleteUser(...args),
-    assignRole: vi.fn(),
+    assignRole: (...args: unknown[]) => assignRole(...args),
     removeRole: vi.fn(),
     assignLinkedPlayer: vi.fn(),
     removeLinkedPlayer: vi.fn()
+  }
+}));
+
+vi.mock("@/services/notification.service", () => ({
+  default: {
+    adminUserNotifications: (...args: unknown[]) => adminUserNotifications(...args),
+    updateAdminUserPreferences: (...args: unknown[]) => updateAdminUserPreferences(...args)
   }
 }));
 
@@ -216,6 +229,17 @@ function commandItem(label: string) {
   );
 }
 
+function buttonNamed(text: string) {
+  return Array.from(document.querySelectorAll("button")).find((element) =>
+    element.textContent?.trim().startsWith(text)
+  );
+}
+
+/** Restrictions fold to one line; the picker only exists once it is opened. */
+async function openRestrictions() {
+  await click(await waitFor(() => buttonNamed("Restrictions"), "the Restrictions disclosure"));
+}
+
 function tabHrefs() {
   return Array.from(document.querySelectorAll("nav[aria-label='Access sections'] a")).map((link) =>
     link.getAttribute("href")
@@ -316,6 +340,17 @@ beforeEach(() => {
   ]);
   removeUserDeny.mockReset().mockResolvedValue([]);
   deleteUser.mockReset().mockResolvedValue(undefined);
+  assignRole.mockReset().mockResolvedValue(undefined);
+  const notifications = {
+    discord_dm: { tournament: true, matches: true, team: true },
+    discord_linked: true,
+    unread_count: 2,
+    recent_deliveries: []
+  };
+  adminUserNotifications.mockReset().mockResolvedValue(notifications);
+  updateAdminUserPreferences
+    .mockReset()
+    .mockResolvedValue({ ...notifications, discord_dm: { ...notifications.discord_dm, matches: false } });
   document.body.innerHTML = "";
 });
 
@@ -410,6 +445,7 @@ describe("Access › Accounts · chips are the URL", () => {
 describe("Access › Accounts · one permission toggle", () => {
   it("denies a capability through the shared PermissionPicker", async () => {
     await mount("?id=90");
+    await openRestrictions();
     const box = await waitFor(
       () => document.querySelector('[aria-label="Toggle account.avatar"]'),
       "the restrictions picker"
@@ -425,6 +461,7 @@ describe("Access › Accounts · one permission toggle", () => {
   // unrevokable in practice.
   it("can revoke workspace creation and mix self-join globally", async () => {
     await mount("?id=90");
+    await openRestrictions();
     const workspaceBox = await waitFor(
       () => document.querySelector('[aria-label="Toggle workspace.self_create"]'),
       "the workspace.self_create row"
@@ -447,12 +484,57 @@ describe("Access › Accounts · one permission toggle", () => {
   it("offers no restriction control without role.update", async () => {
     globalPermissions = ["auth_user.read", "user.read", "role.read"];
     await mount("?id=90");
+    await openRestrictions();
     const box = await waitFor(
       () => document.querySelector('[aria-label="Toggle account.avatar"]'),
       "the restrictions picker"
     );
 
     expect(box.hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("Access › Accounts · inspector writes", () => {
+  it("assigns a role the moment it is picked", async () => {
+    listRolesAll.mockResolvedValue([
+      { id: 5, name: "caster", description: null, is_system: false, created_at: "2026-01-01" },
+      {
+        id: 6,
+        name: "moderator",
+        description: null,
+        is_system: false,
+        workspace_id: 3,
+        created_at: "2026-01-01"
+      }
+    ]);
+    await mount("?id=90");
+
+    await click(
+      await waitFor(
+        () => document.querySelector('[aria-label="Add a role to this account"]'),
+        "the Add role picker"
+      )
+    );
+    await click(await waitFor(() => commandItem("moderator"), "the moderator option"));
+
+    expect(assignRole).toHaveBeenCalledWith({ user_id: 90, role_id: 6 });
+  });
+
+  it("flips a DM group on the inspected account", async () => {
+    await mount("?id=90");
+    const matches = await waitFor(
+      () =>
+        Array.from(document.querySelectorAll('[role="switch"]')).find(
+          (element) =>
+            document.getElementById(element.getAttribute("aria-labelledby") ?? "")
+              ?.textContent === "Matches"
+        ),
+      "the Matches DM switch"
+    );
+
+    await click(matches);
+
+    expect(updateAdminUserPreferences).toHaveBeenCalledWith(90, { discord_dm: { matches: false } });
   });
 });
 

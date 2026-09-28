@@ -4610,6 +4610,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/auth-users/{id}/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one account's notification state
+         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the three effective Discord-DM switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
+         *
+         *     RPC subject: `rpc.app.admin_user_notifications_get`
+         */
+        get: operations["get__api_v1_admin_auth_users__id__notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/auth-users/{id}/notifications/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update one account's Discord DM preferences
+         * @description Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id — the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted group keeps its stored value and unknown group names are a 422. The edited row is the target's, never the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when the account does not exist.
+         *
+         *     RPC subject: `rpc.app.admin_user_notification_preferences_update`
+         */
+        put: operations["put__api_v1_admin_auth_users__id__notifications_preferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/balancer/registrations/{registration_id}": {
         parameters: {
             query?: never;
@@ -6389,7 +6433,7 @@ export interface paths {
         };
         /**
          * List the notifications a workspace produced
-         * @description Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one keyset page of the notifications this workspace's own activity produced (`source_workspace_id`), newest first, expired ones included — the operator view exists to show what has already been retired, which the inbox's time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind` or a malformed cursor.
+         * @description Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one page (`page`/`per_page`, with `total`) of the notifications this workspace's own activity produced (`source_workspace_id`), newest first, expired ones included — the operator view exists to show what has already been retired, which the inbox's time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind`.
          *
          *     RPC subject: `rpc.app.notification_admin_list`
          */
@@ -18697,6 +18741,27 @@ export interface components {
              */
             workspace_ids: number[] | null;
         };
+        /**
+         * AdminUserNotificationsRead
+         * @description One *other* account's notification state, for the admin inspector.
+         *
+         *     A superset of ``NotificationPreferencesRead`` rather than a sibling of it:
+         *     the operator's question is "why has this person not heard from us", and the
+         *     switches alone cannot answer it -- an unlinked Discord, a badge nobody
+         *     clears and an empty delivery ledger are three different diagnoses.
+         */
+        "app.AdminUserNotificationsRead": {
+            discord_dm: components["schemas"]["app.NotificationDmGroups"];
+            /** Discord Linked */
+            discord_linked: boolean;
+            /**
+             * Recent Deliveries
+             * @default []
+             */
+            recent_deliveries: components["schemas"]["app.NotificationDeliveryItem"][];
+            /** Unread Count */
+            unread_count: number;
+        };
         /** AnnouncementCreate */
         "app.AnnouncementCreate": {
             /**
@@ -19096,15 +19161,37 @@ export interface components {
              */
             source_workspace_id: number | null;
         };
-        /** NotificationAdminPage */
-        "app.NotificationAdminPage": {
-            /** Items */
-            items: components["schemas"]["app.NotificationAdminItem"][];
+        /**
+         * NotificationDeliveryItem
+         * @description One row of the delivery ledger -- a message actually handed to Discord.
+         *
+         *     Skips are not recorded upstream (preference off, nothing linked), so an
+         *     empty list here means "we sent nothing", never "we sent something and did
+         *     not write it down" -- which is the whole question the account inspector is
+         *     opened to answer.
+         */
+        "app.NotificationDeliveryItem": {
+            /** Channel */
+            channel: string;
             /**
-             * Next Cursor
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /**
+             * Notification Id
              * @default null
              */
-            next_cursor: string | null;
+            notification_id: number | null;
+            /**
+             * Workspace Id
+             * @default null
+             */
+            workspace_id: number | null;
         };
         /**
          * NotificationRetire
@@ -19152,6 +19239,17 @@ export interface components {
             per_page: number;
             /** Results */
             results: components["schemas"]["app.CatalogAliasMissRead"][];
+            /** Total */
+            total: number;
+        };
+        /** Paginated[NotificationAdminItem] */
+        "app.Paginated_NotificationAdminItem_": {
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: components["schemas"]["app.NotificationAdminItem"][];
             /** Total */
             total: number;
         };
@@ -42110,6 +42208,166 @@ export interface operations {
             };
         };
     };
+    get__api_v1_admin_auth_users__id__notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app.AdminUserNotificationsRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_admin_auth_users__id__notifications_preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app.NotificationPreferencesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app.AdminUserNotificationsRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     delete__api_v1_admin_balancer_registrations__registration_id_: {
         parameters: {
             query?: never;
@@ -49191,8 +49449,8 @@ export interface operations {
             query?: {
                 workspace_id?: number;
                 kind?: string;
-                cursor?: string;
-                limit?: number;
+                page?: number;
+                per_page?: number;
             };
             header?: never;
             path?: never;
@@ -49206,7 +49464,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app.NotificationAdminPage"];
+                    "application/json": components["schemas"]["app.Paginated_NotificationAdminItem_"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */

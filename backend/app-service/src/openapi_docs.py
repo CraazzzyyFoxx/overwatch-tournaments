@@ -640,11 +640,11 @@ DOCS: dict[str, dict] = {
     "rpc.app.notification_admin_list": {
         "summary": "List the notifications a workspace produced",
         "description": (
-            "Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one keyset"
-            " page of the notifications this workspace's own activity produced (`source_workspace_id`), newest first,"
-            " expired ones included — the operator view exists to show what has already been retired, which the inbox's"
-            " time window hides. Announcements are not listed here, they have their own CRUD. 422 on an unknown `kind`"
-            " or a malformed cursor."
+            "Permission: workspace `notification.read` in the workspace named by `workspace_id`. Returns one page"
+            " (`page`/`per_page`, with `total`) of the notifications this workspace's own activity produced"
+            " (`source_workspace_id`), newest first, expired ones included — the operator view exists to show what"
+            " has already been retired, which the inbox's time window hides. Announcements are not listed here, they"
+            " have their own CRUD. 422 on an unknown `kind`."
         ),
     },
     "rpc.app.notification_admin_retire": {
@@ -655,6 +655,29 @@ DOCS: dict[str, dict] = {
             " are filters over the same scoped statement and may be combined; naming neither is a 422 rather than a"
             " tenant-wide wipe. The rows and their read marks are kept, like an announcement retire; already-expired"
             " rows are skipped, so a repeat call answers 0."
+        ),
+    },
+    # ── notifications admin (one account's own notification state) ──────────────────────────────────
+    "rpc.app.admin_user_notifications_get": {
+        "summary": "Read one account's notification state",
+        "description": (
+            "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by"
+            " the path id: the three effective Discord-DM switches with defaults filled in, whether a Discord account"
+            " is connected at all, the unread count that account's own bell shows (same audience rules as their inbox,"
+            " not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first."
+            " Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in"
+            " the ledger. Unlike the self-service preferences read this acts on another account, which the global"
+            " grant is what authorizes. 404 when the account does not exist."
+        ),
+    },
+    "rpc.app.admin_user_notification_preferences_update": {
+        "summary": "Update one account's Discord DM preferences",
+        "description": (
+            "Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id"
+            " — the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted"
+            " group keeps its stored value and unknown group names are a 422. The edited row is the target's, never"
+            " the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when"
+            " the account does not exist."
         ),
     },
     "rpc.app.active_announcements": {

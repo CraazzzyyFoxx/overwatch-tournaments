@@ -12,6 +12,7 @@ import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { PersonAccountTab } from "@/components/admin/people/PersonAccountTab";
 import { PersonAchievementsTab } from "@/components/admin/people/PersonAchievementsTab";
 import { PersonParticipationsTab } from "@/components/admin/people/PersonParticipationsTab";
+import { PersonGlance } from "@/components/admin/people/PersonGlance";
 import { RankPlayerPanel } from "@/components/admin/people/PersonRankPanel";
 import { SubscriptionPlayerPanel } from "@/components/admin/people/PersonSubscriptionPanel";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
@@ -24,14 +25,23 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { User } from "@/types/user.types";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
-const TABS = ["identity", "participations", "account", "achievements"] as const;
+const TABS = [
+  "profile",
+  "participations",
+  "achievements",
+  "ranks",
+  "subscriptions",
+  "account"
+] as const;
 type PersonTab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<PersonTab, string> = {
-  identity: "Identity",
+  profile: "Profile",
   participations: "Participations",
-  account: "Account",
-  achievements: "Achievements"
+  achievements: "Achievements",
+  ranks: "Ranks",
+  subscriptions: "Subscriptions",
+  account: "Account"
 };
 
 function Section({
@@ -72,7 +82,7 @@ export default function PersonHubPage() {
   const requested = searchParams.get("tab") ?? "";
   const tab: PersonTab = (TABS as readonly string[]).includes(requested)
     ? (requested as PersonTab)
-    : "identity";
+    : "profile";
 
   const personQuery = useQuery({
     queryKey: adminQueryKeys.person(personId),
@@ -142,12 +152,13 @@ export default function PersonHubPage() {
 
       <LinkTabs items={items} activeKey={tab} ariaLabel="Person sections" />
 
-      {tab === "identity" ? (
+      {tab === "profile" ? (
         person ? (
           // The profile body was built for a max-w-md dialog — a centred avatar
-          // and a stacked identity list. Stretched across the page it read as
-          // empty, so it keeps dialog width as the left rail and the rank and
-          // subscription panels (tables, a chart) take the rest.
+          // and a stacked identity list — so it keeps dialog width as the left
+          // rail. The rank and subscription tables used to fill the rest and
+          // made this the heaviest tab; they have their own tabs now, and the
+          // right column keeps one line of each.
           <div className="grid items-start gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
             <Section title="Profile">
               <PlayerProfileBody
@@ -163,15 +174,9 @@ export default function PersonHubPage() {
               />
             </Section>
 
-            <div className="flex min-w-0 flex-col gap-4">
-              <Section title="Rank collection">
-                <RankPlayerPanel userId={person.id} />
-              </Section>
-
-              <Section title="Subscription">
-                <SubscriptionPlayerPanel userId={person.id} label={person.name} />
-              </Section>
-            </div>
+            <Section title="At a glance">
+              <PersonGlance personId={person.id} canReadAuth={canReadAuth} />
+            </Section>
           </div>
         ) : (
           <div className="h-64 animate-pulse rounded-lg bg-muted/40 motion-reduce:animate-none" />
@@ -186,15 +191,23 @@ export default function PersonHubPage() {
         />
       ) : null}
 
-      {tab === "account" ? (
-        <PersonAccountTab
-          personId={personId}
-          personName={person?.name ?? ""}
-          canReadAuth={canReadAuth}
-        />
+      {tab === "achievements" ? <PersonAchievementsTab personId={personId} /> : null}
+
+      {tab === "ranks" ? (
+        <Section title="Rank collection">
+          <RankPlayerPanel userId={personId} />
+        </Section>
       ) : null}
 
-      {tab === "achievements" ? <PersonAchievementsTab personId={personId} /> : null}
+      {tab === "subscriptions" ? (
+        <Section title="Subscriptions">
+          <SubscriptionPlayerPanel userId={personId} label={person?.name ?? `Player #${personId}`} />
+        </Section>
+      ) : null}
+
+      {tab === "account" ? (
+        <PersonAccountTab personId={personId} canReadAuth={canReadAuth} />
+      ) : null}
 
       {mergeOpen && person ? (
         <UserMergeDialog

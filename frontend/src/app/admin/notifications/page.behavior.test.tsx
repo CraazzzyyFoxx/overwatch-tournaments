@@ -7,9 +7,9 @@
 //     must get the table with no retire control at all — offering one would be
 //     a button that guarantees a 403;
 //  2. a bulk retire is offered only with a kind chosen, and sends that kind
-//     rather than the ids that happen to be on the loaded page. The list is
-//     keyset-paginated, so "retire every registration.approved" must not mean
-//     "retire the 50 of them I have scrolled to";
+//     rather than the ids that happen to be on the page. The list is paged on
+//     the server, so "retire every registration.approved" must not mean
+//     "retire the 25 of them on this page";
 //  3. a per-row retire goes through the confirmation and names exactly that id,
 //     because the row it takes out of somebody's inbox is not recoverable from
 //     this screen.
@@ -73,6 +73,10 @@ function row(overrides: Partial<NotificationAdminItem> = {}): NotificationAdminI
     expires_at: null,
     ...overrides
   };
+}
+
+function page(results: NotificationAdminItem[]) {
+  return { results, total: results.length, page: 1, per_page: 25 };
 }
 
 const mounted: Root[] = [];
@@ -139,7 +143,7 @@ afterEach(async () => {
 beforeEach(() => {
   canRetire = true;
   workspaceId = 7;
-  listWorkspaceNotifications.mockResolvedValue({ items: [row()], next_cursor: null });
+  listWorkspaceNotifications.mockResolvedValue(page([row()]));
   retireWorkspaceNotifications.mockResolvedValue({ retired: 1 });
   document.body.innerHTML = "";
 });
@@ -149,7 +153,7 @@ describe("/admin/notifications", () => {
     const container = await mount();
 
     expect(listWorkspaceNotifications).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 7, kind: null })
+      expect.objectContaining({ workspaceId: 7, kind: null, page: 1, perPage: 25 })
     );
     expect(container.textContent).toContain(LABEL.kinds.registration.approved);
     expect(container.textContent).toContain(LABEL.state.live);
@@ -199,10 +203,9 @@ describe("/admin/notifications", () => {
   });
 
   it("shows an already-retired row without a retire button", async () => {
-    listWorkspaceNotifications.mockResolvedValue({
-      items: [row({ expires_at: "2026-09-02T10:00:00Z" })],
-      next_cursor: null
-    });
+    listWorkspaceNotifications.mockResolvedValue(
+      page([row({ expires_at: "2026-09-02T10:00:00Z" })])
+    );
 
     const container = await mount();
 

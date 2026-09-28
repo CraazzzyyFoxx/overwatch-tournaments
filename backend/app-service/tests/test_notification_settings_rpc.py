@@ -1,10 +1,12 @@
-"""Behavioural pins for the two notification settings surfaces.
+"""Behavioural pins for the three notification settings surfaces.
 
-Both are "who may change what": the personal DM switches are self-service and
-may only ever edit the caller's own row, and the workspace delivery config
+All three are "who may change what": the personal DM switches are self-service
+and may only ever edit the caller's own row, the workspace delivery config
 decides which Discord channel the bot is made to speak in -- which is why a
 channel outside the workspace's own verified guild has to be refused rather
-than stored.
+than stored -- and the admin account inspector is the one place where an
+operator reads and edits *somebody else's* switches, on a global grant and a
+path id.
 
 SQLite with the Postgres type shims behind the sync-``Session`` facade, like the
 sibling notification suites: the answers are rows and effective values, and a
@@ -26,16 +28,29 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from cashews import cache  # noqa: E402
+
+from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.oauth import OAuthConnection  # noqa: E402
-from shared.models.platform.notification import NotificationPreference, NotificationWorkspaceConfig  # noqa: E402
-from shared.models.tenancy.workspace import Workspace  # noqa: E402
+from shared.models.identity.rbac import Role, user_roles  # noqa: E402
+from shared.models.identity.user import User  # noqa: E402
+from shared.models.platform.notification import (  # noqa: E402
+    Notification,
+    NotificationDelivery,
+    NotificationPreference,
+    NotificationRead,
+    NotificationWorkspaceConfig,
+)
+from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.services.discord_client import DiscordClient  # noqa: E402
 from shared.services.notifications import NOTIFICATION_GROUPS  # noqa: E402
 from shared.services.subscriptions.providers.discord_role import DiscordUnavailable  # noqa: E402
 from shared.testing import install_postgres_type_shims  # noqa: E402
 from src import schemas  # noqa: E402
 from src.rpc import notifications as notifications_rpc  # noqa: E402
+from src.rpc import notifications_admin as notifications_admin_rpc  # noqa: E402
 from src.rpc import workspaces as workspaces_rpc  # noqa: E402
+from src.services import notifications as notification_service  # noqa: E402
 
 install_postgres_type_shims()
 
@@ -44,6 +59,17 @@ TABLES = (
     NotificationWorkspaceConfig.__table__,
     OAuthConnection.__table__,
     Workspace.__table__,
+    # The admin inspector's half: the account it names, the ledger of what was
+    # actually DM'd, and the four tables the unread count's audience resolves
+    # through.
+    AuthUser.__table__,
+    Notification.__table__,
+    NotificationRead.__table__,
+    NotificationDelivery.__table__,
+    WorkspaceMember.__table__,
+    User.__table__,
+    Role.__table__,
+    user_roles,
 )
 
 ALICE = 100
@@ -59,6 +85,33 @@ _OWNER = {
     "workspaces": [{"workspace_id": WORKSPACE, "rbac_roles": ["owner"], "rbac_permissions": []}],
 }
 _OUTSIDER = {"user_id": 3, "username": "mallory", "is_active": True, "is_superuser": False, "workspaces": []}
+
+# The admin inspector's cast: the account being looked at, an operator who may
+# only read and one who may also write. Both grants are global — this surface
+# has no workspace to scope them to.
+TARGET = 200
+READER = 201
+EDITOR = 202
+DISCORD_TARGET = "424242424242424242"
+DISCORD_STRANGER = "999999999999999999"
+
+_READER = {
+    "user_id": READER,
+    "username": "reader",
+    "is_active": True,
+    "is_superuser": False,
+    "permissions": [{"resource": "auth_user", "action": "read"}],
+    "workspaces": [],
+}
+_EDITOR = {
+    **_READER,
+    "user_id": EDITOR,
+    "username": "editor",
+    "permissions": [
+        {"resource": "auth_user", "action": "read"},
+        {"resource": "auth_user", "action": "update"},
+    ],
+}
 
 
 class _AsyncSessionShim:
@@ -93,7 +146,7 @@ class _SessionMaker:
 
 
 class _SettingsCase(IsolatedAsyncioTestCase):
-    """Engine + captured subscribers for both RPC modules."""
+    """Engine + captured subscribers for all three RPC modules."""
 
     def setUp(self) -> None:
         self.engine = sa.create_engine(
@@ -115,8 +168,9 @@ class _SettingsCase(IsolatedAsyncioTestCase):
         broker = MagicMock()
         broker.subscriber = self._capture
         notifications_rpc.register(broker, MagicMock())
+        notifications_admin_rpc.register(broker, MagicMock())
         workspaces_rpc.register(broker, MagicMock())
-        for module in (notifications_rpc, workspaces_rpc):
+        for module in (notifications_rpc, notifications_admin_rpc, workspaces_rpc):
             original = module._SF
             module._SF = maker
             self.addCleanup(setattr, module, "_SF", original)
@@ -208,6 +262,192 @@ class PreferencesRpcTests(_SettingsCase):
         """``NotificationDmGroups`` is hand-written for OpenAPI; keep it honest."""
         self.assertEqual(set(schemas.NotificationDmGroups.model_fields), set(NOTIFICATION_GROUPS))
         self.assertEqual(set(schemas.NotificationDmGroupsUpdate.model_fields), set(NOTIFICATION_GROUPS))
+
+
+class AdminUserNotificationsRpcTests(_SettingsCase):
+    """The one notification surface that acts on somebody else's account.
+
+    Everything here is about the target rather than the caller: the switches
+    read and written are the path id's, the badge count is the one that account
+    sees, and the delivery ledger is filtered to *their* Discord ids -- a
+    missing filter would show an operator strangers' messages.
+    """
+
+    async def asyncSetUp(self) -> None:
+        # The workspace set is cached per auth_user_id in a process-global
+        # cashews backend that outlives one test's database.
+        for auth_user_id in (ALICE, TARGET):
+            await cache.delete(notification_service.WORKSPACE_IDS_CACHE_KEY.format(auth_user_id=auth_user_id))
+
+    # -- builders ---------------------------------------------------------
+
+    def account(self, auth_user_id: int = TARGET, username: str = "target") -> int:
+        self.session.add(AuthUser(id=auth_user_id, email=f"{username}@example.test", username=username))
+        self.session.flush()
+        return auth_user_id
+
+    def link_discord(self, auth_user_id: int, provider_user_id: str) -> None:
+        self.session.add(
+            OAuthConnection(
+                auth_user_id=auth_user_id,
+                provider="discord",
+                provider_user_id=provider_user_id,
+                username="linked",
+            )
+        )
+        self.session.flush()
+
+    def notify(self, auth_user_id: int) -> int:
+        row = Notification(
+            kind="registration.approved",
+            audience="user",
+            recipient_auth_user_id=auth_user_id,
+            published_at=PAST,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row.id
+
+    def delivered(self, target: str, *, channel: str = "discord_dm", created_at: datetime = PAST) -> int:
+        row = NotificationDelivery(
+            channel=channel,
+            target=target,
+            dedupe_key=f"{channel}:{target}:{created_at.isoformat()}",
+            kind="match.scheduled",
+            created_at=created_at,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row.id
+
+    async def read(self, identity: dict, auth_user_id: int = TARGET) -> dict[str, Any]:
+        return await self.call("rpc.app.admin_user_notifications_get", {"identity": identity, "id": auth_user_id})
+
+    async def write(self, identity: dict, auth_user_id: int = TARGET, **groups: bool) -> dict[str, Any]:
+        return await self.call(
+            "rpc.app.admin_user_notification_preferences_update",
+            {"identity": identity, "id": auth_user_id, "payload": {"discord_dm": groups}},
+        )
+
+    def stored(self, auth_user_id: int) -> dict[str, bool] | None:
+        self.session.expire_all()
+        row = self.session.get(NotificationPreference, auth_user_id)
+        return dict(row.discord_dm) if row is not None else None
+
+    # -- the gate ----------------------------------------------------------
+
+    async def test_reading_another_account_needs_the_global_read_grant(self) -> None:
+        """Without it this is an ordinary user reading a stranger's settings."""
+        self.account()
+
+        answer = await self.read(_ALICE)
+
+        self.assertFalse(answer["ok"], answer)
+        self.assertEqual(answer["error"]["code"], "forbidden")
+
+    async def test_writing_another_account_needs_update_not_merely_read(self) -> None:
+        """Read is a weaker grant; it must not carry the edit with it."""
+        self.account()
+
+        answer = await self.write(_READER, matches=False)
+
+        self.assertFalse(answer["ok"], answer)
+        self.assertEqual(answer["error"]["code"], "forbidden")
+        self.assertIsNone(self.stored(TARGET))
+
+    async def test_a_missing_account_is_a_404_on_both_subjects(self) -> None:
+        """Nothing is stored for an id that never existed, and no 200 implies it was."""
+        read = await self.read(_READER)
+        write = await self.write(_EDITOR, team=False)
+
+        self.assertEqual(read["error"]["code"], "not_found", read)
+        self.assertEqual(write["error"]["code"], "not_found", write)
+        self.assertIsNone(self.stored(TARGET))
+
+    # -- the read ----------------------------------------------------------
+
+    async def test_the_read_answers_the_targets_effective_switches_and_link(self) -> None:
+        """The target's values, not the caller's, and defaults filled in."""
+        self.account()
+        self.link_discord(TARGET, DISCORD_TARGET)
+        self.session.add(NotificationPreference(auth_user_id=TARGET, discord_dm={"matches": False}))
+        # The operator's own row must not answer for the account they inspect.
+        self.session.add(NotificationPreference(auth_user_id=READER, discord_dm={"team": False}))
+        self.session.flush()
+
+        answer = await self.read(_READER)
+
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True})
+        self.assertTrue(answer["data"]["discord_linked"])
+
+    async def test_the_unread_count_is_the_one_that_accounts_bell_shows(self) -> None:
+        """Their inbox's audience, not a platform-wide total."""
+        self.account()
+        self.notify(TARGET)
+        self.notify(TARGET)
+        self.notify(ALICE)
+
+        answer = await self.read(_READER)
+
+        self.assertEqual(answer["data"]["unread_count"], 2, answer)
+
+    async def test_deliveries_are_this_accounts_discord_dms_newest_first_capped_at_ten(self) -> None:
+        """Three different ways the ledger could leak or mislead, in one pin.
+
+        The ledger is keyed by Discord snowflake, so a target filter that let a
+        stranger's id through, a channel filter that let a workspace broadcast
+        through, or an unordered read would each put the wrong rows in front of
+        an operator.
+        """
+        self.account()
+        self.link_discord(TARGET, DISCORD_TARGET)
+        mine = [self.delivered(DISCORD_TARGET, created_at=PAST + timedelta(minutes=index)) for index in range(12)]
+        self.delivered(DISCORD_STRANGER)
+        self.delivered(DISCORD_TARGET, channel="discord_channel")
+
+        answer = await self.read(_READER)
+
+        rows = answer["data"]["recent_deliveries"]
+        self.assertEqual([row["id"] for row in rows], list(reversed(mine[2:])))
+        self.assertEqual({row["channel"] for row in rows}, {"discord_dm"})
+
+    async def test_an_account_with_no_discord_has_an_empty_ledger(self) -> None:
+        """An unfiltered IN () would hand over every delivery on the platform."""
+        self.account()
+        self.delivered(DISCORD_STRANGER)
+
+        answer = await self.read(_READER)
+
+        self.assertEqual(answer["data"]["recent_deliveries"], [])
+        self.assertFalse(answer["data"]["discord_linked"])
+
+    # -- the write ---------------------------------------------------------
+
+    async def test_the_write_edits_the_target_row_and_answers_the_full_payload(self) -> None:
+        """The caller's own preferences must be untouched by an admin edit."""
+        self.account()
+        self.session.add(NotificationPreference(auth_user_id=EDITOR, discord_dm={"tournament": False}))
+        self.session.flush()
+
+        answer = await self.write(_EDITOR, matches=False)
+
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True})
+        self.assertEqual(answer["data"]["unread_count"], 0)
+        self.assertEqual(answer["data"]["recent_deliveries"], [])
+        self.assertEqual(self.stored(TARGET), {"matches": False})
+        self.assertEqual(self.stored(EDITOR), {"tournament": False})
+
+    async def test_the_admin_edit_is_partial_like_the_self_service_one(self) -> None:
+        """An operator fixing one group must not re-assert the other two."""
+        self.account()
+
+        await self.write(_EDITOR, matches=False)
+        answer = await self.write(_EDITOR, team=False)
+
+        self.assertEqual(answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": False})
+        self.assertEqual(self.stored(TARGET), {"matches": False, "team": False})
 
 
 class WorkspaceNotificationConfigRpcTests(_SettingsCase):
@@ -382,6 +622,8 @@ class ContractTests(IsolatedAsyncioTestCase):
     _SUBJECTS = (
         "rpc.app.notification_preferences_get",
         "rpc.app.notification_preferences_update",
+        "rpc.app.admin_user_notifications_get",
+        "rpc.app.admin_user_notification_preferences_update",
         "rpc.app.workspaces.notification_config_get",
         "rpc.app.workspaces.notification_config_update",
     )
@@ -401,6 +643,7 @@ class ContractTests(IsolatedAsyncioTestCase):
 
         broker.subscriber = capture
         notifications_rpc.register(broker, MagicMock())
+        notifications_admin_rpc.register(broker, MagicMock())
         workspaces_rpc.register(broker, MagicMock())
 
         for subject in self._SUBJECTS:

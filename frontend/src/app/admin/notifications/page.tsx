@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
@@ -58,7 +58,8 @@ const KINDS = [
 
 const ALL_KINDS = "all";
 const KIND_PARAM = "kind";
-const PAGE_SIZE = 50;
+/** The server's default page; it caps `per_page` at 100. */
+const PAGE_SIZE = 25;
 
 export default function AdminWorkspaceNotificationsPage() {
   const { canAccessPermission, isLoaded } = usePermissions();
@@ -69,6 +70,8 @@ export default function AdminWorkspaceNotificationsPage() {
 
   const { searchParams } = useQueryParams({ resetOnChange: [] });
   const [confirming, setConfirming] = useState<{ ids?: number[]; kind?: string } | null>(null);
+  // Seen from the table's own fetch: the kind retire is pointless on an empty kind.
+  const [total, setTotal] = useState<number | null>(null);
 
   const canRead = workspaceId != null && canAccessPermission("notification.read", workspaceId);
   // Two grants, two questions — the server checks them separately, so a
@@ -80,20 +83,6 @@ export default function AdminWorkspaceNotificationsPage() {
   const requested = searchParams?.get(KIND_PARAM);
   const kind = requested && KINDS.includes(requested as (typeof KINDS)[number]) ? requested : ALL_KINDS;
   const kindFilter = kind === ALL_KINDS ? null : kind;
-
-  const list = useInfiniteQuery({
-    queryKey: notificationQueryKeys.workspaceNotifications(workspaceId, kindFilter),
-    queryFn: ({ pageParam }) =>
-      notificationService.listWorkspaceNotifications({
-        workspaceId: workspaceId as number,
-        kind: kindFilter,
-        cursor: pageParam,
-        limit: PAGE_SIZE
-      }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.next_cursor,
-    enabled: canRead
-  });
 
   const retire = useMutation({
     mutationFn: (target: { ids?: number[]; kind?: string }) =>
@@ -109,8 +98,6 @@ export default function AdminWorkspaceNotificationsPage() {
       void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list() });
     }
   });
-
-  const rows = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
 
   const columns = useMemo<ColumnDef<NotificationAdminItem>[]>(() => {
     const stamp = (value: string | null) =>
@@ -129,6 +116,8 @@ export default function AdminWorkspaceNotificationsPage() {
         accessorKey: "kind",
         header: t("notifications.workspaceAdmin.columns.kind"),
         size: 220,
+        // One server order (newest first); a header sort would change nothing.
+        enableSorting: false,
         cell: ({ row }) => (
           <Badge tone="neutral" className="font-normal">
             {t(`notifications.workspaceAdmin.kinds.${row.original.kind}` as never)}
@@ -152,6 +141,7 @@ export default function AdminWorkspaceNotificationsPage() {
         accessorKey: "published_at",
         header: t("notifications.workspaceAdmin.columns.publishedAt"),
         size: 190,
+        enableSorting: false,
         cell: ({ row }) => stamp(row.original.published_at)
       },
       {
@@ -245,7 +235,7 @@ export default function AdminWorkspaceNotificationsPage() {
               size="sm"
               variant="outline"
               data-field="retire-kind"
-              disabled={retire.isPending || rows.length === 0}
+              disabled={retire.isPending || total === 0}
               onClick={() => setConfirming({ kind: kindFilter })}
             >
               <Archive aria-hidden className="size-4" />
@@ -262,52 +252,53 @@ export default function AdminWorkspaceNotificationsPage() {
         }
       />
 
-      {/* Real links, so a filtered view is linkable and survives a reload —
-          the same reason the announcement screen's scope is a tab row. */}
-      <div data-field="kind">
-        <LinkTabs
-          ariaLabel={t("notifications.workspaceAdmin.kindLabel")}
-          activeKey={kind}
-          items={[ALL_KINDS, ...KINDS].map((option) => ({
-            key: option,
-            label:
-              option === ALL_KINDS
-                ? t("notifications.workspaceAdmin.allKinds")
-                : t(`notifications.workspaceAdmin.kinds.${option}` as never),
-            href:
-              option === ALL_KINDS
-                ? "/admin/notifications"
-                : `/admin/notifications?${KIND_PARAM}=${option}`
-          }))}
-        />
-      </div>
-
-      <DataTable
-        rows={rows}
-        isLoading={list.isLoading}
+      <DataTable<NotificationAdminItem>
         columns={columns}
         getRowId={(row) => String(row.id)}
         emptyMessage={t("notifications.workspaceAdmin.empty")}
-        initialPageSize={25}
+        initialPageSize={PAGE_SIZE}
+        pageSizeOptions={[25, 50, 100]}
+        filterKey={kind}
+        // The kind row is the table's filter row, and taking the toolbar slot
+        // also drops the built-in search box: the server does not search, so
+        // a box there would type into nothing. Real links, so a filtered view
+        // is linkable and survives a reload.
+        toolbar={
+          <div data-field="kind" className="min-w-0">
+            <LinkTabs
+              ariaLabel={t("notifications.workspaceAdmin.kindLabel")}
+              activeKey={kind}
+              items={[ALL_KINDS, ...KINDS].map((option) => ({
+                key: option,
+                label:
+                  option === ALL_KINDS
+                    ? t("notifications.workspaceAdmin.allKinds")
+                    : t(`notifications.workspaceAdmin.kinds.${option}` as never),
+                href:
+                  option === ALL_KINDS
+                    ? "/admin/notifications"
+                    : `/admin/notifications?${KIND_PARAM}=${option}`
+              }))}
+            />
+          </div>
+        }
+        // Under the `list()` prefix, so a retire refetches the page on screen.
+        queryKey={(page, _search, pageSize) => [
+          ...notificationQueryKeys.workspaceNotifications(workspaceId, kindFilter),
+          page,
+          pageSize
+        ]}
+        queryFn={async (page, _search, pageSize) => {
+          const result = await notificationService.listWorkspaceNotifications({
+            workspaceId,
+            kind: kindFilter,
+            page,
+            perPage: pageSize
+          });
+          setTotal(result.total);
+          return result;
+        }}
       />
-
-      {/* Keyset pagination, so "older" is a request, not a page number: the
-          table above pages what has been loaded. */}
-      {list.hasNextPage ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full"
-          disabled={list.isFetchingNextPage}
-          onClick={() => void list.fetchNextPage()}
-        >
-          {t(
-            list.isFetchingNextPage
-              ? "notifications.workspaceAdmin.loadingMore"
-              : "notifications.workspaceAdmin.loadMore"
-          )}
-        </Button>
-      ) : null}
 
       <ConfirmDialog
         open={confirming !== null}

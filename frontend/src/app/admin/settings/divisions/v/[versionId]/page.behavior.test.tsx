@@ -13,7 +13,11 @@
 //     the importer sends the user) lands there;
 //  4. cutting the ladder is what edits the draft: a click on a rank splits the
 //     band and the save bar appears with the draft's summary;
-//  5. a published version opens read-only, offering a clone instead of edits.
+//  5. a published version opens read-only, offering a clone instead of edits;
+//  6. a grid on its own rank scale opens as itself and saves its ranges
+//     untouched — reading it through the OW ladder rewrote every range;
+//  7. a mapping pick alone is an edit: without it counting, a saved draft
+//     could never store the decisions its Mappings tab asks for.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -385,6 +389,83 @@ describe("Divisions › draft editor", () => {
     expect(sourceId).toBe(21);
     expect(targetId).toBe(23);
     expect(container).toBeTruthy();
+  });
+
+  it("opens a grid on its own rank scale as itself and saves its ranges untouched", async () => {
+    // Division 3 starts under Bronze 5 without being the bottom: no ladder band does that.
+    const custom = [
+      tier(601, 1, "Division 1", 2000, null),
+      tier(602, 2, "Division 2", 1900, 1999),
+      tier(603, 3, "Division 3", 300, 1899),
+      tier(604, 4, "Division 4", 100, 299)
+    ];
+    getDivisionGridVersion.mockImplementation(async (id: number) =>
+      id === 23 ? version(23, 4, "draft", custom) : version(22, 3, "published")
+    );
+    getDivisionGridVersionReadiness.mockResolvedValue(
+      readiness({ sources: [], used_source_version_ids: [] })
+    );
+    updateDivisionGridVersion.mockResolvedValue(version(23, 4, "draft", custom));
+    const container = await mount();
+
+    expect(container.textContent).toContain("Custom rank scale");
+    // No stored OW link: Gold 1 (1900) resolves by rank range into Division 2.
+    expect(byLabel("Gold 1, in Division 2")).toBeTruthy();
+
+    await click(byLabel("Move Gold 1 into Division 1"));
+    expect(container.textContent).toContain("2 divisions have no OW ranks");
+    await click(button("Save draft"));
+
+    const [, payload] = updateDivisionGridVersion.mock.calls[0] as [
+      number,
+      { tiers: Record<string, unknown>[] }
+    ];
+    expect(payload.tiers.map((entry) => [entry.rank_min, entry.rank_max])).toEqual([
+      [2000, null],
+      [1900, 1999],
+      [300, 1899],
+      [100, 299]
+    ]);
+    expect(payload.tiers.map((entry) => [entry.ow_rank_min, entry.ow_rank_max])).toEqual([
+      [1900, 4900],
+      [null, null],
+      [500, 1800],
+      [null, null]
+    ]);
+  });
+
+  it("counts a mapping pick as an edit and stores it without touching the tiers", async () => {
+    window.history.replaceState(null, "", "/admin/settings/divisions/v/23?tab=mappings");
+    const container = await mount();
+    expect(container.querySelector('[aria-label="unsavedChanges"]')).toBeNull();
+
+    await act(async () => {
+      const trigger = byLabel("Target division for Old rest")!;
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (element) => element.textContent?.trim() === "2. Elite · 4000\u20134699"
+    );
+    await act(async () => {
+      option!.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      option!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle(3);
+
+    const bar = container.querySelector('[aria-label="unsavedChanges"]');
+    expect(bar?.textContent).toContain("1 mapping pick");
+    await click(button("Save draft"));
+
+    expect(updateDivisionGridVersion).not.toHaveBeenCalled();
+    const [, , body] = putDivisionGridMapping.mock.calls[0] as [
+      number,
+      number,
+      { rules: Record<string, unknown>[] }
+    ];
+    expect(body.rules.filter((rule) => rule.source_tier_id === 402)).toEqual([
+      { source_tier_id: 402, target_tier_id: 502, weight: 1, is_primary: true }
+    ]);
   });
 
   it("moves the impact rail into a fourth tab below xl, and nowhere above it", async () => {

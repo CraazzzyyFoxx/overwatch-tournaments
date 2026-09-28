@@ -29,16 +29,16 @@ The page has three parts:
 
 - **Version history** — every version of the grid, with **Open editor** and **View**.
 - **Who reads which version** — the older versions tournaments still read, and whether their divisions translate into the one in force.
-- **Divisions in force** — the active divisions in a table with **#**, **Division**, **OW band** and **Ranks** columns.
+- **Divisions in force** — the active divisions in a table with **#**, **Division**, **Rank range** and **OW ranks** columns.
 
 ## Build your own grid
 
 1. Press **Load standard OW ladder** to start from the standard ladder, or **New draft from v…** to start from the latest version. The draft editor opens.
-2. On the **Divisions** tab set the boundaries and names. Neighbouring divisions can be folded together (**Merge into the division above**, **Merge into the division below**) and the widest one split (**Split the widest**). Each division can get its own crest through **Set crest…**.
-3. The **Changes** tab shows how the draft differs from the version it came from. **Mappings** shows how divisions of older versions translate into this one. **Impact** holds the **Ready to publish?** checklist.
+2. On the **Divisions** tab pick the **Rank scale**. With **Follow OW ladder** a division's rank range is its Overwatch ranks: cut a new division at any rank of the ladder on the left, or join one into the division above. With **Custom** you type each division's floor (its ceiling is the floor above minus one) and choose its Overwatch ranks in the **OW ranks** column — for a grid such as twenty divisions of 100 that is not the Overwatch ladder. On both scales the arrows on the ladder move a boundary one rank. Neighbouring divisions can be folded together (**Merge into the division above**, **Merge into the division below**) and any division halved (**Split in two**). Each division can get its own crest through **Set crest…**.
+3. The **Changes** tab shows how the draft differs from the version it came from. **Mappings** shows how divisions of older versions translate into this one; any row can be pointed at another division, and the choice is stored with **Save draft**. **Impact** holds the **Ready to publish?** checklist.
 4. Press **Save draft**, then **Publish v…**, then **Activate v…**.
 
-A draft can be published once every check passes: each Overwatch rank belongs to exactly one division, all names are set and unique, the draft is saved, and no mapping decisions are left. Giving every division its own crest is advice, not a condition.
+A draft can be published once every check passes: each Overwatch rank lands in exactly one division, rank ranges do not overlap, all names are set and unique, the draft is saved, and no mapping decisions are left. A crest for every division, and Overwatch ranks for every division on a custom scale, are advice, not conditions.
 
 <Callout>
 Publishing and activating are two separate steps. A published version becomes immutable, but it only becomes the workspace grid after **Activate**.

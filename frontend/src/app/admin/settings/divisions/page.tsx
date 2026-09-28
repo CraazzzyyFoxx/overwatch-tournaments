@@ -39,10 +39,10 @@ import type {
 
 import {
   bandIconUrl,
-  bandRangeLabel,
-  bandSize,
   bandsFromTiers,
+  owRangeLabel,
   RANK_COUNT,
+  rankRangeLabel,
   tiersFromBands,
   type Band
 } from "./editor/draftReducer";
@@ -308,15 +308,21 @@ export default function DivisionsSettingsPage() {
         )
       },
       {
-        id: "band",
-        header: "OW band",
-        cell: ({ row }) => <span className="font-mono text-sm">{bandRangeLabel(row.original)}</span>
+        id: "range",
+        header: "Rank range",
+        size: 130,
+        cell: ({ row }) => (
+          <span className="font-mono text-sm tabular-nums">{rankRangeLabel(row.original)}</span>
+        )
       },
       {
-        id: "ranks",
-        header: "Ranks",
-        size: 76,
-        cell: ({ row }) => <span className="font-mono tabular-nums">{bandSize(row.original)}</span>
+        id: "ow",
+        header: "OW ranks",
+        cell: ({ row }) => (
+          <span className={cn("font-mono text-sm", !row.original.ow && "text-warning")}>
+            {owRangeLabel(row.original)}
+          </span>
+        )
       }
     ],
     []

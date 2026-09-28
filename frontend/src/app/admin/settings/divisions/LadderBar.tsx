@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 
 import {
   bandIconUrl,
-  bandRangeLabel,
-  bandSize,
+  ladderOwners,
+  owRangeLabel,
   RANK_COUNT,
   rankLabel,
   type Band
@@ -28,13 +28,10 @@ const SEGMENT_TONE = {
 } as const;
 
 /**
- * The 45-rank Overwatch ladder as one bar, cut where the version cuts it.
- *
- * A version *is* a partition of the ladder, so this is the version drawn
- * rather than described: a segment per division, as wide as the ranks it owns,
- * alternating two tints so every boundary reads. Two versions with the same
- * division count but different cuts look different here and identical in a
- * "20 divisions" caption — which is why the history rows carry it too.
+ * The 45-rank Overwatch ladder as one bar, cut where the version sends each
+ * rank: a segment per division, as wide as the OW ranks that land in it,
+ * alternating two tints so every boundary reads. Ranks no division takes are
+ * a dashed warning segment; a division no OW rank reaches has no width here.
  */
 export function LadderBar({
   bands,
@@ -45,37 +42,55 @@ export function LadderBar({
   const [even, odd] = SEGMENT_TONE[tone];
   const large = size === "lg";
 
+  const segments: { owner: number | null; from: number; size: number }[] = [];
+  ladderOwners(bands).forEach((owner, rank) => {
+    const last = segments[segments.length - 1];
+    if (last && last.owner === owner) last.size += 1;
+    else segments.push({ owner, from: rank, size: 1 });
+  });
+
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <ol
-        aria-label={`${bands.length} divisions over ${RANK_COUNT} ranks`}
+        aria-label={`${bands.length} divisions over ${RANK_COUNT} OW ranks`}
         className={cn("flex w-full gap-px", large ? "h-9" : "h-1.5")}
       >
-        {bands.map((band, index) => (
-          <li
-            key={band.slug}
-            style={{ flexGrow: bandSize(band) }}
-            title={`${band.number} · ${band.name} — ${bandRangeLabel(band)}`}
-            className={cn(
-              "flex min-w-0 basis-0 items-center justify-center overflow-hidden",
-              large ? "rounded-sm" : "rounded-[1px]",
-              index % 2 === 0 ? even : odd
-            )}
-          >
-            {/* Below `lg` a one-rank segment is a few pixels wide: the crest would be a
-                sliver, so the cut alone carries the bar there. */}
-            {large ? (
-              <Image
-                src={bandIconUrl(band)}
-                alt=""
-                width={20}
-                height={20}
-                unoptimized
-                className="hidden size-5 max-w-full object-contain lg:block"
-              />
-            ) : null}
-          </li>
-        ))}
+        {segments.map((segment) => {
+          const band = segment.owner === null ? null : bands[segment.owner];
+          return (
+            <li
+              key={segment.from}
+              style={{ flexGrow: segment.size }}
+              title={
+                band
+                  ? `${band.number} · ${band.name} — ${owRangeLabel(band)}`
+                  : `${rankLabel(segment.from)}${segment.size > 1 ? ` – ${rankLabel(segment.from + segment.size - 1)}` : ""} — no division`
+              }
+              className={cn(
+                "flex min-w-0 basis-0 items-center justify-center overflow-hidden",
+                large ? "rounded-sm" : "rounded-[1px]",
+                band === null
+                  ? "border border-dashed border-warning/70 bg-warning/10"
+                  : segment.owner! % 2 === 0
+                    ? even
+                    : odd
+              )}
+            >
+              {/* Below `lg` a one-rank segment is a few pixels wide: the crest would be a
+                  sliver, so the cut alone carries the bar there. */}
+              {large && band ? (
+                <Image
+                  src={bandIconUrl(band)}
+                  alt=""
+                  width={20}
+                  height={20}
+                  unoptimized
+                  className="hidden size-5 max-w-full object-contain lg:block"
+                />
+              ) : null}
+            </li>
+          );
+        })}
       </ol>
       {large ? (
         <div

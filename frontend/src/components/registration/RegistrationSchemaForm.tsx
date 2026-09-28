@@ -505,14 +505,26 @@ export default function RegistrationSchemaForm({
     }
   };
 
+  /** Show this step's objections and put focus on the first of them. */
+  const revealErrors = () => {
+    setShowErrors(true);
+    // Let the messages render before moving focus into one.
+    requestAnimationFrame(() => {
+      stepRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    });
+  };
+
+  /** A step picked on the indicator: `blocked` is where a forward jump stopped. */
+  const selectStep = (target: number, blocked: boolean) => {
+    setStep(target);
+    if (blocked) revealErrors();
+    else setShowErrors(false);
+  };
+
   /** `finish` submits from any step — the admin footer's early Save. */
   const advance = async (state: SchemaFormFooterState, finish = state.isLast) => {
     if (state.stepError) {
-      setShowErrors(true);
-      // Let the messages render before moving focus into one.
-      requestAnimationFrame(() => {
-        stepRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-      });
+      revealErrors();
       return;
     }
     if (!finish) {
@@ -742,6 +754,7 @@ export default function RegistrationSchemaForm({
         serverErrors={serverErrors}
         step={step}
         onStepChange={setStep}
+        onStepSelect={selectStep}
         showErrors={showErrors}
         lockedFields={lockedFields}
         skipLockedSteps={isEditing}

@@ -35,22 +35,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.pagination import Paginated
 from shared.models.identity.auth_user import AuthUser
-from shared.repository.notification import (
-    InvalidCursorError,
-    NotificationRepository,
-    decode_cursor,
-    encode_cursor,
-)
+from shared.repository.notification import NotificationRepository
 from shared.services.audit import record_admin_audit
 from shared.services.notifications import NOTIFICATION_KINDS
 from src import schemas
 from src.services.announcements import ANNOUNCEMENT_KIND
 
-__all__ = ("DEFAULT_LIST_LIMIT", "MAX_LIST_LIMIT", "SYSTEM_KINDS", "list_for_workspace", "retire")
+__all__ = ("DEFAULT_PER_PAGE", "MAX_PER_PAGE", "SYSTEM_KINDS", "list_for_workspace", "retire")
 
-DEFAULT_LIST_LIMIT = 50
-MAX_LIST_LIMIT = 200
+DEFAULT_PER_PAGE = 25
+MAX_PER_PAGE = 100
 
 _notifications = NotificationRepository()
 
@@ -78,17 +74,18 @@ async def list_for_workspace(
     *,
     workspace_id: int,
     kind: str | None = None,
-    cursor: str | None = None,
-    limit: int = DEFAULT_LIST_LIMIT,
-) -> schemas.NotificationAdminPage:
-    """One tenant's produced notifications, newest first, keyset-paginated.
+    page: int = 1,
+    per_page: int = DEFAULT_PER_PAGE,
+) -> Paginated[schemas.NotificationAdminItem]:
+    """One tenant's produced notifications, newest first, offset-paginated.
 
     Unfiltered by the time window, like the announcement list and for the same
     reason: an operator screen exists to show what is scheduled and what has
     already been retired, which the inbox's window hides.
 
-    The cursor is the inbox's own ``(published_at, id)`` encoding -- same order,
-    same tie-breaking, so the helper is shared rather than re-derived.
+    Offset rather than the inbox's keyset cursor: this is a table with page
+    numbers and a total, not an endless feed. ``id`` breaks ``published_at``
+    ties so an offset never repeats or skips a row between pages.
 
     The recipient join is a strict LEFT OUTER, for the reason the audit feed
     states: ``recipient_auth_user_id`` carries no foreign key by design, so the
@@ -96,36 +93,31 @@ async def list_for_workspace(
     operator still has to retire.
     """
     model = models.Notification
-    limit = max(1, min(int(limit), MAX_LIST_LIMIT))
-    query = (
-        sa.select(model, AuthUser.username)
-        .outerjoin(AuthUser, AuthUser.id == model.recipient_auth_user_id)
-        .where(*_scope(workspace_id))
-    )
+    page = max(int(page), 1)
+    per_page = max(1, min(int(per_page), MAX_PER_PAGE))
+    where = _scope(workspace_id)
     if kind is not None:
-        query = query.where(model.kind == _validated_kind(kind))
-    if cursor is not None:
-        try:
-            after_published_at, after_id = decode_cursor(cursor)
-        except InvalidCursorError as exc:
-            raise HTTPException(status_code=422, detail="Invalid notification page cursor") from exc
-        query = query.where(
-            sa.tuple_(model.published_at, model.id)
-            < sa.tuple_(
-                sa.literal(after_published_at, model.published_at.type),
-                sa.literal(after_id, model.id.type),
-            ),
-        )
+        where.append(model.kind == _validated_kind(kind))
 
-    # One row past the page, the same "is there more" trick the inbox uses.
-    rows = (await session.execute(query.order_by(model.published_at.desc(), model.id.desc()).limit(limit + 1))).all()
-    next_cursor = encode_cursor(rows[limit - 1][0]) if len(rows) > limit else None
-    return schemas.NotificationAdminPage(
-        items=[
+    total = await session.scalar(sa.select(sa.func.count()).select_from(model).where(*where)) or 0
+    rows = (
+        await session.execute(
+            sa.select(model, AuthUser.username)
+            .outerjoin(AuthUser, AuthUser.id == model.recipient_auth_user_id)
+            .where(*where)
+            .order_by(model.published_at.desc(), model.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+    ).all()
+    return Paginated[schemas.NotificationAdminItem](
+        page=page,
+        per_page=per_page,
+        total=total,
+        results=[
             schemas.NotificationAdminItem.model_validate(row).model_copy(update={"recipient_username": username})
-            for row, username in rows[:limit]
+            for row, username in rows
         ],
-        next_cursor=next_cursor,
     )
 
 

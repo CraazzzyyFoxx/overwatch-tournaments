@@ -28,15 +28,17 @@ import { LadderColumn } from "./LadderColumn";
 import { MappingsView, type MappingSource } from "./MappingsView";
 import { publishChecks, readyToPublish } from "./publishChecks";
 import {
+  bandsCoverLadder,
   bandsDifferingFromBase,
   bandsFromTiers,
   describeEdits,
   diffBands,
   draftReducer,
   initDraftState,
-  RANK_COUNT,
+  scaleOf,
   tiersFromBands,
-  type Band
+  type Band,
+  type Scale
 } from "./draftReducer";
 import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 
@@ -58,11 +60,16 @@ export interface DraftEditorProps {
   canPublish: boolean;
   canDelete: boolean;
   /**
+   * Mapping picks made before a save that could not store them — carried into
+   * the next mount so an incomplete mapping does not lose its decisions.
+   */
+  initialChoices?: Record<number, number>;
+  /**
    * Re-mounts this editor from the cache. Both "saved" and "discard my edits"
    * are the same thing to a reducer holding a snapshot stack: throw it away and
-   * read the version again.
+   * read the version again. `carry` seeds the next mount's mapping picks.
    */
-  onReload: () => void;
+  onReload: (carry?: Record<number, number>) => void;
 }
 
 /**
@@ -87,6 +94,7 @@ export function DraftEditor({
   editable,
   canPublish,
   canDelete,
+  initialChoices,
   onReload
 }: Readonly<DraftEditorProps>) {
   const router = useRouter();
@@ -95,12 +103,19 @@ export function DraftEditor({
   const [state, dispatch] = useReducer(
     draftReducer,
     { tiers: version.tiers, base },
-    (seed) => initDraftState(bandsFromTiers(seed.tiers), seed.base)
+    (seed) => initDraftState(bandsFromTiers(seed.tiers), scaleOf(seed.tiers), seed.base)
   );
-  const [manualChoice, setManualChoice] = useState<Record<number, number | undefined>>({});
-  const [confirming, setConfirming] = useState<"publish" | "delete" | null>(null);
+  const [manualChoice, setManualChoice] = useState<Record<number, number | undefined>>(
+    () => initialChoices ?? {}
+  );
+  const [confirming, setConfirming] = useState<"publish" | "delete" | "scale" | null>(null);
   const [iconTarget, setIconTarget] = useState<number | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
+  // What the ladder draws for a version that stores no OW link is the backend's
+  // rank-range fallback, not a decision anyone made — the column says so.
+  const implicitLinks = !version.tiers.some(
+    (tier) => tier.ow_rank_min != null && tier.ow_rank_max != null
+  );
 
   const [isWide, setIsWide] = useState(true);
   useEffect(() => {
@@ -112,7 +127,11 @@ export function DraftEditor({
   }, []);
 
   const sources = readiness?.sources ?? [];
-  const dirty = state.history.length > 0;
+  const tiersDirty = state.history.length > 0;
+  // A mapping pick is an edit too: without it counting, a draft whose tiers are
+  // saved could never store the decisions its Mappings tab asks for.
+  const pickedCount = Object.keys(manualChoice).length;
+  const dirty = tiersDirty || pickedCount > 0;
   // Mapping rules key on target tier ids, so an unsaved band cannot be a target.
   const mappable = state.bands.every((band) => band.id !== undefined);
 
@@ -160,7 +179,8 @@ export function DraftEditor({
     () =>
       mappingSources.reduce(
         (total, source) =>
-          total + unresolvedRows(autoMap(source.tiers, state.bands), chosen).length,
+          total +
+          unresolvedRows(autoMap(source.tiers, state.bands), chosen, state.bands).length,
         0
       ),
     [chosen, mappingSources, state.bands]
@@ -168,6 +188,7 @@ export function DraftEditor({
 
   const checks = publishChecks({
     bands: state.bands,
+    scale: state.scale,
     readiness,
     unresolvedMappings,
     mappable,
@@ -191,30 +212,56 @@ export function DraftEditor({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const updated = await workspaceService.updateDivisionGridVersion(version.id, {
-        tiers: tiersFromBands(state.bands)
-      });
+      const updated = tiersDirty
+        ? await workspaceService.updateDivisionGridVersion(version.id, {
+            tiers: tiersFromBands(state.bands)
+          })
+        : version;
       // Mappings are written against the SAVED tiers: the rules point at tier
       // ids, and a band created in this session only gets one here.
-      const savedBands = bandsFromTiers(updated.tiers);
+      const savedBands = tiersDirty ? bandsFromTiers(updated.tiers) : state.bands;
+      // The backend stores a mapping only when it covers every source tier, so
+      // a source with an open row keeps its server state and its picks carry over.
+      const pending: MappingSource[] = [];
       for (const source of mappingSources) {
-        const rules = mappingRules(autoMap(source.tiers, savedBands), chosen);
+        const rows = autoMap(source.tiers, savedBands);
+        if (unresolvedRows(rows, chosen, savedBands).length > 0) {
+          pending.push(source);
+          continue;
+        }
+        const rules = mappingRules(rows, chosen, savedBands);
         if (rules.length === 0) continue;
         await workspaceService.putDivisionGridMapping(source.readiness.version_id, version.id, {
           name: `${source.readiness.version_label} \u2192 ${updated.label}`,
           rules
         });
       }
-      return updated;
+      return { updated, pending };
     },
-    onSuccess: async (updated) => {
+    onSuccess: async ({ updated, pending }) => {
       // Seed the cache before remounting, so the fresh editor reads the tiers
       // that were just saved rather than the ones it sent.
       queryClient.setQueryData(divisionGridQueryKeys.version(version.id), updated);
-      setManualChoice({});
       await invalidate();
-      notify.success(`v${updated.version} draft saved`);
-      onReload();
+      if (pending.length === 0) {
+        notify.success(`v${updated.version} draft saved`);
+      } else {
+        notify.warning(`v${updated.version} draft saved — mappings still open`, {
+          description: `${pending
+            .map((source) => source.readiness.version_label)
+            .join(", ")}: a mapping is stored once every division has a target. Finish it in Mappings.`
+        });
+      }
+      const pendingTierIds = new Set(
+        pending.flatMap((source) => source.tiers.map((tier) => tier.id))
+      );
+      const carry: Record<number, number> = {};
+      for (const [sourceTierId, targetTierId] of Object.entries(manualChoice)) {
+        if (targetTierId !== undefined && pendingTierIds.has(Number(sourceTierId))) {
+          carry[Number(sourceTierId)] = targetTierId;
+        }
+      }
+      onReload(carry);
     },
     onError: reportFailure("Draft could not be saved")
   });
@@ -319,13 +366,27 @@ export function DraftEditor({
           confirmLabel: "Discard draft",
           tone: "danger"
         }
-      : {
-          title: `Publish v${version.version}?`,
-          description:
-            "A published version becomes immutable: tournaments can be pinned to it, and changing the divisions afterwards means a new draft. Publishing does not make it the workspace grid — activate it separately.",
-          confirmLabel: `Publish v${version.version}`,
-          tone: "warning"
-        };
+      : confirming === "scale"
+        ? {
+            title: "Follow the OW ladder?",
+            description:
+              "Every division's rank range is recomputed from its OW ranks, so the grid moves onto the OW scale (Bronze 5 = 500 … Champion 1 = 4900+). Stored player ranks keep their numbers — if they are on this grid's current scale, they will land in different divisions.",
+            confirmLabel: "Follow the ladder",
+            tone: "warning"
+          }
+        : {
+            title: `Publish v${version.version}?`,
+            description:
+              "A published version becomes immutable: tournaments can be pinned to it, and changing the divisions afterwards means a new draft. Publishing does not make it the workspace grid — activate it separately.",
+            confirmLabel: `Publish v${version.version}`,
+            tone: "warning"
+          };
+
+  const changeScale = (next: Scale) => {
+    // Leaving the ladder keeps every number; following it rewrites them.
+    if (next === "ladder") setConfirming("scale");
+    else dispatch({ type: "setScale", scale: next });
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -339,7 +400,7 @@ export function DraftEditor({
         meta={[
           base.length > 0 ? `Created from ${baseLabel}` : "No parent version",
           `${state.bands.length} divisions`,
-          `${RANK_COUNT} ranks`
+          state.scale === "ladder" ? "Rank ranges follow the OW ladder" : "Custom rank scale"
         ]}
         actions={
           <>
@@ -347,7 +408,7 @@ export function DraftEditor({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!dirty}
+                disabled={!tiersDirty}
                 onClick={() => dispatch({ type: "undo" })}
               >
                 <RotateCcw aria-hidden className="size-4" />
@@ -437,13 +498,15 @@ export function DraftEditor({
       <div
         className={cn(
           "grid items-start gap-4",
-          "xl:grid-cols-[230px_minmax(0,1fr)_250px]"
+          "xl:grid-cols-[272px_minmax(0,1fr)_250px]"
         )}
       >
         <LadderColumn
           bands={state.bands}
+          scale={state.scale}
           selectedSlug={selectedSlug}
           editable={editable}
+          implicitLinks={implicitLinks && !tiersDirty}
           onSelect={(slug) => setParams({ band: slug })}
           dispatch={dispatch}
         />
@@ -460,11 +523,14 @@ export function DraftEditor({
             <DivisionsTable
               bands={state.bands}
               base={state.base}
+              scale={state.scale}
               editable={editable}
               selectedSlug={selectedSlug}
               onSelect={(slug) => setParams({ band: slug })}
               dispatch={dispatch}
               onPickIcon={onPickIcon}
+              onScaleChange={changeScale}
+              canFollowLadder={bandsCoverLadder(state.bands)}
             />
           ) : null}
 
@@ -506,11 +572,14 @@ export function DraftEditor({
                 v{version.version} {version.status}
               </strong>{" "}
               · {state.bands.length} divisions · {state.history.length}{" "}
-              {state.history.length === 1 ? "edit" : "edits"} ·{" "}
-              {bandsDifferingFromBase(state.base, state.bands)} bands differ from {baseLabel}
+              {state.history.length === 1 ? "edit" : "edits"}
+              {pickedCount > 0
+                ? ` · ${pickedCount} mapping ${pickedCount === 1 ? "pick" : "picks"}`
+                : null}{" "}
+              · {bandsDifferingFromBase(state.base, state.bands)} divisions differ from {baseLabel}
             </>
           }
-          onDiscard={onReload}
+          onDiscard={() => onReload()}
           onSave={() => saveMutation.mutate()}
           // Divisions · Changes · Mappings · Impact are `?tab=` links of THIS
           // editor, and "resolve the open mapping decisions" is exactly what
@@ -528,6 +597,7 @@ export function DraftEditor({
         onConfirm={async () => {
           const action = confirming;
           setConfirming(null);
+          if (action === "scale") dispatch({ type: "setScale", scale: "ladder" });
           if (action === "delete") await deleteMutation.mutateAsync();
           if (action === "publish") await publishMutation.mutateAsync();
         }}

@@ -175,11 +175,11 @@ export default class workspaceService {
   static async addMember(
     workspaceId: number,
     authUserId: number,
-    roleIds?: number[]
+    roleId: number
   ): Promise<WorkspaceMember> {
     return apiFetch(`/api/v1/workspaces/${workspaceId}/members`, {
       method: "POST",
-      body: { auth_user_id: authUserId, role_ids: roleIds }
+      body: { auth_user_id: authUserId, role_ids: [roleId] }
     }).then((r) => r.json());
   }
 

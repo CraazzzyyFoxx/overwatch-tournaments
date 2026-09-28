@@ -36,9 +36,11 @@ from cashews import cache
 
 from shared import models
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.models.identity.auth_user import AuthUser
 from shared.repository.notification import (
     DEFAULT_PAGE_LIMIT,
     InvalidCursorError,
+    NotificationDeliveryRepository,
     NotificationPreferenceRepository,
     NotificationRepository,
 )
@@ -47,9 +49,12 @@ from shared.services.subscriptions.strategies import load_provider_user_ids
 from src import schemas
 
 __all__ = (
+    "ADMIN_RECENT_DELIVERIES",
     "WORKSPACE_IDS_CACHE_KEY",
     "WORKSPACE_IDS_CACHE_TTL",
     "active_announcements",
+    "admin_update_user_preferences",
+    "admin_user_notifications",
     "delete",
     "inbox_page",
     "mark_read",
@@ -62,6 +67,11 @@ logger = logging.getLogger(__name__)
 
 repository = NotificationRepository()
 preference_repository = NotificationPreferenceRepository()
+delivery_repository = NotificationDeliveryRepository()
+
+#: How much of the delivery ledger the admin inspector shows. Ten is a glance at
+#: "did anything go out lately", not an audit trail -- the ledger itself is.
+ADMIN_RECENT_DELIVERIES = 10
 
 # 60 s: the set changes when somebody joins a workspace or is granted a role,
 # and a minute of staleness on "which announcements do I see" is invisible,
@@ -238,3 +248,64 @@ async def update_preferences(
     await preference_repository.set_discord_dm(session, auth_user_id=auth_user_id, discord_dm=stored)
     await session.commit()
     return await preferences(session, auth_user_id=auth_user_id)
+
+
+async def _require_auth_user(session: Any, auth_user_id: int) -> None:
+    """404 an account that is not there, before anything is read or written."""
+    result = await session.execute(sa.select(AuthUser.id).where(AuthUser.id == auth_user_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+async def _admin_summary(session: Any, *, auth_user_id: int) -> schemas.AdminUserNotificationsRead:
+    prefs = await preferences(session, auth_user_id=auth_user_id)
+    workspace_ids = await workspace_ids_for(session, auth_user_id=auth_user_id)
+    unread = await repository.unread_count(session, auth_user_id=auth_user_id, workspace_ids=workspace_ids)
+    # The ledger is keyed by Discord snowflake, not by account: an operator
+    # looking at somebody who linked twice has to see both accounts' sends.
+    linked = await load_provider_user_ids(session, auth_user_ids=[auth_user_id], oauth_provider="discord")
+    deliveries = await delivery_repository.recent_for_targets(
+        session,
+        channel="discord_dm",
+        targets=linked.get(auth_user_id) or (),
+        limit=ADMIN_RECENT_DELIVERIES,
+    )
+    return schemas.AdminUserNotificationsRead(
+        discord_dm=prefs.discord_dm,
+        discord_linked=prefs.discord_linked,
+        unread_count=unread,
+        recent_deliveries=[schemas.NotificationDeliveryItem.model_validate(row) for row in deliveries],
+    )
+
+
+async def admin_user_notifications(session: Any, *, auth_user_id: int) -> schemas.AdminUserNotificationsRead:
+    """One *other* account's notification state, for the admin inspector.
+
+    ``auth_user_id`` is the id from the request path rather than the caller's --
+    the one place in this module where that is so. The handler's global
+    ``auth_user.read`` grant is what authorizes it; nothing here re-derives it.
+
+    The numbers are the account's own, not a global view: ``unread_count``
+    composes the same audience clause their bell does, so an operator and the
+    user are always looking at the same badge.
+    """
+    await _require_auth_user(session, auth_user_id)
+    return await _admin_summary(session, auth_user_id=auth_user_id)
+
+
+async def admin_update_user_preferences(
+    session: Any,
+    *,
+    auth_user_id: int,
+    discord_dm: dict[str, bool],
+) -> schemas.AdminUserNotificationsRead:
+    """Flip another account's DM switches on their behalf, then answer as the read.
+
+    Same partial-merge semantics as the self-service write it delegates to --
+    an operator fixing one group must not silently re-assert the other two from
+    a stale screen. The response is the full inspector payload so the screen
+    that issued the write does not need a second round trip to refresh.
+    """
+    await _require_auth_user(session, auth_user_id)
+    await update_preferences(session, auth_user_id=auth_user_id, discord_dm=discord_dm)
+    return await _admin_summary(session, auth_user_id=auth_user_id)

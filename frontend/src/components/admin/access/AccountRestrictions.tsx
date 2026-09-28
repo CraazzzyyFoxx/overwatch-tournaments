@@ -4,11 +4,13 @@ import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Globe } from "lucide-react";
 
+import { AccountDisclosure } from "@/components/admin/access/AccountCard";
 import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { EYEBROW_CLASS, TONE_CLASS } from "@/components/kit/tone";
+import { TONE_CLASS } from "@/components/kit/tone";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -80,6 +82,10 @@ type DenyScope = "global" | number;
  * Restrictions for one auth account — the same `PermissionPicker` as roles and
  * API keys, read as "what this account may NOT do".
  *
+ * Collapsed by default: most accounts have none, and a six-row red panel on
+ * every account buried the roles above it. Active denies stay visible as chips
+ * while collapsed, so a restricted account never reads as unrestricted.
+ *
  * The picker's signature carries no tone, so the danger reading comes from the
  * panel around it rather than from the control: a checked row here takes access
  * away, which is the opposite of every other picker on the screen and must not
@@ -91,6 +97,7 @@ export function AccountRestrictions({
 }: Readonly<{ userId: number; canEdit: boolean }>) {
   const queryClient = useQueryClient();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<DenyScope>("global");
   const scopeId = useId();
   const scopeWorkspaceId = scope === "global" ? null : scope;
@@ -103,8 +110,10 @@ export function AccountRestrictions({
     // The whole inventory, not a `search` narrowed to one resource: the
     // restrictable capabilities span three resources now, and a row whose
     // permission id is missing here is silently dropped from the picker below.
+    // Only once opened — the collapsed line needs the denies alone.
     queryKey: accessQueryKeys.permissionsInventory(),
-    queryFn: () => rbacService.listPermissionsAll()
+    queryFn: () => rbacService.listPermissionsAll(),
+    enabled: open
   });
 
   const denies = deniesQuery.data ?? [];
@@ -128,21 +137,47 @@ export function AccountRestrictions({
     onError: (error) => notify.apiError(error, { title: "Could not change the restriction" })
   });
 
-  const loading = deniesQuery.isLoading || permissionsQuery.isLoading;
   const catalog = RESTRICTABLE.filter(
     (entry) => permissionIdByName.get(entry.key) !== undefined
   );
 
+  const scopeLabel = (workspaceId: number | null | undefined) =>
+    workspaceId
+      ? (workspaces.find((workspace) => workspace.id === workspaceId)?.name ??
+        `Workspace #${workspaceId}`)
+      : "Global";
+
   return (
-    <section className={cn("space-y-2 rounded-xl border p-3", TONE_CLASS.danger)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className={EYEBROW_CLASS}>Restricted actions</h3>
-          {loading ? (
-            <Spinner className="size-3.5 text-muted-foreground" />
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
+    <AccountDisclosure
+      title="Restrictions"
+      open={open}
+      onOpenChange={setOpen}
+      summary={
+        deniesQuery.isLoading ? (
+          <Spinner className="size-3.5" />
+        ) : denies.length === 0 ? (
+          "None"
+        ) : (
+          <span className="text-danger">{denies.length} active</span>
+        )
+      }
+      preview={
+        denies.length > 0 ? (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Active restrictions">
+            {denies.map((deny) => (
+              <li key={`${deny.permission_id}-${deny.workspace_id ?? "global"}`}>
+                <Badge tone="danger" className="font-normal">
+                  <span className="font-mono">{deny.name}</span>
+                  <span className="opacity-80">· {scopeLabel(deny.workspace_id)}</span>
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ) : null
+      }
+    >
+      <div className={cn("space-y-2 rounded-lg border p-3", TONE_CLASS.danger)}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor={scopeId} className="text-xs text-muted-foreground">
             Scope
           </Label>
@@ -150,7 +185,7 @@ export function AccountRestrictions({
             value={String(scope)}
             onValueChange={(value) => setScope(value === "global" ? "global" : Number(value))}
           >
-            <SelectTrigger id={scopeId} className="h-8 w-40 text-xs" disabled={!canEdit}>
+            <SelectTrigger id={scopeId} className="h-8 w-44 text-xs" disabled={!canEdit}>
               <SelectValue placeholder="Select scope" />
             </SelectTrigger>
             <SelectContent>
@@ -171,46 +206,31 @@ export function AccountRestrictions({
             </SelectContent>
           </Select>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          A checked capability is revoked in the selected scope. It beats every grant, superuser
+          included, for that exact action in that scope only.
+        </p>
+
+        {permissionsQuery.isLoading ? (
+          <Spinner className="size-4 text-muted-foreground" />
+        ) : (
+          <PermissionPicker
+            mode="list"
+            readOnly={!canEdit || toggle.isPending}
+            catalog={catalog}
+            value={denied}
+            onChange={(next) => {
+              const entry = catalog.find(
+                (candidate) => next.has(candidate.key) !== denied.has(candidate.key)
+              );
+              const permissionId = entry ? permissionIdByName.get(entry.key) : undefined;
+              if (!entry || permissionId === undefined) return;
+              toggle.mutate({ permissionId, deny: next.has(entry.key) });
+            }}
+          />
+        )}
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        A checked capability is revoked for this account in the selected scope. A restriction beats
-        every grant, superuser included, for that exact action in that scope only.
-      </p>
-
-      <PermissionPicker
-        mode="list"
-        readOnly={!canEdit || toggle.isPending}
-        catalog={catalog}
-        value={denied}
-        onChange={(next) => {
-          const entry = catalog.find(
-            (candidate) => next.has(candidate.key) !== denied.has(candidate.key)
-          );
-          const permissionId = entry ? permissionIdByName.get(entry.key) : undefined;
-          if (!entry || permissionId === undefined) return;
-          toggle.mutate({ permissionId, deny: next.has(entry.key) });
-        }}
-      />
-
-      {denies.length > 0 ? (
-        <ul className="space-y-1 border-t border-border/60 pt-2">
-          {denies.map((deny) => (
-            <li
-              key={`${deny.permission_id}-${deny.workspace_id ?? "global"}`}
-              className="flex items-center gap-2 text-xs"
-            >
-              <span className="font-mono">{deny.name}</span>
-              <span className="text-muted-foreground">
-                {deny.workspace_id
-                  ? (workspaces.find((workspace) => workspace.id === deny.workspace_id)?.name ??
-                    `Workspace #${deny.workspace_id}`)
-                  : "Global"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
+    </AccountDisclosure>
   );
 }

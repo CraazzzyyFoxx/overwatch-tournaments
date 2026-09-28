@@ -37,6 +37,21 @@ var NotificationAdminRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/notifications/retire", Queue: "rpc.app.notification_admin_retire", Body: true, Auth: edge.AuthRequired},
 }
 
+// NotificationUserAdminRoutes is the account inspector: one *other* account's
+// notification state, for the Access › Accounts screen and the People › Account
+// tab.
+//
+// Account-scoped, not workspace-scoped, so it is a separate table from
+// NotificationAdminRoutes above — the gate is the global auth_user.read /
+// auth_user.update that already governs the accounts admin, checked in
+// app-service. {id} is the account being inspected, and the worker honours it:
+// the deliberate exception to "never read a caller-supplied user id", because
+// an operator acting on somebody else has no other way to name them.
+var NotificationUserAdminRoutes = []edge.RouteSpec{
+	{Method: "GET", Pattern: "/api/v1/admin/auth-users/{id}/notifications", Queue: "rpc.app.admin_user_notifications_get", IDParam: "id", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/admin/auth-users/{id}/notifications/preferences", Queue: "rpc.app.admin_user_notification_preferences_update", IDParam: "id", Body: true, Auth: edge.AuthRequired},
+}
+
 // AnnouncementPublicRoutes serves the site-wide banner.
 //
 // AuthOptional, not AuthNone: under AuthNone the dispatcher never injects

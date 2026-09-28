@@ -3,11 +3,14 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+import DivisionIcon from "@/components/DivisionIcon";
 import { AnswerValue } from "@/components/forms/AnswerValue";
 import { BUILTIN_ANSWER_LABELS } from "@/components/balancer/registrations/_components/registrationColumnCells";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
+import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useFormatter } from "@/lib/datetime/client";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { formatAdmissionReason, type AdmissionTranslator } from "@/lib/registration/admission";
 import { ROLE_LABELS, getSubroleLabel } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
@@ -28,6 +31,7 @@ function RolesCell({
   roles: AdminRegistration["roles"];
   catalog?: SubroleCatalog;
 }>) {
+  const grid = useDivisionGrid();
   // Declared, not playable: a rankless role must stay visible (see `RolesCell`
   // in registrationColumnCells.tsx).
   const active = roles.filter((role) => role.is_declared_active);
@@ -44,6 +48,7 @@ function RolesCell({
           const subroleLabel = role.subrole
             ? getSubroleLabel(catalog, role.role, role.subrole)
             : null;
+          const division = resolveDivisionFromRank(grid, role.rank_value);
           return (
             <span
               key={`${role.role}-${role.subrole ?? "base"}-${role.priority}`}
@@ -59,7 +64,12 @@ function RolesCell({
                 <span className="text-muted-foreground">{subroleLabel}</span>
               ) : null}
               {role.rank_value != null ? (
-                <span className="tabular-nums text-muted-foreground">{role.rank_value}</span>
+                <span className="inline-flex items-center gap-1 tabular-nums text-muted-foreground">
+                  {division != null ? (
+                    <DivisionIcon division={division} width={18} height={18} className="shrink-0" />
+                  ) : null}
+                  {role.rank_value}
+                </span>
               ) : (
                 <span className="text-muted-foreground">No rank</span>
               )}

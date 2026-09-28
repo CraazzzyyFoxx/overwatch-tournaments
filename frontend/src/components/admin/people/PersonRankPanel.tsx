@@ -112,29 +112,40 @@ function rankLabel(rank: CurrentRank): string {
   return rank.tier != null ? `${division} ${rank.tier}` : division;
 }
 
-function CurrentRanksSection({ userId }: Readonly<{ userId: number }>) {
+/** The ranked rows of a player's current ranks; the cache entry the rank tab and the glance share. */
+export function useCurrentRanks(userId: number) {
   const query = useQuery({
     queryKey: adminQueryKeys.rankCurrent(userId),
     queryFn: () => rankService.getUserCurrentRanks(userId)
   });
-  const ranks = (query.data?.ranks ?? []).filter((r) => r.is_ranked);
-  if (query.isLoading || ranks.length === 0) return null;
+  return { isLoading: query.isLoading, ranks: (query.data?.ranks ?? []).filter((r) => r.is_ranked) };
+}
+
+export function CurrentRankChips({ ranks }: Readonly<{ ranks: CurrentRank[] }>) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {ranks.map((rank) => (
+        <span
+          key={`${rank.social_account_id}-${rank.role}-${rank.platform}`}
+          className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs"
+          title={`${rank.battle_tag} · ${rank.platform}`}
+        >
+          <span className="capitalize text-muted-foreground">{rank.role}</span>
+          <span className="font-medium">{rankLabel(rank)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function CurrentRanksSection({ userId }: Readonly<{ userId: number }>) {
+  const { isLoading, ranks } = useCurrentRanks(userId);
+  if (isLoading || ranks.length === 0) return null;
 
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold">Current ranks</h3>
-      <div className="flex flex-wrap gap-2">
-        {ranks.map((rank) => (
-          <span
-            key={`${rank.social_account_id}-${rank.role}-${rank.platform}`}
-            className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs"
-            title={`${rank.battle_tag} · ${rank.platform}`}
-          >
-            <span className="capitalize text-muted-foreground">{rank.role}</span>
-            <span className="font-medium">{rankLabel(rank)}</span>
-          </span>
-        ))}
-      </div>
+      <CurrentRankChips ranks={ranks} />
     </section>
   );
 }

@@ -112,8 +112,9 @@ vi.mock("@/components/RankHistory", () => ({
   default: () => <p>Rank history</p>
 }));
 vi.mock("@/stores/workspace.store", () => ({
-  useWorkspaceStore: (selector: (state: { currentWorkspaceId: number }) => unknown) =>
-    selector({ currentWorkspaceId: 1 })
+  useWorkspaceStore: (
+    selector: (state: { currentWorkspaceId: number; getCurrentWorkspace: () => undefined }) => unknown
+  ) => selector({ currentWorkspaceId: 1, getCurrentWorkspace: () => undefined })
 }));
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }

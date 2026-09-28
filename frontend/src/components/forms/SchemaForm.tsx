@@ -66,6 +66,13 @@ export interface SchemaFormProps {
   serverErrors: Record<string, string>;
   step: number;
   onStepChange: (index: number) => void;
+  /**
+   * A click on the step indicator. Backward is free; forward passes through
+   * the steps in between the way Next would, so `index` is the first of them
+   * with an objection (`blocked`) or else the step clicked. Read-only jumps
+   * anywhere — nothing on it can be answered.
+   */
+  onStepSelect: (index: number, blocked: boolean) => void;
   /** Reveal client-side objections. Off until the registrant tries to advance. */
   showErrors: boolean;
   readOnly?: boolean;
@@ -104,6 +111,7 @@ export default function SchemaForm({
   serverErrors,
   step,
   onStepChange,
+  onStepSelect,
   showErrors,
   readOnly = false,
   lockedFields,
@@ -143,18 +151,32 @@ export default function SchemaForm({
     return validateAnswer(rule, answers[field.key], context.t, answers);
   };
 
-  let stepError: string | null = null;
-  for (const field of fields) {
-    // A locked field's objection is not this viewer's to clear, so it must not
-    // hold the step: an edit that may only touch `public_notes` would be stuck
-    // behind a required question it is forbidden to answer.
-    if (lockedFields?.[field.key] !== undefined) continue;
-    const objection = objectionTo(field);
-    if (objection) {
-      stepError = objection;
-      break;
+  /** First client-side objection among `entry`'s visible fields, or `null`. */
+  const objectionOn = (entry: FormSection): string | null => {
+    for (const field of entry.fields) {
+      // A locked field's objection is not this viewer's to clear, so it must
+      // not hold the step: an edit that may only touch `public_notes` would be
+      // stuck behind a required question it is forbidden to answer.
+      if (!isVisible(field, answers) || lockedFields?.[field.key] !== undefined) continue;
+      const objection = objectionTo(field);
+      if (objection) return objection;
     }
-  }
+    return null;
+  };
+
+  const stepError = section ? objectionOn(section) : null;
+
+  const selectStep = (target: number) => {
+    if (target === index) return;
+    // Forward is Next pressed until `target`: a click must not be a way around
+    // a required question on a step in between.
+    const blocker =
+      readOnly || target < index
+        ? -1
+        : steps.slice(index, target).findIndex((entry) => objectionOn(entry) !== null);
+    if (blocker < 0) onStepSelect(target, false);
+    else onStepSelect(index + blocker, true);
+  };
 
   // Derived here rather than by each host: a renderer that needs to know which
   // roles the registration declares (the per-role rank block marks exactly
@@ -170,6 +192,7 @@ export default function SchemaForm({
         <StepIndicator
           steps={steps.map((entry) => ({ label: entry.title || entry.key }))}
           current={index}
+          onSelect={selectStep}
         />
       )}
 

@@ -6436,8 +6436,6 @@
         "retired": "Retired"
       },
       "empty": "This workspace has produced no notifications of this kind.",
-      "loadMore": "Show older",
-      "loadingMore": "Loading older…",
       "retired": "{count, plural, =0 {Nothing to retire} one {# notification retired} other {# notifications retired}}",
       "retire": {
         "action": "Retire",

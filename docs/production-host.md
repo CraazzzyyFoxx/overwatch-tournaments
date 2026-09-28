@@ -3,7 +3,9 @@
 What machine the production stack needs, and how to run it on a host with no database of
 its own: `docker-compose.production.yml` ships PostgreSQL 18 + pgBouncer behind the `db`
 profile. Moscow and the dev site keep their external `db_postgres` / `db_pgbouncer` and
-leave the profile off.
+leave the profile off. Moscow's lives in `/root/postgres/docker-compose.yml` on the host (not
+in git), tuned for its 8 vCPU / 12 GB, with 5432/6432 published on `172.17.0.1` only — the
+`host.docker.internal` the services use.
 
 ## Host requirements
 
@@ -27,7 +29,7 @@ Where the numbers come from:
   rollback until the daily [`disk-cleanup.md`](./disk-cleanup.md) cron removes them.
   Container logs are capped at 150 MB each. On top of that: the Postgres data, up to 2 GB
   of WAL (`max_wal_size`), and the nightly dump staged in `ops/backup/tmp` before upload.
-  Production runs on 77 GB and reached 94% the one time cleanup was not running.
+  Production reached 94% of its then-77 GB disk the one time cleanup was not running.
 - **SSD.** The bundled Postgres is tuned for it (`random_page_cost=1.1`,
   `effective_io_concurrency=200`).
 - **x86_64 only.** CI builds `linux/amd64` images

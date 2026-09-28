@@ -27,13 +27,14 @@ __all__ = (
     "NotificationDelete",
     "NotificationDeleteResult",
     "NotificationAdminItem",
-    "NotificationAdminPage",
     "NotificationRetire",
     "NotificationRetireResult",
     "NotificationDmGroups",
     "NotificationDmGroupsUpdate",
     "NotificationPreferencesRead",
     "NotificationPreferencesUpdate",
+    "NotificationDeliveryItem",
+    "AdminUserNotificationsRead",
     "NotificationWorkspaceConfigRead",
     "NotificationWorkspaceConfigUpdate",
 )
@@ -129,12 +130,6 @@ class NotificationAdminItem(BaseRead):
     expires_at: datetime | None = None
 
 
-class NotificationAdminPage(BaseModel):
-    items: list[NotificationAdminItem]
-    #: ``None`` on the last page; opaque, like the inbox cursor.
-    next_cursor: str | None = None
-
-
 class NotificationRetire(BaseModel):
     """Which of this workspace's notifications to take out of circulation.
 
@@ -191,6 +186,41 @@ class NotificationPreferencesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     discord_dm: NotificationDmGroupsUpdate
+
+
+class NotificationDeliveryItem(BaseRead):
+    """One row of the delivery ledger -- a message actually handed to Discord.
+
+    Skips are not recorded upstream (preference off, nothing linked), so an
+    empty list here means "we sent nothing", never "we sent something and did
+    not write it down" -- which is the whole question the account inspector is
+    opened to answer.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    channel: str
+    kind: str
+    workspace_id: int | None = None
+    notification_id: int | None = None
+    created_at: datetime
+
+
+class AdminUserNotificationsRead(BaseModel):
+    """One *other* account's notification state, for the admin inspector.
+
+    A superset of ``NotificationPreferencesRead`` rather than a sibling of it:
+    the operator's question is "why has this person not heard from us", and the
+    switches alone cannot answer it -- an unlinked Discord, a badge nobody
+    clears and an empty delivery ledger are three different diagnoses.
+    """
+
+    discord_dm: NotificationDmGroups
+    discord_linked: bool
+    #: The number this account's own bell shows -- same audience rules as their
+    #: inbox, not a global count.
+    unread_count: int
+    recent_deliveries: list[NotificationDeliveryItem] = []
 
 
 class NotificationWorkspaceConfigRead(BaseModel):

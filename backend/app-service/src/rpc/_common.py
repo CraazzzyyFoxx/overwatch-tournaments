@@ -22,6 +22,7 @@ from shared.rpc.common import (
     qbool,
     require_active,
     require_id,
+    require_permission,
     require_query_int,
     require_superuser,
 )
@@ -41,6 +42,7 @@ __all__ = (
     "gate_tournament",
     "require_active",
     "require_superuser",
+    "require_permission",
     "require_id",
     "require_query_int",
     "dump",

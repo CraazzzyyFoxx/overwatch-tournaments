@@ -30,7 +30,7 @@ BACKUP_COMPOSE = docker compose -f docker-compose.backup.yml --env-file $(BACKUP
 # hottest uncacheable route (registration/form) = ~18 rps per replica, app-svc
 # ~20 ms on live routes plus ~107 ms per response-cache miss on user profiles,
 # identity ~6-12 ms and bounded by SESSIONS, not rps (the gateway caches each
-# validate_token verdict for 30s). small = this 4 CPU / 8G box, large needs 8.
+# validate_token verdict for 30s). small = a 4 CPU / 8G box, large needs 8.
 # `make prod-up` / `make prod-scale` / GitHub release all honour PROD_SIZE so a
 # plain `docker compose up -d` cannot silently restore leftover replica counts.
 # Override a size on the CLI, e.g. make prod-up PROD_SIZE=medium

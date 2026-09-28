@@ -15,10 +15,11 @@ export const accessQueryKeys = {
   rolesByScope: (scope: KeyPart) => ["access-admin", "roles", "scope", scope] as const,
   role: (roleId: KeyPart) => ["access-admin", "roles", roleId] as const,
   roles: () => ["access-admin", "roles"] as const,
-  user: (userId: KeyPart) => ["access-admin", "user", userId] as const,
   usersAll: () => ["access-admin", "users", "all"] as const,
   userOauthConnections: (userId: KeyPart) =>
     ["access-admin", "users", userId, "oauth-connections"] as const,
+  userNotifications: (userId: KeyPart) =>
+    ["access-admin", "users", userId, "notifications"] as const,
   userDetail: (userId: KeyPart) => ["access-admin", "users", userId] as const,
   users: () => ["access-admin", "users"] as const,
 };
