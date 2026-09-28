@@ -5,6 +5,13 @@ import { useRealtimeStore } from "@/stores/realtime.store";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import type { ServerRealtimeFrame } from "@/types/realtime.types";
 
+const getAccessTokenCookie = vi.fn<() => Promise<string | undefined>>();
+const refreshAccessToken = vi.fn();
+vi.mock("@/lib/auth/tokens", () => ({
+  getAccessTokenCookie: () => getAccessTokenCookie(),
+  refreshAccessToken: () => refreshAccessToken(),
+}));
+
 class MockWebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
@@ -259,13 +266,35 @@ describe("realtime subscribed confirmations", () => {
     expect(useRealtimeStore.getState().connectionState).toBe("idle");
   });
 
-  it("opens the login modal when a subscription is denied with auth_required", () => {
+  it("re-handshakes after a refresh instead of prompting login when the session is alive", async () => {
+    getAccessTokenCookie.mockResolvedValue(undefined); // cookie expired before the reconnect
+    refreshAccessToken.mockResolvedValue({ status: "refreshed", token: "fresh" });
+    const topic = "tournament:1:balancer";
+    trackCleanup(realtimeClient.subscribe(topic, () => undefined));
+    const stale = currentSocket();
+    stale.open();
+
+    stale.receive({ op: "error", topic, code: "auth_required", message: "Log in" });
+    await vi.waitFor(() => expect(currentSocket()).not.toBe(stale));
+    expect(useAuthModalStore.getState().isOpen).toBe(false);
+
+    // Still anonymous after re-handshaking: a real denial, prompt (no reconnect loop).
+    const recovered = currentSocket();
+    recovered.open();
+    recovered.receive({ op: "error", topic, code: "auth_required", message: "Log in" });
+    expect(useAuthModalStore.getState().isOpen).toBe(true);
+    expect(currentSocket()).toBe(recovered);
+  });
+
+  it("opens the login modal when auth_required arrives and the session is dead", async () => {
+    getAccessTokenCookie.mockResolvedValue(undefined);
+    refreshAccessToken.mockResolvedValue({ status: "unauthenticated" });
     const topic = "tournament:1:balancer";
     trackCleanup(realtimeClient.subscribe(topic, () => undefined));
     currentSocket().open();
 
     currentSocket().receive({ op: "error", topic, code: "auth_required", message: "Log in" });
-    expect(useAuthModalStore.getState().isOpen).toBe(true);
+    await vi.waitFor(() => expect(useAuthModalStore.getState().isOpen).toBe(true));
   });
 
   it("does not open the login modal on a plain forbidden error", () => {

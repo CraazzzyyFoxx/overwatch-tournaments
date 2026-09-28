@@ -2,6 +2,8 @@
 
 import { useRealtimeStore } from "@/stores/realtime.store";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth/tokens";
+import { isExpiredOrNearExpiry } from "@/lib/auth/jwt";
 import type {
   ClientRealtimeFrame,
   EventFrame,
@@ -50,6 +52,8 @@ class RealtimeClient {
   private reconnectAttempt = 0;
   private nextHandlerId = 1;
   private handlersByTopic = new Map<string, TopicHandlers>();
+  private authRecovery: Promise<void> | null = null;
+  private recoveredSocket: WebSocket | null = null;
 
   subscribe<TData>(
     topic: string,
@@ -223,9 +227,9 @@ class RealtimeClient {
       }
       if (frame.code === "auth_required") {
         // The gateway distinguishes an anonymous denial (login may grant
-        // access) from a genuine forbidden. Prompt login rather than leaving
-        // the subscription silently rejected.
-        useAuthModalStore.getState().open();
+        // access) from a genuine forbidden. The socket may only LOOK anonymous
+        // though — see recoverAuth.
+        this.recoverAuth();
       }
       console.warn("Realtime subscription error", frame);
       return;
@@ -255,6 +259,37 @@ class RealtimeClient {
     }
 
     this.dispatchEvent(frame);
+  }
+
+  // The gateway authenticates a socket from the access cookie present at the
+  // handshake and closes it at that token's exp, so a reconnect regularly lands
+  // while the cookie is expired or gone (throttled background tab, page load
+  // racing the first refresh, a network blip). That socket is anonymous even
+  // though the session is alive, and prompting login there is what made users
+  // think they were being logged out every few minutes. Refresh if needed and
+  // re-handshake; prompt only when the session is dead or the re-handshake is
+  // still anonymous.
+  private recoverAuth(): void {
+    if (this.authRecovery) {
+      return; // every rejected topic reports at once
+    }
+    if (this.socket !== null && this.socket === this.recoveredSocket) {
+      useAuthModalStore.getState().open();
+      return;
+    }
+    this.authRecovery = (async () => {
+      const token = await getAccessTokenCookie();
+      const outcome = isExpiredOrNearExpiry(token) ? (await refreshAccessToken()).status : "refreshed";
+      if (outcome === "refreshed") {
+        this.reset();
+        this.recoveredSocket = this.socket;
+      } else if (outcome === "unauthenticated") {
+        useAuthModalStore.getState().open();
+      }
+      // "error" is transient: keep the session, the topic error stays surfaced.
+    })().finally(() => {
+      this.authRecovery = null;
+    });
   }
 
   private dispatchEvent(frame: EventFrame): void {
