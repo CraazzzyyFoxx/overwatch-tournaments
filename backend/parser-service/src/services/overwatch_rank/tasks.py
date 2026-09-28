@@ -35,6 +35,7 @@ rank_client = OverFastRankClient(
     base_url=config.settings.overfast_base_url,
     timeout=config.settings.overfast_timeout,
     max_retries=config.settings.overfast_max_retries,
+    proxy=config.settings.overfast_proxy_url,
 )
 
 _redis_client: redis_async.Redis | None = None
