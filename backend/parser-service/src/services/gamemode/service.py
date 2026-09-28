@@ -15,6 +15,7 @@ from shared.repository import GamemodeRepository
 from src import models, schemas
 from src.clients.overfast import OverFastCatalogClient, overfast_catalog_client
 from src.core import pagination
+from src.services.catalog_images import CatalogImageMirror, catalog_image_mirror
 
 __all__ = ("GamemodeService", "gamemode_service")
 
@@ -25,17 +26,19 @@ class GamemodeService:
         *,
         repo: GamemodeRepository = GamemodeRepository(),
         overfast: OverFastCatalogClient = overfast_catalog_client,
+        images: CatalogImageMirror = catalog_image_mirror,
     ) -> None:
         self.repo = repo
         self.overfast = overfast
+        self.images = images
 
     async def get(self, session: AsyncSession, id: int) -> models.Gamemode | None:
         return await self.repo.get(session, id)
 
-    async def get_existing_slugs(self, session: AsyncSession, slugs: list[str]) -> set[str]:
-        """Slugs among ``slugs`` that already exist, in one query (batch
-        counterpart of the per-item probe used by ``initial_create``)."""
-        return set(await self.repo.get_many_by(session, models.Gamemode.slug, slugs))
+    async def get_by_slugs(self, session: AsyncSession, slugs: list[str]) -> dict[str, models.Gamemode]:
+        """Gamemodes among ``slugs`` that already exist, keyed by slug, in one
+        query (batch counterpart of the per-item probe used by ``initial_create``)."""
+        return await self.repo.get_many_by(session, models.Gamemode.slug, slugs)
 
     async def get_by_slug(self, session: AsyncSession, slug: str) -> models.Gamemode | None:
         return await self.repo.get_by(session, slug=slug)
@@ -52,25 +55,32 @@ class GamemodeService:
         gamemodes = await self.fetch_gamemodes()
 
         # One existence query + one bulk insert instead of a get-then-create pair
-        # per gamemode.
-        existing_slugs = await self.get_existing_slugs(session, [gamemode.key for gamemode in gamemodes])
+        # per gamemode. Existing rows keep everything but `image_path`, which
+        # moves onto our bucket if it is not there yet.
+        existing = await self.get_by_slugs(session, [gamemode.key for gamemode in gamemodes])
+        # Release the read transaction before the image round-trips;
+        # expire_on_commit=False keeps the rows loaded and tracked.
+        await session.commit()
+        image_paths = await self.images.resolve_many(
+            "gamemodes",
+            {
+                gamemode.key: (getattr(existing.get(gamemode.key), "image_path", None), gamemode.icon)
+                for gamemode in gamemodes
+            },
+        )
+
         new_gamemodes: list[models.Gamemode] = []
         for gamemode in gamemodes:
-            if gamemode.key in existing_slugs:
-                continue
-            existing_slugs.add(gamemode.key)
-            new_gamemodes.append(
-                models.Gamemode(
-                    slug=gamemode.key,
-                    name=gamemode.name,
-                    image_path=gamemode.icon,
-                    description=gamemode.description,
-                )
-            )
+            gamemode_db = existing.get(gamemode.key)
+            if gamemode_db is None:
+                gamemode_db = models.Gamemode(slug=gamemode.key, name=gamemode.name, description=gamemode.description)
+                existing[gamemode.key] = gamemode_db
+                new_gamemodes.append(gamemode_db)
+            gamemode_db.image_path = image_paths[gamemode.key]
 
         if new_gamemodes:
             await self.repo.create_many(session, new_gamemodes)
-            await session.commit()
+        await session.commit()
 
 
 gamemode_service = GamemodeService()

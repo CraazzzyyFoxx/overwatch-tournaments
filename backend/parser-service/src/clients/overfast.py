@@ -53,5 +53,16 @@ class OverFastCatalogClient:
         response.raise_for_status()
         return [schemas.OverfastGamemode.model_validate(gamemode) for gamemode in response.json()]
 
+    async def fetch_image(self, url: str) -> tuple[bytes, str]:
+        """Download a catalog image by its absolute URL (OverFast's own ``/static``
+        or Blizzard's CDN), returning the bytes and their content type."""
+        response = await self._http.get(url)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "").split(";")[0].strip()
+        # It is re-published public from our bucket: an HTML error page must not be.
+        if not content_type.startswith("image/"):
+            raise ValueError(f"{url} returned {content_type or 'no content type'}, not an image")
+        return response.content, content_type
+
 
 overfast_catalog_client = OverFastCatalogClient()

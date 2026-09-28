@@ -17,6 +17,7 @@ from src import models, schemas
 from src.clients.overfast import OverFastCatalogClient, overfast_catalog_client
 from src.core import errors, pagination
 from src.domain.hero_aliases import merge_aliases
+from src.services.catalog_images import CatalogImageMirror, catalog_image_mirror
 
 __all__ = ("HeroService", "hero_service", "get_all", "CANONICAL_LOCALE", "ALIAS_LOCALES")
 
@@ -50,9 +51,11 @@ class HeroService:
         *,
         repo: HeroRepository = HeroRepository(),
         overfast: OverFastCatalogClient = overfast_catalog_client,
+        images: CatalogImageMirror = catalog_image_mirror,
     ) -> None:
         self.repo = repo
         self.overfast = overfast
+        self.images = images
 
     async def get_by_slugs(self, session: AsyncSession, slugs: list[str]) -> dict[str, models.Hero]:
         """Heroes among ``slugs`` that already exist, keyed by slug, in one query
@@ -105,10 +108,21 @@ class HeroService:
                 localized.setdefault(hero.key, set()).add(hero.name)
 
         # One existence query + one bulk insert instead of a get-then-create pair
-        # per hero. Pre-existing rows keep their name/type/image_path — only
-        # `aliases` is refreshed, and only by reassignment: JSONB does not track
-        # in-place mutation.
+        # per hero. Pre-existing rows keep their name/type; `aliases` is refreshed
+        # by reassignment (JSONB does not track in-place mutation) and
+        # `image_path` moves onto our bucket if it is not there yet.
         existing_heroes = await self.get_by_slugs(session, [hero.key for hero in canonical_heroes])
+        # Release the read transaction before the image round-trips;
+        # expire_on_commit=False keeps the rows loaded and tracked.
+        await session.commit()
+        image_paths = await self.images.resolve_many(
+            "heroes",
+            {
+                hero.key: (getattr(existing_heroes.get(hero.key), "image_path", None), hero.portrait)
+                for hero in canonical_heroes
+            },
+        )
+
         new_heroes: list[models.Hero] = []
         for hero in canonical_heroes:
             hero_db = existing_heroes.get(hero.key)
@@ -117,10 +131,10 @@ class HeroService:
                     slug=hero.key,
                     name=hero.name,
                     type=hero.role,  # type: ignore
-                    image_path=hero.portrait,
                 )
                 existing_heroes[hero.key] = hero_db
                 new_heroes.append(hero_db)
+            hero_db.image_path = image_paths[hero.key]
             hero_db.aliases = merge_aliases(
                 existing=hero_db.aliases or [],
                 localized=localized[hero.key],

@@ -52,6 +52,18 @@ class _FakeOverfastCatalogClient:
         ]
 
 
+class _FakeImageMirror:
+    """Test double for ``CatalogImageMirror``: records what it was asked to
+    resolve and answers with a bucket URL per slug."""
+
+    def __init__(self) -> None:
+        self.requests: dict[str, dict[str, tuple[str | None, str]]] = {}
+
+    async def resolve_many(self, kind: str, images: dict[str, tuple[str | None, str]]) -> dict[str, str]:
+        self.requests[kind] = images
+        return {slug: f"https://bucket/{kind}/{slug}.png" for slug in images}
+
+
 class _FakeSession:
     def __init__(self) -> None:
         self.added: list[object] = []
@@ -123,7 +135,7 @@ class HeroLocaleSyncTests(IsolatedAsyncioTestCase):
     async def test_initial_create_hits_every_locale_exactly_once(self) -> None:
         locales: list[str] = []
         session = _FakeSession()
-        service = HeroService(overfast=_FakeOverfastCatalogClient(locales))
+        service = HeroService(overfast=_FakeOverfastCatalogClient(locales), images=_FakeImageMirror())
         with mock.patch.object(service, "get_by_slugs", mock.AsyncMock(return_value={})):
             await service.initial_create(session)  # type: ignore[arg-type]
 
@@ -137,7 +149,7 @@ class HeroLocaleSyncTests(IsolatedAsyncioTestCase):
     async def test_initial_create_creates_new_heroes_with_localized_aliases(self) -> None:
         locales: list[str] = []
         session = _FakeSession()
-        service = HeroService(overfast=_FakeOverfastCatalogClient(locales))
+        service = HeroService(overfast=_FakeOverfastCatalogClient(locales), images=_FakeImageMirror())
         with mock.patch.object(service, "get_by_slugs", mock.AsyncMock(return_value={})):
             await service.initial_create(session)  # type: ignore[arg-type]
 
@@ -145,11 +157,13 @@ class HeroLocaleSyncTests(IsolatedAsyncioTestCase):
         self.assertEqual({"ana", "genji"}, set(created))
         self.assertEqual("Ana", created["ana"].name)
         self.assertEqual("support", created["ana"].type)
-        self.assertEqual("https://cdn/ana.png", created["ana"].image_path)
+        self.assertEqual("https://bucket/heroes/ana.png", created["ana"].image_path)
         self.assertEqual(["Ана", "アナ", "아나"], created["ana"].aliases)
         self.assertNotIn("Ana", created["ana"].aliases, "canonical name never lands in aliases")
 
-    async def test_initial_create_refreshes_aliases_of_existing_heroes_without_touching_the_rest(self) -> None:
+    async def test_initial_create_refreshes_aliases_and_image_of_existing_heroes_without_touching_the_rest(
+        self,
+    ) -> None:
         existing = models.Hero(
             slug="ana",
             name="Ana (stale)",
@@ -159,14 +173,18 @@ class HeroLocaleSyncTests(IsolatedAsyncioTestCase):
         )
         locales: list[str] = []
         session = _FakeSession()
-        service = HeroService(overfast=_FakeOverfastCatalogClient(locales))
+        images = _FakeImageMirror()
+        service = HeroService(overfast=_FakeOverfastCatalogClient(locales), images=images)
         with mock.patch.object(service, "get_by_slugs", mock.AsyncMock(return_value={"ana": existing})):
             await service.initial_create(session)  # type: ignore[arg-type]
 
         # Pre-existing row is not re-inserted and keeps its own columns.
         self.assertEqual(["genji"], [hero.slug for hero in session.added])
         self.assertEqual("Ana (stale)", existing.name)
-        self.assertEqual("https://cdn/old-ana.png", existing.image_path)
+        # The mirror sees the row's current image next to OverFast's, and its
+        # answer is what the row stores.
+        self.assertEqual(("https://cdn/old-ana.png", "https://cdn/ana.png"), images.requests["heroes"]["ana"])
+        self.assertEqual("https://bucket/heroes/ana.png", existing.image_path)
         # The hand-added alias survives, the localisations are appended, and the
         # canonical OverFast name is excluded.
         self.assertEqual(["Ana", "Ана", "Анка", "アナ", "아나"], existing.aliases)
