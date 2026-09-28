@@ -249,11 +249,15 @@ No service ships its own migrations — there is one Alembic project at
   result fanout and the DLQs.
 - **Redis** — scheduler leader locks, rank-collection dedup/rate-limit/cooldown keys, the cashews
   cache for impact baselines, and the realtime publish channel.
-- **S3** — match-log file storage (`logs/{tournament_id}/{filename}`).
+- **S3** — match-log file storage (`logs/{tournament_id}/{filename}`) and the catalog images
+  (`assets/overwatch/{heroes,maps,gamemodes}/{slug}.{ext}`).
 - **OverFast API** (self-hosted) — player career summaries for rank collection and the
   hero/map/gamemode catalog; the hero sync pulls all 13 Blizzard locales, one request per locale,
   and only ever adds aliases. OverFast exposes no `locale` parameter for `/maps` or `/gamemodes`,
-  so map and gamemode aliases are admin-supplied.
+  so map and gamemode aliases are admin-supplied. Every sync copies portraits, screenshots and
+  icons into S3 and stores the S3 URL (`src/services/catalog_images.py`): the site cannot load
+  images from OverFast's host. A row already on the bucket is not re-uploaded, so a hand-replaced
+  image survives the sync.
 - **Discord and Twitch APIs** — subscription entitlement verification.
 - All external calls egress through the outbound **`proxy`** container.
 
