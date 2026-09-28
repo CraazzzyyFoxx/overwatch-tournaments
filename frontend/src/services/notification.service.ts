@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/fetch";
 import type {
+  AdminUserNotifications,
   AnnouncementCreateBody,
   NotificationAdminPage,
   NotificationDeleteResult,
@@ -176,6 +177,29 @@ export default class notificationService {
     body: NotificationPreferencesUpdate
   ): Promise<NotificationPreferences> {
     return apiFetch("/api/v1/notifications/preferences", {
+      method: "PUT",
+      body,
+      skipWorkspace: true
+    }).then((response) => response.json());
+  }
+
+  /**
+   * One account's DM switches, unread badge and latest DMs, for Access. The
+   * account is the path id, not the token — the one read here that is about
+   * someone else, so it is gated by `auth_user.read` server-side.
+   */
+  static async adminUserNotifications(authUserId: number): Promise<AdminUserNotifications> {
+    return apiFetch(`/api/v1/admin/auth-users/${authUserId}/notifications`, {
+      skipWorkspace: true
+    }).then((response) => response.json());
+  }
+
+  /** Partial like `updatePreferences`; needs `auth_user.update`. Answers with the full summary. */
+  static async updateAdminUserPreferences(
+    authUserId: number,
+    body: NotificationPreferencesUpdate
+  ): Promise<AdminUserNotifications> {
+    return apiFetch(`/api/v1/admin/auth-users/${authUserId}/notifications/preferences`, {
       method: "PUT",
       body,
       skipWorkspace: true

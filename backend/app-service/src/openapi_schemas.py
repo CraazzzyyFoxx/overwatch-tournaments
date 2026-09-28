@@ -266,6 +266,11 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.notification_admin_retire": Op(
         request=schemas.NotificationRetire, response=schemas.NotificationRetireResult
     ),
+    # ── notifications admin (one account's own notification state) ─────────
+    "rpc.app.admin_user_notifications_get": Op(response=schemas.AdminUserNotificationsRead),
+    "rpc.app.admin_user_notification_preferences_update": Op(
+        request=schemas.NotificationPreferencesUpdate, response=schemas.AdminUserNotificationsRead
+    ),
     "rpc.app.active_announcements": Op(response=schemas.NotificationItem, response_array=True),
     # ── announcements admin (operator CRUD) ────────────────────────────────
     "rpc.app.announcement_list": Op(

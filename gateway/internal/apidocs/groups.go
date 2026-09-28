@@ -97,8 +97,8 @@ func Groups() (public, admin []openapi.Group) {
 			Routes: auditRoutes},
 		{Tag: "Admin: Announcements", Description: "Workspace and platform-wide announcements: publish, edit, retire.",
 			Routes: app.AnnouncementAdminRoutes},
-		{Tag: "Admin: Notifications", Description: "Notifications a workspace produced: review and retire.",
-			Routes: app.NotificationAdminRoutes},
+		{Tag: "Admin: Notifications", Description: "Notifications a workspace produced: review and retire, plus one account's notification state.",
+			Routes: concat(app.NotificationAdminRoutes, app.NotificationUserAdminRoutes)},
 	}
 	return public, admin
 }

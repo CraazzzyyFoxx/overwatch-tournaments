@@ -541,6 +541,26 @@
       },
       "summary": "Update workspace"
     },
+    "rpc.app.admin_user_notification_preferences_update": {
+      "description": "Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id \u2014 the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted group keeps its stored value and unknown group names are a 422. The edited row is the target's, never the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when the account does not exist.",
+      "request": {
+        "array": false,
+        "ref": "app.NotificationPreferencesUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.AdminUserNotificationsRead"
+      },
+      "summary": "Update one account's Discord DM preferences"
+    },
+    "rpc.app.admin_user_notifications_get": {
+      "description": "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the three effective Discord-DM switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent \u2014 it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.",
+      "response": {
+        "array": false,
+        "ref": "app.AdminUserNotificationsRead"
+      },
+      "summary": "Read one account's notification state"
+    },
     "rpc.app.announcement_create": {
       "description": "Permission: workspace `announcement.create` in that workspace for a `workspace` announcement, superuser for a `global` one. Publishes an announcement and audits it. A `workspace` one needs at least one locale plus a default_locale among the filled ones; a `global` one renders to every visitor including anonymous ones and requires every supported locale (ru and en) \u2014 a workspace grant cannot reach the platform's voice. `user` is not an accepted audience: personal notifications are written by the flows that cause them, from server-resolved recipients. 422 on a locale or audience/workspace_id mismatch.",
       "request": {
@@ -12133,6 +12153,37 @@
       "title": "AchievementTournamentLink",
       "type": "object"
     },
+    "app.AdminUserNotificationsRead": {
+      "description": "One *other* account's notification state, for the admin inspector.\n\nA superset of ``NotificationPreferencesRead`` rather than a sibling of it:\nthe operator's question is \"why has this person not heard from us\", and the\nswitches alone cannot answer it -- an unlinked Discord, a badge nobody\nclears and an empty delivery ledger are three different diagnoses.",
+      "properties": {
+        "discord_dm": {
+          "$ref": "#/components/schemas/app.NotificationDmGroups"
+        },
+        "discord_linked": {
+          "title": "Discord Linked",
+          "type": "boolean"
+        },
+        "recent_deliveries": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/app.NotificationDeliveryItem"
+          },
+          "title": "Recent Deliveries",
+          "type": "array"
+        },
+        "unread_count": {
+          "title": "Unread Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "discord_dm",
+        "discord_linked",
+        "unread_count"
+      ],
+      "title": "AdminUserNotificationsRead",
+      "type": "object"
+    },
     "app.AnnouncementCreate": {
       "additionalProperties": false,
       "properties": {
@@ -14522,6 +14573,60 @@
         "unread_count"
       ],
       "title": "NotificationDeleteResult",
+      "type": "object"
+    },
+    "app.NotificationDeliveryItem": {
+      "description": "One row of the delivery ledger -- a message actually handed to Discord.\n\nSkips are not recorded upstream (preference off, nothing linked), so an\nempty list here means \"we sent nothing\", never \"we sent something and did\nnot write it down\" -- which is the whole question the account inspector is\nopened to answer.",
+      "properties": {
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "notification_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notification Id"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "id",
+        "channel",
+        "kind",
+        "created_at"
+      ],
+      "title": "NotificationDeliveryItem",
       "type": "object"
     },
     "app.NotificationDmGroups": {

@@ -128,6 +128,26 @@ export interface NotificationPreferencesUpdate {
   discord_dm: Partial<Record<NotificationGroup, boolean>>;
 }
 
+/** One DM handed to the bot for an account (`notification_delivery`); sends only, never skips. */
+export interface NotificationDeliveryItem {
+  id: number;
+  channel: string;
+  kind: string;
+  workspace_id: number | null;
+  notification_id: number | null;
+  created_at: string;
+}
+
+/**
+ * `GET /api/v1/admin/auth-users/{id}/notifications` — another account's DM
+ * switches (effective, like the self read), the badge its bell shows, and the
+ * last ten DMs actually sent. The PUT sibling answers with the same shape.
+ */
+export interface AdminUserNotifications extends NotificationPreferences {
+  unread_count: number;
+  recent_deliveries: NotificationDeliveryItem[];
+}
+
 /**
  * `GET/PUT /api/v1/workspaces/{id}/notification-config`.
  *

@@ -371,10 +371,11 @@ class NotificationRepository(BaseRepository[models.Notification]):
 class NotificationDeliveryRepository(BaseRepository[models.NotificationDelivery]):
     """The ledger that makes an outside send happen once.
 
-    One method, because the ledger has exactly one question: "am I the one who
-    gets to send this?". Asking and answering it in a single statement is the
-    point -- a SELECT-then-INSERT would let a redelivered event slip between
-    the two.
+    ``claim`` is the write half and the reason the table exists: asking "am I
+    the one who gets to send this?" and answering it in a single statement is
+    the point -- a SELECT-then-INSERT would let a redelivered event slip
+    between the two. :meth:`recent_for_targets` is the read half, for the admin
+    account inspector.
     """
 
     def __init__(self) -> None:
@@ -414,6 +415,31 @@ class NotificationDeliveryRepository(BaseRepository[models.NotificationDelivery]
         )
         result = await session.execute(statement)
         return result.scalar_one_or_none() is not None
+
+    async def recent_for_targets(
+        self,
+        session: AsyncSession,
+        *,
+        channel: str,
+        targets: Sequence[str],
+        limit: int,
+    ) -> list[models.NotificationDelivery]:
+        """The newest sends on one channel to any of these targets, newest first.
+
+        ``targets`` empty means the account has nothing connected on that
+        channel, which is an empty answer rather than an unfiltered one: an
+        ``IN ()`` that degraded into "every delivery on the platform" would put
+        strangers' sends in an operator's account inspector.
+        """
+        if not targets:
+            return []
+        result = await session.execute(
+            self.select()
+            .where(self.model.channel == channel, self.model.target.in_(tuple(targets)))
+            .order_by(self.model.created_at.desc(), self.model.id.desc())
+            .limit(limit),
+        )
+        return list(result.scalars().all())
 
 
 class NotificationPreferenceRepository(BaseRepository[models.NotificationPreference]):

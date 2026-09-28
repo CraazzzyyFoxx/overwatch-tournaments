@@ -73,6 +73,7 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	d.Register(mux, app.AnnouncementPublicRoutes)
 	d.Register(mux, app.AnnouncementAdminRoutes)
 	d.Register(mux, app.NotificationAdminRoutes)
+	d.Register(mux, app.NotificationUserAdminRoutes)
 	mux.Handle("/api/v1/achievements/", d.Subtree(app.AchievementsSubtreeRoutes))
 	// parser domains folded into /api/v1. The achievement-rule admin subtree mounts
 	// at the shared /api/v1/admin/ws/ prefix; tournament's balancer-statuses routes

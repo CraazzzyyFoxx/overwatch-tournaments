@@ -3,7 +3,7 @@
 // The person hub (People › one identity). What is pinned here:
 //  1. the `user.read` gate — the hub refuses instead of rendering empty tabs;
 //  2. `?tab=` is the whole tab state: a deep link opens that tab directly and
-//     an unknown value falls back to Identity;
+//     an unknown value falls back to Profile;
 //  3. the detail query lands under the EXACT key `breadcrumb-registry.ts`
 //     declares for the `people` segment, which is the only reason the crumb
 //     reads a person's name instead of "Details";
@@ -326,11 +326,11 @@ describe("person hub", () => {
     );
   });
 
-  it("defaults to Identity and never fetches another tab's data", async () => {
+  it("defaults to Profile and never fetches another tab's data", async () => {
     const { container } = await mount();
-    await waitFor(() => container.textContent?.includes("Social identities"), "the identity tab");
+    await waitFor(() => container.textContent?.includes("Social identities"), "the profile tab");
 
-    expect(activeTab()).toBe("Identity");
+    expect(activeTab()).toBe("Profile");
     expect(getUserTournaments).not.toHaveBeenCalled();
   });
 
@@ -343,11 +343,11 @@ describe("person hub", () => {
     expect(getUserTournaments).toHaveBeenCalledWith(42, 1);
   });
 
-  it("falls back to Identity for a tab that does not exist", async () => {
+  it("falls back to Profile for a tab that does not exist", async () => {
     window.history.replaceState(null, "", "/admin/people/42?tab=nonsense");
     await mount();
 
-    expect(activeTab()).toBe("Identity");
+    expect(activeTab()).toBe("Profile");
   });
 
   it("orders the participation columns name-first and pins the name", async () => {

@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AccountInspector } from "@/components/admin/access/AccountInspector";
+import { accountEmail, accountTitle } from "@/components/admin/access/AccountCard";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
@@ -24,6 +25,15 @@ import type { AuthAdminUser } from "@/types/rbac.types";
 import { accessQueryKeys } from "@/lib/access/query-keys";
 
 const PAGE_SIZE = 15;
+
+/** Under the inspector title: the login name, when the title is the player, and a real email. */
+function accountSubtitle(account: AuthAdminUser): string | undefined {
+  const parts = [
+    accountTitle(account) === account.username ? null : `@${account.username}`,
+    accountEmail(account)
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
 
 /**
  * Auth accounts (T2, F15) — who can sign in, and with what.
@@ -44,7 +54,7 @@ export default function AccessAdminAccountsPage() {
 
   const canReadRoles = hasPermission("role.read");
   const canAssignRoles = hasPermission("role.update") && canReadRoles;
-  const canManageLinkedPlayers = hasPermission("auth_user.update");
+  const canUpdateAccount = hasPermission("auth_user.update");
   // Same gate as the People route: a workspace-scoped `user.read` opens it.
   const canReadPeople = canAccessPermission("user.read");
 
@@ -256,8 +266,8 @@ export default function AccessAdminAccountsPage() {
       <Inspector
         openId={openRow ? openId : null}
         onClose={() => setParams({ id: null })}
-        title={openRow ? openRow.email : ""}
-        subtitle={openRow ? `@${openRow.username}` : undefined}
+        title={openRow ? accountTitle(openRow) : ""}
+        subtitle={openRow ? accountSubtitle(openRow) : undefined}
         onPrev={
           openIndex > 0 ? () => setParams({ id: String(pageRows[openIndex - 1].id) }) : undefined
         }
@@ -272,9 +282,8 @@ export default function AccessAdminAccountsPage() {
             key={openRow.id}
             userId={openRow.id}
             canAssignRoles={canAssignRoles}
-            canManageLinkedPlayers={canManageLinkedPlayers}
+            canUpdateAccount={canUpdateAccount}
             canReadPeople={canReadPeople}
-            roles={roles}
           />
         ) : null}
       </Inspector>
