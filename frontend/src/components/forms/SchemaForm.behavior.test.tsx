@@ -152,6 +152,10 @@ function Harness({
         serverErrors={serverErrors}
         step={step}
         onStepChange={setStep}
+        onStepSelect={(index, blocked) => {
+          setStep(index);
+          setShowErrors(blocked);
+        }}
         showErrors={showErrors}
         footer={({ isLast, stepError }) => (
           <button
@@ -194,6 +198,12 @@ function click(selector: string, index = 0) {
     el.dispatchEvent(new testWindow.MouseEvent("click", { bubbles: true }) as unknown as Event);
   });
 }
+
+/** Position of the step indicator's button for `title` among all buttons. */
+const stepButton = (title: string) =>
+  Array.from(container.querySelectorAll("button")).findIndex((el) =>
+    el.textContent?.includes(title),
+  );
 
 describe("SchemaForm", () => {
   it("does not offer a section whose only field is hidden", () => {
@@ -274,6 +284,21 @@ describe("SchemaForm", () => {
     expect(control).not.toBeNull();
     const describedBy = control?.getAttribute("aria-describedby");
     expect(container.querySelector(`#${describedBy}`)?.textContent).toBe("invalid_option");
+  });
+
+  it("moves on a step click, but never past a step Next would refuse", () => {
+    mount({ initial: { reveal: true } });
+
+    // `vk` is blank: the jump stops on the step holding it and says why.
+    click("button", stepButton("Extra section"));
+    expect(reachedStep()).toBe(0);
+    expect(container.querySelector('input[aria-invalid="true"]')).not.toBeNull();
+
+    mount({ initial: { reveal: true, vk: "x" } });
+    click("button", stepButton("Extra section"));
+    expect(reachedStep()).toBe(1);
+    click("button", stepButton("Main section"));
+    expect(reachedStep()).toBe(0);
   });
 });
 
