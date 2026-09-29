@@ -30,9 +30,13 @@ export type BalancerPageCollections = {
 };
 
 export function buildBalancerPageCollections(
-  registrations: AdminRegistration[],
+  allRegistrations: AdminRegistration[],
   divisionGrid: DivisionGrid,
 ): BalancerPageCollections {
+  // Only approved registrations belong to the balancer, the same rule the
+  // backend pool uses (`pool_only`): pending, rejected and withdrawn rows are
+  // neither pool candidates nor "excluded" rows to triage, so they never list.
+  const registrations = allRegistrations.filter(isRegistrationAvailableForBalancer);
   const registrationsById = new Map(
     registrations.map((registration) => [registration.id, registration]),
   );
@@ -40,16 +44,14 @@ export function buildBalancerPageCollections(
     createSyntheticPlayerFromRegistration(registration, divisionGrid),
   );
   const playersById = new Map(players.map((player) => [player.id, player]));
-  const applications = registrations
-    .filter((registration) => isRegistrationAvailableForBalancer(registration))
-    .map((registration) =>
-      createSyntheticApplicationFromRegistration(
-        registration,
-        playersById.get(registration.id)?.is_in_pool
-          ? playersById.get(registration.id) ?? null
-          : null,
-      ),
-    );
+  const applications = registrations.map((registration) =>
+    createSyntheticApplicationFromRegistration(
+      registration,
+      playersById.get(registration.id)?.is_in_pool
+        ? playersById.get(registration.id) ?? null
+        : null,
+    ),
+  );
   const applicationsById = new Map(
     applications.map((application) => [application.id, application]),
   );

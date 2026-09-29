@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { replaceVariantPayload, upsertSavedVariant } from "./balancer-page-selectors";
+import {
+  buildBalancerPageCollections,
+  replaceVariantPayload,
+  upsertSavedVariant,
+} from "./balancer-page-selectors";
 import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
-import type { InternalBalancePayload } from "@/types/balancer-admin.types";
+import { DEFAULT_DIVISION_GRID } from "@/lib/divisions/grid";
+import type { AdminRegistration, InternalBalancePayload } from "@/types/balancer-admin.types";
 
 function createPayload(teamName: string): InternalBalancePayload {
   return {
@@ -68,5 +73,44 @@ describe("upsertSavedVariant", () => {
 
     expect(saved.dirty).toBeUndefined();
     expect(saved.payload.teams[0].name).toBe("Team A");
+  });
+});
+
+describe("buildBalancerPageCollections", () => {
+  function registration(id: number, status: string): AdminRegistration {
+    return {
+      id,
+      tournament_id: 60,
+      user_id: id,
+      battle_tag: `Player${id}#1000`,
+      battle_tag_normalized: `player${id}#1000`,
+      display_name: null,
+      answers: {},
+      roles: [],
+      is_flex: false,
+      status,
+      balancer_status: "ready",
+      balancer_status_meta: { excludes_from_balancer: false, excludes_from_ready: false },
+      deleted_at: null,
+      submitted_at: null,
+      reviewed_at: null,
+      admin_notes: null,
+    } as unknown as AdminRegistration;
+  }
+
+  it("lists only approved registrations, neither pooling nor excluding the rest", () => {
+    const collections = buildBalancerPageCollections(
+      [
+        registration(1, "approved"),
+        registration(2, "withdrawn"),
+        registration(3, "rejected"),
+        registration(4, "pending"),
+      ],
+      DEFAULT_DIVISION_GRID,
+    );
+
+    expect(collections.allPlayerValidationStates.map((state) => state.player.id)).toEqual([1]);
+    expect(collections.poolPlayers.map((player) => player.id)).toEqual([1]);
+    expect([...collections.registrationsById.keys()]).toEqual([1]);
   });
 });
