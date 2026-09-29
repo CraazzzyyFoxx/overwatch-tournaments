@@ -456,6 +456,10 @@ class BalancerRegistrationRead(BaseRead):
     checked_in_by_username: str | None = None
     deleted_at: datetime | None = None
     submitted_at: datetime | None = None
+    #: Signed up after the registration window's ``ends_at``; same predicate as
+    #: the public ``RegistrationRead.submitted_late``. ``False`` when the row's
+    #: tournament was not eager-loaded.
+    submitted_late: bool = False
     reviewed_at: datetime | None = None
     reviewed_by_username: str | None = None
     balancer_profile_overridden_at: datetime | None = None

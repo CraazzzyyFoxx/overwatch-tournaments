@@ -11,6 +11,7 @@ import {
   AdmissionStatusBadge,
   BalancerStatusBadge,
   CheckInStatusBadge,
+  LateSignUpBadge,
   ProfileStatusBadge,
   SubscriptionStatusBadge,
   RegistrationStatusBadge,
@@ -241,15 +242,7 @@ export function buildParticipantColumns(
     render: (reg) => (
       <div className="flex flex-col items-center gap-1">
         <RegistrationStatusBadge status={reg.status} meta={reg.status_meta} />
-        {reg.submitted_late ? (
-          <span
-            data-row-late="true"
-            title={t("tournamentDetail.participants.lateHint")}
-            className="rounded-full border border-[color:var(--aqt-border)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]"
-          >
-            {t("tournamentDetail.participants.lateBadge")}
-          </span>
-        ) : null}
+        {reg.submitted_late ? <LateSignUpBadge data-row-late="true" /> : null}
       </div>
     ),
   });

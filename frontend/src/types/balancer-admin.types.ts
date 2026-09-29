@@ -516,6 +516,8 @@ export interface AdminRegistration {
   checked_in_by_username: string | null;
   deleted_at: string | null;
   submitted_at: string | null;
+  /** Signed up after the registration window closed (late sign-ups allowed). */
+  submitted_late: boolean;
   reviewed_at: string | null;
   reviewed_by_username: string | null;
   balancer_profile_overridden_at: string | null;

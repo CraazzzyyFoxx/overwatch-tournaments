@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { StatusDot } from "@/components/ui/status-dot";
+import { LateSignUpBadge, OnCallBadge } from "@/components/status/RegistrationBadges";
 import { cn, hexToRgba } from "@/lib/utils";
 import { activeRequirements, formatAdmissionReason, formatRequirementName } from "@/lib/registration/admission";
 import { formatShortfall } from "@/lib/registration/team-shortfall";
@@ -611,22 +612,9 @@ function MyRegistrationCard({
                   })}
                 </span>
               ) : null}
-              {isReserve ? (
-                <span
-                  data-registration-reserve="true"
-                  className="rounded-full border border-[color:color-mix(in_srgb,var(--aqt-blue)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_12%,transparent)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-blue)]"
-                >
-                  {t("registration.reserve.badge")}
-                </span>
-              ) : null}
+              {isReserve ? <OnCallBadge data-registration-reserve="true" /> : null}
               {registration.submitted_late ? (
-                <span
-                  data-registration-late="true"
-                  title={t("tournamentDetail.participants.lateHint")}
-                  className="rounded-full border border-[color:var(--aqt-border)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]"
-                >
-                  {t("tournamentDetail.participants.lateBadge")}
-                </span>
+                <LateSignUpBadge data-registration-late="true" />
               ) : null}
             </div>
             <h3 className="mt-0.5 text-lg font-bold leading-tight text-[color:var(--aqt-fg)]">

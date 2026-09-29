@@ -151,6 +151,9 @@ class RegistrationLifecycleService:
                 selectinload(models.BalancerRegistration.google_sheet_binding).selectinload(
                     models.BalancerRegistrationGoogleSheetBinding.feed
                 ),
+                # One row for every registration: its phase schedule is what
+                # ``submitted_late`` is measured against.
+                selectinload(models.BalancerRegistration.tournament),
                 # serialize_registration derives user_id from workspace_member.player_id
                 # and the team brief from registration_team; both must be eager.
                 *registration_read_loaders(),

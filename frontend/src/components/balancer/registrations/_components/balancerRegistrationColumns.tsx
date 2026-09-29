@@ -9,6 +9,8 @@ import {
   SubscriptionStatusBadge,
   BalancerStatusBadge,
   CheckInStatusBadge,
+  LateSignUpBadge,
+  OnCallBadge,
   ProfileStatusBadge,
   RegistrationStatusBadge,
 } from "@/components/status/RegistrationBadges";
@@ -30,7 +32,6 @@ import {
   DEFAULT_VISIBLE_ANSWER_KEYS,
   ExclusionCell,
   ParticipantCell,
-  ReserveBadge,
   ReviewedCell,
   RolesCell,
   SourceCell,
@@ -172,7 +173,10 @@ export function buildBalancerRegistrationColumns(
       filterFn: (row: Row<AdminRegistration>, _columnId: string, values: string[]) =>
         values.length === 0 || values.includes(row.original.status),
       cell: ({ row }) => (
-        <RegistrationStatusBadge status={row.original.status} meta={row.original.status_meta} />
+        <div className="flex flex-col items-center gap-1">
+          <RegistrationStatusBadge status={row.original.status} meta={row.original.status_meta} />
+          {row.original.submitted_late ? <LateSignUpBadge /> : null}
+        </div>
       ),
       meta: columnMeta<AdminRegistration>({
         category: "core",
@@ -184,7 +188,8 @@ export function buildBalancerRegistrationColumns(
           mode: "multi",
           options: statusOptions,
         },
-        searchValue: (registration) => registration.status,
+        searchValue: (registration) =>
+          `${registration.status}${registration.submitted_late ? " late" : ""}`,
       }),
     },
     {
@@ -215,7 +220,7 @@ export function buildBalancerRegistrationColumns(
             status={row.original.balancer_status}
             meta={row.original.balancer_status_meta}
           />
-          {row.original.answers?.reserve === true ? <ReserveBadge /> : null}
+          {row.original.answers?.reserve === true ? <OnCallBadge /> : null}
         </div>
       ),
       meta: columnMeta<AdminRegistration>({

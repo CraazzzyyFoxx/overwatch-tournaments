@@ -22339,6 +22339,11 @@ export interface components {
              */
             submitted_at: string | null;
             /**
+             * Submitted Late
+             * @default false
+             */
+            submitted_late: boolean;
+            /**
              * Subscription Outcome
              * @default null
              */

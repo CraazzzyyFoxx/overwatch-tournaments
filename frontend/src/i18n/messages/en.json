@@ -139,6 +139,8 @@
     "reserve": "On call",
     "notReserve": "Not on call",
     "reserveHint": "Plays as usual, and is fine being called in if somebody drops or they cannot start on time",
+    "lateSignUp": "Late sign-up",
+    "lateSignUpHint": "Signed up after registration closed.",
     "notCheckedIn": "Not checked in",
     "profileOpen": "Profile open",
     "profileClosed": "Profile closed",
@@ -303,7 +305,6 @@
       }
     },
     "reserve": {
-      "badge": "On call",
       "explainer": "You play as usual. You have also said the organizers can call you in if somebody drops or you cannot make the start.",
       "lateNotice": "Registration is closed — your sign-up will be marked as a late one. It changes nothing else about it."
     },
@@ -2364,8 +2365,6 @@
     },
     "participants": {
       "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
-      "lateBadge": "Late sign-up",
-      "lateHint": "Signed up after registration closed.",
       "hidden": {
         "title": "Participants list hidden",
         "description": "The organizer publishes only the size of the field and how it splits by role. Your own registration is still shown above."

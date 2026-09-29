@@ -259,24 +259,6 @@ export function ReviewedCell({ registration }: Readonly<{ registration: AdminReg
   );
 }
 
-/**
- * "Call me in if somebody drops or I cannot make the start" — the registrant's
- * own availability note, not a pool verdict.
- *
- * It rides beside the balancer chip rather than replacing it because the two
- * answer different questions: the chip says where the row stands in the pool,
- * this says who the organizer can ring when a slot opens up mid-tournament. A
- * player wearing it plays like anybody else.
- */
-export function ReserveBadge() {
-  const t = useTranslations();
-  return (
-    <StatusPill tone="info" title={t("common.reserveHint")}>
-      {t("common.reserve")}
-    </StatusPill>
-  );
-}
-
 export function ExclusionCell({ registration }: Readonly<{ registration: AdminRegistration }>) {
   if (registration.balancer_status !== "excluded") {
     return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
