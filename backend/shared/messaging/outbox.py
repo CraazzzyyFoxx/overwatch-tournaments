@@ -62,7 +62,7 @@ async def publish_pending_outbox_events(
     commit: bool = True,
 ) -> int:
     now = now or datetime.now(UTC)
-    result = await session.execute(
+    next_due = (
         select(EventOutbox)
         .where(
             EventOutbox.status.in_(PENDING_STATUSES),
@@ -72,13 +72,20 @@ async def publish_pending_outbox_events(
             ),
         )
         .order_by(EventOutbox.created_at.asc(), EventOutbox.id.asc())
-        .limit(limit)
+        .limit(1)
         .with_for_update(skip_locked=True)
     )
-    rows = list(result.scalars().all())
     published = 0
 
-    for row in rows:
+    # One row per lock, never a batch under one: the per-row commit below ends
+    # the transaction and every lock it held, so the rest of a batch would be
+    # free for another replica's drain to take and publish a second time
+    # (duplicate Discord DMs). A published or backed-off row stops matching, so
+    # each pass takes the oldest row nobody else is publishing.
+    for _ in range(limit):
+        row = await session.scalar(next_due)
+        if row is None:
+            break
         try:
             await broker.publish(
                 row.payload_json,

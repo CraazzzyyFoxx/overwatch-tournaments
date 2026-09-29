@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,25 +15,32 @@ from shared.messaging.outbox import enqueue_outbox_event, publish_pending_outbox
 from shared.schemas.events import EncounterCompletedEvent  # noqa: E402
 
 
-class _ScalarResult:
-    def __init__(self, rows: list[object]) -> None:
+class _Db:
+    """The outbox rows plus who holds their row locks: what two drains contend on."""
+
+    def __init__(self, rows: list[object], *, now: datetime | None = None) -> None:
         self.rows = rows
+        self.now = now
+        self.locks: dict[int, _Session] = {}
 
-    def all(self) -> list[object]:
-        return self.rows
-
-
-class _Result:
-    def __init__(self, rows: list[object]) -> None:
-        self.rows = rows
-
-    def scalars(self) -> _ScalarResult:
-        return _ScalarResult(self.rows)
+    def lock_due(self, session: _Session, limit: int) -> list[object]:
+        """``SELECT ... FOR UPDATE SKIP LOCKED LIMIT n``: due rows nobody else holds."""
+        now = self.now or datetime.now(UTC)
+        due = [
+            row
+            for row in self.rows
+            if row.status in {"pending", "failed"}
+            and (row.next_attempt_at is None or row.next_attempt_at <= now)
+            and self.locks.get(row.id, session) is session
+        ][:limit]
+        for row in due:
+            self.locks[row.id] = session
+        return due
 
 
 class _Session:
-    def __init__(self, rows: list[object] | None = None) -> None:
-        self.rows = rows or []
+    def __init__(self, db: _Db | None = None) -> None:
+        self.db = db or _Db([])
         self.added: list[object] = []
         self.flushed = 0
         self.committed = 0
@@ -44,11 +52,31 @@ class _Session:
         self.flushed += 1
 
     async def commit(self) -> None:
+        # The transaction ends, and with it every row lock it took.
         self.committed += 1
+        self.db.locks = {row_id: owner for row_id, owner in self.db.locks.items() if owner is not self}
 
-    async def execute(self, _statement) -> _Result:
-        publishable = [row for row in self.rows if row.status in {"pending", "failed"}]
-        return _Result(publishable)
+    async def scalar(self, _statement) -> object | None:
+        taken = self.db.lock_due(self, limit=1)
+        return taken[0] if taken else None
+
+
+def _row(row_id: int, *, now: datetime | None = None) -> SimpleNamespace:
+    now = now or datetime.now(UTC)
+    return SimpleNamespace(
+        id=row_id,
+        event_id=f"event-{row_id}",
+        event_type="encounter_completed",
+        exchange="tournament.events",
+        routing_key="tournament.encounter.completed",
+        payload_json={"event_id": f"event-{row_id}", "event_type": "encounter_completed"},
+        status="pending",
+        attempts=0,
+        next_attempt_at=now,
+        created_at=now,
+        published_at=None,
+        last_error=None,
+    )
 
 
 class OutboxTests(IsolatedAsyncioTestCase):
@@ -77,21 +105,8 @@ class OutboxTests(IsolatedAsyncioTestCase):
         self.assertEqual(1, session.flushed)
 
     async def test_publish_pending_marks_success_and_skips_repeated_drain(self) -> None:
-        row = SimpleNamespace(
-            id=1,
-            event_id="event-1",
-            event_type="encounter_completed",
-            exchange="tournament.events",
-            routing_key="tournament.encounter.completed",
-            payload_json={"event_id": "event-1", "event_type": "encounter_completed"},
-            status="pending",
-            attempts=0,
-            next_attempt_at=datetime.now(UTC),
-            created_at=datetime.now(UTC),
-            published_at=None,
-            last_error=None,
-        )
-        session = _Session([row])
+        row = _row(1)
+        session = _Session(_Db([row]))
         broker = SimpleNamespace(publish=AsyncMock())
 
         first = await publish_pending_outbox_events(session, broker, commit=True)
@@ -106,21 +121,8 @@ class OutboxTests(IsolatedAsyncioTestCase):
 
     async def test_publish_failure_leaves_retryable_row(self) -> None:
         now = datetime.now(UTC)
-        row = SimpleNamespace(
-            id=1,
-            event_id="event-1",
-            event_type="encounter_completed",
-            exchange="tournament.events",
-            routing_key="tournament.encounter.completed",
-            payload_json={"event_id": "event-1", "event_type": "encounter_completed"},
-            status="pending",
-            attempts=0,
-            next_attempt_at=now,
-            created_at=now,
-            published_at=None,
-            last_error=None,
-        )
-        session = _Session([row])
+        row = _row(1, now=now)
+        session = _Session(_Db([row], now=now))
         broker = SimpleNamespace(publish=AsyncMock(side_effect=RuntimeError("broker down")))
 
         published = await publish_pending_outbox_events(session, broker, now=now, commit=True)
@@ -131,3 +133,27 @@ class OutboxTests(IsolatedAsyncioTestCase):
         self.assertEqual("broker down", row.last_error)
         self.assertGreater(row.next_attempt_at, now)
         self.assertEqual(1, session.committed)
+
+    async def test_two_drains_publish_each_event_once(self) -> None:
+        """Every tournament-service replica drains the shared table each second.
+
+        A drain must only publish rows it still holds the lock on: once it has
+        committed its first row, the rest of a batch it selected is free for the
+        other replica to take -- and publish a second time.
+        """
+        db = _Db([_row(row_id) for row_id in range(1, 6)])
+        published: list[str] = []
+
+        async def publish(payload, *_args, **_kwargs) -> None:
+            published.append(payload["event_id"])
+            await asyncio.sleep(0)  # a real publish awaits the broker; the other drain runs meanwhile
+
+        broker = SimpleNamespace(publish=publish)
+        first = asyncio.create_task(publish_pending_outbox_events(_Session(db), broker))
+        await asyncio.sleep(0)  # the first drain holds its rows and is mid-publish
+        while not first.done():
+            await publish_pending_outbox_events(_Session(db), broker)
+            await asyncio.sleep(0)
+        await first
+
+        self.assertCountEqual(published, [f"event-{row_id}" for row_id in range(1, 6)])

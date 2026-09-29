@@ -244,7 +244,10 @@ A service never publishes to RabbitMQ from inside a request. It calls
 in the *same transaction* as the mutation, so "the row changed" and "the world was told" commit
 or roll back together. `serve.py`'s scheduler drains the table with
 `publish_pending_outbox_events` (`tournament-service/serve.py`'s `event_outbox_drain`), retrying
-failures with exponential backoff capped at 300s.
+failures with exponential backoff capped at 300s. Every tournament-service replica runs that
+drain, so it locks (`FOR UPDATE SKIP LOCKED`) and commits one row at a time: a batch selected
+under one lock is released by the first per-row commit and gets published again by the other
+replica.
 
 - Event payloads are Pydantic models in `shared/schemas/events.py` and **must** carry
   `event_id` — `enqueue_outbox_event` raises `ValueError` without one. That id is the
