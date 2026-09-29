@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import io
+import json
+import time
 from typing import Any
 
 import discord
@@ -40,6 +43,54 @@ _DIRECTORY_CODES = {
     "invalid": "bad_request",
     "error": "internal",
 }
+
+#: How long a repeat of the same message to the same place is dropped. Every
+#: duplicate the pipeline can produce -- a redelivered command, an outbox row
+#: published twice, two racing notification rows for one event -- lands within
+#: seconds; a minute is still short enough not to refuse a deliberate re-post.
+DEBOUNCE_SECONDS = 60.0
+
+_DEBOUNCED_ACTIONS = frozenset({"post_message", "send_dm"})
+
+#: Where it goes and what it says. Not ``event_id``: a second notification row
+#: for the same event renders the same card under a fresh event id.
+_MESSAGE_FIELDS = {"action", "channel_id", "discord_user_id", "content", "embed", "image_b64", "card"}
+
+
+def _message_key(event: DiscordCommandEvent) -> str:
+    body = event.model_dump(mode="json", include=_MESSAGE_FIELDS)
+    return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+
+
+class _Debounce:
+    """Message keys sent within the last ``window`` seconds.
+
+    ``ponytail:`` process memory: discord-worker runs as one replica (one
+    gateway session), and a restart forgets the window. Move it to Redis
+    ``SET NX EX`` if the worker is ever scaled out.
+    """
+
+    def __init__(self, window: float) -> None:
+        self._window = window
+        # Insertion order is expiry order: every entry gets the same window.
+        self._until: dict[str, float] = {}
+
+    def claim(self, key: str) -> bool:
+        """True when ``key`` was not sent within the window -- and now it is."""
+        now = time.monotonic()
+        while self._until:
+            oldest = next(iter(self._until))
+            if self._until[oldest] > now:
+                break
+            del self._until[oldest]
+        if key in self._until:
+            return False
+        self._until[key] = now + self._window
+        return True
+
+    def release(self, key: str) -> None:
+        """The send failed and is requeued: its retry must not count as a repeat."""
+        self._until.pop(key, None)
 
 
 def _directory_reply(outcome: DirectoryOutcome) -> dict[str, Any]:
@@ -113,6 +164,7 @@ class DiscordRabbitGateway:
         self._result_waiter = result_waiter
         self._bot = bot
         self._broker: RabbitBroker | None = None
+        self._debounce = _Debounce(DEBOUNCE_SECONDS)
 
     async def start(self) -> None:
         if not self._settings.broker_url:
@@ -156,6 +208,15 @@ class DiscordRabbitGateway:
                     observation.set_status("invalid")
                     logger.error(f"❌ Invalid discord command payload: {e}")
                     await msg.reject()  # Send to DLQ
+                    return
+
+                debounce_key = _message_key(event) if event.action in _DEBOUNCED_ACTIONS else None
+                if debounce_key is not None and not self._debounce.claim(debounce_key):
+                    observation.set_status("debounced")
+                    logger.warning(
+                        f"⚠️ Dropped a repeated {event.action}: same target and content within {DEBOUNCE_SECONDS:.0f}s"
+                    )
+                    await msg.ack()
                     return
 
                 try:
@@ -288,6 +349,8 @@ class DiscordRabbitGateway:
                     await msg.ack()
 
                 except Exception as e:
+                    if debounce_key is not None:
+                        self._debounce.release(debounce_key)
                     logger.error(f"❌ Error handling discord command: {e}")
                     await msg.nack()  # Requeue for retry
                     raise
