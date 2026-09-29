@@ -3,17 +3,14 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-import DivisionIcon from "@/components/DivisionIcon";
-import { AnswerValue } from "@/components/forms/AnswerValue";
+import { AnswerValue, RoleRankList } from "@/components/forms/AnswerValue";
 import { BUILTIN_ANSWER_LABELS } from "@/components/balancer/registrations/_components/registrationColumnCells";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useFormatter } from "@/lib/datetime/client";
-import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { formatAdmissionReason, type AdmissionTranslator } from "@/lib/registration/admission";
-import { ROLE_LABELS, getSubroleLabel } from "@/lib/roster/roles";
-import { cn } from "@/lib/utils";
+import { getSubroleLabel } from "@/lib/roster/roles";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { FormField } from "@/types/forms.types";
 import type { SubroleCatalog } from "@/types/registration.types";
@@ -40,43 +37,18 @@ function RolesCell({
   }
 
   return (
-    <span className="flex flex-wrap gap-1.5">
-      {active
+    <RoleRankList
+      grid={grid}
+      entries={active
         .slice()
         .sort((left, right) => left.priority - right.priority)
-        .map((role) => {
-          const subroleLabel = role.subrole
-            ? getSubroleLabel(catalog, role.role, role.subrole)
-            : null;
-          const division = resolveDivisionFromRank(grid, role.rank_value);
-          return (
-            <span
-              key={`${role.role}-${role.subrole ?? "base"}-${role.priority}`}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs",
-                !role.is_active && "opacity-60"
-              )}
-            >
-              <span className={cn(role.is_primary && "font-medium text-foreground")}>
-                {ROLE_LABELS[role.role] ?? role.role}
-              </span>
-              {subroleLabel ? (
-                <span className="text-muted-foreground">{subroleLabel}</span>
-              ) : null}
-              {role.rank_value != null ? (
-                <span className="inline-flex items-center gap-1 tabular-nums text-muted-foreground">
-                  {division != null ? (
-                    <DivisionIcon division={division} width={18} height={18} className="shrink-0" />
-                  ) : null}
-                  {role.rank_value}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">No rank</span>
-              )}
-            </span>
-          );
-        })}
-    </span>
+        .map((role) => ({
+          role: role.role,
+          rank: role.rank_value,
+          subrole: role.subrole ? getSubroleLabel(catalog, role.role, role.subrole) : null,
+          dimmed: !role.is_active
+        }))}
+    />
   );
 }
 
