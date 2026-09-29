@@ -16,8 +16,9 @@
 //  5. a published version opens read-only, offering a clone instead of edits;
 //  6. a grid on its own rank scale opens as itself and saves its ranges
 //     untouched — reading it through the OW ladder rewrote every range;
-//  7. a mapping pick alone is an edit: without it counting, a saved draft
-//     could never store the decisions its Mappings tab asks for.
+//  7. a mapping pick alone is an edit — a range of divisions and where in it
+//     players land, the rule set the backend normalizer reads; without it
+//     counting, a saved draft could never store what its Mappings tab asks for.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -434,24 +435,22 @@ describe("Divisions › draft editor", () => {
     ]);
   });
 
-  it("counts a mapping pick as an edit and stores it without touching the tiers", async () => {
+  it("stores a range of divisions picked in Mappings, without touching the tiers", async () => {
     window.history.replaceState(null, "", "/admin/settings/divisions/v/23?tab=mappings");
     const container = await mount();
     expect(container.querySelector('[aria-label="unsavedChanges"]')).toBeNull();
 
-    await act(async () => {
-      const trigger = byLabel("Target division for Old rest")!;
-      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-      (element) => element.textContent?.trim() === "2. Elite · 4000\u20134699"
-    );
-    await act(async () => {
-      option!.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-      option!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle(3);
+    await click(document.querySelector('[aria-label^="Target divisions for Old rest:"]'));
+    const picker = document.querySelector('[role="dialog"][aria-label="Target divisions for Old rest"]')!;
+    const row = (name: string) =>
+      [...picker.querySelectorAll("li > button:first-child")].find((element) =>
+        element.textContent?.includes(name)
+      );
+    // First click lands the players in Champion, the second spreads them down to Elite…
+    await click(row("Champion"));
+    await click(row("Elite"));
+    // …and the dot moves where they land.
+    await click(byLabel("Players of Old rest land in Elite"));
 
     const bar = container.querySelector('[aria-label="unsavedChanges"]');
     expect(bar?.textContent).toContain("1 mapping pick");
@@ -463,8 +462,10 @@ describe("Divisions › draft editor", () => {
       number,
       { rules: Record<string, unknown>[] }
     ];
+    // Old rest (0–3999) overlaps neither division, so its players split evenly.
     expect(body.rules.filter((rule) => rule.source_tier_id === 402)).toEqual([
-      { source_tier_id: 402, target_tier_id: 502, weight: 1, is_primary: true }
+      { source_tier_id: 402, target_tier_id: 502, weight: 0.5, is_primary: true },
+      { source_tier_id: 402, target_tier_id: 501, weight: 0.5, is_primary: false }
     ]);
   });
 

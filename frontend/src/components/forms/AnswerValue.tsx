@@ -8,7 +8,9 @@ import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { ROLE_LABELS, ROLES } from "@/lib/roster/roles";
+import { cn } from "@/lib/utils";
 import type { FieldKind } from "@/types/forms.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 /**
  * One stored answer, rendered for a table cell or an inspector row.
@@ -45,41 +47,58 @@ function roleRank(code: string): number {
   return index < 0 ? ROLES.length : index;
 }
 
+export interface RoleRankEntry {
+  role: string;
+  /** As stored. `null` = declared, not ranked yet: shown as a dash. */
+  rank: unknown;
+  /** Sub-role label, printed beside the glyph. */
+  subrole?: string | null;
+  /** Declared but not playable. */
+  dimmed?: boolean;
+}
+
 /**
- * One `role_ranks` answer as chips: role glyph, division crest, SR. The glyph
- * and the crest carry the role and division names for assistive tech, so the
- * number is the only text — the same reading the roster's roles column gives.
+ * Role ranks as a spaced row: role glyph, division crest, SR. The glyph and the
+ * crest carry the role and division names for assistive tech, so the number is
+ * the only text — the same reading the roster's roles column gives. Shared by
+ * `role_ranks` answers and the registration inspector's declared roles.
  *
- * Crested off the PLATFORM grid, never the workspace's, exactly like the
- * `RoleRanksField` that captured it: what the registrant typed is their
- * Overwatch SR, and 3200 is Diamond 3 on the ladder no matter what a workspace
- * calls its 14th division. Reading it through the workspace grid renamed every
- * answer under the registrant.
+ * `grid` is the scale `rank` is on. A `role_ranks` answer is crested off the
+ * PLATFORM grid, never the workspace's, exactly like the `RoleRanksField` that
+ * captured it: what the registrant typed is their Overwatch SR, and 3200 is
+ * Diamond 3 on the ladder no matter what a workspace calls its 14th division.
  */
-function RoleRankChips({ entries }: Readonly<{ entries: [string, unknown][] }>) {
+export function RoleRankList({
+  entries,
+  grid,
+}: Readonly<{ entries: readonly RoleRankEntry[]; grid: DivisionGrid }>) {
   return (
-    <span className="flex flex-wrap gap-1">
-      {entries.map(([role, rank]) => {
-        const sr = Number(rank);
-        const division = Number.isFinite(sr) ? resolveDivisionFromRank(OW_REFERENCE_GRID, sr) : null;
-        const icon = ROLES.find((def) => def.code === role)?.icon ?? null;
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {entries.map((entry, index) => {
+        const missing = entry.rank == null || entry.rank === "";
+        const sr = missing ? Number.NaN : Number(entry.rank);
+        const division = Number.isFinite(sr) ? resolveDivisionFromRank(grid, sr) : null;
+        const icon = ROLES.find((def) => def.code === entry.role)?.icon ?? null;
+        const label = ROLE_LABELS[entry.role] ?? entry.role;
         return (
-          <span key={role} className={`${CHIP} gap-1`}>
-            {icon ? (
-              <PlayerRoleIcon role={icon} size={14} label={ROLE_LABELS[role] ?? role} />
-            ) : (
-              <span>{ROLE_LABELS[role] ?? role}</span>
-            )}
+          <span
+            key={`${entry.role}-${index}`}
+            className={cn("inline-flex items-center gap-1 text-xs font-medium", MUTED, entry.dimmed && "opacity-60")}
+          >
+            {icon ? <PlayerRoleIcon role={icon} size={14} label={label} /> : <span>{label}</span>}
+            {entry.subrole ? (
+              <span className="text-[color:var(--aqt-fg-dim)]">{entry.subrole}</span>
+            ) : null}
             {division != null ? (
               <DivisionIcon
                 division={division}
-                tournamentGrid={OW_REFERENCE_GRID}
+                tournamentGrid={grid}
                 width={18}
                 height={18}
                 className="shrink-0"
               />
             ) : null}
-            <span className="tabular-nums">{String(rank)}</span>
+            {missing ? EMPTY : <span className="tabular-nums">{String(entry.rank)}</span>}
           </span>
         );
       })}
@@ -117,7 +136,9 @@ export function AnswerValue({
       .filter(([, rank]) => rank !== null && rank !== undefined && rank !== "")
       .sort(([a], [b]) => roleRank(a) - roleRank(b));
     if (entries.length === 0) return EMPTY;
-    return <RoleRankChips entries={entries} />;
+    return (
+      <RoleRankList entries={entries.map(([role, rank]) => ({ role, rank }))} grid={OW_REFERENCE_GRID} />
+    );
   }
 
   // A checkbox that round-tripped through a form encoding arrives as the string

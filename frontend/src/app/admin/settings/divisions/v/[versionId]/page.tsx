@@ -10,6 +10,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
+import type { MappingChoices } from "../../editor/autoMap";
 import { DraftEditor } from "../../editor/DraftEditor";
 import { bandsFromTiers } from "../../editor/draftReducer";
 import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
@@ -28,7 +29,7 @@ export default function DivisionDraftEditorPage() {
   const params = useParams<{ versionId: string }>();
   const versionId = Number(params.versionId);
   const [epoch, setEpoch] = useState(0);
-  const [carriedChoices, setCarriedChoices] = useState<Record<number, number>>({});
+  const [carriedChoices, setCarriedChoices] = useState<MappingChoices>({});
 
   const { isSuperuser, canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
