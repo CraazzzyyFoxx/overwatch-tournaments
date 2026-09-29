@@ -497,7 +497,7 @@ def test_keep_existing_action_when_source_value_present() -> None:
     assert row["roles"][0]["action"] == "keep_existing"
 
 
-# ── OW weekly composite: round((max + mean) / 2) over a 7-day window ─────────────────────────
+# ── OW weekly composite: round((max + mean) / 2), mean weighted by how long each rank held ──
 
 _NOW = datetime(2026, 6, 12, tzinfo=UTC)
 
@@ -508,12 +508,14 @@ def _snap(
     *,
     role: str = "damage",
     tag_id: int = 7,
+    platform: str = "pc",
 ) -> SimpleNamespace:
     return SimpleNamespace(
         rank_value=rank_value,
+        is_ranked=rank_value is not None,
         role=role,
         social_account_id=tag_id,
-        platform="pc",
+        platform=platform,
         division="master",
         tier=3,
         season=15,
@@ -521,57 +523,57 @@ def _snap(
     )
 
 
-def test_week_composite_is_max_plus_mean_over_two() -> None:
-    snaps = [
-        _snap(3400, datetime(2026, 6, 11, tzinfo=UTC)),
-        _snap(3200, datetime(2026, 6, 9, tzinfo=UTC)),
-        _snap(3000, datetime(2026, 6, 7, tzinfo=UTC)),
-    ]
-    # max=3400, mean=3200 -> (3400 + 3200) / 2 = 3300
-    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW) == 3300
+def _day(day: int, month: int = 6) -> datetime:
+    return datetime(2026, month, day, tzinfo=UTC)
 
 
-def test_week_recent_window_takes_precedence_over_old_peak() -> None:
-    snaps = [
-        _snap(3000, datetime(2026, 6, 10, tzinfo=UTC)),
-        _snap(3400, datetime(2026, 6, 8, tzinfo=UTC)),
-        _snap(4000, datetime(2026, 5, 1, tzinfo=UTC)),  # older than a week -> ignored
-    ]
-    # window [now-7d]: [3000, 3400] -> max 3400, mean 3200 -> 3300
-    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW) == 3300
+def test_week_rank_that_held_all_week_is_that_rank() -> None:
+    # Climbed a month ago and stayed: the week says 3600, not the climb that led there.
+    snaps = [_snap(3000, _day(1, 5)), _snap(3200, _day(3, 5)), _snap(3600, _day(5, 5))]
+    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW, _NOW) == 3600
 
 
-def test_week_falls_back_to_window_around_latest_when_recent_empty() -> None:
-    snaps = [
-        _snap(3000, datetime(2026, 6, 1, tzinfo=UTC)),  # latest, but >7d before now
-        _snap(3200, datetime(2026, 5, 30, tzinfo=UTC)),
-        _snap(3100, datetime(2026, 5, 28, tzinfo=UTC)),
-    ]
-    # No snapshot within 7d of now -> window of 7d around the latest (2026-06-01): all three.
-    # max=3200, mean=3100 -> (3200 + 3100) / 2 = 3150
-    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW) == 3150
+def test_week_mean_is_weighted_by_how_long_each_rank_held() -> None:
+    # 3000 from before the window to 6/11 (6 of its 7 days), then 3400 for the last day.
+    snaps = [_snap(3000, _day(1)), _snap(3400, _day(11))]
+    # mean = (3000*6 + 3400*1) / 7 = 3057.14, max 3400 -> 3228.57
+    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW, _NOW) == 3229
 
 
-def test_week_single_snapshot_returns_its_value() -> None:
-    snaps = [_snap(3333, datetime(2026, 1, 1, tzinfo=UTC))]
-    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW) == 3333
+def test_week_unranked_row_ends_the_ranked_stretch() -> None:
+    snaps = [_snap(3200, _day(1, 5)), _snap(None, _day(9))]
+    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW, _NOW) == 3200
 
 
-def test_week_no_snapshots_returns_none() -> None:
+def test_week_ends_at_the_last_poll_when_the_account_went_stale() -> None:
+    # Last polled 5/28, before this week: the window is the week up to that poll.
+    snaps = [_snap(3000, _day(20, 5)), _snap(3400, _day(25, 5))]
+    # window [5/21, 5/28]: 3000 for 4 days, 3400 for 3 -> mean 3171.43, max 3400 -> 3285.71
+    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW, _day(28, 5)) == 3286
+
+
+def test_week_platforms_hold_their_ranks_side_by_side() -> None:
+    snaps = [_snap(3000, _day(1, 5)), _snap(3600, _day(2, 5), platform="console")]
+    # Both hold the whole week: mean 3300, max 3600 -> 3450.
+    assert rank_sources._compute_ow_week_rank_value(snaps, _NOW, _NOW) == 3450
+
+
+def test_week_rank_observed_on_this_poll_counts() -> None:
+    assert rank_sources._compute_ow_week_rank_value([_snap(3333, _NOW)], _NOW, _NOW) == 3333
+
+
+def test_week_no_ranked_snapshots_returns_none() -> None:
     assert rank_sources._compute_ow_week_rank_value([], _NOW) is None
-    assert rank_sources._compute_ow_week_rank_value([_snap(None, _NOW)], _NOW) is None
+    assert rank_sources._compute_ow_week_rank_value([_snap(None, _NOW)], _NOW, _NOW) is None
 
 
-def test_group_ow_signals_computes_composite_and_latest() -> None:
-    snaps = [
-        _snap(3400, datetime(2026, 6, 11, tzinfo=UTC)),
-        _snap(3200, datetime(2026, 6, 9, tzinfo=UTC)),
-    ]
-    grouped = rank_sources._group_ow_rank_signals(snaps, _NOW)
+def test_group_ow_signals_computes_composite_and_latest_ranked() -> None:
+    snaps = [_snap(None, _day(11)), _snap(3400, _day(9)), _snap(3200, _day(1))]
+    grouped = rank_sources._group_ow_rank_signals(snaps, _NOW, {7: _NOW})
     signals = grouped[7]["damage"]
 
-    # max=3400, mean=3300 -> (3400 + 3300) / 2 = 3350
-    assert signals.composite_rank_value == 3350
+    # 3200 for 4 days (6/5-6/9), 3400 for 2 (6/9-6/11) -> mean 3266.67, max 3400 -> 3333.33
+    assert signals.composite_rank_value == 3333
     assert signals.latest_snapshot.rank_value == 3400
 
 
