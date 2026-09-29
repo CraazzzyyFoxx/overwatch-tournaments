@@ -1322,10 +1322,27 @@
     "badgeUnverified": "unverified",
     "pillUnverified": "unverified",
     "pillMissing": "missing",
+    "pillPeak": "peak",
+    "pillPeakAtLeast": "at least",
+    "owValueAria": "Which OW number to use",
+    "owValue": {
+      "composite": {
+        "label": "Formula",
+        "description": "Time-weighted summary of the window: (peak + average) / 2."
+      },
+      "current": {
+        "label": "Current",
+        "description": "The latest rank OverFast reported. The window doesn't apply."
+      },
+      "peak": {
+        "label": "Peak",
+        "description": "The highest rank the polls saw in the window.",
+        "caveat": "We can't know the exact peak: ranks are polled periodically, so a rank held only between two polls is never seen. The real peak may be higher."
+      }
+    },
     "source": {
       "ow": {
-        "label": "Overwatch rank",
-        "description": "Weekly composite of OW snapshots for the main BattleTag."
+        "label": "Overwatch rank"
       },
       "division_history": {
         "label": "Balancer history",

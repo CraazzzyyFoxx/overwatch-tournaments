@@ -15,6 +15,7 @@ import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { ROLE_LABELS, getRoleIconName } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type {
+  RankAutofillOwValue,
   RegistrationRankAutofillPlayer,
   RegistrationRankAutofillResponse,
   RegistrationRankAutofillRole
@@ -36,16 +37,25 @@ function formatRankSource(format: DateFormatter, role: RegistrationRankAutofillR
 }
 
 /**
- * Per-role breakdown of the suggestion: OW (week composite), balancer (division history) and
- * analytics, with the chosen signal marked. Lines with no value are omitted.
+ * Per-role breakdown of the suggestion: the three OW numbers (formula, current, peak), balancer
+ * (division history) and analytics, with the chosen signal marked. Lines with no value are omitted.
  */
-function formatBlendBreakdown(role: RegistrationRankAutofillRole): string[] {
+function formatBlendBreakdown(
+  role: RegistrationRankAutofillRole,
+  owValue: RankAutofillOwValue | null
+): string[] {
   // Plain-text `title` content, so the marker has to stay a word rather than an icon.
-  const mark = (source: RegistrationRankAutofillRole["used_source"]) =>
-    role.used_source === source ? " (used)" : "";
+  const mark = (source: RegistrationRankAutofillRole["used_source"], ow?: RankAutofillOwValue) =>
+    role.used_source === source && (ow === undefined || ow === owValue) ? " (used)" : "";
   const lines: string[] = [];
   if (role.ow_rank_value != null) {
-    lines.push(`OW (week) ${role.ow_rank_value}${mark("ow")}`);
+    lines.push(`OW formula ${role.ow_rank_value}${mark("ow", "composite")}`);
+  }
+  if (role.ow_current_rank_value != null) {
+    lines.push(`OW current ${role.ow_current_rank_value}${mark("ow", "current")}`);
+  }
+  if (role.ow_peak_rank_value != null) {
+    lines.push(`OW peak ≥${role.ow_peak_rank_value}${mark("ow", "peak")}`);
   }
   if (role.division_history_rank_value != null) {
     lines.push(`balancer ${role.division_history_rank_value}${mark("division_history")}`);
@@ -103,13 +113,16 @@ function playerLabel(player: RegistrationRankAutofillPlayer): string {
   return player.battle_tag ?? player.display_name ?? `#${player.registration_id}`;
 }
 
-function RankAutofillRolePill({ role }: Readonly<{ role: RegistrationRankAutofillRole }>) {
+function RankAutofillRolePill({
+  role,
+  owValue
+}: Readonly<{ role: RegistrationRankAutofillRole; owValue: RankAutofillOwValue | null }>) {
   const t = useTranslations();
   const format = useFormatter();
   const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
   const source = formatRankSource(format, role);
-  const breakdown = formatBlendBreakdown(role);
+  const breakdown = formatBlendBreakdown(role, owValue);
   const tone = resolveRolePillTone(role);
   // The tone already ranks these two apart: an update is what gets written, a
   // mismatch is a kept rank that disagrees with the suggestion (overwrite off)
@@ -133,6 +146,11 @@ function RankAutofillRolePill({ role }: Readonly<{ role: RegistrationRankAutofil
       : (role.current_rank_value ?? role.parsed_rank_value);
   const primaryDivision =
     isUpdate || isMismatch ? parsedDivision : (currentDivision ?? parsedDivision);
+  // A peak is only the highest rank a poll happened to see: the number shown is a floor.
+  const isPeak =
+    role.used_source === "ow" &&
+    owValue === "peak" &&
+    (isUpdate || isMismatch || role.current_rank_value == null);
 
   return (
     <div
@@ -140,7 +158,11 @@ function RankAutofillRolePill({ role }: Readonly<{ role: RegistrationRankAutofil
         "inline-flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
         ROLE_PILL_TONE_CLASS[tone]
       )}
-      title={[[role.reason, source].filter(Boolean).join(" / "), ...breakdown]
+      title={[
+        [role.reason, source].filter(Boolean).join(" / "),
+        isPeak ? t("rankAutofill.owValue.peak.caveat") : null,
+        ...breakdown
+      ]
         .filter(Boolean)
         .join("\n")}
     >
@@ -170,7 +192,16 @@ function RankAutofillRolePill({ role }: Readonly<{ role: RegistrationRankAutofil
           {primaryDivision != null && (
             <DivisionIcon division={primaryDivision} width={16} height={16} />
           )}
-          <span className="tabular-nums">{primaryRank ?? "-"}</span>
+          <span className="tabular-nums">
+            {isPeak && primaryRank != null && (
+              <>
+                <span aria-hidden>≥</span>
+                <span className="sr-only">{t("rankAutofill.pillPeakAtLeast")}</span>
+              </>
+            )}
+            {primaryRank ?? "-"}
+          </span>
+          {isPeak && <span className="opacity-60">{t("rankAutofill.pillPeak")}</span>}
           {isUnverified && <span className="opacity-60">{t("rankAutofill.pillUnverified")}</span>}
         </>
       )}
@@ -295,7 +326,7 @@ export function RankAutofillPreviewTables({
                   {player.roles
                     .filter((role) => role.action === "set" || role.action === "overwrite")
                     .map((role) => (
-                      <RankAutofillRolePill key={role.role} role={role} />
+                      <RankAutofillRolePill key={role.role} role={role} owValue={preview.ow_value} />
                     ))}
                 </div>
               </label>
@@ -331,7 +362,7 @@ export function RankAutofillPreviewTables({
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {player.roles.map((role) => (
-                    <RankAutofillRolePill key={role.role} role={role} />
+                    <RankAutofillRolePill key={role.role} role={role} owValue={preview.ow_value} />
                   ))}
                 </div>
               </div>
@@ -380,7 +411,7 @@ export function RankAutofillPreviewTables({
                   {auditRoles.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {auditRoles.map((role) => (
-                        <RankAutofillRolePill key={role.role} role={role} />
+                        <RankAutofillRolePill key={role.role} role={role} owValue={preview.ow_value} />
                       ))}
                     </div>
                   )}

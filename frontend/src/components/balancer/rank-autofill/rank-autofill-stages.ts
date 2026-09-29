@@ -1,4 +1,5 @@
 import type {
+  RankAutofillOwValue,
   RankAutofillSourceKey,
   RegistrationRankAutofillStage,
 } from "@/types/balancer-admin.types";
@@ -20,7 +21,7 @@ export const STAGE_WINDOW_KIND: Record<RankAutofillSourceKey, StageWindowKind> =
 /** Default chain: OW → история balancer → аналитика, все включены, без окон. */
 export function defaultRankAutofillStages(): RegistrationRankAutofillStage[] {
   return [
-    { source: "ow", enabled: true, lookback_days: null },
+    { source: "ow", enabled: true, lookback_days: null, ow_value: "composite" },
     { source: "division_history", enabled: true, lookback_tournaments: null },
     { source: "analytics", enabled: true, lookback_tournaments: null }
   ];
@@ -78,6 +79,14 @@ export function setStageLookback(
       ? { ...stage, lookback_days: value }
       : { ...stage, lookback_tournaments: value };
   });
+}
+
+/** Pick which OW number the OW stage offers. */
+export function setStageOwValue(
+  stages: RegistrationRankAutofillStage[],
+  owValue: RankAutofillOwValue
+): RegistrationRankAutofillStage[] {
+  return stages.map((stage) => (stage.source === "ow" ? { ...stage, ow_value: owValue } : stage));
 }
 
 /** Current lookback value for a stage, regardless of which field backs it. */

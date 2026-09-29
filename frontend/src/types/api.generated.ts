@@ -21936,8 +21936,8 @@ export interface components {
          * @description A single source in the rank-autofill priority chain.
          *
          *     ``lookback_tournaments`` limits ``division_history``/``analytics`` to the last N tournaments
-         *     before the current one; ``lookback_days`` overrides the OW weekly window. The
-         *     irrelevant lookback for a given ``source`` is ignored by the service.
+         *     before the current one; ``lookback_days`` overrides the OW weekly window. ``ow_value`` picks
+         *     which OW number the stage offers. Fields irrelevant to a given ``source`` are ignored.
          */
         "tournament.BalancerRankAutofillStage": {
             /**
@@ -21955,6 +21955,12 @@ export interface components {
              * @default null
              */
             lookback_tournaments: number | null;
+            /**
+             * Ow Value
+             * @default composite
+             * @enum {string}
+             */
+            ow_value: TournamentBalancerRankAutofillStageOw_value;
             /**
              * Source
              * @enum {string}
@@ -22081,6 +22087,11 @@ export interface components {
             balancer_additions: number;
             /** Overwrite Existing */
             overwrite_existing: boolean;
+            /**
+             * Ow Value
+             * @default null
+             */
+            ow_value: TournamentBalancerRegistrationRankAutofillResponseOw_valueAnyOf0 | null;
             /** Players */
             players?: components["schemas"]["tournament.BalancerRegistrationRankAutofillPlayer"][];
             /** Role Updates */
@@ -22133,6 +22144,11 @@ export interface components {
              * @default null
              */
             ow_current_rank_value: number | null;
+            /**
+             * Ow Peak Rank Value
+             * @default null
+             */
+            ow_peak_rank_value: number | null;
             /**
              * Ow Rank Value
              * @default null
@@ -70529,6 +70545,11 @@ export enum StreamStreamPollHealthReadStatusAnyOf0 {
     unavailable = "unavailable",
     error = "error"
 }
+export enum TournamentBalancerRankAutofillStageOw_value {
+    composite = "composite",
+    current = "current",
+    peak = "peak"
+}
 export enum TournamentBalancerRankAutofillStageSource {
     ow = "ow",
     division_history = "division_history",
@@ -70543,6 +70564,11 @@ export enum TournamentBalancerRegistrationRankAutofillPlayerStatus {
 export enum TournamentBalancerRegistrationRankAutofillRequestMode {
     ow_first = "ow_first",
     balancer_first = "balancer_first"
+}
+export enum TournamentBalancerRegistrationRankAutofillResponseOw_valueAnyOf0 {
+    composite = "composite",
+    current = "current",
+    peak = "peak"
 }
 export enum TournamentBalancerRegistrationRankAutofillRoleAction {
     set = "set",

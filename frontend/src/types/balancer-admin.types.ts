@@ -215,6 +215,12 @@ type RegistrationRankAutofillUsedSource =
 export type RankAutofillSourceKey = "ow" | "division_history" | "analytics";
 
 /**
+ * The number the OW stage offers: the weekly `composite`, the `current` (latest ranked) rank, or
+ * the week's `peak` — the highest rank a poll saw, so a lower bound on the real one.
+ */
+export type RankAutofillOwValue = "composite" | "current" | "peak";
+
+/**
  * Priority chains for rank autofill:
  *  - ow_first: OW (weekly composite) -> balancer (division history) -> analytics (past tournaments)
  *  - balancer_first: balancer -> analytics -> OW
@@ -230,6 +236,8 @@ export interface RegistrationRankAutofillStage {
   lookback_tournaments?: number | null;
   /** Recency window for the OW source, in days (null = default 7-day window). */
   lookback_days?: number | null;
+  /** Which OW number the OW stage offers (default `composite`). */
+  ow_value?: RankAutofillOwValue;
 }
 
 export interface RegistrationRankAutofillRequest {
@@ -259,6 +267,7 @@ export interface RegistrationRankAutofillRole {
   division_history_rank_value: number | null;
   ow_rank_value: number | null;
   ow_current_rank_value: number | null;
+  ow_peak_rank_value: number | null;
   analytics_rank_value: number | null;
   used_source: RegistrationRankAutofillUsedSource | null;
 }
@@ -289,6 +298,8 @@ export interface RegistrationRankAutofillResponse {
   add_to_balancer: boolean;
   balancer_additions: number;
   players: RegistrationRankAutofillPlayer[];
+  /** The OW number this run offered; null when the OW stage is off. */
+  ow_value: RankAutofillOwValue | null;
 }
 
 export interface BalancerRegistrationRankHistoryEntry {

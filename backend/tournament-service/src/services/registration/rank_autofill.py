@@ -47,13 +47,14 @@ class _ResolvedAutofillStage:
     """One enabled source in the resolved autofill chain, with its lookback window.
 
     ``lookback_tournaments`` applies to the tournament-based sources (``division_history``,
-    ``analytics``); ``lookback_days`` overrides the OW weekly window. The irrelevant field for a
-    given ``source`` is simply ignored by the orchestrator.
+    ``analytics``); ``lookback_days`` overrides the OW weekly window and ``ow_value`` picks the
+    OW number. The irrelevant fields for a given ``source`` are simply ignored by the orchestrator.
     """
 
     source: str
     lookback_tournaments: int | None = None
     lookback_days: int | None = None
+    ow_value: str = "composite"
 
 
 def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any | None) -> dict[str, Any]:
@@ -69,6 +70,7 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any |
             "division_history_rank_value": None,
             "ow_rank_value": None,
             "ow_current_rank_value": None,
+            "ow_peak_rank_value": None,
             "analytics_rank_value": None,
             "used_source": None,
         }
@@ -83,6 +85,7 @@ def _rank_snapshot_payload(snapshot: models.UserRankSnapshot | _RankData | Any |
         "division_history_rank_value": getattr(snapshot, "division_history_rank_value", None),
         "ow_rank_value": getattr(snapshot, "ow_rank_value", None),
         "ow_current_rank_value": getattr(snapshot, "ow_current_rank_value", None),
+        "ow_peak_rank_value": getattr(snapshot, "ow_peak_rank_value", None),
         "analytics_rank_value": getattr(snapshot, "analytics_rank_value", None),
         "used_source": getattr(snapshot, "used_source", None),
     }
@@ -269,7 +272,8 @@ def resolve_autofill_stages(
     When ``stages`` is non-empty it wins: disabled entries are dropped and duplicate sources are
     de-duplicated (first occurrence kept), preserving order. Otherwise the legacy ``mode`` preset
     order is used, with no lookback windows. ``stages`` items are duck-typed (``source``,
-    ``enabled``, ``lookback_tournaments``, ``lookback_days``) so unit tests can pass simple objects.
+    ``enabled``, ``lookback_tournaments``, ``lookback_days``, ``ow_value``) so unit tests can pass
+    simple objects.
     """
     if stages:
         resolved: list[_ResolvedAutofillStage] = []
@@ -286,6 +290,7 @@ def resolve_autofill_stages(
                     source=source,
                     lookback_tournaments=getattr(stage, "lookback_tournaments", None),
                     lookback_days=getattr(stage, "lookback_days", None),
+                    ow_value=getattr(stage, "ow_value", "composite"),
                 )
             )
         return resolved
@@ -349,7 +354,9 @@ class RankAutofillService:
         resolved_stages = resolve_autofill_stages(mode, stages)
         order = tuple(stage.source for stage in resolved_stages)
         enabled_sources = set(order)
-        ow_lookback_days = next((s.lookback_days for s in resolved_stages if s.source == "ow"), None)
+        ow_stage = next((s for s in resolved_stages if s.source == "ow"), None)
+        ow_lookback_days = ow_stage.lookback_days if ow_stage else None
+        ow_value = ow_stage.ow_value if ow_stage else None
         division_lookback = next(
             (s.lookback_tournaments for s in resolved_stages if s.source == "division_history"), None
         )
@@ -441,6 +448,7 @@ class RankAutofillService:
                     balancer_by_role.get(registration_role),
                     analytics_by_role.get(registration_role),
                     grid,
+                    ow_value or "composite",
                 )
                 if resolved is not None:
                     rank_data_by_role[rank_role] = resolved
@@ -524,6 +532,7 @@ class RankAutofillService:
             "add_to_balancer": add_to_balancer,
             "balancer_additions": balancer_additions,
             "players": players,
+            "ow_value": ow_value,
         }
 
 

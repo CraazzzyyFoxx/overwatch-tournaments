@@ -9,7 +9,8 @@ import {
   defaultRankAutofillStages,
   moveStageBySource,
   setStageEnabled,
-  setStageLookback
+  setStageLookback,
+  setStageOwValue
 } from "./rank-autofill-stages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -233,6 +234,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
               onReorder={handleReorderStage}
               onToggle={handleToggleStage}
               onLookbackChange={handleLookbackChange}
+              onOwValueChange={(value) => setStages((current) => setStageOwValue(current, value))}
             />
 
             <div className="flex flex-wrap items-center gap-4 border-t border-[color:var(--aqt-border-2)] pt-3">
