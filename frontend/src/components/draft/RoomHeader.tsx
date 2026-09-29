@@ -23,12 +23,12 @@ interface RoomHeaderProps {
 type RoomStatus = "live" | "paused" | "completed" | "notStarted" | "cancelled" | "blocked";
 
 const STATUS_COLOR: Record<RoomStatus, string> = {
-  live: "var(--aqt-live)",
-  paused: "var(--aqt-amber)",
+  live: "var(--aqt-status-live)",
+  paused: "var(--aqt-status-upcoming)",
   blocked: "var(--aqt-rose)",
-  completed: "var(--aqt-fg-faint)",
+  completed: "var(--aqt-status-finished)",
   notStarted: "var(--aqt-fg-muted)",
-  cancelled: "var(--aqt-fg-faint)"
+  cancelled: "var(--aqt-status-finished)"
 };
 
 function roomStatus(board: DraftBoard): RoomStatus {
@@ -52,36 +52,44 @@ export function RoomHeader({ tournament, board, gating, presence, connectionStat
       <Link
         href={`/tournaments/${tournament.id}`}
         title={t("room.back")}
-        className="-ml-1 inline-flex min-h-11 min-w-0 items-center gap-1.5 rounded-md px-1 text-sm text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:min-h-8"
+        className="-ml-1 inline-flex min-h-11 min-w-0 items-center gap-1.5 rounded-md px-1 text-body text-[color:var(--aqt-fg-muted)] outline-hidden transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:min-h-8"
       >
         <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
         <span className="truncate">{tournament.name}</span>
       </Link>
       <span aria-hidden className="hidden h-5 w-px bg-[color:var(--aqt-border-2)] sm:block" />
-      <h1 className="font-onest text-lg font-semibold leading-tight">{t("shell.title")}</h1>
+      <h1 className="font-onest text-heading font-semibold">{t("shell.title")}</h1>
       <span
-        className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold uppercase tracking-[0.08em]"
-        style={{ color, borderColor: `color-mix(in srgb, ${color} 45%, transparent)` }}
+        className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-label font-semibold"
+        style={{
+          // Live and stopped are rose: the border keeps the hue, the label uses
+          // the text variant so 12px type still reads.
+          color: status === "live" || status === "blocked" ? "var(--aqt-rose-text)" : color,
+          borderColor: `color-mix(in srgb, ${color} 45%, transparent)`
+        }}
       >
-        <StatusDot pulse={status === "live"} />
+        <StatusDot />
         {t(`shell.status.${status}`)}
       </span>
 
       {/* No live region on the counters: they tick on their own. Only the
           connection state announces itself. */}
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 sm:ml-auto xl:flex-nowrap">
-        <span className="hidden whitespace-nowrap text-[13px] text-[color:var(--aqt-fg-dim)] md:inline">
-          {t("shell.formatLine", {
-            format: t(`shell.formatName.${session.format}`),
-            teams: board.teams.length,
-            rounds: session.rounds,
-            seconds: session.pick_time_seconds
-          })}
+        {/* Separate facts, separate spans — a middle-dot string is one unreadable
+            run for a screen reader and truncates as one block. */}
+        <span className="hidden whitespace-nowrap text-caption text-[color:var(--aqt-fg-dim)] md:inline">
+          {t(`shell.formatName.${session.format}`)}
         </span>
-        <span className="whitespace-nowrap text-[13px] tabular-nums text-[color:var(--aqt-fg-dim)]">
+        <span className="hidden whitespace-nowrap text-caption tabular-nums text-[color:var(--aqt-fg-dim)] md:inline">
+          {t("shell.teamsCount", { teams: board.teams.length })}
+        </span>
+        <span className="hidden whitespace-nowrap text-caption tabular-nums text-[color:var(--aqt-fg-dim)] md:inline">
+          {t("shell.pickTime", { seconds: session.pick_time_seconds })}
+        </span>
+        <span className="whitespace-nowrap text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
           {t("shell.viewers", { count: viewerCount(presence) })}
         </span>
-        <span className="inline-flex h-[30px] max-w-full items-center truncate rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-3 text-[13px] font-medium text-[color:var(--aqt-fg-muted)]">
+        <span className="inline-flex h-[30px] max-w-full items-center truncate rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-3 text-caption font-medium text-[color:var(--aqt-fg-muted)]">
           {seat === "captain" || seat === "captain_admin"
             ? t(`shell.seat.${seat}`, { team: myTeam?.name ?? "" })
             : t(`shell.seat.${seat}`)}

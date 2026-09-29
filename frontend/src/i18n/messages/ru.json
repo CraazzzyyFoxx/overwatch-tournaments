@@ -281,10 +281,10 @@
     "registration": "Командная регистрация",
     "solo": "Соло-регистрация (FFA)",
     "connection": {
-      "idle": "Соединение не запущено",
+      "idle": "Нет соединения",
       "connecting": "Подключение",
       "connected": "Подключено",
-      "reconnecting": "Переподключение"
+      "reconnecting": "Переподключаемся…"
     },
     "confirm": {
       "cascade": "Вместе с этим будет удалено:",
@@ -989,6 +989,7 @@
       "autopicking": "автопик…",
       "remaining": "На пик осталось {seconds, plural, one {# секунда} few {# секунды} many {# секунд} other {# секунды}}",
       "idle": "Таймер пика не запущен",
+      "finished": "Драфт завершён",
       "overtime": "Овертайм"
     },
     "empty": {
@@ -5004,7 +5005,8 @@
   },
   "draftRedesign": {
     "room": {
-      "back": "Назад к турниру"
+      "back": "Назад к турниру",
+      "allTournaments": "Все турниры"
     },
     "yourTurn": "Ваш ход",
     "unknownTeam": "Неизвестная команда",
@@ -5019,7 +5021,7 @@
     "resetFilters": "Сбросить фильтры",
     "heroFilter": "Герои",
     "heroFilterClear": "Сбросить",
-    "heroFilterCount": "{count, plural, one {# герой} few {# героя} many {# героев} other {# героя}}",
+    "heroFilterOn": "выбран",
     "unsafeOption": "Недоступно для этого пика",
     "captain": "Капитан",
     "note": "Заметка",
@@ -5028,6 +5030,7 @@
     "role": "Роль",
     "noRole": "Без роли",
     "noRoleHint": "У игрока нет ни одной роли с рангом, поэтому выбрать его не на что. Добавьте ранг в балансировщике.",
+    "noRoleHintViewer": "У игрока нет роли с рангом — выбрать его нельзя.",
     "rankSource": {
       "registration": "Указан в заявке",
       "workspace": "Ранг из воркспейса",
@@ -5045,14 +5048,14 @@
       "slot_filled": "Эта позиция в составе уже занята.",
       "role_shortage": "После такого выбора другую обязательную роль будет некем заполнить."
     },
-    "waitingFreshData": "Подтверждение станет доступно после подключения и получения вариантов для актуальной версии пика.",
+    "waitingFreshData": "Нет связи — переподключаемся. Подтвердить пик можно будет, когда связь восстановится.",
     "pickSuccess": "Игрок {player} успешно выбран.",
-    "checkingSafeOptions": "Проверяем каждый вариант игрока и роли с учётом оставшейся части драфта…",
-    "safeOptionsUnavailable": "Проверку безопасных пиков загрузить не удалось, поэтому ни один игрок здесь не отмечен ни безопасным, ни заблокированным.",
+    "checkingSafeOptions": "Проверяем, кого можно взять…",
+    "safeOptionsUnavailable": "Не удалось проверить, кого можно взять, поэтому подтвердить пик пока нельзя. Нажмите «Повторить».",
     "mobileViews": "Разделы драфта",
     "loadingTitle": "Загружаем драфт",
     "loadErrorTitle": "Не удалось загрузить драфт",
-    "loadErrorHint": "Сервер не вернул актуальное состояние. Повторите запрос — контекст страницы сохранится.",
+    "loadErrorHint": "Проверьте соединение и нажмите «Повторить».",
     "retry": "Повторить",
     "emptyTitle": "Драфт ещё не настроен",
     "emptyHint": "Организатору нужно создать и проверить драфт, после чего публичная страница станет доступна.",
@@ -5071,7 +5074,7 @@
     "filterBySlot": "Показать игроков на роль {role}",
     "selectionTaken": "{player} только что ушёл в другую команду, поэтому выбор сброшен.",
     "overrideDisabled": "Ручная замена пика выключена для этого драфта.",
-    "overrideSuccess": "{player} назначен вручную.",
+    "overrideSuccess": "{player} взят за капитана.",
     "badge": {
       "auto": "Авто",
       "override": "Замена",
@@ -5079,6 +5082,8 @@
     },
     "admin": {
       "dock": "Управление организатора",
+      "clockGroup": "Таймер",
+      "pickGroup": "Пик",
       "pause": "Пауза",
       "resume": "Продолжить",
       "addSeconds": "+{seconds} с",
@@ -5101,7 +5106,7 @@
     "shell": {
       "title": "Драфт",
       "status": {
-        "live": "Live",
+        "live": "Идёт",
         "paused": "Пауза",
         "completed": "Завершён",
         "notStarted": "Не начат",
@@ -5110,14 +5115,15 @@
       },
       "formatName": {
         "snake": "Змейка",
-        "linear": "Линейный",
+        "linear": "Прямой порядок",
         "custom": "Свой порядок"
       },
-      "formatLine": "{format} · {teams, plural, one {# команда} few {# команды} many {# команд} other {# команды}} · {rounds, plural, one {# раунд} few {# раунда} many {# раундов} other {# раунда}} · {seconds} с на пик",
+      "teamsCount": "{teams, plural, one {# команда} few {# команды} many {# команд} other {# команды}}",
+      "pickTime": "{seconds} с на пик",
       "viewers": "{count, plural, one {# зритель} few {# зрителя} many {# зрителей} other {# зрителя}}",
       "seat": {
-        "captain": "Вы капитан {team}",
-        "captain_admin": "Капитан {team} и организатор",
+        "captain": "Капитан: {team}",
+        "captain_admin": "Капитан: {team}, организатор",
         "admin": "Организатор",
         "spectator": "Зритель"
       },
@@ -5131,17 +5137,20 @@
         "captainOnline": "Капитан в комнате",
         "captainOffline": "Капитан не в комнате",
         "pick": "Пик {pick} из {total}",
-        "round": "Раунд {round} из {rounds} · {direction}",
+        "round": "Раунд {round} из {rounds}, {direction}",
         "direction": {
           "forward": "прямой порядок",
           "reverse": "обратный порядок",
           "custom": "свой порядок"
         },
-        "allRounds": "Все раунды",
-        "track": "Раунд {round} · {done} / {total}",
+        "allRounds": "Порядок пиков",
+        "track": "Раунд {round}: сделано {done} из {total, plural, one {# пика} other {# пиков}}",
         "tick": "П{pick} · {team}",
         "tickPlayer": "П{pick} · {team} — {player}",
-        "myTurnIn": "Ваш ход через {count}",
+        "myTurnIn": "Ваш ход через {count, plural, one {# пик} few {# пика} many {# пиков} other {# пика}}",
+        "announce": "Пик {pick}: выбирает {team}.",
+        "announceMine": "Пик {pick}: ваш ход.",
+        "announceLast": "{team} взяли {player}.",
         "next": "Далее: {teams}",
         "nextMine": "{team} (вы)",
         "finalPick": "Последний пик",
@@ -5161,7 +5170,7 @@
         "label": "Журнал драфта",
         "loading": "Загружаем журнал…",
         "empty": "Событий пока нет.",
-        "error": "Журнал не загрузился.",
+        "error": "Не удалось загрузить журнал.",
         "system": "система",
         "unknownTeam": "команда",
         "unknownPlayer": "игрок",
@@ -5183,6 +5192,7 @@
       "banner": {
         "pausedCaptain": "Драфт на паузе. Ваш выбор сохранится — таймер продолжит, когда организатор снимет паузу.",
         "pausedSpectator": "Драфт на паузе. Ожидаем продолжения от организатора.",
+        "pausedAdmin": "Драфт на паузе. Снимите паузу, когда будете готовы.",
         "blocked": {
           "role_shortage": "Драфт остановлен: оставшимися игроками уже не закрыть все составы. Организатору нужно добавить недостающую роль.",
           "order_recalculated": "Порядок пиков в этом раунде пересчитан. Драфт продолжится, когда организатор снимет паузу.",
@@ -5193,8 +5203,9 @@
         "overtimeFit": "Основное время вышло. Через {time} автопик возьмёт {player} — лучшего по свободной роли.",
         "overtimeMine": "Основное время вышло. Через {time} сработает автопик.",
         "overtimeOther": "Овертайм у {team}: через {time} сработает автопик.",
-        "finished": "Драфт завершён: {picks, plural, one {# пик} few {# пика} many {# пиков} other {# пика}}, {teams, plural, one {# команда собрана} few {# команды собрано} many {# команд собрано} other {# команды собрано}}. Итоги — над списком игроков.",
+        "finished": "Составы готовы: {teams, plural, one {# команда собрана} few {# команды собраны} many {# команд собрано} other {# команды собрано}}. Итоги — во вкладке «Игроки».",
         "notStarted": "Драфт ещё не начался. Организатор запустит его, когда все будут готовы.",
+        "notStartedAdmin": "Драфт ещё не начался. Запустите его, когда все капитаны будут готовы.",
         "cancelled": "Организатор отменил этот драфт."
       },
       "tabs": {
@@ -5213,7 +5224,7 @@
       "search": "Поиск по нику",
       "roleFilter": "Фильтр по роли",
       "chip": {
-        "need": "Нужны {team}",
+        "need": "Для {team}",
         "all": "Все",
         "aria": "{label}: {count}"
       },
@@ -5225,11 +5236,14 @@
       "heroEmpty": "Героев не найдено.",
       "market": {
         "label": "Свободные слоты и игроки по ролям",
-        "slots": "{role} · {count, plural, one {# слот} few {# слота} many {# слотов} other {# слота}}",
+        "slots": "{count, plural, =0 {слотов нет} one {# слот} few {# слота} many {# слотов} other {# слота}}",
         "supply": "{primary} {total, plural, one {игрок} few {игрока} many {игроков} other {игрока}}",
-        "supplyWithSecondary": "{primary} +{secondary} {total, plural, one {игрок} few {игрока} many {игроков} other {игрока}}",
+        "supplyWithSecondary": "{primary} осн. + {secondary} доп.",
         "title": "Свободных слотов «{role}» у всех команд: {open}. В пуле: {primary} с этой основной ролью и ещё {secondary} со второй.",
-        "deficit": "Игроков меньше, чем слотов — кто-то сыграет не свою роль."
+        "deficit": "Игроков меньше, чем слотов — кто-то сыграет не свою роль.",
+        "tight": "Основных игроков меньше, чем слотов — часть мест закроют вторые роли.",
+        "deficitLabel": "не хватает",
+        "tightLabel": "впритык"
       },
       "summary": {
         "title": "Итоги драфта",
@@ -5245,7 +5259,7 @@
       "col": {
         "player": "Игрок",
         "fit": "Подбор",
-        "demand": "Спрос"
+        "demand": "Команд"
       },
       "row": {
         "select": "Выбрать на лучшую свободную роль",
@@ -5273,8 +5287,7 @@
       },
       "fitTitle": "Подбор для {team} на роль «{role}»",
       "fitTitleAny": "Подбор для {team}",
-      "demand": "нужен {count}",
-      "demandTitle": "Столько команд ещё могут взять его на одну из его ролей",
+      "demandTitle": "Сколько команд ещё могут взять игрока на одну из его ролей",
       "queueAdd": "Добавить в мой список",
       "queueRemove": "Убрать из моего списка",
       "moveUp": "Выше в списке",
@@ -5295,7 +5308,7 @@
         "rosters": "Составы",
         "queue": "Очередь",
         "order": "Порядок",
-        "orderCount": "{count} р."
+        "orderCount": "{count, plural, one {# раунд} few {# раунда} many {# раундов} other {# раунда}}"
       },
       "caption": {
         "order": "{kind, select, snake {Змейка} linear {Прямой порядок} other {Свой порядок}} · {count, plural, one {# пик} few {# пика} many {# пиков} other {# пика}}",
@@ -5329,12 +5342,13 @@
         "myTurn": "вы · ваш ход",
         "picking": "выбирает сейчас",
         "first": "ходит первой",
-        "in": "ход через {n}",
+        "in": "ход через {n, plural, one {# пик} few {# пика} many {# пиков} other {# пика}}",
         "mine": "вы · {status}"
       },
       "follow": "Следить за {team}",
       "unfollow": "Не следить за {team}",
       "followTitle": "Следить за командой",
+      "followedMark": "Вы следите за командой",
       "captainOnline": "Капитан в комнате",
       "captainOffline": "Капитан не в комнате",
       "avgEmpty": "Слоты не заняты",
@@ -5382,7 +5396,6 @@
       }
     },
     "island": {
-      "aria": "Игрок {player}",
       "close": "Закрыть",
       "status": {
         "available": "Доступен",
@@ -5463,25 +5476,25 @@
         "chooseRole": "Выберите роль игрока, чтобы взять его.",
         "prepare": "Выбор можно подготовить заранее. Если игрока заберут раньше, выбор сбросится.",
         "prepareQueue": "Выбор можно подготовить заранее. Если игрока заберут раньше, выбор сбросится. Порядок в «Моём списке» — приоритет автопика.",
-        "override": "Пик заберётся у капитана {captain}. Причина обязательна и попадёт в журнал."
+        "override": "Вы делаете пик за капитана {captain}. Укажите причину — она попадёт в журнал."
       },
       "action": {
         "pickEmpty": "Взять пик",
         "pickPlayer": "Взять {player}",
         "pickRole": "Взять {player} на {role, select, tank {танка} damage {дамага} support {саппорта} other {флекс}}",
         "wait": "Ждём своего хода",
-        "overrideEmpty": "Заменить пик",
-        "overridePlayer": "Заменить: {player}",
-        "overrideRole": "Заменить: {player} на {role, select, tank {танка} damage {дамага} support {саппорта} other {флекс}}"
+        "overrideEmpty": "Пик за капитана",
+        "overridePlayer": "Взять {player} за капитана",
+        "overrideRole": "Взять {player} на {role, select, tank {танка} damage {дамага} support {саппорта} other {флекс}} за капитана"
       },
       "overrideNotePlaceholder": "Причина замены — попадёт в журнал",
       "overrideNoteLabel": "Причина замены",
       "pill": {
         "turn": "Ход {team}",
         "turnMineIn": "Ход {team} · ваш через {n}",
-        "override": "Замена пика · {team}",
-        "hintOverride": "Кликните по игроку, чтобы выбрать за команду",
-        "hintMine": "Кликните по игроку — откроется карточка с ролями",
+        "override": "Пик за капитана: {team}",
+        "hintOverride": "Выберите игрока, чтобы сделать пик за команду",
+        "hintMine": "Выберите игрока — откроется карточка с ролями",
         "hintPrepare": "Можно подготовить выбор заранее"
       }
     }

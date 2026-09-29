@@ -3,9 +3,8 @@
 import { ShieldAlert } from "lucide-react";
 import { redirect, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 
-import { DraftBoard } from "@/components/draft/DraftBoard";
+import { DraftBoard, DraftStateFrame } from "@/components/draft/DraftBoard";
 import { tournamentHref } from "@/lib/tournament/url";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { Button } from "@/components/ui/button";
@@ -32,45 +31,27 @@ export default function PublicDraftRoomPage() {
 
   const initialLoadError = tournamentQuery.isError && !tournament;
 
-  // The room lays out its own full-bleed header and 1720px body; only the
-  // error state needs the page's padding.
   return (
     <div className={`${styles.room} site-theme`}>
-      <main className={styles.stage}>
+      <main>
         {initialLoadError || !tournament ? (
-          <div className="mx-auto w-full max-w-[1720px] px-4 py-5 sm:px-6">
-            <DraftRoomState
-              icon={<ShieldAlert className="h-6 w-6 text-[color:var(--aqt-amber)]" />}
-              title={t("loadErrorTitle")}
-              hint={t("loadErrorHint")}
-              action={<Button onClick={() => tournamentQuery.refetch()}>{t("retry")}</Button>}
-            />
-          </div>
+          // The same frame the board uses for its own dead ends; the tournament
+          // is unknown here, so the way out is the tournament list.
+          <DraftStateFrame
+            icon={<ShieldAlert className="h-6 w-6 text-[color:var(--aqt-amber)]" />}
+            title={t("loadErrorTitle")}
+            hint={t("loadErrorHint")}
+            back={{ href: "/tournaments", label: t("room.allTournaments") }}
+            action={
+              <Button variant="outline" onClick={() => tournamentQuery.refetch()}>
+                {t("retry")}
+              </Button>
+            }
+          />
         ) : (
           <DraftBoard tournament={tournament} />
         )}
       </main>
     </div>
-  );
-}
-
-function DraftRoomState({
-  icon,
-  title,
-  hint,
-  action
-}: Readonly<{
-  icon: ReactNode;
-  title: string;
-  hint: string;
-  action?: ReactNode;
-}>) {
-  return (
-    <section className="flex min-h-[60svh] flex-col items-center justify-center gap-3 text-center">
-      {icon}
-      <h1 className="font-onest text-2xl font-semibold">{title}</h1>
-      <p className="max-w-lg text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{hint}</p>
-      {action ? <div className="mt-2">{action}</div> : null}
-    </section>
   );
 }

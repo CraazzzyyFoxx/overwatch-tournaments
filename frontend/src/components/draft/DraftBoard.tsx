@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
@@ -95,12 +96,16 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
     return <DraftBoardSkeleton />;
   }
 
+  // Every dead end keeps a way out: the room has no site navigation around it.
+  const back = { href: `/tournaments/${tournament.id}`, label: t("room.back") };
+
   if (boardQuery.isError && !board) {
     return (
       <DraftStateFrame
         icon={<AlertTriangle className="h-6 w-6 text-[color:var(--aqt-warm)]" />}
         title={t("loadErrorTitle")}
         hint={t("loadErrorHint")}
+        back={back}
         action={
           <Button variant="outline" onClick={() => boardQuery.refetch()}>
             {t("retry")}
@@ -116,6 +121,7 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
         icon={<ShieldCheck className="h-6 w-6 text-[color:var(--aqt-teal)]" />}
         title={t("emptyTitle")}
         hint={t("emptyHint")}
+        back={back}
       />
     );
   }
@@ -164,25 +170,42 @@ function setOptionalParam(
   else params.set(key, value);
 }
 
-function DraftStateFrame({
+/** A draft state with nothing to show yet: what happened, and a way out. Shared by the route's own error. */
+export function DraftStateFrame({
   icon,
   title,
   hint,
-  action
+  action,
+  back
 }: Readonly<{
   icon: ReactNode;
   title: string;
   hint: string;
   action?: ReactNode;
+  back?: { href: string; label: string };
 }>) {
   return (
     <div className="mx-auto max-w-[1720px] px-4 py-5 sm:px-6">
       <HeroFrame>
         <div className="flex min-h-64 flex-col items-start justify-center gap-3 px-6 py-12 md:px-10">
           {icon}
-          <h1 className="font-onest text-2xl font-semibold text-[color:var(--aqt-fg)]">{title}</h1>
-          <p className="max-w-xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{hint}</p>
-          {action ? <div className="mt-2">{action}</div> : null}
+          <h1 className="font-onest text-title font-semibold text-[color:var(--aqt-fg)]">{title}</h1>
+          <p className="max-w-xl text-body text-[color:var(--aqt-fg-muted)]">{hint}</p>
+          {action || back ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {action}
+              {back ? (
+                // Alone, the ghost button's padding would indent it off the
+                // heading's edge; after an action it sits in the button row.
+                <Button asChild variant="ghost" className={action ? undefined : "-ml-3"}>
+                  <Link href={back.href}>
+                    <ChevronLeft className="h-4 w-4" aria-hidden />
+                    {back.label}
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </HeroFrame>
     </div>

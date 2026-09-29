@@ -13,7 +13,9 @@ export function isMyTurnFor(gating: DraftGating, actingTeam: TeamView | null): b
 }
 
 export function clockColor(board: DraftBoard, myTurn: boolean, overtime: boolean): string {
-  if (board.session.status === "paused") return "var(--aqt-amber)";
+  const status = board.session.status;
+  if (status === "completed" || status === "cancelled") return "var(--aqt-status-finished)";
+  if (status === "paused") return "var(--aqt-amber)";
   if (overtime) return "var(--aqt-rose)";
   return myTurn ? "var(--aqt-teal)" : "var(--aqt-fg)";
 }
@@ -68,21 +70,21 @@ export function PickPill({ board, gating, actingTeam, overrideMode }: Readonly<P
       {/* Ticks every second: kept out of the live region so it is not announced on each tick. */}
       <span
         aria-hidden
-        className="font-onest text-[17px] font-bold tabular-nums"
+        className="font-onest text-ui font-bold tabular-nums"
         style={{ color: clockColor(board, myTurn, countdown.overtime) }}
       >
         {countdown.text ?? "—"}
       </span>
       <span aria-hidden className="h-[22px] w-px bg-[color:var(--aqt-border-2)]" />
       <span
-        className="text-[15px] font-semibold"
+        className="text-ui font-semibold"
         style={{
           color: overrideMode ? "var(--aqt-amber)" : myTurn ? "var(--aqt-teal)" : "var(--aqt-fg-muted)"
         }}
       >
         {label}
       </span>
-      <span className="hidden min-w-0 truncate text-sm text-[color:var(--aqt-fg-muted)] sm:inline">{hint}</span>
+      <span className="hidden min-w-0 truncate text-body text-[color:var(--aqt-fg-muted)] sm:inline">{hint}</span>
     </div>
   );
 }

@@ -33,6 +33,8 @@ interface RoleTilesProps {
   card: UserDraftCard | null;
   /** The card is on its way: its lines hold their place instead of popping in. */
   cardPending: boolean;
+  /** Only an organizer can act on a missing rank, so only an organizer is told how. */
+  isAdmin: boolean;
   divisionGrid: DivisionGrid;
 }
 
@@ -44,6 +46,7 @@ export function RoleTiles({
   actingTeam,
   card,
   cardPending,
+  isAdmin,
   divisionGrid
 }: Readonly<RoleTilesProps>) {
   const t = useTranslations("draftRedesign");
@@ -58,7 +61,9 @@ export function RoleTiles({
 
   if (roles.length === 0) {
     return (
-      <p className="px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("noRoleHint")}</p>
+      <p className="px-3.5 py-3 text-body text-[color:var(--aqt-fg-muted)]">
+        {isAdmin ? t("noRoleHint") : t("noRoleHintViewer")}
+      </p>
     );
   }
 
@@ -102,11 +107,11 @@ export function RoleTiles({
             <span className="flex min-w-0 items-center gap-2">
               <PlayerRoleIcon role={getRoleIconName(role)} size={24} color={ROLE_ACCENT[role]} decorative />
               <span className="flex min-w-0 flex-col">
-                <span className="whitespace-nowrap text-sm font-semibold leading-tight">{roleLabel}</span>
+                <span className="whitespace-nowrap text-body font-semibold leading-tight">{roleLabel}</span>
                 {priority && (
                   <span
-                    className="whitespace-nowrap text-label font-medium uppercase leading-snug tracking-label"
-                    style={{ color: index === 0 ? "var(--aqt-teal)" : "var(--aqt-fg-muted)" }}
+                    className="whitespace-nowrap text-label font-medium leading-snug"
+                    style={{ color: index === 0 ? "var(--aqt-fg)" : "var(--aqt-fg-muted)" }}
                     title={t("island.priorityTitle", { n: index + 1, total: roles.length })}
                   >
                     {t(`island.priority.${priority}`)}
@@ -116,13 +121,13 @@ export function RoleTiles({
               <span className="ml-auto flex shrink-0 items-center gap-1.5">
                 {borrowed && (
                   <span
-                    className="rounded border border-[color:var(--aqt-border-2)] px-1 text-label uppercase tracking-wide text-[color:var(--aqt-fg-faint)]"
+                    className="rounded border border-[color:var(--aqt-border-2)] px-1 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
                     title={t(`rankSource.${borrowed}`)}
                   >
                     {t(`rankSourceShort.${borrowed}`)}
                   </span>
                 )}
-                <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums">{rank ?? "—"}</span>
+                <span className="whitespace-nowrap text-ui font-semibold tabular-nums">{rank ?? "—"}</span>
                 {division != null && (
                   <DivisionIcon
                     division={division}
@@ -137,13 +142,13 @@ export function RoleTiles({
             {(subRole || withStats) && (
               <span className="flex min-w-0 items-center gap-1.5">
                 {subRole && (
-                  <span className="min-w-0 truncate text-[13px] font-medium" title={subRole}>
+                  <span className="min-w-0 truncate text-caption font-medium" title={subRole}>
                     {subRole}
                   </span>
                 )}
                 {withStats && (
                   <span
-                    className="ml-auto shrink-0 whitespace-nowrap text-xs tabular-nums text-[color:var(--aqt-fg-muted)]"
+                    className="ml-auto shrink-0 whitespace-nowrap text-label tabular-nums text-[color:var(--aqt-fg-muted)]"
                     title={roleStats && roleStats.maps > 0 && lowMaps ? t("island.tile.wrHidden") : t("island.tile.wrTitle")}
                   >
                     {cardPending ? (
@@ -190,7 +195,7 @@ export function RoleTiles({
                       />
                       {withStats && (
                         <span
-                          className="text-xs font-semibold leading-none tabular-nums"
+                          className="text-label font-semibold leading-none tabular-nums"
                           style={{ color: record ? winrateColor(heroShare, record.maps) : "var(--aqt-fg-muted)" }}
                         >
                           {cardPending ? <Bar className="w-6" /> : heroLow ? "—" : `${Math.round(heroShare * 100)}%`}
@@ -241,7 +246,7 @@ export function RoleTiles({
             }}
             className={cn(
               tileClass,
-              "min-h-11 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-card-2)] motion-reduce:transition-none",
+              "min-h-11 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-card-2)] motion-reduce:transition-none",
               on ? "border-2" : "border",
               usable ? "cursor-pointer" : "cursor-default border-dashed opacity-55"
             )}

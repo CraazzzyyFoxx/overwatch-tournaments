@@ -9,15 +9,6 @@
   background: var(--aqt-bg);
 }
 
-.stage {
-  /* `backwards` (not `both`): a forwards-filling animation that touches
-     `transform` keeps the element a containing block for `position: fixed`
-     descendants forever, which pinned the floating pick layer to the bottom
-     of the page instead of the viewport. Backwards fill still hides the stage
-     during the 80ms delay, then releases the containing block on finish. */
-  animation: stage-in 650ms 80ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
 /* The two room panels fill the viewport under the header: the header's live
    height arrives as `--draft-header-h`, 34px is the body's block padding. */
 @media (min-width: 80rem) {
@@ -29,16 +20,34 @@
 /* ---------------------------------------------------------------------------
    Loading skeleton: header row, clock strip, pool + teams panels. */
 
+.skeletonBlock {
+  display: block;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--aqt-border-2) 45%, transparent);
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(105deg, transparent 32%, var(--aqt-overlay-3) 48%, transparent 64%),
+    var(--aqt-card-2);
+  background-size:
+    240% 100%,
+    100% 100%;
+  animation: draft-skeleton-sweep 1.8s ease-in-out infinite;
+}
+
 .skeletonRoom {
   width: 100%;
   min-width: 0;
   max-width: 100%;
   overflow-x: clip;
+  /* The loaded room measures its header into this variable; the skeleton has
+     no JS, so it states the header it draws (52px row + 1px + 72px strip). */
+  --draft-header-h: 126px;
 }
 
 .skeletonBoardRegion {
   width: 100%;
   min-width: 0;
+  --draft-header-h: 126px;
 }
 
 .skeletonHeader {
@@ -182,10 +191,34 @@
 }
 
 .skeletonBody {
+  display: grid;
+  gap: 14px;
+  padding-block: 14px 20px;
+}
+
+/* Below `xl` the loaded room switches panels with a full-width tab bar. */
+.skeletonTabBar {
+  display: flex;
+  gap: 8px;
+}
+
+.skeletonTabBarItem {
+  flex: 1;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.skeletonPanels {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding-block: 14px 20px;
+  min-width: 0;
+}
+
+@media (min-width: 80rem) {
+  .skeletonTabBar {
+    display: none;
+  }
 }
 
 .skeletonPanel {
@@ -200,11 +233,11 @@
 }
 
 .skeletonPanel[data-draft-skeleton="pool"] {
-  flex: 1 1 600px;
+  flex: 1.2 1 600px;
 }
 
 .skeletonPanel[data-draft-skeleton="teams"] {
-  flex: 0 1 600px;
+  flex: 1 1 600px;
   min-width: 520px;
 }
 
@@ -215,9 +248,34 @@
   border-bottom: 1px solid var(--aqt-border);
 }
 
+.skeletonHeadRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .skeletonPanelTitle {
   width: 10rem;
   height: 1.1rem;
+  flex: none;
+}
+
+.skeletonSearch {
+  flex: 1;
+  min-width: 0;
+  height: 2.25rem;
+  border-radius: 8px;
+}
+
+.skeletonTabStrip {
+  display: flex;
+  gap: 14px;
+}
+
+.skeletonTab {
+  width: 5rem;
+  height: 1.75rem;
 }
 
 .skeletonChips {
@@ -228,7 +286,29 @@
 .skeletonChip {
   width: 5.5rem;
   height: 2rem;
+  border-radius: 999px;
+}
+
+.skeletonMeters {
+  display: flex;
+  gap: 8px;
+}
+
+.skeletonMeter {
+  flex: 1;
+  height: 2rem;
   border-radius: 8px;
+}
+
+.skeletonColHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skeletonColLabel {
+  flex: 1;
+  height: 0.7rem;
 }
 
 .skeletonRows {
@@ -239,9 +319,16 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 3.5rem;
   padding: 10px 16px;
   border-bottom: 1px solid var(--aqt-border);
+}
+
+.skeletonRow[data-draft-skeleton="pool-row"] {
+  min-height: 4rem;
+}
+
+.skeletonRow[data-draft-skeleton="team-row"] {
+  min-height: 3.25rem;
 }
 
 .skeletonRow:last-child {
@@ -256,28 +343,14 @@
 
 .skeletonRowCell {
   flex: 1;
-  height: 2.25rem;
 }
 
-.skeletonBlock {
-  display: block;
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--aqt-border-2) 45%, transparent);
-  border-radius: 0.4rem;
-  background:
-    linear-gradient(105deg, transparent 32%, color-mix(in srgb, var(--aqt-teal) 8%, transparent) 48%, transparent 64%),
-    hsl(220 22% 11% / 0.82);
-  background-size:
-    240% 100%,
-    100% 100%;
-  animation: draft-skeleton-sweep 1.8s ease-in-out infinite;
+.skeletonRow[data-draft-skeleton="pool-row"] .skeletonRowCell {
+  height: 52px;
 }
 
-@keyframes stage-in {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
+.skeletonRow[data-draft-skeleton="team-row"] .skeletonRowCell {
+  height: 30px;
 }
 
 @keyframes draft-skeleton-sweep {
@@ -333,12 +406,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage {
-    animation: none;
-  }
-
   .skeletonBlock {
     animation: none;
-    background: hsl(220 22% 11% / 0.82);
+    background: var(--aqt-card-2);
   }
 }

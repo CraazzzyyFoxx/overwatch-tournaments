@@ -139,7 +139,9 @@ export function PoolRow({
       }
       className={cn(
         POOL_GRID,
-        "min-h-16 cursor-pointer items-center gap-y-2 border-b border-[color:var(--aqt-border)] bg-[color:var(--row-bg)] px-4 pb-1.5 pt-2.5 hover:bg-[color:var(--aqt-overlay-2)]"
+        "min-h-16 cursor-pointer items-center gap-y-2 border-b border-[color:var(--aqt-border)] bg-[color:var(--row-bg)] px-4 pb-1.5 pt-2.5",
+        // Hover must not wipe the selected / open-profile tint it would replace.
+        !selected && !isProfile && "hover:bg-[color:var(--aqt-overlay-2)]"
       )}
     >
       <div className={cn("min-w-0", dimmed && "opacity-55")}>
@@ -157,7 +159,10 @@ export function PoolRow({
               onOpenProfile(player.id);
             }}
             aria-label={t("openProfile", { player: name })}
-            className="min-w-0 truncate rounded text-left text-body font-semibold text-[color:var(--aqt-fg)] outline-none hover:text-[color:var(--aqt-teal)] hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+            // Focus target when the pick card closes and its opener is gone.
+            data-player-name={player.id}
+            title={name}
+            className="min-w-0 truncate rounded text-left text-body font-semibold text-[color:var(--aqt-fg)] outline-hidden hover:text-[color:var(--aqt-teal)] hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
           >
             {name}
           </button>
@@ -165,7 +170,7 @@ export function PoolRow({
             <Crown className="h-[15px] w-[15px] shrink-0 text-[color:var(--aqt-warm)]" role="img" aria-label={t("captain")} />
           )}
           {player.is_flex && (
-            <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-[5px] text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
+            <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-[5px] text-label font-medium text-[color:var(--aqt-fg-muted)]">
               {t("flex")}
             </span>
           )}
@@ -174,7 +179,7 @@ export function PoolRow({
           <div
             className={cn(
               "mt-0.5 truncate text-caption",
-              blocked ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-muted)]"
+              blocked ? "text-[color:var(--aqt-rose-text)]" : "text-[color:var(--aqt-fg-muted)]"
             )}
           >
             {note}
@@ -252,7 +257,7 @@ export function PoolRow({
             queue.toggle(player.id);
           }}
           className={cn(
-            "flex h-11 w-11 items-center justify-center justify-self-end rounded-lg outline-none hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:h-8 sm:w-8",
+            "flex h-11 w-11 items-center justify-center justify-self-end rounded-lg outline-hidden hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:h-8 sm:w-8",
             queued ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-faint)]"
           )}
         >
@@ -280,7 +285,7 @@ function MoveButton({
         stop(event);
         onClick();
       }}
-      className="flex h-11 w-11 items-center justify-center rounded-md text-[color:var(--aqt-fg-muted)] outline-none hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] disabled:opacity-40 sm:h-6 sm:w-7"
+      className="flex h-11 w-11 items-center justify-center rounded-md text-[color:var(--aqt-fg-muted)] outline-hidden hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] disabled:opacity-40 sm:h-6 sm:w-7"
     >
       {children}
     </button>
@@ -314,18 +319,21 @@ function RightCell({
       : cell?.role
         ? `${t(`roles.${cell.role}`)}${cell.offRole ? ` · ${t("pool.right.offRole")}` : ""}`
         : null;
+    // The team is already under the name ("Already on {team}"); this narrow
+    // column only has room for what that line lacks — the seat they took.
     return (
-      <>
-        <div className={cn(main, "text-[color:var(--aqt-fg)]")}>{takenTeam?.team.name ?? "—"}</div>
-        {sub && <div className="truncate text-caption text-[color:var(--aqt-fg-muted)]">{sub}</div>}
-      </>
+      <div className={cn(main, "text-[color:var(--aqt-fg)]")} title={takenTeam?.team.name}>
+        {sub ?? "—"}
+      </div>
     );
   }
 
   if (actingTeam != null) {
     if (blocked || fit == null) return <div className={cn(main, "text-[color:var(--aqt-fg-faint)]")}>—</div>;
+    // Neutral ramp: the fit number is a magnitude, not a role — Support green here
+    // would read as "support" and collide with online/good.
     const color =
-      fit.score >= 75 ? "var(--aqt-support)" : fit.score >= 55 ? "var(--aqt-fg)" : "var(--aqt-fg-muted)";
+      fit.score >= 75 ? "var(--aqt-fg)" : fit.score >= 55 ? "var(--aqt-fg-muted)" : "var(--aqt-fg-dim)";
     const title =
       fit.role == null
         ? t("pool.fitTitleAny", { team: actingTeam.team.name })
@@ -345,8 +353,8 @@ function RightCell({
 
   const demand = demandCount(player, teamViews);
   return (
-    <div className={cn(main, "text-[color:var(--aqt-fg-muted)]")} title={t("pool.demandTitle")}>
-      {demand > 0 ? t("pool.demand", { count: demand }) : "—"}
+    <div className={cn(main, "tabular-nums text-[color:var(--aqt-fg-muted)]")} title={t("pool.demandTitle")}>
+      {demand > 0 ? demand : "—"}
     </div>
   );
 }
@@ -404,8 +412,8 @@ function RoleCell({
       <span
         title={prioTitle}
         className={cn(
-          "pointer-events-none absolute -top-[7px] left-[7px] whitespace-nowrap bg-[color:var(--aqt-card)] px-1 text-[11px] font-semibold uppercase leading-[13px] tracking-[0.06em]",
-          primary ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-fg-muted)]"
+          "pointer-events-none absolute -top-[7px] left-[7px] whitespace-nowrap bg-[color:var(--aqt-card)] px-1 text-label font-semibold leading-none",
+          primary ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)]"
         )}
       >
         {t(`pool.cell.${PRIORITY_KEYS[index] ?? "third"}`)}
@@ -434,15 +442,18 @@ function RoleCell({
         <span className="whitespace-nowrap text-body font-semibold leading-tight tabular-nums">{rank ?? "—"}</span>
         <span
           className={cn(
-            "truncate text-label leading-tight tracking-[-0.01em]",
+            "truncate text-label leading-tight",
             subRole ? "text-[color:var(--aqt-fg-muted)]" : "text-[color:var(--aqt-fg-faint)]"
           )}
         >
           {subRole ?? t("pool.cell.noSubRole")}
         </span>
       </span>
+      {/* Hero faces are the first thing to give way: a cell narrower than the
+          crest + rank + three faces keeps the rank whole instead (container
+          query on the cell, so it tracks the panel width, not the viewport). */}
       {heroes.length > 0 && (
-        <span className="hidden shrink-0 sm:flex">
+        <span className="hidden shrink-0 @[176px]/cell:flex">
           {heroes.map((hero, heroIndex) => {
             const heroName = hero.slug.replace(/-/g, " ");
             return (
@@ -465,7 +476,7 @@ function RoleCell({
     </>
   );
   const shell =
-    "relative flex h-[52px] w-full min-w-0 items-center gap-[3px] overflow-visible rounded-lg border pl-[5px] pr-[3px] text-caption font-medium";
+    "@container/cell relative flex h-[52px] w-full min-w-0 items-center gap-[3px] overflow-visible rounded-lg border pl-[5px] pr-[3px] text-caption font-medium";
 
   if (actor == null) {
     // Spectators and taken players: the same facts, nothing to press.
@@ -475,7 +486,9 @@ function RoleCell({
         className={cn(
           shell,
           "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)]",
-          dimmed && "opacity-55"
+          // Dim by colour, not opacity: opacity stacks onto an already muted
+          // foreground and drops the cell under 3:1.
+          dimmed && "text-[color:var(--aqt-fg-dim)] [&_img]:grayscale [&_svg]:grayscale"
         )}
       >
         {body}
@@ -522,9 +535,12 @@ function RoleCell({
       }
       className={cn(
         shell,
-        "cursor-pointer border-[color:var(--cell-border)] outline-none transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
-        on || usable ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)]",
-        !usable && "border-dashed opacity-45"
+        "border-[color:var(--cell-border)] outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+        // A cell that cannot be taken must not invite the click, and must stay
+        // legible: dim foreground, not opacity over the whole cell.
+        usable ? "cursor-pointer" : "cursor-default border-dashed [&_img]:grayscale [&_svg]:grayscale",
+        usable && !on && "hover:border-[color:var(--aqt-teal)]",
+        on || usable ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]"
       )}
     >
       {body}

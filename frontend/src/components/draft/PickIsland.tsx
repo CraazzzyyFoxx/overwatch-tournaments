@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Crown, Heart, WifiOff, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -40,6 +40,8 @@ import { actionBorder, clockColor, isMyTurnFor } from "./PickPill";
 
 interface PickIslandProps {
   board: DraftBoard;
+  /** The card element: the room focuses it when a user opens the card. */
+  cardRef: RefObject<HTMLDivElement | null>;
   gating: DraftGating;
   /** Card subject; null → the island is closed and PickPill renders instead (when the seat can act). */
   player: DraftPlayer | null;
@@ -63,7 +65,7 @@ interface PickIslandProps {
 }
 
 const ICON_BUTTON =
-  "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] outline-none hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] outline-hidden hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 const VIEW_PANEL =
   "mt-0 ring-offset-0 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0";
 
@@ -75,7 +77,7 @@ type CardView = "info" | "stats";
  * outlives the card closing on a successful pick.
  */
 export function PickIsland(props: Readonly<PickIslandProps>) {
-  const { board, gating, player, selection, onSelectRole, onClose, actingTeam, overrideMode } = props;
+  const { board, cardRef, gating, player, selection, onSelectRole, onClose, actingTeam, overrideMode } = props;
   const { showTargets, target, onTargetChange, queue, divisionGrid } = props;
   const t = useTranslations("draftRedesign");
   const [announcement, setAnnouncement] = useState("");
@@ -130,6 +132,7 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
       actingTeam={actingTeam}
       card={cardQuery.data ?? null}
       cardPending={cardPending}
+      isAdmin={gating.isAdmin}
       divisionGrid={divisionGrid}
     />
   );
@@ -143,8 +146,10 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
     <>
       {liveRegion}
       <div
+        ref={cardRef}
         role="dialog"
-        aria-label={t("island.aria", { player: displayName })}
+        tabIndex={-1}
+        aria-labelledby="pick-island-title"
         className="flex max-h-[85svh] w-full flex-col overflow-hidden rounded-t-2xl border bg-[color:var(--aqt-card-2)] shadow-[0_18px_50px_rgb(0_0_0/0.45)] sm:max-h-[calc(100svh-40px)] sm:rounded-2xl"
         style={{ borderColor: actionBorder(board, myTurn, overrideMode) }}
       >
@@ -162,7 +167,7 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
           )}
           <div className="min-w-0 flex-1">
             <p
-              className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em]"
+              className="flex min-w-0 items-center gap-1.5 text-label font-semibold"
               style={{ color: available ? "var(--aqt-teal)" : "var(--aqt-fg-muted)" }}
             >
               <span className="truncate">{statusText}</span>
@@ -174,11 +179,11 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
               )}
             </p>
             <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <h2 className="min-w-0 truncate font-onest text-xl font-semibold leading-tight tracking-[-0.01em]">
+              <h2 id="pick-island-title" className="min-w-0 truncate font-onest text-title font-semibold">
                 {profileSlug ? (
                   <Link
                     href={`/users/${profileSlug}`}
-                    className="rounded hover:text-[color:var(--aqt-teal)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                    className="rounded hover:text-[color:var(--aqt-teal)] hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
                   >
                     {displayName}
                   </Link>
@@ -194,19 +199,19 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
                 />
               )}
               {player.is_flex && (
-                <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-1.5 text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--aqt-fg-muted)]">
+                <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-1.5 text-label font-medium text-[color:var(--aqt-fg-muted)]">
                   {t("flex")}
                 </span>
               )}
               {player.primary_role == null && (
-                <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-1.5 text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--aqt-fg-muted)]">
+                <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-1.5 text-label font-medium text-[color:var(--aqt-fg-muted)]">
                   {t("noRole")}
                 </span>
               )}
             </div>
             {priority.length > 0 && (
               <p
-                className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm text-[color:var(--aqt-fg-muted)]"
+                className="mt-0.5 flex min-w-0 items-center gap-1.5 text-body text-[color:var(--aqt-fg-muted)]"
                 title={priorityLine}
               >
                 <span className="shrink-0">{t("island.rolePriority")}</span>
@@ -298,7 +303,7 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
                     <CareerTables card={cardQuery.data} pending={cardPending} divisionGrid={divisionGrid} />
                   </>
                 ) : (
-                  <p className="px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("island.noAccount")}</p>
+                  <p className="px-3.5 py-3 text-body text-[color:var(--aqt-fg-muted)]">{t("island.noAccount")}</p>
                 )}
               </div>
             </TabsContent>
@@ -423,11 +428,11 @@ function IslandFooter({
   return (
     <div className="border-t border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-3.5 pb-3 pt-2.5">
       {overrideMode && (
-        <p className="mb-2 text-xs text-[color:var(--aqt-amber)]">{t("island.hint.override", { captain: captainTag })}</p>
+        <p className="mb-2 text-label text-[color:var(--aqt-amber)]">{t("island.hint.override", { captain: captainTag })}</p>
       )}
       <div className="flex flex-wrap items-center gap-3.5 sm:flex-nowrap">
         <span
-          className="min-w-12 font-onest text-[17px] font-bold tabular-nums"
+          className="min-w-12 font-onest text-ui font-bold tabular-nums"
           style={{ color: clockColor(board, myTurn, countdown.overtime) }}
         >
           {countdown.text ?? "—"}
@@ -445,16 +450,17 @@ function IslandFooter({
           />
         )}
 
-        {/* About confirming MY pick (live options); an override needs neither. */}
-        {!isConnected && !overrideMode ? (
-          <p className="flex min-w-0 flex-1 items-center gap-2 text-[13px] text-[color:var(--aqt-warm)]">
+        {/* Only the seat whose confirm the connection blocks hears about it:
+            a spectator's pick is nobody's to make. */}
+        {!isConnected && !overrideMode && myTurn ? (
+          <p className="flex min-w-0 flex-1 items-center gap-2 text-caption text-[color:var(--aqt-warm)]">
             <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
             <span className="line-clamp-2">{t("waitingFreshData")}</span>
           </p>
         ) : overrideMode && !board.session.allow_admin_override ? (
-          <p className="min-w-0 flex-1 text-[13px] text-[color:var(--aqt-fg-muted)]">{t("overrideDisabled")}</p>
+          <p className="min-w-0 flex-1 text-caption text-[color:var(--aqt-fg-muted)]">{t("overrideDisabled")}</p>
         ) : hint ? (
-          <p className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug text-[color:var(--aqt-fg-muted)]" title={hint}>
+          <p className="line-clamp-2 min-w-0 flex-1 text-caption leading-snug text-[color:var(--aqt-fg-muted)]" title={hint}>
             {hint}
           </p>
         ) : null}

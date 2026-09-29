@@ -281,7 +281,7 @@
     "registration": "Team registration",
     "solo": "Solo registration (FFA)",
     "connection": {
-      "idle": "Realtime idle",
+      "idle": "Not connected",
       "connecting": "Connecting",
       "connected": "Live connection",
       "reconnecting": "Reconnecting"
@@ -989,6 +989,7 @@
       "autopicking": "autopicking…",
       "remaining": "{seconds, plural, one {# second} other {# seconds}} left to pick",
       "idle": "Pick clock is not running",
+      "finished": "Draft finished",
       "overtime": "Overtime"
     },
     "empty": {
@@ -5004,7 +5005,8 @@
   },
   "draftRedesign": {
     "room": {
-      "back": "Back to tournament"
+      "back": "Back to tournament",
+      "allTournaments": "All tournaments"
     },
     "yourTurn": "Your turn",
     "unknownTeam": "Unknown team",
@@ -5019,7 +5021,7 @@
     "resetFilters": "Reset filters",
     "heroFilter": "Heroes",
     "heroFilterClear": "Clear",
-    "heroFilterCount": "{count, plural, one {# hero} other {# heroes}}",
+    "heroFilterOn": "selected",
     "unsafeOption": "Unavailable for this pick",
     "captain": "Captain",
     "note": "Note",
@@ -5028,6 +5030,7 @@
     "role": "Role",
     "noRole": "No role",
     "noRoleHint": "This player has no ranked role, so there is nothing to pick them on. Add a rank in the balancer.",
+    "noRoleHintViewer": "This player has no ranked role, so they can't be picked.",
     "rankSource": {
       "registration": "Declared on registration",
       "workspace": "Workspace rank",
@@ -5045,14 +5048,14 @@
       "slot_filled": "This roster slot is already filled.",
       "role_shortage": "Choosing this option would leave another required role impossible to fill."
     },
-    "waitingFreshData": "Confirmation waits for a live connection and options matching the current pick version.",
+    "waitingFreshData": "Connection lost — reconnecting. You can confirm your pick once it's back.",
     "pickSuccess": "{player} was picked successfully.",
-    "checkingSafeOptions": "Checking every player-role option against the remaining draft…",
-    "safeOptionsUnavailable": "The safe-pick check could not be loaded, so no player is marked safe or blocked here.",
+    "checkingSafeOptions": "Checking which picks are allowed…",
+    "safeOptionsUnavailable": "Couldn't check which picks are allowed, so you can't confirm yet. Select Retry.",
     "mobileViews": "Draft workspace sections",
     "loadingTitle": "Loading the draft room",
     "loadErrorTitle": "The draft room could not be loaded",
-    "loadErrorHint": "The server did not return a current board. Retry without losing your page context.",
+    "loadErrorHint": "Check your connection and try again.",
     "retry": "Retry",
     "emptyTitle": "Draft is not configured yet",
     "emptyHint": "The organizer needs to create and validate the draft before the public room becomes available.",
@@ -5071,7 +5074,7 @@
     "filterBySlot": "Show {role} players",
     "selectionTaken": "{player} was just drafted by another team, so your selection was cleared.",
     "overrideDisabled": "Admin overrides are disabled for this draft.",
-    "overrideSuccess": "{player} was assigned by override.",
+    "overrideSuccess": "{player} was picked for the captain.",
     "badge": {
       "auto": "Auto",
       "override": "Override",
@@ -5079,6 +5082,8 @@
     },
     "admin": {
       "dock": "Organizer controls",
+      "clockGroup": "Clock",
+      "pickGroup": "Pick",
       "pause": "Pause",
       "resume": "Resume",
       "addSeconds": "+{seconds}s",
@@ -5110,14 +5115,15 @@
       },
       "formatName": {
         "snake": "Snake",
-        "linear": "Linear",
+        "linear": "Straight order",
         "custom": "Custom order"
       },
-      "formatLine": "{format} · {teams, plural, one {# team} other {# teams}} · {rounds, plural, one {# round} other {# rounds}} · {seconds}s per pick",
+      "teamsCount": "{teams, plural, one {# team} other {# teams}}",
+      "pickTime": "{seconds}s per pick",
       "viewers": "{count, plural, one {# viewer} other {# viewers}}",
       "seat": {
-        "captain": "You captain {team}",
-        "captain_admin": "Captain of {team} and organizer",
+        "captain": "Captain: {team}",
+        "captain_admin": "Captain: {team}, organizer",
         "admin": "Organizer",
         "spectator": "Spectator"
       },
@@ -5131,17 +5137,20 @@
         "captainOnline": "Captain is in the room",
         "captainOffline": "Captain is not in the room",
         "pick": "Pick {pick} of {total}",
-        "round": "Round {round} of {rounds} · {direction}",
+        "round": "Round {round} of {rounds}, {direction}",
         "direction": {
-          "forward": "forward order",
+          "forward": "straight order",
           "reverse": "reverse order",
           "custom": "custom order"
         },
-        "allRounds": "All rounds",
-        "track": "Round {round} · {done} / {total}",
+        "allRounds": "Pick order",
+        "track": "Round {round}: {done} of {total, plural, one {# pick} other {# picks}} made",
         "tick": "P{pick} · {team}",
         "tickPlayer": "P{pick} · {team} — {player}",
-        "myTurnIn": "Your turn in {count}",
+        "myTurnIn": "Your turn in {count, plural, one {# pick} other {# picks}}",
+        "announce": "Pick {pick}: {team} is picking.",
+        "announceMine": "Pick {pick}: your turn.",
+        "announceLast": "{team} took {player}.",
         "next": "Next: {teams}",
         "nextMine": "{team} (you)",
         "finalPick": "Final pick",
@@ -5161,7 +5170,7 @@
         "label": "Draft journal",
         "loading": "Loading the journal…",
         "empty": "Nothing has happened yet.",
-        "error": "The journal did not load.",
+        "error": "Couldn't load the journal.",
         "system": "system",
         "unknownTeam": "a team",
         "unknownPlayer": "a player",
@@ -5183,6 +5192,7 @@
       "banner": {
         "pausedCaptain": "The draft is paused. Your selection is kept — the clock continues when the organizer resumes.",
         "pausedSpectator": "The draft is paused. Waiting for the organizer to resume.",
+        "pausedAdmin": "The draft is paused. Resume when you're ready.",
         "blocked": {
           "role_shortage": "The draft stopped: the remaining players can no longer fill every roster. The organizer has to add a missing role.",
           "order_recalculated": "The pick order of this round was recalculated. The draft continues once the organizer resumes it.",
@@ -5193,8 +5203,9 @@
         "overtimeFit": "Main time is up. In {time} the autopick takes {player} — the best fit for an open role.",
         "overtimeMine": "Main time is up. In {time} the autopick fires.",
         "overtimeOther": "Overtime for {team}: the autopick fires in {time}.",
-        "finished": "Draft finished: {picks, plural, one {# pick} other {# picks}}, {teams, plural, one {# team} other {# teams}} assembled. The summary is above the player list.",
+        "finished": "Rosters are set: {teams, plural, one {# team} other {# teams}} complete. See Draft results under Players.",
         "notStarted": "The draft has not started yet. The organizer starts it once everyone is ready.",
+        "notStartedAdmin": "The draft hasn't started. Start it when every captain is ready.",
         "cancelled": "The organizer cancelled this draft."
       },
       "tabs": {
@@ -5225,11 +5236,14 @@
       "heroEmpty": "No heroes found.",
       "market": {
         "label": "Open slots and supply per role",
-        "slots": "{role} · {count, plural, one {# slot} other {# slots}}",
+        "slots": "{count, plural, =0 {no slots} one {# slot} other {# slots}}",
         "supply": "{primary} {total, plural, one {player} other {players}}",
-        "supplyWithSecondary": "{primary} +{secondary} {total, plural, one {player} other {players}}",
+        "supplyWithSecondary": "{primary} main + {secondary} secondary",
         "title": "Open “{role}” slots across all teams: {open}. In the pool: {primary} with it as their main role and {secondary} more as a secondary one.",
-        "deficit": "Fewer players than slots — someone will play off-role."
+        "deficit": "Fewer players than slots — someone will play off-role.",
+        "tight": "Fewer main-role players than slots — secondary roles will fill the rest.",
+        "deficitLabel": "short",
+        "tightLabel": "tight"
       },
       "summary": {
         "title": "Draft results",
@@ -5245,7 +5259,7 @@
       "col": {
         "player": "Player",
         "fit": "Fit",
-        "demand": "Demand"
+        "demand": "Teams"
       },
       "row": {
         "select": "Select on the best open role",
@@ -5273,7 +5287,6 @@
       },
       "fitTitle": "Fit for {team} on {role}",
       "fitTitleAny": "Fit for {team}",
-      "demand": "wanted {count}",
       "demandTitle": "How many teams can still take this player on one of their roles",
       "queueAdd": "Add to my list",
       "queueRemove": "Remove from my list",
@@ -5295,7 +5308,7 @@
         "rosters": "Rosters",
         "queue": "Queue",
         "order": "Order",
-        "orderCount": "{count} rd"
+        "orderCount": "{count, plural, one {# round} other {# rounds}}"
       },
       "caption": {
         "order": "{kind, select, snake {Snake} linear {Straight order} other {Custom order}} · {count, plural, one {# pick} other {# picks}}",
@@ -5329,12 +5342,13 @@
         "myTurn": "you · your pick",
         "picking": "picking now",
         "first": "picks first",
-        "in": "picks in {n}",
+        "in": "turn in {n, plural, one {# pick} other {# picks}}",
         "mine": "you · {status}"
       },
       "follow": "Follow {team}",
       "unfollow": "Unfollow {team}",
       "followTitle": "Follow this team",
+      "followedMark": "You follow this team",
       "captainOnline": "Captain is in the room",
       "captainOffline": "Captain is not in the room",
       "avgEmpty": "No slots filled",
@@ -5382,7 +5396,6 @@
       }
     },
     "island": {
-      "aria": "Player {player}",
       "close": "Close",
       "status": {
         "available": "Available",
@@ -5463,25 +5476,25 @@
         "chooseRole": "Choose one of the player's roles to pick them.",
         "prepare": "You can prepare your pick in advance. If the player is taken first, the selection resets.",
         "prepareQueue": "You can prepare your pick in advance. If the player is taken first, the selection resets. The order of My list is the autopick priority.",
-        "override": "The pick is taken away from captain {captain}. A reason is required and goes to the journal."
+        "override": "You're picking for captain {captain}. Give a reason — it goes to the journal."
       },
       "action": {
         "pickEmpty": "Pick",
         "pickPlayer": "Pick {player}",
         "pickRole": "Pick {player} as {role, select, tank {tank} damage {damage} support {support} other {flex}}",
         "wait": "Waiting for your turn",
-        "overrideEmpty": "Override",
-        "overridePlayer": "Override with {player}",
-        "overrideRole": "Override with {player} as {role, select, tank {tank} damage {damage} support {support} other {flex}}"
+        "overrideEmpty": "Pick for the captain",
+        "overridePlayer": "Pick {player} for the captain",
+        "overrideRole": "Pick {player} as {role, select, tank {tank} damage {damage} support {support} other {flex}} for the captain"
       },
       "overrideNotePlaceholder": "Override reason — goes to the journal",
       "overrideNoteLabel": "Override reason",
       "pill": {
         "turn": "{team} is picking",
         "turnMineIn": "{team} is picking · yours in {n}",
-        "override": "Pick override · {team}",
-        "hintOverride": "Click a player to pick for the team",
-        "hintMine": "Click a player to open their card with roles",
+        "override": "Picking for the captain: {team}",
+        "hintOverride": "Select a player to pick for the team",
+        "hintMine": "Select a player to open their card with roles",
         "hintPrepare": "You can prepare your pick in advance"
       }
     }

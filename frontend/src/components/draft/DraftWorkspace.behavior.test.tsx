@@ -227,7 +227,8 @@ describe("DraftWorkspace seats", () => {
     expect(html).toContain('href="/tournaments/5"');
     expect(html).toContain("Cup #41");
     expect(html).toContain('shell.viewers:{"count":3}');
-    expect(html).toContain("shell.formatLine:");
+    expect(html).toContain("shell.teamsCount:");
+    expect(html).toContain("shell.pickTime:");
   });
 });
 

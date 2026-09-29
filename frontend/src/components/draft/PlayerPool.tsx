@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { Check, Search } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -69,7 +69,7 @@ interface PlayerPoolProps {
   bottomInset: number;
 }
 
-const FOCUS_RING = "outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+const FOCUS_RING = "outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 
 export function PlayerPool({
   board,
@@ -181,7 +181,7 @@ export function PlayerPool({
       >
         <div className="flex flex-col gap-3 border-b border-[color:var(--aqt-border)] px-4 pb-3 pt-3.5">
           <div className="flex flex-wrap items-center gap-3.5">
-            <h2 id={headingId} className="font-onest text-base font-semibold leading-snug">
+            <h2 id={headingId} className="font-onest text-heading font-semibold">
               {t("pool.title")}
             </h2>
             <label className="relative ml-auto flex min-w-[180px] flex-[0_1_280px] items-center">
@@ -230,9 +230,10 @@ export function PlayerPool({
                       } as CSSProperties
                     }
                     className={cn(
-                      "flex min-h-11 max-w-full items-center gap-1.5 rounded-full border bg-[color:var(--chip-bg)] px-[11px] text-caption font-medium hover:bg-[color:var(--aqt-overlay-3)] sm:min-h-8",
+                      "flex min-h-11 max-w-full items-center gap-1.5 rounded-full border bg-[color:var(--chip-bg)] px-[11px] text-caption font-medium sm:min-h-8",
                       FOCUS_RING,
-                      on ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)]"
+                      // Hover must not paint over the role tint that marks the active filter.
+                      on ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)]"
                     )}
                   >
                     {chip.role && (
@@ -252,10 +253,7 @@ export function PlayerPool({
               })}
             </div>
             <div className="ml-auto flex items-center gap-1">
-              <span
-                id={`${headingId}-sort`}
-                className="mr-1 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
-              >
+              <span id={`${headingId}-sort`} className="mr-1 text-label font-medium text-[color:var(--aqt-fg-faint)]">
                 {t("pool.sortLabel")}
               </span>
               <div role="group" aria-labelledby={`${headingId}-sort`} className="flex items-center gap-1">
@@ -292,7 +290,6 @@ export function PlayerPool({
                         ? "bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)]"
                         : "text-[color:var(--aqt-fg-muted)]"
                     )}
-                    aria-label={t("heroFilterCount", { count: heroFilter.size })}
                   >
                     {t("heroFilter")}
                     {heroFilter.size > 0 && <span className="tabular-nums">{heroFilter.size}</span>}
@@ -310,7 +307,11 @@ export function PlayerPool({
                               <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
                             </Avatar>
                             <span className="truncate capitalize">{hero.slug.replace(/-/g, " ")}</span>
+                            {/* cmdk's aria-selected follows the highlighted row, not the
+                                filter, so the filter state is spelled out. */}
+                            {heroFilter.has(hero.slug) && <span className="sr-only">{t("heroFilterOn")}</span>}
                             <Check
+                              aria-hidden
                               className={cn("ml-auto h-4 w-4", heroFilter.has(hero.slug) ? "opacity-100" : "opacity-0")}
                             />
                           </CommandItem>
@@ -340,32 +341,50 @@ export function PlayerPool({
             <ul
               aria-label={t("pool.market.label")}
               className="grid gap-x-[18px] gap-y-3"
-              style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 160px), 1fr))` }}
+              style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 200px), 1fr))` }}
             >
               {market.map((entry) => {
                 const supply = entry.primary + entry.secondary;
                 const denominator = Math.max(entry.openSlots, supply, 1);
                 const barColor = entry.deficit ? "var(--aqt-rose)" : ROLE_ACCENT[entry.role];
                 const roleLabel = t(`roles.${entry.role}`);
+                // Shortage is a fact, not a hue: the icon + word carry it, the colour only repeats it.
+                const shortage = entry.deficit ? "deficit" : entry.tight ? "tight" : null;
+                const ShortageIcon = entry.deficit ? AlertTriangle : AlertCircle;
                 const title = `${t("pool.market.title", {
                   role: roleLabel,
                   open: entry.openSlots,
                   primary: entry.primary,
                   secondary: entry.secondary
-                })}${entry.deficit ? ` ${t("pool.market.deficit")}` : ""}`;
+                })}${shortage ? ` ${t(`pool.market.${shortage}`)}` : ""}`;
                 return (
                   <li key={entry.role} title={title}>
                     <span className="sr-only">{title}</span>
-                    <div className="flex items-center gap-[7px] text-body text-[color:var(--aqt-fg-muted)]" aria-hidden="true">
+                    <div
+                      className="flex flex-wrap items-center gap-x-[7px] gap-y-0.5 text-body text-[color:var(--aqt-fg-muted)]"
+                      aria-hidden="true"
+                    >
                       <PlayerRoleIcon role={getRoleIconName(entry.role)} size={17} color={ROLE_ACCENT[entry.role]} decorative />
-                      <span className="min-w-0 truncate">
-                        {t("pool.market.slots", { role: roleLabel, count: entry.openSlots })}
+                      <span className="min-w-0 truncate">{roleLabel}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">
+                        {t("pool.market.slots", { count: entry.openSlots })}
                       </span>
+                      {shortage && (
+                        <span
+                          className={cn(
+                            "flex shrink-0 items-center gap-1 font-medium",
+                            entry.deficit ? "text-[color:var(--aqt-rose-text)]" : "text-[color:var(--aqt-amber)]"
+                          )}
+                        >
+                          <ShortageIcon className="h-[15px] w-[15px]" aria-hidden="true" />
+                          {t(`pool.market.${shortage}Label`)}
+                        </span>
+                      )}
                       <span
                         className={cn(
                           "ml-auto shrink-0 whitespace-nowrap font-semibold tabular-nums",
                           entry.deficit
-                            ? "text-[color:var(--aqt-rose)]"
+                            ? "text-[color:var(--aqt-rose-text)]"
                             : entry.tight
                               ? "text-[color:var(--aqt-amber)]"
                               : "text-[color:var(--aqt-fg)]"
@@ -401,7 +420,7 @@ export function PlayerPool({
 
         {summary && (
           <div className="border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-5 py-[18px]">
-            <h3 className="font-onest text-lg font-semibold leading-snug">{t("pool.summary.title")}</h3>
+            <h3 className="font-onest text-ui font-semibold">{t("pool.summary.title")}</h3>
             <dl className="mt-3.5 grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
                 {
@@ -418,10 +437,10 @@ export function PlayerPool({
                 { key: "overrides" as const, value: String(summary.overrides), sub: t("pool.summary.overridesSub") }
               ].map((tile) => (
                 <div key={tile.key} className="flex flex-col">
-                  <dt className="text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                  <dt className="text-label font-medium text-[color:var(--aqt-fg-faint)]">
                     {t(`pool.summary.${tile.key}`)}
                   </dt>
-                  <dd className="mt-1 font-onest text-[30px] font-bold leading-[1.1] tabular-nums">{tile.value}</dd>
+                  <dd className="mt-1 font-onest text-headline font-bold tabular-nums">{tile.value}</dd>
                   <dd className="mt-0.5 text-caption text-[color:var(--aqt-fg-muted)]">{tile.sub}</dd>
                 </div>
               ))}
@@ -431,14 +450,14 @@ export function PlayerPool({
 
         <TabsContent
           value={tab}
-          className="mt-0 min-h-0 flex-1 ring-offset-0 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 xl:overflow-y-auto"
+          className="mt-0 min-h-0 flex-1 ring-offset-0 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 xl:scroll-pb-[var(--draft-layer-h,0px)] xl:overflow-y-auto"
           style={{ "--pool-roles": `${Math.max(columns.length, 1)}fr`, paddingBottom: bottomInset } as CSSProperties}
         >
           <div
             aria-hidden="true"
             className={cn(
               POOL_GRID,
-              "sticky top-0 z-10 hidden border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-4 py-2 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)] sm:grid"
+              "sticky top-[var(--draft-tabs-h,0px)] z-10 hidden border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-4 py-2 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)] sm:grid"
             )}
           >
             <span>{t("pool.col.player")}</span>
@@ -502,7 +521,7 @@ function PoolEmpty({ kind, onReset }: Readonly<{ kind: "filtered" | "shortlist" 
   const t = useTranslations("draftRedesign");
   return (
     <div className="px-5 py-14 text-center">
-      <p className="text-base font-semibold">{t(`pool.empty.${kind}Title`)}</p>
+      <p className="text-ui font-semibold">{t(`pool.empty.${kind}Title`)}</p>
       <p className="mt-1.5 text-body text-[color:var(--aqt-fg-muted)]">{t(`pool.empty.${kind}Text`)}</p>
       {kind === "filtered" && (
         <Button type="button" variant="outline" className="mt-4 min-h-10" onClick={onReset}>

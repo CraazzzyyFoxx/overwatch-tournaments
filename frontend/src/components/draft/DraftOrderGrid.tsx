@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowRight, Shuffle } from "lucide-react";
+import { ArrowRight, Shuffle, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { currentRound, orderGrid, pickState, picksAway, type RoundDirection } from "@/lib/draft/room-model";
 import { cn } from "@/lib/utils";
 import type { DraftBoard } from "@/types/draft.types";
@@ -39,12 +40,17 @@ export function DraftOrderGrid({
   const gridTemplateColumns = `24px minmax(0,1.1fr) repeat(${Math.max(rounds.length, 1)}, minmax(0,1fr))`;
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto border-t border-[color:var(--aqt-border)]">
-      <p className="border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-[13px] leading-[1.45] text-[color:var(--aqt-fg-muted)] [text-wrap:pretty]">
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label={t("teams.tabs.order")}
+      className="min-h-0 flex-1 scroll-pb-[var(--draft-layer-h,0px)] overflow-auto border-t border-[color:var(--aqt-border)] pb-[var(--draft-layer-h,0px)] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+    >
+      <p className="border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-caption text-[color:var(--aqt-fg-muted)] [text-wrap:pretty]">
         {t(`teams.order.note.${kind}`)}
       </p>
       <div
-        className="sticky top-0 z-[1] grid gap-1 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-4 py-2 text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]"
+        className="sticky top-0 z-[1] grid gap-1 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-4 py-2 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)]"
         style={{ gridTemplateColumns }}
       >
         <span>#</span>
@@ -56,7 +62,7 @@ export function DraftOrderGrid({
               key={round}
               title={t("teams.order.roundTitle", { n: round, direction })}
               className="flex min-w-0 items-center gap-1 whitespace-nowrap"
-              style={{ color: round === liveRound ? "var(--aqt-teal)" : undefined }}
+              style={{ color: round === liveRound ? clockColor : undefined }}
             >
               {t("teams.order.roundShort", { n: round })}
               {direction === "custom" ? (
@@ -74,6 +80,7 @@ export function DraftOrderGrid({
       </div>
       {rows.map(({ team, cells }) => {
         const isMe = team.id === myTeamId;
+        const isFollowed = followed.has(team.id);
         return (
           <div
             key={team.id}
@@ -81,26 +88,35 @@ export function DraftOrderGrid({
             style={{
               gridTemplateColumns,
               background: isMe ? "var(--aqt-overlay-2)" : "transparent",
-              boxShadow:
-                team.id === onClockId
-                  ? `inset 3px 0 0 ${clockColor}`
-                  : followed.has(team.id)
-                    ? "inset 3px 0 0 var(--aqt-amber)"
-                    : "none"
+              boxShadow: team.id === onClockId ? `inset 3px 0 0 ${clockColor}` : "none"
             }}
           >
-            <span className="text-xs tabular-nums text-[color:var(--aqt-fg-faint)]">{team.draft_position}</span>
-            <span
-              title={team.name}
-              className="truncate text-[13px] font-semibold"
-              style={{ color: isMe ? "var(--aqt-teal)" : "var(--aqt-fg)" }}
-            >
-              {isMe ? t("teams.mineName", { name: team.name }) : team.name}
+            <span className="text-label tabular-nums text-[color:var(--aqt-fg-faint)]">{team.draft_position}</span>
+            <span className="flex min-w-0 items-center gap-1">
+              {/* A followed team is told apart by the star's SHAPE, not by a hue. */}
+              {isFollowed && (
+                <>
+                  <Star
+                    aria-hidden
+                    className="h-3 w-3 flex-none"
+                    fill="currentColor"
+                    style={{ color: "var(--aqt-follow)" }}
+                  />
+                  <span className="sr-only">{t("teams.followedMark")}</span>
+                </>
+              )}
+              <span
+                title={team.name}
+                className="truncate text-caption font-semibold"
+                style={{ color: isMe ? "var(--aqt-teal)" : "var(--aqt-fg)" }}
+              >
+                {isMe ? t("teams.mineName", { name: team.name }) : team.name}
+              </span>
             </span>
             {cells.map((pick, index) => {
               if (pick == null) {
                 return (
-                  <span key={`none-${rounds[index]}`} className="px-[7px] text-xs text-[color:var(--aqt-fg-faint)]">
+                  <span key={`none-${rounds[index]}`} className="px-[7px] text-label text-[color:var(--aqt-fg-faint)]">
                     —
                   </span>
                 );
@@ -112,7 +128,9 @@ export function DraftOrderGrid({
               const away = picksAway(board, pick);
               const sub =
                 state === "done"
-                  ? (tag ?? "—")
+                  ? tag != null
+                    ? splitBattleTag(tag).name
+                    : "—"
                   : state === "current"
                     ? t("teams.order.now")
                     : state === "skipped"
@@ -135,28 +153,28 @@ export function DraftOrderGrid({
                   className="min-w-0 rounded-md px-[7px] py-[3px]"
                   style={{
                     background: current
-                      ? "color-mix(in srgb, var(--aqt-teal) 16%, transparent)"
+                      ? `color-mix(in srgb, ${clockColor} 16%, transparent)`
                       : done
                         ? "var(--aqt-overlay-2)"
                         : "transparent",
                     boxShadow: current
-                      ? "inset 0 0 0 1px var(--aqt-teal)"
+                      ? `inset 0 0 0 1px ${clockColor}`
                       : done
                         ? "none"
                         : "inset 0 0 0 1px var(--aqt-border)"
                   }}
                 >
                   <div
-                    className="text-xs font-semibold tabular-nums"
+                    className="text-label font-semibold tabular-nums"
                     style={{
-                      color: current ? "var(--aqt-teal)" : done ? "var(--aqt-fg-muted)" : "var(--aqt-fg)"
+                      color: current ? clockColor : done ? "var(--aqt-fg-muted)" : "var(--aqt-fg)"
                     }}
                   >
                     {t("teams.pickNo", { n: pick.overall_no })}
                   </div>
                   <div
-                    className="truncate text-xs"
-                    style={{ color: current ? "var(--aqt-teal)" : "var(--aqt-fg-muted)" }}
+                    className="truncate text-label"
+                    style={{ color: current ? clockColor : "var(--aqt-fg-muted)" }}
                   >
                     {sub}
                   </div>

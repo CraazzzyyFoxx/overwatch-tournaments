@@ -87,65 +87,76 @@ export function AdminStrip({ board, mutations, onlineCaptainIds }: Readonly<Admi
       <div
         role="group"
         aria-label={t("admin.dock")}
-        className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-2 px-4 py-1.5 sm:px-6"
+        className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-1.5 sm:px-6"
       >
-        <span className="mr-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
+        <span className="text-label font-medium text-[color:var(--aqt-fg-muted)]">
           {t("shell.admin.label")}
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-11 sm:min-h-8"
-          disabled={!clockRunning || mutations.lifecycle.isPending}
-          onClick={() => runLifecycle(paused ? "resume" : "pause")}
-        >
-          {paused ? t("admin.resume") : t("admin.pause")}
-        </Button>
-        {EXTEND_STEPS.map((seconds) => (
+        {/* Two clusters, spaced wider apart than their buttons: the clock (pause
+            and extra time — harmless, reversible) and the pick itself (autopick
+            and rollback, which resolve or undo a pick). The two extend steps
+            share one frame: one action at two sizes. The pick actions carry no
+            frame, and rollback is told apart by the colour of undoing. */}
+        <div role="group" aria-label={t("admin.clockGroup")} className="flex flex-wrap items-center gap-2">
           <Button
-            key={seconds}
             type="button"
             variant="outline"
             size="sm"
-            className="min-h-11 tabular-nums sm:min-h-8"
-            disabled={!canExtend || mutations.extendClock.isPending}
-            onClick={() => extend(seconds)}
+            className="min-h-11 sm:min-h-8"
+            disabled={!clockRunning || mutations.lifecycle.isPending}
+            onClick={() => runLifecycle(paused ? "resume" : "pause")}
           >
-            {t("admin.addSeconds", { seconds })}
+            {paused ? t("admin.resume") : t("admin.pause")}
           </Button>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-11 sm:min-h-8"
-          disabled={!canExtend || mutations.autopick.isPending}
-          onClick={() => setConfirming("autopick")}
-        >
-          {t("shell.admin.autopickNow")}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-11 sm:min-h-8"
-          disabled={lastPick == null || session.status === "cancelled" || mutations.lifecycle.isPending}
-          onClick={() => setConfirming("rollback")}
-        >
-          {lastPick ? t("shell.admin.rollbackPick", { pick: lastPick.overall_no }) : t("admin.rollback")}
-        </Button>
+          <div className="inline-flex divide-x divide-[color:var(--aqt-border-2)] overflow-hidden rounded-md border border-[color:var(--aqt-border-2)]">
+            {EXTEND_STEPS.map((seconds) => (
+              <Button
+                key={seconds}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-11 rounded-none tabular-nums sm:min-h-8"
+                disabled={!canExtend || mutations.extendClock.isPending}
+                onClick={() => extend(seconds)}
+              >
+                {t("admin.addSeconds", { seconds })}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div role="group" aria-label={t("admin.pickGroup")} className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 sm:min-h-8"
+            disabled={!canExtend || mutations.autopick.isPending}
+            onClick={() => setConfirming("autopick")}
+          >
+            {t("shell.admin.autopickNow")}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 text-[color:var(--aqt-rose-text)] hover:text-[color:var(--aqt-rose-text)] sm:min-h-8"
+            disabled={lastPick == null || session.status === "cancelled" || mutations.lifecycle.isPending}
+            onClick={() => setConfirming("rollback")}
+          >
+            {lastPick ? t("shell.admin.rollbackPick", { pick: lastPick.overall_no }) : t("admin.rollback")}
+          </Button>
+        </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:ml-auto">
-          <span className="whitespace-nowrap text-sm tabular-nums text-[color:var(--aqt-fg-muted)]">
+          <span className="whitespace-nowrap text-body tabular-nums text-[color:var(--aqt-fg-muted)]">
             {t("shell.admin.captainsOnline", { online: captains.online, total: captains.total })}
           </span>
           {/* Feasibility decides whether this draft can still finish; the fix
               lives on the setup page, so a failing chip carries the link. */}
           {feasibility != null && (
             <span
-              className="inline-flex items-center gap-1 text-sm"
-              style={{ color: feasibility.is_feasible ? "var(--aqt-support)" : "var(--aqt-live)" }}
+              className="inline-flex items-center gap-1 text-body"
+              style={{ color: feasibility.is_feasible ? "var(--aqt-positive)" : "var(--aqt-rose-text)" }}
             >
               {feasibility.is_feasible ? (
                 <>
@@ -157,7 +168,7 @@ export function AdminStrip({ board, mutations, onlineCaptainIds }: Readonly<Admi
                   <AlertTriangle className="h-4 w-4" aria-hidden />
                   <Link
                     href={`/admin/tournaments/${session.tournament_id}/teams/draft`}
-                    className="rounded-sm underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                    className="rounded-sm underline underline-offset-2 outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
                   >
                     {t("admin.infeasible")}
                   </Link>
@@ -190,6 +201,7 @@ export function AdminStrip({ board, mutations, onlineCaptainIds }: Readonly<Admi
           entries={journal.data?.entries}
           isLoading={journal.isPending}
           isError={journal.isError}
+          onRetry={() => void journal.refetch()}
         />
       )}
 
