@@ -12,6 +12,7 @@ import {
   moveCaptain,
   orderCaptainIds,
   previousSetupStep,
+  reseatCaptain,
   SETUP_STEPS,
   validateSetupStep,
   type DraftCaptainRow
@@ -86,6 +87,22 @@ describe("draft setup model", () => {
   it("reorders captains deterministically for manual order", () => {
     expect(moveCaptain([10, 20, 30], 30, 10)).toEqual([30, 10, 20]);
     expect(moveCaptain([10, 20, 30], 99, 10)).toEqual([10, 20, 30]);
+  });
+
+  it("dragging a computed order overrides its seeds, not the selection order", () => {
+    const ranks = new Map([
+      [10, 3100],
+      [20, 2500],
+      [30, 2800]
+    ]);
+    const value = { ids: [10, 20, 30], teamNames: {}, roles: {}, order: "weakest_first" as const, randomSeed: 42 };
+    const shown = orderCaptainIds(value.ids, value.order, ranks, value.randomSeed); // [20, 30, 10]
+
+    // 10 dragged onto seat 1: the shown order with that move, now manual.
+    expect(reseatCaptain(value, shown, 10, 20)).toMatchObject({ order: "manual", ids: [10, 20, 30] });
+    expect(reseatCaptain(value, shown, 30, 20)).toMatchObject({ order: "manual", ids: [30, 20, 10] });
+    // A drop outside the list changes nothing, and does not flip the order.
+    expect(reseatCaptain(value, shown, 99, 20)).toBe(value);
   });
 
   it("keeps calculated captain order reproducible", () => {

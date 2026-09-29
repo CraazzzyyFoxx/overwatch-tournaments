@@ -9,6 +9,7 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import { DraftCaptainsStep } from "./DraftCaptainsStep";
 import { DraftConfigStep } from "./DraftConfigStep";
 import { DraftHistoryPanel } from "./DraftHistoryPanel";
+import { DraftOrderStep } from "./DraftOrderStep";
 import type { DraftSetupConfig } from "./setup-types";
 
 const SESSIONS = vi.hoisted(
@@ -248,6 +249,26 @@ describe("draft captains step", () => {
     // Support + tank: a choice. Damage only: nothing to pick.
     expect(selected).toContain('captainRoleFor:{&quot;name&quot;:&quot;Player2#1000&quot;}');
     expect(selected).not.toContain('captainRoleFor:{&quot;name&quot;:&quot;Player3#1000&quot;}');
+  });
+});
+
+describe("draft order step", () => {
+  test("keeps a computed order draggable so its seeds can be overridden", () => {
+    const html = renderToStaticMarkup(
+      <DraftOrderStep
+        value={{ ids: [2, 3], teamNames: {}, roles: {}, order: "weakest_first", randomSeed: 1 }}
+        onChange={() => {}}
+        pool={POOL}
+        rounds={4}
+        format="snake"
+        roundRules={[]}
+        rosterShape={{ slots: { tank: 1, damage: 2, support: 2 }, has_role_slots: true }}
+      />
+    );
+    // Weakest first: 2600 before 3800, each with a drag handle.
+    expect(html.indexOf("Player2#1000")).toBeLessThan(html.indexOf("Player3#1000"));
+    expect(html).toContain('moveCaptain:{&quot;name&quot;:&quot;Player2#1000&quot;}');
+    expect(html).toContain("dragToOverrideSeeds");
   });
 });
 

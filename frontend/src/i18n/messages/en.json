@@ -4793,6 +4793,7 @@
     },
     "newRandomSeed": "Generate a new random seed",
     "moveCaptain": "Move captain {name}",
+    "dragToOverrideSeeds": "Drag a captain to change the seeds by hand: the order switches to Manual and keeps the rest as shown.",
     "orderResolvedOnTheServer": "the server resolves the order when the round starts",
     "schedulePreview": "Round schedule preview",
     "validatingDraft": "The server is building a dry-run and checking role feasibility…",

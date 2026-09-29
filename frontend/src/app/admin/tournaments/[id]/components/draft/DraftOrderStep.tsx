@@ -7,7 +7,7 @@ import {
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Dices, GripVertical, LockKeyhole, RefreshCw } from "lucide-react";
+import { GripVertical, LockKeyhole, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftCaptainOrder, DraftFormat } from "@/types/draft.types";
 
-import { moveCaptain, orderCaptainIds } from "./setup-model";
+import { orderCaptainIds, reseatCaptain } from "./setup-model";
 import { DraftSetupPreview } from "./DraftSetupPreview";
 import type { DraftCaptainSetup } from "./setup-types";
 import { captainSeat, registrationLabel } from "./setup-types";
@@ -64,12 +64,11 @@ export function DraftOrderStep({
   );
   const orderedIds = orderCaptainIds(value.ids, value.order, ranks, value.randomSeed);
 
+  // Every order is draggable: a drag overrides the seeds of a computed order
+  // by turning it into the manual one it was showing (`reseatCaptain`).
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    onChange({
-      ...value,
-      ids: moveCaptain(value.ids, Number(active.id), Number(over.id))
-    });
+    onChange(reseatCaptain(value, orderedIds, Number(active.id), Number(over.id)));
   };
 
   return (
@@ -92,6 +91,9 @@ export function DraftOrderStep({
             </SelectContent>
           </Select>
           <p className="text-sm text-muted-foreground">{t(`orders.${value.order}.description`)}</p>
+          {value.order !== "manual" && (
+            <p className="text-xs text-muted-foreground">{t("dragToOverrideSeeds")}</p>
+          )}
         </div>
         {value.order === "random" && (
           <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
@@ -113,53 +115,25 @@ export function DraftOrderStep({
         )}
       </div>
 
-      {value.order === "manual" ? (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={value.ids} strategy={verticalListSortingStrategy}>
-            <div className="space-y-2">
-              {value.ids.map((id, index) => {
-                const registration = pool.find((candidate) => candidate.id === id);
-                if (!registration) return null;
-                return (
-                  <SortableCaptain
-                    key={id}
-                    id={id}
-                    position={index + 1}
-                    label={registrationLabel(registration)}
-                    rank={ranks.get(id) ?? null}
-                  />
-                );
-              })}
-            </div>
-          </SortableContext>
-        </DndContext>
-      ) : (
-        <div className="space-y-2">
-          {orderedIds.map((id, index) => {
-            const registration = pool.find((candidate) => candidate.id === id);
-            if (!registration) return null;
-            return (
-              <div
-                key={id}
-                className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-4 py-3"
-              >
-                <Badge className="grid h-7 w-7 place-items-center rounded-full p-0 tabular-nums">
-                  {index + 1}
-                </Badge>
-                {value.order === "random" ? (
-                  <Dices className="h-4 w-4 text-muted-foreground" aria-hidden />
-                ) : null}
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {registrationLabel(registration)}
-                </span>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {ranks.get(id) ?? "—"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {orderedIds.map((id, index) => {
+              const registration = pool.find((candidate) => candidate.id === id);
+              if (!registration) return null;
+              return (
+                <SortableCaptain
+                  key={id}
+                  id={id}
+                  position={index + 1}
+                  label={registrationLabel(registration)}
+                  rank={ranks.get(id) ?? null}
+                />
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       <DraftSetupPreview
         orderedCaptainIds={orderedIds}

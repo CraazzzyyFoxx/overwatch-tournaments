@@ -6,6 +6,8 @@ import type {
   DraftStatus
 } from "@/types/draft.types";
 
+import type { DraftCaptainSetup } from "./setup-types";
+
 // The backend does not cap team_count (it flows through settings_json);
 // this is a UI sanity bound only.
 export const MIN_DRAFT_TEAM_COUNT = 2;
@@ -196,6 +198,22 @@ export function moveCaptain(ids: number[], activeId: number, overId: number): nu
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved);
   return next;
+}
+
+/**
+ * Drag a captain to another seat. The drag moves the order the organizer is
+ * LOOKING at, so a computed order (weakest/strongest first, seeded random)
+ * becomes the manual one it was showing, with the move applied — dragging on
+ * top of `ids` would reorder the selection order hidden underneath instead.
+ */
+export function reseatCaptain(
+  value: DraftCaptainSetup,
+  orderedIds: number[],
+  activeId: number,
+  overId: number
+): DraftCaptainSetup {
+  const ids = moveCaptain(orderedIds, activeId, overId);
+  return ids === orderedIds ? value : { ...value, order: "manual", ids };
 }
 
 export function orderCaptainIds(
