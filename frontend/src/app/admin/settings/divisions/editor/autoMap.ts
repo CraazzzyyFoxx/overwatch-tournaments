@@ -4,10 +4,12 @@
  * Every tournament keeps the grid version it was played on, so the workspace
  * needs a translation from each still-read version's tiers to the new ones.
  * Players are stored on the grid's own rank scale, so overlap is measured
- * there — the same rule the backend's automap applies — and "which division
- * does this old one become" is the draft division sharing most of its range.
- * Only a tie needs a person (SPLIT); every other row is AUTO, and any row may
- * be overridden, because across a scale change overlap stops meaning anything.
+ * there — the same rule the backend's automap applies: an old division maps
+ * onto the draft divisions it overlaps, and its players land in the one
+ * sharing most of its range. Only a tie needs a person (SPLIT); every other
+ * row is AUTO. Any row may be overridden with a range of draft divisions and
+ * the one players land in, because across a scale change overlap stops
+ * meaning anything.
  *
  * Pure: takes tiers and bands, returns rows and rules.
  */
@@ -98,72 +100,136 @@ export function autoMap(sourceTiers: DivisionTier[], bands: Band[]): MappingRow[
 }
 
 /**
- * The primary target for a row: the user's (or the stored) choice while it
- * still names a draft division, else the leading candidate of an AUTO row.
+ * A decision for one source division, keyed by source tier id: the draft
+ * divisions its players spread over — the range is the hull of `targets` in
+ * draft order — and the one they land in. `null` asks for the automatic
+ * mapping even where a stored one says otherwise.
  */
-export function primaryTarget(
+export interface MappingChoice {
+  targets: number[];
+  primary: number;
+}
+
+export type MappingChoices = Record<number, MappingChoice | null | undefined>;
+
+export interface MappingTarget {
+  /** Consecutive draft divisions the source's players spread over, top first. */
+  range: Band[];
+  /** Where a player of the source division lands — the rule marked primary. */
+  primary: Band;
+  /** Share of the source's players per division of `range`; sums to 1. */
+  weights: number[];
+  /** Shares follow rank overlap; otherwise the range is split evenly. */
+  byOverlap: boolean;
+  /** Chosen rather than the automatic mapping. */
+  manual: boolean;
+}
+
+/**
+ * How the source's players divide over `range`: by rank overlap while every
+ * division of it overlaps the source, else evenly — across a scale change, or
+ * past the overlap, overlap no longer says where anyone goes.
+ */
+function spread(row: MappingRow, range: Band[]): Pick<MappingTarget, "weights" | "byOverlap"> {
+  const overlaps = range.map(
+    (band) => row.candidates.find((candidate) => candidate.band.slug === band.slug)?.overlap ?? 0
+  );
+  const byOverlap = overlaps.every((overlap) => overlap > 0);
+  const total = byOverlap ? overlaps.reduce((sum, overlap) => sum + overlap, 0) : range.length;
+  return { weights: overlaps.map((overlap) => (byOverlap ? overlap : 1) / total), byOverlap };
+}
+
+/** The overlapping divisions, top first — the range an AUTO row maps onto, and a SPLIT row's proposal. */
+export function overlapRange(row: MappingRow): Band[] {
+  return row.candidates
+    .map((candidate) => candidate.band)
+    .sort((left, right) => left.number - right.number);
+}
+
+/**
+ * Where a row's players go: the user's (or the stored) choice while its
+ * primary still names a draft division, else the automatic mapping of an AUTO
+ * row, else `null` — a SPLIT row nobody has decided yet.
+ */
+export function resolveTarget(
   row: MappingRow,
-  chosen: Record<number, number | undefined>,
+  choices: MappingChoices,
   bands: Band[]
-): Band | null {
-  const pickedId = row.source.id === undefined ? undefined : chosen[row.source.id];
-  const picked = pickedId === undefined ? undefined : bands.find((band) => band.id === pickedId);
-  if (picked) return picked;
-  return row.kind === "auto" ? (row.candidates[0]?.band ?? null) : null;
+): MappingTarget | null {
+  const leader = row.candidates[0];
+  const overlapping = overlapRange(row);
+  const automatic: MappingTarget | null =
+    row.kind === "auto" && leader
+      ? { range: overlapping, primary: leader.band, ...spread(row, overlapping), manual: false }
+      : null;
+
+  const choice = row.source.id === undefined ? undefined : choices[row.source.id];
+  const primaryIndex = choice ? bands.findIndex((band) => band.id === choice.primary) : -1;
+  // No choice, or one whose landing division was merged away since.
+  if (!choice || primaryIndex === -1) return automatic;
+
+  const indices = [
+    primaryIndex,
+    ...choice.targets
+      .map((id) => bands.findIndex((band) => band.id === id))
+      .filter((index) => index !== -1)
+  ];
+  const range = bands.slice(Math.min(...indices), Math.max(...indices) + 1);
+  const primary = bands[primaryIndex];
+  const same =
+    automatic !== null &&
+    automatic.primary.slug === primary.slug &&
+    automatic.range.length === range.length &&
+    automatic.range[0].slug === range[0].slug;
+  return { range, primary, ...spread(row, range), manual: !same };
 }
 
 /** Rows still waiting on a decision — the tab badge, and the publish blocker. */
 export function unresolvedRows(
   rows: MappingRow[],
-  chosen: Record<number, number | undefined>,
+  choices: MappingChoices,
   bands: Band[]
 ): MappingRow[] {
-  return rows.filter((row) => primaryTarget(row, chosen, bands) === null);
+  return rows.filter((row) => resolveTarget(row, choices, bands) === null);
 }
 
 const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
 
 /**
  * The rows as mapping rules, in the shape the backend validates: per source
- * tier the weights sum to 1 and exactly one rule is primary. `weight` records
- * how the old range divides over the overlapping divisions; `is_primary` is
- * where a player from it lands. A primary chosen outside the overlap is the
- * whole mapping for its row. Rows without a primary are left out, which is
- * what keeps the mapping incomplete until they are resolved.
+ * tier one rule per division of the range, weights summing to 1, exactly one
+ * primary. `weight` records how the old division's players spread; `is_primary`
+ * is where each of them lands. A row without a target — or with a target that
+ * has no tier id yet — is left out, which keeps the mapping incomplete.
  */
 export function mappingRules(
   rows: MappingRow[],
-  chosen: Record<number, number | undefined>,
+  choices: MappingChoices,
   bands: Band[]
 ): DivisionGridMappingRule[] {
   const rules: DivisionGridMappingRule[] = [];
   for (const row of rows) {
     const sourceTierId = row.source.id;
-    const primary = primaryTarget(row, chosen, bands);
-    if (sourceTierId === undefined || primary?.id === undefined) continue;
+    const target = resolveTarget(row, choices, bands);
+    if (sourceTierId === undefined || !target || target.range.some((band) => band.id === undefined)) {
+      continue;
+    }
 
-    const overlapping = row.candidates.filter((candidate) => candidate.band.id !== undefined);
-    const total = overlapping.reduce((sum, candidate) => sum + candidate.overlap, 0);
-    const secondary = overlapping
-      .filter((candidate) => candidate.band.id !== primary.id)
-      .map((candidate) => ({
+    const secondary = target.range
+      .map((band, index) => ({
         source_tier_id: sourceTierId,
-        target_tier_id: candidate.band.id!,
-        weight: round6(candidate.overlap / total),
+        target_tier_id: band.id!,
+        weight: round6(target.weights[index]),
         is_primary: false
       }))
-      .filter((rule) => rule.weight > 0);
-    const primaryOverlaps = overlapping.some((candidate) => candidate.band.id === primary.id);
-
+      .filter((rule) => rule.target_tier_id !== target.primary.id && rule.weight > 0);
     rules.push({
       source_tier_id: sourceTierId,
-      target_tier_id: primary.id,
-      weight: primaryOverlaps
-        ? round6(1 - secondary.reduce((sum, rule) => sum + rule.weight, 0))
-        : 1,
+      target_tier_id: target.primary.id!,
+      weight: round6(1 - secondary.reduce((sum, rule) => sum + rule.weight, 0)),
       is_primary: true
     });
-    if (primaryOverlaps) rules.push(...secondary);
+    rules.push(...secondary);
   }
   return rules;
 }

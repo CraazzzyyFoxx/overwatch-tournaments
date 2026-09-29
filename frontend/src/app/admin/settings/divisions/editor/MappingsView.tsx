@@ -4,19 +4,21 @@ import { useMemo } from "react";
 
 import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DivisionGridReadinessSource, DivisionTier } from "@/types/workspace.types";
 
-import { autoMap, primaryTarget, unresolvedRows, type MappingRow } from "./autoMap";
+import {
+  autoMap,
+  resolveTarget,
+  unresolvedRows,
+  type MappingChoice,
+  type MappingChoices,
+  type MappingRow,
+  type MappingTarget
+} from "./autoMap";
 import { rankRangeLabel, type Band } from "./draftReducer";
+import { MappingTargetPicker, targetSummary } from "./MappingTargetPicker";
 
 export interface MappingSource {
   readiness: DivisionGridReadinessSource;
@@ -27,9 +29,10 @@ export interface MappingsViewProps {
   targetLabel: string;
   bands: Band[];
   sources: MappingSource[];
-  /** source tier id → chosen target tier id: stored primaries, overlaid with this session's picks. */
-  chosen: Record<number, number | undefined>;
-  onChoose: (sourceTierId: number, targetTierId: number) => void;
+  /** source tier id → choice: the stored mapping, overlaid with this session's picks. */
+  chosen: MappingChoices;
+  /** `null` returns the row to the automatic mapping. */
+  onChoose: (sourceTierId: number, choice: MappingChoice | null) => void;
   editable: boolean;
   /**
    * `false` until the draft has been saved once: the rules key on target tier
@@ -39,12 +42,14 @@ export interface MappingsViewProps {
   loading: boolean;
 }
 
-function matchLabel(row: MappingRow, primary: Band | null): string {
-  if (primary === null) return "SPLIT · choose";
-  const candidate = row.candidates.find((entry) => entry.band.slug === primary.slug);
-  const share = candidate ? `${Math.round(candidate.weight * 100)}%` : "no overlap";
-  const automatic = row.kind === "auto" && row.candidates[0]?.band.slug === primary.slug;
-  return `${automatic ? "AUTO" : "MANUAL"} · ${share}`;
+function matchLabel(row: MappingRow, target: MappingTarget | null): string {
+  if (target === null) return "SPLIT · choose";
+  if (target.range.length > 1) {
+    return `${target.manual ? "MANUAL" : "AUTO"} · ${target.range.length} divisions`;
+  }
+  const overlap = row.candidates.find((entry) => entry.band.slug === target.primary.slug);
+  const share = overlap ? `${Math.round(overlap.weight * 100)}%` : "no overlap";
+  return `${target.manual ? "MANUAL" : "AUTO"} · ${share}`;
 }
 
 /**
@@ -52,7 +57,8 @@ function matchLabel(row: MappingRow, primary: Band | null): string {
  * reads land in this draft.
  *
  * Overlap on the rank scale proposes a target (AUTO); a tie needs a person
- * (SPLIT). Every row can be overridden: when an older version sits on another
+ * (SPLIT). Every row can be overridden with a range of divisions the players
+ * spread over and the one they land in: when an older version sits on another
  * rank scale, overlap is only a guess and the organiser knows better. The
  * unresolved count here is the tab badge and the "Ready to publish?" blocker.
  */
@@ -121,7 +127,7 @@ export function MappingsView({
                       Players
                     </th>
                     <th scope="col" className="px-3 py-2 font-medium">
-                      {targetLabel} division
+                      In {targetLabel}
                     </th>
                     <th scope="col" className="px-3 py-2 font-medium">
                       Match
@@ -130,11 +136,8 @@ export function MappingsView({
                 </thead>
                 <tbody>
                   {rows.map((row) => {
-                    const primary = primaryTarget(row, chosen, bands);
+                    const target = resolveTarget(row, chosen, bands);
                     const sourceTierId = row.source.id;
-                    const overlapBySlug = new Map(
-                      row.candidates.map((candidate) => [candidate.band.slug, candidate.weight])
-                    );
                     return (
                       <tr key={row.source.slug} className="border-b border-border last:border-b-0">
                         <td className="px-3 py-2">{row.source.name}</td>
@@ -149,39 +152,25 @@ export function MappingsView({
                         </td>
                         <td className="px-3 py-2">
                           {editable && sourceTierId !== undefined ? (
-                            <Select
-                              value={primary?.id === undefined ? undefined : String(primary.id)}
-                              onValueChange={(value) => onChoose(sourceTierId, Number(value))}
-                            >
-                              <SelectTrigger
-                                className="h-8 w-full min-w-56"
-                                aria-label={`Target division for ${row.source.name}`}
-                              >
-                                <SelectValue placeholder="Choose a division" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {bands.map((band) => {
-                                  const weight = overlapBySlug.get(band.slug);
-                                  return (
-                                    <SelectItem key={band.slug} value={String(band.id ?? "")}>
-                                      {band.number}. {band.name} · {rankRangeLabel(band)}
-                                      {weight === undefined ? "" : ` · ${Math.round(weight * 100)}%`}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
+                            <MappingTargetPicker
+                              row={row}
+                              bands={bands}
+                              target={target}
+                              onChange={(choice) => onChoose(sourceTierId, choice)}
+                            />
+                          ) : target ? (
+                            targetSummary(target)
                           ) : (
-                            (primary?.name ?? <span className="text-warning">unresolved</span>)
+                            <span className="text-warning">unresolved</span>
                           )}
                         </td>
                         <td
                           className={cn(
                             "px-3 py-2 font-mono text-xs",
-                            primary === null ? "text-warning" : "text-muted-foreground"
+                            target === null ? "text-warning" : "text-muted-foreground"
                           )}
                         >
-                          {matchLabel(row, primary)}
+                          {matchLabel(row, target)}
                         </td>
                       </tr>
                     );

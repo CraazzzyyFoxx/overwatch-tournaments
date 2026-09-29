@@ -20,7 +20,7 @@ import type {
 } from "@/types/workspace.types";
 
 import { VERSION_STATE_TONE, versionState } from "../versionStatus";
-import { autoMap, mappingRules, unresolvedRows } from "./autoMap";
+import { autoMap, mappingRules, unresolvedRows, type MappingChoice, type MappingChoices } from "./autoMap";
 import { ChangesView } from "./ChangesView";
 import { DivisionsTable } from "./DivisionsTable";
 import { ImpactColumn } from "./ImpactColumn";
@@ -63,13 +63,13 @@ export interface DraftEditorProps {
    * Mapping picks made before a save that could not store them — carried into
    * the next mount so an incomplete mapping does not lose its decisions.
    */
-  initialChoices?: Record<number, number>;
+  initialChoices?: MappingChoices;
   /**
    * Re-mounts this editor from the cache. Both "saved" and "discard my edits"
    * are the same thing to a reducer holding a snapshot stack: throw it away and
    * read the version again. `carry` seeds the next mount's mapping picks.
    */
-  onReload: (carry?: Record<number, number>) => void;
+  onReload: (carry?: MappingChoices) => void;
 }
 
 /**
@@ -105,9 +105,7 @@ export function DraftEditor({
     { tiers: version.tiers, base },
     (seed) => initDraftState(bandsFromTiers(seed.tiers), scaleOf(seed.tiers), seed.base)
   );
-  const [manualChoice, setManualChoice] = useState<Record<number, number | undefined>>(
-    () => initialChoices ?? {}
-  );
+  const [manualChoice, setManualChoice] = useState<MappingChoices>(() => initialChoices ?? {});
   const [confirming, setConfirming] = useState<"publish" | "delete" | "scale" | null>(null);
   const [iconTarget, setIconTarget] = useState<number | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
@@ -161,15 +159,21 @@ export function DraftEditor({
   );
 
   /**
-   * Primary targets already stored server-side, overlaid with this session's
-   * choices — derived rather than copied into state on load, so a refetch can
-   * never silently drop a decision the user just made.
+   * The mapping already stored server-side — each source tier's targets and
+   * primary — overlaid with this session's choices. Derived rather than copied
+   * into state on load, so a refetch can never silently drop a decision the
+   * user just made.
    */
   const chosen = useMemo(() => {
-    const stored: Record<number, number | undefined> = {};
+    const stored: Record<number, MappingChoice> = {};
     for (const query of mappingQueries) {
       for (const rule of query.data?.rules ?? []) {
-        if (rule.is_primary) stored[rule.source_tier_id] = rule.target_tier_id;
+        const entry = (stored[rule.source_tier_id] ??= {
+          targets: [],
+          primary: rule.target_tier_id
+        });
+        entry.targets.push(rule.target_tier_id);
+        if (rule.is_primary) entry.primary = rule.target_tier_id;
       }
     }
     return { ...stored, ...manualChoice };
@@ -255,10 +259,10 @@ export function DraftEditor({
       const pendingTierIds = new Set(
         pending.flatMap((source) => source.tiers.map((tier) => tier.id))
       );
-      const carry: Record<number, number> = {};
-      for (const [sourceTierId, targetTierId] of Object.entries(manualChoice)) {
-        if (targetTierId !== undefined && pendingTierIds.has(Number(sourceTierId))) {
-          carry[Number(sourceTierId)] = targetTierId;
+      const carry: MappingChoices = {};
+      for (const [sourceTierId, choice] of Object.entries(manualChoice)) {
+        if (choice !== undefined && pendingTierIds.has(Number(sourceTierId))) {
+          carry[Number(sourceTierId)] = choice;
         }
       }
       onReload(carry);
@@ -544,8 +548,8 @@ export function DraftEditor({
               bands={state.bands}
               sources={mappingSources}
               chosen={chosen}
-              onChoose={(sourceTierId, targetTierId) =>
-                setManualChoice((current) => ({ ...current, [sourceTierId]: targetTierId }))
+              onChoose={(sourceTierId, choice) =>
+                setManualChoice((current) => ({ ...current, [sourceTierId]: choice }))
               }
               editable={editable}
               mappable={mappable}
