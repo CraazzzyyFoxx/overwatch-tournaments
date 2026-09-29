@@ -210,27 +210,18 @@ export default function RankHistoryChart({
       for (const p of s.points) {
         if (!p.is_ranked || p.rank_value == null) continue;
 
-        let dateKey = p.captured_at;
-        if (granularity === "date") {
-          dateKey = p.captured_at.split("T")[0] || p.captured_at;
-        } else if (granularity === "hour") {
-          if (p.captured_at.includes("T")) {
-            dateKey = p.captured_at.split(":")[0] + ":00";
-          } else {
-            dateKey = p.captured_at.substring(0, 13) + ":00";
-          }
-        }
-
-        const row = rows.get(dateKey) ?? { ts: dateKey };
+        // Daily/hourly points arrive filled and stamped at their UTC bucket
+        // start, identical across series, so the timestamp is the merge key.
+        const row = rows.get(p.captured_at) ?? { ts: p.captured_at };
         row[key] = p.rank_value;
-        rows.set(dateKey, row);
+        rows.set(p.captured_at, row);
       }
     }
     const sorted = [...rows.values()].sort(
       (a, b) => new Date(a.ts as string).getTime() - new Date(b.ts as string).getTime()
     );
     return { lines: lineDefs, data: sorted };
-  }, [groupBy, platformSeries, effectiveBattleTagId, effectiveRole, granularity]);
+  }, [groupBy, platformSeries, effectiveBattleTagId, effectiveRole]);
 
   const chartConfig = useMemo<ChartConfig>(() => {
     const cfg: ChartConfig = {};

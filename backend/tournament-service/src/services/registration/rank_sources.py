@@ -10,7 +10,7 @@ tournament's division grid. The stage resolution and orchestration live in
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -66,9 +66,9 @@ class _OwRankSignals:
     """Weekly OW rank signal for a single (battle_tag, role).
 
     ``composite_rank_value`` is ``round((max + mean) / 2)`` over the chosen weekly window of
-    mapped OW ``rank_value`` snapshots (see ``_compute_ow_week_rank_value``). ``latest_snapshot``
-    is the most recent snapshot, kept for display metadata (platform/division/season/captured_at)
-    and for the contextual "OW current" value.
+    the mapped OW ``rank_value``, the mean weighted by how long each rank held (see
+    ``_compute_ow_week_rank_value``). ``latest_snapshot`` is the newest ranked row, kept for
+    display metadata (platform/division/season/captured_at) and the contextual "OW current" value.
     """
 
     composite_rank_value: int | None = None
@@ -82,7 +82,7 @@ RANK_ROLE_BY_REGISTRATION_ROLE = dict(REGISTRATION_TO_CANONICAL)
 REGISTRATION_ROLE_LABELS = {
     role.slot_code: role.value for role in (enums.HeroClass.tank, enums.HeroClass.damage, enums.HeroClass.support)
 }
-# Window for the OW rank source: aggregate snapshots captured within one week.
+# Window for the OW rank source: the rank a player held over one week.
 OW_RANK_WEEK_WINDOW = timedelta(days=7)
 
 
@@ -112,58 +112,98 @@ def _normalize_history_rank(
 
 
 def _group_ow_rank_signals(
-    snapshots_newest_first: Iterable[models.UserRankSnapshot | Any],
+    snapshots: Iterable[models.UserRankSnapshot | Any],
     now: datetime,
+    known_until_by_tag_id: Mapping[int, datetime | None],
     week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> dict[int, dict[str, _OwRankSignals]]:
-    """Group newest-first snapshots into per (social_account_id, role) weekly OW signals.
+    """Group snapshots into per (social_account_id, role) weekly OW signals.
 
-    Pure (no DB) so the windowing logic can be unit-tested. For each (tag, role) the composite
-    rank is ``round((max + mean) / 2)`` over the ``week_window`` (see ``_compute_ow_week_rank_value``);
-    the first snapshot seen (newest) is kept as the latest for display metadata.
+    Pure (no DB) so the windowing logic can be unit-tested. ``known_until_by_tag_id`` is each
+    account's last successful poll (see ``_compute_ow_week_rank_value``).
     """
     grouped: dict[int, dict[str, list[Any]]] = {}
-    for snapshot in snapshots_newest_first:
+    for snapshot in snapshots:
         grouped.setdefault(snapshot.social_account_id, {}).setdefault(snapshot.role, []).append(snapshot)
 
     signals_by_tag_id: dict[int, dict[str, _OwRankSignals]] = {}
     for tag_id, role_map in grouped.items():
         out = signals_by_tag_id.setdefault(tag_id, {})
         for role, snaps in role_map.items():
+            ranked = [s for s in snaps if _is_ranked(s)]
             out[role] = _OwRankSignals(
-                composite_rank_value=_compute_ow_week_rank_value(snaps, now, week_window),
-                latest_snapshot=snaps[0] if snaps else None,
+                composite_rank_value=_compute_ow_week_rank_value(
+                    snaps, now, known_until_by_tag_id.get(tag_id), week_window
+                ),
+                latest_snapshot=max(ranked, key=lambda s: s.captured_at, default=None),
             )
     return signals_by_tag_id
+
+
+def _is_ranked(snapshot: models.UserRankSnapshot | Any) -> bool:
+    return snapshot.rank_value is not None and getattr(snapshot, "is_ranked", True)
+
+
+def _ow_ranked_stretches(
+    snapshots: Iterable[models.UserRankSnapshot | Any], known_until: datetime | None
+) -> list[tuple[datetime, datetime, int]]:
+    """``(start, end, rank_value)`` for every ranked stretch of one (account, role).
+
+    ``rank_snapshot`` rows are changes, not polls: each holds until the next row of its
+    platform, and the newest holds until ``known_until`` -- the account's last successful
+    poll -- or, without one, only at its own instant.
+    """
+    by_platform: dict[str | None, list[Any]] = {}
+    for snapshot in snapshots:
+        by_platform.setdefault(getattr(snapshot, "platform", None), []).append(snapshot)
+
+    stretches: list[tuple[datetime, datetime, int]] = []
+    for rows in by_platform.values():
+        rows.sort(key=lambda s: s.captured_at)
+        last = rows[-1].captured_at
+        ends = [row.captured_at for row in rows[1:]] + [max(last, known_until or last)]
+        stretches += [
+            (row.captured_at, end, row.rank_value) for row, end in zip(rows, ends, strict=True) if _is_ranked(row)
+        ]
+    return stretches
 
 
 def _compute_ow_week_rank_value(
     snapshots: Iterable[models.UserRankSnapshot | Any],
     now: datetime,
+    known_until: datetime | None = None,
     week_window: timedelta = OW_RANK_WEEK_WINDOW,
 ) -> int | None:
     """Composite OW rank over a weekly window: ``round((max + mean) / 2)`` of mapped rank_value.
 
-    Window selection (per role), using ``week_window`` (default 7 days):
-      1. snapshots captured within the last ``week_window`` from ``now``;
-      2. if none, snapshots within ``week_window`` of the player's most recent snapshot;
-      3. if still none (no usable timestamps), the single most-recent snapshot.
-    Returns ``None`` only when there are no snapshots carrying a ``rank_value``.
+    ``snapshots`` are one (account, role)'s changes (any platform, unranked ones included, the
+    row each platform entered the window in among them); ``known_until`` is the account's last
+    successful poll. The mean is weighted by how long each rank held inside the window -- what
+    the mean over 15-minute polls measured before the table kept only changes.
+
+    Window: the last ``week_window`` from ``now`` while a ranked value held inside it, else the
+    ``week_window`` before the last ranked value stopped being known. Returns ``None`` only when
+    no ranked value was ever seen.
     """
-    snaps = [s for s in snapshots if getattr(s, "rank_value", None) is not None]
-    if not snaps:
+    stretches = _ow_ranked_stretches(snapshots, known_until)
+    if not stretches:
         return None
 
-    dated = [s for s in snaps if getattr(s, "captured_at", None) is not None]
-    window = [s for s in dated if s.captured_at >= now - week_window]
-    if not window and dated:
-        latest_at = max(s.captured_at for s in dated)
-        window = [s for s in dated if s.captured_at >= latest_at - week_window]
-    if not window:
-        window = [snaps[0]]
-
-    values = [s.rank_value for s in window]
-    return round((max(values) + sum(values) / len(values)) / 2)
+    last_end = max(end for _, end, _ in stretches)
+    hi = max(now, last_end) if last_end > now - week_window else last_end
+    lo = hi - week_window
+    values: list[int] = []
+    weighted = held = 0.0
+    for start, end, value in stretches:
+        a, b = max(start, lo), min(end, hi)
+        # A rank held inside the window, or one observed there at the very moment it was polled.
+        if a < b or a == b == start:
+            seconds = (b - a).total_seconds()
+            values.append(value)
+            weighted += value * seconds
+            held += seconds
+    mean = weighted / held if held else sum(values) / len(values)
+    return round((max(values) + mean) / 2)
 
 
 def _build_priority_rank_data(
@@ -547,12 +587,12 @@ class RankSourcesService:
     ) -> dict[int, dict[str, _OwRankSignals]]:
         """Return per (social_account_id, rank_role) the weekly OW rank composite + latest snapshot.
 
-        The window ``_compute_ow_week_rank_value`` applies -- the last ``week_window``
-        from ``now``, or from the group's newest snapshot when nothing is that recent
-        -- is applied here in SQL, per (account, role), so the read is bounded by a
-        week of polls per group instead of the account's whole history. Python
-        re-applies the same window on what comes back, so the result is identical;
-        only the rows that never survive it stop being fetched.
+        ``rank_snapshot`` holds changes, so the window ``_compute_ow_week_rank_value`` weighs
+        needs every row from ``threshold`` on -- unranked ones too, as that is where a ranked
+        stretch ends -- plus, per platform, the row the series entered it in, and the account's
+        last successful poll. ``threshold`` is the week cutoff while the newest ranked row is
+        inside the week, else the week before that row; either way it precedes the window
+        Python picks, so the read is bounded by the pair's recent changes, not its history.
         """
         if not social_account_ids:
             return {}
@@ -563,27 +603,40 @@ class RankSourcesService:
         roles = sa.values(sa.column("role", sa.String), name="roles").data(
             [(role,) for role in sorted(set(RANK_ROLE_BY_REGISTRATION_ROLE.values()))]
         )
-        ranked = (
-            snap.social_account_id == accounts.c.id,
-            snap.role == roles.c.role,
-            snap.rank_value.is_not(None),
-            snap.is_ranked.is_(True),
-        )
+        pair = (snap.social_account_id == accounts.c.id, snap.role == roles.c.role)
         # One index descent per (account, role) on ``ix_rank_snapshot_latest_ranked``.
-        newest = sa.select(sa.func.max(snap.captured_at).label("captured_at")).where(*ranked).lateral("newest")
+        newest = (
+            sa.select(sa.func.max(snap.captured_at).label("captured_at"))
+            .where(*pair, snap.rank_value.is_not(None), snap.is_ranked.is_(True))
+            .lateral("newest")
+        )
         cutoff = now - week_window
         threshold = sa.case((newest.c.captured_at >= cutoff, cutoff), else_=newest.c.captured_at - week_window)
-        window = sa.select(snap).where(*ranked, snap.captured_at >= threshold).lateral("window")
-        window_snap = aliased(snap, window)
-        result = await session.execute(
-            sa.select(window_snap)
-            .select_from(accounts)
-            .join(roles, sa.true())
-            .join(newest, sa.true())
-            .join(window, sa.true())
-            .order_by(window_snap.captured_at.desc(), window_snap.id.desc())
+        since = sa.select(snap).where(*pair, snap.captured_at >= threshold).lateral("since")
+        opening = (
+            sa.select(snap)
+            .where(*pair, snap.captured_at < threshold)
+            .distinct(snap.platform)
+            .order_by(snap.platform, snap.captured_at.desc())
+            .lateral("opening")
         )
-        return _group_ow_rank_signals(result.scalars().all(), now, week_window)
+        rows: list[models.UserRankSnapshot] = []
+        for sub in (since, opening):
+            row = aliased(snap, sub)
+            result = await session.execute(
+                sa.select(row).select_from(accounts).join(roles, sa.true()).join(newest, sa.true()).join(sub, sa.true())
+            )
+            rows += result.scalars().all()
+        if not rows:
+            return {}
+
+        state = models.BattleTagRankState
+        polled = await session.execute(
+            sa.select(state.social_account_id, state.last_success_at).where(
+                state.social_account_id.in_({row.social_account_id for row in rows})
+            )
+        )
+        return _group_ow_rank_signals(rows, now, dict(polled.all()), week_window)
 
 
 rank_sources_service = RankSourcesService()

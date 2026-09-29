@@ -1,6 +1,6 @@
 """Pure logic for the OverFast rank-collection domain: fetch DTOs, native
 division/tier -> rank_value mapping, collection-rate pacing math, history-read
-date-range resolution, and the battle-tag -> OverFast-slug helper. Zero
+date-range resolution and gap filling, and the battle-tag -> OverFast-slug helper. Zero
 ``AsyncSession``, zero ``await`` — see ``backend/ARCHITECTURE.md``'s ``domain/``
 boundary.
 """
@@ -8,10 +8,10 @@ boundary.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Literal, get_args
 
 from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
@@ -29,6 +29,7 @@ __all__ = (
     "compute_per_tick",
     "Granularity",
     "resolve_date_range",
+    "fill_rank_series",
     "battle_tag_to_slug",
 )
 
@@ -159,6 +160,9 @@ def compute_per_tick(
 
 Granularity = Literal["raw", "daily", "hourly"]
 
+#: Bucket width of the granularities that are filled on read; ``raw`` is not bucketed.
+_BUCKET = {"daily": timedelta(days=1), "hourly": timedelta(hours=1)}
+
 
 def resolve_date_range(
     granularity: Granularity,
@@ -176,6 +180,8 @@ def resolve_date_range(
     clause (it is a strict subclass), silently degrading the 422 into a generic
     500. The rest of the ``src/services`` layer raises the same type.
     """
+    if granularity not in get_args(Granularity):
+        raise HTTPException(status_code=422, detail=f"Unknown granularity '{granularity}'.")
     now = datetime.now(tz=UTC)
     resolved_to = date_to or now
     default_days = 7 if granularity == "daily" else 3
@@ -187,6 +193,53 @@ def resolve_date_range(
             detail=f"Date range for '{granularity}' granularity must not exceed {max_days} days.",
         )
     return resolved_from, resolved_to
+
+
+def fill_rank_series(
+    changed_at: Sequence[datetime],
+    *,
+    start: datetime | None,
+    end: datetime,
+    granularity: Granularity,
+) -> list[tuple[datetime, int]]:
+    """Expand one series' change times into the points a chart draws.
+
+    ``rank_snapshot`` stores changes, not polls (:func:`changed_ranks`), so a rank
+    holds from its row until the next one. ``changed_at`` is ascending; its first
+    entry may predate ``start`` -- the state the window opens in. ``end`` is the
+    last moment the latest state is known to hold (the account's last successful poll).
+
+    Returns ``(point_time, index into changed_at)`` pairs. ``raw`` keeps every
+    change, moves the opening state to ``start`` and repeats the latest at ``end``.
+    ``daily``/``hourly`` emit one point per UTC bucket from the first known one
+    through ``end``, stamped at the bucket start and carrying the state the bucket
+    closes on -- the same stamps for every series, so charts can merge them by time.
+    Empty when nothing is known inside the window.
+    """
+    if not changed_at:
+        return []
+    first = changed_at[0] if start is None else max(changed_at[0], start)
+    if first > end:
+        return []
+
+    if granularity == "raw":
+        points = [(max(at, first), i) for i, at in enumerate(changed_at)]
+        if points[-1][0] < end:
+            points.append((end, len(changed_at) - 1))
+        return points
+
+    step = _BUCKET[granularity]
+    bucket = first.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    if granularity == "daily":
+        bucket = bucket.replace(hour=0)
+    points, i = [], 0
+    while bucket <= end:
+        bucket_end = bucket + step
+        while i + 1 < len(changed_at) and changed_at[i + 1] < bucket_end:
+            i += 1
+        points.append((bucket, i))
+        bucket = bucket_end
+    return points
 
 
 def battle_tag_to_slug(battle_tag: str) -> str:
