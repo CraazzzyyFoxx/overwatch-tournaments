@@ -33,11 +33,13 @@ from src.domain.draft.entities import (
     DraftResult,
     DraftSnapshot,
     EligiblePlayer,
+    PoolSeat,
     RoleEditPreview,
     SlotDecision,
 )
 from src.domain.draft.errors import err as _err
 from src.domain.draft.feasibility import analyze_draft_feasibility, describe_role_deficits
+from src.domain.draft.ranks import seat_role
 
 __all__ = (
     "DELETABLE_STATUSES",
@@ -57,6 +59,7 @@ __all__ = (
     "team_slot_counts",
     "unranked_pool_error",
     "unsafe_pick_error",
+    "validate_captain_roles",
     "validate_current_pick",
     "validate_draft_rounds",
     "validate_seed_version",
@@ -119,6 +122,30 @@ def unranked_pool_error(rosters: Sequence[PlayerRoster]) -> ApiHTTPException:
         f"These pool registrations have no ranked role: {names}{more}. Set their ranks in the balancer, then seed.",
         status_code=422,
     )
+
+
+def validate_captain_roles(
+    captains: Sequence[PoolSeat], rosters: Mapping[int, PlayerRoster], shape: RosterShape
+) -> None:
+    """A captain may only be pinned to a role they play and the roster has a slot for.
+
+    A role-less (all-flex) shape seats nobody on a role, so it takes no pin at
+    all. Refused rather than dropped: a pin the draft quietly ignored would seat
+    the captain somewhere the organizer did not choose.
+    """
+    for seat in captains:
+        if seat.captain_role is None:
+            continue
+        roster = rosters[seat.registration_id]
+        role = HeroClass.from_slot_code(seat.captain_role)
+        if shape.role_slots.get(seat.captain_role, 0) < 1 or role not in roster.playable_roles:
+            name = roster.battle_tag or roster.display_name or f"#{roster.registration_id}"
+            raise _err(
+                "captain_role_invalid",
+                f"{name} cannot captain on {seat.captain_role}: the role must be one they play "
+                f"and one the roster {shape.slots} has a slot for",
+                status_code=422,
+            )
 
 
 # Round rules whose seat order is only known once the round starts: they rank
@@ -274,10 +301,11 @@ def team_slot_counts(
     """Filled-slot counts for one team, computed from the request snapshot.
 
     Role slots are filled by the drafted role -- a resolved pick's frozen
-    ``target_role`` wins over the player's current lead role, so off-role picks
-    count against the drafted role. Every remaining picked player occupies a flex
-    slot: a role slot that is already full, a role the shape has no slot for, and
-    a player with no usable role all land there, which is exactly the spill rule
+    ``target_role`` wins over the player's current seat role (a captain's pin,
+    else the lead role), so off-role picks count against the drafted role.
+    Every remaining picked player occupies a flex slot: a role slot that is
+    already full, a role the shape has no slot for, and a player with no usable
+    role all land there, which is exactly the spill rule
     ``feasibility._remaining_capacity`` applies to the same rows.
     """
     pick_by_player_id = {
@@ -295,7 +323,11 @@ def team_slot_counts(
             continue
         taken += 1
         pk = pick_by_player_id.get(p.id)
-        code = pk.target_role if (pk and pk.target_role) else _lead_slot_code(rosters.get(p.id))
+        if pk and pk.target_role:
+            code = pk.target_role
+        else:
+            role = seat_role(rosters.get(p.id), p.captain_role)
+            code = role.slot_code if role is not None else None
         if code in role_slot_targets and counts[code] < role_slot_targets[code]:
             counts[code] += 1
     if FLEX_SLOT_CODE in counts:
@@ -304,11 +336,6 @@ def team_slot_counts(
             max(0, taken - sum(counts[code] for code in role_slot_targets)),
         )
     return counts
-
-
-def _lead_slot_code(roster: PlayerRoster | None) -> str | None:
-    lead = roster.primary if roster is not None else None
-    return lead.role.slot_code if lead is not None else None
 
 
 def role_openings(shape: RosterShape, counts: Mapping[str, int]) -> dict[HeroClass, int]:

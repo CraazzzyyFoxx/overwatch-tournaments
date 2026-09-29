@@ -38,7 +38,7 @@ from shared.repository.draft import (
     DraftTeamRepository,
 )
 from shared.repository.workspace import get_or_create_workspace_member
-from src.domain.draft import rules
+from src.domain.draft import ranks, rules
 from src.domain.draft.entities import PoolSeat
 from src.domain.draft.errors import err as _err
 from src.services.draft.feasibility import DraftFeasibilityService, feasibility_service
@@ -157,10 +157,9 @@ class DraftLifecycleService:
 
         captains = await self.players_repo.list_drafted_captains(session, draft_session.id)
         rosters = await self.rosters.load(session, draft_session, captains)
+        shape = await self.feasibility.resolve_shape(session, draft_session)
         captain_ranks = {
-            captain.drafted_by_team_id: (rosters.get(captain.id).best_rank or -1)
-            if rosters.get(captain.id) is not None
-            else -1
+            captain.drafted_by_team_id: ranks.captain_rank(rosters.get(captain.id), captain.captain_role, shape)
             for captain in captains
         }
         fmt = DraftFormat(draft_session.format)
@@ -225,6 +224,8 @@ class DraftLifecycleService:
         unranked = [rosters[seat.registration_id] for seat in seats if not rosters[seat.registration_id].is_draftable]
         if unranked:
             raise rules.unranked_pool_error(unranked)
+        shape = await self.feasibility.resolve_shape(session, draft_session)
+        rules.validate_captain_roles(captains, rosters, shape)
 
         # Re-seed: clear any prior teams/players/picks (cascade via relationships).
         await self.picks_repo.delete_by_session(session, draft_session.id)
@@ -294,6 +295,7 @@ class DraftLifecycleService:
                     is_captain=True,
                     status=DraftPlayerStatus.PICKED.value,
                     drafted_by_team_id=team_by_position[position].id,
+                    captain_role=seat.captain_role,
                 )
             )
         for seat in seats:
@@ -312,7 +314,7 @@ class DraftLifecycleService:
 
         # Pre-create all picks in deterministic order based on round rules.
         team_captain_ranks = {
-            team_by_position[position].id: (rosters[seat.registration_id].best_rank or -1)
+            team_by_position[position].id: ranks.captain_rank(rosters[seat.registration_id], seat.captain_role, shape)
             for position, seat in enumerate(ordered_captains, start=1)
         }
         seats_in_order = [team_by_position[position] for position in sorted(team_by_position)]
@@ -362,14 +364,17 @@ class DraftLifecycleService:
         team_names: dict[int, str] | None = None,
         captain_order: DraftCaptainOrder = DraftCaptainOrder.MANUAL,
         rng_seed: int | None = None,
+        captain_roles: dict[int, str] | None = None,
     ) -> DraftSession:
         """Seed a draft from the balancer registration pool.
 
         ``captain_registration_ids`` are ``balancer.registration`` ids chosen as
         captains; ``captain_order`` decides seat order (WEAKEST_FIRST seats the
-        lowest-rated captain at position 1). Every other in-pool registration
-        becomes an available draft player. Ordering reads the engine's ranks --
-        the same numbers the balancer sorted the captain picker by.
+        lowest-rated captain at position 1). ``captain_roles`` pins a captain to
+        one of their roles (absent = their lead role). Every other in-pool
+        registration becomes an available draft player. Ordering reads the rank
+        of the role each captain is seated on -- the number the captain step
+        shows next to them.
         """
         rosters = await self.rosters.pool(session, draft_session.tournament_id)
         if not captain_registration_ids:
@@ -383,8 +388,16 @@ class DraftLifecycleService:
                 )
 
         team_names = team_names or {}
+        captain_roles = captain_roles or {}
+        shape = await self.feasibility.resolve_shape(session, draft_session)
         ordered_ids = rules.order_captain_ids(
-            [(registration_id, rosters[registration_id].best_rank) for registration_id in captain_registration_ids],
+            [
+                (
+                    registration_id,
+                    ranks.captain_rank(rosters[registration_id], captain_roles.get(registration_id), shape),
+                )
+                for registration_id in captain_registration_ids
+            ],
             captain_order,
             rng_seed,
         )
@@ -394,6 +407,7 @@ class DraftLifecycleService:
                 registration_id=registration_id,
                 draft_position=position,
                 team_name=team_names.get(registration_id),
+                captain_role=captain_roles.get(registration_id),
             )
             for position, registration_id in enumerate(ordered_ids, start=1)
         ]

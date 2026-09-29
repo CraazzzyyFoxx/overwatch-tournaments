@@ -4767,6 +4767,7 @@
     },
     "selectCaptain": "Выбрать {name} капитаном",
     "removeCaptain": "Убрать капитана {name}",
+    "captainRoleFor": "{name} · роль в команде",
     "noCaptainsFound": "Ни один игрок не подходит под этот поиск. Очистите поиск или снимите фильтр по роли.",
     "selectedTeams": "Выбранные команды",
     "selectCaptainsHint": "Выберите капитанов из пула, чтобы настроить команды.",
@@ -4999,7 +5000,7 @@
       "all": "Все",
       "selected": "Выбранные"
     },
-    "captainRankOnRole": "Сильнейшая роль: {role}"
+    "captainRankOnRole": "Ранг на роли: {role}"
   },
   "draftRedesign": {
     "room": {

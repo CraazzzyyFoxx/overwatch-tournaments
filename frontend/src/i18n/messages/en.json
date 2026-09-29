@@ -4767,6 +4767,7 @@
     },
     "selectCaptain": "Select {name} as captain",
     "removeCaptain": "Remove captain {name}",
+    "captainRoleFor": "{name} · role on the team",
     "noCaptainsFound": "No players match this search. Clear the search or widen the role filter.",
     "selectedTeams": "Selected teams",
     "selectCaptainsHint": "Select captains from the pool to configure their teams.",
@@ -4999,7 +5000,7 @@
       "all": "All",
       "selected": "Selected"
     },
-    "captainRankOnRole": "Strongest on {role}"
+    "captainRankOnRole": "Rank on {role}"
   },
   "draftRedesign": {
     "room": {

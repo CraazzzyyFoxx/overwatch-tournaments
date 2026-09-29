@@ -16,7 +16,7 @@ import {
   validateSetupStep,
   type DraftCaptainRow
 } from "./setup-model";
-import { captainRankSummary, poolRegistrationSummary } from "./setup-types";
+import { captainSeat, poolRegistrationSummary } from "./setup-types";
 
 const CAPTAIN_ROWS: DraftCaptainRow[] = [
   { id: 1, label: "Baida#21855", roles: ["tank", "damage", "support"], rank: null, rankRole: null },
@@ -224,10 +224,9 @@ describe("draft setup model", () => {
     ).toHaveLength(CAPTAIN_ROWS.length);
   });
 
-  it("ranks a captain by their strongest playable role, not their primary one", () => {
+  it("seats a captain on their lead role unless the organizer pins another", () => {
     // Primary tank 2000, secondary damage 3500, and an inactive support that
-    // must not count at all: seating this captain as a 2000 would put the
-    // pool's strongest damage player in the weakest seat.
+    // must not count at all.
     const registration = {
       id: 9,
       roles: [
@@ -236,10 +235,24 @@ describe("draft setup model", () => {
         { role: "support", is_active: false, is_primary: false, priority: 2, rank_value: 4200 }
       ]
     } as unknown as AdminRegistration;
-    expect(captainRankSummary(registration)).toEqual({ rank: 3500, role: "damage" });
+
+    // The lead role's own rank, not the damage maximum.
+    expect(captainSeat(registration, undefined, SHAPE)).toEqual({
+      role: "tank",
+      rank: 2000,
+      options: ["tank", "damage"]
+    });
+    expect(captainSeat(registration, "damage", SHAPE)).toMatchObject({ role: "damage", rank: 3500 });
+    // A pin the captain cannot play falls back to the lead role.
+    expect(captainSeat(registration, "support", SHAPE)).toMatchObject({ role: "tank", rank: 2000 });
+    // A role-less roster seats nobody on a role: the best playable rank.
+    const allFlex = { slots: { flex: 3 }, has_role_slots: false };
+    expect(captainSeat(registration, "damage", allFlex)).toEqual({ role: null, rank: 3500, options: [] });
+    expect(captainSeat({ id: 10, roles: [] } as unknown as AdminRegistration, undefined, SHAPE)).toEqual({
+      role: null,
+      rank: null,
+      options: []
+    });
     expect(poolRegistrationSummary(registration).rank).toBe(2000);
-    expect(
-      captainRankSummary({ id: 10, roles: [] } as unknown as AdminRegistration)
-    ).toEqual({ rank: null, role: null });
   });
 });

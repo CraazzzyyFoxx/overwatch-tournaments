@@ -44,7 +44,7 @@ import {
   validateSetupStep
 } from "./setup-model";
 import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
-import { captainRankSummary, isInDraftPool, poolRegistrationSummary } from "./setup-types";
+import { captainSeat, isInDraftPool, poolRegistrationSummary } from "./setup-types";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 interface DraftSetupWizardProps {
@@ -77,6 +77,7 @@ function createEmptyCaptainSetup(): DraftCaptainSetup {
   return {
     ids: [],
     teamNames: {},
+    roles: {},
     order: "weakest_first",
     randomSeed: Math.floor(Math.random() * 2_147_483_647)
   };
@@ -157,6 +158,15 @@ export function DraftSetupWizard({
         order: "manual",
         teamNames: Object.fromEntries(
           orderedTeams.flatMap((team, index) => (ids[index] ? [[ids[index], team.name]] : []))
+        ),
+        // Only the pins that differ from the lead role: an unpinned captain
+        // keeps following their registration's lead role.
+        roles: Object.fromEntries(
+          board.players.flatMap((player) =>
+            player.is_captain && player.captain_role && player.captain_role !== player.primary_role
+              ? [[player.registration_id, player.captain_role]]
+              : []
+          )
         )
       }));
       setConfig((current) => ({ ...current, teamCount: ids.length }));
@@ -185,8 +195,13 @@ export function DraftSetupWizard({
   );
   const ranks = useMemo(
     () =>
-      new Map(pool.map((registration) => [registration.id, captainRankSummary(registration).rank])),
-    [pool]
+      new Map(
+        pool.map((registration) => [
+          registration.id,
+          captainSeat(registration, captains.roles[registration.id], shape).rank
+        ])
+      ),
+    [pool, captains.roles, shape]
   );
   const orderedCaptainIds = useMemo(
     () => orderCaptainIds(captains.ids, captains.order, ranks, captains.randomSeed),
@@ -234,10 +249,18 @@ export function DraftSetupWizard({
   const seedBody = (activeSession: DraftSession, previewOnly: boolean): DraftSeedRequest => ({
     captain_order: captains.order,
     seed: captains.order === "random" ? captains.randomSeed : null,
-    pool_captains: captains.ids.map((id) => ({
-      registration_id: id,
-      name: captains.teamNames[id]?.trim() || null
-    })),
+    pool_captains: captains.ids.map((id) => {
+      // A pin is sent only while it still seats the captain (a playable role
+      // with a slot); a stale one would be refused by the seed.
+      const pinned = captains.roles[id];
+      const registration = pool.find((candidate) => candidate.id === id);
+      const seated = pinned && registration ? captainSeat(registration, pinned, shape).role : null;
+      return {
+        registration_id: id,
+        name: captains.teamNames[id]?.trim() || null,
+        role: pinned && seated === pinned ? pinned : null
+      };
+    }),
     preview_only: previewOnly,
     expected_version: activeSession.version
   });
@@ -500,6 +523,7 @@ export function DraftSetupWizard({
               value={captains}
               onChange={setCaptainsAndReset}
               divisionGrid={divisionGrid}
+              rosterShape={shape}
             />
           )}
           {step === "order" && (
@@ -510,6 +534,7 @@ export function DraftSetupWizard({
               rounds={shape.draft_rounds}
               format={config.format}
               roundRules={config.roundRules}
+              rosterShape={shape}
             />
           )}
           {step === "review" && (

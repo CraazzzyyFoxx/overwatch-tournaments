@@ -21,6 +21,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { useDragSensors } from "@/hooks/useDragSensors";
+import type { RosterShape } from "@/lib/roster/shape";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftCaptainOrder, DraftFormat } from "@/types/draft.types";
@@ -28,7 +29,7 @@ import type { DraftCaptainOrder, DraftFormat } from "@/types/draft.types";
 import { moveCaptain, orderCaptainIds } from "./setup-model";
 import { DraftSetupPreview } from "./DraftSetupPreview";
 import type { DraftCaptainSetup } from "./setup-types";
-import { captainRankSummary, registrationLabel } from "./setup-types";
+import { captainSeat, registrationLabel } from "./setup-types";
 
 interface DraftOrderStepProps {
   value: DraftCaptainSetup;
@@ -37,6 +38,7 @@ interface DraftOrderStepProps {
   rounds: number;
   format: DraftFormat;
   roundRules: string[];
+  rosterShape: Pick<RosterShape, "slots" | "has_role_slots">;
 }
 
 export function DraftOrderStep({
@@ -45,16 +47,20 @@ export function DraftOrderStep({
   pool,
   rounds,
   format,
-  roundRules
+  roundRules,
+  rosterShape
 }: Readonly<DraftOrderStepProps>) {
   const t = useTranslations("draftAdmin");
   // No activation distance: a captain row carries no controls of its own, so
   // there is no click here for a threshold to protect.
   const sensors = useDragSensors({ distance: 0, keyboard: true });
-  // Same rank the captain picker seats by: a captain's STRONGEST playable
-  // role, so the previewed order matches the list it was chosen from.
+  // Same rank the captain step shows and the server seats by: the rank of the
+  // role each captain is seated on.
   const ranks = new Map(
-    pool.map((registration) => [registration.id, captainRankSummary(registration).rank])
+    pool.map((registration) => [
+      registration.id,
+      captainSeat(registration, value.roles[registration.id], rosterShape).rank
+    ])
   );
   const orderedIds = orderCaptainIds(value.ids, value.order, ranks, value.randomSeed);
 
@@ -120,7 +126,7 @@ export function DraftOrderStep({
                     id={id}
                     position={index + 1}
                     label={registrationLabel(registration)}
-                    rank={captainRankSummary(registration).rank}
+                    rank={ranks.get(id) ?? null}
                   />
                 );
               })}
@@ -147,7 +153,7 @@ export function DraftOrderStep({
                   {registrationLabel(registration)}
                 </span>
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {captainRankSummary(registration).rank ?? "—"}
+                  {ranks.get(id) ?? "—"}
                 </span>
               </div>
             );

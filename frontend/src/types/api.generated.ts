@@ -14242,6 +14242,11 @@ export interface components {
         "balancer.DraftPlayerRead": {
             /** Battle Tag */
             battle_tag: string | null;
+            /**
+             * Captain Role
+             * @default null
+             */
+            captain_role: string | null;
             /** Custom Fields */
             custom_fields?: components["schemas"]["balancer.DraftPlayerCustomFieldRead"][];
             /** Drafted By Team Id */
@@ -14313,6 +14318,11 @@ export interface components {
             name: string | null;
             /** Registration Id */
             registration_id: number;
+            /**
+             * Role
+             * @default null
+             */
+            role: BalancerDraftPoolCaptainInputRoleAnyOf0 | null;
         };
         /**
          * DraftPoolSource
@@ -70176,6 +70186,11 @@ export enum BalancerDraftPlayerStatus {
     available = "available",
     picked = "picked",
     removed = "removed"
+}
+export enum BalancerDraftPoolCaptainInputRoleAnyOf0 {
+    tank = "tank",
+    damage = "damage",
+    support = "support"
 }
 export enum BalancerDraftPoolSource {
     balancer_balance = "balancer_balance",

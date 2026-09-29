@@ -176,13 +176,15 @@ describe("draft config step", () => {
 });
 
 describe("draft captains step", () => {
+  const ROLE_SHAPE = { slots: { tank: 1, damage: 2, support: 2 }, has_role_slots: true };
   const html = renderToStaticMarkup(
     <DraftCaptainsStep
       pool={POOL}
       teamCount={2}
-      value={{ ids: [], teamNames: {}, order: "weakest_first", randomSeed: 1 }}
+      value={{ ids: [], teamNames: {}, roles: {}, order: "weakest_first", randomSeed: 1 }}
       onChange={() => {}}
       divisionGrid={TOURNAMENT_GRID}
+      rosterShape={ROLE_SHAPE}
     />
   );
 
@@ -230,6 +232,22 @@ describe("draft captains step", () => {
   test("sorts the pool by rank descending by default", () => {
     expect(html.indexOf("Player3#1000")).toBeLessThan(html.indexOf("Player2#1000"));
     expect(html.indexOf("Player2#1000")).toBeLessThan(html.indexOf("Player1#1000"));
+  });
+
+  test("lets the organizer choose the role of a captain who plays more than one", () => {
+    const selected = renderToStaticMarkup(
+      <DraftCaptainsStep
+        pool={POOL}
+        teamCount={2}
+        value={{ ids: [2, 3], teamNames: {}, roles: {}, order: "weakest_first", randomSeed: 1 }}
+        onChange={() => {}}
+        divisionGrid={TOURNAMENT_GRID}
+        rosterShape={ROLE_SHAPE}
+      />
+    );
+    // Support + tank: a choice. Damage only: nothing to pick.
+    expect(selected).toContain('captainRoleFor:{&quot;name&quot;:&quot;Player2#1000&quot;}');
+    expect(selected).not.toContain('captainRoleFor:{&quot;name&quot;:&quot;Player3#1000&quot;}');
   });
 });
 

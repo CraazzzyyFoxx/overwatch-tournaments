@@ -23620,6 +23620,18 @@
           ],
           "title": "Battle Tag"
         },
+        "captain_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Captain Role"
+        },
         "custom_fields": {
           "items": {
             "$ref": "#/components/schemas/balancer.DraftPlayerCustomFieldRead"
@@ -23806,6 +23818,23 @@
         "registration_id": {
           "title": "Registration Id",
           "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "tank",
+                "damage",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
         }
       },
       "required": [

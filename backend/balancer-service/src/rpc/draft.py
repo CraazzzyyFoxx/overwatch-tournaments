@@ -572,6 +572,7 @@ def register(broker: Any, logger: Any) -> None:
                     team_names={c_.registration_id: c_.name for c_ in payload.pool_captains if c_.name},
                     captain_order=payload.captain_order,
                     rng_seed=payload.seed,
+                    captain_roles={c_.registration_id: c_.role for c_ in payload.pool_captains if c_.role},
                 )
 
                 after = await lifecycle_service.seed_row_counts(session, draft.id)

@@ -141,9 +141,9 @@ export interface DraftCaptainRow {
   id: number;
   label: string;
   roles: DraftRole[];
-  /** The captain's STRONGEST playable rank (`captainRankSummary`). */
+  /** The rank of the role the captain is seated on (`captainSeat`). */
   rank: number | null;
-  /** Which role that rank was earned on, so the list can say where it comes from. */
+  /** That role, so the list can say where the rank comes from. */
   rankRole: DraftRole | null;
 }
 

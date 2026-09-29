@@ -895,6 +895,7 @@ Table balancer.draft_player {
   status VARCHAR(16) [not null, default: `available`]
   is_captain boolean [not null, default: false]
   drafted_by_team_id bigint
+  captain_role VARCHAR(16)
   version int [not null, default: 0]
   indexes {
     (session_id, registration_id) [unique, name: "uq_draft_player_session_registration"]

@@ -161,6 +161,13 @@ describe("roster role/rank", () => {
     expect(rosterRoleForPlayer(player, [])).toBe("tank");
     expect(slotRankForPlayer(player, "tank", ROLE_SLOTS)).toBe(2800);
   });
+  it("seats a captain on the role the organizer pinned, not their lead role", () => {
+    const captain = mkPlayer({
+      id: 7, is_captain: true, primary_role: "tank", captain_role: "damage",
+      role_ranks: { tank: 2600, damage: 3900 }
+    });
+    expect(rosterRoleForPlayer(captain, [])).toBe("damage");
+  });
   it("reports no role and no rank once every role lost its rank", () => {
     // An organizer can strip the ranks mid-draft; nothing may stand in.
     const player = mkPlayer({ id: 8, primary_role: null, secondary_roles: [], role_ranks: {} });

@@ -24,6 +24,7 @@ from shared.core.enums import (  # noqa: E402
     DraftStatus,
     HeroClass,
 )
+from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.domain.roster_shape import DEFAULT_ROSTER_SHAPE, parse_roster_slots  # noqa: E402
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam  # noqa: E402
 from src import (  # noqa: E402
@@ -31,8 +32,8 @@ from src import (  # noqa: E402
     openapi_schemas,
     schemas,  # noqa: E402
 )
-from src.domain.draft import rules  # noqa: E402
-from src.domain.draft.entities import DraftPickOption  # noqa: E402
+from src.domain.draft import ranks, rules  # noqa: E402
+from src.domain.draft.entities import DraftPickOption, PoolSeat  # noqa: E402
 from src.rpc import draft as draft_rpc  # noqa: E402
 from src.services.draft import board, journal, lifecycle  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
@@ -246,6 +247,56 @@ def test_player_read_carries_a_sub_role_per_playable_role_not_just_the_lead_one(
 
     assert read.sub_role == "hitscan"
     assert read.role_sub_roles == {"damage": "hitscan", "support": "flex_support"}
+
+
+def test_a_captain_is_worth_the_rank_of_the_role_they_are_seated_on() -> None:
+    # Tank lead, strongest on damage. The captain step shows, and the seat
+    # order ranks by, the seated role's number -- never the damage maximum.
+    tank_lead = roster(120, ranks={"tank": 2600, "damage": 3900, "support": None})
+
+    assert ranks.captain_rank(tank_lead, None, DEFAULT_ROSTER_SHAPE) == 2600
+    assert ranks.captain_rank(tank_lead, "damage", DEFAULT_ROSTER_SHAPE) == 3900
+    # A pin whose rank was cleared since falls back to the lead role.
+    assert ranks.seat_role(tank_lead, "support") is HeroClass.tank
+    assert ranks.captain_rank(tank_lead, "support", DEFAULT_ROSTER_SHAPE) == 2600
+    # A role-less roster seats nobody on a role: the best rank, pinned or not.
+    all_flex = parse_roster_slots({"flex": 5})
+    assert ranks.captain_rank(tank_lead, None, all_flex) == 3900
+    assert ranks.captain_rank(None, None, DEFAULT_ROSTER_SHAPE) == -1
+
+
+def test_a_pinned_captain_reads_and_counts_on_the_pinned_role() -> None:
+    captain = DraftPlayer(
+        id=20,
+        session_id=1,
+        registration_id=120,
+        status="picked",
+        is_captain=True,
+        drafted_by_team_id=10,
+        captain_role="damage",
+        version=1,
+    )
+    tank_lead = roster(120, ranks={"tank": 2600, "damage": 3900})
+
+    read = schemas.DraftPlayerRead.from_seat(captain, tank_lead, shape=DEFAULT_ROSTER_SHAPE, custom_fields=[])
+    assert (read.primary_role, read.captain_role, read.effective_rank) == ("tank", "damage", 3900)
+
+    counts = rules.team_slot_counts([captain], [], 10, DEFAULT_ROSTER_SHAPE, {captain.id: tank_lead})
+    assert (counts["tank"], counts["damage"]) == (0, 1)
+
+
+def test_a_seed_refuses_a_captain_role_the_captain_or_the_roster_cannot_take() -> None:
+    rosters = {120: roster(120, ranks={"tank": 2600, "damage": None})}
+    rules.validate_captain_roles([PoolSeat(120, draft_position=1, captain_role="tank")], rosters, DEFAULT_ROSTER_SHAPE)
+
+    for pin, shape in (
+        ("damage", DEFAULT_ROSTER_SHAPE),  # declared, but unranked
+        ("support", DEFAULT_ROSTER_SHAPE),  # not declared at all
+        ("tank", parse_roster_slots({"damage": 2, "support": 2})),  # no tank slot
+    ):
+        with pytest.raises(ApiHTTPException) as ctx:
+            rules.validate_captain_roles([PoolSeat(120, draft_position=1, captain_role=pin)], rosters, shape)
+        assert ctx.value.detail[0]["code"] == "captain_role_invalid"
 
 
 def test_the_public_board_never_carries_a_captains_pick_queue() -> None:

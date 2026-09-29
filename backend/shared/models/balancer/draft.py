@@ -167,9 +167,11 @@ class DraftPlayer(db.TimeStampIntegerMixin):
     ``registration_role.rank_value`` while the balancer resolved the same rank
     through three layers, and nothing ever re-synced it.
 
-    The only surviving derivation in the draft is ``DraftPick.target_role`` /
-    ``target_rank_value``: a historical fact about a pick that was made, not a
-    cache of something readable elsewhere.
+    The surviving derivations in the draft are ``DraftPick.target_role`` /
+    ``target_rank_value`` -- a historical fact about a pick that was made, not a
+    cache of something readable elsewhere -- and ``captain_role``, the role the
+    organizer seated a captain on. Both are draft decisions, not registration
+    data.
     """
 
     __tablename__ = "draft_player"
@@ -198,6 +200,12 @@ class DraftPlayer(db.TimeStampIntegerMixin):
     drafted_by_team_id: Mapped[int | None] = mapped_column(
         ForeignKey("balancer.draft_team.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: The role slot the organizer pinned this CAPTAIN to at seed time
+    #: (``HeroClass.slot_code``). ``None`` -- every non-captain, and a captain
+    #: nobody pinned -- means "their lead role", resolved live. A pin whose rank
+    #: was cleared since falls back the same way; see
+    #: ``domain.draft.ranks.seat_role``.
+    captain_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
     version: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
     session: Mapped[DraftSession] = relationship(back_populates="players")

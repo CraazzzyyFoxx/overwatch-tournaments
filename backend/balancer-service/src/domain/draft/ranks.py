@@ -17,7 +17,7 @@ from shared.core.enums import HeroClass
 from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import RosterShape
 
-__all__ = ("slot_rank",)
+__all__ = ("captain_rank", "seat_role", "slot_rank")
 
 
 def slot_rank(roster: PlayerRoster | None, role: HeroClass | str | None, shape: RosterShape) -> int | None:
@@ -30,3 +30,34 @@ def slot_rank(roster: PlayerRoster | None, role: HeroClass | str | None, shape: 
     if roster is None:
         return None
     return roster.rank_on(role if shape.has_role_slots else None)
+
+
+def seat_role(roster: PlayerRoster | None, pinned: str | None = None) -> HeroClass | None:
+    """The role a rostered player holds when no pick froze one.
+
+    ``pinned`` is ``DraftPlayer.captain_role``: the role the organizer seated a
+    captain on. It holds while the registration can still play it; a pin whose
+    rank was cleared since, and every seat without one, fall back to the lead
+    role (flagged primary, else the first playable). ``None`` only for a roster
+    that can play nothing, which feasibility reports rather than guesses.
+    """
+    if roster is None:
+        return None
+    if pinned is not None:
+        role = HeroClass.from_slot_code(pinned)
+        if role in roster.playable_roles:
+            return role
+    lead = roster.primary
+    return lead.role if lead is not None else None
+
+
+def captain_rank(roster: PlayerRoster | None, pinned: str | None, shape: RosterShape) -> int:
+    """What a captain is worth when captains are ordered by strength.
+
+    The rank of the role they are seated on -- the same number the captain step
+    and the board show -- not their strongest role: a support main seated on
+    support is not worth their damage rank. A role-less shape answers the best
+    rank, as ``slot_rank`` does for everybody. ``-1`` for an unranked captain,
+    so they sort as the weakest.
+    """
+    return slot_rank(roster, seat_role(roster, pinned), shape) or -1

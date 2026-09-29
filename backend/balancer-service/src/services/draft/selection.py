@@ -119,17 +119,16 @@ class DraftSelectionService:
             return False
 
         # Average the drafted-role rank (off-role aware), not the lead-role one.
-        avg_by_team = await self._team_avg_drafted_rank(
-            session, draft_session, await self.feasibility.resolve_shape(session, draft_session)
-        )
+        shape = await self.feasibility.resolve_shape(session, draft_session)
+        avg_by_team = await self._team_avg_drafted_rank(session, draft_session, shape)
         teams = await self.teams_repo.list_by_session(session, draft_session.id)
         # Tie-break for equal averages — same shape as lifecycle.resync_pick_order's,
         # so a live re-seat and a settings resync rank captains identically.
         captains = await self.players_repo.list_drafted_captains(session, draft_session.id)
         captain_rosters = await self.rosters.load(session, draft_session, captains)
         captain_ranks = {
-            captain.drafted_by_team_id: (
-                (captain_rosters[captain.id].best_rank or -1) if captain.id in captain_rosters else -1
+            captain.drafted_by_team_id: domain_ranks.captain_rank(
+                captain_rosters.get(captain.id), captain.captain_role, shape
             )
             for captain in captains
         }
@@ -221,7 +220,8 @@ class DraftSelectionService:
 
         Uses each pick's frozen ``target_rank_value`` -- the one derivation the
         draft still stores, because it is a fact about a pick that happened.
-        Captains have no pick, so they are valued live on their lead role. A
+        Captains have no pick, so they are valued live on their seat role -- the
+        one they were pinned to, else their lead role. A
         role-less shape ignores the frozen value: it was frozen against a role
         the shape gives no meaning to, so ``slot_rank`` re-derives the same
         maximum every other reader of a flex draft shows.
@@ -244,8 +244,7 @@ class DraftSelectionService:
                 rank = pk.target_rank_value
             else:
                 roster = rosters.get(p.id)
-                lead = roster.primary if roster is not None else None
-                role = (pk.target_role if pk else None) or (lead.role if lead is not None else None)
+                role = (pk.target_role if pk else None) or domain_ranks.seat_role(roster, p.captain_role)
                 rank = domain_ranks.slot_rank(roster, role, shape) or 0
             tid = p.drafted_by_team_id
             sums[tid] = sums.get(tid, 0.0) + rank
