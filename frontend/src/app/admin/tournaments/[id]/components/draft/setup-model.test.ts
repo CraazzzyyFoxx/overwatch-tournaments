@@ -99,6 +99,16 @@ describe("draft setup model", () => {
     expect(orderCaptainIds([10, 20, 30], "random", ranks, 42)).toEqual([30, 10, 20]);
   });
 
+  it("breaks tied captain ranks by id in both directions, like the server", () => {
+    const ranks = new Map([
+      [30, 2500],
+      [10, 2500],
+      [20, 3000]
+    ]);
+    expect(orderCaptainIds([30, 10, 20], "weakest_first", ranks, 0)).toEqual([10, 30, 20]);
+    expect(orderCaptainIds([30, 10, 20], "strongest_first", ranks, 0)).toEqual([20, 10, 30]);
+  });
+
   it("previews snake order for every round", () => {
     expect(buildDraftSchedule([10, 20, 30], 3, "snake", [])).toEqual([
       { round: 1, teamIds: [10, 20, 30], rule: "linear", resolved: true },

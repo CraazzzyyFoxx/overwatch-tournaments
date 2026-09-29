@@ -210,7 +210,10 @@ export function orderCaptainIds(
     return [...ids].sort((left, right) => {
       const leftRank = ranks.get(left) ?? -1;
       const rightRank = ranks.get(right) ?? -1;
-      return ((leftRank - rightRank) || left - right) * direction;
+      // Ties by id ascending in BOTH directions, as the server's
+      // `rules.order_captain_ids` does: flipping it with the rank showed a
+      // strongest-first preview the commit then seated differently.
+      return (leftRank - rightRank) * direction || left - right;
     });
   }
 
