@@ -71,7 +71,6 @@ def register(broker: Any, logger: Any) -> None:
             user_id = c.require_id(data)
             granularity = c.q1(data, "granularity", str, "daily")
             date_from, date_to = resolve_date_range(granularity, _dt(data, "date_from"), _dt(data, "date_to"))
-            service_granularity = "daily" if granularity == "daily" else "raw"
             series = await queries.get_rank_series(
                 session,
                 user_id=user_id,
@@ -80,7 +79,7 @@ def register(broker: Any, logger: Any) -> None:
                 role=c.q1(data, "role"),
                 date_from=date_from,
                 date_to=date_to,
-                granularity=service_granularity,
+                granularity=granularity,
             )
             return schemas.RankHistoryResponse(user_id=user_id, series=series, generated_at=datetime.now(UTC))
 
@@ -93,7 +92,6 @@ def register(broker: Any, logger: Any) -> None:
             social_account_id = c.require_id(data)
             granularity = c.q1(data, "granularity", str, "daily")
             date_from, date_to = resolve_date_range(granularity, _dt(data, "date_from"), _dt(data, "date_to"))
-            service_granularity = "daily" if granularity == "daily" else "raw"
             series = await queries.get_rank_series(
                 session,
                 social_account_id=social_account_id,
@@ -101,7 +99,7 @@ def register(broker: Any, logger: Any) -> None:
                 role=c.q1(data, "role"),
                 date_from=date_from,
                 date_to=date_to,
-                granularity=service_granularity,
+                granularity=granularity,
             )
             return schemas.RankHistoryResponse(user_id=None, series=series, generated_at=datetime.now(UTC))
 
