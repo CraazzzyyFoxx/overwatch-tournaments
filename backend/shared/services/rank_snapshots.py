@@ -7,6 +7,8 @@ query + role filtering + grid normalisation here avoids duplicating it per servi
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +17,13 @@ from shared.core.social import SocialProvider
 from shared.division_grid import DivisionGrid
 from shared.domain.player_sub_roles import canonical_to_registration_role
 from shared.models.identity.social import SocialAccount
-from shared.models.ranks.overwatch_rank import UserRankSnapshot
+from shared.models.ranks.overwatch_rank import BattleTagRankState, UserRankSnapshot
+
+#: How recent an account's last successful poll must be for its rank to count. ``rank_snapshot``
+#: keeps changes, so the newest row of an account nobody can poll any more (private profile,
+#: renamed tag) still reads as its rank for good -- and, taken as the max across a player's
+#: accounts, outranks the account they actually play on.
+OW_RANK_MAX_AGE = timedelta(days=30)
 
 
 async def fetch_latest_ow_ranks_by_account(
@@ -28,7 +36,9 @@ async def fetch_latest_ow_ranks_by_account(
     snapshot's denormalized ``Name#1234`` and ``registration_role`` is one of ``tank``/``damage``/
     ``support`` (the snapshot stores the canonical ``HeroClass`` name, which is what registration
     uses too; ``flex`` snapshots are dropped). Only ranked snapshots with a non-null ``rank_value``
-    are considered, and only the newest per **(user, battle_tag, role)** by ``captured_at``.
+    are considered, and only the newest per **(user, battle_tag, role)** by ``captured_at``. An
+    account whose last successful poll is older than :data:`OW_RANK_MAX_AGE` contributes nothing:
+    its newest row is what it was then, not what it is.
 
     Keeping one entry per account (rather than collapsing by user) lets callers prefer main accounts
     over declared smurfs and take the maximum rank across accounts. The raw OW SR is returned as-is;
@@ -60,11 +70,13 @@ async def fetch_latest_ow_ranks_by_account(
     query = (
         sa.select(SocialAccount.user_id, latest.c.battle_tag, roles.c.role, latest.c.rank_value)
         .select_from(SocialAccount)
+        .join(BattleTagRankState, BattleTagRankState.social_account_id == SocialAccount.id)
         .join(roles, sa.true())
         .join(latest, sa.true())
         .where(
             SocialAccount.user_id.in_(user_ids),
             SocialAccount.provider == SocialProvider.BATTLENET,
+            BattleTagRankState.last_success_at >= sa.func.now() - OW_RANK_MAX_AGE,
         )
     )
     result = await session.execute(query)
