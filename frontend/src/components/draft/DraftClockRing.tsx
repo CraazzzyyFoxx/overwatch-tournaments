@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { usePickCountdown } from "@/hooks/usePickCountdown";
+import { formatClock, usePickCountdown } from "@/hooks/usePickCountdown";
 import { isUrgent } from "@/lib/draft/logic";
 import { cn } from "@/lib/utils";
 import type { DraftPick } from "@/types/draft.types";
@@ -20,6 +20,12 @@ interface DraftClockRingProps {
   color?: string;
   /** `md`: 88px standalone ring; `sm`: the 52px ring of the clock strip. */
   size?: "md" | "sm";
+  /**
+   * Whether this ring announces its 30/10/5s thresholds. The strip's ring turns
+   * it off for viewers the clock does not concern — only the team on the clock
+   * needs to hear it count down.
+   */
+  announce?: boolean;
 }
 
 const GEOMETRY = {
@@ -35,10 +41,11 @@ export function DraftClockRing({
   totalSeconds,
   overtimeSeconds = 0,
   color = "var(--aqt-teal)",
-  size = "md"
+  size = "md",
+  announce = true
 }: Readonly<DraftClockRingProps>) {
   const t = useTranslations();
-  // `ms` stays null for the first render, so SSR and hydration agree on "--".
+  // `ms` stays null for the first render, so SSR and hydration agree on "—".
   const { ms, overtime, text } = usePickCountdown(pick, paused);
   const { size: box, stroke } = GEOMETRY[size];
   const radius = (box - stroke) / 2;
@@ -49,10 +56,14 @@ export function DraftClockRing({
   const phaseAnnouncement = overtime ? t("draft.clock.overtime") : "";
 
   const seconds = ms == null ? null : Math.ceil(ms / 1000);
+  // No pick on the clock at all (before the start): a full ring with the pick
+  // time reads as "this is how long a pick gets", not as a timed-out empty arc.
+  // Derived from props only, so SSR and hydration render the same thing.
+  const idle = pick == null;
   // In overtime the arc measures the grace period, not the pick time it already
   // spent — against `pick_time_seconds` a 15s overtime would render as a sliver.
   const total = overtime ? overtimeSeconds : totalSeconds;
-  const frac = ms == null || total <= 0 ? 0 : Math.min(1, ms / (total * 1000));
+  const frac = idle ? 1 : ms == null || total <= 0 ? 0 : Math.min(1, ms / (total * 1000));
   const urgent = ms != null && isUrgent(ms);
   // Colour, not only the pulse: under prefers-reduced-motion the animation is
   // suppressed, so motion alone would leave no urgency cue at all.
@@ -69,9 +80,17 @@ export function DraftClockRing({
   // threshold, and React skips identical text writes, so the live region gets
   // exactly one announcement per threshold instead of one every 250ms tick.
   const announcement =
-    !paused && seconds != null && ANNOUNCE_AT.includes(seconds)
+    announce && !paused && seconds != null && ANNOUNCE_AT.includes(seconds)
       ? t("draft.clock.remaining", { seconds })
       : "";
+
+  // 52px holds no word: the small ring stays digits; amber and the label say "paused".
+  const digits =
+    paused && size === "md"
+      ? t("draft.clock.pauseCompact")
+      : idle && totalSeconds > 0
+        ? formatClock(totalSeconds * 1000, false)
+        : (text ?? "—");
 
   return (
     <div className="relative grid shrink-0 place-items-center" style={{ width: box, height: box }}>
@@ -102,15 +121,14 @@ export function DraftClockRing({
         aria-label={label}
         className={cn(
           "absolute flex flex-col items-center font-semibold tabular-nums",
-          size === "md" ? "font-onest text-xl" : "text-sm font-bold",
+          size === "md" ? "font-onest text-title" : "text-body font-bold",
           urgent && "animate-pulse motion-reduce:animate-none"
         )}
         style={{ color: tone }}
       >
-        {/* 52px holds no word: the small ring stays digits; amber and the label say "paused". */}
-        {paused && size === "md" ? t("draft.clock.pauseCompact") : (text ?? "--")}
+        {digits}
         {overtime && !paused && size === "md" && (
-          <span className="text-label font-bold uppercase tracking-label">{t("draft.clock.overtime")}</span>
+          <span className="text-label font-bold">{t("draft.clock.overtime")}</span>
         )}
       </span>
       <span className="sr-only" aria-live="polite">

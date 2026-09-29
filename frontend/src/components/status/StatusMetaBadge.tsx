@@ -3,7 +3,11 @@
 import { createElement } from "react";
 
 import { getStatusIcon } from "@/lib/registration/status-icons";
-import { STATUS_TONE_PILL, type StatusTone } from "@/components/status/StatusIconBadge";
+import {
+  STATUS_CHIP_CLASS,
+  STATUS_TONE_PILL,
+  type StatusTone
+} from "@/components/status/StatusIconBadge";
 import { cn, hexToRgba } from "@/lib/utils";
 import type { StatusMeta } from "@/types/registration.types";
 
@@ -67,7 +71,7 @@ export default function StatusMetaBadge({
       title={resolvedMeta.description ?? resolvedMeta.name}
       style={tintedStyle}
       className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-label font-medium leading-none",
+        STATUS_CHIP_CLASS,
         STATUS_TONE_PILL[getFallbackTone(resolvedMeta.scope, resolvedMeta.value)],
         compact && "px-1.5",
         className,

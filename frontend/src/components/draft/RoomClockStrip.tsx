@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import type { ReactNode } from "react";
+import { ArrowRight, Check, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -38,6 +39,7 @@ export function RoomClockStrip({
   onViewParamsChange
 }: Readonly<RoomClockStripProps>) {
   const t = useTranslations("draftRedesign");
+  const tClock = useTranslations("draft.clock");
   const session = board.session;
   const current = board.current_pick;
   const done = session.status === "completed";
@@ -53,7 +55,8 @@ export function RoomClockStrip({
   const clockTeam: DraftTeam | null = headPick ? (teamById.get(headPick.draft_team_id) ?? null) : null;
   const myTeamId = gating.myTeamId;
   const isMyTurn = current != null && myTeamId != null && current.draft_team_id === myTeamId;
-  const clockColor = done || cancelled ? "var(--aqt-fg-faint)" : isMyTurn ? "var(--aqt-teal)" : "var(--aqt-fg)";
+  const clockColor =
+    done || cancelled ? "var(--aqt-status-finished)" : isMyTurn ? "var(--aqt-teal)" : "var(--aqt-fg)";
 
   const captain = clockTeam
     ? board.players.find((player) => player.is_captain && player.drafted_by_team_id === clockTeam.id)
@@ -74,12 +77,41 @@ export function RoomClockStrip({
       ? t("shell.strip.nextMine", { team: teamName(pick.draft_team_id) })
       : teamName(pick.draft_team_id)
   );
-  const nextParts: string[] = [];
+  // Separate facts, separate spans: "A · B" is one string a screen reader reads
+  // as a sentence and a narrow viewport truncates in the middle of.
+  const nextParts: ReactNode[] = [];
   if (!done && !cancelled) {
-    if (myIn != null && myIn > 0) nextParts.push(t("shell.strip.myTurnIn", { count: myIn }));
-    if (upcoming.length > 0) nextParts.push(t("shell.strip.next", { teams: upcoming.join(", ") }));
-    else if (current != null) nextParts.push(t("shell.strip.finalPick"));
+    if (myIn != null && myIn > 0)
+      nextParts.push(
+        <span key="mine" className="whitespace-nowrap tabular-nums">
+          {t("shell.strip.myTurnIn", { count: myIn })}
+        </span>
+      );
+    if (upcoming.length > 0)
+      nextParts.push(
+        <span key="next" className="min-w-0 truncate">
+          {t("shell.strip.next", { teams: upcoming.join(", ") })}
+        </span>
+      );
+    else if (current != null) nextParts.push(<span key="final">{t("shell.strip.finalPick")}</span>);
   }
+
+  // One announcement per pick, not per tick: every part of this text is derived
+  // from board state, so React only writes the region when the pick changes.
+  const announceParts: string[] = [];
+  if (last && lastPlayer)
+    announceParts.push(
+      t("shell.strip.announceLast", {
+        team: teamName(last.draft_team_id),
+        player: lastPlayer.battle_tag ?? `#${lastPlayer.id}`
+      })
+    );
+  if (current != null)
+    announceParts.push(
+      isMyTurn
+        ? t("shell.strip.announceMine", { pick: current.overall_no })
+        : t("shell.strip.announce", { pick: current.overall_no, team: teamName(current.draft_team_id) })
+    );
 
   const whoLabel = done
     ? t("shell.strip.completed")
@@ -91,6 +123,10 @@ export function RoomClockStrip({
           ? t("shell.strip.firstPick")
           : t("shell.strip.picking");
   const whoName = done ? t("shell.strip.picksMade", { count: totalPicks }) : (clockTeam?.name ?? "—");
+  // Teams are named after their captain by default: the tag next to the team
+  // name only earns its place when it says something the name doesn't.
+  const captainTag = captain ? (captain.battle_tag ?? `#${captain.id}`) : null;
+  const showCaptainTag = captainTag != null && captainTag !== whoName;
 
   const tickTone = (pick: DraftPick) => {
     const state = pickState(pick);
@@ -100,7 +136,7 @@ export function RoomClockStrip({
         : pick.draft_team_id === myTeamId
           ? "inset 0 0 0 1.5px var(--aqt-teal)"
           : followed.has(pick.draft_team_id)
-            ? "inset 0 0 0 1.5px var(--aqt-amber)"
+            ? "inset 0 0 0 1.5px var(--aqt-follow)"
             : "none";
     const background =
       state === "current"
@@ -110,7 +146,7 @@ export function RoomClockStrip({
             ? "var(--aqt-live)"
             : clockColor
         : state === "done"
-          ? "color-mix(in srgb, var(--aqt-teal) 38%, transparent)"
+          ? "color-mix(in srgb, var(--aqt-fg-muted) 40%, transparent)"
           : "var(--aqt-overlay-3)";
     return { background, boxShadow: ring };
   };
@@ -128,36 +164,54 @@ export function RoomClockStrip({
   return (
     <div className="border-t border-[color:var(--aqt-border)]">
       <div className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-[18px] gap-y-3 px-4 py-2.5 sm:px-6">
-        <DraftClockRing
-          pick={current}
-          paused={paused}
-          totalSeconds={session.pick_time_seconds}
-          overtimeSeconds={session.overtime_seconds}
-          color={clockColor}
-          size="sm"
-        />
+        {done || cancelled ? (
+          // A finished draft has no clock left to run: an empty arc reads as
+          // broken, a glyph reads as the state it is.
+          <span
+            role="img"
+            aria-label={done ? tClock("finished") : t("shell.strip.cancelled")}
+            className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full text-[color:var(--aqt-status-finished)]"
+            style={{ boxShadow: "inset 0 0 0 3.5px color-mix(in srgb, var(--aqt-status-finished) 45%, transparent)" }}
+          >
+            {done ? <Check className="h-6 w-6" aria-hidden /> : <X className="h-6 w-6" aria-hidden />}
+          </span>
+        ) : (
+          <DraftClockRing
+            pick={current}
+            paused={paused}
+            totalSeconds={session.pick_time_seconds}
+            overtimeSeconds={session.overtime_seconds}
+            color={clockColor}
+            size="sm"
+            announce={isMyTurn}
+          />
+        )}
         <div className="min-w-[150px]">
           <p
-            className="text-xs font-semibold uppercase leading-tight tracking-[0.08em]"
+            className="text-caption font-medium"
             style={{ color: isMyTurn ? "var(--aqt-teal)" : "var(--aqt-fg-muted)" }}
           >
             {whoLabel}
           </p>
-          <div className="mt-[3px] flex items-center gap-2.5">
-            <span className="whitespace-nowrap font-onest text-xl font-bold leading-tight tracking-[-0.01em]">
+          <div className="mt-[3px] flex min-w-0 items-center gap-2.5">
+            <span title={whoName} className="min-w-0 truncate font-onest text-title font-bold">
               {whoName}
             </span>
             {!done && !cancelled && captain && (
               <span
                 title={captainOnline ? t("shell.strip.captainOnline") : t("shell.strip.captainOffline")}
-                className="flex items-center gap-1.5 whitespace-nowrap text-sm text-[color:var(--aqt-fg-muted)]"
+                className="flex items-center gap-1.5 whitespace-nowrap text-body text-[color:var(--aqt-fg-muted)]"
               >
                 <span
                   aria-hidden
                   className="h-[7px] w-[7px] rounded-full"
-                  style={{ background: captainOnline ? "var(--aqt-support)" : "var(--aqt-border-3)" }}
+                  style={
+                    captainOnline
+                      ? { background: "var(--aqt-positive)" }
+                      : { boxShadow: "inset 0 0 0 1.5px var(--aqt-border-3)" }
+                  }
                 />
-                {captain.battle_tag ?? `#${captain.id}`}
+                {showCaptainTag && captainTag}
                 <span className="sr-only">
                   {captainOnline ? t("shell.strip.captainOnline") : t("shell.strip.captainOffline")}
                 </span>
@@ -169,13 +223,13 @@ export function RoomClockStrip({
 
         <div className="flex min-w-[230px] flex-[1_1_300px] flex-col gap-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="whitespace-nowrap text-[15px] font-semibold tabular-nums">
+            <span className="whitespace-nowrap text-ui font-semibold tabular-nums">
               {t("shell.strip.pick", {
                 pick: done ? totalPicks : (headPick?.overall_no ?? totalPicks),
                 total: totalPicks
               })}
             </span>
-            <span className="whitespace-nowrap text-[13px] text-[color:var(--aqt-fg-muted)]">
+            <span className="whitespace-nowrap text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
               {t("shell.strip.round", {
                 round,
                 rounds: session.rounds,
@@ -185,13 +239,13 @@ export function RoomClockStrip({
             <button
               type="button"
               onClick={() => onViewParamsChange({ teams: "order", view: "teams" })}
-              className="min-h-11 whitespace-nowrap rounded-sm text-[13px] font-medium text-[color:var(--aqt-teal)] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:min-h-0"
+              className="min-h-11 whitespace-nowrap rounded-sm text-caption font-medium text-[color:var(--aqt-teal)] outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:min-h-0"
             >
               {t("shell.strip.allRounds")}
             </button>
             {nextParts.length > 0 && (
-              <span className="min-w-0 truncate text-sm text-[color:var(--aqt-fg-muted)] sm:ml-auto">
-                {nextParts.join(" · ")}
+              <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-body text-[color:var(--aqt-fg-muted)] sm:ml-auto">
+                {nextParts}
               </span>
             )}
           </div>
@@ -212,7 +266,7 @@ export function RoomClockStrip({
             </div>
           )}
           {last && lastPlayer && (
-            <div className="flex min-w-0 items-center gap-[7px] whitespace-nowrap text-sm text-[color:var(--aqt-fg-muted)]">
+            <div className="flex min-w-0 items-center gap-[7px] whitespace-nowrap text-body text-[color:var(--aqt-fg-muted)]">
               <span>{t("shell.strip.lastPick")}</span>
               <span className="truncate">{teamName(last.draft_team_id)}</span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-fg-faint)]" aria-hidden />
@@ -228,7 +282,7 @@ export function RoomClockStrip({
               {last.is_autopick && (
                 <span
                   title={t("shell.strip.autoTitle")}
-                  className="rounded bg-[color:var(--aqt-overlay-3)] px-1.5 py-px text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--aqt-amber)]"
+                  className="rounded bg-[color:var(--aqt-overlay-3)] px-1.5 py-px text-label font-medium text-[color:var(--aqt-fg-muted)]"
                 >
                   {t("badge.auto")}
                 </span>
@@ -237,6 +291,9 @@ export function RoomClockStrip({
           )}
         </div>
       </div>
+      <p className="sr-only" role="status">
+        {announceParts.join(" ")}
+      </p>
     </div>
   );
 }

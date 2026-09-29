@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { AnswerValue } from "@/components/forms/AnswerValue";
 import type { DraftPlayer } from "@/types/draft.types";
 
-const EYEBROW = "text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]";
+const EYEBROW = "text-label font-semibold text-[color:var(--aqt-fg-muted)]";
 
 /** Public registration answers and the organizer's notes: the card's Information view. */
 export function RegistrationSection({ player }: Readonly<{ player: DraftPlayer }>) {

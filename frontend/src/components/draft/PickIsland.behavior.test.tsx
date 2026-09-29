@@ -295,9 +295,12 @@ describe("spectator", () => {
   it("gets the card only: no action footer, no heart, no target toggle, role chips instead of buttons", async () => {
     const { body } = await open();
 
-    expect(body.querySelector("[role='dialog']")?.getAttribute("aria-label")).toBe(
-      'island.aria:{"player":"Ana#1234"}'
-    );
+    // The dialog is named by its visible heading, so the name a screen reader
+    // hears is the one on screen.
+    const dialog = body.querySelector("[role='dialog']");
+    const titleId = dialog?.getAttribute("aria-labelledby");
+    expect(titleId).toBeTruthy();
+    expect(body.querySelector(`#${titleId}`)?.textContent).toContain("Ana#1234");
     expect(buttonStartingWith("island.action")).toBeUndefined();
     expect(body.querySelector("[aria-label='island.queue.add']")).toBeNull();
     expect(body.querySelector("[role='radiogroup']")).toBeNull();

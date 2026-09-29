@@ -283,9 +283,15 @@ async def _lifecycle_action(
     await action(session, draft, **action_kwargs)
     current = await _picks_repo.get(session, draft.current_pick_id) if draft.current_pick_id else None
     extra: dict = {"session_id": draft.id, "status": draft.status}
-    if event_type == "draft.pick_started" and current is not None:
+    if current is not None:
+        # Every lifecycle move names the pick it leaves on the clock. A resume
+        # re-arms that pick's deadline and a rollback moves the clock back to an
+        # earlier pick: a client that only folds events in has no other way to
+        # learn either, and used to resume with no clock at all.
         extra["pick_id"] = current.id
+        extra["draft_team_id"] = current.draft_team_id
         extra["clock_expires_at"] = current.clock_expires_at.isoformat() if current.clock_expires_at else None
+        extra["pick_version"] = current.version
     # Journalled inside the transition's own transaction: the organizer's log
     # cannot show a move the board never made, nor miss one it did.
     await journal_service.record_lifecycle(
@@ -566,6 +572,7 @@ def register(broker: Any, logger: Any) -> None:
                     team_names={c_.registration_id: c_.name for c_ in payload.pool_captains if c_.name},
                     captain_order=payload.captain_order,
                     rng_seed=payload.seed,
+                    captain_roles={c_.registration_id: c_.role for c_ in payload.pool_captains if c_.role},
                 )
 
                 after = await lifecycle_service.seed_row_counts(session, draft.id)

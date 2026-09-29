@@ -30,6 +30,7 @@ from src.domain.draft.entities import (
     EligiblePlayer,
     SlotDeficit,
 )
+from src.domain.draft.ranks import seat_role
 from src.domain.matching import maximum_bipartite_matching
 
 __all__ = (
@@ -89,7 +90,6 @@ def build_feasibility_state(
     assignments: list[DraftAssignment] = []
     for player in players:
         roster = rosters.get(player.id)
-        lead = roster.primary if roster is not None else None
         if player.status == DraftPlayerStatus.AVAILABLE.value:
             playable_roles = roster.playable_roles if roster is not None else frozenset()
             if playable_roles:
@@ -112,7 +112,9 @@ def build_feasibility_state(
                 )
             )
             continue
-        assigned_role = picked_role_by_player.get(player.id) or (lead.role if lead is not None else None)
+        # A pick's frozen role, else the seat's own: a captain's pinned role or
+        # the lead one (``ranks.seat_role``).
+        assigned_role = picked_role_by_player.get(player.id) or seat_role(roster, player.captain_role)
         if assigned_role is not None:
             assignments.append(
                 DraftAssignment(

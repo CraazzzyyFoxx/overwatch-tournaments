@@ -795,6 +795,7 @@ CREATE TABLE balancer.draft_player (
 	status VARCHAR(16) DEFAULT 'available' NOT NULL, 
 	is_captain BOOLEAN DEFAULT 'false' NOT NULL, 
 	drafted_by_team_id BIGINT, 
+	captain_role VARCHAR(16), 
 	version INTEGER DEFAULT '0' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_draft_player_session_registration UNIQUE (session_id, registration_id), 

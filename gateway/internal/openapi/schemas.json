@@ -23620,6 +23620,18 @@
           ],
           "title": "Battle Tag"
         },
+        "captain_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Captain Role"
+        },
         "custom_fields": {
           "items": {
             "$ref": "#/components/schemas/balancer.DraftPlayerCustomFieldRead"
@@ -23806,6 +23818,23 @@
         "registration_id": {
           "title": "Registration Id",
           "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "tank",
+                "damage",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
         }
       },
       "required": [
@@ -32547,7 +32576,7 @@
       "type": "object"
     },
     "tournament.BalancerRankAutofillStage": {
-      "description": "A single source in the rank-autofill priority chain.\n\n``lookback_tournaments`` limits ``division_history``/``analytics`` to the last N tournaments\nbefore the current one; ``lookback_days`` overrides the OW weekly window. The\nirrelevant lookback for a given ``source`` is ignored by the service.",
+      "description": "A single source in the rank-autofill priority chain.\n\n``lookback_tournaments`` limits ``division_history``/``analytics`` to the last N tournaments\nbefore the current one; ``lookback_days`` overrides the OW weekly window. ``ow_value`` picks\nwhich OW number the stage offers. Fields irrelevant to a given ``source`` are ignored.",
       "properties": {
         "enabled": {
           "default": true,
@@ -32579,6 +32608,16 @@
           ],
           "default": null,
           "title": "Lookback Tournaments"
+        },
+        "ow_value": {
+          "default": "composite",
+          "enum": [
+            "composite",
+            "current",
+            "peak"
+          ],
+          "title": "Ow Value",
+          "type": "string"
         },
         "source": {
           "enum": [
@@ -32842,6 +32881,23 @@
           "title": "Overwrite Existing",
           "type": "boolean"
         },
+        "ow_value": {
+          "anyOf": [
+            {
+              "enum": [
+                "composite",
+                "current",
+                "peak"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ow Value"
+        },
         "players": {
           "items": {
             "$ref": "#/components/schemas/tournament.BalancerRegistrationRankAutofillPlayer"
@@ -32975,6 +33031,18 @@
           ],
           "default": null,
           "title": "Ow Current Rank Value"
+        },
+        "ow_peak_rank_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ow Peak Rank Value"
         },
         "ow_rank_value": {
           "anyOf": [
@@ -33382,6 +33450,11 @@
           ],
           "default": null,
           "title": "Submitted At"
+        },
+        "submitted_late": {
+          "default": false,
+          "title": "Submitted Late",
+          "type": "boolean"
         },
         "subscription_outcome": {
           "anyOf": [

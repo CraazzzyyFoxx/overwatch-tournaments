@@ -5,14 +5,18 @@ import {
   HeartCrack,
   HeartHandshake,
   Lock,
+  PhoneCall,
   ShieldCheck,
   Unlock,
   XCircle
 } from "lucide-react";
+import type { ComponentPropsWithoutRef } from "react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import {
+  STATUS_CHIP_CLASS,
   STATUS_TONE_PILL,
   StatusIconBadge,
   type StatusTone
@@ -70,6 +74,61 @@ export function CheckInStatusBadge({ checkedIn, className }: Readonly<CheckInSta
       label={isCheckedIn ? t("common.checkedIn") : t("common.notCheckedIn")}
       tone={isCheckedIn ? "positive" : "neutral"}
       className={className}
+    />
+  );
+}
+
+type FlagBadgeProps = Omit<ComponentPropsWithoutRef<"span">, "children">;
+
+/** A labelled flag beside a status, drawn exactly like `StatusMetaBadge`. */
+function FlagBadge({
+  icon: Icon,
+  tone,
+  label,
+  hint,
+  className,
+  ...props
+}: Readonly<FlagBadgeProps & { icon: LucideIcon; tone: StatusTone; label: string; hint: string }>) {
+  return (
+    <span
+      title={hint}
+      className={cn(STATUS_CHIP_CLASS, STATUS_TONE_PILL[tone], className)}
+      {...props}
+    >
+      <Icon className="size-3 shrink-0" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+/** Signed up after the registration window closed: the schedule's mark, not the player's. */
+export function LateSignUpBadge(props: Readonly<FlagBadgeProps>) {
+  const t = useTranslations();
+  return (
+    <FlagBadge
+      icon={Clock}
+      tone="warning"
+      label={t("common.lateSignUp")}
+      hint={t("common.lateSignUpHint")}
+      {...props}
+    />
+  );
+}
+
+/**
+ * "Call me in if somebody drops or I cannot make the start" — the registrant's
+ * own availability note, not a pool verdict. A player wearing it plays like
+ * anybody else.
+ */
+export function OnCallBadge(props: Readonly<FlagBadgeProps>) {
+  const t = useTranslations();
+  return (
+    <FlagBadge
+      icon={PhoneCall}
+      tone="info"
+      label={t("common.reserve")}
+      hint={t("common.reserveHint")}
+      {...props}
     />
   );
 }

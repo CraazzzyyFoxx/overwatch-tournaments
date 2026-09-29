@@ -1043,6 +1043,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.refresh(chosen)
             self.assertEqual(chosen.status, DraftPlayerStatus.PICKED.value)
 
+            # A pick that ran into overtime before it resolved (the timeout
+            # autopick path) must come back on its main clock.
+            await s.refresh(current)
+            current.overtime_started_at = datetime.now(UTC)
+            await s.commit()
+
             # Rollback
             await lifecycle.lifecycle_service.rollback(s, draft)
             await s.commit()
@@ -1055,6 +1061,8 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.refresh(current)
             self.assertEqual(current.status, DraftPickStatus.ON_CLOCK.value)
             self.assertIsNone(current.picked_player_id)
+            self.assertIsNone(current.overtime_started_at)
+            self.assertIsNone(current.target_rank_value)
 
             await s.refresh(chosen)
             self.assertEqual(chosen.status, DraftPlayerStatus.AVAILABLE.value)

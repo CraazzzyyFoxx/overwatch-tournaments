@@ -17,6 +17,7 @@ from src.schemas.admission import AdmissionRead
 from src.schemas.registration_form import RegistrationFormRead, RegistrationFormTemplateRead
 from src.services.registration.answers import answer_service
 from src.services.registration.roles_rules import is_flex_submission
+from src.services.registration.self_edit import submitted_late
 
 
 def loaded_relationship_or_none(instance: object, attribute: str):
@@ -85,6 +86,7 @@ def serialize_registration(
     # now derived from the member anchor — callers must eager-load
     # workspace_member (loaded_relationship_or_none never lazy-loads).
     workspace_member = loaded_relationship_or_none(registration, "workspace_member")
+    tournament = loaded_relationship_or_none(registration, "tournament")
     sorted_roles = sorted(roles, key=lambda item: (item.priority, item.role))
     # Every role row is still reported (the editor toggles the ones the engine
     # left out of the roster); the roster is what rates them.
@@ -126,6 +128,7 @@ def serialize_registration(
         checked_in_by_username=checked_in_by_user.username if checked_in_by_user is not None else None,
         deleted_at=registration.deleted_at,
         submitted_at=registration.submitted_at,
+        submitted_late=tournament is not None and submitted_late(registration, tournament),
         reviewed_at=registration.reviewed_at,
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,

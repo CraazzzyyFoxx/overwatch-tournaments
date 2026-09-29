@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { usePickCountdown } from "@/hooks/usePickCountdown";
 import { DRAFT_ROLES, pickHistory, type TeamView } from "@/lib/draft/room-model";
@@ -23,7 +24,7 @@ const UPCOMING_COUNT = 10;
 const HISTORY_COUNT = 12;
 
 const headingClass =
-  "m-0 flex items-center gap-2 px-[18px] pb-2 text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]";
+  "m-0 flex items-center gap-2 px-[18px] pb-2 text-caption font-semibold text-[color:var(--aqt-fg-muted)]";
 
 export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }: Readonly<DraftQueueProps>) {
   const t = useTranslations("draftRedesign");
@@ -34,10 +35,10 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
   const shownHistory = showAll ? history : history.slice(0, HISTORY_COUNT);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto border-t border-[color:var(--aqt-border)]">
+    <div className="min-h-0 flex-1 scroll-pb-[var(--draft-layer-h,0px)] overflow-y-auto border-t border-[color:var(--aqt-border)] pb-[var(--draft-layer-h,0px)]">
       <h3 className={`${headingClass} pt-4`}>{t("teams.queue.upcoming")}</h3>
       {remaining.length === 0 && (
-        <p className="px-[18px] py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("teams.queue.empty")}</p>
+        <p className="px-[18px] py-3 text-body text-[color:var(--aqt-fg-muted)]">{t("teams.queue.empty")}</p>
       )}
       <ol>
         {remaining.slice(0, UPCOMING_COUNT).map((pick, index) => {
@@ -57,7 +58,8 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
               key={pick.id}
               className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-[18px] py-2.5"
               style={{
-                background: isCur ? "color-mix(in srgb, var(--aqt-teal) 8%, transparent)" : "transparent",
+                // The on-clock row borrows the clock's colour, whatever it is.
+                background: isCur ? `color-mix(in srgb, ${clockColor} 8%, transparent)` : "transparent",
                 boxShadow: isCur
                   ? `inset 3px 0 0 ${clockColor}`
                   : mine
@@ -65,19 +67,19 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
                     : "none"
               }}
             >
-              <span className="text-sm font-semibold tabular-nums text-[color:var(--aqt-fg-faint)]">
+              <span className="text-body font-semibold tabular-nums text-[color:var(--aqt-fg-faint)]">
                 {t("teams.pickNo", { n: pick.overall_no })}
               </span>
               <div className="min-w-0">
-                <div className="truncate text-[15px] font-semibold" title={name}>
+                <div className="truncate text-ui font-semibold" title={name}>
                   {mine ? t("teams.mineName", { name }) : name}
                 </div>
-                <div className="truncate text-[13px] text-[color:var(--aqt-fg-muted)]">
+                <div className="truncate text-caption text-[color:var(--aqt-fg-muted)]">
                   {t("teams.queue.sub", { round: pick.round_no, needs: needs.length > 0 ? needs.join(", ") : "—" })}
                 </div>
               </div>
               <span
-                className="whitespace-nowrap text-sm font-semibold tabular-nums"
+                className="whitespace-nowrap text-body font-semibold tabular-nums"
                 style={{
                   color: isCur ? clockColor : mine ? "var(--aqt-teal)" : "var(--aqt-fg-muted)"
                 }}
@@ -91,10 +93,10 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
 
       <h3 className={`${headingClass} pt-5`}>
         {t("teams.history.title")}
-        <span className="tabular-nums tracking-normal">{history.length}</span>
+        <span className="tabular-nums">{history.length}</span>
       </h3>
       {history.length === 0 && (
-        <p className="px-[18px] py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("teams.history.empty")}</p>
+        <p className="px-[18px] py-3 text-body text-[color:var(--aqt-fg-muted)]">{t("teams.history.empty")}</p>
       )}
       <ol>
         {shownHistory.map((pick) => {
@@ -105,15 +107,17 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
               key={pick.id}
               className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-[18px] py-[9px]"
             >
-              <span className="text-sm tabular-nums text-[color:var(--aqt-fg-faint)]">
+              <span className="text-body tabular-nums text-[color:var(--aqt-fg-faint)]">
                 {t("teams.pickNo", { n: pick.overall_no })}
               </span>
-              <div className="flex min-w-0 items-center gap-[7px] text-sm">
+              <div className="flex min-w-0 items-center gap-[7px] text-body">
                 <span className="max-w-[45%] truncate text-[color:var(--aqt-fg-muted)]">
                   {teamViews.get(pick.draft_team_id)?.team.name ?? t("unknownTeam")}
                 </span>
                 <ArrowRight aria-hidden className="h-[13px] w-[13px] flex-none text-[color:var(--aqt-fg-faint)]" />
-                <span className="truncate font-semibold">{tag}</span>
+                <span className="truncate font-semibold" title={tag}>
+                  {splitBattleTag(tag).name}
+                </span>
                 {pick.target_role && (
                   <span className="flex-none" title={t(`roles.${pick.target_role}`)}>
                     <PlayerRoleIcon
@@ -125,12 +129,20 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
                 )}
               </div>
               <span className="flex gap-1">
-                {pick.is_autopick && <PickBadge title={t("teams.history.autoTitle")}>{t("badge.auto")}</PickBadge>}
+                {pick.is_autopick && (
+                  <PickBadge title={t("teams.history.autoTitle")} tone="var(--aqt-fg-muted)">
+                    {t("badge.auto")}
+                  </PickBadge>
+                )}
                 {pick.is_admin_override && (
-                  <PickBadge title={t("teams.history.overrideTitle")}>{t("badge.override")}</PickBadge>
+                  <PickBadge title={t("teams.history.overrideTitle")} tone="var(--aqt-amber)">
+                    {t("badge.override")}
+                  </PickBadge>
                 )}
                 {pick.overtime_started_at != null && (
-                  <PickBadge title={t("teams.history.overtimeTitle")}>{t("badge.overtime")}</PickBadge>
+                  <PickBadge title={t("teams.history.overtimeTitle")} tone="var(--aqt-live)">
+                    {t("badge.overtime")}
+                  </PickBadge>
                 )}
               </span>
             </li>
@@ -143,7 +155,7 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
             type="button"
             aria-expanded={showAll}
             onClick={() => setShowAll((value) => !value)}
-            className="rounded text-sm font-medium text-[color:var(--aqt-teal)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] max-sm:min-h-11"
+            className="rounded text-body font-medium text-[color:var(--aqt-teal)] outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] max-sm:min-h-11"
           >
             {showAll ? t("teams.history.collapse") : t("teams.history.showAll", { count: history.length })}
           </button>
@@ -154,11 +166,12 @@ export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }
 }
 
 /** How a resolved pick was made when it was not simply the captain choosing in time. */
-function PickBadge({ title, children }: Readonly<{ title: string; children: string }>) {
+function PickBadge({ title, tone, children }: Readonly<{ title: string; tone: string; children: string }>) {
   return (
     <span
       title={title}
-      className="rounded px-1.5 py-px text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--aqt-amber)] [background:var(--aqt-overlay-3)]"
+      className="rounded px-1.5 py-px text-label font-semibold [background:var(--aqt-overlay-3)]"
+      style={{ color: tone }}
     >
       {children}
     </span>

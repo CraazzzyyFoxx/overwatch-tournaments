@@ -207,7 +207,9 @@ describe("draft accessibility contracts", () => {
     expect(html).toContain("2800");
     expect(html).toContain("openProfile:");
     expect(html).toContain("pool.col.demand");
-    expect(html).toContain('pool.demand:{&quot;count&quot;:2}');
+    // The bare count, not a phrase: "wanted {count}" never fit the 56px column.
+    expect(html).not.toContain("pool.demand:");
+    expect(html).toMatch(/title="pool\.demandTitle">2</);
   });
 
   test("an admin without a team acts for the clock but has no list", () => {

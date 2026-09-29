@@ -57,6 +57,7 @@ class _RankData:
     division_history_rank_value: int | None = None
     ow_rank_value: int | None = None
     ow_current_rank_value: int | None = None
+    ow_peak_rank_value: int | None = None
     analytics_rank_value: int | None = None
     used_source: str | None = None
 
@@ -66,12 +67,14 @@ class _OwRankSignals:
     """Weekly OW rank signal for a single (battle_tag, role).
 
     ``composite_rank_value`` is ``round((max + mean) / 2)`` over the chosen weekly window of
-    the mapped OW ``rank_value``, the mean weighted by how long each rank held (see
-    ``_compute_ow_week_rank_value``). ``latest_snapshot`` is the newest ranked row, kept for
-    display metadata (platform/division/season/captured_at) and the contextual "OW current" value.
+    the OW ``rank_value``, the mean weighted by how long each rank held, and
+    ``peak_rank_value`` that window's max (see ``_compute_ow_week_ranks``). ``latest_snapshot``
+    is the newest ranked row, kept for display metadata (platform/division/season/captured_at)
+    and the "OW current" value.
     """
 
     composite_rank_value: int | None = None
+    peak_rank_value: int | None = None
     latest_snapshot: models.UserRankSnapshot | Any | None = None
 
 
@@ -120,7 +123,7 @@ def _group_ow_rank_signals(
     """Group snapshots into per (social_account_id, role) weekly OW signals.
 
     Pure (no DB) so the windowing logic can be unit-tested. ``known_until_by_tag_id`` is each
-    account's last successful poll (see ``_compute_ow_week_rank_value``).
+    account's last successful poll (see ``_compute_ow_week_ranks``).
     """
     grouped: dict[int, dict[str, list[Any]]] = {}
     for snapshot in snapshots:
@@ -131,10 +134,10 @@ def _group_ow_rank_signals(
         out = signals_by_tag_id.setdefault(tag_id, {})
         for role, snaps in role_map.items():
             ranked = [s for s in snaps if _is_ranked(s)]
+            composite, peak = _compute_ow_week_ranks(snaps, now, known_until_by_tag_id.get(tag_id), week_window)
             out[role] = _OwRankSignals(
-                composite_rank_value=_compute_ow_week_rank_value(
-                    snaps, now, known_until_by_tag_id.get(tag_id), week_window
-                ),
+                composite_rank_value=composite,
+                peak_rank_value=peak,
                 latest_snapshot=max(ranked, key=lambda s: s.captured_at, default=None),
             )
     return signals_by_tag_id
@@ -168,26 +171,27 @@ def _ow_ranked_stretches(
     return stretches
 
 
-def _compute_ow_week_rank_value(
+def _compute_ow_week_ranks(
     snapshots: Iterable[models.UserRankSnapshot | Any],
     now: datetime,
     known_until: datetime | None = None,
     week_window: timedelta = OW_RANK_WEEK_WINDOW,
-) -> int | None:
-    """Composite OW rank over a weekly window: ``round((max + mean) / 2)`` of mapped rank_value.
+) -> tuple[int | None, int | None]:
+    """``(composite, peak)`` OW rank_value over a weekly window.
+
+    ``composite`` is ``round((max + mean) / 2)``, the mean weighted by how long each rank held
+    inside the window -- what the mean over 15-minute polls measured before the table kept only
+    changes. ``peak`` is that ``max``: the highest rank a poll saw, a lower bound on the real one.
 
     ``snapshots`` are one (account, role)'s changes (any platform, unranked ones included, the
     row each platform entered the window in among them); ``known_until`` is the account's last
-    successful poll. The mean is weighted by how long each rank held inside the window -- what
-    the mean over 15-minute polls measured before the table kept only changes.
-
-    Window: the last ``week_window`` from ``now`` while a ranked value held inside it, else the
-    ``week_window`` before the last ranked value stopped being known. Returns ``None`` only when
-    no ranked value was ever seen.
+    successful poll. Window: the last ``week_window`` from ``now`` while a ranked value held
+    inside it, else the ``week_window`` before the last ranked value stopped being known. Both
+    are ``None`` only when no ranked value was ever seen.
     """
     stretches = _ow_ranked_stretches(snapshots, known_until)
     if not stretches:
-        return None
+        return None, None
 
     last_end = max(end for _, end, _ in stretches)
     hi = max(now, last_end) if last_end > now - week_window else last_end
@@ -203,7 +207,8 @@ def _compute_ow_week_rank_value(
             weighted += value * seconds
             held += seconds
     mean = weighted / held if held else sum(values) / len(values)
-    return round((max(values) + mean) / 2)
+    peak = max(values)
+    return round((peak + mean) / 2), peak
 
 
 def _build_priority_rank_data(
@@ -212,19 +217,25 @@ def _build_priority_rank_data(
     division_history_rank: int | None,
     analytics_rank: int | None,
     grid: DivisionGrid,
+    ow_value: str = "composite",
 ) -> _RankData | None:
     """Pick a rank by strict priority fallback over the given (enabled, ordered) source chain.
 
     ``order`` lists the enabled sources in priority order (subset of ``ow`` / ``division_history`` /
-    ``analytics``). The first source carrying a value wins (no max blending). Returns ``None`` when
-    no source in ``order`` carries a value (the role is then treated as missing).
+    ``analytics``). The first source carrying a value wins (no max blending). ``ow_value`` picks
+    which OW number stands for the ``ow`` source: the weekly ``composite``, the ``current`` (latest
+    ranked) rank, or the week's ``peak``. Returns ``None`` when no source in ``order`` carries a
+    value (the role is then treated as missing).
     """
     latest_snapshot = signals.latest_snapshot if signals else None
-    ow_rank = _map_ow_rank_value(signals.composite_rank_value, grid) if signals else None
-    ow_current_rank = _map_ow_snapshot_rank(latest_snapshot, grid)
+    ow_ranks = {
+        "composite": _map_ow_rank_value(signals.composite_rank_value, grid) if signals else None,
+        "current": _map_ow_snapshot_rank(latest_snapshot, grid),
+        "peak": _map_ow_rank_value(signals.peak_rank_value, grid) if signals else None,
+    }
 
     candidates: dict[str, int | None] = {
-        "ow": ow_rank,
+        "ow": ow_ranks[ow_value],
         "division_history": division_history_rank,
         "analytics": analytics_rank,
     }
@@ -244,8 +255,9 @@ def _build_priority_rank_data(
         captured_at=getattr(latest_snapshot, "captured_at", None),
         source=source,
         division_history_rank_value=division_history_rank,
-        ow_rank_value=ow_rank,
-        ow_current_rank_value=ow_current_rank,
+        ow_rank_value=ow_ranks["composite"],
+        ow_current_rank_value=ow_ranks["current"],
+        ow_peak_rank_value=ow_ranks["peak"],
         analytics_rank_value=analytics_rank,
         used_source=used_source,
     )

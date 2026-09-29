@@ -59,7 +59,7 @@ describe("DraftClockRing", () => {
     const secondRender = renderActiveClock(Date.parse("2026-01-01T00:00:30.000Z"));
 
     expect(firstRender).toBe(secondRender);
-    expect(firstRender).toContain(">--</span>");
+    expect(firstRender).toContain(">—</span>");
     expect(firstRender).toContain('role="timer"');
   });
 

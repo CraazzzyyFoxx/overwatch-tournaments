@@ -2,8 +2,9 @@
 
 import { Star } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
@@ -45,6 +46,8 @@ interface TeamRostersProps {
 const TEAM_SORTS: readonly TeamSort[] = ["order", "next", "avg"];
 
 const SLOT_COLOR: Record<RosterSlotCode, string> = { ...ROLE_ACCENT, flex: "var(--aqt-flex)" };
+
+const FOCUS_RING = "outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 
 function tint(color: string, percent: number): string {
   return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
@@ -104,9 +107,12 @@ export function TeamRosters({
     ...shapeCodes,
     ...Array.from({ length: columns - shapeCodes.length }, () => "flex" as const)
   ];
-  // Cells grow to 70px first and shrink (down to the crest) before the name
-  // column drops under 120px, so a 6+ slot roster still fits a 520px panel.
-  const gridTemplateColumns = `22px minmax(120px,1fr) repeat(${Math.max(columns, 1)}, minmax(0,70px)) 66px`;
+  // Every seat gets the same share of what is left once the name column has had
+  // its 140px: a BattleTag's name part is what these cells exist to show. Below
+  // the container query's 640px the seats drop to their own row instead of
+  // shrinking into 4-character stubs.
+  const gridTemplateColumns = `22px minmax(140px,1.2fr) repeat(${Math.max(columns, 1)}, minmax(0,1fr)) 66px`;
+  const rowVars = { "--roster-cols": gridTemplateColumns } as CSSProperties;
 
   const roleCodes = orderSlotCodes(shape.slots).filter(isRoleSlotCode);
   const followCount = board.teams.filter((team) => followed.has(team.id) || team.id === myTeamId).length;
@@ -133,17 +139,22 @@ export function TeamRosters({
                 aria-pressed={on}
                 aria-label={chip.aria}
                 onClick={() => onFilterChange(chip.value)}
-                className="flex h-[30px] items-center gap-[5px] whitespace-nowrap rounded-full border px-2.5 text-[13px] font-medium hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] max-sm:h-11"
-                style={{
-                  borderColor: on ? accent : "var(--aqt-border-2)",
-                  background: on ? tint(accent, 12) : "transparent",
-                  color: on ? "var(--aqt-fg)" : "var(--aqt-fg-muted)"
-                }}
+                className={cn(
+                  "flex min-h-11 max-w-full items-center gap-1.5 whitespace-nowrap rounded-full border bg-[color:var(--chip-bg)] px-[11px] text-caption font-medium hover:bg-[color:var(--aqt-overlay-3)] sm:min-h-8",
+                  FOCUS_RING,
+                  on ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)]"
+                )}
+                style={
+                  {
+                    "--chip-bg": on ? tint(accent, 12) : "transparent",
+                    borderColor: on ? accent : "var(--aqt-border-2)"
+                  } as CSSProperties
+                }
               >
                 {chip.role && (
-                  <PlayerRoleIcon role={getRoleIconName(chip.role)} size={15} color={ROLE_ACCENT[chip.role]} decorative />
+                  <PlayerRoleIcon role={getRoleIconName(chip.role)} size={17} color={ROLE_ACCENT[chip.role]} decorative />
                 )}
-                {chip.label}
+                <span className="truncate">{chip.label}</span>
                 <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{chip.count}</span>
               </button>
             );
@@ -159,7 +170,8 @@ export function TeamRosters({
                 aria-pressed={on}
                 onClick={() => onSortChange(value)}
                 className={cn(
-                  "flex h-7 items-center whitespace-nowrap rounded-[7px] px-[9px] text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] max-sm:h-11",
+                  "flex min-h-11 items-center whitespace-nowrap rounded-[7px] px-[9px] text-caption font-medium sm:min-h-7",
+                  FOCUS_RING,
                   on
                     ? "bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)]"
                     : "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]"
@@ -173,26 +185,28 @@ export function TeamRosters({
       </div>
 
       <div
-        className="grid items-center gap-1 border-b border-[color:var(--aqt-border)] px-4 py-[7px] text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]"
-        style={{ gridTemplateColumns }}
+        className="grid grid-cols-[22px_minmax(0,1fr)_66px] items-center gap-1 border-b border-[color:var(--aqt-border)] px-4 py-[7px] text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)] @[640px]/roster:grid-cols-[var(--roster-cols)]"
+        style={rowVars}
       >
         <span>#</span>
         <span>{t("teams.col.team")}</span>
-        {headerGroups(columnCodes).map((group, index) => (
-          <span
-            key={`${group.code}-${index}`}
-            title={t(`roles.${group.code}`)}
-            className="flex justify-center"
-            style={{ gridColumn: `span ${group.span}` }}
-          >
-            <PlayerRoleIcon
-              role={isRoleSlotCode(group.code) ? getRoleIconName(group.code) : "Flex"}
-              size={17}
-              color={SLOT_COLOR[group.code]}
-              label={t(`roles.${group.code}`)}
-            />
-          </span>
-        ))}
+        <span className="hidden @[640px]/roster:contents">
+          {headerGroups(columnCodes).map((group, index) => (
+            <span
+              key={`${group.code}-${index}`}
+              title={t(`roles.${group.code}`)}
+              className="flex justify-center"
+              style={{ gridColumn: `span ${group.span}` }}
+            >
+              <PlayerRoleIcon
+                role={isRoleSlotCode(group.code) ? getRoleIconName(group.code) : "Flex"}
+                size={16}
+                color={SLOT_COLOR[group.code]}
+                label={t(`roles.${group.code}`)}
+              />
+            </span>
+          ))}
+        </span>
         <span className="text-right" title={t("teams.col.avgTitle")}>
           {t("teams.col.avg")}
         </span>
@@ -209,7 +223,7 @@ export function TeamRosters({
         onPointerLeave={() => {
           hovering.current = false;
         }}
-        className="relative min-h-0 flex-1 overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+        className="relative min-h-0 flex-1 scroll-pb-[var(--draft-layer-h,0px)] overflow-y-auto pb-[var(--draft-layer-h,0px)] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
       >
         {teams.map((view) => {
           const { team } = view;
@@ -238,22 +252,16 @@ export function TeamRosters({
               key={team.id}
               role="listitem"
               data-team={team.id}
-              className="grid items-center gap-1 border-b border-[color:var(--aqt-border)] px-4 py-[5px]"
+              className="grid grid-cols-[22px_minmax(0,1fr)_66px] items-center gap-1 border-b border-[color:var(--aqt-border)] px-4 py-[5px] @[640px]/roster:grid-cols-[var(--roster-cols)]"
               style={{
-                gridTemplateColumns,
-                background: isCur
-                  ? tint("var(--aqt-teal)", 8)
-                  : isMe
-                    ? "var(--aqt-overlay-2)"
-                    : "transparent",
-                boxShadow: isCur
-                  ? `inset 3px 0 0 ${clockColor}`
-                  : isFollowed
-                    ? "inset 3px 0 0 var(--aqt-amber)"
-                    : "none"
+                ...rowVars,
+                // The on-clock wash is the clock's own colour, never a fixed
+                // teal: teal means "mine" everywhere else in the room.
+                background: isCur ? tint(clockColor, 8) : isMe ? "var(--aqt-overlay-2)" : "transparent",
+                boxShadow: isCur ? `inset 3px 0 0 ${clockColor}` : "none"
               }}
             >
-              <span className="text-[13px] tabular-nums text-[color:var(--aqt-fg-faint)]">{team.draft_position}</span>
+              <span className="text-caption tabular-nums text-[color:var(--aqt-fg-faint)]">{team.draft_position}</span>
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <button
@@ -264,53 +272,69 @@ export function TeamRosters({
                     }
                     title={t("teams.followTitle")}
                     onClick={() => onToggleFollow(team.id)}
-                    className="relative flex h-6 w-6 flex-none items-center justify-center rounded-md after:absolute after:-inset-2.5 after:content-[''] hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:after:hidden"
-                    style={{ color: isFollowed ? "var(--aqt-amber)" : "var(--aqt-fg-faint)" }}
+                    className={cn(
+                      "relative flex h-6 w-6 flex-none items-center justify-center rounded-md after:absolute after:-inset-2.5 after:content-[''] hover:bg-[color:var(--aqt-overlay-3)] sm:after:hidden",
+                      FOCUS_RING
+                    )}
+                    style={{ color: isFollowed ? "var(--aqt-follow)" : "var(--aqt-fg-faint)" }}
                   >
                     <Star aria-hidden className="h-[15px] w-[15px]" fill={isFollowed ? "currentColor" : "none"} />
                   </button>
                   <span
                     title={team.name}
-                    className="truncate text-sm font-semibold"
+                    className="truncate text-body font-semibold"
                     style={{ color: isMe ? "var(--aqt-teal)" : "var(--aqt-fg)" }}
                   >
                     {team.name}
                   </span>
+                  {/* Shape, not just hue: filled = the captain is here, hollow = not. */}
                   <span
                     role="img"
                     aria-label={online ? t("teams.captainOnline") : t("teams.captainOffline")}
                     title={online ? t("teams.captainOnline") : t("teams.captainOffline")}
-                    className="h-[7px] w-[7px] flex-none rounded-full"
-                    style={{ background: online ? "var(--aqt-support)" : "var(--aqt-border-3)" }}
+                    className="h-[8px] w-[8px] flex-none rounded-full border"
+                    style={{
+                      background: online ? "var(--aqt-positive)" : "transparent",
+                      borderColor: online ? "var(--aqt-positive)" : "var(--aqt-fg-faint)"
+                    }}
                   />
                 </div>
                 <div
-                  className="ml-[30px] truncate text-xs"
+                  className="ml-[30px] truncate text-label"
                   style={{ color: isCur ? clockColor : "var(--aqt-fg-muted)" }}
                 >
                   {sub}
                 </div>
               </div>
-              {view.cells.map((cell, index) => (
-                <RosterCell
-                  key={cell.player?.id ?? `open-${index}`}
-                  cell={cell}
-                  hasRoleSlots={shape.has_role_slots}
-                  onClock={isCur}
-                  onSlotFilter={isMe ? onSlotFilter : undefined}
-                  onOpenProfile={onOpenProfile}
-                  divisionGrid={divisionGrid}
-                />
-              ))}
-              {/* Pad a team the server seated fewer cells for, so the avg column stays aligned. */}
-              {view.cells.length < columns && <span style={{ gridColumn: `span ${columns - view.cells.length}` }} />}
+              {/* Wide: `contents` hands the seats straight to the row grid. Narrow:
+                  they wrap onto their own row under the team name. */}
+              <div className="col-span-full row-start-2 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-1 pb-0.5 pl-[26px] pt-1 @[640px]/roster:contents">
+                {view.cells.map((cell, index) => (
+                  <RosterCell
+                    key={cell.player?.id ?? `open-${index}`}
+                    cell={cell}
+                    hasRoleSlots={shape.has_role_slots}
+                    onClock={isCur}
+                    onSlotFilter={isMe ? onSlotFilter : undefined}
+                    onOpenProfile={onOpenProfile}
+                    divisionGrid={divisionGrid}
+                  />
+                ))}
+                {/* Pad a team the server seated fewer cells for, so the avg column stays aligned. */}
+                {view.cells.length < columns && (
+                  <span
+                    className="hidden @[640px]/roster:block"
+                    style={{ gridColumn: `span ${columns - view.cells.length}` }}
+                  />
+                )}
+              </div>
               <span
                 title={
                   view.avgRank == null
                     ? t("teams.avgEmpty")
                     : [t("teams.col.avgTitle"), avgLabel].filter(Boolean).join(" · ")
                 }
-                className="flex items-center justify-end gap-1 whitespace-nowrap text-[13px] font-medium tabular-nums text-[color:var(--aqt-fg-muted)]"
+                className="col-start-3 row-start-1 flex items-center justify-end gap-1 whitespace-nowrap text-caption font-medium tabular-nums text-[color:var(--aqt-fg-muted)] @[640px]/roster:col-start-auto @[640px]/roster:row-start-auto"
               >
                 {avgDivision != null && (
                   <DivisionIcon
@@ -327,7 +351,7 @@ export function TeamRosters({
           );
         })}
         {teams.length === 0 && (
-          <p className="px-[18px] py-12 text-center text-sm text-[color:var(--aqt-fg-muted)]">
+          <p className="px-[18px] py-12 text-center text-body text-[color:var(--aqt-fg-muted)]">
             {filter === "follow" ? t("teams.empty.follow") : t("teams.empty.role")}
           </p>
         )}
@@ -368,10 +392,7 @@ function RosterCell({
           aria-label={t("filterBySlot", { role: slotLabel })}
           title={t("teams.cell.openFilter", { role: slotLabel })}
           onClick={() => onSlotFilter(filterRole)}
-          className={cn(
-            boxClass,
-            "cursor-pointer hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
-          )}
+          className={cn(boxClass, "cursor-pointer hover:bg-[color:var(--aqt-overlay-3)]", FOCUS_RING)}
           style={{ borderColor }}
         />
       );
@@ -413,23 +434,20 @@ function RosterCell({
       title={title}
       aria-label={title}
       onClick={() => onOpenProfile(player.id)}
-      className="flex h-[30px] min-w-0 items-center gap-1 overflow-hidden rounded-[7px] border px-[5px] text-left text-xs font-medium text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
-      style={{
-        background: tint(color, 12),
-        borderStyle: cell.offRole ? "dashed" : "solid",
-        borderColor: cell.offRole ? "var(--aqt-amber)" : tint(color, 38)
-      }}
-    >
-      {division != null && (
-        <DivisionIcon
-          division={division}
-          tournamentGrid={divisionGrid}
-          width={16}
-          height={16}
-          className="h-4 w-4 flex-none object-contain"
-        />
+      className={cn(
+        "flex h-[30px] min-w-0 items-center overflow-hidden rounded-[7px] border border-transparent bg-[color:var(--cell-bg)] px-[5px] text-left text-label font-medium text-[color:var(--aqt-fg)] hover:bg-[color:var(--cell-bg-hover)]",
+        FOCUS_RING,
+        // Off-role is the one thing a cell still draws a border for.
+        cell.offRole && "border-dashed border-[color:var(--aqt-amber)]"
       )}
-      <span className="min-w-0 truncate">{tag}</span>
+      style={
+        {
+          "--cell-bg": tint(color, 12),
+          "--cell-bg-hover": tint(color, 26)
+        } as CSSProperties
+      }
+    >
+      <span className="min-w-0 truncate">{splitBattleTag(tag).name}</span>
     </button>
   );
 }

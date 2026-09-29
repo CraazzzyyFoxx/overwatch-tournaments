@@ -6,6 +6,8 @@ import type {
   DraftStatus
 } from "@/types/draft.types";
 
+import type { DraftCaptainSetup } from "./setup-types";
+
 // The backend does not cap team_count (it flows through settings_json);
 // this is a UI sanity bound only.
 export const MIN_DRAFT_TEAM_COUNT = 2;
@@ -141,9 +143,9 @@ export interface DraftCaptainRow {
   id: number;
   label: string;
   roles: DraftRole[];
-  /** The captain's STRONGEST playable rank (`captainRankSummary`). */
+  /** The rank of the role the captain is seated on (`captainSeat`). */
   rank: number | null;
-  /** Which role that rank was earned on, so the list can say where it comes from. */
+  /** That role, so the list can say where the rank comes from. */
   rankRole: DraftRole | null;
 }
 
@@ -198,6 +200,22 @@ export function moveCaptain(ids: number[], activeId: number, overId: number): nu
   return next;
 }
 
+/**
+ * Drag a captain to another seat. The drag moves the order the organizer is
+ * LOOKING at, so a computed order (weakest/strongest first, seeded random)
+ * becomes the manual one it was showing, with the move applied — dragging on
+ * top of `ids` would reorder the selection order hidden underneath instead.
+ */
+export function reseatCaptain(
+  value: DraftCaptainSetup,
+  orderedIds: number[],
+  activeId: number,
+  overId: number
+): DraftCaptainSetup {
+  const ids = moveCaptain(orderedIds, activeId, overId);
+  return ids === orderedIds ? value : { ...value, order: "manual", ids };
+}
+
 export function orderCaptainIds(
   ids: number[],
   order: DraftCaptainOrder,
@@ -210,7 +228,10 @@ export function orderCaptainIds(
     return [...ids].sort((left, right) => {
       const leftRank = ranks.get(left) ?? -1;
       const rightRank = ranks.get(right) ?? -1;
-      return ((leftRank - rightRank) || left - right) * direction;
+      // Ties by id ascending in BOTH directions, as the server's
+      // `rules.order_captain_ids` does: flipping it with the rank showed a
+      // strongest-first preview the commit then seated differently.
+      return (leftRank - rightRank) * direction || left - right;
     });
   }
 

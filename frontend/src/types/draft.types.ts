@@ -89,6 +89,12 @@ export interface DraftPlayer {
   status: DraftPlayerStatus;
   is_captain: boolean;
   drafted_by_team_id: number | null;
+  /**
+   * A captain's seat role: the role the organizer pinned while it stays
+   * playable, else their lead role. `null` for everyone else — their roster
+   * role is the pick's `target_role`.
+   */
+  captain_role: DraftRole | null;
   secondary_roles: string[];
   role_ranks: Record<string, number>;
   /** Per-role provenance of `role_ranks`, keyed the same way. */
@@ -292,6 +298,8 @@ export interface DraftSessionCreateRequest {
 interface DraftPoolCaptainInput {
   registration_id: number;
   name?: string | null;
+  /** The role the captain is seated on; omitted/null = their lead role. */
+  role?: DraftRole | null;
 }
 
 export type DraftCaptainOrder = "manual" | "weakest_first" | "strongest_first" | "random";

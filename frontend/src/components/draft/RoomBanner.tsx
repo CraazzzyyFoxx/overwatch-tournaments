@@ -43,7 +43,12 @@ export function RoomBanner({ board, gating, autopickPreview }: Readonly<RoomBann
     text = t(`shell.banner.blocked.${blockedReasonKey(session.blocked_reason)}`);
     adminLink = gating.isAdmin;
   } else if (paused) {
-    text = gating.isCaptain ? t("shell.banner.pausedCaptain") : t("shell.banner.pausedSpectator");
+    // Each seat gets the line that concerns it: only an organizer can resume.
+    text = gating.isCaptain
+      ? t("shell.banner.pausedCaptain")
+      : gating.isAdmin
+        ? t("shell.banner.pausedAdmin")
+        : t("shell.banner.pausedSpectator");
   } else if (session.status === "live" && current?.overtime_started_at != null) {
     color = "var(--aqt-rose)";
     ticking = true;
@@ -61,15 +66,19 @@ export function RoomBanner({ board, gating, autopickPreview }: Readonly<RoomBann
       text = t("shell.banner.overtimeOther", { time, team: clockTeam?.name ?? t("unknownTeam") });
     }
   } else if (session.status === "completed") {
-    color = "var(--aqt-teal)";
+    color = "var(--aqt-status-finished)";
     text = t("shell.banner.finished", { picks: board.picks.length, teams: board.teams.length });
   } else if (session.status === "setup" || session.status === "ready") {
     color = "var(--aqt-fg-muted)";
-    text = t("shell.banner.notStarted");
+    text = gating.isAdmin ? t("shell.banner.notStartedAdmin") : t("shell.banner.notStarted");
+    adminLink = gating.isAdmin;
   } else if (session.status === "cancelled") {
-    color = "var(--aqt-fg-faint)";
+    color = "var(--aqt-status-finished)";
     text = t("shell.banner.cancelled");
   }
+  // The tint and border keep the state hue; rose TEXT needs its lighter twin to
+  // read as a label on that tint.
+  const textColor = color === "var(--aqt-rose)" ? "var(--aqt-rose-text)" : color;
 
   // The region stays mounted so a state that appears later is announced.
   return (
@@ -85,14 +94,14 @@ export function RoomBanner({ board, gating, autopickPreview }: Readonly<RoomBann
     >
       {text != null && (
         <p
-          className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm font-medium sm:px-6"
-          style={{ color }}
+          className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-body font-medium sm:px-6"
+          style={{ color: textColor }}
         >
           <span>{text}</span>
           {adminLink && (
             <Link
               href={`/admin/tournaments/${session.tournament_id}/teams/draft`}
-              className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:min-h-0"
+              className="inline-flex min-h-11 items-center rounded-sm underline underline-offset-2 outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] sm:min-h-0"
             >
               {t("shell.banner.blockedAdminLink")}
             </Link>

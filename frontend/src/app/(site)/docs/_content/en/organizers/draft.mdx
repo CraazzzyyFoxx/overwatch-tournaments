@@ -35,11 +35,15 @@ The setup wizard has six steps, and you cannot move on while the current one has
 
 With **Custom**, each round can use **Linear (1 → N)**, **Reverse (N → 1)**, **Weakest captain first**, **Strongest captain first**, **Lowest team average first** or **Highest team average first**. The last two are computed from the rosters as they stand, so that round's order is only known when the round begins.
 
+When teams in such a round tie on average, the weaker captain picks first under the lowest-average rule and the stronger one under the highest-average rule. When the captains' ranks tie too, the seed decides — the order from the **Order** step: 1 → N by default, and the **Equal average and captain rank: reverse seed (N → 1)** switch flips it.
+
 ### Pool and captains
 
 The **Pool** step shows how many players are ready to be drafted, how the declared roles are covered, who has no rank or no linked account, and who is excluded. Blockers are spelled out: there are fewer eligible players than roster slots; a number of pool players have no rank; there are not enough eligible tank, damage or support players. Ranks are added in the balancer.
 
 On **Captains** you select exactly as many players as there are teams. There is a search by BattleTag or name and the sort options **Rank: high to low**, **Rank: low to high** and **Name (A–Z)**. Each team can be given a name right away; the field is optional.
+
+A captain fills one role slot on their own team. By default it is their lead role — the one flagged primary in the registration, else the first — and the rank shown next to them is that role's rank, not their best one. A captain who plays more than one role gets a role picker in the list of chosen teams; the captain order, the team averages and the export all use the role picked there. Under a roster made only of flex slots nobody holds a role, so there is no picker and the captain counts at their best rank.
 
 ### Captain order
 
@@ -47,6 +51,8 @@ On **Captains** you select exactly as many players as there are teams. There is 
 - **Strongest first** — the other way round.
 - **Seeded random** — a random order; the saved seed makes it reproducible, and **Generate a new random seed** reshuffles.
 - **Manual** — drag captains into the exact order you want.
+
+Whatever order is chosen, a captain can be dragged to another seat. That overrides the seeds by hand: the order switches to **Manual**, starting from the one that was shown, with the move applied.
 
 Below it, **Round schedule preview** lays out the whole pick order. For rounds whose order depends on live team averages, it says instead that the order is resolved on the server when the round starts.
 

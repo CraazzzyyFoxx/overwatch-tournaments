@@ -746,6 +746,18 @@
   --aqt-flex: var(--aqt-violet);
   --aqt-live: var(--aqt-rose);
   --aqt-warm: var(--aqt-amber);
+  /* A viewer's own bookmark (a followed draft team). Neutral on purpose: amber
+     already means paused/warning and teal means "mine", so a starred team is
+     told apart by the filled star's SHAPE, never by borrowing a status hue. */
+  --aqt-follow: var(--aqt-fg-muted);
+  /* Online / good / feasible. Same value as the Support role today, but its own
+     name: re-hueing a role must not change what "online" looks like. */
+  --aqt-positive: var(--aqt-emerald);
+  /* Rose as TEXT (a stopped draft, overtime, a shortage count). The fill hue
+     clears WCAG AA on the dark cards but reads faint as a label (APCA ≈ Lc 40);
+     this lighter rose keeps the hue and lands ≈ Lc 68. Fills, borders and tints
+     stay on --aqt-rose. Not a `-fg` token: those name text ON a coloured fill. */
+  --aqt-rose-text: hsl(349 90% 82%);
   /* Tournament lifecycle statuses (design-book §1). Aliases, not new hues: a
      status can be recoloured without moving the accent it borrows today.
      `finished` points at --aqt-fg-muted rather than the book's literal

@@ -125,10 +125,12 @@ export function TeamsPanel({
       >
         <div className="flex flex-col gap-2 px-4 pb-3 pt-3.5">
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
-            <h2 id={headingId} className="font-onest text-base font-semibold leading-[1.3]">
+            <h2 id={headingId} className="font-onest text-heading font-semibold">
               {t("teams.title")}
             </h2>
-            <span className="ml-auto whitespace-nowrap text-[13px] text-[color:var(--aqt-fg-dim)]">{caption}</span>
+            <span className="ml-auto whitespace-nowrap text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
+              {caption}
+            </span>
           </div>
           <TabsList aria-label={t("teams.tabsLabel")}>
             {tabs.map((entry) => (
@@ -139,7 +141,10 @@ export function TeamsPanel({
           </TabsList>
         </div>
 
-        <TabsContent value="rosters" className="mt-0 flex min-h-0 flex-1 flex-col focus-visible:ring-inset">
+        <TabsContent
+          value="rosters"
+          className="@container/roster mt-0 flex min-h-0 flex-1 flex-col focus-visible:ring-inset"
+        >
           <TeamRosters
             board={board}
             teamViews={teamViews}

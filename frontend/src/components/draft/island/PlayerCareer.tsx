@@ -19,9 +19,9 @@ export const MIN_WINRATE_MAPS = 10;
 
 export function winrateColor(wonShare: number, maps: number): string {
   if (maps < MIN_WINRATE_MAPS) return "var(--aqt-fg-muted)";
-  if (wonShare >= 0.6) return "var(--aqt-support)";
+  if (wonShare >= 0.6) return "var(--aqt-positive)";
   if (wonShare >= 0.5) return "var(--aqt-amber)";
-  return "var(--aqt-rose)";
+  return "var(--aqt-rose-text)";
 }
 
 export function placeColor(place: number | null): string {
@@ -31,11 +31,11 @@ export function placeColor(place: number | null): string {
   return "var(--aqt-fg)";
 }
 
-const EYEBROW = "text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]";
+const EYEBROW = "text-label font-semibold text-[color:var(--aqt-fg-muted)]";
 const STATS_GRID =
   "grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-px bg-[color:var(--aqt-border)]";
 const STAT_CELL = "flex min-w-0 flex-col gap-0.5 bg-[color:var(--aqt-card-2)] px-3.5 py-2.5";
-const STAT_VALUE = "whitespace-nowrap font-onest text-[19px] font-semibold leading-tight tabular-nums";
+const STAT_VALUE = "whitespace-nowrap font-onest text-heading font-semibold leading-tight tabular-nums";
 
 /**
  * A loading stand-in for one line of text. It sits in the line box of a parent
@@ -162,9 +162,9 @@ export function CareerStats({ query }: Readonly<{ query: UseQueryResult<UserDraf
         trend == null
           ? "var(--aqt-fg-muted)"
           : trend > 0
-            ? "var(--aqt-support)"
+            ? "var(--aqt-positive)"
             : trend < 0
-              ? "var(--aqt-rose)"
+              ? "var(--aqt-rose-text)"
               : "var(--aqt-fg)",
       title: t("island.stats.trendTitle")
     }
@@ -180,7 +180,7 @@ export function CareerStats({ query }: Readonly<{ query: UseQueryResult<UserDraf
               {stat.value}
             </span>
             {stat.low && (
-              <span className="whitespace-nowrap rounded border border-[color:var(--aqt-border-2)] px-1.5 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
+              <span className="whitespace-nowrap rounded border border-[color:var(--aqt-border-2)] px-1.5 text-label font-medium text-[color:var(--aqt-fg-muted)]">
                 {t("island.stats.lowSample")}
               </span>
             )}

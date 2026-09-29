@@ -208,6 +208,18 @@ export function DraftWorkspace({
     }
   }, [takenPlayer, gating.myTeamId, t]);
 
+  // Non-modal card, hundreds of Tab stops from its trigger: a user who opened
+  // it gets the focus moved in, and gets it back where they left it on close.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const focusCard = useRef(false);
+  const lastSubjectRef = useRef<number | null>(null);
+  const rememberTrigger = () => {
+    const active = document.activeElement;
+    triggerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    focusCard.current = true;
+  };
+
   const clearAll = () => {
     setSelection(null);
     setProfileId(null);
@@ -218,11 +230,16 @@ export function DraftWorkspace({
     if (profileId != null && profileId !== selection?.playerId) setProfileId(null);
     else clearAll();
   };
+  const openProfile = (playerId: number) => {
+    rememberTrigger();
+    setProfileId(playerId);
+  };
   const onSelect = (playerId: number, role: DraftRole) => {
     if (selection?.playerId === playerId && selection.role === role) {
       clearAll();
       return;
     }
+    rememberTrigger();
     setSelection({ playerId, role });
     setProfileId(playerId);
   };
@@ -232,6 +249,30 @@ export function DraftWorkspace({
       selection?.playerId === subject.id && selection.role === role ? null : { playerId: subject.id, role }
     );
   };
+
+  useEffect(() => {
+    if (subjectId != null) {
+      lastSubjectRef.current = subjectId;
+      // Only a user's own action pulls the focus across the room; a card that
+      // opened because the board moved leaves the caret where it was.
+      if (!focusCard.current) return;
+      focusCard.current = false;
+      cardRef.current?.focus();
+      return;
+    }
+    focusCard.current = false;
+    const saved = triggerRef.current;
+    triggerRef.current = null;
+    // Restore only what the closing card dropped: if the focus already moved
+    // on (a click elsewhere), leave it alone.
+    const active = document.activeElement;
+    if (active != null && active !== document.body) return;
+    const fallback =
+      lastSubjectRef.current == null
+        ? null
+        : document.querySelector<HTMLElement>(`[data-player-name="${lastSubjectRef.current}"]`);
+    (saved?.isConnected ? saved : fallback)?.focus();
+  }, [subjectId]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -270,15 +311,45 @@ export function DraftWorkspace({
     return () => observer.disconnect();
   }, []);
 
-  // The pool reserves the floating layer's height so its last rows stay reachable.
+  // Below `xl` the panel switch is sticky; the pool's own sticky column header
+  // sits under it and reads its height from here. At `xl` there is no bar.
+  const tabsBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const bar = tabsBarRef.current;
+    if (!bar) {
+      root.style.setProperty("--draft-tabs-h", "0px");
+      return;
+    }
+    const sync = () => root.style.setProperty("--draft-tabs-h", `${bar.offsetHeight}px`);
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [wide]);
+
+  // The pool reserves the floating layer's height so its last rows stay reachable,
+  // and every scroller (the page below xl, the panels at xl) treats it as scroll
+  // padding: a row focused by Tab scrolls clear of the card, not under it.
   const layerRef = useRef<HTMLDivElement>(null);
   const [bottomInset, setBottomInset] = useState(96);
   useEffect(() => {
     const layer = layerRef.current;
-    if (!layer) return;
-    const observer = new ResizeObserver(() => setBottomInset(Math.ceil(layer.offsetHeight) + 16));
+    const root = rootRef.current;
+    if (!layer || !root) return;
+    const html = document.documentElement;
+    const observer = new ResizeObserver(() => {
+      const inset = Math.ceil(layer.offsetHeight) + 16;
+      setBottomInset(inset);
+      root.style.setProperty("--draft-layer-h", `${inset}px`);
+      html.style.scrollPaddingBottom = `${inset}px`;
+    });
     observer.observe(layer);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      html.style.scrollPaddingBottom = "";
+    };
   }, []);
 
   const renderPool = (headingId: string) => (
@@ -292,7 +363,7 @@ export function DraftWorkspace({
       selection={selection}
       profileId={profileId}
       onSelect={onSelect}
-      onOpenProfile={setProfileId}
+      onOpenProfile={openProfile}
       onPrefetchCard={prefetchCard}
       queue={queue}
       fit={fit}
@@ -321,7 +392,7 @@ export function DraftWorkspace({
       }
       myTeamId={gating.myTeamId}
       onlineCaptainIds={onlineCaptainIds}
-      onOpenProfile={setProfileId}
+      onOpenProfile={openProfile}
       onSlotFilter={gating.isCaptain ? (role) => onViewParamsChange({ role, view: "pool" }) : undefined}
       divisionGrid={divisionGrid}
       headingId={headingId}
@@ -361,7 +432,7 @@ export function DraftWorkspace({
             <button
               type="button"
               onClick={onRetryOptions}
-              className="min-h-11 rounded-sm text-[color:var(--aqt-teal)] underline outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+              className="min-h-11 rounded-sm text-[color:var(--aqt-teal)] underline outline-hidden focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
             >
               {t("retry")}
             </button>
@@ -372,8 +443,10 @@ export function DraftWorkspace({
       <div className="mx-auto max-w-[1720px] px-4 pb-5 pt-3.5 sm:px-6">
         {wide ? (
           <div className="flex items-start gap-3.5">
-            <div className={cn("min-w-0 flex-[1_1_600px]", styles.roomPanel)}>{renderPool("player-pool-heading")}</div>
-            <div className={cn("min-w-[520px] flex-[0_1_600px]", styles.roomPanel)}>
+            <div className={cn("min-w-0 flex-[1.2_1_600px]", styles.roomPanel)}>
+              {renderPool("player-pool-heading")}
+            </div>
+            <div className={cn("min-w-[520px] flex-[1_1_600px]", styles.roomPanel)}>
               {renderTeams("teams-panel-heading")}
             </div>
           </div>
@@ -381,13 +454,20 @@ export function DraftWorkspace({
           // Radix Tabs, not hand-rolled roles: it wires aria-controls, roving
           // tabindex and arrow-key traversal that a plain button row lacks.
           <Tabs value={viewParams.view} onValueChange={(view) => onViewParamsChange({ view: view as DraftMobileView })}>
-            <TabsList aria-label={t("mobileViews")}>
-              {DRAFT_MOBILE_VIEWS.map((view) => (
-                <TabsTrigger key={view} value={view} className="min-h-11 flex-1 justify-center">
-                  {t(`shell.tabs.${view}`)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {/* The switch between the two panels stays reachable: 80 rows down
+                the pool, going back to Teams is a tap, not a scroll. */}
+            <div
+              ref={tabsBarRef}
+              className="sticky top-0 z-20 -mx-4 -mt-3.5 bg-[color:color-mix(in_srgb,var(--aqt-bg)_88%,transparent)] px-4 pb-2 pt-3.5 backdrop-blur-xl sm:-mx-6 sm:px-6"
+            >
+              <TabsList aria-label={t("mobileViews")}>
+                {DRAFT_MOBILE_VIEWS.map((view) => (
+                  <TabsTrigger key={view} value={view} className="min-h-11 flex-1 justify-center">
+                    {t(`shell.tabs.${view}`)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
             <TabsContent value="pool" className="mt-3.5">
               {renderPool("player-pool-heading")}
             </TabsContent>
@@ -408,6 +488,7 @@ export function DraftWorkspace({
               region, so a pick's announcement outlives the card closing. */}
           <PickIsland
             board={board}
+            cardRef={cardRef}
             gating={gating}
             player={subject}
             selection={selection}

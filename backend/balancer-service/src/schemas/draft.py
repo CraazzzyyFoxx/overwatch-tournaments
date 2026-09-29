@@ -24,7 +24,7 @@ from shared.core.enums import (
 )
 from shared.domain.roster_shape import RegistrationRoleCode, RosterShape
 from shared.schemas.roster_slots import RosterShapeRead
-from src.domain.draft.ranks import slot_rank
+from src.domain.draft.ranks import seat_role, slot_rank
 from src.schemas.base import BaseRead
 
 __all__ = (
@@ -122,6 +122,9 @@ class DraftPoolCaptainInput(BaseModel):
 
     registration_id: int
     name: str | None = None
+    #: The role this captain is seated on; ``None`` = their lead role. Must be
+    #: one they play and one the roster has a slot for (422 otherwise).
+    role: RegistrationRoleCode | None = None
 
 
 class DraftSeedRequest(BaseModel):
@@ -304,6 +307,10 @@ class DraftPlayerRead(BaseRead):
     status: DraftPlayerStatus
     is_captain: bool
     drafted_by_team_id: int | None
+    #: A captain's seat role -- the one the organizer pinned while it stays
+    #: playable, else their lead role. ``None`` for everyone who is not a
+    #: captain: their role on a roster is the pick's ``target_role``.
+    captain_role: str | None = None
     #: Playable off-roles, priority-ordered. Empty, never null.
     secondary_roles: list[str] = Field(default_factory=list)
     #: ``{slot_code: rank}`` over playable roles. A missing key means the role is
@@ -323,10 +330,11 @@ class DraftPlayerRead(BaseRead):
     #: organizers-only ``organizer_notes``/``admin_notes`` are deliberately NOT
     #: projected here.
     notes: str | None = None
-    #: The one rank that represents this player in THIS draft: their own role's
-    #: rank under a shape with role slots, their best playable rank under a
-    #: role-less (all-flex) one, where nobody is assigned a role. The rule lives
-    #: once, in ``domain.draft.ranks.slot_rank``.
+    #: The one rank that represents this player in THIS draft: their seat role's
+    #: rank under a shape with role slots (a captain's pinned role, everyone
+    #: else's lead role), their best playable rank under a role-less (all-flex)
+    #: one, where nobody is assigned a role. The rule lives once, in
+    #: ``domain.draft.ranks.slot_rank``.
     effective_rank: int | None = None
     custom_fields: list[DraftPlayerCustomFieldRead] = Field(default_factory=list)
     version: int
@@ -342,6 +350,7 @@ class DraftPlayerRead(BaseRead):
     ) -> DraftPlayerRead:
         from src.services.draft.board import player_custom_fields
 
+        seat = seat_role(roster, player.captain_role)
         lead = roster.primary if roster is not None else None
         return cls(
             id=player.id,
@@ -357,6 +366,7 @@ class DraftPlayerRead(BaseRead):
             status=player.status,
             is_captain=player.is_captain,
             drafted_by_team_id=player.drafted_by_team_id,
+            captain_role=seat.slot_code if (player.is_captain and seat is not None) else None,
             secondary_roles=[role.slot_code for role in roster.secondary_roles] if roster is not None else [],
             role_ranks=roster.role_ranks if roster is not None else {},
             role_sources=roster.role_sources if roster is not None else {},
@@ -364,9 +374,10 @@ class DraftPlayerRead(BaseRead):
             role_top_heroes=roster.role_top_heroes if roster is not None else {},
             notes=roster.public_notes if roster is not None else None,
             # The player's OWN role under role slots -- a support main is not
-            # worth their damage rank on the pool card. ``slot_rank`` drops the role
+            # worth their damage rank on the pool card, and a captain seated on
+            # support is worth their support rank. ``slot_rank`` drops the role
             # itself under a role-less shape, where the maximum is the answer.
-            effective_rank=slot_rank(roster, lead.role if lead is not None else None, shape),
+            effective_rank=slot_rank(roster, seat, shape),
             custom_fields=player_custom_fields(roster.custom_fields if roster is not None else None, custom_fields),
             version=player.version,
         )

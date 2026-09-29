@@ -109,10 +109,16 @@ class TestAverageSeatOrder:
     round order.
     """
 
-    def _avg(self, averages, *, descending, captain_ranks=CAPTAIN_RANKS) -> list[int]:
+    def _avg(self, averages, *, descending, captain_ranks=CAPTAIN_RANKS, seed_reversed=False) -> list[int]:
         return [
             team.id
-            for team in average_seat_order(SEATS, averages=averages, captain_ranks=captain_ranks, descending=descending)
+            for team in average_seat_order(
+                SEATS,
+                averages=averages,
+                captain_ranks=captain_ranks,
+                descending=descending,
+                seed_reversed=seed_reversed,
+            )
         ]
 
     def test_ascending_puts_the_lowest_average_first(self) -> None:
@@ -144,6 +150,17 @@ class TestAverageSeatOrder:
 
         assert self._avg(tied, descending=False, captain_ranks=same) == [70, 20, 50]
         assert self._avg(tied, descending=True, captain_ranks=same) == [70, 20, 50]
+
+    def test_the_seed_setting_flips_only_a_full_tie(self) -> None:
+        # Tied on average and captain: the organizer's setting reverses the seed,
+        # independent of the rule's direction.
+        tied = {70: 2800.0, 20: 2800.0, 50: 2800.0}
+        same = {70: 2800, 20: 2800, 50: 2800}
+
+        assert self._avg(tied, descending=False, captain_ranks=same, seed_reversed=True) == [50, 20, 70]
+        assert self._avg(tied, descending=True, captain_ranks=same, seed_reversed=True) == [50, 20, 70]
+        # A captain-rank difference still decides before the seed is consulted.
+        assert self._avg(tied, descending=False, seed_reversed=True) == [50, 70, 20]
 
     def test_a_partial_tie_breaks_within_the_tied_group_only(self) -> None:
         averages = {70: 2800.0, 20: 2800.0, 50: 3500.0}

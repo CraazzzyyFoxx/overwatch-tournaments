@@ -29,6 +29,9 @@ RankAutofillSource = Literal["analytics", "balancer"]
 RankAutofillUsedSource = Literal["division_history", "ow", "analytics"]
 # Individual source of a rank-autofill stage chain.
 RankAutofillSourceKey = Literal["ow", "division_history", "analytics"]
+# What the OW stage reads off the window: the time-weighted composite, the latest rank, or the
+# highest rank observed in it -- a lower bound, since a rank held between two polls is never seen.
+RankAutofillOwValue = Literal["composite", "current", "peak"]
 # Priority chains for rank autofill:
 #   ow_first       -> OW (week composite) -> balancer (division history) -> analytics (past tournaments)
 #   balancer_first -> balancer -> analytics -> OW
@@ -279,14 +282,15 @@ class BalancerRankAutofillStage(BaseModel):
     """A single source in the rank-autofill priority chain.
 
     ``lookback_tournaments`` limits ``division_history``/``analytics`` to the last N tournaments
-    before the current one; ``lookback_days`` overrides the OW weekly window. The
-    irrelevant lookback for a given ``source`` is ignored by the service.
+    before the current one; ``lookback_days`` overrides the OW weekly window. ``ow_value`` picks
+    which OW number the stage offers. Fields irrelevant to a given ``source`` are ignored.
     """
 
     source: RankAutofillSourceKey
     enabled: bool = True
     lookback_tournaments: int | None = Field(None, ge=1)
     lookback_days: int | None = Field(None, ge=1)
+    ow_value: RankAutofillOwValue = "composite"
 
 
 class BalancerRegistrationRankAutofillRequest(BaseModel):
@@ -318,6 +322,7 @@ class BalancerRegistrationRankAutofillRole(BaseModel):
     division_history_rank_value: int | None = None
     ow_rank_value: int | None = None
     ow_current_rank_value: int | None = None
+    ow_peak_rank_value: int | None = None
     analytics_rank_value: int | None = None
     used_source: RankAutofillUsedSource | None = None
 
@@ -348,6 +353,8 @@ class BalancerRegistrationRankAutofillResponse(BaseModel):
     add_to_balancer: bool
     balancer_additions: int
     players: list[BalancerRegistrationRankAutofillPlayer] = Field(default_factory=list)
+    # The OW number the run offered (None when the OW stage is off), so a peak reads as one.
+    ow_value: RankAutofillOwValue | None = None
 
 
 class BalancerRegistrationRankHistoryEntry(BaseModel):
@@ -449,6 +456,10 @@ class BalancerRegistrationRead(BaseRead):
     checked_in_by_username: str | None = None
     deleted_at: datetime | None = None
     submitted_at: datetime | None = None
+    #: Signed up after the registration window's ``ends_at``; same predicate as
+    #: the public ``RegistrationRead.submitted_late``. ``False`` when the row's
+    #: tournament was not eager-loaded.
+    submitted_late: bool = False
     reviewed_at: datetime | None = None
     reviewed_by_username: str | None = None
     balancer_profile_overridden_at: datetime | None = None

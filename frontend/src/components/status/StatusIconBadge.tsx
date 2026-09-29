@@ -7,13 +7,14 @@ import { cn } from "@/lib/utils";
  * `StatusMetaBadge`'s built-in fallback palette read from these records — they
  * used to carry two different hand-written palettes of raw Tailwind colors.
  */
-export type StatusTone = "positive" | "warning" | "negative" | "neutral";
+export type StatusTone = "positive" | "warning" | "negative" | "info" | "neutral";
 
 /** tone → foreground token (bare icon badges). */
 const STATUS_TONE_FG: Record<StatusTone, string> = {
   positive: "text-[color:var(--aqt-emerald)]",
   warning: "text-[color:var(--aqt-amber)]",
   negative: "text-[color:var(--aqt-rose)]",
+  info: "text-[color:var(--aqt-blue)]",
   neutral: "text-[color:var(--aqt-fg-faint)]"
 };
 
@@ -25,9 +26,15 @@ export const STATUS_TONE_PILL: Record<StatusTone, string> = {
     "border-[color:color-mix(in_srgb,var(--aqt-amber)_22%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_10%,transparent)] text-[color:var(--aqt-amber)]",
   negative:
     "border-[color:color-mix(in_srgb,var(--aqt-rose)_22%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-rose)_10%,transparent)] text-[color:var(--aqt-rose)]",
+  info:
+    "border-[color:color-mix(in_srgb,var(--aqt-blue)_22%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_10%,transparent)] text-[color:var(--aqt-blue)]",
   neutral:
     "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-faint)]"
 };
+
+/** Shape of a labelled status chip (icon + name); pair with `STATUS_TONE_PILL`. */
+export const STATUS_CHIP_CLASS =
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-label font-medium leading-none";
 
 interface StatusIconBadgeProps {
   /** The glyph standing in for the status. */

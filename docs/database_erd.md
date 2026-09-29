@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`auditsrc01`** (89 revisions in `backend/migrations/versions/`).
+Alembic head: **`draftcap01`** (90 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1823,6 +1823,7 @@ erDiagram
         varchar(16) status
         boolean is_captain
         bigint drafted_by_team_id FK "nullable"
+        varchar(16) captain_role "nullable"
         int version
     }
     BALANCER_DRAFT_SESSION {

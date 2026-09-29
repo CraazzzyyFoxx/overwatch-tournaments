@@ -33,20 +33,20 @@ export function DraftClock({ expiresAt, paused, compact = false }: Readonly<Draf
     );
   }
   if (!expiresAt || now === null) {
-    return <span className="tabular-nums text-[color:var(--aqt-fg-muted)]">--</span>;
+    return <span className="tabular-nums text-[color:var(--aqt-fg-muted)]">—</span>;
   }
 
   const ms = remainingMs(expiresAt, now);
   if (ms <= 0) {
     return (
-      <span className="tabular-nums text-[color:var(--aqt-rose)]">
+      <span className="tabular-nums text-[color:var(--aqt-rose-text)]">
         {compact ? t("draft.clock.autoCompact") : t("draft.clock.autopicking")}
       </span>
     );
   }
   const seconds = Math.ceil(ms / 1000);
   const className = isUrgent(ms)
-    ? "tabular-nums text-[color:var(--aqt-rose)] animate-pulse motion-reduce:animate-none"
+    ? "tabular-nums text-[color:var(--aqt-rose-text)] animate-pulse motion-reduce:animate-none"
     : "tabular-nums text-[color:var(--aqt-teal)]";
   return <span className={className}>{seconds}s</span>;
 }

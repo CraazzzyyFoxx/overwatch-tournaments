@@ -136,12 +136,15 @@ class PoolSeat:
 
     All a seed carries. Roles, ranks, sub-role, flex and division are NOT
     copied: the draft reads them from the registration through the engine, so
-    there is nothing here to go stale.
+    there is nothing here to go stale. ``captain_role`` is not a copy either: it
+    is the organizer's choice of which of the captain's roles they are seated
+    on (``None`` = their lead role).
     """
 
     registration_id: int
     draft_position: int | None = None
     team_name: str | None = None
+    captain_role: str | None = None
 
 
 # --- pick selection (domain/draft/rules.py) ----------------------------------

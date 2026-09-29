@@ -14242,6 +14242,11 @@ export interface components {
         "balancer.DraftPlayerRead": {
             /** Battle Tag */
             battle_tag: string | null;
+            /**
+             * Captain Role
+             * @default null
+             */
+            captain_role: string | null;
             /** Custom Fields */
             custom_fields?: components["schemas"]["balancer.DraftPlayerCustomFieldRead"][];
             /** Drafted By Team Id */
@@ -14313,6 +14318,11 @@ export interface components {
             name: string | null;
             /** Registration Id */
             registration_id: number;
+            /**
+             * Role
+             * @default null
+             */
+            role: BalancerDraftPoolCaptainInputRoleAnyOf0 | null;
         };
         /**
          * DraftPoolSource
@@ -21936,8 +21946,8 @@ export interface components {
          * @description A single source in the rank-autofill priority chain.
          *
          *     ``lookback_tournaments`` limits ``division_history``/``analytics`` to the last N tournaments
-         *     before the current one; ``lookback_days`` overrides the OW weekly window. The
-         *     irrelevant lookback for a given ``source`` is ignored by the service.
+         *     before the current one; ``lookback_days`` overrides the OW weekly window. ``ow_value`` picks
+         *     which OW number the stage offers. Fields irrelevant to a given ``source`` are ignored.
          */
         "tournament.BalancerRankAutofillStage": {
             /**
@@ -21955,6 +21965,12 @@ export interface components {
              * @default null
              */
             lookback_tournaments: number | null;
+            /**
+             * Ow Value
+             * @default composite
+             * @enum {string}
+             */
+            ow_value: TournamentBalancerRankAutofillStageOw_value;
             /**
              * Source
              * @enum {string}
@@ -22081,6 +22097,11 @@ export interface components {
             balancer_additions: number;
             /** Overwrite Existing */
             overwrite_existing: boolean;
+            /**
+             * Ow Value
+             * @default null
+             */
+            ow_value: TournamentBalancerRegistrationRankAutofillResponseOw_valueAnyOf0 | null;
             /** Players */
             players?: components["schemas"]["tournament.BalancerRegistrationRankAutofillPlayer"][];
             /** Role Updates */
@@ -22133,6 +22154,11 @@ export interface components {
              * @default null
              */
             ow_current_rank_value: number | null;
+            /**
+             * Ow Peak Rank Value
+             * @default null
+             */
+            ow_peak_rank_value: number | null;
             /**
              * Ow Rank Value
              * @default null
@@ -22312,6 +22338,11 @@ export interface components {
              * @default null
              */
             submitted_at: string | null;
+            /**
+             * Submitted Late
+             * @default false
+             */
+            submitted_late: boolean;
             /**
              * Subscription Outcome
              * @default null
@@ -70161,6 +70192,11 @@ export enum BalancerDraftPlayerStatus {
     picked = "picked",
     removed = "removed"
 }
+export enum BalancerDraftPoolCaptainInputRoleAnyOf0 {
+    tank = "tank",
+    damage = "damage",
+    support = "support"
+}
 export enum BalancerDraftPoolSource {
     balancer_balance = "balancer_balance",
     manual = "manual"
@@ -70529,6 +70565,11 @@ export enum StreamStreamPollHealthReadStatusAnyOf0 {
     unavailable = "unavailable",
     error = "error"
 }
+export enum TournamentBalancerRankAutofillStageOw_value {
+    composite = "composite",
+    current = "current",
+    peak = "peak"
+}
 export enum TournamentBalancerRankAutofillStageSource {
     ow = "ow",
     division_history = "division_history",
@@ -70543,6 +70584,11 @@ export enum TournamentBalancerRegistrationRankAutofillPlayerStatus {
 export enum TournamentBalancerRegistrationRankAutofillRequestMode {
     ow_first = "ow_first",
     balancer_first = "balancer_first"
+}
+export enum TournamentBalancerRegistrationRankAutofillResponseOw_valueAnyOf0 {
+    composite = "composite",
+    current = "current",
+    peak = "peak"
 }
 export enum TournamentBalancerRegistrationRankAutofillRoleAction {
     set = "set",

@@ -12,11 +12,12 @@ import {
   moveCaptain,
   orderCaptainIds,
   previousSetupStep,
+  reseatCaptain,
   SETUP_STEPS,
   validateSetupStep,
   type DraftCaptainRow
 } from "./setup-model";
-import { captainRankSummary, poolRegistrationSummary } from "./setup-types";
+import { captainSeat, poolRegistrationSummary } from "./setup-types";
 
 const CAPTAIN_ROWS: DraftCaptainRow[] = [
   { id: 1, label: "Baida#21855", roles: ["tank", "damage", "support"], rank: null, rankRole: null },
@@ -88,6 +89,22 @@ describe("draft setup model", () => {
     expect(moveCaptain([10, 20, 30], 99, 10)).toEqual([10, 20, 30]);
   });
 
+  it("dragging a computed order overrides its seeds, not the selection order", () => {
+    const ranks = new Map([
+      [10, 3100],
+      [20, 2500],
+      [30, 2800]
+    ]);
+    const value = { ids: [10, 20, 30], teamNames: {}, roles: {}, order: "weakest_first" as const, randomSeed: 42 };
+    const shown = orderCaptainIds(value.ids, value.order, ranks, value.randomSeed); // [20, 30, 10]
+
+    // 10 dragged onto seat 1: the shown order with that move, now manual.
+    expect(reseatCaptain(value, shown, 10, 20)).toMatchObject({ order: "manual", ids: [10, 20, 30] });
+    expect(reseatCaptain(value, shown, 30, 20)).toMatchObject({ order: "manual", ids: [30, 20, 10] });
+    // A drop outside the list changes nothing, and does not flip the order.
+    expect(reseatCaptain(value, shown, 99, 20)).toBe(value);
+  });
+
   it("keeps calculated captain order reproducible", () => {
     const ranks = new Map([
       [10, 3100],
@@ -97,6 +114,16 @@ describe("draft setup model", () => {
     expect(orderCaptainIds([10, 20, 30], "weakest_first", ranks, 42)).toEqual([20, 30, 10]);
     expect(orderCaptainIds([10, 20, 30], "strongest_first", ranks, 42)).toEqual([10, 30, 20]);
     expect(orderCaptainIds([10, 20, 30], "random", ranks, 42)).toEqual([30, 10, 20]);
+  });
+
+  it("breaks tied captain ranks by id in both directions, like the server", () => {
+    const ranks = new Map([
+      [30, 2500],
+      [10, 2500],
+      [20, 3000]
+    ]);
+    expect(orderCaptainIds([30, 10, 20], "weakest_first", ranks, 0)).toEqual([10, 30, 20]);
+    expect(orderCaptainIds([30, 10, 20], "strongest_first", ranks, 0)).toEqual([20, 10, 30]);
   });
 
   it("previews snake order for every round", () => {
@@ -214,10 +241,9 @@ describe("draft setup model", () => {
     ).toHaveLength(CAPTAIN_ROWS.length);
   });
 
-  it("ranks a captain by their strongest playable role, not their primary one", () => {
+  it("seats a captain on their lead role unless the organizer pins another", () => {
     // Primary tank 2000, secondary damage 3500, and an inactive support that
-    // must not count at all: seating this captain as a 2000 would put the
-    // pool's strongest damage player in the weakest seat.
+    // must not count at all.
     const registration = {
       id: 9,
       roles: [
@@ -226,10 +252,24 @@ describe("draft setup model", () => {
         { role: "support", is_active: false, is_primary: false, priority: 2, rank_value: 4200 }
       ]
     } as unknown as AdminRegistration;
-    expect(captainRankSummary(registration)).toEqual({ rank: 3500, role: "damage" });
+
+    // The lead role's own rank, not the damage maximum.
+    expect(captainSeat(registration, undefined, SHAPE)).toEqual({
+      role: "tank",
+      rank: 2000,
+      options: ["tank", "damage"]
+    });
+    expect(captainSeat(registration, "damage", SHAPE)).toMatchObject({ role: "damage", rank: 3500 });
+    // A pin the captain cannot play falls back to the lead role.
+    expect(captainSeat(registration, "support", SHAPE)).toMatchObject({ role: "tank", rank: 2000 });
+    // A role-less roster seats nobody on a role: the best playable rank.
+    const allFlex = { slots: { flex: 3 }, has_role_slots: false };
+    expect(captainSeat(registration, "damage", allFlex)).toEqual({ role: null, rank: 3500, options: [] });
+    expect(captainSeat({ id: 10, roles: [] } as unknown as AdminRegistration, undefined, SHAPE)).toEqual({
+      role: null,
+      rank: null,
+      options: []
+    });
     expect(poolRegistrationSummary(registration).rank).toBe(2000);
-    expect(
-      captainRankSummary({ id: 10, roles: [] } as unknown as AdminRegistration)
-    ).toEqual({ rank: null, role: null });
   });
 });

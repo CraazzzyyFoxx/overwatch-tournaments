@@ -137,6 +137,9 @@ def test_seat_is_anchored_on_a_registration_and_carries_no_roles_or_ranks() -> N
         "status",
         "is_captain",
         "drafted_by_team_id",
+        # Draft state, not a copy: which of the captain's OWN roles the
+        # organizer seated them on. The ranks stay on the registration.
+        "captain_role",
         "version",
     }
     registration_id = DraftPlayer.__table__.c.registration_id

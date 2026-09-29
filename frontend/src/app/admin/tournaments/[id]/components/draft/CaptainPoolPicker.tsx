@@ -178,9 +178,9 @@ export function CaptainPoolPicker({
                     height={20}
                   />
                 )}
-                {/* The rank is the captain's STRONGEST playable role, so the
-                    row names which role it came from instead of implying it is
-                    the primary one. */}
+                {/* The rank of the role the captain would be seated on — their
+                    lead role unless one was pinned — and the row names that
+                    role, since it is not always the one they rank highest on. */}
                 <span
                   className="min-w-10 text-right"
                   style={{ color: row.rankRole ? ROLE_ACCENT[row.rankRole] : undefined }}

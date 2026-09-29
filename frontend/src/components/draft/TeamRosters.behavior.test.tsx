@@ -197,7 +197,7 @@ describe("roster cells", () => {
     const html = renderRosters(makeBoard(MIXED_SHAPE, { players: [], picks: [] }));
 
     expect(html).toContain('title="roles.flex" class="flex justify-center" style="grid-column:span 2"');
-    expect(html).toContain("repeat(5, minmax(0,70px))");
+    expect(html).toContain("repeat(5, minmax(0,1fr))");
     expect(html).toContain("teams.chips.needAria:{&quot;role&quot;:&quot;tank&quot;");
     expect(html).toContain("teams.chips.needAria:{&quot;role&quot;:&quot;damage&quot;");
     expect(html).not.toContain("&quot;role&quot;:&quot;support&quot;");
@@ -219,7 +219,7 @@ describe("roster cells", () => {
     const shape: RosterShape = { ...ROLE_SHAPE, slots: { tank: 1 }, team_size: 1, draft_rounds: 1 };
     const html = renderRosters(makeBoard(shape, { players: [], picks: [] }));
 
-    expect(html).toContain("repeat(1, minmax(0,70px))");
+    expect(html).toContain("repeat(1, minmax(0,1fr))");
   });
 });
 

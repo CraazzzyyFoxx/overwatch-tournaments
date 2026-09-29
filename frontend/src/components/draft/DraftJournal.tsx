@@ -1,6 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+
+import { Button } from "@/components/ui/button";
 import { useFormatter } from "@/lib/datetime/client";
 
 import type { DraftBoard, DraftJournalAction, DraftJournalEntry } from "@/types/draft.types";
@@ -11,6 +13,8 @@ interface DraftJournalProps {
   entries: readonly DraftJournalEntry[] | undefined;
   isLoading: boolean;
   isError: boolean;
+  /** Refetch the journal after a failed load. */
+  onRetry: () => void;
 }
 
 const KNOWN_ACTIONS = new Set([
@@ -35,7 +39,7 @@ function entryColor(action: string): string {
 }
 
 /** The organizer's log of what happened in the room, newest first. */
-export function DraftJournal({ id, board, entries, isLoading, isError }: Readonly<DraftJournalProps>) {
+export function DraftJournal({ id, board, entries, isLoading, isError, onRetry }: Readonly<DraftJournalProps>) {
   const t = useTranslations("draftRedesign");
   const format = useFormatter();
   const teamName = (teamId: number | null) =>
@@ -65,17 +69,22 @@ export function DraftJournal({ id, board, entries, isLoading, isError }: Readonl
         className="max-h-[220px] overflow-y-auto rounded-[10px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)]"
       >
         {isLoading ? (
-          <p className="px-3.5 py-2 text-sm text-[color:var(--aqt-fg-muted)]">{t("shell.journal.loading")}</p>
+          <p className="px-3.5 py-2 text-body text-[color:var(--aqt-fg-muted)]">{t("shell.journal.loading")}</p>
         ) : isError ? (
-          <p className="px-3.5 py-2 text-sm text-[color:var(--aqt-rose)]">{t("shell.journal.error")}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2">
+            <p className="text-body text-[color:var(--aqt-rose-text)]">{t("shell.journal.error")}</p>
+            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-8" onClick={onRetry}>
+              {t("retry")}
+            </Button>
+          </div>
         ) : !entries || entries.length === 0 ? (
-          <p className="px-3.5 py-2 text-sm text-[color:var(--aqt-fg-muted)]">{t("shell.journal.empty")}</p>
+          <p className="px-3.5 py-2 text-body text-[color:var(--aqt-fg-muted)]">{t("shell.journal.empty")}</p>
         ) : (
           <ul>
             {entries.map((entry) => (
               <li
                 key={entry.id}
-                className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 border-b border-[color:var(--aqt-border)] px-3.5 py-2 text-sm last:border-b-0 sm:grid-cols-[80px_minmax(0,1fr)_140px]"
+                className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 border-b border-[color:var(--aqt-border)] px-3.5 py-2 text-body last:border-b-0 sm:grid-cols-[80px_minmax(0,1fr)_140px]"
               >
                 <time dateTime={entry.created_at} className="tabular-nums text-[color:var(--aqt-fg-faint)]">
                   {format.dateTime(new Date(entry.created_at), {
