@@ -50,6 +50,25 @@ function patchPick(board: DraftBoard, pickId: number, patch: Partial<DraftPick>)
 }
 
 /**
+ * Events whose payload cannot say everything they changed, so the board must be
+ * re-read instead of folded:
+ *  - a rollback rewinds a pick, frees its player and bumps the version of every
+ *    pick it rewound — folding only the status left captains picking against
+ *    stale versions with the wrong team on the clock;
+ *  - a live re-seat (`order_recalculated`) moves a whole round to other teams;
+ *  - `session_updated` is a (re-)seed, a settings resync or a deleted session.
+ * All three leave the draft paused or not yet live, so nothing else lands while
+ * the snapshot is in flight.
+ */
+export function draftEventNeedsSnapshot(event: RealtimeEventEnvelope<DraftEventData>): boolean {
+  return (
+    event.event_type === "draft.rollback" ||
+    event.event_type === "draft.session_updated" ||
+    (event.event_type === "draft.blocked" && event.data.blocked_reason === "order_recalculated")
+  );
+}
+
+/**
  * Apply a realtime draft event to a board snapshot, immutably. Idempotent:
  * re-applying the same event converges to the same state.
  */
@@ -62,7 +81,10 @@ export function applyDraftEvent(
     case "draft.presence":
       return board; // ephemeral; handled outside the board cache
 
+    // Status only: the snapshot these trigger (`draftEventNeedsSnapshot`) brings
+    // the rest.
     case "draft.session_updated":
+    case "draft.rollback":
       return data.status ? { ...board, session: { ...board.session, status: data.status } } : board;
 
     case "draft.pick_made":
@@ -143,19 +165,23 @@ export function applyDraftEvent(
         }
       };
 
+    // Names the pick it re-arms: a board that missed a rollback or a re-seat
+    // would otherwise start the clock on whatever it last thought was current.
     case "draft.resumed": {
+      const pickId = data.pick_id ?? board.session.current_pick_id;
       const picks =
-        board.session.current_pick_id != null
-          ? setPick(board, board.session.current_pick_id, {
+        pickId != null
+          ? setPick(board, pickId, {
+              status: "on_clock",
               clock_expires_at: data.clock_expires_at ?? null,
             })
           : board.picks;
-      const current = picks.find((p) => p.id === board.session.current_pick_id) ?? board.current_pick;
+      const current = picks.find((p) => p.id === pickId) ?? board.current_pick;
       return {
         ...board,
         picks,
         current_pick: current,
-        session: { ...board.session, status: "live", blocked_reason: null }
+        session: { ...board.session, current_pick_id: pickId, status: "live", blocked_reason: null }
       };
     }
 

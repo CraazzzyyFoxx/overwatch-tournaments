@@ -7,6 +7,7 @@ import {
   applyDraftEvent,
   canConfirmPick,
   computeGating,
+  draftEventNeedsSnapshot,
   isUrgent,
   presenceFromEvent,
   remainingMs
@@ -181,6 +182,28 @@ describe("applyDraftEvent", () => {
     expect(done.session.status).toBe("completed");
     expect(done.current_pick).toBeNull();
     expect(applyDraftEvent(makeBoard(), ev("draft.cancelled", {})).session.status).toBe("cancelled");
+  });
+
+  it("resumed re-arms the pick the server names, not the one the board last had", () => {
+    // A board that missed a rollback still points at pick 1; the server resumes pick 2.
+    const next = applyDraftEvent(
+      { ...makeBoard(), session: { ...makeBoard().session, status: "paused" } },
+      ev("draft.resumed", { pick_id: 2, clock_expires_at: "2026-06-05T00:00:45Z" })
+    );
+
+    expect(next.session.current_pick_id).toBe(2);
+    expect(next.current_pick?.id).toBe(2);
+    expect(next.current_pick?.status).toBe("on_clock");
+    expect(next.current_pick?.clock_expires_at).toBe("2026-06-05T00:00:45Z");
+  });
+
+  it("rewrites that cannot be folded ask for a fresh snapshot", () => {
+    expect(draftEventNeedsSnapshot(ev("draft.rollback", { status: "paused", pick_id: 1 }))).toBe(true);
+    expect(draftEventNeedsSnapshot(ev("draft.blocked", { blocked_reason: "order_recalculated" }))).toBe(true);
+    expect(draftEventNeedsSnapshot(ev("draft.blocked", { blocked_reason: "role_shortage" }))).toBe(false);
+    expect(draftEventNeedsSnapshot(ev("draft.pick_made", { pick_id: 1 }))).toBe(false);
+    // The fold still flips the status at once, before the snapshot lands.
+    expect(applyDraftEvent(makeBoard(), ev("draft.rollback", { status: "paused" })).session.status).toBe("paused");
   });
 
   it("presence does not mutate the board", () => {

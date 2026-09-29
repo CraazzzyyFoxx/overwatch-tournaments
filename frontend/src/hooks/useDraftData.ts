@@ -21,7 +21,7 @@ import type {
 } from "@/types/draft.types";
 import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
-import { applyDraftEvent, presenceFromEvent } from "@/lib/draft/logic";
+import { applyDraftEvent, draftEventNeedsSnapshot, presenceFromEvent } from "@/lib/draft/logic";
 
 const MAX_PENDING_DRAFT_EVENTS = 100;
 const EMPTY_DRAFT_PRESENCE: DraftPresenceState = { users: {}, anonymous_viewer_count: 0 };
@@ -222,6 +222,9 @@ export function useDraftRealtime(
         queryKey,
         event,
       });
+      if (draftEventNeedsSnapshot(event)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
 
       // Two derived reads the patch cannot fold in: feasibility is keyed by
       // SESSION id, which does not change when a pick lands, and pick options

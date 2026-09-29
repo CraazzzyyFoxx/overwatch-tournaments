@@ -591,6 +591,11 @@ class DraftLifecycleService:
             pick.is_autopick = False
             pick.is_admin_override = False
             pick.target_role = None
+            pick.target_rank_value = None
+            # The grace period is per pick: a pick autopicked out of overtime must
+            # come back on its MAIN clock, not already "in overtime", or the next
+            # expiry autopicks at once and the board shows a +m:ss clock.
+            pick.overtime_started_at = None
             # Increment version to prevent race conditions from pending requests
             pick.version += 1
 
