@@ -58,7 +58,8 @@ const CONFIG: DraftSetupConfig = {
   format: "snake",
   autopickStrategy: "best_fit",
   allowAdminOverride: true,
-  roundRules: ["linear", "linear", "linear", "linear"]
+  roundRules: ["linear", "linear", "linear", "linear"],
+  avgTieSeedReverse: false
 };
 
 function registration(id: number, roles: string[], rank: number | null): AdminRegistration {
@@ -156,6 +157,21 @@ describe("draft config step", () => {
     expect(custom.indexOf("roundRules")).toBeLessThan(custom.indexOf("<details"));
     // Snake never shows them at all.
     expect(html).not.toContain("roundRules");
+  });
+
+  test("offers the reversed-seed tie-break only when a round ranks by team average", () => {
+    const render = (roundRules: string[]) =>
+      renderToStaticMarkup(
+        <DraftConfigStep
+          value={{ ...CONFIG, format: "custom", roundRules }}
+          onChange={() => {}}
+          rosterShape={SHAPE}
+          tournamentId={5}
+        />
+      );
+
+    expect(render(["linear", "team_avg_desc", "linear", "linear"])).toContain('id="draft-avg-tie-seed"');
+    expect(render(["linear", "strongest_first", "reverse", "linear"])).not.toContain("draft-avg-tie-seed");
   });
 });
 

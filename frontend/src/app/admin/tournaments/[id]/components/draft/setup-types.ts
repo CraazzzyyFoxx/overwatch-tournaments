@@ -16,6 +16,11 @@ export interface DraftSetupConfig {
   autopickStrategy: DraftAutopickStrategy;
   allowAdminOverride: boolean;
   roundRules: string[];
+  /**
+   * `team_avg_*` rounds: teams tied on average AND captain rank pick in seed
+   * order N → 1 instead of 1 → N. Stored as `settings_json.avg_tie_seed_reverse`.
+   */
+  avgTieSeedReverse: boolean;
 }
 
 export interface DraftCaptainSetup {

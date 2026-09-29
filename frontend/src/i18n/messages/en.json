@@ -4703,6 +4703,8 @@
     "roundRules": "Rules by round",
     "roundNumber": "Round {round}",
     "roundRulesHint": "Each round follows its own rule, in order from round 1 to round {rounds}.",
+    "avgTieSeedReverse": "Equal average and captain rank: reverse seed (N → 1)",
+    "avgTieSeedReverseHint": "In team-average rounds, teams tied on average are split by captain rank, then by seed — the order from the Order step. Off: seed 1 picks first. On: the last seed picks first. With Weakest first, seed 1 is the weakest captain.",
     "rules": {
       "linear": "Linear (1 → N)",
       "reverse": "Reverse (N → 1)",

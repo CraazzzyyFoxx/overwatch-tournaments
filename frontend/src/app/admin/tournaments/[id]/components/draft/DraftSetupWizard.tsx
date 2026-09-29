@@ -68,7 +68,8 @@ function configFromSession(session: DraftSession | null, shape: RosterShape): Dr
     allowAdminOverride: session?.allow_admin_override ?? true,
     roundRules: Array.isArray(roundRules)
       ? roundRules.map(String)
-      : Array.from({ length: shape.draft_rounds }, () => "linear")
+      : Array.from({ length: shape.draft_rounds }, () => "linear"),
+    avgTieSeedReverse: session?.settings_json?.avg_tie_seed_reverse === true
   };
 }
 
@@ -215,7 +216,9 @@ export function DraftSetupWizard({
         allow_admin_override: config.allowAdminOverride,
         settings: {
           team_count: config.teamCount,
-          ...(config.format === "custom" ? { round_rules: config.roundRules } : {})
+          ...(config.format === "custom"
+            ? { round_rules: config.roundRules, avg_tie_seed_reverse: config.avgTieSeedReverse }
+            : {})
         }
       })
   });

@@ -335,6 +335,20 @@ export function DraftConfigStep({
                 );
               })}
             </div>
+            {value.roundRules.some((rule) => rule.startsWith("team_avg_")) && (
+              <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-3">
+                <div>
+                  <Label htmlFor="draft-avg-tie-seed">{t("avgTieSeedReverse")}</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("avgTieSeedReverseHint")}</p>
+                </div>
+                <Switch
+                  id="draft-avg-tie-seed"
+                  disabled={locked}
+                  checked={value.avgTieSeedReverse}
+                  onCheckedChange={(avgTieSeedReverse) => patch({ avgTieSeedReverse })}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -177,6 +177,7 @@ def average_seat_order(
     averages: Mapping[int, float],
     captain_ranks: Mapping[int, int],
     descending: bool,
+    seed_reversed: bool = False,
 ) -> list[_SeatT]:
     """Seat order for a ``team_avg_*`` round: live average, captain, then seed.
 
@@ -191,8 +192,12 @@ def average_seat_order(
     Without it a tie fell through to the seed order, which is whatever order the
     organizer happened to tick the captains in (the pool lists them
     alphabetically), so an equal-average round was decided by battle tag.
-    An unranked captain sorts as weakest, as in ``weakest_first``. Only teams
-    that tie on BOTH keep the seed order, so the result stays deterministic.
+    An unranked captain sorts as weakest, as in ``weakest_first``. Teams that
+    tie on BOTH fall to the seed: 1 -> N by default, N -> 1 with
+    ``seed_reversed`` (the session's ``avg_tie_seed_reverse`` setting). The
+    organizer decides what the seed means -- under a rank-based captain order
+    it is weakest-to-strongest or the other way round -- so the flip is theirs,
+    not the rule's. The result stays deterministic either way.
 
     A team with no average yet sorts as 0.0. In practice every team has one --
     captains are seeded as PICKED players on their own roster -- so this only
@@ -204,7 +209,7 @@ def average_seat_order(
         key=lambda t: (
             direction * averages.get(t.id, 0.0),
             direction * captain_ranks.get(t.id, -1),
-            t.draft_position,
+            -t.draft_position if seed_reversed else t.draft_position,
         ),
     )
 
