@@ -182,3 +182,37 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
         msg.reject.assert_awaited_once()
         msg.ack.assert_not_awaited()
         msg.nack.assert_not_awaited()
+
+    async def test_a_repeat_of_the_same_dm_is_dropped(self) -> None:
+        """A command published twice (or two rows for one event) must reach the user once.
+
+        Each validation mints a fresh ``event_id``, so the two copies differ in
+        everything but where they go and what they say -- which is the point.
+        """
+        user = MagicMock(send=AsyncMock())
+        bot = _bot(user=user)
+        handle = _command_handler(bot)
+        first, repeat, other_user = _message(), _message(), _message()
+
+        await handle(_body(), first)
+        await handle(_body(), repeat)
+        await handle(_body(discord_user_id=4343), other_user)
+
+        self.assertEqual(user.send.await_count, 2)
+        self.assertEqual([call.args for call in bot.get_user.call_args_list], [(4242,), (4343,)])
+        for msg in (first, repeat, other_user):
+            msg.ack.assert_awaited_once()
+
+    async def test_a_requeued_failure_is_not_a_repeat(self) -> None:
+        """A send that crashed is nacked for a retry, and that retry has to go out."""
+        user = MagicMock(send=AsyncMock(side_effect=[RuntimeError("gateway hiccup"), None]))
+        handle = _command_handler(_bot(user=user))
+        failed, retry = _message(), _message()
+
+        with self.assertRaises(RuntimeError):
+            await handle(_body(), failed)
+        await handle(_body(), retry)
+
+        failed.nack.assert_awaited_once()
+        self.assertEqual(user.send.await_count, 2)
+        retry.ack.assert_awaited_once()

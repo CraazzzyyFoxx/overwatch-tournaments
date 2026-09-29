@@ -265,6 +265,11 @@ port, so that check proves only that the interpreter runs, not that the gateway 
   exception is `nack`ed and requeued. A `send_dm` the recipient cannot receive (DMs closed, no mutual
   guild, unknown user) is `ack`ed instead — the notification already exists in the in-app inbox, and
   no retry changes the outcome. Retries are RabbitMQ's, there is no application-level backoff.
+- **Debounce on `post_message` / `send_dm`.** A command with the same target and the same body
+  (content, embed, image, card) as one sent in the last 60 s is `ack`ed and dropped, whatever its
+  `event_id` — a redelivered command, an outbox row published twice or two notification rows for
+  one event all look like that. A send that crashed and was `nack`ed does not count, so its retry
+  goes out. The window is process memory, which the single-replica rule above makes enough.
 - **Upload timeout.** A parse result that does not arrive within 120 s leaves the message marked as
   timed out even if the parse later succeeds. The upload itself is not retried.
 - **Idempotency is by `(tournament_id, filename)`**, checked against `log_processing.record` before
