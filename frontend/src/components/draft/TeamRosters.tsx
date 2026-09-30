@@ -453,9 +453,9 @@ function RosterCell({
         <DivisionIcon
           division={division}
           tournamentGrid={divisionGrid}
-          width={16}
-          height={16}
-          className="h-4 w-4 flex-none object-contain"
+          width={18}
+          height={18}
+          className="h-[18px] w-[18px] flex-none object-contain"
         />
       )}
       <span className="min-w-0 truncate">{splitBattleTag(tag).name}</span>
