@@ -48,6 +48,15 @@ export IMAGE_TAG="${TAG}"
 # pulled, and a GHCR failure still stops the deploy at `up`.
 docker compose -f "${COMPOSE_FILE}" pull --quiet --policy missing
 
+# `make prod-up` recreates nginx whenever nginx.conf changed (the Makefile stamps
+# its hash on the service), and a broken file would then take the whole site
+# down. Test the checked-out file in a throwaway container of the same image
+# first; `set -e` stops the deploy here, before migrations, with the old stack
+# still serving.
+NGINX_IMAGE="$(docker compose -f "${COMPOSE_FILE}" config --format json \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["nginx"]["image"])')"
+docker run --rm -v "${REPO_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" "${NGINX_IMAGE}" nginx -t </dev/null
+
 # Migrations run from the NEW image while the OLD containers still serve. That
 # order is what keeps a deploy from 500ing in between: every migration this
 # project ships is additive, so old code tolerates the new schema, while new
