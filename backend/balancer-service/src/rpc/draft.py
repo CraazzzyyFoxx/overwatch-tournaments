@@ -466,12 +466,17 @@ def register(broker: Any, logger: Any) -> None:
             draft = await _load_session(session, c.require_id(data))
             team = await _load_team(session, draft, c.path_int(data, "team_id"))
             _require_team_actor(data, user, draft, team, "read")
-            scores = await feasibility_service.team_fit_scores(session, draft, team_id=team.id)
-            return schemas.DraftTeamFitResponse(
-                session_id=draft.id,
-                team_id=team.id,
-                scores=[schemas.DraftTeamFitScore.model_validate(score) for score in scores],
-            )
+
+            async def compute() -> schemas.DraftTeamFitResponse:
+                scores = await feasibility_service.team_fit_scores(session, draft, team_id=team.id)
+                return schemas.DraftTeamFitResponse(
+                    session_id=draft.id,
+                    team_id=team.id,
+                    scores=[schemas.DraftTeamFitScore.model_validate(score) for score in scores],
+                )
+
+            # Refetched by every viewer on every draft event: one run per board state.
+            return await board_service.shared_read(session, draft, ("fit", team.id, draft.autopick_strategy), compute)
 
         return await c.envelope(logger, "draft.team_fit", op, session_factory=_SF)
 
@@ -482,7 +487,11 @@ def register(broker: Any, logger: Any) -> None:
             draft = await _load_session(session, c.require_id(data))
             team = await _load_team(session, draft, c.path_int(data, "team_id"))
             _require_team_actor(data, user, draft, team, "create")
-            return await queue_service.read(session, draft, team)
+            # The private queue is in the key: queue_set emits no event.
+            queue = ",".join(str(player_id) for player_id in team.pick_queue or [])
+            return await board_service.shared_read(
+                session, draft, ("queue", team.id, queue), lambda: queue_service.read(session, draft, team)
+            )
 
         return await c.envelope(logger, "draft.queue_get", op, session_factory=_SF)
 
