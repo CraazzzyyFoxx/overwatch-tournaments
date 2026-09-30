@@ -796,7 +796,9 @@ services:
       resources:
         limits:
           cpus: '2.00'
-          memory: 256M
+          # 256M was hit during the 2026-09-30 homepage flood: in-flight
+          # proxied requests to a saturated frontend pinned it at the limit.
+          memory: 768M
         reservations:
           cpus: '0.50'
           memory: 128M
@@ -850,7 +852,8 @@ services:
           # fails before the thing it defends; limit_req/limit_conn shared zones
           # are also preallocated, so 64M cannot hold them plus body buffers.
           cpus: '1.00'
-          memory: 256M
+          # 256M OOM-killed workers in the 2026-09-30 homepage flood.
+          memory: 768M
         reservations:
           cpus: '0.25'
           memory: 64M
