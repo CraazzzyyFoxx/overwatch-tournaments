@@ -271,7 +271,11 @@ export function DraftWorkspace({
       lastSubjectRef.current == null
         ? null
         : document.querySelector<HTMLElement>(`[data-player-name="${lastSubjectRef.current}"]`);
-    (saved?.isConnected ? saved : fallback)?.focus();
+    // No scroll: the card only floated over the list, so the row is where the
+    // user left it. Scrolling here would read the page's scroll padding while it
+    // still reserves the card's height (the layer observer shrinks it a frame
+    // later) and jump a row that sat under the card to the top of the list.
+    (saved?.isConnected ? saved : fallback)?.focus({ preventScroll: true });
   }, [subjectId]);
 
   useEffect(() => {
