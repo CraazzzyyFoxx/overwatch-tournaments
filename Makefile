@@ -10,6 +10,12 @@
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
+# nginx.conf is bind-mounted as a single file, so a new checkout swaps the inode
+# under the running container and nothing restarts it: the old config keeps
+# serving. Its hash is stamped on the nginx service as a label
+# (docker-compose.production.yml), so `up` recreates nginx exactly when the file
+# changed. remote-deploy.sh runs `nginx -t` on the new file before that.
+export NGINX_CONF_SHA := $(shell sha256sum nginx/nginx.conf 2>/dev/null | cut -c1-12)
 # Monitoring runs on home, not on the production host (monitoring/README.md).
 MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 # Backups: rclone → Timeweb S3. Moscow cron 04:30 UTC, see docs/backup-rustfs.md.

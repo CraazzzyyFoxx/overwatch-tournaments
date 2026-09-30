@@ -880,6 +880,10 @@ services:
       # nginx` goes quiet — Grafana is the consumer. Rotation is host-side and
       # must use copytruncate or follow up with `nginx -s reopen`.
       - ./logs/nginx:/var/log/nginx
+    # NGINX_CONF_SHA comes from the Makefile: a changed nginx.conf changes this
+    # label, which is what makes `make prod-up` recreate nginx onto the new file.
+    labels:
+      owt.nginx-conf-sha: "${NGINX_CONF_SHA:-}"
     depends_on:
       gateway:
         condition: service_started

@@ -11,7 +11,9 @@
 # for analytics) and it depends on uv.lock + pyproject files alone, so a release
 # that touches shared/ or service code re-pulls a few MiB of source, not the
 # venv. Nothing that changes per release may be copied before it.
-FROM python:3.14-slim AS base
+# Digest-pinned: a re-published 3.14-slim rebuilds every layer above it and the
+# host re-pulls every venv. Dependabot (docker, /backend) bumps it as a PR.
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS base
 
 ENV PYTHONUNBUFFERED=1
 

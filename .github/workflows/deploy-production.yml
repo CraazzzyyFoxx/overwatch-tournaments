@@ -152,7 +152,12 @@ jobs:
         with:
           ref: ${{ needs.meta.outputs.tag }}
 
+      # Pinned: the floating buildx-stable-1 moved v0.32.2 -> v0.33.1 between
+      # v1.27.0 and v1.28.0, no cache key matched and every layer was rebuilt,
+      # so the host re-pulled ~1.1 GiB instead of ~50 MiB. Bump on purpose.
       - uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=moby/buildkit:v0.33.1
 
       - name: Log in to GHCR
         uses: docker/login-action@v4

@@ -14,3 +14,11 @@ updates:
       interval: daily
     commit-message:
       prefix: ⬆
+  # backend base image digest: each bump is a full venv re-pull on the host,
+  # so weekly, not daily.
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ⬆
