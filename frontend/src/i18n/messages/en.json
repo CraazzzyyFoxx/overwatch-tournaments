@@ -5142,7 +5142,8 @@
         "direction": {
           "forward": "straight order",
           "reverse": "reverse order",
-          "custom": "custom order"
+          "custom": "custom order",
+          "pending": "order by team average, set when the round starts"
         },
         "allRounds": "Pick order",
         "track": "Round {round}: {done} of {total, plural, one {# pick} other {# picks}} made",
@@ -5383,13 +5384,14 @@
         "note": {
           "linear": "Straight order: every round runs from the 1st seat to the last.",
           "snake": "Snake: rounds alternate direction. Whoever picked last in a round picks first in the next one.",
-          "custom": "Custom order: the organizer set the sequence of each round. The arrow shows a round's direction; the shuffle icon marks a round in its own order."
+          "custom": "Custom order: the organizer set the sequence of each round. The arrow shows a round's direction; the shuffle icon marks a round in its own order; the hourglass marks a round seated by team average once it starts."
         },
-        "roundTitle": "Round {n} · {direction, select, forward {straight order} reverse {reverse order} other {custom order}}",
+        "roundTitle": "Round {n} · {direction, select, forward {straight order} reverse {reverse order} pending {order by team average, set when the round starts} other {custom order}}",
         "roundShort": "R{n}",
         "now": "now",
         "skipped": "skipped",
         "in": "in {n}",
+        "pendingCell": "by average",
         "cellTitle": "Round {round}, pick {n}"
       }
     },

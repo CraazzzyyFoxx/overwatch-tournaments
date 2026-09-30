@@ -192,7 +192,11 @@ def round_seat_order(
     if rule == "weakest_first":
         return sorted(seats, key=lambda t: (captain_ranks.get(t.id, -1), t.draft_position))
     if rule == "strongest_first":
-        return sorted(seats, key=lambda t: (captain_ranks.get(t.id, -1), -t.draft_position), reverse=True)
+        # The exact mirror of weakest_first, ties included: among equal captains
+        # the one seated last in a weakest_first round picks first here, so a
+        # weak/strong alternation evens out a tie instead of always favouring
+        # the lower seed.
+        return sorted(seats, key=lambda t: (captain_ranks.get(t.id, -1), t.draft_position), reverse=True)
     # "linear", a dynamic rule, an unknown value, or a hole left by an older
     # client: all keep the seed order here.
     return list(seats)

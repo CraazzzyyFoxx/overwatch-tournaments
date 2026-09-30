@@ -48,7 +48,8 @@ export type OrderKind = "linear" | "snake" | "custom";
 function orderKind(directions: readonly RoundDirection[]): OrderKind {
   if (directions.every((direction) => direction === "forward")) return "linear";
   const alternates = directions.every(
-    (direction, index) => direction !== "custom" && (index === 0 || direction !== directions[index - 1])
+    (direction, index) =>
+      (direction === "forward" || direction === "reverse") && (index === 0 || direction !== directions[index - 1])
   );
   return alternates ? "snake" : "custom";
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Shuffle, Star } from "lucide-react";
+import { ArrowRight, Hourglass, Shuffle, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useRef } from "react";
 
@@ -69,7 +69,9 @@ export function DraftOrderGrid({
               style={{ color: round === liveRound ? clockColor : undefined }}
             >
               {t("teams.order.roundShort", { n: round })}
-              {direction === "custom" ? (
+              {direction === "pending" ? (
+                <Hourglass aria-hidden className="h-[13px] w-[13px] flex-none" />
+              ) : direction === "custom" ? (
                 <Shuffle aria-hidden className="h-[13px] w-[13px] flex-none" />
               ) : (
                 <ArrowRight
@@ -118,10 +120,15 @@ export function DraftOrderGrid({
               </span>
             </span>
             {cells.map((pick, index) => {
-              if (pick == null) {
+              if (pick == null || directions[index] === "pending") {
+                // A pending round's rows carry the seed order as a placeholder: no team owns a pick in it yet.
                 return (
-                  <span key={`none-${rounds[index]}`} className="px-[7px] text-label text-[color:var(--aqt-fg-faint)]">
-                    —
+                  <span
+                    key={`none-${rounds[index]}`}
+                    title={pick ? t("teams.order.roundTitle", { n: rounds[index], direction: "pending" }) : undefined}
+                    className="px-[7px] text-label text-[color:var(--aqt-fg-faint)]"
+                  >
+                    {pick ? t("teams.order.pendingCell") : "—"}
                   </span>
                 );
               }

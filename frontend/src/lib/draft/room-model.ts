@@ -326,19 +326,26 @@ export function currentRound(board: DraftBoard): number {
   return board.current_pick?.round_no ?? lastResolvedPick(board)?.round_no ?? 1;
 }
 
-export type RoundDirection = "forward" | "reverse" | "custom";
+export type RoundDirection = "forward" | "reverse" | "custom" | "pending";
+
+/** Mirror of the server's `DYNAMIC_ROUND_RULES`: rounds seated by live team average. */
+const DYNAMIC_ROUND_RULES: Record<string, true> = { team_avg_asc: true, team_avg_desc: true };
 
 /**
  * Which way a round runs, read off its actual pick rows against the seat
  * order: never a snake formula, because `linear` and `custom` formats (and
- * dynamic re-seats) order rounds any way they like.
+ * dynamic re-seats) order rounds any way they like. `pending`: a `team_avg_*`
+ * round that has not started — the server seats it by team average when its
+ * first pick goes on the clock, so its rows still hold the seed order as a
+ * placeholder.
  */
 export function roundDirection(board: DraftBoard, round: number): RoundDirection {
+  const picks = roundPicks(board, round);
+  const dynamic =
+    board.session.format === "custom" && DYNAMIC_ROUND_RULES[board.session.settings_json.round_rules?.[round - 1]];
+  if (dynamic && picks.every((pick) => pick.status === "upcoming")) return "pending";
   const position = new Map(board.teams.map((team) => [team.id, team.draft_position]));
-  const seats = board.picks
-    .filter((pick) => pick.round_no === round)
-    .sort((a, b) => a.pick_in_round - b.pick_in_round)
-    .map((pick) => position.get(pick.draft_team_id) ?? 0);
+  const seats = picks.map((pick) => position.get(pick.draft_team_id) ?? 0);
   if (seats.every((seat, index) => index === 0 || seat > seats[index - 1])) return "forward";
   if (seats.every((seat, index) => index === 0 || seat < seats[index - 1])) return "reverse";
   return "custom";

@@ -68,6 +68,13 @@ def test_strongest_first_ranks_captains_descending() -> None:
     assert _order(round_rules=["strongest_first"]) == [20, 70, 50]
 
 
+def test_strongest_first_mirrors_weakest_first_on_a_captain_tie() -> None:
+    tied = {70: 3000, 20: 3000, 50: 4000}
+    weakest = _order(round_rules=["weakest_first"], captain_ranks=tied)
+    assert weakest == [70, 20, 50]
+    assert _order(round_rules=["strongest_first"], captain_ranks=tied) == weakest[::-1]
+
+
 def test_an_unranked_captain_counts_as_weakest() -> None:
     assert _order(round_rules=["weakest_first"], captain_ranks={70: 3000, 20: 4000}) == [50, 70, 20]
 

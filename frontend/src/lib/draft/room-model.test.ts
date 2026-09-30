@@ -163,6 +163,21 @@ describe("roundDirection", () => {
     });
     expect([1, 2, 3].map((round) => roundDirection(b, round))).toEqual(["forward", "reverse", "custom"]);
   });
+
+  it("leaves a team-average round pending until its first pick is on the clock", () => {
+    const b = board({
+      shape: shape({ tank: 1 }),
+      picks: [
+        pick(1, { round_no: 1, pick_in_round: 1, draft_team_id: 1, status: "completed" }),
+        pick(2, { round_no: 1, pick_in_round: 2, draft_team_id: 2, status: "on_clock" }),
+        pick(3, { round_no: 2, pick_in_round: 1, draft_team_id: 1 }),
+        pick(4, { round_no: 2, pick_in_round: 2, draft_team_id: 2 })
+      ]
+    });
+    b.session = { ...b.session, format: "custom", settings_json: { round_rules: ["team_avg_asc", "team_avg_asc"] } };
+    // Round 1 started, so its rows are the real seating; round 2 still holds the seed placeholder.
+    expect([1, 2].map((round) => roundDirection(b, round))).toEqual(["forward", "pending"]);
+  });
 });
 
 describe("fitByPlayer", () => {
