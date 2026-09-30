@@ -28,11 +28,13 @@ from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import FLEX_SLOT_CODE, RosterShape
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from src.domain.draft.entities import (
+    DEFAULT_ROLE_IMPACT,
     DraftFeasibilityReport,
     DraftFeasibilityState,
     DraftResult,
     DraftSnapshot,
     EligiblePlayer,
+    FitConfig,
     PoolSeat,
     RoleEditPreview,
     SlotDecision,
@@ -56,6 +58,7 @@ __all__ = (
     "role_openings",
     "role_shortage_error",
     "round_seat_order",
+    "team_fit_config",
     "team_slot_counts",
     "unranked_pool_error",
     "unsafe_pick_error",
@@ -359,6 +362,32 @@ def role_openings(shape: RosterShape, counts: Mapping[str, int]) -> dict[HeroCla
         role: max(0, targets.get(role.slot_code, 0) - counts.get(role.slot_code, 0)) + free_flex
         for role in HERO_TYPE_CLASSES
     }
+
+
+#: Share of a role's impact a team gives up once every seat that role can take
+#: is filled; a half-filled role gives up half of it (x0.75).
+FILLED_ROLE_DISCOUNT: Final = 0.5
+
+
+def team_fit_config(shape: RosterShape, counts: Mapping[str, int]) -> FitConfig:
+    """Fit weights for ONE team: a role's impact shrinks as the team fills it.
+
+    A support captain on a 1-2-2 roster still has a support seat open, but the
+    team needs its tank and damage more, so support scores at x0.75 there and a
+    higher-ranked support can lose to a damage player. A role's seats are its
+    own slots plus the flex slots, the same capacity ``role_openings`` counts.
+    THE config behind autopick, /suggestions and /fit, so the three agree on
+    what a team needs.
+    """
+    openings = role_openings(shape, counts)
+    targets = shape.slots
+    flex = targets.get(FLEX_SLOT_CODE, 0)
+    impact: dict[HeroClass, float] = {}
+    for role, weight in DEFAULT_ROLE_IMPACT.items():
+        seats = targets.get(role.slot_code, 0) + flex
+        filled = 1.0 - openings[role] / seats if seats else 1.0
+        impact[role] = weight * (1.0 - FILLED_ROLE_DISCOUNT * filled)
+    return FitConfig(role_impact=impact)
 
 
 def validate_current_pick(draft_session: DraftSession, pick: DraftPick) -> None:

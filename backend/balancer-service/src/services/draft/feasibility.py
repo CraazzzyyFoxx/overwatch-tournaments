@@ -27,7 +27,6 @@ from src.domain.draft.entities import (
     DraftFeasibilityState,
     DraftPickOption,
     DraftSnapshot,
-    FitConfig,
     FitResult,
     TeamFitScore,
 )
@@ -203,7 +202,7 @@ class DraftFeasibilityService:
         ranked = sug.rank_suggestions(
             fit_players,
             capacity,
-            FitConfig(),
+            rules.team_fit_config(shape, counts),
             strategy=DraftAutopickStrategy(draft_session.autopick_strategy),
             limit=5,
             allowed_options=safe_options,
@@ -235,7 +234,12 @@ class DraftFeasibilityService:
             return []  # this team's roster is full
         available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
         players = sug.fit_players(available, snapshot.rosters)
-        results = sug.candidates(players, capacity, FitConfig(), DraftAutopickStrategy(draft_session.autopick_strategy))
+        results = sug.candidates(
+            players,
+            capacity,
+            rules.team_fit_config(shape, counts),
+            DraftAutopickStrategy(draft_session.autopick_strategy),
+        )
         by_id = {player.player_id: player for player in players}
         ordered = sorted(results, key=lambda result: sug.sort_key(result, by_id))
         if not shape.has_role_slots:
