@@ -733,7 +733,7 @@ services:
   # consumer below) -> RPC -> identity-svc, and the gateway serves /api/auth/*,
   # /api/v1 (typed RPC) + reverse-proxies the rest (parser/analytics/balancer/
   # frontend). nginx is the external edge (Kong removed).
-  #   traefik (TLS) -> nginx -> gateway -> RPC -> identity
+  #   haproxy (TLS, host) -> nginx -> gateway -> RPC -> identity
   # ==========================================================================
 
   identity-svc:
@@ -857,19 +857,16 @@ services:
         reservations:
           cpus: '0.25'
           memory: 64M
-    # Plain-HTTP app entry (sole external edge, replaces Kong): TLS is terminated
-    # by Traefik in front of nginx, so no certs/443 here. nginx publishes the
-    # host port Traefik already targets (APP_PORT, was Kong's), so no Traefik
-    # config change is needed for the cutover.
+    # Plain-HTTP app entry: TLS is terminated by HAProxy on the host in front of
+    # nginx (ops/edge/haproxy.cfg), so no certs/443 here.
     # APP_BIND defaults to loopback: a bare "${APP_PORT}:80" binds 0.0.0.0, which
-    # exposes nginx to the internet directly, bypassing Traefik and every limit
-    # configured there. Docker's published ports are NOT covered by ufw's filter
-    # chains, so this must not rely on the host firewall alone. Production runs
-    # Traefik as a host process pointed at http://127.0.0.1:${APP_PORT}, so the
-    # default is exactly right; override APP_BIND (e.g. to a bridge IP) only when
-    # the proxy in front lives elsewhere. Client-IP spoofing is not possible on a
-    # direct path — a public peer is not in set_real_ip_from — but the Traefik
-    # rate limits are bypassable.
+    # exposes nginx to the internet directly, bypassing HAProxy and its per-IP
+    # bans. Docker's published ports are NOT covered by ufw's filter chains, so
+    # this must not rely on the host firewall alone. HAProxy runs as a host
+    # process pointed at http://127.0.0.1:${APP_PORT}, so the default is exactly
+    # right; override APP_BIND (e.g. to a bridge IP) only when the proxy in front
+    # lives elsewhere. Client-IP spoofing is not possible on a direct path — a
+    # public peer is not in set_real_ip_from — but the edge bans are bypassable.
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT}:80"
     volumes:
