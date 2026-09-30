@@ -566,9 +566,17 @@ def test_week_peak_is_the_highest_rank_seen_inside_the_window() -> None:
     assert rank_sources._compute_ow_week_ranks(snaps, _NOW, _NOW) == (3257, 3400)
 
 
-def test_week_unranked_row_ends_the_ranked_stretch() -> None:
-    snaps = [_snap(3200, _day(1, 5)), _snap(None, _day(9))]
-    assert rank_sources._compute_ow_week_ranks(snaps, _NOW, _NOW) == (3200, 3200)
+def test_week_unranked_gap_is_not_counted_as_the_rank_before_it() -> None:
+    # 3200 until 6/7, unranked 6/7-6/9, 3000 since: window [6/5, 6/12].
+    snaps = [_snap(3200, _day(1)), _snap(None, _day(7)), _snap(3000, _day(9))]
+    # 3200 for 2 days, 3000 for 3 -> mean 3080, max 3200 -> 3140
+    assert rank_sources._compute_ow_week_ranks(snaps, _NOW, _NOW) == (3140, 3200)
+
+
+def test_week_role_unranked_on_its_latest_poll_has_no_rank() -> None:
+    # Last season's 4200, then the reset: not placed yet, so no rank -- not 4200.
+    snaps = [_snap(4200, _day(1, 5)), _snap(None, _day(9))]
+    assert rank_sources._compute_ow_week_ranks(snaps, _NOW, _NOW) == (None, None)
 
 
 def test_week_ends_at_the_last_poll_when_the_account_went_stale() -> None:
@@ -584,6 +592,17 @@ def test_week_platforms_hold_their_ranks_side_by_side() -> None:
     assert rank_sources._compute_ow_week_ranks(snaps, _NOW, _NOW) == (3450, 3600)
 
 
+def test_week_platform_unranked_now_drops_out() -> None:
+    # Console held 3600 into this week and went unranked on 6/10: it is not ranked now, so
+    # its 3600 does not lift the week (it would read (3425, 3600) if it counted).
+    snaps = [
+        _snap(3000, _day(1, 5)),
+        _snap(3600, _day(2, 5), platform="console"),
+        _snap(None, _day(10), platform="console"),
+    ]
+    assert rank_sources._compute_ow_week_ranks(snaps, _NOW, _NOW) == (3000, 3000)
+
+
 def test_week_rank_observed_on_this_poll_counts() -> None:
     assert rank_sources._compute_ow_week_ranks([_snap(3333, _NOW)], _NOW, _NOW) == (3333, 3333)
 
@@ -594,14 +613,35 @@ def test_week_no_ranked_snapshots_returns_none() -> None:
 
 
 def test_group_ow_signals_computes_composite_peak_and_latest_ranked() -> None:
-    snaps = [_snap(None, _day(11)), _snap(3400, _day(9)), _snap(3200, _day(1))]
+    snaps = [_snap(3400, _day(9)), _snap(3200, _day(1))]
     grouped = rank_sources._group_ow_rank_signals(snaps, _NOW, {7: _NOW})
     signals = grouped[7]["damage"]
 
-    # 3200 for 4 days (6/5-6/9), 3400 for 2 (6/9-6/11) -> mean 3266.67, max 3400 -> 3333.33
-    assert signals.composite_rank_value == 3333
+    # 3200 for 4 days (6/5-6/9), 3400 for 3 (6/9-6/12) -> mean 3285.71, max 3400 -> 3342.86
+    assert signals.composite_rank_value == 3343
     assert signals.peak_rank_value == 3400
     assert signals.latest_snapshot.rank_value == 3400
+
+
+def test_group_ow_signals_offer_nothing_for_a_role_unranked_now() -> None:
+    # Every OW number -- formula, peak and current -- goes, so the chain falls through.
+    snaps = [_snap(None, _day(11)), _snap(4200, _day(9))]
+    signals = rank_sources._group_ow_rank_signals(snaps, _NOW, {7: _NOW})[7]["damage"]
+
+    assert (signals.composite_rank_value, signals.peak_rank_value, signals.latest_snapshot) == (None, None, None)
+    data = rank_sources._build_priority_rank_data(_OW_FIRST, signals, 3100, None, _FakeGrid(), "current")
+    assert (data.rank_value, data.used_source) == (3100, "division_history")
+
+
+def test_group_ow_signals_current_is_the_higher_platform_ranked_now() -> None:
+    snaps = [
+        _snap(3000, _day(1)),
+        _snap(3600, _day(2), platform="console"),
+        _snap(3900, _day(3), platform="xbox"),
+        _snap(None, _day(4), platform="xbox"),
+    ]
+    signals = rank_sources._group_ow_rank_signals(snaps, _NOW, {7: _NOW})[7]["damage"]
+    assert (signals.latest_snapshot.rank_value, signals.latest_snapshot.platform) == (3600, "console")
 
 
 # ── Cross-grid rank normalization for history sources ────────────────────────────────────────

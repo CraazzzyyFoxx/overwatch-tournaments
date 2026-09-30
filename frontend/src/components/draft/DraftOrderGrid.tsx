@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowRight, Shuffle, Star } from "lucide-react";
+import { ArrowRight, Hourglass, Shuffle, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
+import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { currentRound, orderGrid, pickState, picksAway, type RoundDirection } from "@/lib/draft/room-model";
 import { cn } from "@/lib/utils";
 import type { DraftBoard } from "@/types/draft.types";
@@ -38,13 +39,16 @@ export function DraftOrderGrid({
   const liveRound = board.current_pick != null ? currentRound(board) : null;
   const onClockId = board.current_pick?.draft_team_id ?? null;
   const gridTemplateColumns = `24px minmax(0,1.1fr) repeat(${Math.max(rounds.length, 1)}, minmax(0,1fr))`;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useDraftLayerPad(scrollRef);
 
   return (
     <div
+      ref={scrollRef}
       tabIndex={0}
       role="region"
       aria-label={t("teams.tabs.order")}
-      className="min-h-0 flex-1 scroll-pb-[var(--draft-layer-h,0px)] overflow-auto border-t border-[color:var(--aqt-border)] pb-[var(--draft-layer-h,0px)] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+      className="min-h-0 flex-1 overflow-auto border-t border-[color:var(--aqt-border)] pb-[var(--draft-layer-h,0px)] outline-hidden [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
     >
       <p className="border-b border-[color:var(--aqt-border)] px-4 py-2.5 text-caption text-[color:var(--aqt-fg-muted)] [text-wrap:pretty]">
         {t(`teams.order.note.${kind}`)}
@@ -65,7 +69,9 @@ export function DraftOrderGrid({
               style={{ color: round === liveRound ? clockColor : undefined }}
             >
               {t("teams.order.roundShort", { n: round })}
-              {direction === "custom" ? (
+              {direction === "pending" ? (
+                <Hourglass aria-hidden className="h-[13px] w-[13px] flex-none" />
+              ) : direction === "custom" ? (
                 <Shuffle aria-hidden className="h-[13px] w-[13px] flex-none" />
               ) : (
                 <ArrowRight
@@ -114,10 +120,15 @@ export function DraftOrderGrid({
               </span>
             </span>
             {cells.map((pick, index) => {
-              if (pick == null) {
+              if (pick == null || directions[index] === "pending") {
+                // A pending round's rows carry the seed order as a placeholder: no team owns a pick in it yet.
                 return (
-                  <span key={`none-${rounds[index]}`} className="px-[7px] text-label text-[color:var(--aqt-fg-faint)]">
-                    —
+                  <span
+                    key={`none-${rounds[index]}`}
+                    title={pick ? t("teams.order.roundTitle", { n: rounds[index], direction: "pending" }) : undefined}
+                    className="px-[7px] text-label text-[color:var(--aqt-fg-faint)]"
+                  >
+                    {pick ? t("teams.order.pendingCell") : "—"}
                   </span>
                 );
               }

@@ -1569,7 +1569,7 @@ export interface paths {
         put?: never;
         /**
          * Create draft session
-         * @description Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event.
+         * @description Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the tournament's `draft_format_json`, not from the request.
          *
          *     RPC subject: `rpc.balancer.draft.session_create`
          */
@@ -14435,10 +14435,11 @@ export interface components {
         };
         /**
          * DraftSessionCreateRequest
-         * @description Everything about a new draft EXCEPT its size.
+         * @description Everything about a new draft EXCEPT its size and its format.
          *
-         *     ``rounds`` is derived from the tournament's roster shape server-side, so the
-         *     admin form has nothing to submit and nothing to keep in sync.
+         *     ``rounds`` is derived from the tournament's roster shape server-side and the
+         *     format is a tournament rule (``Tournament.draft_format_json``), so the admin
+         *     form has nothing to submit and nothing to keep in sync for either.
          */
         "balancer.DraftSessionCreateRequest": {
             /**
@@ -14448,8 +14449,6 @@ export interface components {
             allow_admin_override: boolean;
             /** @default best_fit */
             autopick_strategy: components["schemas"]["balancer.DraftAutopickStrategy"];
-            /** @default snake */
-            format: components["schemas"]["balancer.DraftFormat"];
             /**
              * Overtime Seconds
              * @default 0
@@ -18521,6 +18520,13 @@ export interface components {
             division_grid_version: components["schemas"]["tournament.DivisionGridVersionRead"] | null;
             /** Division Grid Version Id */
             division_grid_version_id: number | null;
+            /**
+             * Draft Format Json
+             * @default null
+             */
+            draft_format_json: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Draw Points
              * @default 0.5
@@ -25495,6 +25501,13 @@ export interface components {
              */
             division_grid_version_id: number | null;
             /**
+             * Draft Format Json
+             * @default null
+             */
+            draft_format_json: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Draw Points
              * @default 0.5
              */
@@ -25688,6 +25701,13 @@ export interface components {
              * @default null
              */
             division_grid_version_id: number | null;
+            /**
+             * Draft Format Json
+             * @default null
+             */
+            draft_format_json: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Draw Points
              * @default null

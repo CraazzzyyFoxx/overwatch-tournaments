@@ -6,18 +6,30 @@ import { useTranslations } from "next-intl";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { TONE_CLASS } from "@/components/kit/tone";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DraftFeasibility, DraftRole } from "@/types/draft.types";
 
-import type { DraftPoolReadiness } from "./setup-model";
+import { MAX_DRAFT_TEAM_COUNT, MIN_DRAFT_TEAM_COUNT, type DraftPoolReadiness } from "./setup-model";
 
 interface DraftPoolStepProps {
   readiness: DraftPoolReadiness;
   feasibility?: DraftFeasibility | null;
   loading: boolean;
   failed: boolean;
+  /** The team count in effect: the pinned one, else the pool's maximum. */
+  teamCount: number;
+  /** `maxDraftTeamCount` — how many teams this pool can fill at most. */
+  maxTeamCount: number;
+  /** False while the count follows the maximum. */
+  pinned: boolean;
+  /** A number pins the count; `null` follows the maximum again. */
+  onTeamCountChange: (next: number | null) => void;
+  locked?: boolean;
 }
 
 const ROLES: DraftRole[] = ["tank", "damage", "support"];
@@ -29,7 +41,17 @@ const BLOCKER_MESSAGE_KEYS = {
   "role_shortage:support": "blockers.role_shortage_support"
 } as const;
 
-export function DraftPoolStep({ readiness, feasibility, loading, failed }: Readonly<DraftPoolStepProps>) {
+export function DraftPoolStep({
+  readiness,
+  feasibility,
+  loading,
+  failed,
+  teamCount,
+  maxTeamCount,
+  pinned,
+  onTeamCountChange,
+  locked = false
+}: Readonly<DraftPoolStepProps>) {
   const t = useTranslations("draftAdmin");
   const percent = readiness.requiredPlayers
     ? Math.min(100, Math.round((readiness.actualPlayers / readiness.requiredPlayers) * 100))
@@ -49,7 +71,7 @@ export function DraftPoolStep({ readiness, feasibility, loading, failed }: Reado
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-border/70 bg-card p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-muted-foreground">{t("poolPlayers")}</p>
             <p className="mt-1 text-3xl font-semibold tabular-nums">
@@ -57,6 +79,34 @@ export function DraftPoolStep({ readiness, feasibility, loading, failed }: Reado
               <span className="ml-1 text-base font-normal text-muted-foreground">
                 / {readiness.requiredPlayers}
               </span>
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="draft-team-count">{t("teamCount")}</Label>
+            <div className="flex items-center gap-2">
+              <NumberInput
+                id="draft-team-count"
+                integer
+                min={MIN_DRAFT_TEAM_COUNT}
+                max={MAX_DRAFT_TEAM_COUNT}
+                disabled={locked}
+                value={teamCount}
+                onValueChange={(next) => onTeamCountChange(next ?? MIN_DRAFT_TEAM_COUNT)}
+                className="h-9 w-20 tabular-nums"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9"
+                disabled={locked || !pinned}
+                onClick={() => onTeamCountChange(null)}
+              >
+                {t("teamCountMax")}
+              </Button>
+            </div>
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {t("teamCountMaxHint", { count: maxTeamCount })}
             </p>
           </div>
           <StatusPill tone={readiness.blockers.length === 0 ? "success" : "danger"}>

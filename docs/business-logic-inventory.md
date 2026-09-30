@@ -230,7 +230,7 @@ Autopick only from feasibility-safe `(player, role)`:
 - No safe choice → pause `role_shortage`, never force-pick.
 - `team_avg_*` re-seats on round start and pauses with `order_recalculated`.
 
-Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is deliberately simpler than the balancer.
+Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is deliberately simpler than the balancer. Fit's role impact is per team: each role's weight is scaled by `1 − 0.5 × filled share` of that role's seats (own + flex), so a support-captain team prefers tank/damage over a somewhat higher-ranked support (`rules.team_fit_config`).
 
 ### Mix / custom game
 

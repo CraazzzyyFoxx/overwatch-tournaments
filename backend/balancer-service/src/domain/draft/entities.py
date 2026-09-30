@@ -208,6 +208,7 @@ class RoleEditResult:
 # --- autopick fit scoring (domain/draft/fit.py) ------------------------------
 
 # Role-impact weights — mirror native/tournament_balancer/src/lib.rs (tank 1.4 / damage 1.0 / support 1.1).
+# Base values only: ``rules.team_fit_config`` scales them down by how much of each role a team already filled.
 DEFAULT_ROLE_IMPACT: dict[HeroClass, float] = {
     HeroClass.tank: 1.4,
     HeroClass.damage: 1.0,

@@ -12,7 +12,9 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 
 
 from shared.core.enums import DraftAutopickStrategy, HeroClass  # noqa: E402
+from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from src.domain.draft import fit as sug  # noqa: E402
+from src.domain.draft import rules  # noqa: E402
 
 T, D, SUP = HeroClass.tank, HeroClass.damage, HeroClass.support
 
@@ -95,6 +97,22 @@ def test_role_need_fills_most_needed_role_first() -> None:
     res = sug.best_fit([tank, supp], {T: 1, SUP: 2}, DraftAutopickStrategy.ROLE_NEED, sug.FitConfig())
     assert res.role == SUP
     assert res.player_id == 2
+
+
+def test_best_fit_prefers_the_role_a_support_captain_team_still_lacks() -> None:
+    shape = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
+    supp = fp(1, 3600, {SUP}, prefs=(SUP,))  # 3600*1.1*0.75 = 2970 (support half-filled)
+    dps = fp(2, 3200, {D}, prefs=(D,))  # 3200*1.0*1.0 = 3200
+    counts = {"tank": 0, "damage": 0, "support": 1}  # only the support captain seated
+    captain_support = rules.team_fit_config(shape, counts)
+    capacity = rules.role_openings(shape, counts)
+
+    res = sug.best_fit([supp, dps], capacity, DraftAutopickStrategy.BEST_FIT, captain_support)
+    assert res is not None
+    assert (res.player_id, res.role) == (2, D)
+    # An empty team has no filled role to discount: the higher support still wins.
+    empty = rules.team_fit_config(shape, {"tank": 0, "damage": 0, "support": 0})
+    assert sug.best_fit([supp, dps], capacity, DraftAutopickStrategy.BEST_FIT, empty).player_id == 1
 
 
 # ---- legality / empties ----

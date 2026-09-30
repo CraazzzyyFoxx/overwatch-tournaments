@@ -2,6 +2,7 @@ import type { RosterShape } from "@/lib/roster/shape";
 import type {
   DraftCaptainOrder,
   DraftFormat,
+  DraftFormatSettings,
   DraftRole,
   DraftStatus
 } from "@/types/draft.types";
@@ -13,14 +14,7 @@ import type { DraftCaptainSetup } from "./setup-types";
 export const MIN_DRAFT_TEAM_COUNT = 2;
 export const MAX_DRAFT_TEAM_COUNT = 32;
 
-export const SETUP_STEPS = [
-  "config",
-  "pool",
-  "captains",
-  "order",
-  "review",
-  "ready"
-] as const;
+export const SETUP_STEPS = ["config", "pool", "captains", "order", "review", "ready"] as const;
 
 export type DraftSetupStep = (typeof SETUP_STEPS)[number];
 
@@ -69,7 +63,7 @@ export const DRAFT_ROUND_RULES = [
   "team_avg_desc"
 ] as const;
 
-type DraftRoundRule = (typeof DRAFT_ROUND_RULES)[number];
+export type DraftRoundRule = (typeof DRAFT_ROUND_RULES)[number];
 
 /** Coerce a stored value (older client, hand-edited settings) to a known rule. */
 function asRoundRule(value: string | null | undefined): DraftRoundRule {
@@ -134,6 +128,51 @@ export function derivePoolReadiness(
     excludedPlayers: candidates.length - included.length,
     roleCoverage,
     blockers
+  };
+}
+
+/**
+ * The most teams the pool can fill — what the pool step's team count follows
+ * until the organizer types one. Counts only players the seed accepts (ranked,
+ * in the pool) and the per-role targets `derivePoolReadiness` checks.
+ *
+ * ponytail: an upper bound — a multi-role player counts toward every role, so
+ * the exact slot matching may fill fewer teams. The Review step's server
+ * preview runs that matching; port it here if the bound proves misleading.
+ */
+export function maxDraftTeamCount(candidates: DraftPoolCandidate[], shape: RosterShape): number {
+  const ranked = candidates.filter((candidate) => !candidate.excluded && candidate.rank != null);
+  let max = shape.team_size > 0 ? Math.floor(ranked.length / shape.team_size) : 0;
+  for (const role of ["tank", "damage", "support"] as const) {
+    const slots = shape.slots[role] ?? 0;
+    if (slots === 0) continue;
+    const covered = ranked.filter((candidate) => candidate.roles.includes(role)).length;
+    max = Math.min(max, Math.floor(covered / slots));
+  }
+  return Math.min(max, MAX_DRAFT_TEAM_COUNT);
+}
+
+/** A pinned team count wins; `null` follows the pool's maximum, within bounds. */
+export function effectiveTeamCount(pinned: number | null, max: number): number {
+  return pinned ?? Math.min(MAX_DRAFT_TEAM_COUNT, Math.max(MIN_DRAFT_TEAM_COUNT, max));
+}
+
+/**
+ * The format a session is (or will be) drafted with, one rule per round — the
+ * client twin of the server's `session_format_from_tournament`: custom rules
+ * are padded with `linear` or truncated to the round count, other formats
+ * carry none.
+ */
+export function resolveDraftFormat(
+  value: DraftFormatSettings | null,
+  rounds: number
+): DraftFormatSettings {
+  const format = value?.format ?? "snake";
+  if (format !== "custom") return { format, round_rules: [], avg_tie_seed_reverse: false };
+  return {
+    format,
+    round_rules: Array.from({ length: rounds }, (_, i) => asRoundRule(value?.round_rules[i])),
+    avg_tie_seed_reverse: value?.avg_tie_seed_reverse === true
   };
 }
 
@@ -264,7 +303,13 @@ export function buildDraftSchedule(
     const reverse =
       format === "snake" ? index % 2 === 1 : format === "custom" && customRule === "reverse";
     const rule: DraftRoundRule =
-      format === "snake" ? (reverse ? "reverse" : "linear") : format === "custom" ? customRule : "linear";
+      format === "snake"
+        ? reverse
+          ? "reverse"
+          : "linear"
+        : format === "custom"
+          ? customRule
+          : "linear";
     return {
       round,
       teamIds: reverse ? [...teamIds].reverse() : [...teamIds],

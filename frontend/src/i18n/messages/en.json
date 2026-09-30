@@ -4666,8 +4666,8 @@
       "ready": "Ready to start"
     },
     "stepDescriptions": {
-      "config": "Set roster size, timing and the rules used throughout the draft.",
-      "pool": "Check capacity, role coverage and data quality before choosing teams.",
+      "config": "Set timing and how the draft handles autopicks. The format comes from the tournament settings.",
+      "pool": "Set the number of teams, then check capacity, role coverage and data quality.",
       "captains": "Choose the exact number of team captains and name their teams.",
       "order": "Calculate or arrange the captain order and preview every round.",
       "review": "Run server validation and inspect every blocker before seeding.",
@@ -4681,6 +4681,10 @@
     "openTournamentSettings": "Open tournament settings",
     "teamCount": "Number of teams",
     "teamCountHint": "The same number of captains must be selected later.",
+    "teamCountMax": "Max",
+    "teamCountMaxHint": "The pool supports up to {count, plural, one {# team} other {# teams}}.",
+    "changeFormatInSettings": "Change in tournament settings",
+    "formatLockedByDraft": "A draft of this tournament is in progress, so its format is locked. Finish or cancel the draft to change it.",
     "rounds": "Rounds",
     "roundsDerived": "{rounds, plural, one {# pick per team} other {# picks per team}} — the captain already occupies one roster slot.",
     "pickTime": "Time per pick",
@@ -4721,8 +4725,8 @@
     "roundRules": "Rules by round",
     "roundNumber": "Round {round}",
     "roundRulesHint": "Each round follows its own rule, in order from round 1 to round {rounds}.",
-    "avgTieSeedReverse": "Equal average and captain rank: reverse seed (N → 1)",
-    "avgTieSeedReverseHint": "In team-average rounds, teams tied on average are split by captain rank, then by seed — the order from the Order step. Off: seed 1 picks first. On: the last seed picks first. With Weakest first, seed 1 is the weakest captain.",
+    "avgTieSeedReverse": "Equal average: reverse the tie-break",
+    "avgTieSeedReverseHint": "In team-average rounds, teams tied on average are split by captain rank, then by seed — the order from the Order step. Off: under Lowest team average first the weaker captain picks first (under Highest, the stronger), then seed 1. On: the other way round — under Lowest team average first the stronger captain picks first, then the last seed.",
     "rules": {
       "linear": "Linear (1 → N)",
       "reverse": "Reverse (N → 1)",
@@ -5142,7 +5146,8 @@
         "direction": {
           "forward": "straight order",
           "reverse": "reverse order",
-          "custom": "custom order"
+          "custom": "custom order",
+          "pending": "order by team average, set when the round starts"
         },
         "allRounds": "Pick order",
         "track": "Round {round}: {done} of {total, plural, one {# pick} other {# picks}} made",
@@ -5259,8 +5264,7 @@
       },
       "col": {
         "player": "Player",
-        "fit": "Fit",
-        "demand": "Teams"
+        "fit": "Fit"
       },
       "row": {
         "select": "Select on the best open role",
@@ -5279,8 +5283,7 @@
         "second": "Second",
         "third": "Third",
         "primaryMark": "main",
-        "priority": "Priority {n} of {total}",
-        "noSubRole": "no sub-role"
+        "priority": "Priority {n} of {total}"
       },
       "right": {
         "captain": "captain",
@@ -5288,7 +5291,6 @@
       },
       "fitTitle": "Fit for {team} on {role}",
       "fitTitleAny": "Fit for {team}",
-      "demandTitle": "How many teams can still take this player on one of their roles",
       "queueAdd": "Add to my list",
       "queueRemove": "Remove from my list",
       "moveUp": "Move up the list",
@@ -5386,13 +5388,14 @@
         "note": {
           "linear": "Straight order: every round runs from the 1st seat to the last.",
           "snake": "Snake: rounds alternate direction. Whoever picked last in a round picks first in the next one.",
-          "custom": "Custom order: the organizer set the sequence of each round. The arrow shows a round's direction; the shuffle icon marks a round in its own order."
+          "custom": "Custom order: the organizer set the sequence of each round. The arrow shows a round's direction; the shuffle icon marks a round in its own order; the hourglass marks a round seated by team average once it starts."
         },
-        "roundTitle": "Round {n} · {direction, select, forward {straight order} reverse {reverse order} other {custom order}}",
+        "roundTitle": "Round {n} · {direction, select, forward {straight order} reverse {reverse order} pending {order by team average, set when the round starts} other {custom order}}",
         "roundShort": "R{n}",
         "now": "now",
         "skipped": "skipped",
         "in": "in {n}",
+        "pendingCell": "by average",
         "cellTitle": "Round {round}, pick {n}"
       }
     },

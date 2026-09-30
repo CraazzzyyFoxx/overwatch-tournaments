@@ -14,6 +14,7 @@ export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
   scoring: "Scoring",
   schedule: "Schedule",
   roster: "Roster shape",
+  draft: "Draft format",
   registration: "Registration",
   admission: "Admission",
   "pre-game": "Pre-game phase",
@@ -35,7 +36,7 @@ export const SETTINGS_SECTION_GROUPS: ReadonlyArray<{
   label?: string;
   sections: readonly SettingsSection[];
 }> = [
-  { sections: ["general", "rules", "scoring", "schedule", "roster"] },
+  { sections: ["general", "rules", "scoring", "schedule", "roster", "draft"] },
   // The registration form used to hold all of this INSIDE the questionnaire
   // builder, under six groups whose titles had to be written with "and".
   // Splitting it in two names the two questions being answered: how entries are

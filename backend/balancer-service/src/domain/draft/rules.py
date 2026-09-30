@@ -28,11 +28,13 @@ from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import FLEX_SLOT_CODE, RosterShape
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from src.domain.draft.entities import (
+    DEFAULT_ROLE_IMPACT,
     DraftFeasibilityReport,
     DraftFeasibilityState,
     DraftResult,
     DraftSnapshot,
     EligiblePlayer,
+    FitConfig,
     PoolSeat,
     RoleEditPreview,
     SlotDecision,
@@ -56,6 +58,7 @@ __all__ = (
     "role_openings",
     "role_shortage_error",
     "round_seat_order",
+    "team_fit_config",
     "team_slot_counts",
     "unranked_pool_error",
     "unsafe_pick_error",
@@ -192,7 +195,11 @@ def round_seat_order(
     if rule == "weakest_first":
         return sorted(seats, key=lambda t: (captain_ranks.get(t.id, -1), t.draft_position))
     if rule == "strongest_first":
-        return sorted(seats, key=lambda t: (captain_ranks.get(t.id, -1), -t.draft_position), reverse=True)
+        # The exact mirror of weakest_first, ties included: among equal captains
+        # the one seated last in a weakest_first round picks first here, so a
+        # weak/strong alternation evens out a tie instead of always favouring
+        # the lower seed.
+        return sorted(seats, key=lambda t: (captain_ranks.get(t.id, -1), t.draft_position), reverse=True)
     # "linear", a dynamic rule, an unknown value, or a hole left by an older
     # client: all keep the seed order here.
     return list(seats)
@@ -204,7 +211,7 @@ def average_seat_order(
     averages: Mapping[int, float],
     captain_ranks: Mapping[int, int],
     descending: bool,
-    seed_reversed: bool = False,
+    tie_reversed: bool = False,
 ) -> list[_SeatT]:
     """Seat order for a ``team_avg_*`` round: live average, captain, then seed.
 
@@ -220,23 +227,26 @@ def average_seat_order(
     organizer happened to tick the captains in (the pool lists them
     alphabetically), so an equal-average round was decided by battle tag.
     An unranked captain sorts as weakest, as in ``weakest_first``. Teams that
-    tie on BOTH fall to the seed: 1 -> N by default, N -> 1 with
-    ``seed_reversed`` (the session's ``avg_tie_seed_reverse`` setting). The
-    organizer decides what the seed means -- under a rank-based captain order
-    it is weakest-to-strongest or the other way round -- so the flip is theirs,
-    not the rule's. The result stays deterministic either way.
+    tie on BOTH fall to the seed, 1 -> N.
+
+    ``tie_reversed`` (the session's ``avg_tie_seed_reverse`` setting) turns the
+    whole tie-break around: the captain rank runs AGAINST the rule -- under
+    ``team_avg_asc`` the stronger captain picks first, since an equal average
+    with a stronger captain means a weaker rest of the roster -- and a full tie
+    falls to the seed N -> 1. The result stays deterministic either way.
 
     A team with no average yet sorts as 0.0. In practice every team has one --
     captains are seeded as PICKED players on their own roster -- so this only
     guards a team whose roster was emptied by hand.
     """
     direction = -1 if descending else 1
+    tie = -1 if tie_reversed else 1
     return sorted(
         seats,
         key=lambda t: (
             direction * averages.get(t.id, 0.0),
-            direction * captain_ranks.get(t.id, -1),
-            -t.draft_position if seed_reversed else t.draft_position,
+            tie * direction * captain_ranks.get(t.id, -1),
+            tie * t.draft_position,
         ),
     )
 
@@ -352,6 +362,32 @@ def role_openings(shape: RosterShape, counts: Mapping[str, int]) -> dict[HeroCla
         role: max(0, targets.get(role.slot_code, 0) - counts.get(role.slot_code, 0)) + free_flex
         for role in HERO_TYPE_CLASSES
     }
+
+
+#: Share of a role's impact a team gives up once every seat that role can take
+#: is filled; a half-filled role gives up half of it (x0.75).
+FILLED_ROLE_DISCOUNT: Final = 0.5
+
+
+def team_fit_config(shape: RosterShape, counts: Mapping[str, int]) -> FitConfig:
+    """Fit weights for ONE team: a role's impact shrinks as the team fills it.
+
+    A support captain on a 1-2-2 roster still has a support seat open, but the
+    team needs its tank and damage more, so support scores at x0.75 there and a
+    higher-ranked support can lose to a damage player. A role's seats are its
+    own slots plus the flex slots, the same capacity ``role_openings`` counts.
+    THE config behind autopick, /suggestions and /fit, so the three agree on
+    what a team needs.
+    """
+    openings = role_openings(shape, counts)
+    targets = shape.slots
+    flex = targets.get(FLEX_SLOT_CODE, 0)
+    impact: dict[HeroClass, float] = {}
+    for role, weight in DEFAULT_ROLE_IMPACT.items():
+        seats = targets.get(role.slot_code, 0) + flex
+        filled = 1.0 - openings[role] / seats if seats else 1.0
+        impact[role] = weight * (1.0 - FILLED_ROLE_DISCOUNT * filled)
+    return FitConfig(role_impact=impact)
 
 
 def validate_current_pick(draft_session: DraftSession, pick: DraftPick) -> None:

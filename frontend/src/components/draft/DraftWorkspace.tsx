@@ -10,6 +10,7 @@ import {
   useDraftTeamQueue,
   type DraftMutations
 } from "@/hooks/useDraftData";
+import { DRAFT_WIDE_QUERY } from "@/hooks/useDraftLayerPad";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { canConfirmPick, type DraftGating } from "@/lib/draft/logic";
 import {
@@ -65,15 +66,14 @@ interface DraftWorkspaceProps {
   onlineCaptainIds: ReadonlySet<number>;
 }
 
-// Tailwind's `xl`. One tree at a time: the pool is the heaviest list in the
-// app, and mounting it twice (desktop + tabs) doubled every re-render.
-const WIDE_QUERY = "(min-width: 80rem)";
+// One tree at a time: the pool is the heaviest list in the app, and mounting it
+// twice (desktop + tabs) doubled every re-render.
 const subscribeWide = (onChange: () => void) => {
-  const query = window.matchMedia(WIDE_QUERY);
+  const query = window.matchMedia(DRAFT_WIDE_QUERY);
   query.addEventListener("change", onChange);
   return () => query.removeEventListener("change", onChange);
 };
-const isWideNow = () => window.matchMedia(WIDE_QUERY).matches;
+const isWideNow = () => window.matchMedia(DRAFT_WIDE_QUERY).matches;
 const NOT_WIDE_ON_SERVER = () => false;
 
 /** Enter already activates these; the confirm shortcut must not fire on top. */
@@ -271,7 +271,11 @@ export function DraftWorkspace({
       lastSubjectRef.current == null
         ? null
         : document.querySelector<HTMLElement>(`[data-player-name="${lastSubjectRef.current}"]`);
-    (saved?.isConnected ? saved : fallback)?.focus();
+    // No scroll: the card only floated over the list, so the row is where the
+    // user left it. Scrolling here would read the page's scroll padding while it
+    // still reserves the card's height (the layer observer shrinks it a frame
+    // later) and jump a row that sat under the card to the top of the list.
+    (saved?.isConnected ? saved : fallback)?.focus({ preventScroll: true });
   }, [subjectId]);
 
   useEffect(() => {
@@ -332,6 +336,9 @@ export function DraftWorkspace({
   // The pool reserves the floating layer's height so its last rows stay reachable,
   // and every scroller (the page below xl, the panels at xl) treats it as scroll
   // padding: a row focused by Tab scrolls clear of the card, not under it.
+  // A panel ends the body's `pb-5` (20px) above the viewport, so the card covers
+  // that much less of it than of the page. The Teams lists measure their own
+  // share at xl (`useDraftLayerPad`).
   const layerRef = useRef<HTMLDivElement>(null);
   const [bottomInset, setBottomInset] = useState(96);
   useEffect(() => {
@@ -342,7 +349,7 @@ export function DraftWorkspace({
     const observer = new ResizeObserver(() => {
       const inset = Math.ceil(layer.offsetHeight) + 16;
       setBottomInset(inset);
-      root.style.setProperty("--draft-layer-h", `${inset}px`);
+      root.style.setProperty("--draft-layer-h", `${Math.max(0, inset - 20)}px`);
       html.style.scrollPaddingBottom = `${inset}px`;
     });
     observer.observe(layer);
@@ -483,7 +490,7 @@ export function DraftWorkspace({
           so the card never covers the conversation. Below `sm` it is a
           full-width sheet. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center sm:px-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))] lg:pe-[24rem]">
-        <div ref={layerRef} className="pointer-events-auto w-full sm:w-[min(780px,100%)]">
+        <div ref={layerRef} data-draft-layer className="pointer-events-auto w-full sm:w-[min(780px,100%)]">
           {/* Always mounted: with `player = null` it keeps only its live
               region, so a pick's announcement outlives the card closing. */}
           <PickIsland

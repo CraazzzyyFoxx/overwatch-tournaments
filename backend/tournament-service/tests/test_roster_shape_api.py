@@ -49,6 +49,7 @@ def _tournament(
     *,
     tournament_id: int = 1,
     roster_slots_json: dict[str, int] | None = None,
+    draft_format_json: dict | None = None,
 ) -> models.Tournament:
     tournament = models.Tournament(
         id=tournament_id,
@@ -74,6 +75,7 @@ def _tournament(
         team_formation="balancer",
         division_grid_version_id=5,
         roster_slots_json=roster_slots_json,
+        draft_format_json=draft_format_json,
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         cover_image_url=None,

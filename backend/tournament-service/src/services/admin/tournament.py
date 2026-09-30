@@ -314,6 +314,13 @@ class AdminTournamentService:
             # of those rosters. Same protection a live draft already gets.
             await assert_no_registered_teams(session, tournament_id, change="the roster shape")
 
+        # Same lock, one level down: the session snapshots the format at create
+        # time, so an edit mid-draft would promise a change the running board
+        # will never honour. Both sides are normalized (DraftFormatField in,
+        # this same path out), so a Settings-tab resend is not a change.
+        if "draft_format_json" in update_data and update_data["draft_format_json"] != tournament.draft_format_json:
+            await assert_no_active_draft_session(session, tournament_id, change="the draft format")
+
         if "challonge_slug" in update_data:
             raw_slug = update_data.pop("challonge_slug")
             if raw_slug:

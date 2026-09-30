@@ -105,6 +105,17 @@ async def _load_session(session: AsyncSession, session_id: int) -> DraftSession:
     return draft
 
 
+#: ``settings_json`` keys the tournament's format rule owns. A client may not set
+#: them: on create they come from ``Tournament.draft_format_json``, on patch the
+#: session keeps the snapshot it was created with. Otherwise the wizard (or a
+#: stale bundle) would be a second, unlocked place to edit the format.
+_FORMAT_SETTINGS_KEYS = ("round_rules", "avg_tie_seed_reverse")
+
+
+def _with_format_settings(client: dict[str, Any], owned: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in client.items() if k not in _FORMAT_SETTINGS_KEYS} | owned
+
+
 async def _load_pick(session: AsyncSession, pick_id: int) -> tuple[DraftSession, DraftPick]:
     pick = await _picks_repo.get(session, pick_id)
     if pick is None:
@@ -515,8 +526,13 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, workspace_id, "team", "create")
             payload = schemas.DraftSessionCreateRequest.model_validate(c.payload(data))
             # The roster shape is the tournament's, not the request's: a draft
-            # cannot be created at a size the tournament does not run.
+            # cannot be created at a size the tournament does not run. The format
+            # is the tournament's for the same reason -- it is a rule organizers
+            # announce, edited in the tournament's settings, not here.
             shape = await get_effective_roster_shape(session, tournament_id=tournament_id, workspace_id=workspace_id)
+            fmt, format_settings = await lifecycle_service.tournament_draft_format(
+                session, tournament_id, rounds=shape.draft_rounds
+            )
             draft = await lifecycle_service.create_session(
                 session,
                 tournament_id=tournament_id,
@@ -524,12 +540,12 @@ def register(broker: Any, logger: Any) -> None:
                 shape=shape,
                 pool_source=payload.pool_source.value,
                 source_balance_id=payload.source_balance_id,
-                fmt=payload.format,
+                fmt=fmt,
                 pick_time_seconds=payload.pick_time_seconds,
                 overtime_seconds=payload.overtime_seconds,
                 autopick_strategy=payload.autopick_strategy.value,
                 allow_admin_override=payload.allow_admin_override,
-                settings=payload.settings,
+                settings=_with_format_settings(payload.settings, format_settings),
             )
             await draft_rt.publish_draft_event(
                 session,
@@ -634,7 +650,12 @@ def register(broker: Any, logger: Any) -> None:
                 )
                 draft.rounds = payload.rounds
             if payload.settings is not None:
-                draft.settings_json = payload.settings
+                # A full replace, minus the format the tournament owns: the session
+                # keeps the snapshot it was created with (see _FORMAT_SETTINGS_KEYS).
+                draft.settings_json = _with_format_settings(
+                    payload.settings,
+                    {k: draft.settings_json[k] for k in _FORMAT_SETTINGS_KEYS if k in draft.settings_json},
+                )
             # The pick rows carry the seat order, and `round_rules` decides it, so
             # a rules change that stopped at `settings_json` left the board picking
             # in the order it was seeded with while the wizard previewed the new

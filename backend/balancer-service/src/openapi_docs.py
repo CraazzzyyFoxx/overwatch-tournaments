@@ -188,7 +188,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.draft.session_create": {
         "summary": "Create draft session",
-        "description": "Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event.",
+        "description": "Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the tournament's `draft_format_json`, not from the request.",
     },
     "rpc.balancer.draft.seed": {
         "summary": "Seed draft session",

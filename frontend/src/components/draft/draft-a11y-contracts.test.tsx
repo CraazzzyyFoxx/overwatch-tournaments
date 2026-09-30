@@ -197,7 +197,7 @@ describe("draft accessibility contracts", () => {
     expect(html).toMatch(/id="player-pool-heading-7-support-reason"[^>]*>optionReason\.role_shortage</);
   });
 
-  test("a spectator gets chips, no buttons, no hearts and the demand column", () => {
+  test("a spectator gets chips, no buttons, no hearts and no fit column", () => {
     const html = renderPool({ acting: null });
 
     expect(html).not.toContain("pickAs:");
@@ -206,10 +206,7 @@ describe("draft accessibility contracts", () => {
     // Still readable: the roles and their ranks are public information.
     expect(html).toContain("2800");
     expect(html).toContain("openProfile:");
-    expect(html).toContain("pool.col.demand");
-    // The bare count, not a phrase: "wanted {count}" never fit the 56px column.
-    expect(html).not.toContain("pool.demand:");
-    expect(html).toMatch(/title="pool\.demandTitle">2</);
+    expect(html).not.toContain("pool.col.fit");
   });
 
   test("an admin without a team acts for the clock but has no list", () => {

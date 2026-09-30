@@ -3,6 +3,7 @@ import { Encounter } from "@/types/encounter.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 import type { RosterShape, RosterSlotMap } from "@/lib/roster/shape";
 import type { TournamentLink } from "@/types/stream.types";
+import type { DraftFormatSettings } from "@/types/draft.types";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,8 @@ export interface Tournament {
   division_grid_version: DivisionGridVersion | null;
   /** Tournament-level override of the roster shape; `null` = inherit. */
   roster_slots_json: RosterSlotMap | null;
+  /** Draft format rule the wizard seeds every session with; `null` = snake. */
+  draft_format_json: DraftFormatSettings | null;
   /** Resolved shape. `null` when the read did not opt into the entity. */
   roster_shape: RosterShape | null;
   /**

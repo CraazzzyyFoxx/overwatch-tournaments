@@ -1,11 +1,7 @@
 "use client";
 
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, LockKeyhole, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -72,76 +68,88 @@ export function DraftOrderStep({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-        <div className="space-y-2">
-          <Label htmlFor="captain-order">{t("captainOrder")}</Label>
-          <Select
-            value={value.order}
-            onValueChange={(order) => onChange({ ...value, order: order as DraftCaptainOrder })}
-          >
-            <SelectTrigger id="captain-order" aria-label={t("captainOrder")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="weakest_first">{t("orders.weakest_first.title")}</SelectItem>
-              <SelectItem value="strongest_first">{t("orders.strongest_first.title")}</SelectItem>
-              <SelectItem value="random">{t("orders.random.title")}</SelectItem>
-              <SelectItem value="manual">{t("orders.manual.title")}</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-sm text-muted-foreground">{t(`orders.${value.order}.description`)}</p>
-          {value.order !== "manual" && (
-            <p className="text-xs text-muted-foreground">{t("dragToOverrideSeeds")}</p>
-          )}
-        </div>
-        {value.order === "random" && (
-          <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
-            <LockKeyhole className="h-4 w-4 text-muted-foreground" aria-hidden />
-            <span className="font-mono text-xs tabular-nums">{value.randomSeed}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() =>
-                onChange({ ...value, randomSeed: Math.floor(Math.random() * 2_147_483_647) })
-              }
-              aria-label={t("newRandomSeed")}
-            >
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+    <div className="@container">
+      <div className="grid gap-6 @3xl:grid-cols-2 @3xl:items-start">
+        <div className="space-y-4">
           <div className="space-y-2">
-            {orderedIds.map((id, index) => {
-              const registration = pool.find((candidate) => candidate.id === id);
-              if (!registration) return null;
-              return (
-                <SortableCaptain
-                  key={id}
-                  id={id}
-                  position={index + 1}
-                  label={registrationLabel(registration)}
-                  rank={ranks.get(id) ?? null}
-                />
-              );
-            })}
+            <Label htmlFor="captain-order">{t("captainOrder")}</Label>
+            <div className="flex items-center gap-2">
+              <Select
+                value={value.order}
+                onValueChange={(order) => onChange({ ...value, order: order as DraftCaptainOrder })}
+              >
+                <SelectTrigger
+                  id="captain-order"
+                  className="min-w-0 flex-1"
+                  aria-label={t("captainOrder")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weakest_first">{t("orders.weakest_first.title")}</SelectItem>
+                  <SelectItem value="strongest_first">
+                    {t("orders.strongest_first.title")}
+                  </SelectItem>
+                  <SelectItem value="random">{t("orders.random.title")}</SelectItem>
+                  <SelectItem value="manual">{t("orders.manual.title")}</SelectItem>
+                </SelectContent>
+              </Select>
+              {value.order === "random" && (
+                <div className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/20 pl-2.5 pr-1">
+                  <LockKeyhole className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  <span className="font-mono text-xs tabular-nums">{value.randomSeed}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() =>
+                      onChange({ ...value, randomSeed: Math.floor(Math.random() * 2_147_483_647) })
+                    }
+                    aria-label={t("newRandomSeed")}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t(`orders.${value.order}.description`)}
+            </p>
+            {value.order !== "manual" && (
+              <p className="text-xs text-muted-foreground">{t("dragToOverrideSeeds")}</p>
+            )}
           </div>
-        </SortableContext>
-      </DndContext>
 
-      <DraftSetupPreview
-        orderedCaptainIds={orderedIds}
-        pool={pool}
-        rounds={rounds}
-        format={format}
-        roundRules={roundRules}
-      />
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {orderedIds.map((id, index) => {
+                  const registration = pool.find((candidate) => candidate.id === id);
+                  if (!registration) return null;
+                  return (
+                    <SortableCaptain
+                      key={id}
+                      id={id}
+                      position={index + 1}
+                      label={registrationLabel(registration)}
+                      rank={ranks.get(id) ?? null}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+
+        <DraftSetupPreview
+          orderedCaptainIds={orderedIds}
+          pool={pool}
+          rounds={rounds}
+          format={format}
+          roundRules={roundRules}
+        />
+      </div>
     </div>
   );
 }
@@ -155,7 +163,9 @@ interface SortableCaptainProps {
 
 function SortableCaptain({ id, position, label, rank }: Readonly<SortableCaptainProps>) {
   const t = useTranslations("draftAdmin");
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id
+  });
   return (
     <div
       ref={setNodeRef}
@@ -187,4 +197,3 @@ function SortableCaptain({ id, position, label, rank }: Readonly<SortableCaptain
     </div>
   );
 }
-

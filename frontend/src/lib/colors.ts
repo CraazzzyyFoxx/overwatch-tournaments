@@ -15,3 +15,10 @@ export const getWinrateColor = (winrate: number) => {
   if (fraction < 0.64) return "var(--aqt-teal)";
   return "var(--aqt-violet)";
 };
+
+/** 0–100 impact/percentile score → ramp: high up-green, low rose, the middle blue. */
+export const getImpactColor = (value: number) => {
+  if (value >= 66) return "var(--aqt-up)";
+  if (value <= 34) return "var(--aqt-rose)";
+  return "var(--aqt-blue)";
+};

@@ -114,6 +114,11 @@ class Tournament(db.TimeStampIntegerMixin):
     # NULL means "inherit from the workspace default", NOT "an empty roster" — the
     # resolution chain lives in ``shared.domain.roster_shape.resolve_roster_shape``.
     roster_slots_json: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    # The tournament's draft format: ``{"format": ..., "round_rules": [...],
+    # "avg_tie_seed_reverse": bool}`` (see ``shared.schemas.draft_format``). NULL
+    # means the snake default; ``session_create`` copies the resolved value onto
+    # each new draft session, which keeps its own snapshot from then on.
+    draft_format_json: Mapped[dict[str, typing.Any] | None] = mapped_column(JSONB, nullable=True)
     # Organizer-uploaded branding (S3 public URLs, keys under
     # ``avatars/tournaments/{id}/{cover,logo}/`` -- see
     # ``shared.clients.s3.avatar_prefix``). Nullable with no default: a

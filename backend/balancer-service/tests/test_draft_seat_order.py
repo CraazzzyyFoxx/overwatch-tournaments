@@ -68,6 +68,13 @@ def test_strongest_first_ranks_captains_descending() -> None:
     assert _order(round_rules=["strongest_first"]) == [20, 70, 50]
 
 
+def test_strongest_first_mirrors_weakest_first_on_a_captain_tie() -> None:
+    tied = {70: 3000, 20: 3000, 50: 4000}
+    weakest = _order(round_rules=["weakest_first"], captain_ranks=tied)
+    assert weakest == [70, 20, 50]
+    assert _order(round_rules=["strongest_first"], captain_ranks=tied) == weakest[::-1]
+
+
 def test_an_unranked_captain_counts_as_weakest() -> None:
     assert _order(round_rules=["weakest_first"], captain_ranks={70: 3000, 20: 4000}) == [50, 70, 20]
 
@@ -109,7 +116,7 @@ class TestAverageSeatOrder:
     round order.
     """
 
-    def _avg(self, averages, *, descending, captain_ranks=CAPTAIN_RANKS, seed_reversed=False) -> list[int]:
+    def _avg(self, averages, *, descending, captain_ranks=CAPTAIN_RANKS, tie_reversed=False) -> list[int]:
         return [
             team.id
             for team in average_seat_order(
@@ -117,7 +124,7 @@ class TestAverageSeatOrder:
                 averages=averages,
                 captain_ranks=captain_ranks,
                 descending=descending,
-                seed_reversed=seed_reversed,
+                tie_reversed=tie_reversed,
             )
         ]
 
@@ -151,16 +158,19 @@ class TestAverageSeatOrder:
         assert self._avg(tied, descending=False, captain_ranks=same) == [70, 20, 50]
         assert self._avg(tied, descending=True, captain_ranks=same) == [70, 20, 50]
 
-    def test_the_seed_setting_flips_only_a_full_tie(self) -> None:
-        # Tied on average and captain: the organizer's setting reverses the seed,
-        # independent of the rule's direction.
+    def test_the_setting_turns_the_whole_tie_break_around(self) -> None:
+        # Equal average, stronger captain: the rest of that roster is weaker, so
+        # under "lowest average first" the organizer can hand it the first pick.
         tied = {70: 2800.0, 20: 2800.0, 50: 2800.0}
-        same = {70: 2800, 20: 2800, 50: 2800}
 
-        assert self._avg(tied, descending=False, captain_ranks=same, seed_reversed=True) == [50, 20, 70]
-        assert self._avg(tied, descending=True, captain_ranks=same, seed_reversed=True) == [50, 20, 70]
-        # A captain-rank difference still decides before the seed is consulted.
-        assert self._avg(tied, descending=False, seed_reversed=True) == [50, 70, 20]
+        assert self._avg(tied, descending=False, tie_reversed=True) == [20, 70, 50]
+        assert self._avg(tied, descending=True, tie_reversed=True) == [50, 70, 20]
+        # Tied on the captain too: the seed runs N -> 1, whatever the rule's direction.
+        same = {70: 2800, 20: 2800, 50: 2800}
+        assert self._avg(tied, descending=False, captain_ranks=same, tie_reversed=True) == [50, 20, 70]
+        assert self._avg(tied, descending=True, captain_ranks=same, tie_reversed=True) == [50, 20, 70]
+        # The average itself is never reversed.
+        assert self._avg({70: 3000.0, 20: 2000.0, 50: 2500.0}, descending=False, tie_reversed=True) == [20, 50, 70]
 
     def test_a_partial_tie_breaks_within_the_tied_group_only(self) -> None:
         averages = {70: 2800.0, 20: 2800.0, 50: 3500.0}

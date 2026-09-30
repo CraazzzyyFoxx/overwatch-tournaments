@@ -12,12 +12,12 @@ export function isMyTurnFor(gating: DraftGating, actingTeam: TeamView | null): b
   return gating.isMyPick && actingTeam != null && actingTeam.team.id === gating.myTeamId;
 }
 
-export function clockColor(board: DraftBoard, myTurn: boolean, overtime: boolean): string {
+export function clockColor(board: DraftBoard, overtime: boolean): string {
   const status = board.session.status;
   if (status === "completed" || status === "cancelled") return "var(--aqt-status-finished)";
   if (status === "paused") return "var(--aqt-amber)";
   if (overtime) return "var(--aqt-rose)";
-  return myTurn ? "var(--aqt-teal)" : "var(--aqt-fg)";
+  return "var(--aqt-teal)";
 }
 
 /** Teal while the viewer is on the clock, amber while an organizer is replacing a captain's pick. */
@@ -71,7 +71,7 @@ export function PickPill({ board, gating, actingTeam, overrideMode }: Readonly<P
       <span
         aria-hidden
         className="font-onest text-ui font-bold tabular-nums"
-        style={{ color: clockColor(board, myTurn, countdown.overtime) }}
+        style={{ color: clockColor(board, countdown.overtime) }}
       >
         {countdown.text ?? "—"}
       </span>

@@ -55,8 +55,7 @@ export function RoomClockStrip({
   const clockTeam: DraftTeam | null = headPick ? (teamById.get(headPick.draft_team_id) ?? null) : null;
   const myTeamId = gating.myTeamId;
   const isMyTurn = current != null && myTeamId != null && current.draft_team_id === myTeamId;
-  const clockColor =
-    done || cancelled ? "var(--aqt-status-finished)" : isMyTurn ? "var(--aqt-teal)" : "var(--aqt-fg)";
+  const clockColor = done || cancelled ? "var(--aqt-status-finished)" : "var(--aqt-teal)";
 
   const captain = clockTeam
     ? board.players.find((player) => player.is_captain && player.drafted_by_team_id === clockTeam.id)

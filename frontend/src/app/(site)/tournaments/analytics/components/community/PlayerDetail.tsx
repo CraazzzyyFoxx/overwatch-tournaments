@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 
+import { getImpactColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -25,12 +26,6 @@ interface PlayerDetailProps {
   tournamentGrid?: DivisionGridVersion | null;
   canReadV2?: boolean;
   onExplain?: (term: GlossaryTerm) => void;
-}
-
-function impactColor(value: number): string {
-  if (value >= 66) return "var(--c-up)";
-  if (value <= 34) return "var(--c-down)";
-  return "var(--c-info)";
 }
 
 export default function PlayerDetail({
@@ -165,7 +160,7 @@ export default function PlayerDetail({
             {t("analytics.community.player.impact")}{" "}
             <InfoDot term="impact" onExplain={onExplain} />
           </span>
-          <span className={styles.cMetricV} style={{ color: impactColor(player.impact) }}>
+          <span className={styles.cMetricV} style={{ color: getImpactColor(player.impact) }}>
             {player.impact}
           </span>
           <span className={styles.cMetricS}>{impactDesc}</span>

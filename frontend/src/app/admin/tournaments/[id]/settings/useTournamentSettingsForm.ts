@@ -44,6 +44,7 @@ export const SETTINGS_SECTION_FIELDS = {
   scoring: ["is_league", "is_finished", "win_points", "draw_points", "loss_points"],
   schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
   roster: ["roster_slots_json"],
+  draft: ["draft_format_json"],
   challonge: ["challonge_slug"],
   discord: ["discord_broadcasts_enabled", "discord_dms_enabled"],
   preview: ["is_hidden"]

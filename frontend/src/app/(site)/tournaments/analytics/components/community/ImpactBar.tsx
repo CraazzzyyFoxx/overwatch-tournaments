@@ -1,6 +1,6 @@
 "use client";
 
-
+import { getImpactColor } from "@/lib/colors";
 import styles from "@/app/(site)/tournaments/analytics/components/Analytics.module.css";
 
 interface ImpactBarProps {
@@ -8,16 +8,9 @@ interface ImpactBarProps {
   value: number;
 }
 
-/** Colour ramp: high = emerald, low = rose, mid = blue (matches the design). */
-function impactColor(value: number): string {
-  if (value >= 66) return "var(--c-up)";
-  if (value <= 34) return "var(--c-down)";
-  return "var(--c-info)";
-}
-
 /** A horizontal 0–100 impact bar with the value tucked at the end. */
 export default function ImpactBar({ value }: Readonly<ImpactBarProps>) {
-  const color = impactColor(value);
+  const color = getImpactColor(value);
   return (
     <span className={styles.cImpact}>
       <span className={styles.cImpactTrack}>

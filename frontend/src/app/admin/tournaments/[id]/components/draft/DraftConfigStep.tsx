@@ -20,10 +20,10 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { TONE_CLASS } from "@/components/kit/tone";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
-import type { DraftAutopickStrategy, DraftFormat } from "@/types/draft.types";
+import type { DraftAutopickStrategy, DraftFormatSettings } from "@/types/draft.types";
 import { isRoleSlotCode, orderSlotCodes, type RosterShape } from "@/lib/roster/shape";
 
-import { DRAFT_ROUND_RULES, MAX_DRAFT_TEAM_COUNT, MIN_DRAFT_TEAM_COUNT } from "./setup-model";
+import type { DraftRoundRule } from "./setup-model";
 import type { DraftSetupConfig } from "./setup-types";
 
 interface DraftConfigStepProps {
@@ -31,18 +31,20 @@ interface DraftConfigStepProps {
   onChange: (next: DraftSetupConfig) => void;
   /** Resolved on the server from the tournament; never editable here (T14 owns it). */
   rosterShape: RosterShape;
+  /** The tournament's format rule, resolved to the round count; read-only here. */
+  format: DraftFormatSettings;
   tournamentId: number;
   locked?: boolean;
 }
 
 const PICK_TIME_PRESETS = [30, 45, 60, 90];
 const OVERTIME_PRESETS = [0, 15, 30, 60];
-const FORMATS: DraftFormat[] = ["snake", "linear", "custom"];
 
 export function DraftConfigStep({
   value,
   onChange,
   rosterShape,
+  format,
   tournamentId,
   locked = false
 }: Readonly<DraftConfigStepProps>) {
@@ -51,8 +53,6 @@ export function DraftConfigStep({
   // the mirror this feature removes.
   const rounds = rosterShape.draft_rounds;
   const pickTimeLabelId = useId();
-  const formatLabelId = useId();
-  const roundRulesLabelId = useId();
   const overtimeLabelId = useId();
 
   const patch = (next: Partial<DraftSetupConfig>) => onChange({ ...value, ...next });
@@ -105,18 +105,32 @@ export function DraftConfigStep({
             <ArrowUpRight className="ml-1 h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>
+        {/* A rule of the tournament, not of this draft: the server seeds every
+            session with it, so the wizard only names it. */}
         <div className="space-y-2">
-          <Label htmlFor="draft-team-count">{t("teamCount")}</Label>
-          <NumberInput
-            id="draft-team-count"
-            integer
-            min={MIN_DRAFT_TEAM_COUNT}
-            max={MAX_DRAFT_TEAM_COUNT}
-            disabled={locked}
-            value={value.teamCount}
-            onValueChange={(next) => patch({ teamCount: next ?? MIN_DRAFT_TEAM_COUNT })}
-          />
-          <p className="text-xs text-muted-foreground">{t("teamCountHint")}</p>
+          <Label>{t("format")}</Label>
+          <p className="text-sm font-semibold">{t(`formats.${format.format}.title`)}</p>
+          {format.format === "custom" ? (
+            <ol className="space-y-0.5 text-xs tabular-nums text-muted-foreground">
+              {format.round_rules.map((rule, index) => (
+                <li key={index}>
+                  {/* `resolveDraftFormat` already coerced every entry to a known rule. */}
+                  {t("roundNumber", { round: index + 1 })}: {t(`rules.${rule as DraftRoundRule}`)}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {t(`formats.${format.format}.description`)}
+            </p>
+          )}
+          <Link
+            href={`/admin/tournaments/${tournamentId}/settings/draft`}
+            className="inline-flex items-center text-xs font-medium text-primary hover:underline"
+          >
+            {t("changeFormatInSettings")}
+            <ArrowUpRight className="ml-1 h-3.5 w-3.5" aria-hidden />
+          </Link>
         </div>
       </div>
 
@@ -127,7 +141,11 @@ export function DraftConfigStep({
             {t("pickTime")}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-3" role="group" aria-labelledby={pickTimeLabelId}>
+        <div
+          className="flex flex-wrap items-center gap-3"
+          role="group"
+          aria-labelledby={pickTimeLabelId}
+        >
           {/* One segmented control instead of four standalone buttons: the presets
               are a single choice, so they must not read as four separate widgets
               next to the custom field. */}
@@ -216,141 +234,6 @@ export function DraftConfigStep({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">{t("overtimeHint")}</p>
-      </div>
-
-      <div className="space-y-3">
-        <span id={formatLabelId} className="text-sm font-medium leading-none">
-          {t("format")}
-        </span>
-        {/* radiogroup promises arrow-key traversal and a single tab stop, so the
-            group owns the arrows and only the checked option stays tabbable. */}
-        <div
-          className="grid gap-3 md:grid-cols-3"
-          role="radiogroup"
-          aria-labelledby={formatLabelId}
-          onKeyDown={(event) => {
-            if (locked) return;
-            const delta =
-              event.key === "ArrowRight" || event.key === "ArrowDown"
-                ? 1
-                : event.key === "ArrowLeft" || event.key === "ArrowUp"
-                  ? -1
-                  : 0;
-            if (delta === 0) return;
-            event.preventDefault();
-            const index = Math.max(0, FORMATS.indexOf(value.format));
-            const next = FORMATS[(index + delta + FORMATS.length) % FORMATS.length];
-            patch({ format: next });
-            event.currentTarget
-              .querySelector<HTMLButtonElement>(`[data-format="${next}"]`)
-              ?.focus();
-          }}
-        >
-          {FORMATS.map((format) => (
-            <button
-              key={format}
-              type="button"
-              role="radio"
-              data-format={format}
-              tabIndex={value.format === format ? 0 : -1}
-              aria-checked={value.format === format}
-              disabled={locked}
-              onClick={() => patch({ format })}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-                value.format === format
-                  ? "border-primary bg-primary/8 ring-1 ring-primary/30"
-                  : "border-border/70 bg-card hover:border-primary/40"
-              )}
-            >
-              <span className="font-medium">{t(`formats.${format}.title`)}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {t(`formats.${format}.description`)}
-              </span>
-              <span className="mt-3 flex gap-1" aria-hidden>
-                {[1, 2, 3, 4].map((seat, index) => (
-                  <span
-                    key={seat}
-                    className={cn(
-                      "grid h-6 w-6 place-items-center rounded-md bg-muted text-xs font-semibold tabular-nums",
-                      format === "snake" && index > 1 && "bg-primary/15 text-primary"
-                    )}
-                  >
-                    {format === "snake" && index > 1 ? 5 - seat : seat}
-                  </span>
-                ))}
-              </span>
-            </button>
-          ))}
-        </div>
-        {value.format === "custom" && (
-          <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
-            <div className="space-y-1">
-              <span id={roundRulesLabelId} className="text-sm font-medium leading-none">
-                {t("roundRules")}
-              </span>
-              <p className="text-xs text-muted-foreground">{t("roundRulesHint", { rounds })}</p>
-            </div>
-            {/* One labelled row per round, read top to bottom: a bare two-column
-                grid of selects never said which round each rule belonged to, nor
-                whether the flow was row- or column-major. */}
-            <div className="space-y-2" role="group" aria-labelledby={roundRulesLabelId}>
-              {Array.from({ length: rounds }, (_, index) => {
-                const round = index + 1;
-                const selectId = `draft-round-rule-${round}`;
-                return (
-                  <div key={round} className="flex items-center gap-3">
-                    <Label
-                      htmlFor={selectId}
-                      className="min-w-16 shrink-0 text-xs font-medium tabular-nums text-muted-foreground"
-                    >
-                      {t("roundNumber", { round })}
-                    </Label>
-                    <Select
-                      disabled={locked}
-                      value={value.roundRules[index] ?? "linear"}
-                      onValueChange={(rule) => {
-                        // Rebuild at the current round count so a shape change can
-                        // never leave a hole (serialized as null) in the payload.
-                        const roundRules = Array.from(
-                          { length: rounds },
-                          (_, i) => value.roundRules[i] ?? "linear"
-                        );
-                        roundRules[index] = rule;
-                        patch({ roundRules });
-                      }}
-                    >
-                      <SelectTrigger id={selectId} className="flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DRAFT_ROUND_RULES.map((rule) => (
-                          <SelectItem key={rule} value={rule}>
-                            {t(`rules.${rule}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              })}
-            </div>
-            {value.roundRules.some((rule) => rule.startsWith("team_avg_")) && (
-              <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-3">
-                <div>
-                  <Label htmlFor="draft-avg-tie-seed">{t("avgTieSeedReverse")}</Label>
-                  <p className="mt-1 text-xs text-muted-foreground">{t("avgTieSeedReverseHint")}</p>
-                </div>
-                <Switch
-                  id="draft-avg-tie-seed"
-                  disabled={locked}
-                  checked={value.avgTieSeedReverse}
-                  onCheckedChange={(avgTieSeedReverse) => patch({ avgTieSeedReverse })}
-                />
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="space-y-2">

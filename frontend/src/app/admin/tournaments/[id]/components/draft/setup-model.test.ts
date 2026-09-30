@@ -8,6 +8,9 @@ import {
   buildDraftSchedule,
   canCancelDraftSetup,
   derivePoolReadiness,
+  effectiveTeamCount,
+  maxDraftTeamCount,
+  resolveDraftFormat,
   filterCaptainRows,
   moveCaptain,
   orderCaptainIds,
@@ -38,14 +41,7 @@ const SHAPE: RosterShape = {
 
 describe("draft setup model", () => {
   it("defines the six-step flow", () => {
-    expect(SETUP_STEPS).toEqual([
-      "config",
-      "pool",
-      "captains",
-      "order",
-      "review",
-      "ready"
-    ]);
+    expect(SETUP_STEPS).toEqual(["config", "pool", "captains", "order", "review", "ready"]);
   });
 
   it("moves the setup flow back one step at a time", () => {
@@ -95,12 +91,24 @@ describe("draft setup model", () => {
       [20, 2500],
       [30, 2800]
     ]);
-    const value = { ids: [10, 20, 30], teamNames: {}, roles: {}, order: "weakest_first" as const, randomSeed: 42 };
+    const value = {
+      ids: [10, 20, 30],
+      teamNames: {},
+      roles: {},
+      order: "weakest_first" as const,
+      randomSeed: 42
+    };
     const shown = orderCaptainIds(value.ids, value.order, ranks, value.randomSeed); // [20, 30, 10]
 
     // 10 dragged onto seat 1: the shown order with that move, now manual.
-    expect(reseatCaptain(value, shown, 10, 20)).toMatchObject({ order: "manual", ids: [10, 20, 30] });
-    expect(reseatCaptain(value, shown, 30, 20)).toMatchObject({ order: "manual", ids: [30, 20, 10] });
+    expect(reseatCaptain(value, shown, 10, 20)).toMatchObject({
+      order: "manual",
+      ids: [10, 20, 30]
+    });
+    expect(reseatCaptain(value, shown, 30, 20)).toMatchObject({
+      order: "manual",
+      ids: [30, 20, 10]
+    });
     // A drop outside the list changes nothing, and does not flip the order.
     expect(reseatCaptain(value, shown, 99, 20)).toBe(value);
   });
@@ -203,12 +211,15 @@ describe("draft setup model", () => {
       )
     ).toEqual([4, 1]);
     expect(
-      filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: ["damage", "support"], sort: "rank_desc" })
-        .map((r) => r.id)
+      filterCaptainRows(CAPTAIN_ROWS, {
+        query: "",
+        roles: ["damage", "support"],
+        sort: "rank_desc"
+      }).map((r) => r.id)
     ).toEqual([3, 4, 2, 1]);
-    expect(filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: [], sort: "rank_desc" })).toHaveLength(
-      CAPTAIN_ROWS.length
-    );
+    expect(
+      filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: [], sort: "rank_desc" })
+    ).toHaveLength(CAPTAIN_ROWS.length);
   });
 
   it("matches the search case-insensitively and never mutates the input order", () => {
@@ -259,17 +270,95 @@ describe("draft setup model", () => {
       rank: 2000,
       options: ["tank", "damage"]
     });
-    expect(captainSeat(registration, "damage", SHAPE)).toMatchObject({ role: "damage", rank: 3500 });
+    expect(captainSeat(registration, "damage", SHAPE)).toMatchObject({
+      role: "damage",
+      rank: 3500
+    });
     // A pin the captain cannot play falls back to the lead role.
     expect(captainSeat(registration, "support", SHAPE)).toMatchObject({ role: "tank", rank: 2000 });
     // A role-less roster seats nobody on a role: the best playable rank.
     const allFlex = { slots: { flex: 3 }, has_role_slots: false };
-    expect(captainSeat(registration, "damage", allFlex)).toEqual({ role: null, rank: 3500, options: [] });
-    expect(captainSeat({ id: 10, roles: [] } as unknown as AdminRegistration, undefined, SHAPE)).toEqual({
+    expect(captainSeat(registration, "damage", allFlex)).toEqual({
+      role: null,
+      rank: 3500,
+      options: []
+    });
+    expect(
+      captainSeat({ id: 10, roles: [] } as unknown as AdminRegistration, undefined, SHAPE)
+    ).toEqual({
       role: null,
       rank: null,
       options: []
     });
     expect(poolRegistrationSummary(registration).rank).toBe(2000);
+  });
+
+  it("caps the pool's team count by players, by each role's slots and at 32", () => {
+    const player = (
+      id: number,
+      roles: ("tank" | "damage" | "support")[],
+      rank: number | null = 3000
+    ) => ({
+      id,
+      roles,
+      rank,
+      hasAccount: true,
+      excluded: false
+    });
+    // 7 ranked players fill two 3-slot teams; the unranked and excluded ones
+    // count for nothing because the seed refuses them.
+    const pool = [
+      player(1, ["tank"]),
+      player(2, ["tank"]),
+      ...[3, 4, 5, 6, 7].map((id) => player(id, ["damage"])),
+      player(8, ["tank"], null),
+      { ...player(9, ["tank"]), excluded: true }
+    ];
+    expect(maxDraftTeamCount(pool, SHAPE)).toBe(2);
+    // One tank less and tank is the limit, whatever the damage depth.
+    expect(maxDraftTeamCount(pool.slice(1), SHAPE)).toBe(1);
+    const huge = Array.from({ length: 200 }, (_, index) => player(index, ["tank", "damage"]));
+    expect(maxDraftTeamCount(huge, SHAPE)).toBe(32);
+  });
+
+  it("follows the pool's maximum until a count is pinned, within bounds", () => {
+    expect(effectiveTeamCount(null, 7)).toBe(7);
+    expect(effectiveTeamCount(null, 0)).toBe(2);
+    expect(effectiveTeamCount(4, 7)).toBe(4);
+  });
+
+  it("resolves a format to one rule per round, custom only", () => {
+    expect(resolveDraftFormat(null, 3)).toEqual({
+      format: "snake",
+      round_rules: [],
+      avg_tie_seed_reverse: false
+    });
+    expect(
+      resolveDraftFormat(
+        { format: "linear", round_rules: ["reverse"], avg_tie_seed_reverse: true },
+        3
+      )
+    ).toEqual({ format: "linear", round_rules: [], avg_tie_seed_reverse: false });
+    // Padded with linear when the roster grew, truncated when it shrank.
+    expect(
+      resolveDraftFormat(
+        { format: "custom", round_rules: ["reverse"], avg_tie_seed_reverse: true },
+        3
+      )
+    ).toEqual({
+      format: "custom",
+      round_rules: ["reverse", "linear", "linear"],
+      avg_tie_seed_reverse: true
+    });
+    expect(
+      resolveDraftFormat(
+        {
+          format: "custom",
+          round_rules: ["reverse", "team_avg_asc", "linear"],
+          avg_tie_seed_reverse: false
+        },
+        2
+      ).round_rules
+    ).toEqual(["reverse", "team_avg_asc"]);
   });
 });

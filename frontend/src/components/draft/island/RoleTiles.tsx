@@ -108,13 +108,22 @@ export function RoleTiles({
               <PlayerRoleIcon role={getRoleIconName(role)} size={24} color={ROLE_ACCENT[role]} decorative />
               <span className="flex min-w-0 flex-col">
                 <span className="whitespace-nowrap text-body font-semibold leading-tight">{roleLabel}</span>
-                {priority && (
-                  <span
-                    className="whitespace-nowrap text-label font-medium leading-snug"
-                    style={{ color: index === 0 ? "var(--aqt-fg)" : "var(--aqt-fg-muted)" }}
-                    title={t("island.priorityTitle", { n: index + 1, total: roles.length })}
-                  >
-                    {t(`island.priority.${priority}`)}
+                {(priority || subRole) && (
+                  <span className="flex min-w-0 items-center gap-1 whitespace-nowrap text-label font-medium leading-snug">
+                    {priority && (
+                      <span
+                        style={{ color: index === 0 ? "var(--aqt-fg)" : "var(--aqt-fg-muted)" }}
+                        title={t("island.priorityTitle", { n: index + 1, total: roles.length })}
+                      >
+                        {t(`island.priority.${priority}`)}
+                      </span>
+                    )}
+                    {priority && subRole && <span className="text-[color:var(--aqt-fg-faint)]">·</span>}
+                    {subRole && (
+                      <span className="min-w-0 truncate text-[color:var(--aqt-fg-muted)]" title={subRole}>
+                        {subRole}
+                      </span>
+                    )}
                   </span>
                 )}
               </span>
@@ -139,11 +148,44 @@ export function RoleTiles({
                 )}
               </span>
             </span>
-            {(subRole || withStats) && (
-              <span className="flex min-w-0 items-center gap-1.5">
-                {subRole && (
-                  <span className="min-w-0 truncate text-caption font-medium" title={subRole}>
-                    {subRole}
+            {(heroes.length > 0 || withStats) && (
+              <span className="flex min-w-0 items-center gap-2">
+                {heroes.length > 0 && (
+                  <span className="flex items-start gap-1">
+                    {heroes.map((hero) => {
+                      const record = heroRecords.get(hero.slug);
+                      const name = record?.hero.name ?? hero.slug;
+                      const heroShare = record && record.maps > 0 ? record.maps_won / record.maps : 0;
+                      const heroLow = record == null || record.maps < MIN_WINRATE_MAPS;
+                      const heroTitle =
+                        card == null
+                          ? name
+                          : record == null
+                            ? `${name} · ${t("island.tile.noMaps")}`
+                            : `${name} · ${t("island.tile.maps", { n: record.maps })} · ${
+                                heroLow ? t("island.stats.winrateHidden") : `${Math.round(heroShare * 100)}%`
+                              }`;
+                      return (
+                        <span key={hero.slug} className="flex w-8 flex-col items-center gap-0.5" title={heroTitle}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getHeroIconUrl(hero.slug, hero.imagePath)}
+                            alt={name}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full object-cover"
+                          />
+                          {withStats && (
+                            <span
+                              className="text-label font-semibold leading-none tabular-nums"
+                              style={{ color: record ? winrateColor(heroShare, record.maps) : "var(--aqt-fg-muted)" }}
+                            >
+                              {cardPending ? <Bar className="w-6" /> : heroLow ? "—" : `${Math.round(heroShare * 100)}%`}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </span>
                 )}
                 {withStats && (
@@ -166,44 +208,6 @@ export function RoleTiles({
                     )}
                   </span>
                 )}
-              </span>
-            )}
-            {heroes.length > 0 && (
-              <span className="flex items-start gap-1">
-                {heroes.map((hero) => {
-                  const record = heroRecords.get(hero.slug);
-                  const name = record?.hero.name ?? hero.slug;
-                  const heroShare = record && record.maps > 0 ? record.maps_won / record.maps : 0;
-                  const heroLow = record == null || record.maps < MIN_WINRATE_MAPS;
-                  const heroTitle =
-                    card == null
-                      ? name
-                      : record == null
-                        ? `${name} · ${t("island.tile.noMaps")}`
-                        : `${name} · ${t("island.tile.maps", { n: record.maps })} · ${
-                            heroLow ? t("island.stats.winrateHidden") : `${Math.round(heroShare * 100)}%`
-                          }`;
-                  return (
-                    <span key={hero.slug} className="flex w-8 flex-col items-center gap-0.5" title={heroTitle}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getHeroIconUrl(hero.slug, hero.imagePath)}
-                        alt={name}
-                        width={32}
-                        height={32}
-                        className="h-8 w-8 rounded-full object-cover"
-                      />
-                      {withStats && (
-                        <span
-                          className="text-label font-semibold leading-none tabular-nums"
-                          style={{ color: record ? winrateColor(heroShare, record.maps) : "var(--aqt-fg-muted)" }}
-                        >
-                          {cardPending ? <Bar className="w-6" /> : heroLow ? "—" : `${Math.round(heroShare * 100)}%`}
-                        </span>
-                      )}
-                    </span>
-                  );
-                })}
               </span>
             )}
             {on && (

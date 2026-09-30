@@ -33,7 +33,7 @@ from shared.repository.workspace import get_or_create_workspace_member
 from src.domain.draft import ranks as domain_ranks
 from src.domain.draft import rules
 from src.domain.draft.entities import AutopickChoice, DraftAssignment, DraftResult, DraftSnapshot
-from src.domain.draft.fit import FitConfig, best_fit, fit_players
+from src.domain.draft.fit import best_fit, fit_players
 from src.services.draft import loaders
 from src.services.draft._errors import err as _err
 from src.services.draft.feasibility import DraftFeasibilityService, feasibility_service
@@ -139,7 +139,7 @@ class DraftSelectionService:
                 averages=avg_by_team,
                 captain_ranks=captain_ranks,
                 descending=rule == "team_avg_desc",
-                seed_reversed=bool(draft_session.settings_json.get("avg_tie_seed_reverse")),
+                tie_reversed=bool(draft_session.settings_json.get("avg_tie_seed_reverse")),
             )
         ]
         round_picks = await self.picks_repo.list_by_round(session, draft_session.id, next_pick.round_no)
@@ -416,7 +416,7 @@ class DraftSelectionService:
             fit_players(available, snapshot.rosters),
             capacity,
             DraftAutopickStrategy(draft_session.autopick_strategy),
-            FitConfig(),
+            rules.team_fit_config(shape, counts),
             allowed_options={(player_id, role) for player_id, roles in safe_by_player.items() for role in roles},
         )
         if choice is None:

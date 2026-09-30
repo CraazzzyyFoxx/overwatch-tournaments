@@ -18,6 +18,7 @@ import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type {
   DraftBoard,
+  DraftFormatSettings,
   DraftSeedRequest,
   DraftSeedResponse,
   DraftSession
@@ -35,10 +36,13 @@ import { DraftReviewStep } from "./DraftReviewStep";
 import {
   canCancelDraftSetup,
   derivePoolReadiness,
+  effectiveTeamCount,
   MAX_DRAFT_TEAM_COUNT,
+  maxDraftTeamCount,
   MIN_DRAFT_TEAM_COUNT,
   orderCaptainIds,
   previousSetupStep,
+  resolveDraftFormat,
   SETUP_STEPS,
   type DraftSetupStep,
   validateSetupStep
@@ -56,20 +60,24 @@ interface DraftSetupWizardProps {
   aside?: ReactNode;
 }
 
-function configFromSession(session: DraftSession | null, shape: RosterShape): DraftSetupConfig {
-  const roundRules = session?.settings_json?.round_rules;
+function configFromSession(session: DraftSession | null): DraftSetupConfig {
   const teamCount = session?.settings_json?.team_count;
   return {
-    teamCount: typeof teamCount === "number" ? teamCount : 2,
+    teamCount: typeof teamCount === "number" ? teamCount : null,
     pickTimeSeconds: session?.pick_time_seconds ?? 45,
     overtimeSeconds: session?.overtime_seconds ?? 0,
-    format: session?.format ?? "snake",
     autopickStrategy: session?.autopick_strategy ?? "best_fit",
-    allowAdminOverride: session?.allow_admin_override ?? true,
-    roundRules: Array.isArray(roundRules)
-      ? roundRules.map(String)
-      : Array.from({ length: shape.draft_rounds }, () => "linear"),
-    avgTieSeedReverse: session?.settings_json?.avg_tie_seed_reverse === true
+    allowAdminOverride: session?.allow_admin_override ?? true
+  };
+}
+
+/** The snapshot a created session drafts with — the server copied it from the tournament. */
+function formatFromSession(session: DraftSession): DraftFormatSettings {
+  const roundRules = session.settings_json?.round_rules;
+  return {
+    format: session.format,
+    round_rules: Array.isArray(roundRules) ? roundRules.map(String) : [],
+    avg_tie_seed_reverse: session.settings_json?.avg_tie_seed_reverse === true
   };
 }
 
@@ -103,9 +111,7 @@ export function DraftSetupWizard({
   const [step, setStep] = useState<DraftSetupStep>(
     initialSession?.status === "ready" ? "ready" : initialSession ? "pool" : "config"
   );
-  const [config, setConfig] = useState<DraftSetupConfig>(() =>
-    configFromSession(initialSession, initialSession?.roster_shape ?? rosterShape)
-  );
+  const [config, setConfig] = useState<DraftSetupConfig>(() => configFromSession(initialSession));
   const [captains, setCaptains] = useState<DraftCaptainSetup>(createEmptyCaptainSetup);
   const [preview, setPreview] = useState<DraftSeedResponse | null>(null);
   const [committedFeasibility, setCommittedFeasibility] = useState<
@@ -118,8 +124,8 @@ export function DraftSetupWizard({
   // Tournament grid first, workspace default second — the captains list ranks
   // players on the same grid the draft is seeded and balanced on. The hub shell
   // already mounts this query under the same key, so this is a cache read.
-  const tournamentGridVersion =
-    useHubTournamentQuery(tournamentId).data?.division_grid_version ?? null;
+  const tournament = useHubTournamentQuery(tournamentId).data;
+  const tournamentGridVersion = tournament?.division_grid_version ?? null;
   const workspaceGrid = useDivisionGrid();
   const divisionGrid: DivisionGrid = useMemo(
     () => (tournamentGridVersion?.tiers ? { tiers: tournamentGridVersion.tiers } : workspaceGrid),
@@ -128,7 +134,7 @@ export function DraftSetupWizard({
 
   const resetSetupState = () => {
     setLocalSession(null);
-    setConfig(configFromSession(null, rosterShape));
+    setConfig(configFromSession(null));
     setCaptains(createEmptyCaptainSetup());
     setPreview(null);
     setCommittedFeasibility(null);
@@ -189,9 +195,21 @@ export function DraftSetupWizard({
   );
   // A created session froze its own shape; before that the tournament's applies.
   const shape = session?.roster_shape ?? rosterShape;
+  const maxTeams = useMemo(() => maxDraftTeamCount(candidates, shape), [candidates, shape]);
+  const teamCount = effectiveTeamCount(config.teamCount, maxTeams);
   const readiness = useMemo(
-    () => derivePoolReadiness(candidates, config.teamCount, shape),
-    [candidates, config.teamCount, shape]
+    () => derivePoolReadiness(candidates, teamCount, shape),
+    [candidates, teamCount, shape]
+  );
+  // The session's snapshot once it exists; before that the tournament's rule —
+  // the one the server will copy into the session it creates.
+  const draftFormat = useMemo(
+    () =>
+      resolveDraftFormat(
+        session ? formatFromSession(session) : (tournament?.draft_format_json ?? null),
+        shape.draft_rounds
+      ),
+    [session, tournament?.draft_format_json, shape.draft_rounds]
   );
   const ranks = useMemo(
     () =>
@@ -224,17 +242,11 @@ export function DraftSetupWizard({
     mutationFn: () =>
       draftService.createSession(tournamentId, {
         pool_source: "balancer_balance",
-        format: config.format,
         pick_time_seconds: config.pickTimeSeconds,
         overtime_seconds: config.overtimeSeconds,
         autopick_strategy: config.autopickStrategy,
         allow_admin_override: config.allowAdminOverride,
-        settings: {
-          team_count: config.teamCount,
-          ...(config.format === "custom"
-            ? { round_rules: config.roundRules, avg_tie_seed_reverse: config.avgTieSeedReverse }
-            : {})
-        }
+        settings: { team_count: teamCount }
       })
   });
 
@@ -329,7 +341,7 @@ export function DraftSetupWizard({
   );
   const reviewReady =
     readiness.blockers.length === 0 &&
-    captains.ids.length === config.teamCount &&
+    captains.ids.length === teamCount &&
     captainsHaveAccounts &&
     preview?.feasibility.is_feasible === true;
   const currentIndex = SETUP_STEPS.indexOf(step);
@@ -384,11 +396,7 @@ export function DraftSetupWizard({
 
   const next = async () => {
     if (step === "config") {
-      if (
-        validateSetupStep(step, validationState).length > 0 ||
-        config.teamCount < MIN_DRAFT_TEAM_COUNT ||
-        config.teamCount > MAX_DRAFT_TEAM_COUNT
-      ) {
+      if (validateSetupStep(step, validationState).length > 0) {
         notify.warning(t("fixStepErrors"));
         return;
       }
@@ -399,6 +407,10 @@ export function DraftSetupWizard({
       return;
     }
     if (step === "pool") {
+      if (teamCount < MIN_DRAFT_TEAM_COUNT || teamCount > MAX_DRAFT_TEAM_COUNT) {
+        notify.warning(t("fixStepErrors"));
+        return;
+      }
       if (validateSetupStep(step, validationState).length > 0) {
         notify.warning(t("poolBlocked"));
         return;
@@ -407,8 +419,8 @@ export function DraftSetupWizard({
       return;
     }
     if (step === "captains") {
-      if (captains.ids.length !== config.teamCount) {
-        notify.warning(t("captainCountError", { count: config.teamCount }));
+      if (captains.ids.length !== teamCount) {
+        notify.warning(t("captainCountError", { count: teamCount }));
         return;
       }
       setStep("order");
@@ -504,6 +516,7 @@ export function DraftSetupWizard({
               value={config}
               onChange={setConfig}
               rosterShape={shape}
+              format={draftFormat}
               tournamentId={tournamentId}
               locked={!!session}
             />
@@ -514,12 +527,19 @@ export function DraftSetupWizard({
               feasibility={preview?.feasibility ?? feasibilityQuery.data ?? null}
               loading={poolQuery.isLoading}
               failed={poolQuery.isError}
+              teamCount={teamCount}
+              maxTeamCount={maxTeams}
+              pinned={config.teamCount != null}
+              onTeamCountChange={(next) =>
+                setConfig((current) => ({ ...current, teamCount: next }))
+              }
+              locked={!!session}
             />
           )}
           {step === "captains" && (
             <DraftCaptainsStep
               pool={pool}
-              teamCount={config.teamCount}
+              teamCount={teamCount}
               value={captains}
               onChange={setCaptainsAndReset}
               divisionGrid={divisionGrid}
@@ -532,14 +552,16 @@ export function DraftSetupWizard({
               onChange={setCaptainsAndReset}
               pool={pool}
               rounds={shape.draft_rounds}
-              format={config.format}
-              roundRules={config.roundRules}
+              format={draftFormat.format}
+              roundRules={draftFormat.round_rules}
               rosterShape={shape}
             />
           )}
           {step === "review" && (
             <DraftReviewStep
               config={config}
+              teamCount={teamCount}
+              format={draftFormat}
               rounds={shape.draft_rounds}
               captains={captains}
               orderedCaptainIds={orderedCaptainIds}
