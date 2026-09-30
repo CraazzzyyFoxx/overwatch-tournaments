@@ -52,7 +52,10 @@ export function DraftCaptainsStep({
 }: Readonly<DraftCaptainsStepProps>) {
   const t = useTranslations("draftAdmin");
 
-  const poolById = useMemo(() => new Map(pool.map((registration) => [registration.id, registration])), [pool]);
+  const poolById = useMemo(
+    () => new Map(pool.map((registration) => [registration.id, registration])),
+    [pool]
+  );
   const rows: DraftCaptainRow[] = useMemo(
     () =>
       pool.map((registration) => {
@@ -99,7 +102,7 @@ export function DraftCaptainsStep({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="@container space-y-5">
       <div
         role="status"
         className={cn(
@@ -116,7 +119,7 @@ export function DraftCaptainsStep({
         </strong>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+      <div className="grid gap-5 @3xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <CaptainPoolPicker
           rows={rows}
           selectedIds={value.ids}
@@ -125,7 +128,7 @@ export function DraftCaptainsStep({
           divisionGrid={divisionGrid}
         />
 
-        <div className="space-y-3">
+        <div className="@container space-y-3">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden />
             <h3 className="text-sm font-semibold">{t("selectedTeams")}</h3>
@@ -133,18 +136,75 @@ export function DraftCaptainsStep({
           {value.ids.length === 0 ? (
             <EmptyNote className="text-center">{t("selectCaptainsHint")}</EmptyNote>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-2 @lg:grid-cols-2">
               {value.ids.map((id, index) => {
                 const row = rowsById.get(id);
                 const registration = poolById.get(id);
                 if (!row || !registration) return null;
                 const seat = captainSeat(registration, value.roles[id], rosterShape);
                 return (
-                  <div key={id} className="rounded-xl border border-border/70 bg-card p-3">
-                    <div className="flex items-center justify-between gap-2">
+                  <div key={id} className="min-w-0 rounded-xl border border-border/70 bg-card p-3">
+                    <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-sm font-medium tabular-nums">
                         {index + 1}. {row.label}
                       </span>
+                      {/* The role the captain fills on their own roster, beside the
+                          rank it produces. A choice only when there is one: a
+                          role-less shape seats nobody on a role, and a one-role
+                          captain has nothing to pick. */}
+                      {seat.options.length > 1 ? (
+                        <Select
+                          value={seat.role ?? undefined}
+                          onValueChange={(role) => setRole(id, role as DraftRole)}
+                        >
+                          <SelectTrigger
+                            className="h-7 w-auto shrink-0 gap-1 px-1.5"
+                            aria-label={t("captainRoleFor", { name: row.label })}
+                            title={seat.role ? t(`roles.${seat.role}`) : undefined}
+                          >
+                            <SelectValue>
+                              {seat.role && (
+                                <PlayerRoleIcon
+                                  role={getRoleIconName(seat.role)}
+                                  size={14}
+                                  color={ROLE_ACCENT[seat.role]}
+                                  decorative
+                                />
+                              )}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {seat.options.map((role) => (
+                              <SelectItem key={role} value={role}>
+                                <span className="inline-flex items-center gap-2">
+                                  <PlayerRoleIcon
+                                    role={getRoleIconName(role)}
+                                    size={14}
+                                    color={ROLE_ACCENT[role]}
+                                    decorative
+                                  />
+                                  {t(`roles.${role}`)}
+                                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                                    {captainSeat(registration, role, rosterShape).rank ?? "—"}
+                                  </span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="flex shrink-0 items-center gap-1">
+                          {(seat.role ? [seat.role] : row.roles).map((role) => (
+                            <PlayerRoleIcon
+                              key={role}
+                              role={getRoleIconName(role)}
+                              size={14}
+                              color={ROLE_ACCENT[role]}
+                              label={t(`roles.${role}`)}
+                            />
+                          ))}
+                        </span>
+                      )}
                       {renderRank(row.rank, 20)}
                       <Button
                         type="button"
@@ -157,52 +217,6 @@ export function DraftCaptainsStep({
                         <X className="h-4 w-4" aria-hidden />
                       </Button>
                     </div>
-                    {/* The role the captain fills on their own roster. Offered only
-                        when there is a choice: a role-less shape seats nobody on a
-                        role, and a one-role captain has nothing to pick. */}
-                    {seat.options.length > 1 ? (
-                      <Select
-                        value={seat.role ?? undefined}
-                        onValueChange={(role) => setRole(id, role as DraftRole)}
-                      >
-                        <SelectTrigger
-                          className="mt-2 h-8"
-                          aria-label={t("captainRoleFor", { name: row.label })}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {seat.options.map((role) => (
-                            <SelectItem key={role} value={role}>
-                              <span className="inline-flex items-center gap-2">
-                                <PlayerRoleIcon
-                                  role={getRoleIconName(role)}
-                                  size={14}
-                                  color={ROLE_ACCENT[role]}
-                                  decorative
-                                />
-                                {t(`roles.${role}`)}
-                                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                                  {captainSeat(registration, role, rosterShape).rank ?? "—"}
-                                </span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="mt-1 flex items-center gap-1.5">
-                        {row.roles.map((role) => (
-                          <PlayerRoleIcon
-                            key={role}
-                            role={getRoleIconName(role)}
-                            size={14}
-                            color={ROLE_ACCENT[role]}
-                            label={t(`roles.${role}`)}
-                          />
-                        ))}
-                      </div>
-                    )}
                     <Input
                       id={`team-name-${id}`}
                       className="mt-2 h-8"

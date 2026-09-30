@@ -38,13 +38,13 @@ export function DraftSetupPreview({
         {schedule.map((entry) => (
           <div
             key={entry.round}
-            className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5"
+            className="flex min-w-0 items-start gap-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5"
           >
-            <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+            <span className="w-16 shrink-0 pt-1 text-xs font-medium tabular-nums text-muted-foreground">
               {t("roundNumber", { round: entry.round })}
             </span>
             {entry.resolved ? (
-              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                 {entry.teamIds.map((id, index) => {
                   const registration = pool.find((candidate) => candidate.id === id);
                   return (
@@ -62,7 +62,7 @@ export function DraftSetupPreview({
             ) : (
               /* Showing the seed order here would promise an order the draft will
                  not follow: this rule is resolved server-side. Name it instead. */
-              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              <p className="min-w-0 flex-1 pt-1 text-xs text-muted-foreground">
                 {t(`rules.${entry.rule}`)} · {t("orderResolvedOnTheServer")}
               </p>
             )}
@@ -72,4 +72,3 @@ export function DraftSetupPreview({
     </div>
   );
 }
-
