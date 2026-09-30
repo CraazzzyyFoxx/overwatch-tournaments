@@ -131,6 +131,15 @@ describe("actingTeamId", () => {
     expect(actingTeamId(clockOn2, gating({ isCaptain: true, isAdmin: true, myTeamId: 1 }), "clock")).toBe(2);
   });
 
+  it("sends an admin to the team that picks first before the clock starts", () => {
+    const ready = board({
+      shape: shape({ tank: 1 }),
+      picks: [pick(2, { draft_team_id: 1 }), pick(1, { draft_team_id: 2 })]
+    });
+    ready.session.status = "ready";
+    expect(actingTeamId(ready, gating({ isAdmin: true }), "mine")).toBe(2);
+  });
+
   it("acts for nobody once the draft is over", () => {
     const done = { ...clockOn2, session: { ...clockOn2.session, status: "completed" as const } };
     expect(actingTeamId(done, gating({ isCaptain: true, myTeamId: 1 }), "mine")).toBeNull();

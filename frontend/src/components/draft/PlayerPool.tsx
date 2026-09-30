@@ -49,7 +49,7 @@ interface PlayerPoolProps {
   viewParams: DraftViewParams;
   onViewParamsChange: (patch: Partial<DraftViewParams>) => void;
   teamViews: ReadonlyMap<number, TeamView>;
-  /** Team the viewer selects for; null → read-only rows and the "Спрос" (demand) column. */
+  /** Team the viewer selects for; null → read-only rows and no fit column. */
   actingTeam: TeamView | null;
   selection: RoomSelection | null;
   profileId: number | null;
@@ -472,7 +472,7 @@ export function PlayerPool({
                 </span>
               ))}
             </span>
-            <span className="text-right">{actingTeam ? t("pool.col.fit") : t("pool.col.demand")}</span>
+            <span className="text-right">{actingTeam && t("pool.col.fit")}</span>
             <span />
           </div>
 

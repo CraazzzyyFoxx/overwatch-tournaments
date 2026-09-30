@@ -51,14 +51,14 @@ export function onClockTeamId(board: DraftBoard): number | null {
 
 /**
  * The team the viewer is selecting FOR. A captain always prepares their own
- * pick (before their turn too); an admin acts for the team on the clock; a
- * captain-admin picks with `target`. `null`: nobody to act for (spectator, or
- * the draft is over).
+ * pick (before their turn too); an admin acts for the team on the clock — or,
+ * before the start, the team that picks first; a captain-admin picks with
+ * `target`. `null`: nobody to act for (spectator, or the draft is over).
  */
 export function actingTeamId(board: DraftBoard, gating: DraftGating, target: PickTarget): number | null {
   const status = board.session.status;
   if (status === "completed" || status === "cancelled") return null;
-  const clock = onClockTeamId(board);
+  const clock = onClockTeamId(board) ?? remainingPicks(board)[0]?.draft_team_id ?? null;
   const mine = gating.myTeamId;
   if (!gating.isAdmin) return mine;
   if (mine == null) return clock;
@@ -252,13 +252,6 @@ export function roleMarket(board: DraftBoard, views: ReadonlyMap<number, TeamVie
       tight: openSlots > 0 && primary < openSlots
     };
   });
-}
-
-/** How many teams could still seat this player on one of their roles. */
-export function demandCount(player: DraftPlayer, views: ReadonlyMap<number, TeamView>): number {
-  let count = 0;
-  for (const view of views.values()) if (seatableRoles(player, view).length > 0) count += 1;
-  return count;
 }
 
 export interface PlayerFit {

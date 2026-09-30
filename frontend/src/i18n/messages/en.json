@@ -5259,8 +5259,7 @@
       },
       "col": {
         "player": "Player",
-        "fit": "Fit",
-        "demand": "Teams"
+        "fit": "Fit"
       },
       "row": {
         "select": "Select on the best open role",
@@ -5287,7 +5286,6 @@
       },
       "fitTitle": "Fit for {team} on {role}",
       "fitTitleAny": "Fit for {team}",
-      "demandTitle": "How many teams can still take this player on one of their roles",
       "queueAdd": "Add to my list",
       "queueRemove": "Remove from my list",
       "moveUp": "Move up the list",

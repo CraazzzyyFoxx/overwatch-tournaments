@@ -10,7 +10,6 @@ import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid"
 import {
   bestSeatRole,
   canSeat,
-  demandCount,
   seatableRoles,
   type PlayerFit,
   type QueueControls,
@@ -225,7 +224,6 @@ export function PoolRow({
           actingTeam={actingTeam}
           takenTeam={takenTeam}
           fit={fit}
-          teamViews={teamViews}
         />
         {tab === "shortlist" && queueEditable && queued && queue && (
           <div className="mt-[3px] flex justify-end gap-0.5">
@@ -298,8 +296,7 @@ function RightCell({
   blocked,
   actingTeam,
   takenTeam,
-  fit,
-  teamViews
+  fit
 }: Readonly<{
   player: DraftPlayer;
   available: boolean;
@@ -307,7 +304,6 @@ function RightCell({
   actingTeam: TeamView | null;
   takenTeam: TeamView | null;
   fit: PlayerFit | undefined;
-  teamViews: ReadonlyMap<number, TeamView>;
 }>) {
   const t = useTranslations("draftRedesign");
   const main = "truncate text-body font-semibold";
@@ -328,33 +324,26 @@ function RightCell({
     );
   }
 
-  if (actingTeam != null) {
-    if (blocked || fit == null) return <div className={cn(main, "text-[color:var(--aqt-fg-faint)]")}>—</div>;
-    // Neutral ramp: the fit number is a magnitude, not a role — Support green here
-    // would read as "support" and collide with online/good.
-    const color =
-      fit.score >= 75 ? "var(--aqt-fg)" : fit.score >= 55 ? "var(--aqt-fg-muted)" : "var(--aqt-fg-dim)";
-    const title =
-      fit.role == null
-        ? t("pool.fitTitleAny", { team: actingTeam.team.name })
-        : t("pool.fitTitle", { team: actingTeam.team.name, role: t(`roles.${fit.role}`) });
-    return (
-      <div title={title}>
-        <div className={cn(main, "tabular-nums")} style={{ color }}>
-          <span className="sr-only">{title}: </span>
-          {fit.score}
-        </div>
-        <div className="ml-auto mt-[5px] h-1 w-full max-w-11 overflow-hidden rounded-full bg-[color:var(--aqt-overlay-3)]">
-          <div className="h-full" style={{ width: `${fit.score}%`, background: color }} />
-        </div>
-      </div>
-    );
-  }
-
-  const demand = demandCount(player, teamViews);
+  // A spectator has no team to fit an available player to: the cell stays empty.
+  if (actingTeam == null) return null;
+  if (blocked || fit == null) return <div className={cn(main, "text-[color:var(--aqt-fg-faint)]")}>—</div>;
+  // Neutral ramp: the fit number is a magnitude, not a role — Support green here
+  // would read as "support" and collide with online/good.
+  const color =
+    fit.score >= 75 ? "var(--aqt-fg)" : fit.score >= 55 ? "var(--aqt-fg-muted)" : "var(--aqt-fg-dim)";
+  const title =
+    fit.role == null
+      ? t("pool.fitTitleAny", { team: actingTeam.team.name })
+      : t("pool.fitTitle", { team: actingTeam.team.name, role: t(`roles.${fit.role}`) });
   return (
-    <div className={cn(main, "tabular-nums text-[color:var(--aqt-fg-muted)]")} title={t("pool.demandTitle")}>
-      {demand > 0 ? demand : "—"}
+    <div title={title}>
+      <div className={cn(main, "tabular-nums")} style={{ color }}>
+        <span className="sr-only">{title}: </span>
+        {fit.score}
+      </div>
+      <div className="ml-auto mt-[5px] h-1 w-full max-w-11 overflow-hidden rounded-full bg-[color:var(--aqt-overlay-3)]">
+        <div className="h-full" style={{ width: `${fit.score}%`, background: color }} />
+      </div>
     </div>
   );
 }
