@@ -50,7 +50,7 @@ class DraftQueueService:
     async def read(
         self, session: AsyncSession, draft_session: DraftSession, team: DraftTeam
     ) -> schemas.DraftTeamQueueResponse:
-        snapshot = await self.feasibility.load_snapshot(session, draft_session)
+        snapshot = await self.feasibility.load_read_snapshot(session, draft_session)
         return await self._response(session, draft_session, team, snapshot, list(team.pick_queue or []))
 
     async def write(

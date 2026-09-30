@@ -10,6 +10,10 @@ CPU-bound matching via ``asyncio.to_thread``.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+import time
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +40,46 @@ from src.domain.draft.feasibility import (
     evaluate_pick_options,
 )
 from src.services.draft import loaders
+from src.services.draft import realtime as draft_rt
 from src.services.draft.rosters import DraftRosterService, draft_rosters
 
-__all__ = ("DraftFeasibilityService", "feasibility_service")
+__all__ = ("DraftFeasibilityService", "feasibility_service", "single_flight")
+
+
+_inflight: dict[str, asyncio.Future[Any]] = {}
+
+
+async def single_flight[T](key: str, compute: Callable[[], Awaitable[T]]) -> T:
+    """Run ``compute`` once per ``key`` at a time in this process; concurrent callers await that run.
+
+    A waiter never inherits the leader's failure: if the leader raises (or its
+    request is cancelled), the waiter computes for itself, so one caller's error
+    or disconnect cannot fail everybody else's request.
+    """
+    pending = _inflight.get(key)
+    if pending is not None:
+        try:
+            return await asyncio.shield(pending)
+        except Exception:  # noqa: BLE001 — the leader failed; answer for ourselves
+            return await compute()
+    future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+    _inflight[key] = future
+    try:
+        result = await compute()
+    except BaseException as exc:
+        future.set_exception(exc if isinstance(exc, Exception) else RuntimeError("shared read abandoned"))
+        future.exception()  # retrieved: waiters recover on their own, nothing left to log
+        raise
+    else:
+        future.set_result(result)
+        return result
+    finally:
+        del _inflight[key]
+
+
+# Bounds staleness for writes that bypass the event log, like the board's TTL.
+_READ_SNAPSHOT_TTL_SECONDS = 15.0
+_read_snapshots: dict[str, tuple[float, DraftSnapshot]] = {}
 
 
 class DraftFeasibilityService:
@@ -101,6 +142,33 @@ class DraftFeasibilityService:
 
     async def load_feasibility_state(self, session: AsyncSession, draft_session: DraftSession) -> DraftFeasibilityState:
         return await self.state_from_snapshot(session, draft_session, await self.load_snapshot(session, draft_session))
+
+    async def load_read_snapshot(self, session: AsyncSession, draft_session: DraftSession) -> DraftSnapshot:
+        """``load_snapshot`` shared by every read of the same board state in this process.
+
+        Fit and the pick queue are asked per team, and every captain and admin
+        re-asks on every draft event: ~50 full snapshot loads per event, each
+        re-resolving every registration, saturated three workers (2026-09-30).
+        The players, picks and rosters are one answer for all of them, keyed
+        like the board. Teams are re-read per call because a captain's private
+        ``pick_queue`` changes without an event.
+
+        READ PATHS ONLY. The rows are detached from the session that loaded them
+        and shared by concurrent readers: nothing may mutate them, and a write
+        that resolves after mutating must see its own change, which a shared
+        snapshot of the prior state would hide.
+        """
+        event_id = await draft_rt.last_event_id(session, draft_session.tournament_id)
+        key = f"{draft_session.id}:{draft_session.version}:{event_id or 0}"
+        now = time.monotonic()
+        for stale in [k for k, (at, _) in _read_snapshots.items() if now - at > _READ_SNAPSHOT_TTL_SECONDS]:
+            del _read_snapshots[stale]
+        entry = _read_snapshots.get(key)
+        if entry is None:
+            snapshot = await single_flight(f"snapshot:{key}", lambda: self.load_snapshot(session, draft_session))
+            entry = _read_snapshots.setdefault(key, (now, snapshot))
+        teams = await self.teams_repo.list_by_session(session, draft_session.id)
+        return dataclasses.replace(entry[1], teams=tuple(teams))
 
     async def analyze_session(
         self,
@@ -226,7 +294,7 @@ class DraftFeasibilityService:
         """
         if draft_session.status in (DraftStatus.COMPLETED.value, DraftStatus.CANCELLED.value):
             return []
-        snapshot = await self.load_snapshot(session, draft_session)
+        snapshot = await self.load_read_snapshot(session, draft_session)
         shape = await self.resolve_shape(session, draft_session)
         counts = rules.team_slot_counts(snapshot.players, snapshot.picks, team_id, shape, snapshot.rosters)
         capacity = rules.role_openings(shape, counts)
