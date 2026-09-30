@@ -57,7 +57,7 @@ flowchart LR
 
 The Go gateway is the only HTTP/WebSocket backend entry point. It validates JWTs, applies edge policy, maps REST routes to request/reply RPC over RabbitMQ, proxies the frontend, serves API documentation, caches anonymous reads, and relays Redis-backed realtime events. Python services expose no HTTP API; they share SQLAlchemy models and cross-service infrastructure from `backend/shared/`.
 
-Production places Traefik in front of the repository-managed nginx edge for TLS termination. See [docs/architecture.md](./docs/architecture.md) for request flow, messaging guarantees, multitenancy, realtime replay, and deployment topology.
+See [docs/architecture.md](./docs/architecture.md) for request flow, messaging guarantees, multitenancy, realtime replay, and deployment topology.
 
 ### Backend services
 
@@ -256,10 +256,10 @@ backend lint/test, frontend, gateway, and production deployment workflows from
 
 - **Production:** [`docker-compose.production.yml`](./docker-compose.production.yml) and `make prod-*`. Production scaling requires pgBouncer; the limits and non-replicable workers are documented in the [`Makefile`](./Makefile). Host sizing (minimum 4 vCPU / 8 GB RAM / 80 GB SSD) and the bundled Postgres + pgBouncer (`db` profile): [`docs/production-host.md`](./docs/production-host.md).
 - **Monitoring:** [`monitoring/README.md`](./monitoring/README.md) covers Prometheus, Alertmanager, Grafana, Loki, Tempo, Promtail, exporters, and OpenTelemetry.
-- **Backups:** [`docs/backup-rustfs.md`](./docs/backup-rustfs.md) covers PostgreSQL dumps, two-site S3 replication, verification, and restore.
+- **Backups:** [`docs/backup-rustfs.md`](./docs/backup-rustfs.md) covers PostgreSQL dumps to S3, verification, and restore.
 - **Load testing:** [`loadtests/README.md`](./loadtests/README.md) documents Locust configuration, seeding, and reports.
 
-Do not reuse development credentials in production. Keep secrets in untracked environment files, restrict the admin API documentation endpoint, configure allowed WebSocket origins, and place TLS termination in front of nginx. Security policy and vulnerability reporting: [`SECURITY.md`](./SECURITY.md).
+Do not reuse development credentials in production. Keep secrets in untracked environment files, restrict the admin API documentation endpoint, and configure allowed WebSocket origins. Security policy and vulnerability reporting: [`SECURITY.md`](./SECURITY.md).
 
 ## Credits
 

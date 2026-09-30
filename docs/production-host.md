@@ -2,10 +2,7 @@
 
 What machine the production stack needs, and how to run it on a host with no database of
 its own: `docker-compose.production.yml` ships PostgreSQL 18 + pgBouncer behind the `db`
-profile. Moscow and the dev site keep their external `db_postgres` / `db_pgbouncer` and
-leave the profile off. Moscow's lives in `/root/postgres/docker-compose.yml` on the host (not
-in git), tuned for its 8 vCPU / 12 GB, with 5432/6432 published on `172.17.0.1` only — the
-`host.docker.internal` the services use.
+profile. A host with an external Postgres leaves the profile off and points `POSTGRES_*` at it.
 
 ## Host requirements
 
@@ -26,10 +23,9 @@ Where the numbers come from:
   big swings are `analytics-worker` training (up to `ANALYTICS_WORKER_MEMORY`, default
   `4G`) and Postgres (`POSTGRES_MEMORY`, default `2G`).
 - **Disk.** One release's image set is ~9 GB unpacked, and earlier releases stay on disk for
-  rollback until the daily [`disk-cleanup.md`](./disk-cleanup.md) cron removes them.
+  rollback until the daily [`disk-cleanup.md`](./disk-cleanup.md) job removes them.
   Container logs are capped at 150 MB each. On top of that: the Postgres data, up to 2 GB
   of WAL (`max_wal_size`), and the nightly dump staged in `ops/backup/tmp` before upload.
-  Production reached 94% of its then-77 GB disk the one time cleanup was not running.
 - **SSD.** The bundled Postgres is tuned for it (`random_page_cost=1.1`,
   `effective_io_concurrency=200`).
 - **x86_64 only.** CI builds `linux/amd64` images
@@ -38,16 +34,15 @@ Where the numbers come from:
 - **Pull, don't build.** `make prod-build` on a 4-core host takes around nine minutes and
   competes with live traffic; releases pull what CI built.
 
-On a 4 vCPU / 8 GB host, set in the root `.env` (the dev site runs with the same values):
+On a 4 vCPU / 8 GB host, set in the root `.env`:
 
 ```dotenv
 ANALYTICS_WORKER_CPUS=3
 ANALYTICS_WORKER_MEMORY=3G
 ```
 
-TLS is terminated in front of nginx (Traefik on the host, pointed at
-`http://127.0.0.1:${APP_PORT}`); see the `nginx` service comment in
-`docker-compose.production.yml`.
+nginx publishes plain HTTP on `${APP_BIND:-127.0.0.1}:${APP_PORT}`; TLS is terminated outside
+the stack, in front of it. See the `nginx` service comment in `docker-compose.production.yml`.
 
 ## Bundled Postgres (profile `db`)
 
@@ -107,7 +102,7 @@ DATABASE_URL=postgresql+psycopg://owt:<same password>@postgres:5432/owt
   `MAX_CLIENT_CONN` in the compose file together with the pools.
 
 Backups ([`backup-rustfs.md`](./backup-rustfs.md)) — `ops/backup/s3.env` overrides the
-Moscow container and superuser names in `backup.sh`:
+default container and superuser names in `backup.sh`:
 
 ```dotenv
 CONTAINER=owt-postgres-1
@@ -129,7 +124,7 @@ the second and third steps. The dump carries `alembic_version`, so `prod-migrate
 applies only the revisions newer than it:
 
 ```bash
-docker exec -i owt-postgres-1 pg_restore -U owt -d owt --no-owner --no-acl < anak_v5.dump
+docker exec -i owt-postgres-1 pg_restore -U owt -d owt --no-owner --no-acl < <dump>
 ```
 
 ### Releases and day-to-day

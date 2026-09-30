@@ -15,7 +15,7 @@ multitenancy, and deployment topology. Per-component detail lives in the linked 
 
 OWT is a **monorepo** with three tiers:
 
-1. **Edge** — Traefik (TLS) → nginx → a **Go gateway**. The gateway is the only process that
+1. **Edge** — nginx → a **Go gateway**. The gateway is the only process that
    speaks HTTP and WebSocket to the outside world.
 2. **Backend** — a set of **Python 3.14 headless workers** built on
    [FastStream](https://faststream.airt.ai/). They expose no HTTP; the gateway reaches them
@@ -27,7 +27,6 @@ OWT is a **monorepo** with three tiers:
 ```mermaid
 flowchart TB
     Browser["Browser / API client"]
-    Traefik["Traefik (TLS terminate)"]
     Nginx["nginx :80"]
     GW["Go gateway :8080\nHTTP + WebSocket, JWT, RPC dispatch,\nresponse cache, rate limit, realtime hub"]
     FE["Next.js frontend :3000"]
@@ -51,7 +50,7 @@ flowchart TB
       S3[("S3 / MinIO")]
     end
 
-    Browser --> Traefik --> Nginx --> GW
+    Browser --> Nginx --> GW
     GW -- "reverse proxy /" --> FE
     GW -- "rpc.<svc>.<method>" --> MQ
     MQ --> APP & ID & TOUR & PARSE & BAL & ANARPC & STREAM
@@ -75,9 +74,9 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
 
 ## 2. Request flow
 
-1. **Traefik** terminates TLS (upstream of this repo).
-2. **nginx** (`nginx/nginx.conf`) is the internal HTTP edge: it recovers the real client IP
-   from Traefik's `X-Forwarded-For`, enforces the per-IP DoS layer (`limit_req` / `limit_conn`
+1. **nginx** (`nginx/nginx.conf`) is the internal HTTP edge: it recovers the real client IP
+   from `X-Forwarded-For` (trusted only from private ranges and loopback), enforces the
+   per-IP DoS layer (`limit_req` / `limit_conn`
    zones for ordinary traffic, auth, WebSocket handshakes and the upload paths, with internal
    networks exempted via an empty zone key), applies anti-slowloris timeouts, allows
    WebSocket upgrades, caps body size at 12 MB (60 MB for match-log upload paths), and
@@ -85,9 +84,8 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    (`$uri` only — the WS token must never be logged) carrying `$limit_req_status`, which
    promtail turns into both Loki streams and Prometheus rejection counters. The limits are
    enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
-   HTTP/2 attack surface belongs to Traefik (nginx only ever speaks HTTP/1.1 here) and
-   L3/L4 to the hosting provider.
-3. The **gateway** (`gateway/cmd/gateway/main.go`):
+   nginx speaks only HTTP/1.1.
+2. The **gateway** (`gateway/cmd/gateway/main.go`):
    - validates JWTs locally with the shared HS256 secret; for RBAC-gated routes it
      revalidates and enriches the principal via `rpc.identity.validate_token`;
    - dispatches typed REST routes to workers as **RabbitMQ request/reply RPC**
@@ -208,7 +206,7 @@ and [`monitoring/README.md`](../monitoring/README.md)):
 Shared substrate: **PostgreSQL** (optionally behind pgBouncer), **Redis** (cache + realtime
 bus + active-user counters), **RabbitMQ** (all RPC/events/jobs), **S3/MinIO** (avatars,
 icons, match-log files). Workers that call external APIs (Discord, OverFast, Challonge, S3)
-egress through the outbound `proxy` container (xray/shadowsocks).
+egress through the outbound `proxy` container (xray).
 
 **Releases.** Pushing a `v*` tag is the whole ritual:
 

@@ -30,7 +30,7 @@ debug/
 .env
 backend/env/*.env
 !backend/env/*.env.example
-# Timeweb S3 keys for ops/backup/backup.sh (copy of /root/pg-backup/s3.env).
+# S3 keys for ops/backup/backup.sh.
 ops/backup/s3.env
 ops/backup/backup.env
 ops/backup/tmp/
@@ -42,6 +42,13 @@ proxy/shadowsocks.json
 !proxy/shadowsocks.json.example
 proxy/xray.json
 !proxy/xray.json.example
+
+# Host infrastructure and incident reviews: kept locally, not project content
+/docs/incidents/
+/ops/edge/
+/ops/logship/
+/ops/backup/compose.home.yml
+/ops/backup/Caddyfile
 
 # Caches / build artifacts
 backend/.cache/
