@@ -58,8 +58,8 @@ class UserRankSnapshot(db.Base):
             "platform",
             "captured_at",
         ),
-        # The "newest ranked snapshot per (account, role)" probe behind
-        # ``shared.services.rank_snapshots.fetch_latest_ow_ranks_by_account``:
+        # The "newest ranked snapshot per (account, role)" probe behind the
+        # registration autofill's OW window (tournament-service ``rank_sources``):
         # one index descent per pair instead of a sort over the whole history.
         # Partial so an account unranked in a role does not walk its history.
         Index(

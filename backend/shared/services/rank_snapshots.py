@@ -35,10 +35,11 @@ async def fetch_latest_ow_ranks_by_account(
     Returns ``{user_id: {battle_tag: {registration_role: rank_value}}}`` where ``battle_tag`` is the
     snapshot's denormalized ``Name#1234`` and ``registration_role`` is one of ``tank``/``damage``/
     ``support`` (the snapshot stores the canonical ``HeroClass`` name, which is what registration
-    uses too; ``flex`` snapshots are dropped). Only ranked snapshots with a non-null ``rank_value``
-    are considered, and only the newest per **(user, battle_tag, role)** by ``captured_at``. An
-    account whose last successful poll is older than :data:`OW_RANK_MAX_AGE` contributes nothing:
-    its newest row is what it was then, not what it is.
+    uses too; ``flex`` snapshots are dropped). A role counts only when the newest row of its
+    **(account, role, platform)** series is ranked: a role that went unranked -- a season reset the
+    player has not placed in yet -- has no current rank, however high the last season's was. Across
+    platforms the higher one wins. An account whose last successful poll is older than
+    :data:`OW_RANK_MAX_AGE` contributes nothing: its newest row is what it was then, not what it is.
 
     Keeping one entry per account (rather than collapsing by user) lets callers prefer main accounts
     over declared smurfs and take the maximum rank across accounts. The raw OW SR is returned as-is;
@@ -47,24 +48,21 @@ async def fetch_latest_ow_ranks_by_account(
     if not user_ids:
         return {}
 
-    # ``rank_snapshot`` is an append-only time series (one row per poll, per
-    # role, every ``interval_seconds``), so "newest per account and role" must
-    # not read the history: a ``DISTINCT ON`` over ``user_id IN (...)`` fetched
-    # and sorted every snapshot the requested users ever had -- millions of rows
-    # after a season -- on every registrations-list render. Instead, enumerate
-    # the small (account x role) set and probe once per pair; with
-    # ``ix_rank_snapshot_latest_ranked`` each probe is a single index descent.
+    # Enumerate the small (account x role) set and read each pair's newest row per
+    # platform on ``ix_rank_snapshot_series_captured`` rather than a ``DISTINCT ON``
+    # over ``user_id IN (...)``, which sorts every requested row on each
+    # registrations-list render. ``rank_snapshot`` holds changes, so a pair is a
+    # handful of rows. Unranked rows are read on purpose: the newest row being
+    # unranked is what says the role has no rank now.
     roles = sa.values(sa.column("role", sa.String), name="roles").data([(role.name,) for role in HERO_TYPE_CLASSES])
     latest = (
-        sa.select(UserRankSnapshot.battle_tag, UserRankSnapshot.rank_value)
+        sa.select(UserRankSnapshot.battle_tag, UserRankSnapshot.rank_value, UserRankSnapshot.is_ranked)
         .where(
             UserRankSnapshot.social_account_id == SocialAccount.id,
             UserRankSnapshot.role == roles.c.role,
-            UserRankSnapshot.rank_value.is_not(None),
-            UserRankSnapshot.is_ranked.is_(True),
         )
-        .order_by(UserRankSnapshot.captured_at.desc())
-        .limit(1)
+        .distinct(UserRankSnapshot.platform)
+        .order_by(UserRankSnapshot.platform, UserRankSnapshot.captured_at.desc())
         .lateral("latest")
     )
     query = (
@@ -77,6 +75,8 @@ async def fetch_latest_ow_ranks_by_account(
             SocialAccount.user_id.in_(user_ids),
             SocialAccount.provider == SocialProvider.BATTLENET,
             BattleTagRankState.last_success_at >= sa.func.now() - OW_RANK_MAX_AGE,
+            latest.c.rank_value.is_not(None),
+            latest.c.is_ranked.is_(True),
         )
     )
     result = await session.execute(query)
@@ -86,7 +86,8 @@ async def fetch_latest_ow_ranks_by_account(
         registration_role = canonical_to_registration_role(role)
         if registration_role is None:
             continue
-        out.setdefault(user_id, {}).setdefault(battle_tag, {})[registration_role] = rank_value
+        by_role = out.setdefault(user_id, {}).setdefault(battle_tag, {})
+        by_role[registration_role] = max(by_role.get(registration_role, rank_value), rank_value)
     return out
 
 
