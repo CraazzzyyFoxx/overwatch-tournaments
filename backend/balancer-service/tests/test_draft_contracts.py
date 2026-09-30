@@ -33,9 +33,10 @@ from src import (  # noqa: E402
     schemas,  # noqa: E402
 )
 from src.domain.draft import ranks, rules  # noqa: E402
-from src.domain.draft.entities import DraftPickOption, PoolSeat  # noqa: E402
+from src.domain.draft.entities import DraftPickOption, DraftSnapshot, PoolSeat  # noqa: E402
 from src.rpc import draft as draft_rpc  # noqa: E402
 from src.services.draft import board, journal, lifecycle  # noqa: E402
+from src.services.draft import feasibility as draft_feasibility  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
 from src.services.draft.journal import journal_service  # noqa: E402
 from tests.factories import roster  # noqa: E402
@@ -798,9 +799,11 @@ def test_a_burst_of_identical_reads_computes_once_and_a_failed_leader_fails_nobo
                 raise RuntimeError("leader broke")
             return label
 
-        leader = asyncio.create_task(board._single_flight("k", lambda: compute("leader", fail=leader_fails)))
+        leader = asyncio.create_task(draft_feasibility.single_flight("k", lambda: compute("leader", fail=leader_fails)))
         await asyncio.sleep(0)
-        waiters = [asyncio.create_task(board._single_flight("k", lambda: compute("waiter"))) for _ in range(3)]
+        waiters = [
+            asyncio.create_task(draft_feasibility.single_flight("k", lambda: compute("waiter"))) for _ in range(3)
+        ]
         await asyncio.sleep(0)
         gate.set()
         return await asyncio.gather(leader, *waiters, return_exceptions=True)
@@ -812,4 +815,42 @@ def test_a_burst_of_identical_reads_computes_once_and_a_failed_leader_fails_nobo
     recovered = asyncio.run(burst(leader_fails=True))
     assert isinstance(recovered[0], RuntimeError)
     assert recovered[1:] == ["waiter"] * 3
-    assert board._inflight == {}
+    assert draft_feasibility._inflight == {}
+
+
+def test_reads_of_one_board_state_share_a_snapshot_but_always_see_the_current_queue(monkeypatch) -> None:
+    # Fit and the pick queue are asked per team by every viewer; the rows behind
+    # them are one answer per board state. A captain's queue changes without an
+    # event, so teams must never come from the shared copy.
+    service = draft_feasibility.DraftFeasibilityService()
+    loads: list[int] = []
+    state = {"event_id": 7, "queue": [11]}
+
+    async def _load_snapshot(_session, _draft):
+        loads.append(state["event_id"])
+        return DraftSnapshot(teams=(), players=(), picks=(), rosters={})
+
+    async def _last_event_id(_session, _tournament_id):
+        return state["event_id"]
+
+    class _Teams:
+        async def list_by_session(self, _session, session_id):
+            return [DraftTeam(id=5, session_id=session_id, pick_queue=list(state["queue"]))]
+
+    monkeypatch.setattr(service, "load_snapshot", _load_snapshot)
+    monkeypatch.setattr(service, "teams_repo", _Teams())
+    monkeypatch.setattr(draft_feasibility.draft_rt, "last_event_id", _last_event_id)
+    monkeypatch.setattr(draft_feasibility, "_read_snapshots", {})
+    draft = DraftSession(id=1, tournament_id=2, workspace_id=3, version=4)
+
+    def read() -> DraftSnapshot:
+        return asyncio.run(service.load_read_snapshot(None, draft))  # type: ignore[arg-type]
+
+    read()
+    state["queue"] = [12]
+    assert read().teams[0].pick_queue == [12]
+    assert loads == [7]
+
+    state["event_id"] = 8
+    read()
+    assert loads == [7, 8]

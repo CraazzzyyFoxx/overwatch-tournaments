@@ -15,10 +15,14 @@ from __future__ import annotations
 
 from typing import Any
 
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from shared.models.balancer.draft import DraftSession
+from shared.models.platform.realtime import WorkspaceEvent
 from shared.services.realtime import DomainEvent, Scope, emit
 
-__all__ = ("DRAFT_BOARD_RESOURCE", "publish_draft_event")
+__all__ = ("DRAFT_BOARD_RESOURCE", "last_event_id", "publish_draft_event")
 
 
 # The client-cache resource these events patch. Mirrors the frontend registry
@@ -46,3 +50,17 @@ async def publish_draft_event(
         ),
         actor_user_id=actor_user_id,
     )
+
+
+async def last_event_id(session: AsyncSession, tournament_id: int) -> int | None:
+    """Newest persisted event on the tournament's draft topic or its invalidation topic.
+
+    What every cached draft read is keyed by. Each draft mutation persists its
+    event in its own transaction (above), and a rank or registration edit lands
+    on the tournament's INVALIDATION topic (tournament-service, resource
+    ``tournament.registrations``) -- roles and ranks are read live, not copied
+    into the draft -- so a new id is a new board state.
+    """
+    scope = Scope.tournament(tournament_id)
+    topics = (scope.domain_topic("draft"), scope.invalidation_topic)
+    return await session.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic.in_(topics)))
