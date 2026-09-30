@@ -780,3 +780,36 @@ def test_board_renders_a_seat_whose_registration_resolved_to_nothing(monkeypatch
     assert read.primary_role is None
     assert read.effective_rank is None
     assert read.role_ranks == {}
+
+
+def test_a_burst_of_identical_reads_computes_once_and_a_failed_leader_fails_nobody_else() -> None:
+    # Every viewer refetches fit/queue on every draft event; the burst used to be
+    # N full snapshot rebuilds per event and saturated the worker.
+    runs: list[str] = []
+
+    async def burst(*, leader_fails: bool) -> list[object]:
+        runs.clear()
+        gate = asyncio.Event()
+
+        async def compute(label: str, *, fail: bool = False) -> str:
+            runs.append(label)
+            await gate.wait()
+            if fail:
+                raise RuntimeError("leader broke")
+            return label
+
+        leader = asyncio.create_task(board._single_flight("k", lambda: compute("leader", fail=leader_fails)))
+        await asyncio.sleep(0)
+        waiters = [asyncio.create_task(board._single_flight("k", lambda: compute("waiter"))) for _ in range(3)]
+        await asyncio.sleep(0)
+        gate.set()
+        return await asyncio.gather(leader, *waiters, return_exceptions=True)
+
+    shared = asyncio.run(burst(leader_fails=False))
+    assert runs == ["leader"]
+    assert shared == ["leader"] * 4
+
+    recovered = asyncio.run(burst(leader_fails=True))
+    assert isinstance(recovered[0], RuntimeError)
+    assert recovered[1:] == ["waiter"] * 3
+    assert board._inflight == {}

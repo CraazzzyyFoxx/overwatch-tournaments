@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import asyncio
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
@@ -36,6 +37,48 @@ def _board_cache_key(session_id: int, last_event_id: int | None) -> str:
     # The "backend:" prefix routes the key to the backend configured by
     # cache.setup() (cashews routes strictly by key prefix).
     return f"backend:balancer:draft_board:{session_id}:{last_event_id or 0}"
+
+
+# Same safety net as the board, stretched over the gateway's 15s read deadline:
+# a client that timed out and refetches the same board state gets the answer
+# the first run produced instead of starting another.
+_SHARED_READ_TTL = "15s"
+
+
+def _shared_read_key(session_id: int, version: int, last_event_id: int | None, parts: tuple[Any, ...]) -> str:
+    tail = ":".join(str(part) for part in parts)
+    return f"backend:balancer:draft_read:{session_id}:{version}:{last_event_id or 0}:{tail}"
+
+
+_inflight: dict[str, asyncio.Future[Any]] = {}
+
+
+async def _single_flight[T](key: str, compute: Callable[[], Awaitable[T]]) -> T:
+    """Run ``compute`` once per ``key`` at a time in this process; concurrent callers await that run.
+
+    A waiter never inherits the leader's failure: if the leader raises (or its
+    request is cancelled), the waiter computes for itself, so one caller's error
+    or disconnect cannot fail everybody else's request.
+    """
+    pending = _inflight.get(key)
+    if pending is not None:
+        try:
+            return await asyncio.shield(pending)
+        except Exception:  # noqa: BLE001 — the leader failed; answer for ourselves
+            return await compute()
+    future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+    _inflight[key] = future
+    try:
+        result = await compute()
+    except BaseException as exc:
+        future.set_exception(exc if isinstance(exc, Exception) else RuntimeError("shared read abandoned"))
+        future.exception()  # retrieved: waiters recover on their own, nothing left to log
+        raise
+    else:
+        future.set_result(result)
+        return result
+    finally:
+        del _inflight[key]
 
 
 class VisibleCustomField(NamedTuple):
@@ -164,11 +207,7 @@ class DraftBoardService:
         # (tournament-service, resource ``tournament.registrations``). Keying on
         # the draft topic alone would serve the pre-edit ranks until the TTL
         # expired.
-        scope = Scope.tournament(draft_session.tournament_id)
-        topics = (scope.domain_topic("draft"), scope.invalidation_topic)
-        last_event_id = await session.scalar(
-            sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic.in_(topics))
-        )
+        last_event_id = await self.last_event_id(session, draft_session)
         cache_key = _board_cache_key(draft_session.id, last_event_id)
         if cache.is_setup():
             try:
@@ -225,6 +264,52 @@ class DraftBoardService:
             except Exception:  # noqa: BLE001 — cache is best-effort
                 pass
         return snapshot
+
+    async def last_event_id(self, session: AsyncSession, draft_session: DraftSession) -> int | None:
+        """Newest event on the draft topic or the tournament's invalidation topic (see ``build_board``)."""
+        scope = Scope.tournament(draft_session.tournament_id)
+        topics = (scope.domain_topic("draft"), scope.invalidation_topic)
+        return await session.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic.in_(topics)))
+
+    async def shared_read[T](
+        self,
+        session: AsyncSession,
+        draft_session: DraftSession,
+        parts: tuple[Any, ...],
+        compute: Callable[[], Awaitable[T]],
+    ) -> T:
+        """One computation per board state for a derived read, shared by everyone asking.
+
+        Fit and the pick queue each rebuild the whole draft snapshot, and every
+        client refetches both on every draft event: 25 viewers asking within the
+        same second saturated the worker (2026-09-30, 8s p50, 504s past 15s).
+        Keyed like the board -- ``last_event_id`` -- plus the session's
+        ``version``, so any persisted change is a new key; ``parts`` must carry
+        whatever else the answer depends on that no event records (the team, its
+        private queue). Redis shares the answer across replicas; the in-flight map
+        folds the burst that arrives before the first answer lands. Read paths
+        only: a write that resolves after mutating would read its own past.
+        """
+        event_id = await self.last_event_id(session, draft_session)
+        key = _shared_read_key(draft_session.id, draft_session.version, event_id, parts)
+        if cache.is_setup():
+            try:
+                cached = await cache.get(key)
+            except Exception:  # noqa: BLE001 — cache is best-effort
+                cached = None
+            if cached is not None:
+                return cached
+
+        async def compute_and_store() -> T:
+            result = await compute()
+            if cache.is_setup():
+                try:
+                    await cache.set(key, result, expire=_SHARED_READ_TTL)
+                except Exception:  # noqa: BLE001 — cache is best-effort
+                    pass
+            return result
+
+        return await _single_flight(key, compute_and_store)
 
 
 board_service = DraftBoardService()
