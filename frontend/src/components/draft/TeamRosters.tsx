@@ -435,7 +435,7 @@ function RosterCell({
       aria-label={title}
       onClick={() => onOpenProfile(player.id)}
       className={cn(
-        "flex h-[30px] min-w-0 items-center overflow-hidden rounded-[7px] border border-transparent bg-[color:var(--cell-bg)] px-[5px] text-left text-label font-medium text-[color:var(--aqt-fg)] hover:bg-[color:var(--cell-bg-hover)]",
+        "flex h-[30px] min-w-0 items-center gap-1 overflow-hidden rounded-[7px] border border-transparent bg-[color:var(--cell-bg)] px-[5px] text-left text-label font-medium text-[color:var(--aqt-fg)] hover:bg-[color:var(--cell-bg-hover)]",
         FOCUS_RING,
         // Off-role is the one thing a cell still draws a border for.
         cell.offRole && "border-dashed border-[color:var(--aqt-amber)]"
@@ -447,6 +447,15 @@ function RosterCell({
         } as CSSProperties
       }
     >
+      {division != null && (
+        <DivisionIcon
+          division={division}
+          tournamentGrid={divisionGrid}
+          width={16}
+          height={16}
+          className="h-4 w-4 flex-none object-contain"
+        />
+      )}
       <span className="min-w-0 truncate">{splitBattleTag(tag).name}</span>
     </button>
   );

@@ -176,11 +176,15 @@ function renderRosters(
 }
 
 describe("roster cells", () => {
-  test("a role slot shows the drafted role and that role's rank", () => {
+  test("a role slot shows the drafted role and that role's rank, crest included", () => {
     const html = renderRosters(makeBoard(ROLE_SHAPE));
+    const cell = html.match(/<button[^>]*aria-label="Ana#1234[^"]*"[^>]*>.*?<\/button>/)?.[0] ?? "";
 
     expect(html).toContain('aria-label="Ana#1234 · roles.support · 2800 SR');
     expect(html).not.toContain("4000 SR");
+    // The crest is the rank a viewer reads at a glance: the slot's, not the best role's.
+    expect(cell).toContain("/low.png");
+    expect(cell).not.toContain("/high.png");
   });
 
   test("an all-flex roster names the flex slot, uses the best rank and offers no role chips", () => {
