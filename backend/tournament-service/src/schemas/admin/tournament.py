@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from shared.core import tournament_state
 from shared.core.enums import TournamentStatus
+from shared.schemas.draft_format import DraftFormatField
 from shared.schemas.roster_slots import RosterSlotsField
 
 __all__ = (
@@ -46,6 +47,9 @@ class TournamentCreate(BaseModel):
     # None = inherit (workspace default -> built-in 5v5). Normalized by
     # RosterSlotsField, so the column never stores a zero count.
     roster_slots_json: RosterSlotsField = None
+    # None = the snake default. Normalized by DraftFormatField, so the column
+    # never stores round rules a non-custom format would ignore.
+    draft_format_json: DraftFormatField = None
 
 
 class TournamentUpdate(BaseModel):
@@ -73,6 +77,7 @@ class TournamentUpdate(BaseModel):
     loss_points: float | None = None
     division_grid_version_id: int | None = None
     roster_slots_json: RosterSlotsField = None
+    draft_format_json: DraftFormatField = None
 
 
 class TournamentStatusTransition(BaseModel):

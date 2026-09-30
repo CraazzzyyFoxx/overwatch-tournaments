@@ -86,15 +86,15 @@ DraftRoleRead = Annotated[RegistrationRoleCode, BeforeValidator(_role_slot_code)
 # Requests
 # --------------------------------------------------------------------------- #
 class DraftSessionCreateRequest(BaseModel):
-    """Everything about a new draft EXCEPT its size.
+    """Everything about a new draft EXCEPT its size and its format.
 
-    ``rounds`` is derived from the tournament's roster shape server-side, so the
-    admin form has nothing to submit and nothing to keep in sync.
+    ``rounds`` is derived from the tournament's roster shape server-side and the
+    format is a tournament rule (``Tournament.draft_format_json``), so the admin
+    form has nothing to submit and nothing to keep in sync for either.
     """
 
     pool_source: DraftPoolSource = DraftPoolSource.BALANCER_BALANCE
     source_balance_id: int | None = None
-    format: DraftFormat = DraftFormat.SNAKE
     pick_time_seconds: int = 45
     # Grace period after the main clock, before the autopick. 0 = no overtime.
     overtime_seconds: int = 0

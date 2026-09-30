@@ -4666,8 +4666,8 @@
       "ready": "Ready to start"
     },
     "stepDescriptions": {
-      "config": "Set roster size, timing and the rules used throughout the draft.",
-      "pool": "Check capacity, role coverage and data quality before choosing teams.",
+      "config": "Set timing and how the draft handles autopicks. The format comes from the tournament settings.",
+      "pool": "Set the number of teams, then check capacity, role coverage and data quality.",
       "captains": "Choose the exact number of team captains and name their teams.",
       "order": "Calculate or arrange the captain order and preview every round.",
       "review": "Run server validation and inspect every blocker before seeding.",
@@ -4681,6 +4681,10 @@
     "openTournamentSettings": "Open tournament settings",
     "teamCount": "Number of teams",
     "teamCountHint": "The same number of captains must be selected later.",
+    "teamCountMax": "Max",
+    "teamCountMaxHint": "The pool supports up to {count, plural, one {# team} other {# teams}}.",
+    "changeFormatInSettings": "Change in tournament settings",
+    "formatLockedByDraft": "A draft of this tournament is in progress, so its format is locked. Finish or cancel the draft to change it.",
     "rounds": "Rounds",
     "roundsDerived": "{rounds, plural, one {# pick per team} other {# picks per team}} — the captain already occupies one roster slot.",
     "pickTime": "Time per pick",

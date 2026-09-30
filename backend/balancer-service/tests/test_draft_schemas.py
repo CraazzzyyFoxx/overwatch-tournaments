@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -26,21 +27,24 @@ from shared.models.balancer.draft import DraftSession  # noqa: E402
 from shared.schemas.roster_slots import RosterShapeRead  # noqa: E402
 from src import schemas  # noqa: E402
 from src.domain.draft import rules  # noqa: E402
+from src.rpc import draft as draft_rpc  # noqa: E402
+from src.services.draft import lifecycle  # noqa: E402
 
 
 def test_create_request_defaults() -> None:
     req = schemas.DraftSessionCreateRequest()
     assert req.pool_source == DraftPoolSource.BALANCER_BALANCE
-    assert req.format == DraftFormat.SNAKE
     assert req.pick_time_seconds == 45
     assert req.autopick_strategy == DraftAutopickStrategy.BEST_FIT
     assert req.allow_admin_override is True
 
 
-def test_create_request_no_longer_carries_the_roster_size() -> None:
-    # The shape owns both, so neither may reappear as a request field.
+def test_create_request_no_longer_carries_the_roster_size_or_the_format() -> None:
+    # The shape owns the first two, the tournament owns the format, so none of
+    # them may reappear as a request field.
     assert "rounds" not in schemas.DraftSessionCreateRequest.model_fields
     assert "team_size" not in schemas.DraftSessionCreateRequest.model_fields
+    assert "format" not in schemas.DraftSessionCreateRequest.model_fields
 
 
 def test_create_request_ignores_a_stale_client_sending_rounds_or_team_size() -> None:
@@ -186,3 +190,66 @@ def test_extend_request_requires_the_optimistic_token() -> None:
         schemas.DraftPickExtendRequest(seconds=30)
     ok = schemas.DraftPickExtendRequest(expected_version=3, seconds=30)
     assert (ok.expected_version, ok.seconds) == (3, 30)
+
+
+# ─── the format is the tournament's, not the request's ───────────────────────
+
+
+class _FormatSession:
+    """Just enough AsyncSession for ``tournament_draft_format``."""
+
+    def __init__(self, raw: dict | None) -> None:
+        self._raw = raw
+
+    async def scalar(self, statement: object) -> dict | None:
+        return self._raw
+
+
+def _tournament_format(raw: dict | None, rounds: int):
+    return asyncio.run(
+        lifecycle.lifecycle_service.tournament_draft_format(_FormatSession(raw), 1, rounds=rounds)  # type: ignore[arg-type]
+    )
+
+
+def test_a_tournament_without_a_stored_format_drafts_snake() -> None:
+    assert _tournament_format(None, 4) == (DraftFormat.SNAKE, {})
+
+
+def test_a_custom_tournament_copies_its_rules_padded_to_the_round_count() -> None:
+    fmt, settings = _tournament_format(
+        {"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}, 3
+    )
+
+    assert fmt is DraftFormat.CUSTOM
+    assert settings == {"round_rules": ["reverse", "linear", "linear"], "avg_tie_seed_reverse": True}
+
+
+def test_a_client_sent_round_rule_is_dropped_on_create() -> None:
+    # The wizard is read-only about the format now; a stale bundle that still
+    # posts rules must not become a second, unlocked place to edit it.
+    merged = draft_rpc._with_format_settings(
+        {"team_count": 4, "round_rules": ["strongest_first"], "avg_tie_seed_reverse": True},
+        {"round_rules": ["linear", "linear"], "avg_tie_seed_reverse": False},
+    )
+
+    assert merged == {"team_count": 4, "round_rules": ["linear", "linear"], "avg_tie_seed_reverse": False}
+
+
+def test_a_non_custom_tournament_leaves_no_format_keys_behind() -> None:
+    # Snake/linear contribute nothing, so a patched settings blob stays as clean
+    # as the one the wizard used to send.
+    assert draft_rpc._with_format_settings({"team_count": 4, "round_rules": ["reverse"]}, {}) == {"team_count": 4}
+
+
+def test_session_patch_keeps_the_sessions_own_format_snapshot() -> None:
+    # What `_session_patch` does: replace settings_json, then re-add the keys the
+    # session was created with.
+    session_settings = {"round_rules": ["reverse", "linear"], "avg_tie_seed_reverse": True, "team_count": 4}
+    incoming = {"team_count": 6, "round_rules": ["strongest_first"], "avg_tie_seed_reverse": False}
+
+    merged = draft_rpc._with_format_settings(
+        incoming,
+        {k: session_settings[k] for k in draft_rpc._FORMAT_SETTINGS_KEYS if k in session_settings},
+    )
+
+    assert merged == {"team_count": 6, "round_rules": ["reverse", "linear"], "avg_tie_seed_reverse": True}

@@ -6,6 +6,16 @@ import type { FormField } from "@/types/forms.types";
 export type DraftStatus = "setup" | "ready" | "live" | "paused" | "completed" | "cancelled";
 
 export type DraftFormat = "snake" | "linear" | "custom";
+
+/**
+ * The tournament's draft format rule (`Tournament.draft_format_json`); `null` on
+ * the tournament = snake. Normalized server-side: only `custom` keeps rules.
+ */
+export interface DraftFormatSettings {
+  format: DraftFormat;
+  round_rules: string[];
+  avg_tie_seed_reverse: boolean;
+}
 type DraftPoolSource = "balancer_balance" | "manual";
 export type DraftAutopickStrategy = "best_fit" | "best_available" | "role_need";
 export type DraftRole = RosterRoleSlotCode;
@@ -287,7 +297,6 @@ export interface DraftEventData {
 export interface DraftSessionCreateRequest {
   pool_source?: DraftPoolSource;
   source_balance_id?: number | null;
-  format?: DraftFormat;
   pick_time_seconds?: number;
   overtime_seconds?: number;
   autopick_strategy?: DraftAutopickStrategy;

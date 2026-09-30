@@ -211,6 +211,7 @@ def _run_update(
     draft_status: str | None,
     update: schemas.TournamentUpdate,
     stored_slots: dict[str, int] | None = None,
+    stored_format: dict | None = None,
 ):
     """Return (error, session, tournament, invalidation spy)."""
     tournament = SimpleNamespace(
@@ -219,6 +220,7 @@ def _run_update(
         team_formation="draft",
         division_grid_version_id=None,
         roster_slots_json=stored_slots,
+        draft_format_json=stored_format,
     )
     session = _FakeSession(tournament=tournament, draft_status=draft_status)
     spy = _InvalidationSpy(session)
@@ -341,3 +343,59 @@ def test_resending_the_same_shape_does_not_invalidate_the_cache(monkeypatch) -> 
     )
     assert session.committed is True
     assert spy.calls == []
+
+
+# ─── update_tournament: the draft format is locked by the same guard ──────────
+
+_CUSTOM_FORMAT = {"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}
+
+
+def test_draft_format_change_blocked_by_unfinished_draft(monkeypatch) -> None:
+    # The session snapshots the format at create time, so an edit mid-draft would
+    # promise a change the running board will never honour.
+    error, session, tournament, _ = _run_update(
+        monkeypatch,
+        draft_status="live",
+        update=schemas.TournamentUpdate(draft_format_json=_CUSTOM_FORMAT),
+    )
+    assert error is not None and error.status_code == 400
+    assert "the draft format" in error.detail
+    assert session.committed is False
+    assert tournament.draft_format_json is None  # unchanged
+
+
+def test_draft_format_change_accepted_without_an_active_draft(monkeypatch) -> None:
+    error, session, tournament, _ = _run_update(
+        monkeypatch,
+        draft_status=None,
+        update=schemas.TournamentUpdate(draft_format_json=_CUSTOM_FORMAT),
+    )
+    assert error is None
+    assert session.committed is True
+    assert tournament.draft_format_json == _CUSTOM_FORMAT
+
+
+def test_resending_the_same_format_does_not_trip_the_guard(monkeypatch) -> None:
+    # Same reason as the roster shape: the Settings tab submits every field.
+    error, session, _, _ = _run_update(
+        monkeypatch,
+        draft_status="live",
+        update=schemas.TournamentUpdate(draft_format_json=dict(_CUSTOM_FORMAT), name="renamed"),
+        stored_format=dict(_CUSTOM_FORMAT),
+    )
+    assert error is None
+    assert session.scalar_stmts == []  # guard query never issued
+    assert session.committed is True
+
+
+def test_a_snake_resend_that_drops_stale_rules_still_counts_as_a_change(monkeypatch) -> None:
+    # Normalization at the schema edge is what makes the equality check
+    # meaningful: switching custom -> snake really does change the stored value.
+    error, _, tournament, _ = _run_update(
+        monkeypatch,
+        draft_status=None,
+        update=schemas.TournamentUpdate(draft_format_json={"format": "snake", "round_rules": ["reverse"]}),
+        stored_format=dict(_CUSTOM_FORMAT),
+    )
+    assert error is None
+    assert tournament.draft_format_json == {"format": "snake", "round_rules": [], "avg_tie_seed_reverse": False}

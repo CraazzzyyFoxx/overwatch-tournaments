@@ -4333,7 +4333,7 @@
       "summary": "Get draft session board"
     },
     "rpc.balancer.draft.session_create": {
-      "description": "Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event.",
+      "description": "Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the tournament's `draft_format_json`, not from the request.",
       "request": {
         "array": false,
         "ref": "balancer.DraftSessionCreateRequest"
@@ -24065,7 +24065,7 @@
       "type": "object"
     },
     "balancer.DraftSessionCreateRequest": {
-      "description": "Everything about a new draft EXCEPT its size.\n\n``rounds`` is derived from the tournament's roster shape server-side, so the\nadmin form has nothing to submit and nothing to keep in sync.",
+      "description": "Everything about a new draft EXCEPT its size and its format.\n\n``rounds`` is derived from the tournament's roster shape server-side and the\nformat is a tournament rule (``Tournament.draft_format_json``), so the admin\nform has nothing to submit and nothing to keep in sync for either.",
       "properties": {
         "allow_admin_override": {
           "default": true,
@@ -24075,10 +24075,6 @@
         "autopick_strategy": {
           "$ref": "#/components/schemas/balancer.DraftAutopickStrategy",
           "default": "best_fit"
-        },
-        "format": {
-          "$ref": "#/components/schemas/balancer.DraftFormat",
-          "default": "snake"
         },
         "overtime_seconds": {
           "default": 0,
@@ -47434,6 +47430,19 @@
           "default": null,
           "title": "Division Grid Version Id"
         },
+        "draft_format_json": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Draft Format Json"
+        },
         "draw_points": {
           "default": 0.5,
           "title": "Draw Points",
@@ -48015,6 +48024,19 @@
           ],
           "title": "Division Grid Version Id"
         },
+        "draft_format_json": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Draft Format Json"
+        },
         "draw_points": {
           "default": 0.5,
           "title": "Draw Points",
@@ -48437,6 +48459,19 @@
           ],
           "default": null,
           "title": "Division Grid Version Id"
+        },
+        "draft_format_json": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Draft Format Json"
         },
         "draw_points": {
           "anyOf": [

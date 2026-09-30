@@ -1,27 +1,19 @@
 import type { RosterShape } from "@/lib/roster/shape";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type {
-  DraftAutopickStrategy,
-  DraftCaptainOrder,
-  DraftFormat,
-  DraftRole
-} from "@/types/draft.types";
+import type { DraftAutopickStrategy, DraftCaptainOrder, DraftRole } from "@/types/draft.types";
 
-/** The roster shape is NOT here: it belongs to the tournament, not the wizard. */
+/**
+ * The roster shape and the draft format are NOT here: both belong to the
+ * tournament, and the server copies them into the session it creates.
+ */
 export interface DraftSetupConfig {
-  teamCount: number;
+  /** `null` = follow the most teams the pool can fill (`maxDraftTeamCount`). */
+  teamCount: number | null;
   pickTimeSeconds: number;
   /** Grace period added when the main clock expires; 0 disables overtime. */
   overtimeSeconds: number;
-  format: DraftFormat;
   autopickStrategy: DraftAutopickStrategy;
   allowAdminOverride: boolean;
-  roundRules: string[];
-  /**
-   * `team_avg_*` rounds: teams tied on average AND captain rank pick in seed
-   * order N → 1 instead of 1 → N. Stored as `settings_json.avg_tie_seed_reverse`.
-   */
-  avgTieSeedReverse: boolean;
 }
 
 export interface DraftCaptainSetup {
@@ -111,4 +103,3 @@ export function captainSeat(
 export function registrationLabel(registration: AdminRegistration): string {
   return registration.battle_tag || registration.display_name || `#${registration.id}`;
 }
-

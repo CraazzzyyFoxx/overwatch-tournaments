@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type { DraftSeedResponse } from "@/types/draft.types";
+import type { DraftFormatSettings, DraftSeedResponse } from "@/types/draft.types";
 
 import type { DraftPoolReadiness } from "./setup-model";
 import { DraftSetupPreview } from "./DraftSetupPreview";
@@ -17,6 +17,10 @@ import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
 
 interface DraftReviewStepProps {
   config: DraftSetupConfig;
+  /** The team count in effect (pinned, else the pool's maximum). */
+  teamCount: number;
+  /** The format the session is drafted with, resolved to `rounds`. */
+  format: DraftFormatSettings;
   /** `roster_shape.draft_rounds` from the server; never derived from a size. */
   rounds: number;
   captains: DraftCaptainSetup;
@@ -31,6 +35,8 @@ interface DraftReviewStepProps {
 
 export function DraftReviewStep({
   config,
+  teamCount,
+  format,
   rounds,
   captains,
   orderedCaptainIds,
@@ -44,13 +50,13 @@ export function DraftReviewStep({
   const t = useTranslations("draftAdmin");
   const checks = [
     { label: t("reviewChecks.pool"), ok: readiness.blockers.length === 0 },
-    { label: t("reviewChecks.captains"), ok: captains.ids.length === config.teamCount },
+    { label: t("reviewChecks.captains"), ok: captains.ids.length === teamCount },
     { label: t("reviewChecks.roles"), ok: preview?.feasibility.is_feasible ?? false },
     {
       label: t("reviewChecks.accounts"),
       ok: captains.ids.every((id) => pool.find((entry) => entry.id === id)?.user_id != null)
     },
-    { label: t("reviewChecks.order"), ok: orderedCaptainIds.length === config.teamCount },
+    { label: t("reviewChecks.order"), ok: orderedCaptainIds.length === teamCount },
     { label: t("reviewChecks.timer"), ok: config.pickTimeSeconds >= 10 },
     { label: t("reviewChecks.privacy"), ok: true }
   ];
@@ -73,8 +79,7 @@ export function DraftReviewStep({
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            <strong className="font-semibold">{t("previewFailed")}</strong>{" "}
-            {t("previewFailedHint")}
+            <strong className="font-semibold">{t("previewFailed")}</strong> {t("previewFailedHint")}
           </span>
         </div>
       )}
@@ -104,9 +109,9 @@ export function DraftReviewStep({
       </div>
 
       <StatTileGrid className="sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-3">
-        <StatTile label={t("teamCount")} value={config.teamCount} />
+        <StatTile label={t("teamCount")} value={teamCount} />
         <StatTile label={t("poolPlayers")} value={readiness.actualPlayers} />
-        <StatTile label={t("totalPicks")} value={config.teamCount * rounds} />
+        <StatTile label={t("totalPicks")} value={teamCount * rounds} />
         <StatTile label={t("pickTime")} value={`${config.pickTimeSeconds}s`} />
         <StatTile
           label={t("overtime")}
@@ -124,9 +129,21 @@ export function DraftReviewStep({
             <Badge variant="outline">{t("dryRun")}</Badge>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            <Diff label={t("teams")} before={preview.diff.teams_before} after={preview.diff.teams_after} />
-            <Diff label={t("players")} before={preview.diff.players_before} after={preview.diff.players_after} />
-            <Diff label={t("picks")} before={preview.diff.picks_before} after={preview.diff.picks_after} />
+            <Diff
+              label={t("teams")}
+              before={preview.diff.teams_before}
+              after={preview.diff.teams_after}
+            />
+            <Diff
+              label={t("players")}
+              before={preview.diff.players_before}
+              after={preview.diff.players_after}
+            />
+            <Diff
+              label={t("picks")}
+              before={preview.diff.picks_before}
+              after={preview.diff.picks_after}
+            />
           </div>
         </div>
       )}
@@ -135,8 +152,8 @@ export function DraftReviewStep({
         orderedCaptainIds={orderedCaptainIds}
         pool={pool}
         rounds={rounds}
-        format={config.format}
-        roundRules={config.roundRules}
+        format={format.format}
+        roundRules={format.round_rules}
       />
 
       <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
@@ -155,7 +172,11 @@ export function DraftReviewStep({
   );
 }
 
-function Diff({ label, before, after }: Readonly<{ label: string; before: number; after: number }>) {
+function Diff({
+  label,
+  before,
+  after
+}: Readonly<{ label: string; before: number; after: number }>) {
   return (
     <div className="rounded-xl bg-background/70 px-3 py-2">
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -165,4 +186,3 @@ function Diff({ label, before, after }: Readonly<{ label: string; before: number
     </div>
   );
 }
-

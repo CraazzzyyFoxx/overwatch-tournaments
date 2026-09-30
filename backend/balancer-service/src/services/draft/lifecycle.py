@@ -38,6 +38,7 @@ from shared.repository.draft import (
     DraftTeamRepository,
 )
 from shared.repository.workspace import get_or_create_workspace_member
+from shared.schemas.draft_format import session_format_from_tournament
 from src.domain.draft import ranks, rules
 from src.domain.draft.entities import PoolSeat
 from src.domain.draft.errors import err as _err
@@ -91,6 +92,18 @@ class DraftLifecycleService:
             )
         ).one()
         return int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
+
+    async def tournament_draft_format(
+        self, session: AsyncSession, tournament_id: int, *, rounds: int
+    ) -> tuple[DraftFormat, dict]:
+        """The tournament's format rule, projected onto a session of ``rounds`` rounds.
+
+        The only read of ``Tournament.draft_format_json`` in this service: the
+        format is entered once in the tournament's settings, and every new session
+        takes its snapshot from here (``NULL`` -> snake).
+        """
+        raw = await session.scalar(sa.select(Tournament.draft_format_json).where(Tournament.id == tournament_id))
+        return session_format_from_tournament(raw, rounds)
 
     async def create_session(
         self,

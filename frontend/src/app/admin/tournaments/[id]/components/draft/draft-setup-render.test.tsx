@@ -3,12 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { RosterShape } from "@/lib/roster/shape";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type { DraftSession } from "@/types/draft.types";
+import type { DraftFormatSettings, DraftSession } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
 import { DraftCaptainsStep } from "./DraftCaptainsStep";
 import { DraftConfigStep } from "./DraftConfigStep";
 import { DraftHistoryPanel } from "./DraftHistoryPanel";
+import { DraftFormatFields } from "./DraftFormatFields";
 import { DraftOrderStep } from "./DraftOrderStep";
 import type { DraftSetupConfig } from "./setup-types";
 
@@ -56,11 +57,14 @@ const CONFIG: DraftSetupConfig = {
   teamCount: 2,
   pickTimeSeconds: 45,
   overtimeSeconds: 0,
-  format: "snake",
   autopickStrategy: "best_fit",
-  allowAdminOverride: true,
-  roundRules: ["linear", "linear", "linear", "linear"],
-  avgTieSeedReverse: false
+  allowAdminOverride: true
+};
+
+const SNAKE: DraftFormatSettings = {
+  format: "snake",
+  round_rules: [],
+  avg_tie_seed_reverse: false
 };
 
 function registration(id: number, roles: string[], rank: number | null): AdminRegistration {
@@ -99,12 +103,18 @@ const TOURNAMENT_GRID: DivisionGrid = {
 
 describe("draft config step", () => {
   const html = renderToStaticMarkup(
-    <DraftConfigStep value={CONFIG} onChange={() => {}} rosterShape={SHAPE} tournamentId={5} />
+    <DraftConfigStep
+      value={CONFIG}
+      onChange={() => {}}
+      rosterShape={SHAPE}
+      format={SNAKE}
+      tournamentId={5}
+    />
   );
 
   test("renders the pick-time presets as one segmented control, not four loose buttons", () => {
-    // Pick time and overtime are the two `role=group` widgets here (round rules
-    // are custom-only, the format picker is a radiogroup).
+    // Pick time and overtime are the two `role=group` widgets here; the format
+    // is the tournament's and only named, never edited.
     expect(html.match(/<div[^>]*role="group"[^>]*aria-labelledby[^>]*>/g) ?? []).toHaveLength(2);
     for (const seconds of [30, 45, 60, 90]) {
       expect(html).toContain(`>${seconds}s</button>`);
@@ -136,15 +146,19 @@ describe("draft config step", () => {
     expect(html).not.toContain("5 roles.flex");
   });
 
-  test("labels every custom round rule with its round, outside the advanced disclosure", () => {
-    const custom = renderToStaticMarkup(
-      <DraftConfigStep
-        value={{ ...CONFIG, format: "custom" }}
-        onChange={() => {}}
-        rosterShape={SHAPE}
-        tournamentId={5}
-      />
-    );
+  test("names the tournament's format read-only and links to where it is set", () => {
+    expect(html).toContain("formats.snake.title");
+    expect(html).not.toContain('role="radiogroup"');
+    expect(html).toContain('href="/admin/tournaments/5/settings/draft"');
+  });
+});
+
+describe("draft format fields", () => {
+  const render = (value: DraftFormatSettings) =>
+    renderToStaticMarkup(<DraftFormatFields value={value} onChange={() => {}} rounds={4} />);
+
+  test("labels every custom round rule with its round", () => {
+    const custom = render({ format: "custom", round_rules: [], avg_tie_seed_reverse: false });
     // Every rule select is bound to a visible "Round N" label, so which round a
     // rule applies to never depends on inferring the grid flow.
     for (const round of [1, 2, 3, 4]) {
@@ -153,26 +167,20 @@ describe("draft config step", () => {
       expect(custom).toContain(`roundNumber:{&quot;round&quot;:${round}}`);
     }
     expect(custom).toContain("roundRulesHint");
-    // The rules configure the chosen format, so they precede (and stay out of)
-    // the collapsed advanced panel.
-    expect(custom.indexOf("roundRules")).toBeLessThan(custom.indexOf("<details"));
     // Snake never shows them at all.
-    expect(html).not.toContain("roundRules");
+    expect(render(SNAKE)).not.toContain("roundRules");
   });
 
   test("offers the reversed-seed tie-break only when a round ranks by team average", () => {
-    const render = (roundRules: string[]) =>
-      renderToStaticMarkup(
-        <DraftConfigStep
-          value={{ ...CONFIG, format: "custom", roundRules }}
-          onChange={() => {}}
-          rosterShape={SHAPE}
-          tournamentId={5}
-        />
-      );
+    const custom = (round_rules: string[]) =>
+      render({ format: "custom", round_rules, avg_tie_seed_reverse: false });
 
-    expect(render(["linear", "team_avg_desc", "linear", "linear"])).toContain('id="draft-avg-tie-seed"');
-    expect(render(["linear", "strongest_first", "reverse", "linear"])).not.toContain("draft-avg-tie-seed");
+    expect(custom(["linear", "team_avg_desc", "linear", "linear"])).toContain(
+      'id="draft-avg-tie-seed"'
+    );
+    expect(custom(["linear", "strongest_first", "reverse", "linear"])).not.toContain(
+      "draft-avg-tie-seed"
+    );
   });
 });
 
@@ -247,8 +255,8 @@ describe("draft captains step", () => {
       />
     );
     // Support + tank: a choice. Damage only: nothing to pick.
-    expect(selected).toContain('captainRoleFor:{&quot;name&quot;:&quot;Player2#1000&quot;}');
-    expect(selected).not.toContain('captainRoleFor:{&quot;name&quot;:&quot;Player3#1000&quot;}');
+    expect(selected).toContain("captainRoleFor:{&quot;name&quot;:&quot;Player2#1000&quot;}");
+    expect(selected).not.toContain("captainRoleFor:{&quot;name&quot;:&quot;Player3#1000&quot;}");
   });
 });
 
@@ -267,7 +275,7 @@ describe("draft order step", () => {
     );
     // Weakest first: 2600 before 3800, each with a drag handle.
     expect(html.indexOf("Player2#1000")).toBeLessThan(html.indexOf("Player3#1000"));
-    expect(html).toContain('moveCaptain:{&quot;name&quot;:&quot;Player2#1000&quot;}');
+    expect(html).toContain("moveCaptain:{&quot;name&quot;:&quot;Player2#1000&quot;}");
     expect(html).toContain("dragToOverrideSeeds");
   });
 });

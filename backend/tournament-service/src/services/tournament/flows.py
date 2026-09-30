@@ -209,6 +209,7 @@ class TournamentFlowsService:
             division_grid_version_id=tournament.division_grid_version_id,
             division_grid_version=division_grid_version,
             roster_slots_json=tournament.roster_slots_json,
+            draft_format_json=tournament.draft_format_json,
             roster_shape=roster_shape,
             roster_locked_by_draft=roster_locked_by_draft,
             roster_locked_by_teams=roster_locked_by_teams,
