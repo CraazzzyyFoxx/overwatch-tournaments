@@ -115,7 +115,6 @@ def test_best_fit_prefers_the_role_a_support_captain_team_still_lacks() -> None:
     assert sug.best_fit([supp, dps], capacity, DraftAutopickStrategy.BEST_FIT, empty).player_id == 1
 
 
-
 # ---- legality / empties ----
 
 

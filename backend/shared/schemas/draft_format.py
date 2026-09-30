@@ -54,9 +54,7 @@ def normalize_draft_format(value: Any) -> Any:
 DraftFormatField = Annotated[dict[str, Any] | None, BeforeValidator(normalize_draft_format)]
 
 
-def session_format_from_tournament(
-    raw: dict[str, Any] | None, rounds: int
-) -> tuple[DraftFormat, dict[str, Any]]:
+def session_format_from_tournament(raw: dict[str, Any] | None, rounds: int) -> tuple[DraftFormat, dict[str, Any]]:
     """Project the stored format onto a new session: ``(format, settings_json keys)``.
 
     The roster shape may have changed since the format was saved, so the rules are
