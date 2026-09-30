@@ -38,5 +38,7 @@ async def get_rank_mapping(session: AsyncSession) -> tuple[RankLookup, str]:
     lookup = build_default_lookup()
     for entry in config.entries:
         lookup[(entry.division.lower(), entry.tier)] = entry.rank_value
-    version = config.version or DEFAULT_RANK_MAPPING_VERSION
+    # No overrides means the rows come from the built-in table, whatever version
+    # the stored setting still carries -- a stale stamp is what hid owmapfix01.
+    version = config.version if config.entries else DEFAULT_RANK_MAPPING_VERSION
     return lookup, version
