@@ -139,7 +139,7 @@ class DraftSelectionService:
                 averages=avg_by_team,
                 captain_ranks=captain_ranks,
                 descending=rule == "team_avg_desc",
-                seed_reversed=bool(draft_session.settings_json.get("avg_tie_seed_reverse")),
+                tie_reversed=bool(draft_session.settings_json.get("avg_tie_seed_reverse")),
             )
         ]
         round_picks = await self.picks_repo.list_by_round(session, draft_session.id, next_pick.round_no)
