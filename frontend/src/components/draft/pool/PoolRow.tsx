@@ -311,16 +311,19 @@ function RightCell({
 
   if (!available) {
     const cell = takenTeam?.cells.find((entry) => entry.player?.id === player.id);
-    const sub = player.is_captain
-      ? t("pool.right.captain")
-      : cell?.role
-        ? `${t(`roles.${cell.role}`)}${cell.offRole ? ` · ${t("pool.right.offRole")}` : ""}`
-        : null;
     // The team is already under the name ("Already on {team}"); this narrow
     // column only has room for what that line lacks — the seat they took.
+    if (!player.is_captain && cell?.role) {
+      const label = `${t(`roles.${cell.role}`)}${cell.offRole ? ` · ${t("pool.right.offRole")}` : ""}`;
+      return (
+        <div className={cn("flex justify-end", cell.offRole && "opacity-60 grayscale")} title={label}>
+          <PlayerRoleIcon role={getRoleIconName(cell.role)} size={22} color={ROLE_ACCENT[cell.role]} label={label} />
+        </div>
+      );
+    }
     return (
       <div className={cn(main, "text-[color:var(--aqt-fg)]")} title={takenTeam?.team.name}>
-        {sub ?? "—"}
+        {player.is_captain ? t("pool.right.captain") : "—"}
       </div>
     );
   }
