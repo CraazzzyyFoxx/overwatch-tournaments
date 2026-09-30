@@ -3,7 +3,7 @@
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
-export type AppRole = "admin" | "tournament_organizer" | "moderator" | "user";
+export type AppRole = "admin" | "moderator" | "user";
 
 const resourcesWithCrud = [
   "workspace",
@@ -93,7 +93,7 @@ export type PermissionProfile = {
 };
 
 function isAdminPanelRole(role: string): boolean {
-  return role === "admin" || role === "tournament_organizer" || role === "moderator";
+  return role === "admin" || role === "moderator";
 }
 
 function workspaceHasPermission(
@@ -336,7 +336,6 @@ export function usePermissions() {
     canAccessAdminRoute,
     isSuperuser: user?.isSuperuser ?? false,
     isAdmin: hasRole("admin"),
-    isOrganizer: hasRole("tournament_organizer"),
     isModerator: hasRole("moderator"),
     hasAdminPanelRole,
   };

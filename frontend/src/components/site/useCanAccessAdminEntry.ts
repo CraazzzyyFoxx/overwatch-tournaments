@@ -11,17 +11,14 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  */
 export function useCanAccessAdminEntry(): boolean {
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
-  const { isOrganizer, isLoaded, canAccessAdminRoute } = usePermissions();
+  const { isLoaded, canAccessAdminRoute } = usePermissions();
 
-  // D27: organizers get the admin entry — the same predicate that used to open
-  // the balancer.
   return (
     isLoaded &&
-    (isOrganizer ||
-      canAccessAdminRoute({
-        permissions: adminEntryPermissions,
-        workspaceId: currentWorkspaceId,
-        workspaceAdminVisible: true
-      }))
+    canAccessAdminRoute({
+      permissions: adminEntryPermissions,
+      workspaceId: currentWorkspaceId,
+      workspaceAdminVisible: true
+    })
   );
 }

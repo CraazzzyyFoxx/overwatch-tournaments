@@ -25,8 +25,8 @@ import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn, initials } from "@/lib/utils";
 
-// Role names come from two RBAC scopes: global roles ("admin",
-// "tournament_organizer", "moderator" — see AppRole in usePermissions) and
+// Role names come from two RBAC scopes: global roles ("admin", "moderator" —
+// see AppRole in usePermissions) and
 // workspace-scoped roles ("owner", "admin", "referee", "host", "member",
 // "player" — see WORKSPACE_SYSTEM_ROLE_NAMES). A workspace admin never holds
 // the *global* "admin" role, so checking only global roles left every
@@ -43,7 +43,6 @@ function getRoleLabel({
 }) {
   if (isSuperuser) return "Superuser";
   if (globalRoles.includes("admin")) return "Admin";
-  if (globalRoles.includes("tournament_organizer")) return "Organizer";
   if (globalRoles.includes("moderator")) return "Moderator";
   if (workspaceRoles.includes("owner")) return "Owner";
   if (workspaceRoles.includes("admin")) return "Admin";

@@ -18,7 +18,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: () => ({
     isLoaded: true,
-    isOrganizer: true,
     canAccessAdminRoute: () => true,
     canAccessPermission: () => true,
   }),

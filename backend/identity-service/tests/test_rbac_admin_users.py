@@ -336,13 +336,13 @@ def test_auth_user_admin_panel_access_rejects_custom_game_grants() -> None:
 
 def test_auth_user_admin_panel_access_allows_panel_roles() -> None:
     current_user = models.AuthUser(
-        email="organizer@example.com",
-        username="organizer",
+        email="moderator@example.com",
+        username="moderator",
         is_active=True,
         is_superuser=False,
         is_verified=True,
     )
-    current_user.set_rbac_cache(role_names=["tournament_organizer"], permissions=[])
+    current_user.set_rbac_cache(role_names=["moderator"], permissions=[])
 
     assert current_user.has_admin_panel_access() is True
 
