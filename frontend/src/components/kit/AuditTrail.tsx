@@ -19,6 +19,7 @@ import {
   hasUncapturedBefore,
   isMachineActor,
   type AuditDiffKind,
+  type AuditDiffRow,
   type AuditTrailScope,
 } from "@/components/kit/audit-log";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,50 @@ const DIFF_KIND_WORD: Record<AuditDiffKind, string> = {
 };
 
 /**
+ * One level of the diff; nested values recurse under an indent. A nested row's
+ * kind word shows only where it differs from its parent's — a role added inside
+ * a changed list — since repeating "changed" at every level says nothing.
+ */
+function AuditDiffList({
+  rows,
+  parentKind,
+}: Readonly<{ rows: AuditDiffRow[]; parentKind?: AuditDiffKind }>) {
+  return (
+    <dl className="space-y-1.5">
+      {rows.map((row) => (
+        <div key={row.field} className="grid gap-0.5">
+          <dt className="flex items-baseline gap-1.5">
+            <span className="font-mono text-xs text-foreground">{row.field}</span>
+            {row.kind === parentKind ? null : (
+              <span className={EYEBROW_CLASS}>{DIFF_KIND_WORD[row.kind]}</span>
+            )}
+          </dt>
+          {row.children ? (
+            <dd className="border-l border-border/60 pl-2.5">
+              <AuditDiffList rows={row.children} parentKind={row.kind} />
+            </dd>
+          ) : (
+            <dd className="grid gap-0.5">
+              {DIFF_LINES[row.kind].map((line) => (
+                <span key={line.side} className="flex items-baseline gap-1.5 font-mono text-xs">
+                  <span aria-hidden className={cn("w-3 shrink-0 text-center", line.className)}>
+                    {line.symbol}
+                  </span>
+                  <span className="sr-only">{line.word}:</span>
+                  <span className="min-w-0 break-all text-muted-foreground">
+                    {line.side === "before" ? row.before : row.after}
+                  </span>
+                </span>
+              ))}
+            </dd>
+          )}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
  * Field-level diff of a row's `before_json` / `after_json`.
  *
  * Writers assemble both sides from named domain fields rather than capturing the
@@ -84,31 +129,7 @@ export function AuditFieldDiff({
 
   return (
     <div className="space-y-1.5">
-      <dl className="space-y-1.5">
-        {rows.map((row) => (
-          <div key={row.field} className="grid gap-0.5">
-            <dt className="flex items-baseline gap-1.5">
-              <span className="font-mono text-xs text-foreground">{row.field}</span>
-              <span className={EYEBROW_CLASS}>
-                {DIFF_KIND_WORD[row.kind]}
-              </span>
-            </dt>
-            <dd className="grid gap-0.5">
-              {DIFF_LINES[row.kind].map((line) => (
-                <span key={line.side} className="flex items-baseline gap-1.5 font-mono text-xs">
-                  <span aria-hidden className={cn("w-3 shrink-0 text-center", line.className)}>
-                    {line.symbol}
-                  </span>
-                  <span className="sr-only">{line.word}:</span>
-                  <span className="min-w-0 break-all text-muted-foreground">
-                    {line.side === "before" ? row.before : row.after}
-                  </span>
-                </span>
-              ))}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <AuditDiffList rows={rows} />
       {hasUncapturedBefore(rows) ? (
         // Said once, rather than dressed up per field as "added": a
         // service-backed update stages the requested values with no before-image,
