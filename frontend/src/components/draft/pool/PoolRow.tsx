@@ -429,8 +429,7 @@ function RoleCell({
       </span>
       <span className="flex min-w-0 flex-auto flex-col gap-0.5 text-left" title={subRole ?? undefined}>
         <span className="whitespace-nowrap text-body font-semibold leading-tight tabular-nums">{rank ?? "—"}</span>
-        {/* Empty but line-tall without a sub-role, so ranks stay level across cells. */}
-        <span className="min-h-lh truncate text-label leading-tight text-[color:var(--aqt-fg-muted)]">{subRole}</span>
+        {subRole && <span className="truncate text-label leading-tight text-[color:var(--aqt-fg-muted)]">{subRole}</span>}
       </span>
       {/* Hero faces are the first thing to give way: a cell narrower than the
           crest + rank + three faces keeps the rank whole instead (container
