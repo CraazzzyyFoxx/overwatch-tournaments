@@ -2,10 +2,11 @@
 
 import { ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { usePickCountdown } from "@/hooks/usePickCountdown";
 import { DRAFT_ROLES, pickHistory, type TeamView } from "@/lib/draft/room-model";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
@@ -29,13 +30,18 @@ const headingClass =
 export function DraftQueue({ board, teamViews, remaining, myTeamId, clockColor }: Readonly<DraftQueueProps>) {
   const t = useTranslations("draftRedesign");
   const [showAll, setShowAll] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useDraftLayerPad(scrollRef);
   const countdown = usePickCountdown(board.current_pick, board.session.status === "paused");
   const history = useMemo(() => pickHistory(board), [board]);
   const playerById = useMemo(() => new Map(board.players.map((player) => [player.id, player])), [board.players]);
   const shownHistory = showAll ? history : history.slice(0, HISTORY_COUNT);
 
   return (
-    <div className="min-h-0 flex-1 scroll-pb-[var(--draft-layer-h,0px)] overflow-y-auto border-t border-[color:var(--aqt-border)] pb-[var(--draft-layer-h,0px)]">
+    <div
+      ref={scrollRef}
+      className="min-h-0 flex-1 overflow-y-auto border-t border-[color:var(--aqt-border)] pb-[var(--draft-layer-h,0px)] [scrollbar-gutter:stable]"
+    >
       <h3 className={`${headingClass} pt-4`}>{t("teams.queue.upcoming")}</h3>
       {remaining.length === 0 && (
         <p className="px-[18px] py-3 text-body text-[color:var(--aqt-fg-muted)]">{t("teams.queue.empty")}</p>

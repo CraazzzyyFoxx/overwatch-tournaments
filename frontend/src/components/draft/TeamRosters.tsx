@@ -7,6 +7,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import {
   teamsNeedingRole,
@@ -85,6 +86,7 @@ export function TeamRosters({
   const shape = board.session.roster_shape;
   const listRef = useRef<HTMLDivElement>(null);
   const hovering = useRef(false);
+  useDraftLayerPad(listRef);
   const currentPickId = board.current_pick?.id ?? null;
   const onClockId = board.current_pick?.draft_team_id ?? null;
 
@@ -185,7 +187,7 @@ export function TeamRosters({
       </div>
 
       <div
-        className="grid grid-cols-[22px_minmax(0,1fr)_66px] items-center gap-1 border-b border-[color:var(--aqt-border)] px-4 py-[7px] text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)] @[640px]/roster:grid-cols-[var(--roster-cols)]"
+        className="grid grid-cols-[22px_minmax(0,1fr)_66px] items-center gap-1 overflow-hidden border-b border-[color:var(--aqt-border)] px-4 py-[7px] text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)] [scrollbar-gutter:stable] @[640px]/roster:grid-cols-[var(--roster-cols)]"
         style={rowVars}
       >
         <span>#</span>
@@ -223,7 +225,7 @@ export function TeamRosters({
         onPointerLeave={() => {
           hovering.current = false;
         }}
-        className="relative min-h-0 flex-1 scroll-pb-[var(--draft-layer-h,0px)] overflow-y-auto pb-[var(--draft-layer-h,0px)] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+        className="relative min-h-0 flex-1 overflow-y-auto pb-[var(--draft-layer-h,0px)] outline-hidden [scrollbar-gutter:stable] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
       >
         {teams.map((view) => {
           const { team } = view;
