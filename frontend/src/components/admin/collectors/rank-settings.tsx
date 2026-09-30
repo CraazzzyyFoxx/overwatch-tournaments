@@ -314,7 +314,15 @@ function RankMappingSection({
   const mutation = useMutation({
     mutationFn: () =>
       adminService.updateSetting(RANK_MAPPING_KEY, {
-        value: { version: initial.version, entries: cells }
+        // Only the cells that differ from the ladder. Saving all of them froze
+        // the v1 table into the setting, where it outlived the Emerald rebase
+        // (migration owmapfix01).
+        value: {
+          version: initial.version,
+          entries: cells.filter(
+            (cell) => cell.rank_value !== defaultRankForCell(cell.division, cell.tier)
+          )
+        }
       }),
     onSuccess: onSaved
   });

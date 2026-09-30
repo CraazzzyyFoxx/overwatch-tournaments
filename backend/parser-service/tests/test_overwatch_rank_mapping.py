@@ -56,7 +56,8 @@ class MappingTests(IsolatedAsyncioTestCase):
         with patch.object(
             mapping.settings_provider,
             "get_rank_mapping_config",
-            AsyncMock(return_value=RankMappingConfig()),
+            # A stored version from an older table must not stamp default-derived rows.
+            AsyncMock(return_value=RankMappingConfig(version="ow2-default-v1")),
         ):
             lookup, version = await mapping.get_rank_mapping(session=object())
         self.assertEqual(version, "ow2-default-v2")
