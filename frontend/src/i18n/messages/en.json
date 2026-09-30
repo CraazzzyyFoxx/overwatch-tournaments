@@ -5279,8 +5279,7 @@
         "second": "Second",
         "third": "Third",
         "primaryMark": "main",
-        "priority": "Priority {n} of {total}",
-        "noSubRole": "no sub-role"
+        "priority": "Priority {n} of {total}"
       },
       "right": {
         "captain": "captain",

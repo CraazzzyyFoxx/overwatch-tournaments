@@ -5279,8 +5279,7 @@
         "second": "Вторая",
         "third": "Третья",
         "primaryMark": "основная",
-        "priority": "Приоритет {n} из {total}",
-        "noSubRole": "без подроли"
+        "priority": "Приоритет {n} из {total}"
       },
       "right": {
         "captain": "капитан",
