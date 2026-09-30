@@ -297,6 +297,7 @@
       "title": "Edit your registration",
       "description": "Only the questions the organizer left open can be changed. Everything else is shown exactly as you submitted it.",
       "fieldLocked": "Frozen after submitting",
+      "rolesLocked": "Only organizers with the roles permission can change roles and ranks.",
       "reason": {
         "status_locked": "A registration with this status can no longer be edited.",
         "checked_in": "You have already checked in — your entry is frozen.",

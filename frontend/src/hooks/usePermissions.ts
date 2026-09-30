@@ -49,9 +49,15 @@ type SpecialPermission =
   | "auth_user.update"
   | "oauth_connection.read"
   | "oauth_connection.delete"
+  // Split out of `match.update`: entering a result is the referee's job, while
+  // the match's structure and config stay with the organizer.
+  | "match.result"
   | "registration.approve"
   | "registration.reject"
   | "registration.check_in"
+  // Roles and ranks carry the balancer's seeding weight, so they are gated
+  // apart from the rest of a registration's fields.
+  | "registration.roles"
   | "rank.read"
   | "rank.update"
   | "subscription.read"

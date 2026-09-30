@@ -183,6 +183,16 @@ def _workspace_ctx(data: dict[str, Any], action: str, resource: str = "team") ->
     return _Ctx(user, workspace_id, workspace_id)
 
 
+def _touches_roles(body: schemas.BalancerRegistrationUpdateRequest) -> bool:
+    """Whether an admin edit writes roles, the ranks on them, or the pin guarding both.
+
+    Presence, not difference: the editor leaves these keys out for staff without
+    ``registration.roles``, so a resent unchanged list is still a write of it.
+    ``pin=False`` unpins, so any non-null ``pin`` counts.
+    """
+    return body.roles is not None or "roles" in body.answers or body.pin is not None or body.clear_pin
+
+
 async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> Any:
     """The response every per-registration admin mutation returns.
 
@@ -904,12 +914,15 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}
-    #   require_registration_permission("registration", "update")
+    #   require_registration_permission("registration", "update"), plus
+    #   "registration"/"roles" when the body writes roles, ranks or the pin
     @broker.subscriber("rpc.tournament.reg_update")
     async def _reg_update(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _registration_ctx(session, data, "update")
             body = schemas.BalancerRegistrationUpdateRequest.model_validate(_payload(data))
+            if _touches_roles(body):
+                ensure_workspace_permission(ctx.user, ctx.ws_id, "registration", "roles")
             # Staged before the service so the row rides the transaction it
             # commits. A save that changes nothing writes no row: the editor
             # round-trips its whole form, and a journal of no-ops is a journal
@@ -1205,11 +1218,13 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/rank-autofill/apply
-    #   require_tournament_permission("registration", "update")
+    #   require_tournament_permission("registration", "update") + ("registration", "roles")
     @broker.subscriber("rpc.tournament.reg_rank_autofill_apply")
     async def _reg_rank_autofill_apply(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "update", resource="registration")
+            # Rewrites the ranks themselves, so it needs the roles/ranks grant too.
+            ensure_workspace_permission(ctx.user, ctx.ws_id, "registration", "roles")
             body = schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             # Rank autofill rewrites the numbers the balancer sorts on, across as
             # many registrations as the request names, so the parameters it ran

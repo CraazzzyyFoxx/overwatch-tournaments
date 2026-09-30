@@ -27,11 +27,11 @@ import { cn, initials } from "@/lib/utils";
 
 // Role names come from two RBAC scopes: global roles ("admin",
 // "tournament_organizer", "moderator" — see AppRole in usePermissions) and
-// workspace-scoped roles ("owner", "admin", "host", "member", "player" — see
-// WORKSPACE_SYSTEM_ROLE_NAMES). A workspace admin never holds the *global*
-// "admin" role, so checking only global roles left every workspace-scoped
-// staff member (the common case) falling through to the "Operator"
-// fallback. Check both scopes, global first.
+// workspace-scoped roles ("owner", "admin", "referee", "host", "member",
+// "player" — see WORKSPACE_SYSTEM_ROLE_NAMES). A workspace admin never holds
+// the *global* "admin" role, so checking only global roles left every
+// workspace-scoped staff member (the common case) falling through to the
+// "Operator" fallback. Check both scopes, global first.
 function getRoleLabel({
   isSuperuser,
   globalRoles,
@@ -47,6 +47,7 @@ function getRoleLabel({
   if (globalRoles.includes("moderator")) return "Moderator";
   if (workspaceRoles.includes("owner")) return "Owner";
   if (workspaceRoles.includes("admin")) return "Admin";
+  if (workspaceRoles.includes("referee")) return "Referee";
   if (workspaceRoles.includes("host")) return "Host";
   if (workspaceRoles.includes("member")) return "Member";
   if (workspaceRoles.includes("player")) return "Player";

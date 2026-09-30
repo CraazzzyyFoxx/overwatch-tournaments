@@ -11,7 +11,7 @@ class PermissionSpec:
     description: str
 
 
-WORKSPACE_SYSTEM_ROLE_NAMES = ("owner", "admin", "host", "member", "player")
+WORKSPACE_SYSTEM_ROLE_NAMES = ("owner", "admin", "referee", "host", "member", "player")
 
 CRUD = ("read", "create", "update", "delete")
 
@@ -48,12 +48,22 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     *_crud("team"),
     *_crud("player"),
     *_crud("match"),
+    # Split off ``match.update`` so results can be granted without the bracket:
+    # ``update`` keeps the encounter's structure (teams, stage, round, best-of,
+    # schedule, slot swaps) and the match config (pick-ban rules, report form);
+    # ``result`` is the score side -- confirming, reopening, per-map and FFA
+    # game results, the live pick-ban overrides of one running match.
+    _permission("match", "result", "Enter and correct encounter results"),
     *_crud("standing"),
     *_crud("registration_form"),
     *_crud("registration"),
     _permission("registration", "approve"),
     _permission("registration", "reject"),
     _permission("registration", "check_in"),
+    # Roles and the ranks on them are what the balancer builds teams from, so
+    # they are split off ``registration.update``: a registration's other fields
+    # can be handed to staff who must not move a player's roles or ranks.
+    _permission("registration", "roles", "Edit a registration's roles and ranks"),
     *_crud("registration_status"),
     *_crud("balancer"),
     *_crud("custom_game"),
@@ -162,11 +172,30 @@ def _host_permission_names() -> tuple[str, ...]:
     return tuple(dict.fromkeys((*_member_permission_names(), *extra)))
 
 
+def _referee_permission_names() -> tuple[str, ...]:
+    """Everything a ``member`` reads, plus running matches and registrations.
+
+    The staff role with the fewest destructive writes: results inside a bracket
+    somebody else built, and the registration queue minus roles and ranks. No
+    tournament, stage, team or roster write, and no delete of any kind.
+    """
+    extra = (
+        "match.result",
+        "registration.update",
+        "registration.approve",
+        "registration.reject",
+        "registration.check_in",
+    )
+    return tuple(dict.fromkeys((*_member_permission_names(), *extra)))
+
+
 def permission_names_for_workspace_role(role_name: str) -> tuple[str, ...]:
     if role_name == "owner":
         return ("admin.*",)
     if role_name == "admin":
         return _admin_permission_names()
+    if role_name == "referee":
+        return _referee_permission_names()
     if role_name == "host":
         return _host_permission_names()
     if role_name == "member":

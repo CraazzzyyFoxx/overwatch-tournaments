@@ -40,6 +40,13 @@ interface EncounterEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   encounter: Encounter;
+  /**
+   * The viewer holds `match.update`, so the match's structure — best-of and
+   * start time — is theirs to change. A referee holds `match.result` alone:
+   * the two controls are hidden and left out of the payload, or the server
+   * would refuse the whole save over fields they never touched.
+   */
+  canEditStructure?: boolean;
 }
 
 // Editable statuses only. Completion moves score, status, result_status and
@@ -65,7 +72,12 @@ function closenessFloatToStars(closeness: number | null | undefined): number {
   return Math.max(1, Math.min(10, Math.round(closeness * 10)));
 }
 
-export function EncounterEditDialog({ open, onOpenChange, encounter }: Readonly<EncounterEditDialogProps>) {
+export function EncounterEditDialog({
+  open,
+  onOpenChange,
+  encounter,
+  canEditStructure = true
+}: Readonly<EncounterEditDialogProps>) {
   const resetKey = [
     encounter.id,
     encounter.score?.home ?? 0,
@@ -80,7 +92,12 @@ export function EncounterEditDialog({ open, onOpenChange, encounter }: Readonly<
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
-        <EncounterEditDialogBody key={resetKey} encounter={encounter} onOpenChange={onOpenChange} />
+        <EncounterEditDialogBody
+          key={resetKey}
+          encounter={encounter}
+          onOpenChange={onOpenChange}
+          canEditStructure={canEditStructure}
+        />
       ) : null}
     </Dialog>
   );
@@ -88,7 +105,8 @@ export function EncounterEditDialog({ open, onOpenChange, encounter }: Readonly<
 
 function EncounterEditDialogBody({
   encounter,
-  onOpenChange
+  onOpenChange,
+  canEditStructure = true
 }: Readonly<Omit<EncounterEditDialogProps, "open">>) {
   const qc = useQueryClient();
   const t = useTranslations();
@@ -134,8 +152,12 @@ function EncounterEditDialogBody({
         home_score: homeScore,
         away_score: awayScore,
         closeness: stars > 0 ? stars / 10 : null,
-        best_of: bestOf,
-        scheduled_at: scheduledAt ? zonedInputToUtc(scheduledAt, timeZone) : null,
+        ...(canEditStructure
+          ? {
+              best_of: bestOf,
+              scheduled_at: scheduledAt ? zonedInputToUtc(scheduledAt, timeZone) : null
+            }
+          : {}),
         ...(isCompleted ? {} : { status: status as EncounterEditableStatus })
       };
       await adminService.updateEncounter(encounter.id, encounterPayload);
@@ -215,41 +237,45 @@ function EncounterEditDialogBody({
           }}
         />
 
-        <div className="space-y-1.5">
-          <Label className="text-caption font-bold text-[color:var(--aqt-fg-muted)]">{t("matchEdit.bestOf")}</Label>
-          <Select value={String(bestOf)} onValueChange={(value) => setBestOf(Number(value))}>
-            <SelectTrigger className="w-full rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] font-semibold text-[color:var(--aqt-fg)]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {BEST_OF_OPTIONS.map((n) => (
-                <SelectItem
-                  key={n}
-                  value={String(n)}
-                  className="cursor-pointer"
-                >
-                  {`BO${n}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {canEditStructure && (
+          <>
+            <div className="space-y-1.5">
+              <Label className="text-caption font-bold text-[color:var(--aqt-fg-muted)]">{t("matchEdit.bestOf")}</Label>
+              <Select value={String(bestOf)} onValueChange={(value) => setBestOf(Number(value))}>
+                <SelectTrigger className="w-full rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] font-semibold text-[color:var(--aqt-fg)]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BEST_OF_OPTIONS.map((n) => (
+                    <SelectItem
+                      key={n}
+                      value={String(n)}
+                      className="cursor-pointer"
+                    >
+                      {`BO${n}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="space-y-1.5">
-          <DateTimePicker
-            id={`encounter-scheduled-at-${encounter.id}`}
-            timeId={`encounter-scheduled-at-time-${encounter.id}`}
-            dateLabel={t("matchEdit.scheduledAt")}
-            timeLabel={t("matchEdit.scheduledAtTime")}
-            clearLabel={t("matchEdit.scheduledAtClear")}
-            placeholder={t("matchEdit.scheduledAtPlaceholder")}
-            value={scheduledAt}
-            onChange={setScheduledAt}
-          />
-          <p className="mt-1 text-label font-medium leading-normal text-[color:var(--aqt-fg-dim)]">
-            {t("matchEdit.scheduledAtHint")}
-          </p>
-        </div>
+            <div className="space-y-1.5">
+              <DateTimePicker
+                id={`encounter-scheduled-at-${encounter.id}`}
+                timeId={`encounter-scheduled-at-time-${encounter.id}`}
+                dateLabel={t("matchEdit.scheduledAt")}
+                timeLabel={t("matchEdit.scheduledAtTime")}
+                clearLabel={t("matchEdit.scheduledAtClear")}
+                placeholder={t("matchEdit.scheduledAtPlaceholder")}
+                value={scheduledAt}
+                onChange={setScheduledAt}
+              />
+              <p className="mt-1 text-label font-medium leading-normal text-[color:var(--aqt-fg-dim)]">
+                {t("matchEdit.scheduledAtHint")}
+              </p>
+            </div>
+          </>
+        )}
 
         <div className="space-y-1.5">
           <Label className="text-caption font-bold text-[color:var(--aqt-fg-muted)]">{t("matchEdit.status")}</Label>

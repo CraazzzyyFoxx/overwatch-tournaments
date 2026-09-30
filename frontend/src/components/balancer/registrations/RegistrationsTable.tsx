@@ -363,10 +363,12 @@ export default function RegistrationsTable({
                   <SelectItem value="admission">Group by admission</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" aria-hidden />
-                Create registration
-              </Button>
+              {canAccessPermission("registration.create", workspaceId) && (
+                <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" aria-hidden />
+                  Create registration
+                </Button>
+              )}
             </>
           }
         />

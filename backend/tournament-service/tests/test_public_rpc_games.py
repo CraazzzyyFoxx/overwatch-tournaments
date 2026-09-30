@@ -62,11 +62,11 @@ GRANTED = make_identity(
         {
             "workspace_id": WORKSPACE_ID,
             "rbac_roles": [],
-            "rbac_permissions": [{"resource": "match", "action": "update"}],
+            "rbac_permissions": [{"resource": "match", "action": "result"}],
         }
     ]
 )
-#: Present, active, and a member of the workspace -- but without `match.update`,
+#: Present, active, and a member of the workspace -- but without `match.result`,
 #: so the permission gate is the only thing that can stop it.
 UNGRANTED = make_identity(
     workspaces=[

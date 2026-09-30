@@ -27,7 +27,7 @@ export default function ReportsViewPage() {
           tournamentId={tournamentId}
           workspaceId={workspaceId}
           tournamentName={tournamentName}
-          canUpdateEncounter={canAccessPermission("match.update", workspaceId)}
+          canUpdateEncounter={canAccessPermission("match.result", workspaceId)}
         />
       )}
     </MatchesView>

@@ -5,11 +5,12 @@ gated exactly like every other public tournament read -- a hidden tournament
 404s for an ineligible viewer before anything else is loaded.
 
 The writes are the organizer's three levers on a lobby: record (or correct) one
-game, void one game, change how many games the lobby plays. Each carries the
-same workspace ``match.update`` permission, files an admin-audit row before the
-service runs, and refuses a correction whose downstream qualification is
-already live -- the duel result endpoints' contract, unchanged
-(``src/rpc/admin_misc.py``).
+game, void one game, change how many games the lobby plays. Recording and voiding
+are results and carry workspace ``match.result``; the games count is the lobby's
+format, like a duel's best-of, and carries ``match.update``. Each files an
+admin-audit row before the service runs, and refuses a correction whose
+downstream qualification is already live -- the duel result endpoints'
+contract, unchanged (``src/rpc/admin_misc.py``).
 
 Every write answers the lobby's own table, so the admin UI re-renders the whole
 group from the response instead of refetching it.
@@ -63,12 +64,12 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
         await admin_stage_service.assert_source_correction_allowed(session, lobby)
 
 
-async def _admin_lobby(session: Any, data: dict) -> tuple[models.AuthUser, int, int]:
+async def _admin_lobby(session: Any, data: dict, action: str) -> tuple[models.AuthUser, int, int]:
     """The shared prologue of the three writes: caller, lobby, workspace."""
     user = _identity(data)
     encounter_id = _require_id(data)
     ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-    ensure_workspace_permission(user, ws_id, "match", "update")
+    ensure_workspace_permission(user, ws_id, "match", action)
     return user, encounter_id, ws_id
 
 
@@ -105,7 +106,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.ffa_game_results_set")
     async def _ffa_game_results_set(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user, encounter_id, ws_id = await _admin_lobby(session, data)
+            user, encounter_id, ws_id = await _admin_lobby(session, data, "result")
             position = _path_int(data, "position")
             body = FfaGameResultsInput.model_validate(_payload(data))
             await record_admin_audit(
@@ -138,7 +139,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.ffa_game_cancel")
     async def _ffa_game_cancel(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user, encounter_id, ws_id = await _admin_lobby(session, data)
+            user, encounter_id, ws_id = await _admin_lobby(session, data, "result")
             position = _path_int(data, "position")
             body = FfaGameCancelInput.model_validate(_payload(data))
             await record_admin_audit(
@@ -167,7 +168,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.ffa_games_count_set")
     async def _ffa_games_count_set(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user, encounter_id, ws_id = await _admin_lobby(session, data)
+            user, encounter_id, ws_id = await _admin_lobby(session, data, "update")
             body = FfaGamesCountInput.model_validate(_payload(data))
             await record_admin_audit(
                 session,
@@ -195,7 +196,7 @@ def register(broker: Any, logger: Any) -> None:
     # The same lobby table the public path answers, minus ``public_view``: the
     # organizer enters the hidden columns, so the dialog and the admin group
     # page have to see them. Gated on the TOURNAMENT's workspace with
-    # "match"/"update" because this read IS the data-entry screen -- it is
+    # "match"/"result" because this read IS the data-entry screen -- it is
     # fetched by the page that records results, so it carries the permission
     # that page already needs.
     #
@@ -210,7 +211,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _require_id(data)
             ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             return await ffa_encounter_service.load_stage_lobbies(
                 session, _path_int(data, "stage_id"), tournament_id=tournament_id
             )

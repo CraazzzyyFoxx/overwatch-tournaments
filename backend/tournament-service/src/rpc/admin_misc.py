@@ -125,7 +125,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             match_id = _require_id(data)
             ws_id = await auth.get_match_workspace_id(session, match_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = schemas.MatchUpdate.model_validate(_payload(data))
             encounter_id = await session.scalar(sa.select(models.Match.encounter_id).where(models.Match.id == match_id))
             await record_admin_audit(
@@ -161,7 +161,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = schemas.EncounterSetResultInput.model_validate(_payload(data))
             await record_admin_audit(
                 session,
@@ -222,7 +222,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             await record_admin_audit(
                 session,
                 action="encounter.reopen_result",

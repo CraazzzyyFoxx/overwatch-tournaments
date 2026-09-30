@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { usePermissions } from "@/hooks/usePermissions";
 import type {
   AdminRegistration,
   AdminRegistrationCreateInput,
@@ -50,6 +51,13 @@ export default function RegistrationFormDialogs({
   onUpdate,
   updatePending
 }: Readonly<RegistrationFormDialogsProps>) {
+  const { canAccessPermission } = usePermissions();
+  // The row carries its own workspace, which is the scope its edits were
+  // authorized against — closer to the truth than the ambient selection.
+  const rolesLocked =
+    editingRegistration !== null &&
+    !canAccessPermission("registration.roles", editingRegistration.workspace_id);
+
   return (
     <>
       <Dialog open={createOpen} onOpenChange={onCreateOpenChange}>
@@ -109,6 +117,7 @@ export default function RegistrationFormDialogs({
                 }}
                 onCancel={() => onEditingChange(null)}
                 submitPending={updatePending}
+                rolesLocked={rolesLocked}
               />
             )}
           </div>

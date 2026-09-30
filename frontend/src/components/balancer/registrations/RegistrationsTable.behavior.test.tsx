@@ -67,6 +67,11 @@ vi.mock("@/stores/workspace.store", () => ({
   useWorkspaceStore: (selector: (state: { currentWorkspaceId: number }) => unknown) =>
     selector({ currentWorkspaceId: 1 })
 }));
+// The toolbar and the kebab are permission-gated now; this suite is about what
+// the table renders for a viewer who holds them, not about the gate itself.
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: () => ({ canAccessPermission: () => true })
+}));
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));

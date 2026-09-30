@@ -51,6 +51,24 @@ IDENTITY = make_identity(
                 {"resource": "registration", "action": "update"},
                 {"resource": "registration", "action": "approve"},
                 {"resource": "registration", "action": "check_in"},
+                {"resource": "registration", "action": "roles"},
+            ],
+        }
+    ],
+)
+
+#: The ``referee`` system role's registration grants: everything above except
+#: roles and ranks.
+REFEREE = make_identity(
+    username="referee",
+    workspaces=[
+        {
+            "workspace_id": WORKSPACE_ID,
+            "rbac_roles": ["referee"],
+            "rbac_permissions": [
+                {"resource": "registration", "action": "update"},
+                {"resource": "registration", "action": "approve"},
+                {"resource": "registration", "action": "check_in"},
             ],
         }
     ],
@@ -329,6 +347,40 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         # signal after the service has already committed, so releasing it needs
         # a commit of its own.
         self.assertEqual(["audit", "service", "commit"], trace)
+
+    async def test_referee_edits_a_registration_the_editor_sent_without_roles(self):
+        payload = _update_payload(admin_notes="late, ping on discord")
+        del payload["roles"]
+        envelope, session, trace = await self._invoke(
+            "rpc.tournament.reg_update",
+            {"identity": REFEREE, "id": REGISTRATION_ID, "payload": payload},
+            stored=_registration(),
+            service_attr="update_registration_profile",
+        )
+
+        self.assertTrue(envelope["ok"], envelope)
+        self.assertIn("service", trace)
+        self.assertEqual({"admin_notes"}, set(session.rows[0].after_json))
+
+    async def test_referee_cannot_write_roles_ranks_or_the_pin(self):
+        # Presence is the write: an unchanged roles list resent is refused too.
+        for label, payload in (
+            ("roles", _update_payload()),
+            ("answers.roles", {"answers": {"roles": [{"role": "damage", "is_primary": True}]}}),
+            ("unpin", {"pin": False}),
+        ):
+            with self.subTest(label):
+                envelope, session, trace = await self._invoke(
+                    "rpc.tournament.reg_update",
+                    {"identity": REFEREE, "id": REGISTRATION_ID, "payload": payload},
+                    stored=_registration(),
+                    service_attr="update_registration_profile",
+                )
+
+                self.assertFalse(envelope["ok"], envelope)
+                self.assertIn("registration.roles", envelope["error"]["message"])
+                self.assertEqual([], session.rows)
+                self.assertNotIn("service", trace)
 
     async def test_approve_records_the_status_transition(self):
         _, session, _ = await self._invoke(

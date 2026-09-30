@@ -64,6 +64,24 @@ def _int_or_400(value: Any, field: str) -> int:
         raise HTTPException(status_code=400, detail=f"invalid {field}") from exc
 
 
+#: The score side of ``EncounterUpdate``: what ``match.result`` may set. Every
+#: other field (teams, stage, round, best-of, schedule, name) is the bracket's
+#: structure and stays on ``match.update``; an unknown key counts as structure.
+_ENCOUNTER_RESULT_FIELDS = frozenset(
+    {"home_score", "away_score", "status", "closeness", "started_at", "ended_at", "current_map_index"}
+)
+
+
+def _encounter_update_actions(fields: frozenset[str]) -> tuple[str, ...]:
+    """``result`` for the score side, ``update`` for the rest, both when mixed."""
+    actions: list[str] = []
+    if fields & _ENCOUNTER_RESULT_FIELDS:
+        actions.append("result")
+    if not fields or fields - _ENCOUNTER_RESULT_FIELDS:
+        actions.append("update")
+    return tuple(actions)
+
+
 async def _ws_body(data: dict[str, Any]) -> int:
     return _int_or_400(_body(data).get("workspace_id"), "workspace_id")
 
@@ -320,6 +338,7 @@ REGISTRY: dict[str, EntityConfig] = {
         service_delete=lambda s, i, d: enc_service.delete_encounter(s, i),
         not_found_detail="Encounter not found",
         actions=frozenset({"create", "update", "delete"}),
+        update_actions=_encounter_update_actions,
     ),
     "standing": EntityConfig(
         entity="standing",
