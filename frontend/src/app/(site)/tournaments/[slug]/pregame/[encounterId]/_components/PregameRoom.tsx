@@ -162,7 +162,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
     workspaceId != null &&
     (isSuperuser ||
       isWorkspaceAdmin(workspaceId) ||
-      hasWorkspacePermission(workspaceId, "match.update"));
+      hasWorkspacePermission(workspaceId, "match.result"));
 
   const series = buildSeriesMaps(loop, room.mapsById, (id) => t("map.itemNumber", { id }));
   const heroName = (id: number) => t("hero.itemNumber", { id });

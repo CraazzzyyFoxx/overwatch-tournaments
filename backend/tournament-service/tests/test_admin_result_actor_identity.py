@@ -40,7 +40,7 @@ IDENTITY = make_identity(
         {
             "workspace_id": 1,
             "rbac_roles": [],
-            "rbac_permissions": [{"resource": "match", "action": "update"}],
+            "rbac_permissions": [{"resource": "match", "action": "result"}],
         }
     ],
 )

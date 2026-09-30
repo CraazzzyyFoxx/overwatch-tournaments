@@ -66,15 +66,26 @@ Two practical consequences follow. First, a registration, a roster slot and a ra
 
 ## Roles and permissions
 
-Permissions are a flat catalogue of `resource.action` grants (`tournament.update`, `registration.approve`) plus the single wildcard `admin.*`. The catalogue is the allowlist: a permission that is not in it cannot be granted. On top of it sit five workspace system roles:
+Permissions are a flat catalogue of `resource.action` grants (`tournament.update`, `registration.approve`) plus the single wildcard `admin.*`. The catalogue is the allowlist: a permission that is not in it cannot be granted. On top of it sit six workspace system roles:
 
 | Role | What it grants |
 | --- | --- |
 | `owner` | `admin.*` — everything in this workspace |
 | `admin` | Everything except managing roles and permissions, and except deleting the workspace or its members |
+| `referee` | `member`-level reads plus `match.result` and `registration.update` / `.approve` / `.reject` / `.check_in` — results and admission, nothing structural |
 | `host` | `member`-level reads plus the full `custom_game` lifecycle — this **is** the right to run mixes |
 | `member` | `*.read` on the community's domain resources only |
 | `player` | Nothing |
+
+Two grants in that catalogue are narrower than their resource suggests, and the split is what makes `referee` possible:
+
+| Permission | What it covers | What it does **not** |
+| --- | --- | --- |
+| `match.result` | The result of an encounter: `home_score`, `away_score`, `status`, `closeness`, `started_at`, `ended_at`, `current_map_index` on the generic PATCH, plus the result endpoints — set/reopen, per-map results, per-game corrections, FFA game results and void, and the live pick-ban overrides (reset, act, submit, reopen, elect opener) | Anything about the match itself |
+| `match.update` | The match itself: name, stage, teams, round, best-of, scheduled time, bracket slot swaps, pick-ban configuration, the report form, the FFA games count | The result fields above |
+| `registration.roles` | A registration's `roles` — including `answers.roles` — and its ranks and pin (`pin`, `clear_pin`), plus applying rank autofill | The rest of the registration, which `registration.update` covers |
+
+A PATCH that mixes the two sides needs both grants, and a `registration` PATCH carrying a `roles` key without `registration.roles` is refused whole rather than silently trimmed.
 
 Separate from those are capabilities allowed by default for everyone: `account.avatar`, `account.rename`, `account.social`, `custom_game.self_join`, `registration.self_register`, `workspace.self_create`. They exist not to be granted but so they can be taken away from one account.
 
@@ -97,8 +108,10 @@ These names are exactly what the endpoint checks, and exactly what you list in a
 | --- | --- |
 | `tournament.read`, `stage.read`, `match.read`, `standing.read`, `team.read`, `player.read` | Reading the community's tournament picture |
 | `tournament.create`, `tournament.update` | Creating and editing tournaments |
+| `match.update`, `match.result` | Editing a match and entering its result |
 | `registration.read` | Reading registrations |
 | `registration.approve`, `registration.reject`, `registration.check_in` | Admission, rejection, check-in |
+| `registration.roles` | Changing a registration's roles, ranks and pin |
 | `registration_form.read`, `registration_form.update` | The registration form |
 | `team.create` | Creating teams, including as the result of a balancer job |
 | `balancer.read`, `balancer.create` | Balancer jobs |

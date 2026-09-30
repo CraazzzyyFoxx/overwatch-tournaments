@@ -120,6 +120,11 @@ class EntityConfig:
     engine skips identity rehydration + workspace permission for those actions
     (global reference data with no owning workspace, e.g. heroes/maps). Writes
     are never public — ``create``/``update``/``delete`` always authenticate.
+
+    ``update_actions`` narrows an update's permission by what the request sets:
+    given the payload's keys, the actions on ``permission_resource`` it needs
+    (every one of them). Absent, an update needs ``update``. Decided from the raw
+    keys, before validation, so a caller with no grant still gets 403, not 422.
     """
 
     entity: str
@@ -141,6 +146,7 @@ class EntityConfig:
     list_fn: Callable[[AsyncSession, dict[str, Any]], Awaitable[Any]] | None = None
     not_found_detail: str = "Not found"
     actions: frozenset[str] = frozenset({"create", "get", "update", "delete"})
+    update_actions: Callable[[frozenset[str]], Iterable[str]] | None = None
 
     @cached_property
     def repo(self) -> BaseRepository:
@@ -293,7 +299,11 @@ class CrudDispatcher:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="update not supported")
         async with self._session_factory() as session:
             ws_id = await self._ws_from_id(cfg, session, obj_id)
-            ensure_workspace_permission(user, ws_id, cfg.permission_resource, _ACTION_PERMISSION["update"])
+            raw = data.get("payload")
+            fields = frozenset(raw) if isinstance(raw, dict) else frozenset()
+            actions = cfg.update_actions(fields) if cfg.update_actions else (_ACTION_PERMISSION["update"],)
+            for action in actions:
+                ensure_workspace_permission(user, ws_id, cfg.permission_resource, action)
             payload = cfg.update_schema.model_validate(data.get("payload") or {})
             changes = payload.model_dump(exclude_unset=True)
             if cfg.service_update is not None:

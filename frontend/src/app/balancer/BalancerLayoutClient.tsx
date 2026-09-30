@@ -80,7 +80,7 @@ type BalancerLayoutClientProps = {
 
 export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClientProps>) {
   const pathname = usePathname();
-  const { isLoaded, isOrganizer, canAccessAdminRoute } = usePermissions();
+  const { isLoaded, canAccessAdminRoute } = usePermissions();
   const { status: contextStatus, summary } = useToolContext();
   const isMix = pathname.startsWith("/balancer/mix");
 
@@ -133,14 +133,13 @@ export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClient
 
   // The entry predicate is unchanged, but the workspace comes from the
   // resolved summary, not the store (the store may still be switching).
-  const hasAdminAccess =
+  const hasAccess =
     summary != null &&
     canAccessAdminRoute({
       permissions: adminEntryPermissions,
       workspaceId: summary.workspace_id,
       workspaceAdminVisible: true
     });
-  const hasAccess = hasAdminAccess || isOrganizer;
 
   if (contextStatus === "forbidden" || !hasAccess) {
     return <UnauthorizedState />;

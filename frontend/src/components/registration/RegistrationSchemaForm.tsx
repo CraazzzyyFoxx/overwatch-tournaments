@@ -59,7 +59,9 @@ export interface AdminExtras {
   admin_notes: string | null;
   status: string;
   balancer_status: string;
-  roles: AdminRegistrationRoleInput[];
+  /** Absent when the viewer may not touch roles or ranks — the server would
+   *  refuse the whole write with `registration.roles required`. */
+  roles?: AdminRegistrationRoleInput[];
   auth_user_id: number | null;
 }
 
@@ -99,6 +101,12 @@ interface RegistrationSchemaFormProps {
    * schema flag, the system floors and the never-answered exception.
    */
   writableKeys?: readonly string[];
+  /**
+   * Admin mode only: the viewer may edit this registration but not its roles
+   * or ranks (`registration.roles`). The `roles` answer renders read-only and
+   * neither it nor the organizer panel's ranks are sent.
+   */
+  rolesLocked?: boolean;
 }
 
 /** A role row as either read model serves it. */
@@ -271,7 +279,8 @@ export default function RegistrationSchemaForm({
   onCancel,
   submitPending = false,
   hideTitle = false,
-  writableKeys
+  writableKeys,
+  rolesLocked = false
 }: Readonly<RegistrationSchemaFormProps>) {
   const t = useTranslations();
   const tErrors = useTranslations("forms.errors");
@@ -295,9 +304,10 @@ export default function RegistrationSchemaForm({
 
   /**
    * Every field this viewer may look at but not change, mapped to the sentence
-   * that says why. One source: the edit allowlist ("frozen at submit"). The
-   * schedule locks nothing — it marks the entry late, it does not answer a
-   * question on the registrant's behalf.
+   * that says why. Two sources: the edit allowlist ("frozen at submit") and the
+   * organizer's own `registration.roles` grant. The schedule locks nothing — it
+   * marks the entry late, it does not answer a question on the registrant's
+   * behalf.
    */
   const lockedFields: Record<string, string> = {};
   if (writableKeys) {
@@ -306,6 +316,10 @@ export default function RegistrationSchemaForm({
         lockedFields[field.key] = t("registration.edit.fieldLocked");
       }
     }
+  }
+  const rolesReadOnly = isAdmin && rolesLocked;
+  if (rolesReadOnly) {
+    lockedFields.roles = t("registration.edit.rolesLocked");
   }
 
   const draftKey = draftKeyFor(mode, tournamentId, isEditing);
@@ -431,6 +445,9 @@ export default function RegistrationSchemaForm({
     const sent: Answers = {};
     for (const field of visibleFields(schema, answers)) {
       if (writableKeys && !writableKeys.includes(field.key)) continue;
+      // Same reason as the allowlist: a locked key resent unchanged is still a
+      // write of that key, and the server refuses the whole PATCH for it.
+      if (rolesReadOnly && field.key === "roles") continue;
       sent[field.key] = answers[field.key] ?? null;
     }
 
@@ -439,26 +456,30 @@ export default function RegistrationSchemaForm({
       const selections = toRoleSelections(
         Array.isArray(answers.roles) ? (answers.roles as RoleInput[]) : []
       );
+      // Admin rows carry ranks and activity, which `answers.roles` cannot —
+      // the server takes these over the answer when both are sent. Left out
+      // whole when the viewer lacks `registration.roles`.
+      const adminRoles = rolesReadOnly
+        ? null
+        : fromRoleSelections(selections, lockedRole).map((role, index) => {
+            const typed = ranks[role.role]?.trim();
+            const rank = typed ? Number(typed) : null;
+            return {
+              role: role.role,
+              subrole: role.subrole ?? null,
+              is_primary: role.is_primary,
+              priority: index + 1,
+              rank_value: rank != null && Number.isFinite(rank) ? rank : null,
+              is_active: true,
+              ...(role.top_heroes?.length ? { top_heroes: role.top_heroes } : {})
+            } as AdminRegistrationRoleInput;
+          });
       payload.admin = {
         display_name: displayName || null,
         admin_notes: adminNotes || null,
         status,
         balancer_status: balancerStatus,
-        // Admin rows carry ranks and activity, which `answers.roles` cannot —
-        // the server takes these over the answer when both are sent.
-        roles: fromRoleSelections(selections, lockedRole).map((role, index) => {
-          const typed = ranks[role.role]?.trim();
-          const rank = typed ? Number(typed) : null;
-          return {
-            role: role.role,
-            subrole: role.subrole ?? null,
-            is_primary: role.is_primary,
-            priority: index + 1,
-            rank_value: rank != null && Number.isFinite(rank) ? rank : null,
-            is_active: true,
-            ...(role.top_heroes?.length ? { top_heroes: role.top_heroes } : {})
-          } as AdminRegistrationRoleInput;
-        }),
+        ...(adminRoles ? { roles: adminRoles } : {}),
         auth_user_id: authUserId ?? null
       };
     }
@@ -570,10 +591,16 @@ export default function RegistrationSchemaForm({
             type="number"
             placeholder="—"
             value={ranks[role.code] ?? ""}
+            disabled={rolesReadOnly}
             onChange={(next) => setRanks((prev) => ({ ...prev, [role.code]: next }))}
           />
         ))}
       </div>
+      {rolesReadOnly && (
+        <p className="text-label text-[color:var(--aqt-fg-dim)]">
+          {t("registration.edit.rolesLocked")}
+        </p>
+      )}
 
       <TextField
         multiline

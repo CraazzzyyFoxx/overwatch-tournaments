@@ -6,6 +6,7 @@ A role decides what a person can do inside your workspace. This article explains
 | --- | --- |
 | **Owner** | Everything in the workspace. Only an owner manages roles and permissions, removes members and deletes the workspace. |
 | **Admin** | The organizer's daily work: tournaments, registrations, teams, encounters, workspace settings, the audit log, integration keys. Does not manage roles and permissions, does not remove members, does not delete the workspace. |
+| **Referee** | Runs the matches of a bracket somebody else built: enters and corrects results — scores, map results, FFA games, live pick-ban overrides — and handles registrations (edit, approve, reject, check-in). Cannot change a registration's roles or ranks, cannot create or edit tournaments, cannot build or regenerate brackets and stages, and deletes nothing. |
 | **Host** | Runs mixes: creates, edits and finishes them. Plus read access to the workspace — rosters, standings, registrations. |
 | **Member** | Read access to the workspace: tournaments, teams, encounters, registrations, achievements, logs. Changes nothing. |
 | **Player** | Grants nothing extra. This is a tournament participant, not community staff. |
@@ -15,6 +16,10 @@ The roles stack: an admin has everything a member has, plus management. On top o
 ## A host does not get the admin panel
 
 A host is the person who runs mixes, not an administrator. The admin panel does not open for them: the right to run mixes is deliberately kept outside panel access. A host works in the mix room on the public side of the site. What happens there is described in [Mixes](/docs/organizers/mixes).
+
+## A referee touches results, never the structure
+
+The split is deliberate: the bracket, its stages, the best-of and the schedule belong to the organizer who built them, while the numbers that come out of a played match belong to the person watching it. A referee opens the match edit dialog and the pregame room's admin controls, but the best-of and start-time fields are not shown to them, and teams cannot be dragged between slots.
 
 ## Rules worth knowing
 

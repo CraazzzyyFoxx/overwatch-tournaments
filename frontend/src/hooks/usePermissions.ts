@@ -3,7 +3,7 @@
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
-export type AppRole = "admin" | "tournament_organizer" | "moderator" | "user";
+export type AppRole = "admin" | "moderator" | "user";
 
 const resourcesWithCrud = [
   "workspace",
@@ -49,9 +49,15 @@ type SpecialPermission =
   | "auth_user.update"
   | "oauth_connection.read"
   | "oauth_connection.delete"
+  // Split out of `match.update`: entering a result is the referee's job, while
+  // the match's structure and config stay with the organizer.
+  | "match.result"
   | "registration.approve"
   | "registration.reject"
   | "registration.check_in"
+  // Roles and ranks carry the balancer's seeding weight, so they are gated
+  // apart from the rest of a registration's fields.
+  | "registration.roles"
   | "rank.read"
   | "rank.update"
   | "subscription.read"
@@ -87,7 +93,7 @@ export type PermissionProfile = {
 };
 
 function isAdminPanelRole(role: string): boolean {
-  return role === "admin" || role === "tournament_organizer" || role === "moderator";
+  return role === "admin" || role === "moderator";
 }
 
 function workspaceHasPermission(
@@ -330,7 +336,6 @@ export function usePermissions() {
     canAccessAdminRoute,
     isSuperuser: user?.isSuperuser ?? false,
     isAdmin: hasRole("admin"),
-    isOrganizer: hasRole("tournament_organizer"),
     isModerator: hasRole("moderator"),
     hasAdminPanelRole,
   };

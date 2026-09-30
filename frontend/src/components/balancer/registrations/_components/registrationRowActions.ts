@@ -99,6 +99,7 @@ export function buildRegistrationRowActions(
       label: "Delete",
       icon: Trash2,
       destructive: true,
+      hidden: !handlers.canAccessPermission("registration.delete", registration.workspace_id),
       onSelect: () => handlers.onDelete(registration)
     }
   ];

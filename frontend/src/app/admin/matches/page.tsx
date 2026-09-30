@@ -139,7 +139,7 @@ export default function AdminMatchesPage() {
         <EncounterReportsBrowser
           tournamentId={null}
           workspaceId={workspaceId}
-          canUpdateEncounter={canAccessPermission("match.update", workspaceId)}
+          canUpdateEncounter={canAccessPermission("match.result", workspaceId)}
         />
       ) : null}
       {view === "parsed" ? (

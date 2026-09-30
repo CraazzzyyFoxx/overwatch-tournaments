@@ -47,10 +47,18 @@ import type { RbacRole } from "@/types/rbac.types";
 import type { WorkspaceMember, WorkspaceSystemRole } from "@/types/workspace.types";
 import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
-const SYSTEM_ROLES: WorkspaceSystemRole[] = ["owner", "admin", "host", "member", "player"];
+const SYSTEM_ROLES: WorkspaceSystemRole[] = [
+  "owner",
+  "admin",
+  "referee",
+  "host",
+  "member",
+  "player"
+];
 const SYSTEM_ROLE_LABEL: Record<WorkspaceSystemRole, string> = {
   owner: "Owner",
   admin: "Admin",
+  referee: "Referee",
   host: "Host",
   member: "Member",
   player: "Player"

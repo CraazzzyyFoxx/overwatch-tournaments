@@ -275,6 +275,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
               if (!open) actions.setEditEncounter(null);
             }}
             encounter={actions.editEncounter}
+            canEditStructure={viewer.canEditStructure}
           />
         )}
 

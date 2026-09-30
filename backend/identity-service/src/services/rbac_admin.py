@@ -282,7 +282,7 @@ class RoleAdminService:
         self._policy.require_role_scope(current_user, params.workspace_id, "read")
 
         if params.workspace_id is not None:
-            # System roles (owner/admin/host/member/player) are created lazily by
+            # System roles (owner/admin/referee/host/member/player) are created lazily by
             # add_member/grant/registration paths, not on workspace creation alone.
             # A workspace that has not exercised one of those since a new system
             # role landed in the catalog would otherwise show a stale role list --

@@ -348,7 +348,9 @@ def register(broker: Any, logger: Any) -> None:
     # Generalizes veto_admin.py's two live-session operations (reset + act
     # for an absent captain), which had no pick-ban equivalent before the
     # room unification. Both kinds share these routes via a ``kind`` body
-    # field instead of kind-hardcoded handlers.
+    # field instead of kind-hardcoded handlers. Gated on ``match.result``, not
+    # ``update``: they run ONE match in progress, the same staff that records
+    # its result; the rules they run on stay behind the config routes above.
 
     @broker.subscriber("rpc.tournament.admin_pick_ban_session_reset")
     async def _admin_pick_ban_session_reset(data: dict, msg: RabbitMessage) -> dict:
@@ -356,7 +358,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = PickBanAdminReset.model_validate(_payload(data))
             encounter = await _load_encounter(session, encounter_id)
             await record_admin_audit(
@@ -385,7 +387,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = PickBanAdminAct.model_validate(_payload(data))
             await record_admin_audit(
                 session,
@@ -426,7 +428,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = PickBanAdminSubmit.model_validate(_payload(data))
             await record_admin_audit(
                 session,
@@ -461,7 +463,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = PickBanAdminReopen.model_validate(_payload(data))
             await record_admin_audit(
                 session,
@@ -483,7 +485,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             body = PickBanAdminElectOpener.model_validate(_payload(data))
             pick_ban = await pick_ban_session.pick_ban_session_service.get_pick_ban_session(
                 session, encounter_id, body.kind
@@ -519,7 +521,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
-            ensure_workspace_permission(user, ws_id, "match", "update")
+            ensure_workspace_permission(user, ws_id, "match", "result")
             game_id = _path_int(data, "game_id")
             body = AdminGameResultInput.model_validate(_payload(data))
             encounter = await _load_encounter(session, encounter_id)

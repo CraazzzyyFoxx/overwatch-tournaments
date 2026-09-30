@@ -22,6 +22,13 @@ const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
 
 export type BracketViewer = {
   isAdmin: boolean;
+  /**
+   * May rewrite the bracket's STRUCTURE — drag a team into another slot, and
+   * the best-of / start-time fields of the edit dialog. A referee holds
+   * `match.result` only, which makes them `isAdmin` here (any non-read grant
+   * does) but leaves the structure alone.
+   */
+  canEditStructure: boolean;
   isAuthenticated: boolean;
   /** The player ids this account is linked to — who it can report FOR. */
   captainPlayerIds: Set<number>;
@@ -33,20 +40,21 @@ export type BracketViewer = {
  * only an organizer sees), and the actions need that already-filtered list.
  */
 export function useBracketViewer(workspaceId: number): BracketViewer {
-  const { isSuperuser, isWorkspaceAdmin } = usePermissions();
+  const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();
   const { status, user } = useAuthProfile();
   const isAuthenticated = status === "authenticated";
+  const hasGlobalAdminRole = (user?.roles ?? []).some((role) => ADMIN_ROLES.has(role));
   const isAdmin =
+    isAuthenticated && (isSuperuser || isWorkspaceAdmin(workspaceId) || hasGlobalAdminRole);
+  const canEditStructure =
     isAuthenticated &&
-    (isSuperuser ||
-      isWorkspaceAdmin(workspaceId) ||
-      (user?.roles ?? []).some((role) => ADMIN_ROLES.has(role)));
+    (isSuperuser || hasGlobalAdminRole || hasWorkspacePermission(workspaceId, "match.update"));
   const captainPlayerIds = useMemo(
     () => new Set((user?.linkedPlayers ?? []).map((player) => player.playerId)),
     [user?.linkedPlayers]
   );
 
-  return { isAdmin, isAuthenticated, captainPlayerIds };
+  return { isAdmin, canEditStructure, isAuthenticated, captainPlayerIds };
 }
 
 type BracketActionsInput = {
@@ -74,7 +82,7 @@ export function useBracketActions({
   const queryClient = useQueryClient();
   const [editEncounter, setEditEncounter] = useState<Encounter | null>(null);
   const [reportEncounter, setReportEncounter] = useState<Encounter | null>(null);
-  const { isAdmin, isAuthenticated, captainPlayerIds } = viewer;
+  const { isAdmin, canEditStructure, isAuthenticated, captainPlayerIds } = viewer;
 
   const isEncounterCaptain = (encounter: Encounter) => {
     const homeCaptain = encounter.home_team?.captain_id;
@@ -125,10 +133,11 @@ export function useBracketActions({
       }
     : undefined;
 
-  // Rearrange mode (admins): one server call swaps two slots; the cache takes
-  // the swap first so the dropped team stays put, and is restored if the server
-  // refuses (a match went live between poll and drop).
-  const handleSwapSlots = isAdmin
+  // Rearrange mode: one server call swaps two slots; the cache takes the swap
+  // first so the dropped team stays put, and is restored if the server refuses
+  // (a match went live between poll and drop). Structure, not result — so a
+  // referee never gets the drag handles.
+  const handleSwapSlots = canEditStructure
     ? async (source: BracketSlotRef<Encounter>, target: BracketSlotRef<Encounter>) => {
         const previous =
           queryClient.getQueryData<PaginatedResponse<Encounter>>(encountersQueryKey);

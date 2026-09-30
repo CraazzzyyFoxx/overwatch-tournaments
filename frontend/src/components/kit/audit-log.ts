@@ -309,9 +309,21 @@ export type AuditDiffKind = "added" | "removed" | "changed" | "set";
 export interface AuditDiffRow {
   field: string;
   kind: AuditDiffKind;
-  /** Rendered value, or `null` when the side does not carry the field. */
+  /** Rendered value, or `null` when the side does not carry the field or `children` breaks it down. */
   before: string | null;
   after: string | null;
+  /**
+   * Per-key breakdown of a nested value — a record, or a list of records such as
+   * registration roles — so a one-rank edit reads as that rank instead of two
+   * copies of the whole list.
+   */
+  children?: AuditDiffRow[];
+}
+
+type AuditRecord = Record<string, unknown>;
+
+function isAuditRecord(value: unknown): value is AuditRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Compact, readable rendering. Strings stay bare so they are not double-quoted. */
@@ -320,6 +332,10 @@ function formatAuditValue(value: unknown): string {
   if (value === undefined) return "—";
   if (typeof value === "string") return value.length > 0 ? value : "(empty)";
   if (typeof value === "number" || typeof value === "boolean") return String(value);
+  // Tag lists and the like: `a, b` reads, `["a","b"]` is wire format.
+  if (Array.isArray(value) && value.every((item) => typeof item !== "object" || item === null)) {
+    return value.length > 0 ? value.map(formatAuditValue).join(", ") : "(none)";
+  }
   try {
     return JSON.stringify(value);
   } catch {
@@ -339,7 +355,73 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /**
- * One row per field that actually differs.
+ * Keys that name a list element. Pairing by position would turn a removed first
+ * role into a change to every role after it; pairing by `role` shows the one
+ * that went.
+ */
+const IDENTITY_KEYS = ["id", "role", "provider", "key", "slug", "name"] as const;
+
+/** Lists of records as records keyed by element identity, `#1…` when none holds. */
+function keyedLists(lists: AuditRecord[][]): AuditRecord[] {
+  const key = IDENTITY_KEYS.find((candidate) =>
+    lists.every((list) => {
+      const ids = list.map((item) => item[candidate]);
+      return (
+        ids.every((id) => typeof id === "string" || typeof id === "number") &&
+        new Set(ids).size === ids.length
+      );
+    }),
+  );
+  return lists.map((list) =>
+    Object.fromEntries(
+      list.map((item, index) => {
+        if (key == null) return [`#${index + 1}`, item];
+        // The row is already labelled with it.
+        const { [key]: id, ...rest } = item;
+        return [String(id), rest];
+      }),
+    ),
+  );
+}
+
+/**
+ * Both sides as records when the field holds a record or a list of records, or
+ * `null` for a leaf. A missing or `null` side counts as empty, so `null → {…}`
+ * lists what arrived.
+ */
+function nestedPair(before: unknown, after: unknown): [AuditRecord, AuditRecord] | null {
+  const sides = [before, after].filter((side) => side != null);
+  if (sides.length > 0 && sides.every(isAuditRecord)) {
+    return [isAuditRecord(before) ? before : {}, isAuditRecord(after) ? after : {}];
+  }
+  const lists = sides.filter((side): side is AuditRecord[] => Array.isArray(side) && side.every(isAuditRecord));
+  if (lists.length === sides.length && lists.some((list) => list.length > 0)) {
+    const [keyedBefore, keyedAfter] = keyedLists([
+      Array.isArray(before) ? before : [],
+      Array.isArray(after) ? after : [],
+    ]);
+    return [keyedBefore, keyedAfter];
+  }
+  return null;
+}
+
+/** `undefined` is a side that does not carry the field. */
+function diffRow(field: string, kind: AuditDiffKind, before: unknown, after: unknown): AuditDiffRow {
+  const pair = nestedPair(before, after);
+  // A `set` parent has no before-image, and neither do its parts.
+  const children = pair ? auditDiffRows(kind === "set" ? null : pair[0], pair[1]) : [];
+  // Empty only when the parts match and the order alone moved: say it whole.
+  if (children.length > 0) return { field, kind, before: null, after: null, children };
+  return {
+    field,
+    kind,
+    before: before === undefined ? null : formatAuditValue(before),
+    after: after === undefined ? null : formatAuditValue(after),
+  };
+}
+
+/**
+ * One row per field that actually differs, nested values broken down per key.
  *
  * Writers assemble `before`/`after` from named domain fields, so a key missing
  * from a populated side is a real fact rather than a gap in the capture — but a
@@ -349,33 +431,26 @@ export function auditDiffRows(
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
 ): AuditDiffRow[] {
-  const fields = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])].sort();
+  // Numeric-aware so `#10` and id `10` land after `9`.
+  const fields = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])].sort(
+    (a, b) => a.localeCompare(b, "en", { numeric: true }),
+  );
 
   const rows: AuditDiffRow[] = [];
   for (const field of fields) {
-    const inBefore = before != null && field in before;
-    const inAfter = after != null && field in after;
+    const inBefore = before != null && Object.hasOwn(before, field);
+    const inAfter = after != null && Object.hasOwn(after, field);
     const beforeValue = inBefore ? before[field] : undefined;
     const afterValue = inAfter ? after[field] : undefined;
 
     if (inBefore && inAfter) {
       if (sameValue(beforeValue, afterValue)) continue;
-      rows.push({
-        field,
-        kind: "changed",
-        before: formatAuditValue(beforeValue),
-        after: formatAuditValue(afterValue),
-      });
+      rows.push(diffRow(field, "changed", beforeValue, afterValue));
     } else if (inAfter) {
-      rows.push({
-        field,
-        // No before-image at all versus a before-image that simply lacked this key.
-        kind: before == null ? "set" : "added",
-        before: null,
-        after: formatAuditValue(afterValue),
-      });
+      // No before-image at all versus a before-image that simply lacked this key.
+      rows.push(diffRow(field, before == null ? "set" : "added", undefined, afterValue));
     } else {
-      rows.push({ field, kind: "removed", before: formatAuditValue(beforeValue), after: null });
+      rows.push(diffRow(field, "removed", beforeValue, undefined));
     }
   }
   return rows;

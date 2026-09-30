@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 __all__ = ("AuthUser", "RefreshToken")
 
 ADMIN_EQUIVALENT_ROLE_NAMES = {"admin"}
-ADMIN_PANEL_ROLE_NAMES = {"admin", "tournament_organizer", "moderator"}
+ADMIN_PANEL_ROLE_NAMES = {"admin", "moderator"}
 
 
 # The "any non-read permission means management" shortcut below is only sound
