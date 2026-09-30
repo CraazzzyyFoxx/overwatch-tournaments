@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "draftcap01",
+  "alembic_head": "noorg01",
   "packages": [
     {
       "key": "achievements",
