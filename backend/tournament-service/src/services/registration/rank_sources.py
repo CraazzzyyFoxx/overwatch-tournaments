@@ -133,18 +133,38 @@ def _group_ow_rank_signals(
     for tag_id, role_map in grouped.items():
         out = signals_by_tag_id.setdefault(tag_id, {})
         for role, snaps in role_map.items():
-            ranked = [s for s in snaps if _is_ranked(s)]
+            # The rank now, per platform whose newest row is ranked; the higher one, as the
+            # registration sheet's OW line reads it (``fetch_latest_ow_ranks_by_account``).
+            current = [rows[-1] for rows in _live_platform_series(snaps)]
             composite, peak = _compute_ow_week_ranks(snaps, now, known_until_by_tag_id.get(tag_id), week_window)
             out[role] = _OwRankSignals(
                 composite_rank_value=composite,
                 peak_rank_value=peak,
-                latest_snapshot=max(ranked, key=lambda s: s.captured_at, default=None),
+                latest_snapshot=max(current, key=lambda s: s.rank_value, default=None),
             )
     return signals_by_tag_id
 
 
 def _is_ranked(snapshot: models.UserRankSnapshot | Any) -> bool:
     return snapshot.rank_value is not None and getattr(snapshot, "is_ranked", True)
+
+
+def _live_platform_series(snapshots: Iterable[models.UserRankSnapshot | Any]) -> list[list[Any]]:
+    """One (account, role)'s rows per platform, oldest first, for the platforms ranked NOW.
+
+    A platform whose newest row is unranked -- a season reset the player has not placed in
+    yet -- has no rank, however high the last season's was, so it offers nothing: the same
+    rule the registration sheet's OW line applies (``fetch_latest_ow_ranks_by_account``).
+    """
+    by_platform: dict[str | None, list[Any]] = {}
+    for snapshot in snapshots:
+        by_platform.setdefault(getattr(snapshot, "platform", None), []).append(snapshot)
+    live: list[list[Any]] = []
+    for rows in by_platform.values():
+        rows.sort(key=lambda s: s.captured_at)
+        if _is_ranked(rows[-1]):
+            live.append(rows)
+    return live
 
 
 def _ow_ranked_stretches(
@@ -154,15 +174,11 @@ def _ow_ranked_stretches(
 
     ``rank_snapshot`` rows are changes, not polls: each holds until the next row of its
     platform, and the newest holds until ``known_until`` -- the account's last successful
-    poll -- or, without one, only at its own instant.
+    poll -- or, without one, only at its own instant. Only platforms ranked now count
+    (see ``_live_platform_series``).
     """
-    by_platform: dict[str | None, list[Any]] = {}
-    for snapshot in snapshots:
-        by_platform.setdefault(getattr(snapshot, "platform", None), []).append(snapshot)
-
     stretches: list[tuple[datetime, datetime, int]] = []
-    for rows in by_platform.values():
-        rows.sort(key=lambda s: s.captured_at)
+    for rows in _live_platform_series(snapshots):
         last = rows[-1].captured_at
         ends = [row.captured_at for row in rows[1:]] + [max(last, known_until or last)]
         stretches += [
@@ -185,9 +201,9 @@ def _compute_ow_week_ranks(
 
     ``snapshots`` are one (account, role)'s changes (any platform, unranked ones included, the
     row each platform entered the window in among them); ``known_until`` is the account's last
-    successful poll. Window: the last ``week_window`` from ``now`` while a ranked value held
-    inside it, else the ``week_window`` before the last ranked value stopped being known. Both
-    are ``None`` only when no ranked value was ever seen.
+    successful poll. A platform whose newest row is unranked contributes nothing, so both are
+    ``None`` when the role is unranked everywhere now. Window: the last ``week_window`` from
+    ``now`` while a ranked value held inside it, else the ``week_window`` before the last poll.
     """
     stretches = _ow_ranked_stretches(snapshots, known_until)
     if not stretches:
@@ -599,12 +615,13 @@ class RankSourcesService:
     ) -> dict[int, dict[str, _OwRankSignals]]:
         """Return per (social_account_id, rank_role) the weekly OW rank composite + latest snapshot.
 
-        ``rank_snapshot`` holds changes, so the window ``_compute_ow_week_rank_value`` weighs
-        needs every row from ``threshold`` on -- unranked ones too, as that is where a ranked
-        stretch ends -- plus, per platform, the row the series entered it in, and the account's
-        last successful poll. ``threshold`` is the week cutoff while the newest ranked row is
-        inside the week, else the week before that row; either way it precedes the window
-        Python picks, so the read is bounded by the pair's recent changes, not its history.
+        ``rank_snapshot`` holds changes, so the window ``_compute_ow_week_ranks`` weighs needs
+        every row from ``threshold`` on -- unranked ones too, as that is where a ranked stretch
+        ends and what says a platform is unranked now -- plus, per platform, the row the series
+        entered it in (so each platform's newest row is always read), and the account's last
+        successful poll. ``threshold`` is the week cutoff while the newest ranked row is inside
+        the week, else the week before that row; either way it precedes the window Python
+        picks, so the read is bounded by the pair's recent changes, not its history.
         """
         if not social_account_ids:
             return {}
