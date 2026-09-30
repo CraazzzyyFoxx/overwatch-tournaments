@@ -733,6 +733,9 @@
   --aqt-teal: hsl(172 70% 49%);
   --aqt-teal-deep: hsl(173 81% 32%);
   --aqt-emerald: hsl(150 57% 52%);
+  /* Positive/up green: the win/positive tone, calmer than emerald and apart from
+     --aqt-support, so a high score does not read as the support role. */
+  --aqt-up: hsl(146 60% 58%);
   --aqt-amber: hsl(36 88% 65%);
   --aqt-rose: hsl(349 84% 63%);
   --aqt-violet: hsl(270 70% 62%);

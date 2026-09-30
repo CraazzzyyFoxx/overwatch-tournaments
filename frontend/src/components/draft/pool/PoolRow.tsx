@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { getImpactColor } from "@/lib/colors";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import {
   bestSeatRole,
@@ -327,10 +328,9 @@ function RightCell({
   // A spectator has no team to fit an available player to: the cell stays empty.
   if (actingTeam == null) return null;
   if (blocked || fit == null) return <div className={cn(main, "text-[color:var(--aqt-fg-faint)]")}>—</div>;
-  // Neutral ramp: the fit number is a magnitude, not a role — Support green here
-  // would read as "support" and collide with online/good.
-  const color =
-    fit.score >= 75 ? "var(--aqt-fg)" : fit.score >= 55 ? "var(--aqt-fg-muted)" : "var(--aqt-fg-dim)";
+  // The analytics impact ramp: fit is the same kind of 1..99 spread, and its
+  // up-green is kept apart from the support role's green.
+  const color = getImpactColor(fit.score);
   const title =
     fit.role == null
       ? t("pool.fitTitleAny", { team: actingTeam.team.name })
