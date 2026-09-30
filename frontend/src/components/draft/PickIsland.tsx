@@ -433,7 +433,7 @@ function IslandFooter({
       <div className="flex flex-wrap items-center gap-3.5 sm:flex-nowrap">
         <span
           className="min-w-12 font-onest text-ui font-bold tabular-nums"
-          style={{ color: clockColor(board, myTurn, countdown.overtime) }}
+          style={{ color: clockColor(board, countdown.overtime) }}
         >
           {countdown.text ?? "—"}
         </span>

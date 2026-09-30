@@ -53,13 +53,11 @@ function orderKind(directions: readonly RoundDirection[]): OrderKind {
   return alternates ? "snake" : "custom";
 }
 
-/** The on-clock accent every surface of the room shares: paused amber, overtime rose, my turn teal. */
-function clockAccent(board: DraftBoard, myTeamId: number | null): string {
-  const pick = board.current_pick;
+/** The on-clock accent every surface of the room shares: paused amber, overtime rose, else teal. */
+function clockAccent(board: DraftBoard): string {
   if (board.session.status === "paused") return "var(--aqt-amber)";
-  if (pick?.overtime_started_at != null) return "var(--aqt-rose)";
-  if (pick != null && pick.draft_team_id === myTeamId) return "var(--aqt-teal)";
-  return "var(--aqt-fg)";
+  if (board.current_pick?.overtime_started_at != null) return "var(--aqt-rose)";
+  return "var(--aqt-teal)";
 }
 
 function isTeamsTab(value: string): value is DraftTeamsTab {
@@ -93,7 +91,7 @@ export function TeamsPanel({
     () => filterSortTeams(board, teamViews, { filter, sort, followed, myTeamId }),
     [board, teamViews, filter, sort, followed, myTeamId]
   );
-  const clockColor = clockAccent(board, myTeamId);
+  const clockColor = clockAccent(board);
   const totalPicks = board.picks.length;
 
   const caption =
