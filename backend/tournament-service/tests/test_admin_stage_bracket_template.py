@@ -84,6 +84,11 @@ def _rows_result(rows: list[tuple]):
     return result
 
 
+def _session() -> SimpleNamespace:
+    """Enough session for the stage row lock these paths take."""
+    return SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
+
+
 class SetBracketTemplateTests(IsolatedAsyncioTestCase):
     async def test_refuses_to_edit_a_bracket_that_already_has_matches(self) -> None:
         stage = _stage()
@@ -94,7 +99,7 @@ class SetBracketTemplateTests(IsolatedAsyncioTestCase):
             patch.object(service.encounter_repo, "count", AsyncMock(return_value=10)),
         ):
             with self.assertRaises(HTTPException) as ctx:
-                await service.set_bracket_template(SimpleNamespace(), 5, template)
+                await service.set_bracket_template(_session(), 5, template)
 
         self.assertEqual(409, ctx.exception.status_code)
         self.assertEqual(
@@ -113,7 +118,7 @@ class SetBracketTemplateTests(IsolatedAsyncioTestCase):
             patch.object(service.encounter_repo, "count", AsyncMock(return_value=0)),
         ):
             with self.assertRaises(HTTPException) as ctx:
-                await service.set_bracket_template(SimpleNamespace(), 5, BracketTemplate.model_validate(raw))
+                await service.set_bracket_template(_session(), 5, BracketTemplate.model_validate(raw))
 
         self.assertEqual(422, ctx.exception.status_code)
         self.assertEqual("invalid_bracket_template", ctx.exception.detail["code"])
@@ -140,7 +145,7 @@ class SetBracketTemplateTests(IsolatedAsyncioTestCase):
             patch.object(service.encounter_repo, "count", AsyncMock(return_value=0)),
             patch.object(service, "_finish_structure_write", AsyncMock()) as finish,
         ):
-            read = await service.set_bracket_template(SimpleNamespace(), 5, template)
+            read = await service.set_bracket_template(_session(), 5, template)
 
         self.assertEqual(template.model_dump(mode="json"), stage.bracket_template)
         self.assertTrue(read["custom"])
@@ -167,7 +172,7 @@ class ClearBracketTemplateTests(IsolatedAsyncioTestCase):
             patch.object(service.encounter_repo, "count", AsyncMock(return_value=0)),
             patch.object(service, "_finish_structure_write", AsyncMock()),
         ):
-            read = await service.clear_bracket_template(SimpleNamespace(), 5)
+            read = await service.clear_bracket_template(_session(), 5)
 
         self.assertIsNone(stage.bracket_template)
         self.assertFalse(read["custom"])
@@ -236,7 +241,7 @@ class GenerateThroughTemplateTests(IsolatedAsyncioTestCase):
 
         with patch.object(service, "_load_team_names", AsyncMock(return_value={})):
             with self.assertRaises(HTTPException) as ctx:
-                await service._generate_bracket_encounters(SimpleNamespace(), stage, {})
+                await service._generate_bracket_encounters(_session(), stage, {})
 
         self.assertEqual(409, ctx.exception.status_code)
         self.assertEqual(
@@ -261,7 +266,7 @@ class GenerateThroughTemplateTests(IsolatedAsyncioTestCase):
             patch.object(service, "_load_team_names", AsyncMock(return_value={})),
             patch.object(service, "_create_encounters_from_skeleton", AsyncMock(side_effect=_capture)),
         ):
-            await service._generate_bracket_encounters(SimpleNamespace(), stage, {})
+            await service._generate_bracket_encounters(_session(), stage, {})
 
         skeleton = persisted["skeleton"]
         self.assertEqual(

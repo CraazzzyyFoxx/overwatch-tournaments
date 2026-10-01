@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { ApiError, errorBodyFields } from "@/lib/api/error";
@@ -160,34 +160,30 @@ export function BracketLayoutSection({ stage }: Readonly<{ stage: Stage }>) {
           <div className="flex flex-wrap items-end gap-4">
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               U
-              <Input
-                type="number"
+              <NumberInput
+                integer
                 min={2}
+                max={512}
+                aria-label="Upper bracket seeds"
                 className="h-8 w-20"
                 value={draft.upper_seeds}
-                onChange={(event) =>
-                  dispatch({
-                    type: "setSeeds",
-                    upper: Number(event.target.value) || 0,
-                    lower: draft.lower_seeds
-                  })
-                }
+                onValueChange={(next) => {
+                  if (next != null) dispatch({ type: "setSeeds", upper: next, lower: draft.lower_seeds });
+                }}
               />
             </label>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               L
-              <Input
-                type="number"
+              <NumberInput
+                integer
                 min={0}
+                max={512}
+                aria-label="Lower bracket seeds"
                 className="h-8 w-20"
                 value={draft.lower_seeds}
-                onChange={(event) =>
-                  dispatch({
-                    type: "setSeeds",
-                    upper: draft.upper_seeds,
-                    lower: Number(event.target.value) || 0
-                  })
-                }
+                onValueChange={(next) => {
+                  if (next != null) dispatch({ type: "setSeeds", upper: draft.upper_seeds, lower: next });
+                }}
               />
             </label>
             {seeds ? (

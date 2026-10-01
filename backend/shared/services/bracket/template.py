@@ -170,12 +170,20 @@ def validate_template(template: BracketTemplate, stage_type: StageType) -> list[
             if slot.seed is not None:
                 pool, number = slot.seed[0], int(slot.seed[1:])
                 limit = template.upper_seeds if pool == "U" else template.lower_seeds
+                bracket = "upper" if pool == "U" else "lower"
                 if number > limit:
-                    bracket = "upper" if pool == "U" else "lower"
                     add("seed_out_of_range", f"{slot.seed} is past the {limit} {bracket} seeds", match.id, side)
                 elif seeded[slot.seed] > 1:
                     # Both slots are flagged: an editor highlights the conflict, not one side of it.
                     add("seed_duplicate", f"{slot.seed} is seeded twice", match.id, side)
+                if (pool == "U") != (match.round > 0):
+                    # Round 0 is already out (``zero_round`` returns early).
+                    add(
+                        "seed_bracket",
+                        f"{slot.seed} is {'an upper' if bracket == 'upper' else 'a lower'} seed; it starts in the {bracket} bracket",
+                        match.id,
+                        side,
+                    )
                 continue
             role = "winner" if slot.winner_of is not None else "loser"
             source_id = slot.winner_of if slot.winner_of is not None else slot.loser_of

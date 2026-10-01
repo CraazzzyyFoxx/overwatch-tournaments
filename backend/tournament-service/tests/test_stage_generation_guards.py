@@ -69,9 +69,16 @@ def _encounter(round_number: int, encounter_id: int, **overrides) -> SimpleNames
 
 
 def _queued_session(results: list) -> SimpleNamespace:
-    """A session whose ``execute`` hands back ``results`` in call order."""
+    """A session whose ``execute`` hands back ``results`` in call order; a row
+    lock (``SELECT … FOR UPDATE``) returns nothing and consumes none of them."""
     queue = list(results)
-    return SimpleNamespace(execute=AsyncMock(side_effect=lambda *_a, **_kw: queue.pop(0)), flush=AsyncMock())
+
+    def execute(statement=None, *_a, **_kw):
+        if "FOR UPDATE" in str(statement):
+            return _rows_result([])
+        return queue.pop(0)
+
+    return SimpleNamespace(execute=AsyncMock(side_effect=execute), flush=AsyncMock())
 
 
 class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):

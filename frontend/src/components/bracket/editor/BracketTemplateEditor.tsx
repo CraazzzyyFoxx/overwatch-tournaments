@@ -69,7 +69,10 @@ export function BracketTemplateEditor({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [connecting]);
 
-  const seeds = unusedSeeds(draft);
+  // A match takes seeds from its own half only, so the two offers are built
+  // once rather than per card.
+  const upperSeeds = unusedSeeds(draft, 1);
+  const lowerSeeds = unusedSeeds(draft, -1);
   const byId = new Map(draft.matches.map((match) => [match.id, match]));
   const isDE = stageType === "double_elimination";
   const rounds = draft.matches.map((match) => match.round);
@@ -217,7 +220,7 @@ export function BracketTemplateEditor({
               >
                 <TemplateMatchCard
                   match={match}
-                  availableSeeds={seeds}
+                  availableSeeds={match.round < 0 ? lowerSeeds : upperSeeds}
                   showLoserPort={isDE && match.round > 0 && match.round !== finalRound}
                   connecting={connecting}
                   onPort={(role) =>

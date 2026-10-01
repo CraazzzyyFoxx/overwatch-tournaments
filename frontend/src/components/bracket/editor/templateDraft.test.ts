@@ -227,4 +227,17 @@ describe("unusedSeeds", () => {
       "L2"
     ]);
   });
+
+  it("offers a match only the seeds of its own half", () => {
+    // The validator refuses `L1` in an upper-round match and `U1` in a lower
+    // one, so a menu offering both offers a draft that cannot be saved.
+    const draft = draftReducer({ ...seDraft(), lower_seeds: 2 }, {
+      type: "clear",
+      target: 1,
+      slot: "home"
+    });
+
+    expect(unusedSeeds(draft, 1)).toEqual(["U1"]);
+    expect(unusedSeeds(draft, -1)).toEqual(["L1", "L2"]);
+  });
 });

@@ -71,14 +71,20 @@ function standingScopeLabel(standing: Standings): string {
  * ranking that would mean nothing. The rows come back whole, which is why the
  * table runs in client mode — search, sort and paging are local and cost no
  * refetch.
+ *
+ * `stageId` scopes it to one stage — the Bracket tab's stage editor shows its
+ * own table there, so the stage is a pinned fact rather than a filter.
  */
 export function StandingsBrowser({
   tournamentId,
-  workspaceId
+  workspaceId,
+  stageId
 }: Readonly<{
   /** `null` = the tournament comes from the `tournament` chip. */
   tournamentId: number | null;
   workspaceId: number | null;
+  /** Set = only this stage's rows, and no Stage filter to widen it again. */
+  stageId?: number;
 }>) {
   const queryClient = useQueryClient();
   const { canAccessPermission } = usePermissions();
@@ -133,7 +139,11 @@ export function StandingsBrowser({
     enabled: scopeTournamentId != null
   });
   const stageList = stagesQuery.data ?? [];
-  const stageItems = stageList.flatMap((stage) => stage.items);
+  const scopedStage = stageId != null ? stageList.find((stage) => stage.id === stageId) : undefined;
+  // Scoped to one stage, only ITS groups are worth filtering by.
+  const stageItems = (stageId != null ? (scopedStage ? [scopedStage] : []) : stageList).flatMap(
+    (stage) => stage.items
+  );
 
   const defs = useMemo<FilterDef[]>(() => {
     const list: FilterDef[] = [];
@@ -148,7 +158,8 @@ export function StandingsBrowser({
         }))
       });
     }
-    if (stageList.length > 0) {
+    // Scoped to one stage there is nothing to pick: the stage is a pinned chip.
+    if (stageId == null && stageList.length > 0) {
       list.push({
         key: "stage",
         label: "Stage",
@@ -165,14 +176,14 @@ export function StandingsBrowser({
       });
     }
     return list;
-  }, [tournamentId, tournamentsQuery.data, stageList, stageItems]);
+  }, [tournamentId, stageId, tournamentsQuery.data, stageList, stageItems]);
 
   const filters = useFilters(defs);
   const stageFilter = String(filters.values.stage ?? "");
   const groupFilter = String(filters.values.group ?? "");
 
   const rows = useMemo(() => {
-    let scoped = standings;
+    let scoped = stageId != null ? standings.filter((row) => row.stage_id === stageId) : standings;
     if (stageFilter) {
       scoped = scoped.filter((standing) => String(standing.stage_id ?? "") === stageFilter);
     }
@@ -180,7 +191,7 @@ export function StandingsBrowser({
       scoped = scoped.filter((standing) => String(standing.stage_item_id ?? "") === groupFilter);
     }
     return scoped;
-  }, [standings, stageFilter, groupFilter]);
+  }, [standings, stageId, stageFilter, groupFilter]);
 
   // Whatever tie-break order the scoped rows were actually ranked by, so the
   // sentence under the table describes these rows and not the tournament's
@@ -263,12 +274,29 @@ export function StandingsBrowser({
             "—"
           )
       },
-      {
-        id: "scope",
-        header: "Stage",
-        enableSorting: false,
-        cell: ({ row }) => <span className="text-sm">{standingScopeLabel(row.original)}</span>
-      },
+      // Scoped to one stage, the stage itself is the pinned chip: the column only
+      // earns its place when the stage has groups to tell apart.
+      ...(stageId == null
+        ? [
+            {
+              id: "scope",
+              header: "Stage",
+              enableSorting: false,
+              cell: ({ row }) => <span className="text-sm">{standingScopeLabel(row.original)}</span>
+            } satisfies ColumnDef<Standings>
+          ]
+        : (scopedStage?.items.length ?? 0) > 1
+          ? [
+              {
+                id: "scope",
+                header: "Group",
+                enableSorting: false,
+                cell: ({ row }) => (
+                  <span className="text-sm">{row.original.stage_item?.name ?? "—"}</span>
+                )
+              } satisfies ColumnDef<Standings>
+            ]
+          : []),
       {
         accessorKey: "matches",
         header: "MP",
@@ -349,7 +377,7 @@ export function StandingsBrowser({
         { rowLabel: (row) => `standing for ${row.team?.name ?? "team"}` }
       )
     ],
-    [canUpdate, canDelete, updateMutation]
+    [canUpdate, canDelete, updateMutation, stageId, scopedStage]
   );
 
   if (workspaceId == null) {
@@ -367,16 +395,19 @@ export function StandingsBrowser({
     <FilterBar
       defs={defs}
       filters={filters}
-      pinned={
-        tournamentId != null
+      pinned={[
+        ...(tournamentId != null
           ? [
               {
                 key: TOURNAMENT_QUERY_PARAM,
                 label: `Tournament: ${tournamentQuery.data?.name ?? `#${tournamentId}`}`
               }
             ]
-          : undefined
-      }
+          : []),
+        ...(stageId != null
+          ? [{ key: "stage", label: `Stage: ${scopedStage?.name ?? `#${stageId}`}` }]
+          : [])
+      ]}
       trailing={
         <>
           {scopeTournamentId != null ? (

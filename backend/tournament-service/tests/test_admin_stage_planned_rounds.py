@@ -160,3 +160,21 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
 
         self.assertEqual((4, 2), projected)
         self.assertEqual([-4, -3, -2, -1, 1, 2, 3], rounds)
+
+    async def test_single_elimination_target_ignores_the_sources_upper_split(self) -> None:
+        # Only a double elimination has a lower bracket: a single elimination
+        # playoff takes all 2 × 6 advancing teams as upper seeds, even though the
+        # source splits 2 of each group's 6 into an upper band.
+        stage = _stage(enums.StageType.SINGLE_ELIMINATION, [_item(1, [])])
+        source = SimpleNamespace(id=4, advance_count=6, advance_upper_count=2, items=[_item(10, []), _item(11, [])])
+        session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
+
+        with (
+            patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
+            patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+        ):
+            rounds = await stage_service.stage_service.get_planned_rounds(session, 5)
+            projected = await stage_service.stage_service._projected_bracket_seed_counts(session, stage)
+
+        self.assertEqual((12, 0), projected)
+        self.assertEqual([1, 2, 3, 4], rounds)

@@ -10,7 +10,6 @@ import { allowedBracketSubTab, BRACKET_SUB_TABS, type BracketSubTab } from "../t
 
 const SUB_TAB_LABELS: Record<BracketSubTab, string> = {
   stages: "Stages",
-  standings: "Standings",
   lobbies: "Lobbies"
 };
 
@@ -21,12 +20,14 @@ function isBracketSubTab(value: string): value is BracketSubTab {
 }
 
 /**
- * Sub-tab bar of the Bracket hub tab: Stages · Standings · Lobbies.
+ * Sub-tab bar of the Bracket hub tab: Stages · Lobbies.
  *
  * Navigation only. `Stages` is the bare `/bracket` container, so every link
  * that already points there keeps landing on the stage editor. `?stage=` rides
- * along on a switch: the editor's selected stage is the Standings filter of the
- * same name, and back again.
+ * along on a switch, so the editor's selected stage survives it.
+ *
+ * A duel tournament has no lobby, which leaves `Stages` alone: a bar of one
+ * tab is a label pretending to be navigation, so it is not drawn at all.
  */
 export default function BracketLayout({ children }: Readonly<{ children: ReactNode }>) {
   const params = useParams<{ id: string }>();
@@ -70,7 +71,9 @@ export default function BracketLayout({ children }: Readonly<{ children: ReactNo
 
   return (
     <div className="space-y-4">
-      <LinkTabs items={items} activeKey={active} level={2} ariaLabel="Bracket views" />
+      {items.filter((item) => !item.hidden).length > 1 ? (
+        <LinkTabs items={items} activeKey={active} level={2} ariaLabel="Bracket views" />
+      ) : null}
       {activeAllowed ? children : null}
     </div>
   );

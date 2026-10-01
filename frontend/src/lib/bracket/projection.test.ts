@@ -160,6 +160,25 @@ describe("projectedBracketSeedCounts", () => {
     });
   });
 
+  test("a single elimination takes the whole advancing field: it has no lower bracket", () => {
+    // Same groups, same split — but the server ignores `advance_upper_count`
+    // for a single elimination, so showing 4 of 12 seeds here would have the
+    // preview draw a bracket a third of the real one.
+    const groups = stage({
+      id: 1,
+      stage_type: "swiss",
+      advance_count: 6,
+      advance_upper_count: 2,
+      items: [item(10, "group"), item(11, "group")]
+    });
+    const playoff = stage({ id: 2, stage_type: "single_elimination" });
+
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
+      upper: 12,
+      lower: 0
+    });
+  });
+
   test("a group's own advance_upper_count overrides the stage's for that group alone", () => {
     const groups = stage({
       id: 1,

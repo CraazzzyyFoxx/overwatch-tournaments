@@ -164,10 +164,9 @@ export function BracketPreview({
   }, [matches, projection.isGroups, stage.items]);
 
   return (
-    <section
-      aria-labelledby="bracket-preview-heading"
-      className={cn("rounded-lg border border-border bg-card p-4", className)}
-    >
+    // No frame of its own: the bracket below draws its own cards and panels,
+    // and a card inside a card inside the editor's card reads as noise.
+    <section aria-labelledby="bracket-preview-heading" className={className}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="bracket-preview-heading" className="text-sm font-semibold text-foreground">
           Bracket preview

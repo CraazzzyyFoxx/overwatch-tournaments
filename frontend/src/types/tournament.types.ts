@@ -135,6 +135,8 @@ export interface StageSummary extends StageRegulation {
   is_active: boolean;
   is_published: boolean;
   is_completed: boolean;
+  /** An organizer-drawn bracket template replaces the generated shape. */
+  has_custom_bracket: boolean;
   challonge_id: number | null;
   challonge_slug: string | null;
 }
