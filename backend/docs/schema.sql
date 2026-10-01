@@ -3052,6 +3052,7 @@ CREATE TABLE tournament.stage (
 	max_rounds INTEGER DEFAULT '5' NOT NULL, 
 	advance_count INTEGER, 
 	advance_upper_count INTEGER, 
+	split_lower_bracket BOOLEAN DEFAULT 'false' NOT NULL, 
 	"order" INTEGER NOT NULL, 
 	is_active BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_published BOOLEAN DEFAULT 'false' NOT NULL, 

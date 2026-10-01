@@ -2828,8 +2828,8 @@ Table tournament.scrim_room {
   created_by_auth_user_id bigint [not null]
   closed_at timestamptz
   indexes {
-    (encounter_id) [unique, name: "uq_scrim_room_encounter"]
     (token) [unique, name: "uq_scrim_room_token"]
+    (encounter_id) [unique, name: "uq_scrim_room_encounter"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
     (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
     (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
@@ -2861,6 +2861,7 @@ Table tournament.stage {
   max_rounds int [not null, default: 5]
   advance_count int
   advance_upper_count int
+  split_lower_bracket boolean [not null, default: false]
   "order" int [not null]
   is_active boolean [not null, default: false]
   is_published boolean [not null, default: false]

@@ -99,6 +99,12 @@ class Stage(db.TimeStampIntegerMixin):
     # Upper bracket of the double elimination they feed; the rest start in its
     # Lower bracket. NULL = all of them start Upper. A group's own value overrides it.
     advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # DEPRECATED, no reader or writer since migration bsplit01 (replaced by
+    # ``advance_upper_count``). Kept on the table and here until a flag-gated
+    # contract migration drops both in one deploy (CONTRIBUTING.md, "Destructive
+    # migrations are gated"): the previous release still selects it while the
+    # new migrations run.
+    split_lower_bracket: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     order: Mapped[int] = mapped_column(Integer(), default=0)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     # Sticky, unlike ``is_active``: set True the first time the stage is

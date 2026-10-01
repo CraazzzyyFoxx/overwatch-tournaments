@@ -15,6 +15,12 @@ bracket item always gets a real ``bracket_lower`` item with the inputs that used
 be cut off the end of the seed list, and when the group stage that fed it can be
 identified that stage gets ``a - a // 2`` (exactly what ``advance_split`` computed).
 Matches are not touched.
+
+``tournament.stage.split_lower_bracket`` is NOT dropped here (CONTRIBUTING.md,
+"Destructive migrations are gated"): this revision runs from the new image while
+the old containers still serve, and they select the column on every stage read.
+It stays on the table and on the ORM model with no reader or writer; a later,
+flag-gated contract migration drops both in one deploy.
 """
 
 from __future__ import annotations
@@ -189,19 +195,15 @@ def upgrade() -> None:
             ),
             {"id": source_id},
         )
-    op.drop_column("stage", "split_lower_bracket", schema="tournament")
 
 
 def downgrade() -> None:
-    """Restores the flag, not the inputs: a stage that got its ``bracket_lower``
-    item here keeps it, and the inputs moved into it stay there -- which is the
-    same bracket, wired explicitly instead of cut in half on every read."""
+    """Restores what the old code reads, not the inputs: the flag is set again for
+    every double elimination that has a ``bracket_lower`` item (a stage split after
+    this revision never wrote it), while a stage that got its lower item here keeps
+    it and the inputs moved into it -- the same bracket, wired explicitly instead of
+    cut in half on every read."""
     _take_locks()
-    op.add_column(
-        "stage",
-        sa.Column("split_lower_bracket", sa.Boolean(), server_default="false", nullable=False),
-        schema="tournament",
-    )
     op.get_bind().execute(
         sa.text(
             "UPDATE tournament.stage s SET split_lower_bracket = true "

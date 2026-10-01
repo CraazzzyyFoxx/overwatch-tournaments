@@ -1169,6 +1169,7 @@ erDiagram
         int max_rounds
         int advance_count "nullable"
         int advance_upper_count "nullable"
+        boolean split_lower_bracket
         int order
         boolean is_active
         boolean is_published
