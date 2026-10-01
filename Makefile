@@ -16,6 +16,9 @@ PROD_COMPOSE = docker compose -f docker-compose.production.yml
 # (docker-compose.production.yml), so `up` recreates nginx exactly when the file
 # changed. remote-deploy.sh runs `nginx -t` on the new file before that.
 export NGINX_CONF_SHA := $(shell sha256sum nginx/nginx.conf 2>/dev/null | cut -c1-12)
+# Same for Alloy on the production host: a moscow.alloy change alone would leave
+# the agent on the old file.
+export ALLOY_CONF_SHA := $(shell sha256sum monitoring/alloy/moscow.alloy 2>/dev/null | cut -c1-12)
 # Monitoring runs on home, not on the production host (monitoring/README.md).
 MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
 # Backups: rclone → Timeweb S3. Moscow cron 04:30 UTC, see docs/backup-rustfs.md.

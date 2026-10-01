@@ -1,0 +1,108 @@
+# The TLS edge on the production host: HAProxy's built-in exporter, scraped by
+# Alloy as job="haproxy", and the certificate it serves, seen by the blackbox
+# probe from home. Counters restart on every `systemctl reload haproxy`; rate()
+# absorbs that.
+
+groups:
+  - name: edge-recording
+    interval: 30s
+    rules:
+      # Everything HAProxy turns away: banned IPs refused at accept (http, tls),
+      # the per-IP connection cap (owt), and requests that tripped a ban on an
+      # open connection (owt). requests_denied on tls is non-TLS junk on :443
+      # and stays out.
+      - record: haproxy:refused:rate5m
+        expr: |
+          sum(rate(haproxy_frontend_denied_connections_total[5m]))
+          + sum(rate(haproxy_frontend_denied_sessions_total[5m]))
+          + sum(rate(haproxy_frontend_requests_denied_total{proxy="owt"}[5m]))
+
+  - name: edge-alerts
+    interval: 30s
+    rules:
+      - alert: EdgeMetricsDown
+        expr: up{job="haproxy"} == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alloy cannot scrape HAProxy"
+          description: >-
+            host.docker.internal:8405 has not answered for 3 minutes. With
+            ProdHttpDown firing too, HAProxy itself is down (systemctl status
+            haproxy); without it, the metrics frontend or its ufw rule is gone.
+
+      - alert: EdgeNginxUnreachable
+        expr: rate(haproxy_backend_connection_errors_total{proxy="nginx"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HAProxy cannot connect to nginx ({{ $value | printf \"%.2f\" }}/s)"
+          description: >-
+            Connections to nginx (127.0.0.1:8888, the APP_PORT) are failing:
+            visitors get 503. nginx is down or not published (docker compose ps nginx).
+
+      - alert: EdgeRefusingClients
+        expr: haproxy:refused:rate5m > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HAProxy is refusing {{ $value | printf \"%.1f\" }} connections/s"
+          description: >-
+            Banned IPs keep reconnecting or clients hit the per-IP connection cap:
+            a flood is in progress. Who is banned:
+            echo "show table st_src data.gpt0 gt 0" | socat stdio /run/haproxy/admin.sock
+
+      # A full table evicts the oldest rows, bans included, so a flood of fresh
+      # IPs can wash out the bans it needs.
+      - alert: EdgeStickTableFilling
+        expr: haproxy_sticktable_used{name="st_src"} / haproxy_sticktable_size{name="st_src"} > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HAProxy st_src table is {{ $value | humanizePercentage }} full"
+          description: >-
+            Raise the stick-table size in /etc/haproxy/haproxy.cfg before it
+            starts evicting banned rows.
+
+      - alert: EdgeConnectionsNearLimit
+        expr: haproxy_process_current_connections / haproxy_process_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HAProxy at {{ $value | humanizePercentage }} of maxconn"
+          description: >-
+            At maxconn new connections queue in the kernel and then time out,
+            for everyone. A flood that is not being banned, or maxconn set too low.
+
+  - name: edge-tls
+    interval: 60s
+    rules:
+      # Renewal runs daily and starts weeks before expiry, so 14 days left means
+      # it has been failing for a while.
+      - alert: TlsCertExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time() < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          description: >-
+            Certificate renewal on the production host is failing. Check its log:
+            tail -n 100 /var/log/edge-certs.log
+
+      - alert: TlsCertExpiryCritical
+        expr: probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time() < 3 * 86400
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          description: >-
+            Browsers will refuse the site when it expires. Renew by hand on the
+            production host now; tail -n 100 /var/log/edge-certs.log says why the
+            daily run failed.

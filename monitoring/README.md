@@ -45,7 +45,8 @@ production (app-network)                     monitoring host
   plus `up`), and embedded exporters with the old `job` labels: `node` (with the textfile
   collector for `owt_backup.prom`), `cadvisor`, `redis`, `postgres`. It also scrapes itself
   (`job="alloy"`): that is where the `nginx_limit_*` counters derived from the nginx access
-  log live. Everything goes out through `remote_write`.
+  log live. The host's TLS proxy is scraped at `host.docker.internal:8405` (`job="haproxy"`,
+  the Edge dashboard). Everything goes out through `remote_write`.
 - **Logs.** `./logs/**/*.log`, three pipelines (`app_services`, `gateway`, `nginx`). The first
   start reads from the end of each file; positions persist in the `alloy-data` volume.
 - **Traces.** Services export OTLP to `alloy:4317` (`OTLP_ENDPOINT` in
@@ -85,12 +86,8 @@ curl -s -XPOST 127.0.0.1:19090/-/reload          # after changing rules or prome
 ```
 
 On the production host the agent ships with every release: `ops/deploy/remote-deploy.sh`
-checks out the tag and `make prod-up` recreates `alloy` when its image or definition changes.
-A change to `moscow.alloy` alone does not recreate it:
-
-```bash
-docker compose -f docker-compose.production.yml restart alloy
-```
+checks out the tag and `make prod-up` recreates `alloy` when its image, definition or
+`moscow.alloy` changes (the Makefile stamps the file's hash on the service).
 
 Retention: Prometheus 14 days / 2 GB, Loki 7 days (`loki/loki.yml`), Tempo 48 hours
 (`tempo/tempo.yml`). While the monitoring host is unreachable, Alloy keeps metrics in its WAL
@@ -125,6 +122,7 @@ Provisioned into the `OWT` folder (deleting a JSON file under
 |---|---|---|
 | Application Logs | `app-logs` | Log rates by level/service, errors-only stream, full-text `$search`, live stream |
 | Workers & Queues | `workers-queues` | Worker throughput/latency/errors, RabbitMQ queue depth + DLQ + consumers + publish/deliver rates, balancer job timings |
+| Edge | `edge` | TLS proxy: requests by class, refused/banned clients, sessions, IP-table fill, nginx behind it, certificate expiry |
 | Gateway | `gateway-usage` | Edge RPS / 4xx-5xx / latency (total + per route), WS connections, DAU/WAU/MAU, Go runtime |
 | Tracing | `tracing-overview` | RED per service from Tempo span-metrics, service graph, TraceQL slow/error traces, logs-with-trace links |
 | Infrastructure | `infrastructure` | Host CPU/RAM/disk (+7d disk forecast), per-container resources, PostgreSQL, Redis |

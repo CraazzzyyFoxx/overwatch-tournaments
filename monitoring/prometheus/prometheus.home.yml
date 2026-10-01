@@ -22,6 +22,8 @@ rule_files:
   - /etc/prometheus/rules/redis.yml
   - /etc/prometheus/rules/infrastructure.yml
   - /etc/prometheus/rules/nginx.yml
+  # The TLS edge (HAProxy on the production host) and its certificate.
+  - /etc/prometheus/rules/haproxy.yml
   # Backups: textfile collector (Alloy's unix exporter on Moscow), ops/backup/backup.sh.
   - /etc/prometheus/rules/backup.yml
   # OverFast rank collection: data freshness and circuit-breaker state.

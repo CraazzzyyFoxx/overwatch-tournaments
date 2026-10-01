@@ -946,6 +946,10 @@ services:
       - /dev/kmsg
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # ALLOY_CONF_SHA comes from the Makefile, like nginx's: a changed
+    # moscow.alloy makes `make prod-up` recreate the agent onto the new file.
+    labels:
+      owt.alloy-conf-sha: "${ALLOY_CONF_SHA:-}"
     networks:
       - app-network
     deploy:
