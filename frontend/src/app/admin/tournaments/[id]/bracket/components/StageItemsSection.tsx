@@ -88,8 +88,8 @@ function SeedSlotRow({
   dragDisabled: boolean;
   children: ReactNode;
 }>) {
-  const { setNodeRef, isOver } = useDroppable({ id: `slot-${input.id}`, data: { input } });
-  const { attributes, listeners, setActivatorNodeRef, isDragging } = useDraggable({
+  const drop = useDroppable({ id: `slot-${input.id}`, data: { input } });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: `team-${input.id}`,
     data: { input },
     disabled: dragDisabled || input.team_id == null
@@ -97,10 +97,16 @@ function SeedSlotRow({
 
   return (
     <li
-      ref={setNodeRef}
+      // Both refs, as in `MatchCard`: dnd-kit measures the DRAGGED node to place
+      // the overlay and to run collision detection, so a row that only registers
+      // as a drop target picks up but never lands anywhere.
+      ref={(node) => {
+        setNodeRef(node);
+        drop.setNodeRef(node);
+      }}
       className={cn(
         "flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs",
-        isOver && "ring-2 ring-ring",
+        drop.isOver && "ring-2 ring-ring",
         isDragging && "opacity-50"
       )}
     >

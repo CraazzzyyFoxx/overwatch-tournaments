@@ -6,7 +6,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import adminService from "@/services/admin.service";
 
 import type { Team } from "@/types/team.types";
 import type { Stage, StageItem, StageItemInput } from "@/types/tournament.types";
@@ -174,5 +176,59 @@ describe("swapping seeded slots", () => {
     expect(
       container.querySelectorAll('button[aria-label^="Drag "]')
     ).toHaveLength(1);
+  });
+
+  describe("dragging with the pointer", () => {
+    // happy-dom lays nothing out, so every slot row of THIS test's container gets
+    // a 40px band of its own (row i spans y = 50i .. 50i + 40) and everything
+    // inside a row shares it. dnd-kit measures the dragged row and the drop
+    // targets through this; earlier tests' containers stay out of the count.
+    let restoreRect: () => void;
+    beforeEach(() => {
+      const original = HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function rectOf(this: HTMLElement) {
+        const row = this.closest("li");
+        const index = row ? [...container.querySelectorAll("li")].indexOf(row) : -1;
+        if (index < 0) return original.call(this);
+        const top = index * 50;
+        return { x: 0, y: top, top, left: 0, right: 500, bottom: top + 40, width: 500, height: 40, toJSON() {} } as DOMRect;
+      };
+      restoreRect = () => {
+        HTMLElement.prototype.getBoundingClientRect = original;
+      };
+    });
+    afterEach(() => restoreRect());
+
+    function pointer(type: string, target: EventTarget, y: number) {
+      target.dispatchEvent(
+        new PointerEvent(type, { bubbles: true, cancelable: true, isPrimary: true, button: 0, pointerId: 1, clientX: 20, clientY: y })
+      );
+    }
+
+    it("moves a dragged team into the empty slot it is dropped on", async () => {
+      vi.mocked(adminService.updateStageItemInput).mockResolvedValue({} as never);
+      await mount(
+        groupStage([
+          item(100, [
+            input(501, { team_id: 7 }),
+            input(502, { id: 502, slot: 2, team_id: null, input_type: "empty" })
+          ])
+        ])
+      );
+
+      const grip = container.querySelector('button[aria-label="Drag Wrong Team to another slot"]')!;
+      await act(async () => pointer("pointerdown", grip, 20));
+      // Past the 6px activation distance, then over the second row (y 50..90).
+      for (const y of [30, 45, 60, 70]) {
+        await act(async () => pointer("pointermove", document, y));
+      }
+      await act(async () => pointer("pointerup", document, 70));
+      await settle();
+
+      expect(vi.mocked(adminService.updateStageItemInput).mock.calls).toEqual([
+        [501, { input_type: "empty" }],
+        [502, { team_id: 7, input_type: "final" }]
+      ]);
+    });
   });
 });
