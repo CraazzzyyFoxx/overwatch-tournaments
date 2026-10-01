@@ -392,7 +392,7 @@ export interface StageCreateInput extends Partial<StageRegulation> {
   stage_type: StageType;
   max_rounds?: number;
   advance_count?: number | null;
-  split_lower_bracket?: boolean;
+  advance_upper_count?: number | null;
   order?: number;
 }
 
@@ -402,7 +402,7 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   stage_type?: StageType;
   max_rounds?: number;
   advance_count?: number | null;
-  split_lower_bracket?: boolean;
+  advance_upper_count?: number | null;
   order?: number;
 }
 
@@ -411,6 +411,7 @@ export interface StageItemCreateInput {
   type: StageItemType;
   order?: number;
   advance_count?: number | null;
+  advance_upper_count?: number | null;
 }
 
 export interface StageItemInputCreateInput {

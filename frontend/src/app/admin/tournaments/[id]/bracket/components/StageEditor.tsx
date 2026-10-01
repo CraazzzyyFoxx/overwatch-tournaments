@@ -149,11 +149,10 @@ export function StageEditor({
         stage,
         stages,
         stageType: form.stageType,
-        splitLowerBracket: form.stageType === "double_elimination" && form.splitLowerBracket,
         maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
         bestOf: form.bestOf
       }),
-    [stage, stages, form.stageType, form.splitLowerBracket, form.maxRounds, form.bestOf]
+    [stage, stages, form.stageType, form.maxRounds, form.bestOf]
   );
 
   const mergeCandidates = isMergeableGroupStage(stage)
@@ -553,6 +552,7 @@ export function StageEditor({
             form={form}
             onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
             bracketTeamCount={projection.bracketTeams.count}
+            lowerBracketTeamCount={projection.lowerBracketTeamCount}
             onApplyToExisting={() => applyBestOfMutation.mutate()}
             applying={applyBestOfMutation.isPending}
           />
@@ -562,6 +562,7 @@ export function StageEditor({
           <RoundScheduleSection
             stage={stage}
             bracketTeamCount={projection.bracketTeams.count}
+            lowerBracketTeamCount={projection.lowerBracketTeamCount}
             onChanged={onChanged}
           />
         ) : null}

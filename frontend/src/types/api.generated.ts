@@ -17945,6 +17945,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             /** Id */
             id: number;
             /**
@@ -17967,6 +17972,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             /** Id */
             id: number;
             /** Name */
@@ -17989,6 +17999,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -18046,11 +18061,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageReadSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default false
-             */
-            split_lower_bracket: boolean;
             stage_type: components["schemas"]["tournament.StageType"];
             /**
              * Swiss Bye Points
@@ -18093,6 +18103,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -18145,11 +18160,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageSummaryReadSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default false
-             */
-            split_lower_bracket: boolean;
             stage_type: components["schemas"]["tournament.StageType"];
             /**
              * Swiss Bye Points
@@ -24931,6 +24941,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -24978,11 +24993,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageCreateSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default false
-             */
-            split_lower_bracket: boolean;
             stage_type: components["schemas"]["tournament.StageType"];
             /**
              * Swiss Bye Points
@@ -25002,6 +25012,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             /** Name */
             name: string;
             /**
@@ -25061,6 +25076,11 @@ export interface components {
              */
             advance_count: number | null;
             /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
+            /**
              * Name
              * @default null
              */
@@ -25086,6 +25106,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * De Grand Final Type
@@ -25126,11 +25151,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageUpdateSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default null
-             */
-            split_lower_bracket: boolean | null;
             /** @default null */
             stage_type: components["schemas"]["tournament.StageType"] | null;
             /**

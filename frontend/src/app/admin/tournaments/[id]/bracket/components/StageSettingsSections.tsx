@@ -37,6 +37,7 @@ import {
   FFA_STAGE_TYPES,
   GROUP_STAGE_TYPES,
   normalizeMaxRounds,
+  projectedBracketSeedCounts,
   RANKING_PRESETS,
   SEED_RANKING_LABELS,
   STAGE_TYPE_LABELS,
@@ -217,7 +218,7 @@ export function SeedingSection({
       ? String(sources[0].id)
       : "";
   // How the advancing teams split across upper/lower is the server's rule
-  // (`advance_split`, per-group `advance_count` overrides included); this only
+  // (per-group `advance_count` / `advance_upper_count` included); this only
   // says WHICH stage feeds the bracket.
   const wireMutation = useMutation({
     mutationFn: (sourceStageId: number) => adminService.autoWireStage(stage.id, sourceStageId),
@@ -233,6 +234,7 @@ export function SeedingSection({
   // on blur instead of waiting for "Save changes", which is why they carry
   // their own draft state rather than living in `form`.
   const [advanceDrafts, setAdvanceDrafts] = useState<Record<number, number | null>>({});
+  const [upperDrafts, setUpperDrafts] = useState<Record<number, number | null>>({});
   const advanceMutation = useMutation({
     mutationFn: ({ stageItemId, advanceCount }: { stageItemId: number; advanceCount: number | null }) =>
       adminService.updateStageItem(stageItemId, { advance_count: advanceCount }),
@@ -246,6 +248,20 @@ export function SeedingSection({
     },
     onError: (error) =>
       notify.apiError(error, { title: "Could not change how many teams advance" })
+  });
+  const upperMutation = useMutation({
+    mutationFn: ({ stageItemId, upperCount }: { stageItemId: number; upperCount: number | null }) =>
+      adminService.updateStageItem(stageItemId, { advance_upper_count: upperCount }),
+    onSuccess: (_item, variables) => {
+      setUpperDrafts((current) => {
+        const next = { ...current };
+        delete next[variables.stageItemId];
+        return next;
+      });
+      onChanged();
+    },
+    onError: (error) =>
+      notify.apiError(error, { title: "Could not change this group's upper-bracket share" })
   });
 
   const commitAdvance = (item: StageItem) => {
@@ -262,30 +278,34 @@ export function SeedingSection({
     advanceMutation.mutate({ stageItemId: item.id, advanceCount: next });
   };
 
+  const commitUpper = (item: StageItem) => {
+    if (!(item.id in upperDrafts)) return;
+    const next = upperDrafts[item.id];
+    if (next === (item.advance_upper_count ?? null)) {
+      setUpperDrafts((current) => {
+        const rest = { ...current };
+        delete rest[item.id];
+        return rest;
+      });
+      return;
+    }
+    upperMutation.mutate({ stageItemId: item.id, upperCount: next });
+  };
+
+  // What the groups below will actually seed, read off the playoff they feed:
+  // the first later double elimination, the same stage the server wires from.
+  const nextPlayoff = stages
+    .filter(
+      (candidate) =>
+        candidate.stage_type === "double_elimination" &&
+        (candidate.order > stage.order ||
+          (candidate.order === stage.order && candidate.id > stage.id))
+    )
+    .sort((left, right) => left.order - right.order || left.id - right.id)[0];
+  const seeds = nextPlayoff ? projectedBracketSeedCounts(nextPlayoff, stages) : null;
+
   return (
     <div className="flex flex-col gap-4">
-      {form.stageType === "double_elimination" ? (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${ids}-split`}>Group seeding</Label>
-          <Select
-            value={form.splitLowerBracket ? "split" : "all_upper"}
-            onValueChange={(value) => onChange({ splitLowerBracket: value === "split" })}
-          >
-            <SelectTrigger id={`${ids}-split`} className="sm:w-[280px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all_upper">All advancing → Upper bracket</SelectItem>
-              <SelectItem value="split">Split: half Upper, half Lower</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Uses the group stage&apos;s &quot;Teams advancing to playoff&quot; count; auto-wired on
-            Activate &amp; generate.
-          </p>
-        </div>
-      ) : null}
-
       {isBracket && sources.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${ids}-feed`}>Wire seeds from</Label>
@@ -360,6 +380,25 @@ export function SeedingSection({
           <p className="text-xs text-muted-foreground">
             Top N from each group advance. Leave empty to auto-derive from the bracket wiring.
           </p>
+
+          <Label htmlFor={`${ids}-advance-upper`} className="mt-2">
+            Of them to upper bracket (per group)
+          </Label>
+          <NumberInput
+            id={`${ids}-advance-upper`}
+            integer
+            min={0}
+            placeholder="All"
+            className="sm:w-[280px]"
+            value={form.advanceUpperCount === "" ? null : Number(form.advanceUpperCount)}
+            onValueChange={(next) =>
+              onChange({ advanceUpperCount: next == null ? "" : String(next) })
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            The rest are seeded straight into the playoff&apos;s Lower bracket. Empty sends every
+            advancing team to the upper bracket.
+          </p>
         </div>
       ) : null}
 
@@ -378,13 +417,33 @@ export function SeedingSection({
                 id={`${ids}-advance-${item.id}`}
                 integer
                 min={1}
-                className="h-8 w-40 text-xs tabular-nums"
+                className="h-8 w-28 text-xs tabular-nums"
                 placeholder={`Inherit (${stage.advance_count ?? "—"})`}
                 value={item.id in advanceDrafts ? advanceDrafts[item.id] : item.advance_count ?? null}
                 onValueChange={(next) =>
                   setAdvanceDrafts((current) => ({ ...current, [item.id]: next }))
                 }
                 onBlur={() => commitAdvance(item)}
+              />
+              <Label
+                htmlFor={`${ids}-upper-${item.id}`}
+                className="shrink-0 text-xs text-muted-foreground"
+              >
+                upper
+              </Label>
+              <NumberInput
+                id={`${ids}-upper-${item.id}`}
+                integer
+                min={0}
+                className="h-8 w-28 text-xs tabular-nums"
+                placeholder={`Inherit (${stage.advance_upper_count ?? "all"})`}
+                value={
+                  item.id in upperDrafts ? upperDrafts[item.id] : item.advance_upper_count ?? null
+                }
+                onValueChange={(next) =>
+                  setUpperDrafts((current) => ({ ...current, [item.id]: next }))
+                }
+                onBlur={() => commitUpper(item)}
               />
             </div>
           ))}
@@ -393,6 +452,12 @@ export function SeedingSection({
             inherits. Saved on blur, not by &quot;Save changes&quot;.
           </p>
         </div>
+      ) : null}
+
+      {isGroups && seeds && seeds.lower > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {nextPlayoff?.name}: → {seeds.upper} upper, {seeds.lower} lower
+        </p>
       ) : null}
 
       <p className="border-t border-border pt-3 text-xs text-muted-foreground">
@@ -623,10 +688,12 @@ export function BestOfSection({
   form,
   onChange,
   bracketTeamCount,
+  lowerBracketTeamCount,
   onApplyToExisting,
   applying
 }: SectionProps & {
   bracketTeamCount: number;
+  lowerBracketTeamCount: number;
   onApplyToExisting: () => void;
   applying: boolean;
 }) {
@@ -655,7 +722,8 @@ export function BestOfSection({
         stageType: form.stageType,
         maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
         bracketTeamCount,
-        splitLowerBracket: form.stageType === "double_elimination" && form.splitLowerBracket,
+        lowerBracketTeamCount:
+          form.stageType === "double_elimination" ? lowerBracketTeamCount : 0,
         configuredRounds: Object.keys(form.bestOf.by_round).map(Number)
       });
 

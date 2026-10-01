@@ -30,7 +30,8 @@ export interface StageForm {
   maxRounds: string;
   advanceCount: string;
   deGrandFinalType: "no_reset" | "with_reset";
-  splitLowerBracket: boolean;
+  /** How many of each group's advancing teams start upper; `""` — all of them. */
+  advanceUpperCount: string;
   seedRanking: SeedRanking;
   rankingPreset: string;
   tiebreakOrder: string[];
@@ -58,7 +59,7 @@ export function stageFormFromStage(stage: Stage): StageForm {
     maxRounds: String(stage.max_rounds ?? 5),
     advanceCount: numberOrEmpty(stage.advance_count),
     deGrandFinalType: stage.de_grand_final_type,
-    splitLowerBracket: stage.split_lower_bracket ?? false,
+    advanceUpperCount: numberOrEmpty(stage.advance_upper_count),
     seedRanking: stage.seed_ranking,
     rankingPreset: stage.ranking_preset || "default",
     tiebreakOrder:
@@ -84,8 +85,12 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     max_rounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
     advance_count:
       form.advanceCount !== "" ? normalizeMaxRounds(form.advanceCount, 1) : null,
-    split_lower_bracket:
-      form.stageType === "double_elimination" ? form.splitLowerBracket : false,
+    // `0` is a real answer here (the whole group starts a bracket down), so an
+    // empty field — not a falsy number — is what means "all of them upper".
+    advance_upper_count:
+      form.advanceUpperCount !== ""
+        ? Math.max(0, Math.floor(Number(form.advanceUpperCount)))
+        : null,
     ranking_preset: form.rankingPreset === "default" ? null : form.rankingPreset || null,
     // A metric switched off in the editor is simply absent from the list — that
     // absence IS the "disabled" state the engine reads. `points` is the one
@@ -135,7 +140,7 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   maxRounds: "Swiss rounds",
   advanceCount: "Teams advancing",
   deGrandFinalType: "Grand final",
-  splitLowerBracket: "Group seeding",
+  advanceUpperCount: "To upper bracket",
   seedRanking: "Bracket seeds",
   rankingPreset: "Standings preset",
   tiebreakOrder: "Tiebreaker order",

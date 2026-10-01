@@ -102,7 +102,7 @@ function playoffStage(): Stage {
     stage_type: "double_elimination",
     max_rounds: 4,
     advance_count: null,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 0,
     is_active: true,
     is_published: true,

@@ -5,8 +5,8 @@
 // What it has to get right is that the admin sees the bracket the BACKEND will
 // generate. Two independent sources feed the depth — the seeds/slots actually
 // wired into the stage, and, before any exist, the preceding group stage's
-// `advance_count × groups` — and a split double elimination splits each
-// group's share rather than halving the total. Getting that wrong offers the
+// `advance_count × groups` — and each group sends its own `advance_upper_count`
+// up, the rest straight into the lower bracket. Getting that wrong offers the
 // organizer best-of rows for rounds that will never exist (or hides rows for
 // rounds that will).
 import { describe, expect, test } from "vitest";
@@ -27,8 +27,9 @@ function item(
   {
     seeded = 0,
     empty = 0,
-    advance = null
-  }: { seeded?: number; empty?: number; advance?: number | null } = {}
+    advance = null,
+    upper = null
+  }: { seeded?: number; empty?: number; advance?: number | null; upper?: number | null } = {}
 ): StageItem {
   const inputs = [
     ...Array.from({ length: seeded }, (_, index) => ({
@@ -50,7 +51,16 @@ function item(
       source_position: null
     }))
   ];
-  return { id, stage_id: 1, name: `Item ${id}`, type, order: 0, advance_count: advance, inputs };
+  return {
+    id,
+    stage_id: 1,
+    name: `Item ${id}`,
+    type,
+    order: 0,
+    advance_count: advance,
+    advance_upper_count: upper,
+    inputs
+  };
 }
 
 function stage(overrides: Partial<Stage> & { id: number; stage_type: StageType }): Stage {
@@ -60,7 +70,7 @@ function stage(overrides: Partial<Stage> & { id: number; stage_type: StageType }
     description: null,
     max_rounds: 5,
     advance_count: null,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: overrides.id,
     is_active: false,
     is_published: false,
@@ -91,7 +101,7 @@ describe("projectedBracketSeedCounts", () => {
     const playoff = stage({ id: 2, stage_type: "single_elimination" });
 
     // 4 groups × top 2 = 8, not 2.
-    expect(projectedBracketSeedCounts(playoff, false, [groups, playoff])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
       upper: 8,
       lower: 0
     });
@@ -102,7 +112,7 @@ describe("projectedBracketSeedCounts", () => {
     const unset = stage({ id: 1, stage_type: "swiss", advance_count: null, items: [item(10, "group")] });
     const playoff = stage({ id: 2, stage_type: "single_elimination" });
 
-    expect(projectedBracketSeedCounts(playoff, false, [unset, playoff, later])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [unset, playoff, later])).toEqual({
       upper: 0,
       lower: 0
     });
@@ -116,7 +126,7 @@ describe("projectedBracketSeedCounts", () => {
     const high = stage({ id: 2, order: 1, stage_type: "round_robin", advance_count: 4, items: [item(20, "group")] });
     const playoff = stage({ id: 3, order: 2, stage_type: "single_elimination" });
 
-    expect(projectedBracketSeedCounts(playoff, false, [low, high, playoff])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [low, high, playoff])).toEqual({
       upper: 0,
       lower: 0
     });
@@ -127,51 +137,93 @@ describe("projectedBracketSeedCounts", () => {
     const sibling = stage({ id: 2, order: 2, stage_type: "single_elimination" });
     const playoff = stage({ id: 3, order: 2, stage_type: "single_elimination" });
 
-    expect(projectedBracketSeedCounts(playoff, false, [groups, sibling, playoff])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [groups, sibling, playoff])).toEqual({
       upper: 2,
       lower: 0
     });
   });
 
-  test("splits EACH group's share for a split DE with a dedicated lower item", () => {
+  test("sends each group's upper share up and the rest straight to the lower bracket", () => {
     const groups = stage({
       id: 1,
       stage_type: "swiss",
-      advance_count: 3,
+      advance_count: 6,
+      advance_upper_count: 2,
       items: [item(10, "group"), item(11, "group")]
     });
-    const playoff = stage({
-      id: 2,
-      stage_type: "double_elimination",
-      split_lower_bracket: true,
-      items: [item(20, "bracket_upper"), item(21, "bracket_lower")]
-    });
+    const playoff = stage({ id: 2, stage_type: "double_elimination" });
 
-    // Per group: floor(3/2)=1 down, 2 up. Two groups -> 4 upper, 2 lower.
-    // Halving the total (6) would have said 3/3, a differently shaped bracket.
-    expect(projectedBracketSeedCounts(playoff, true, [groups, playoff])).toEqual({
+    // Per group: 2 up, 4 down. Two groups -> 4 upper, 8 lower.
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
       upper: 4,
-      lower: 2
+      lower: 8
     });
   });
 
-  test("splits the seed list down the middle when one item holds both halves", () => {
+  test("a group's own advance_upper_count overrides the stage's for that group alone", () => {
     const groups = stage({
       id: 1,
       stage_type: "swiss",
-      advance_count: 3,
+      advance_count: 6,
+      advance_upper_count: 2,
+      items: [item(10, "group", { upper: 4 }), item(11, "group")]
+    });
+    const playoff = stage({ id: 2, stage_type: "double_elimination" });
+
+    // Group A: 4 up, 2 down. Group B inherits: 2 up, 4 down.
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
+      upper: 6,
+      lower: 6
+    });
+  });
+
+  test("an upper share of 0 sends a whole group to the lower bracket", () => {
+    // `0` is a real answer, not "unset": the falsy fallback `advance_count`
+    // uses would have read it as "inherit the stage's 2".
+    const groups = stage({
+      id: 1,
+      stage_type: "swiss",
+      advance_count: 6,
+      advance_upper_count: 2,
+      items: [item(10, "group", { upper: 0 }), item(11, "group")]
+    });
+    const playoff = stage({ id: 2, stage_type: "double_elimination" });
+
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
+      upper: 2,
+      lower: 10
+    });
+  });
+
+  test("no advance_upper_count anywhere keeps every advancing team upper", () => {
+    const groups = stage({
+      id: 1,
+      stage_type: "swiss",
+      advance_count: 6,
       items: [item(10, "group"), item(11, "group")]
     });
-    const playoff = stage({
-      id: 2,
-      stage_type: "double_elimination",
-      split_lower_bracket: true,
-      items: [item(20, "single_bracket")]
-    });
+    const playoff = stage({ id: 2, stage_type: "double_elimination" });
 
-    expect(projectedBracketSeedCounts(playoff, true, [groups, playoff])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
+      upper: 12,
+      lower: 0
+    });
+  });
+
+  test("clamps the upper share to what that group actually advances", () => {
+    const groups = stage({
+      id: 1,
+      stage_type: "swiss",
+      advance_count: 6,
+      advance_upper_count: 2,
+      items: [item(10, "group", { advance: 1 }), item(11, "group")]
+    });
+    const playoff = stage({ id: 2, stage_type: "double_elimination" });
+
+    // The group that advances one team sends it up, with nobody left to drop.
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
       upper: 3,
-      lower: 3
+      lower: 4
     });
   });
 
@@ -185,7 +237,7 @@ describe("projectedBracketSeedCounts", () => {
     const playoff = stage({ id: 2, stage_type: "single_elimination" });
 
     // 3 from the group that says so, 2 from the one that inherits — not 2 × 2.
-    expect(projectedBracketSeedCounts(playoff, false, [groups, playoff])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
       upper: 5,
       lower: 0
     });
@@ -200,30 +252,9 @@ describe("projectedBracketSeedCounts", () => {
     });
     const playoff = stage({ id: 2, stage_type: "single_elimination" });
 
-    expect(projectedBracketSeedCounts(playoff, false, [groups, playoff])).toEqual({
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
       upper: 2,
       lower: 0
-    });
-  });
-
-  test("splits an overriding group's share on its own count, not the stage's", () => {
-    const groups = stage({
-      id: 1,
-      stage_type: "swiss",
-      advance_count: 2,
-      items: [item(10, "group", { advance: 4 }), item(11, "group")]
-    });
-    const playoff = stage({
-      id: 2,
-      stage_type: "double_elimination",
-      split_lower_bracket: true,
-      items: [item(20, "bracket_upper"), item(21, "bracket_lower")]
-    });
-
-    // Group A: 4 -> 2 up, 2 down. Group B inherits 2 -> 1 up, 1 down.
-    expect(projectedBracketSeedCounts(playoff, true, [groups, playoff])).toEqual({
-      upper: 3,
-      lower: 3
     });
   });
 });
@@ -272,7 +303,7 @@ describe("resolveBracketTeamCount", () => {
       items: [item(20, "single_bracket", { seeded: 6, empty: 10 })]
     });
 
-    expect(resolveBracketTeamCount(playoff, false, [playoff])).toEqual({
+    expect(resolveBracketTeamCount(playoff, [playoff])).toEqual({
       count: 6,
       source: "seeded"
     });
@@ -285,36 +316,36 @@ describe("resolveBracketTeamCount", () => {
       items: [item(20, "single_bracket", { empty: 8 })]
     });
 
-    expect(resolveBracketTeamCount(playoff, false, [playoff])).toEqual({
+    expect(resolveBracketTeamCount(playoff, [playoff])).toEqual({
       count: 8,
       source: "slots"
     });
   });
 
-  test("a split DE counts the upper bracket only", () => {
+  test("a DE with a lower-bracket lane counts the upper bracket only", () => {
     const playoff = stage({
       id: 2,
       stage_type: "double_elimination",
-      split_lower_bracket: true,
-      items: [item(20, "bracket_upper", { seeded: 4 }), item(21, "bracket_lower", { seeded: 4 })]
+      items: [item(20, "bracket_upper", { seeded: 4 }), item(21, "bracket_lower", { seeded: 8 })]
     });
 
     // The lower-bracket item does not deepen the upper bracket.
-    expect(resolveBracketTeamCount(playoff, true, [playoff])).toEqual({
+    expect(resolveBracketTeamCount(playoff, [playoff])).toEqual({
       count: 4,
       source: "seeded"
     });
   });
 
-  test("a split DE in one item takes the first half of its seeds", () => {
+  test("one bracket item is the whole upper bracket — nothing is halved", () => {
+    // Lower-bracket seeds live in a `bracket_lower` item or nowhere; a single
+    // item used to be cut down the middle, which shortened the bracket by one.
     const playoff = stage({
       id: 2,
       stage_type: "double_elimination",
-      split_lower_bracket: true,
       items: [item(20, "single_bracket", { seeded: 8 })]
     });
 
-    expect(resolveBracketTeamCount(playoff, true, [playoff]).count).toBe(4);
+    expect(resolveBracketTeamCount(playoff, [playoff]).count).toBe(8);
   });
 
   test("projects from the group stage when the playoff is not wired at all", () => {
@@ -326,7 +357,7 @@ describe("resolveBracketTeamCount", () => {
     });
     const playoff = stage({ id: 2, stage_type: "single_elimination" });
 
-    expect(resolveBracketTeamCount(playoff, false, [groups, playoff])).toEqual({
+    expect(resolveBracketTeamCount(playoff, [groups, playoff])).toEqual({
       count: 4,
       source: "projected"
     });
@@ -335,7 +366,7 @@ describe("resolveBracketTeamCount", () => {
   test("reports `unknown` rather than 0 teams when there is nothing to read", () => {
     const playoff = stage({ id: 2, stage_type: "single_elimination" });
 
-    expect(resolveBracketTeamCount(playoff, false, [playoff])).toEqual({
+    expect(resolveBracketTeamCount(playoff, [playoff])).toEqual({
       count: 0,
       source: "unknown"
     });
@@ -355,7 +386,6 @@ describe("projectStage", () => {
       stage: playoff,
       stages: [playoff],
       stageType: "double_elimination",
-      splitLowerBracket: false,
       maxRounds: 5,
       bestOf: { default: 3, by_round: {}, final: null }
     });
@@ -377,7 +407,6 @@ describe("projectStage", () => {
       stage: playoff,
       stages: [playoff],
       stageType: "double_elimination",
-      splitLowerBracket: false,
       maxRounds: 5,
       // `final` targets the grand final and outranks a `by_round` key on it.
       bestOf: { default: 3, by_round: { "1": 1, "4": 3 }, final: 7 }
@@ -410,7 +439,6 @@ describe("projectStage", () => {
       stage: bracket,
       stages: [bracket],
       stageType: "single_elimination",
-      splitLowerBracket: false,
       maxRounds: 5,
       bestOf: { default: 3, by_round: {}, final: 5 }
     });
@@ -435,7 +463,6 @@ describe("projectStage", () => {
       stage: groups,
       stages: [groups],
       stageType: "round_robin",
-      splitLowerBracket: false,
       maxRounds: 3,
       bestOf: { default: 3, by_round: {}, final: null }
     });
@@ -463,7 +490,6 @@ describe("projectStage", () => {
       stage: groups,
       stages: [groups],
       stageType: "round_robin",
-      splitLowerBracket: false,
       maxRounds: 3,
       bestOf: { default: 3, by_round: {}, final: null }
     });

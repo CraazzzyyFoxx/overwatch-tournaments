@@ -96,7 +96,7 @@ The bracket is **not** an implied tree — it is a set of explicit edges. Each e
 Generation depends on the stage type:
 
 - **Round-robin** — circle method, `bye` skipped; no advancement edges at all.
-- **Single and double elimination** — a skeleton plus edges. Double elimination can additionally seed its lower bracket from the group stage (`split_lower_bracket` splits the advancing teams between upper and lower).
+- **Single and double elimination** — a skeleton plus edges. Double elimination can additionally seed its lower bracket from the group stage: `advance_upper_count` on the group stage (or one group) says how many of the advancing teams start upper; the rest start in the `bracket_lower` item.
 - **Swiss** — one round at a time.
 
 **The double-elimination grand final reset is created lazily.** The stage must be configured with `de_grand_final_type = "with_reset"`, and the match only appears at the moment the grand final is won by the team that came up from the lower bracket. If the upper-bracket side wins, the tournament ends at the grand final and the leftover reset is dropped.

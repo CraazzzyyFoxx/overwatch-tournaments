@@ -128,7 +128,7 @@ describe("stageBestOfRoundSections", () => {
           stageType: "double_elimination",
           maxRounds: 4,
           bracketTeamCount: 4,
-          splitLowerBracket: true
+          lowerBracketTeamCount: 4
         }),
         "lower"
       )
@@ -197,7 +197,7 @@ describe("stageBestOfRoundSections", () => {
       stageType: "double_elimination",
       maxRounds: 5,
       bracketTeamCount: 4,
-      splitLowerBracket: true,
+      lowerBracketTeamCount: 4,
       configuredRounds: [3, 4, 12]
     });
     expect(sections.find((section) => section.key === "other")?.rounds).toEqual([

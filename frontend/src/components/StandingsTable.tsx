@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 
 import { Encounter } from "@/types/encounter.types";
-import { Stage, Standings } from "@/types/tournament.types";
+import { Stage, StageItem, Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament/match-order";
 import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
@@ -44,39 +44,23 @@ export function getStandingsStagesQueryOptions(
  * Where the advancing block splits into Upper and Lower bracket, or `null` when
  * it does not split at all.
  *
- * Mirrors `advance_split` (backend `domain/stage/seeds.py`): a later split
- * double elimination sends the top of each group's advancing teams up and the
- * rest down, so a tie ACROSS this line decides who starts a bracket down —
- * every bit as load-bearing as the advance line itself, and invisible until now.
+ * Mirrors the backend's per-group rule (`group_advance_counts`,
+ * `domain/stage/seeds.py`): places `1…advance_upper_count` are seeded into the
+ * upper bracket and the rest straight into the lower one, so a tie ACROSS this
+ * line decides who starts a bracket down — every bit as load-bearing as the
+ * advance line itself, and invisible until now.
  *
- * Without a dedicated Lower-bracket item the engine halves the concatenated
- * seed list instead of each group's share; that lands on a per-group boundary
- * only when the advancing count is even, so an odd count returns `null` rather
- * than drawing a line this table cannot honestly place.
+ * The group's own number wins over the stage's; `null` on both means every
+ * advancing team starts upper, and there is no line to draw. Which playoff
+ * consumes the seeds no longer matters: the split is configured here.
  */
 export function upperBracketCut(
-  stages: Stage[],
   groupStage: Stage | null | undefined,
-  advanceCount: number
+  item: StageItem | null,
+  advanceCount: number | null
 ): number | null {
-  if (!groupStage || advanceCount < 2) return null;
-  const playoff = stages
-    .filter(
-      (candidate) =>
-        candidate.stage_type === "double_elimination" &&
-        candidate.split_lower_bracket &&
-        (candidate.order > groupStage.order ||
-          (candidate.order === groupStage.order && candidate.id > groupStage.id))
-    )
-    .sort((left, right) => left.order - right.order || left.id - right.id)[0];
-  if (!playoff) return null;
-
-  const hasLowerItem = (playoff.items ?? []).some((item) => item.type === "bracket_lower");
-  const upper = hasLowerItem
-    ? advanceCount - Math.floor(advanceCount / 2)
-    : advanceCount % 2 === 0
-      ? advanceCount / 2
-      : null;
+  if (!groupStage || advanceCount == null) return null;
+  const upper = item?.advance_upper_count ?? groupStage.advance_upper_count;
   return upper != null && upper > 0 && upper < advanceCount ? upper : null;
 }
 
@@ -187,13 +171,12 @@ const StandingsTable = ({
   // standing carries its own group, so the line is right before the separate
   // stages query lands.
   const renderedItemId = standings[0]?.stage_item_id ?? null;
-  const itemAdvanceCount =
-    standings[0]?.stage_item?.advance_count ??
+  const renderedItem =
+    standings[0]?.stage_item ??
     (renderedItemId == null
       ? null
-      : (stages
-          .flatMap((s) => s.items ?? [])
-          .find((item) => item.id === renderedItemId)?.advance_count ?? null));
+      : (stages.flatMap((s) => s.items ?? []).find((item) => item.id === renderedItemId) ?? null));
+  const itemAdvanceCount = renderedItem?.advance_count ?? null;
 
   const resolvedAdvanceCount = itemAdvanceCount ?? stageCount ?? advanceCount;
 
@@ -207,7 +190,7 @@ const StandingsTable = ({
 
   // The second boundary inside the advancing block: Upper vs Lower bracket.
   const upperCut = is_groups
-    ? upperBracketCut(stages, standings[0]?.stage ?? null, resolvedAdvanceCount)
+    ? upperBracketCut(standings[0]?.stage ?? null, renderedItem, resolvedAdvanceCount)
     : null;
   const showUpperCut = upperCut != null && sortedStandings.length > upperCut;
 

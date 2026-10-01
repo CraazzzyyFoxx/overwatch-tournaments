@@ -122,7 +122,7 @@ function stage(stageType: StageType, regulation: Partial<StageRegulation> = {}):
     stage_type: stageType,
     max_rounds: 5,
     advance_count: 2,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 0,
     is_active: true,
     is_published: false,

@@ -83,7 +83,7 @@ function stage(id: number, name: string, order: number, stageType: StageType): S
     stage_type: stageType,
     max_rounds: 5,
     advance_count: null,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order,
     is_active: false,
     is_published: true,

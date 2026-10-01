@@ -78,13 +78,13 @@ export interface StageBestOfShape {
   maxRounds: number;
   /**
    * The team count that fixes this bracket's depth: total teams for single
-   * elimination, upper-bracket teams (post-split) for double elimination.
+   * elimination, upper-bracket teams for double elimination.
    * `0` when nothing is seeded and no count can be derived, which falls back
    * to `maxRounds`.
    */
   bracketTeamCount?: number;
-  /** DE "split" seeding: half the teams start in the lower bracket. */
-  splitLowerBracket?: boolean;
+  /** Teams seeded straight into the lower bracket. */
+  lowerBracketTeamCount?: number;
   /** Round keys already configured, so an override is never hidden. */
   configuredRounds?: number[];
 }
@@ -115,7 +115,7 @@ export function stageBestOfRoundSections({
   stageType,
   maxRounds,
   bracketTeamCount = 0,
-  splitLowerBracket = false,
+  lowerBracketTeamCount = 0,
   configuredRounds = []
 }: StageBestOfShape): BestOfRoundSection[] {
   const flatRounds = Math.max(1, Math.floor(maxRounds) || 1);
@@ -145,7 +145,7 @@ export function stageBestOfRoundSections({
   // Each upper round after the first drops losers into a lower round and the
   // survivors play a reduction round; lower-bracket seeds add an opening round
   // plus the reduction that merges them with the upper bracket's first losers.
-  const lowerRounds = Math.max(0, 2 * (upperRounds - 1) + (splitLowerBracket ? 2 : 0));
+  const lowerRounds = Math.max(0, 2 * (upperRounds - 1) + (lowerBracketTeamCount > 0 ? 2 : 0));
 
   // The grand final is `upperRounds + 1` and its reset the round after
   // (`double_elimination.generate`). Neither is an editable row — `final` owns

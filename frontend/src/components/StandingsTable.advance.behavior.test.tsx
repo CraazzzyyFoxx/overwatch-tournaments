@@ -29,7 +29,7 @@ vi.mock("@/services/tournament.service", () => ({
   default: { getStages: vi.fn().mockResolvedValue([]) }
 }));
 
-function groupItem(id: number, advance: number | null): StageItem {
+function groupItem(id: number, advance: number | null, upper: number | null = null): StageItem {
   return {
     id,
     stage_id: 7,
@@ -37,6 +37,7 @@ function groupItem(id: number, advance: number | null): StageItem {
     type: "group",
     order: 0,
     advance_count: advance,
+    advance_upper_count: upper,
     inputs: []
   };
 }
@@ -50,7 +51,7 @@ function stage(items: StageItem[]): Stage {
     stage_type: "round_robin",
     max_rounds: 3,
     advance_count: 2,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 0,
     is_active: true,
     is_published: true,
@@ -246,24 +247,12 @@ describe("standings tie visibility", () => {
 });
 
 describe("upper vs lower bracket boundary", () => {
-  function splitPlayoff(items: StageItem[] = []): Stage {
-    return {
-      ...stage(items),
-      id: 8,
-      name: "Playoffs",
-      stage_type: "double_elimination",
-      advance_count: null,
-      split_lower_bracket: true,
-      order: 1
-    };
-  }
-
   it("draws the split inside the advancing block and warns when a tie spans it", async () => {
-    // The real shape this was reported on: 4 advance, the playoff splits them
-    // 2 up / 2 down, and the tie sits at positions 2-3 -- entirely above the
+    // The real shape this was reported on: 4 advance, the group sends 2 of them
+    // up and 2 down, and the tie sits at positions 2-3 -- entirely above the
     // "top 4 advance" line, so nothing used to say the tie decided a bracket.
     const group = groupItem(101, 4);
-    const groups = stage([group]);
+    const groups = { ...stage([group]), advance_upper_count: 2 };
 
     await mount(
       [
@@ -273,7 +262,7 @@ describe("upper vs lower bracket boundary", () => {
         standing(4, group, groups),
         standing(5, group, groups)
       ],
-      [groups, splitPlayoff()]
+      [groups]
     );
 
     const upper = container.querySelector(".st-upper-cut");
@@ -285,47 +274,55 @@ describe("upper vs lower bracket boundary", () => {
     );
   });
 
-  it("stays silent when the playoff does not split the advancing teams", async () => {
-    const group = groupItem(101, 4);
-    const groups = stage([group]);
-    const playoff = { ...splitPlayoff(), split_lower_bracket: false };
+  it("cuts a group that advances six after place two", async () => {
+    const group = groupItem(101, 6);
+    const groups = { ...stage([group]), advance_upper_count: 2 };
 
     await mount(
-      [1, 2, 3, 4, 5].map((position) => standing(position, group, groups)),
-      [groups, playoff]
+      [1, 2, 3, 4, 5, 6, 7].map((position) => standing(position, group, groups)),
+      [groups]
     );
 
-    expect(container.querySelector(".st-upper-cut")).toBeNull();
-  });
-
-  it("draws no line for an odd share the seed list splits across groups", async () => {
-    // Without a Lower-bracket item the engine halves the CONCATENATED seed list,
-    // which for an odd per-group share lands mid-group: this table cannot say
-    // where, so it says nothing rather than guessing.
-    const group = groupItem(101, 3);
-    const groups = stage([group]);
-
-    await mount(
-      [1, 2, 3, 4].map((position) => standing(position, group, groups)),
-      [groups, splitPlayoff()]
-    );
-
-    expect(container.querySelector(".st-upper-cut")).toBeNull();
-  });
-
-  it("splits each group's own share once the playoff has a lower-bracket lane", async () => {
-    const group = groupItem(101, 3);
-    const groups = stage([group]);
-    const lowerLane: StageItem = { ...groupItem(200, null), type: "bracket_lower", stage_id: 8 };
-
-    await mount(
-      [1, 2, 3, 4].map((position) => standing(position, group, groups)),
-      [groups, splitPlayoff([lowerLane])]
-    );
-
-    // advance_split sends the odd team up: 2 upper, 1 lower.
     expect(container.querySelector(".st-upper-cut")?.getAttribute("data-label")).toBe(
       "Top 2 → upper bracket"
+    );
+  });
+
+  it("stays silent when no upper share is set: everyone starts upper", async () => {
+    const group = groupItem(101, 6);
+    const groups = stage([group]);
+
+    await mount(
+      [1, 2, 3, 4, 5, 6, 7].map((position) => standing(position, group, groups)),
+      [groups]
+    );
+
+    expect(container.querySelector(".st-upper-cut")).toBeNull();
+  });
+
+  it("stays silent when the whole advancing block starts upper", async () => {
+    const group = groupItem(101, 6);
+    const groups = { ...stage([group]), advance_upper_count: 6 };
+
+    await mount(
+      [1, 2, 3, 4, 5, 6, 7].map((position) => standing(position, group, groups)),
+      [groups]
+    );
+
+    expect(container.querySelector(".st-upper-cut")).toBeNull();
+  });
+
+  it("lets one group set its own share, over the stage's", async () => {
+    const group = groupItem(101, 6, 4);
+    const groups = { ...stage([group]), advance_upper_count: 2 };
+
+    await mount(
+      [1, 2, 3, 4, 5, 6, 7].map((position) => standing(position, group, groups)),
+      [groups]
+    );
+
+    expect(container.querySelector(".st-upper-cut")?.getAttribute("data-label")).toBe(
+      "Top 4 → upper bracket"
     );
   });
 });

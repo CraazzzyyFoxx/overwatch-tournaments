@@ -41,6 +41,8 @@ interface RoundScheduleSectionProps {
    * section is given, so both sections name a round identically.
    */
   bracketTeamCount: number;
+  /** Teams seeded straight into the lower bracket, from the same projection. */
+  lowerBracketTeamCount: number;
   onChanged: () => void;
 }
 
@@ -125,6 +127,7 @@ function scheduleRow(round: number, label: string, encounters: ScheduledEncounte
 export function RoundScheduleSection({
   stage,
   bracketTeamCount,
+  lowerBracketTeamCount,
   onChanged
 }: Readonly<RoundScheduleSectionProps>) {
   const t = useTranslations("admin.roundSchedule");
@@ -187,7 +190,7 @@ export function RoundScheduleSection({
       stageType: stage.stage_type,
       maxRounds: stage.max_rounds ?? 5,
       bracketTeamCount,
-      splitLowerBracket: stage.split_lower_bracket ?? false,
+      lowerBracketTeamCount,
       configuredRounds: [...byRound.keys()]
     }).flatMap((section) => section.rounds);
 
@@ -200,7 +203,7 @@ export function RoundScheduleSection({
     stageEncounters,
     stage.stage_type,
     stage.max_rounds,
-    stage.split_lower_bracket,
+    lowerBracketTeamCount,
     bracketTeamCount,
     t
   ]);
