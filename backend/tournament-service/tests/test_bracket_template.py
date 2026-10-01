@@ -152,6 +152,48 @@ class TemplateValidationTests(TestCase):
         self.assertIn((None, "se_shape"), _codes(_sketch(), StageType.SINGLE_ELIMINATION))
 
 
+class TemplateBoundsTests(TestCase):
+    """A template arrives from the network: every number it carries is bounded."""
+
+    def _rejects(self, **overrides) -> None:
+        raw = _sketch()
+        raw.update(overrides)
+        with self.assertRaises(ValidationError):
+            BracketTemplate.model_validate(raw)
+
+    def test_upper_seeds_above_512(self) -> None:
+        self._rejects(upper_seeds=513)
+
+    def test_lower_seeds_above_512(self) -> None:
+        self._rejects(lower_seeds=513)
+
+    def test_round_below_minus_256(self) -> None:
+        raw = _sketch()
+        raw["matches"][3]["round"] = -257
+        with self.assertRaises(ValidationError):
+            BracketTemplate.model_validate(raw)
+
+    def test_match_id_above_10000(self) -> None:
+        raw = _sketch()
+        raw["matches"][0]["id"] = 10_001
+        with self.assertRaises(ValidationError):
+            BracketTemplate.model_validate(raw)
+
+    def test_seed_longer_than_five_characters(self) -> None:
+        raw = _sketch()
+        raw["matches"][0]["home"] = {"seed": "U12345"}
+        with self.assertRaises(ValidationError):
+            BracketTemplate.model_validate(raw)
+
+    def test_the_bounds_themselves_are_accepted(self) -> None:
+        raw = _sketch()
+        raw["upper_seeds"] = 512
+        raw["lower_seeds"] = 512
+        raw["matches"][0]["id"] = 10_000
+        raw["matches"][3]["round"] = -256
+        BracketTemplate.model_validate(raw)  # bounds are inclusive; §5.2 problems are the validator's job
+
+
 class TemplateRoundTripTests(TestCase):
     def test_every_generated_bracket_is_a_valid_template_and_round_trips(self) -> None:
         for stage_type, lowers in (

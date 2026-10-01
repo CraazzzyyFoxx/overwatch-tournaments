@@ -30,7 +30,7 @@ __all__ = (
     "validate_template",
 )
 
-SeedRef = Annotated[str, StringConstraints(pattern=r"^[UL][1-9][0-9]*$")]
+SeedRef = Annotated[str, StringConstraints(pattern=r"^[UL][1-9][0-9]*$", max_length=5)]
 Side = Literal["home", "away"]
 _SIDES: tuple[Side, Side] = ("home", "away")
 
@@ -52,8 +52,8 @@ class TemplateSlot(BaseModel):
 class TemplateMatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    id: int = Field(ge=0)
-    round: int
+    id: int = Field(ge=0, le=10_000)
+    round: int = Field(ge=-256, le=256)
     home: TemplateSlot
     away: TemplateSlot
 
@@ -62,8 +62,8 @@ class BracketTemplate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: Literal[1] = 1
-    upper_seeds: int = Field(ge=2)
-    lower_seeds: int = Field(ge=0)
+    upper_seeds: int = Field(ge=2, le=512)
+    lower_seeds: int = Field(ge=0, le=512)
     matches: list[TemplateMatch] = Field(min_length=1, max_length=256)
 
 

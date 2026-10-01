@@ -136,6 +136,31 @@ describe("draftReducer · matches", () => {
   });
 });
 
+describe("draftReducer · bounds", () => {
+  // The server's model rejects anything past these, so the editor never offers it.
+  it("does not add a match past the id or round bound", () => {
+    const maxId = { ...seDraft(), matches: [...seDraft().matches, { id: 10_000, round: 1, home: null, away: null }] };
+    expect(draftReducer(maxId, { type: "addMatch", round: 1 })).toBe(maxId);
+
+    const deep = seDraft();
+    expect(draftReducer(deep, { type: "addMatch", round: -257 })).toBe(deep);
+  });
+
+  it("does not push the final past the round bound", () => {
+    const atBound = { ...seDraft(), matches: seDraft().matches.map((match) => ({ ...match, round: 256 })) };
+
+    expect(draftReducer(atBound, { type: "addMatch", round: 256, beforeFinal: true })).toBe(atBound);
+  });
+
+  it("clamps the seed counts", () => {
+    const high = draftReducer(seDraft(), { type: "setSeeds", upper: 513, lower: 9999 });
+    expect([high.upper_seeds, high.lower_seeds]).toEqual([512, 512]);
+
+    const low = draftReducer(seDraft(), { type: "setSeeds", upper: 0, lower: -3 });
+    expect([low.upper_seeds, low.lower_seeds]).toEqual([2, 0]);
+  });
+});
+
 describe("draftToTemplate", () => {
   it("refuses a draft with an unwired slot — the payload cannot express it", () => {
     const draft = draftReducer(seDraft(), { type: "clear", target: 3, slot: "home" });

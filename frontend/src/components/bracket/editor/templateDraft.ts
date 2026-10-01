@@ -14,6 +14,11 @@ import type { BracketTemplate, TemplateSlot } from "@/types/admin.types";
 import type { EncounterSlotSource } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
 
+/** The backend model's bounds (`shared/services/bracket/template.py`), mirrored. */
+export const MAX_MATCH_ID = 10_000;
+export const MAX_ROUND = 256;
+export const MAX_SEEDS = 512;
+
 type Side = "home" | "away";
 
 /** `null` = not wired yet; a draft holding one cannot be saved. */
@@ -102,6 +107,7 @@ export function draftReducer(draft: Draft, action: DraftAction): Draft {
 
     case "addMatch": {
       const id = Math.max(0, ...draft.matches.map((match) => match.id)) + 1;
+      if (id > MAX_MATCH_ID || Math.abs(action.round) > MAX_ROUND) return draft;
       const added: DraftMatch = { id, round: action.round, home: null, away: null };
       // The final is the only match of the last positive round, so an upper
       // round added "at the end" is really added before it.
@@ -110,6 +116,7 @@ export function draftReducer(draft: Draft, action: DraftAction): Draft {
             match.round === action.round ? { ...match, round: match.round + 1 } : match
           )
         : draft.matches;
+      if (matches.some((match) => Math.abs(match.round) > MAX_ROUND)) return draft;
       return { ...draft, matches: [...matches, added] };
     }
 
@@ -143,7 +150,11 @@ export function draftReducer(draft: Draft, action: DraftAction): Draft {
     }
 
     case "setSeeds":
-      return { ...draft, upper_seeds: action.upper, lower_seeds: action.lower };
+      return {
+        ...draft,
+        upper_seeds: Math.min(Math.max(action.upper, 2), MAX_SEEDS),
+        lower_seeds: Math.min(Math.max(action.lower, 0), MAX_SEEDS)
+      };
 
     case "reset":
       return action.draft;

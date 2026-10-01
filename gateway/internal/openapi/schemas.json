@@ -34087,6 +34087,7 @@
       "additionalProperties": false,
       "properties": {
         "lower_seeds": {
+          "maximum": 512,
           "minimum": 0,
           "title": "Lower Seeds",
           "type": "integer"
@@ -34101,6 +34102,7 @@
           "type": "array"
         },
         "upper_seeds": {
+          "maximum": 512,
           "minimum": 2,
           "title": "Upper Seeds",
           "type": "integer"
@@ -34124,6 +34126,7 @@
       "additionalProperties": false,
       "properties": {
         "lower_seeds": {
+          "maximum": 512,
           "minimum": 0,
           "title": "Lower Seeds",
           "type": "integer"
@@ -34138,6 +34141,7 @@
           "type": "array"
         },
         "upper_seeds": {
+          "maximum": 512,
           "minimum": 2,
           "title": "Upper Seeds",
           "type": "integer"
@@ -47470,11 +47474,14 @@
           "$ref": "#/components/schemas/tournament.TemplateSlot"
         },
         "id": {
+          "maximum": 10000,
           "minimum": 0,
           "title": "Id",
           "type": "integer"
         },
         "round": {
+          "maximum": 256,
+          "minimum": -256,
           "title": "Round",
           "type": "integer"
         }
@@ -47506,6 +47513,7 @@
         "seed": {
           "anyOf": [
             {
+              "maxLength": 5,
               "pattern": "^[UL][1-9][0-9]*$",
               "type": "string"
             },
