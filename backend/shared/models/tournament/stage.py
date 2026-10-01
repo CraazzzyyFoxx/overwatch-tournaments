@@ -95,11 +95,10 @@ class Stage(db.TimeStampIntegerMixin):
     # stage. NULL = not configured → the frontend derives it from bracket wiring
     # or falls back to a default. Mirrors the wire-from-groups ``top`` parameter.
     advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Double-elimination playoff stages only: when true, the teams advancing from
-    # each group (advance_count) are split evenly between the Upper and Lower
-    # bracket (extra team → Upper on an odd count). When false, all advancing
-    # teams seed the Upper bracket. Drives the auto-wire on activate-and-generate.
-    split_lower_bracket: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
+    # Group stages only: how many of each group's ``advance_count`` start in the
+    # Upper bracket of the double elimination they feed; the rest start in its
+    # Lower bracket. NULL = all of them start Upper. A group's own value overrides it.
+    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     # Sticky, unlike ``is_active``: set True the first time the stage is
@@ -225,6 +224,8 @@ class StageItem(db.TimeStampIntegerMixin):
     # did before the column existed. Set it when groups are uneven and a flat
     # "top N from each" is the wrong bar.
     advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # Per-group override of ``Stage.advance_upper_count``; NULL = inherit.
+    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     stage: Mapped[Stage] = relationship(back_populates="items")
     inputs: Mapped[list[StageItemInput]] = relationship(

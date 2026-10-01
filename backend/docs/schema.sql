@@ -32,13 +32,12 @@ CREATE TYPE tournament.encountergamestate AS ENUM ('planned', 'awaiting_result',
 CREATE TYPE tournament.encountergameresultsource AS ENUM ('captain_agreement', 'admin', 'admin_log');
 CREATE TYPE tournament.encounterlinkrole AS ENUM ('winner', 'loser');
 CREATE TYPE tournament.encounterlinkslot AS ENUM ('home', 'away');
-CREATE TYPE tournament.pickbankind AS ENUM ('map', 'hero');
-CREATE TYPE tournament.pickbanside AS ENUM ('home', 'away', 'decider', 'admin');
 CREATE TYPE tournament.encounterresultauditaction AS ENUM ('confirm', 'reopen', 'auto_confirm', 'auto_dispute', 'import', 'cascade_reset', 'game_confirm', 'game_correct', 'game_cancel');
+CREATE TYPE tournament.pickbankind AS ENUM ('map', 'hero');
 CREATE TYPE tournament.pickbanmode AS ENUM ('pool', 'slots');
 CREATE TYPE tournament.pickbanfirstpickrule AS ENUM ('higher_seed');
 CREATE TYPE tournament.pickbanrotation AS ENUM ('fixed', 'alternate', 'result_winner_first', 'result_loser_first', 'result_loser_choice');
-CREATE TYPE tournament.pickbannorepeatscope AS ENUM ('none', 'encounter', 'encounter_same_side');
+CREATE TYPE tournament.pickbanside AS ENUM ('home', 'away', 'decider', 'admin');
 CREATE TYPE tournament.pickbanentrystatus AS ENUM ('available', 'picked', 'banned', 'protected');
 CREATE TYPE tournament.pickbanseedsource AS ENUM ('bracket_slot', 'standings', 'fallback_home', 'admin');
 CREATE TYPE tournament.pickbansessionstatus AS ENUM ('active', 'completed', 'cancelled');
@@ -2704,24 +2703,6 @@ CREATE TABLE tournament.encounter_participant (
 
 CREATE INDEX ix_encounter_participant_team_id ON tournament.encounter_participant (team_id);
 
-CREATE TABLE tournament.encounter_pick_ban_ledger (
-	id BIGSERIAL NOT NULL, 
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	updated_at TIMESTAMP WITH TIME ZONE, 
-	encounter_id BIGINT NOT NULL, 
-	kind tournament.pickbankind NOT NULL, 
-	item_id INTEGER NOT NULL, 
-	banned_by_side tournament.pickbanside NOT NULL, 
-	round INTEGER NOT NULL, 
-	PRIMARY KEY (id), 
-	CONSTRAINT uq_encounter_pick_ban_ledger_entry UNIQUE (encounter_id, kind, item_id, banned_by_side), 
-	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE
-);
-
-CREATE INDEX ix_tournament_encounter_pick_ban_ledger_encounter_id ON tournament.encounter_pick_ban_ledger (encounter_id);
-
-CREATE INDEX ix_tournament_encounter_pick_ban_ledger_item_id ON tournament.encounter_pick_ban_ledger (item_id);
-
 CREATE TABLE tournament.encounter_readiness (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -2769,7 +2750,7 @@ CREATE TABLE tournament.encounter_result_audit (
 	game_id BIGINT, 
 	game_result_version INTEGER, 
 	reason TEXT, 
-	source VARCHAR(16) NOT NULL, 
+	source VARCHAR(32) NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_encounter_result_audit_after_shape CHECK ((home_score_after IS NOT NULL AND away_score_after IS NOT NULL) OR ffa_results_json IS NOT NULL), 
 	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
@@ -2814,15 +2795,9 @@ CREATE TABLE tournament.pick_ban_config (
 	mode tournament.pickbanmode DEFAULT 'pool' NOT NULL, 
 	first_pick_rule tournament.pickbanfirstpickrule DEFAULT 'higher_seed' NOT NULL, 
 	first_ban_rotation tournament.pickbanrotation DEFAULT 'fixed' NOT NULL, 
-	turn_timer_seconds INTEGER, 
-	preset VARCHAR(32), 
-	sequence_json JSON NOT NULL, 
-	no_repeat_scope tournament.pickbannorepeatscope DEFAULT 'none' NOT NULL, 
-	unique_attribute_per_side_per_round VARCHAR(32), 
-	allow_protect BOOLEAN DEFAULT 'false' NOT NULL, 
+	ruleset_json JSON NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_pick_ban_config_round_requires_stage CHECK (round IS NULL OR stage_id IS NOT NULL), 
-	CONSTRAINT ck_pick_ban_config_slots_not_custom CHECK (NOT (mode = 'slots' AND preset = 'custom')), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE
 );
@@ -2891,6 +2866,7 @@ CREATE TABLE tournament.pick_ban_entry (
 	status tournament.pickbanentrystatus DEFAULT 'available' NOT NULL, 
 	team_id BIGINT, 
 	protected_by tournament.pickbanside, 
+	carried_from_round INTEGER, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(session_id) REFERENCES tournament.pick_ban_session (id) ON DELETE CASCADE, 
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE SET NULL
@@ -2901,8 +2877,6 @@ CREATE INDEX ix_tournament_pick_ban_entry_item_id ON tournament.pick_ban_entry (
 CREATE INDEX ix_tournament_pick_ban_entry_session_id ON tournament.pick_ban_entry (session_id);
 
 CREATE INDEX ix_tournament_pick_ban_entry_team_id ON tournament.pick_ban_entry (team_id);
-
-CREATE UNIQUE INDEX uq_pick_ban_entry_session_action_index ON tournament.pick_ban_entry (session_id, action_index) WHERE action_index IS NOT NULL;
 
 CREATE TABLE tournament.pick_ban_session (
 	id BIGSERIAL NOT NULL, 
@@ -2917,7 +2891,7 @@ CREATE TABLE tournament.pick_ban_session (
 	away_seed INTEGER, 
 	resolved_sequence_json JSON NOT NULL, 
 	slot_reserves_json JSON, 
-	turn_timer_seconds INTEGER, 
+	ruleset_json JSON NOT NULL, 
 	status tournament.pickbansessionstatus DEFAULT 'active' NOT NULL, 
 	awaiting_choice BOOLEAN DEFAULT 'false' NOT NULL, 
 	pending_loser_side tournament.pickbanside, 
@@ -2933,6 +2907,27 @@ CREATE TABLE tournament.pick_ban_session (
 );
 
 CREATE INDEX ix_tournament_pick_ban_session_encounter_id ON tournament.pick_ban_session (encounter_id);
+
+CREATE TABLE tournament.pick_ban_submission (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	session_id BIGINT NOT NULL, 
+	step_index INTEGER NOT NULL, 
+	side VARCHAR(8) NOT NULL, 
+	attempt INTEGER DEFAULT '1' NOT NULL, 
+	state VARCHAR(16) NOT NULL, 
+	items_json JSON DEFAULT '[]' NOT NULL, 
+	locked_at TIMESTAMP WITH TIME ZONE, 
+	revealed_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (id), 
+	CONSTRAINT ck_pick_ban_submission_side CHECK (side IN ('home', 'away', 'system')), 
+	CONSTRAINT ck_pick_ban_submission_state CHECK (state IN ('draft', 'locked', 'revealed', 'voided')), 
+	CONSTRAINT uq_pick_ban_submission_step_side_attempt UNIQUE (session_id, step_index, side, attempt), 
+	FOREIGN KEY(session_id) REFERENCES tournament.pick_ban_session (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_tournament_pick_ban_submission_session_id ON tournament.pick_ban_submission (session_id);
 
 CREATE TABLE tournament.player (
 	id BIGSERIAL NOT NULL, 
@@ -3056,7 +3051,7 @@ CREATE TABLE tournament.stage (
 	stage_type tournament.stagetype NOT NULL, 
 	max_rounds INTEGER DEFAULT '5' NOT NULL, 
 	advance_count INTEGER, 
-	split_lower_bracket BOOLEAN DEFAULT 'false' NOT NULL, 
+	advance_upper_count INTEGER, 
 	"order" INTEGER NOT NULL, 
 	is_active BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_published BOOLEAN DEFAULT 'false' NOT NULL, 
@@ -3094,6 +3089,7 @@ CREATE TABLE tournament.stage_item (
 	type tournament.stageitemtype NOT NULL, 
 	"order" INTEGER NOT NULL, 
 	advance_count INTEGER, 
+	advance_upper_count INTEGER, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE
 );
@@ -3269,6 +3265,7 @@ CREATE TABLE tournament.tournament (
 	loss_points FLOAT DEFAULT '0.0' NOT NULL, 
 	division_grid_version_id BIGINT, 
 	roster_slots_json JSONB, 
+	draft_format_json JSONB, 
 	cover_image_url VARCHAR, 
 	logo_url VARCHAR, 
 	PRIMARY KEY (id), 

@@ -31,6 +31,8 @@ def _group_stage(*, stage_id: int, tournament_id: int, num_groups: int) -> Simpl
             id=100 + g,
             name=chr(65 + g),  # A, B, C, ...
             order=g,
+            advance_count=None,
+            advance_upper_count=None,
             inputs=[],
         )
         for g in range(num_groups)
@@ -39,6 +41,8 @@ def _group_stage(*, stage_id: int, tournament_id: int, num_groups: int) -> Simpl
         id=stage_id,
         tournament_id=tournament_id,
         stage_type=enums.StageType.ROUND_ROBIN,
+        advance_count=None,
+        advance_upper_count=None,
         items=items,
     )
 
@@ -542,14 +546,15 @@ class PerGroupAdvanceCountTests(IsolatedAsyncioTestCase):
         )
 
     async def test_override_splits_upper_lower_per_group(self) -> None:
-        """A split DE gives each group its OWN lower-bracket band: group A advances
-        4 (2 up, 2 down) so its LB starts at position 3, group B advances the
-        stage's 2 (1 up, 1 down) so its LB starts at position 2."""
+        """Each group gets its OWN lower-bracket band: group A advances 4 with its
+        own ``advance_upper_count`` of 2, so its LB starts at position 3; group B
+        advances 2 and takes the caller's split (1 up, 1 down), so its LB starts
+        at position 2."""
         source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
         source.items[0].advance_count = 4
+        source.items[0].advance_upper_count = 2
         source.items[1].advance_count = 2
         target = _de_stage_with_lb(stage_id=2, tournament_id=99)
-        target.split_lower_bracket = True
 
         ub_inputs: list = []
         lb_inputs: list = []
@@ -612,6 +617,80 @@ class PerGroupAdvanceCountTests(IsolatedAsyncioTestCase):
             [(100, 1), (100, 2)],
             [(inp.source_stage_item_id, inp.source_position) for inp in added_inputs],
         )
+
+    async def test_auto_wire_two_groups_of_six_two_upper(self) -> None:
+        """Spec §3.1's example: 2 groups advance 6 each, 2 of them upper. The
+        upper bracket gets 4 and the lower 8 — one band per group, not one cut
+        down the middle of a 12-team list."""
+        source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
+        source.advance_count = 6
+        source.advance_upper_count = 2
+        target = _de_stage_with_lb(stage_id=2, tournament_id=99)
+
+        ub_inputs: list = []
+        lb_inputs: list = []
+        session = SimpleNamespace(
+            add=Mock(side_effect=lambda obj: (ub_inputs if obj.stage_item_id == 200 else lb_inputs).append(obj)),
+            commit=AsyncMock(),
+            flush=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                stage_service.stage_service,
+                "get_stage",
+                AsyncMock(side_effect=[target, target, source, target]),
+            ),
+            patch.object(
+                stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[source])
+            ),
+        ):
+            await stage_service.stage_service.auto_wire_stage(session, target.id)
+
+        self.assertEqual(
+            [(100, 1), (101, 1), (100, 2), (101, 2)],
+            [(inp.source_stage_item_id, inp.source_position) for inp in ub_inputs],
+        )
+        self.assertEqual(
+            [(100, 3), (101, 3), (100, 4), (101, 4), (100, 5), (101, 5), (100, 6), (101, 6)],
+            [(inp.source_stage_item_id, inp.source_position) for inp in lb_inputs],
+        )
+
+    async def test_lower_entrants_without_lower_item_are_refused(self) -> None:
+        """A group sending teams down needs somewhere to send them, even when the
+        caller asked for no lower seeds at all (``top_lb = 0``)."""
+        source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
+        source.items[0].advance_upper_count = 2
+        target = SimpleNamespace(
+            id=2,
+            tournament_id=99,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            items=[
+                SimpleNamespace(
+                    id=200,
+                    name="Upper Bracket",
+                    type=enums.StageItemType.BRACKET_UPPER,
+                    order=0,
+                    inputs=[],
+                )
+            ],
+        )
+        session = SimpleNamespace(add=Mock(), commit=AsyncMock())
+
+        with patch.object(
+            stage_service.stage_service,
+            "get_stage",
+            AsyncMock(side_effect=[target, source]),
+        ):
+            with self.assertRaises(Exception) as ctx:
+                await stage_service.stage_service.wire_from_groups(
+                    session,
+                    target_stage_id=target.id,
+                    source_stage_id=source.id,
+                    top=4,
+                )
+
+        self.assertIn("BRACKET_LOWER", str(ctx.exception))
 
 
 class AutoWireStageTests(IsolatedAsyncioTestCase):

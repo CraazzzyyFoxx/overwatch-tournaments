@@ -66,7 +66,6 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
             id=5,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             items=[_item(1, inputs)],
-            split_lower_bracket=False,
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
@@ -123,20 +122,20 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
         self.assertEqual([], rounds)
 
     async def test_projects_rounds_from_the_preceding_group_stage(self) -> None:
-        # An unseeded split double elimination playoff: no teams are wired yet,
-        # so the rounds are projected from the group stage that will seed it --
-        # `advance_count` (4) per group × 2 groups = 8 teams, split into a
-        # 4-team upper bracket and 4 lower-bracket seeds. Matches the rounds
-        # `generate_encounters` will build once the groups finish.
+        # An unseeded double elimination playoff: no teams are wired yet, so the
+        # rounds are projected from the group stage that will seed it --
+        # `advance_count` (4) per group × 2 groups = 8 teams, of which 2 per group
+        # start upper: a 4-team upper bracket and 4 lower-bracket seeds. Matches
+        # the rounds `generate_encounters` will build once the groups finish.
         stage = SimpleNamespace(
             id=5,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             items=[_item(1, [])],
-            split_lower_bracket=True,
         )
         source = SimpleNamespace(
             id=4,
             advance_count=4,
+            advance_upper_count=2,
             items=[_item(10, []), _item(11, [])],
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
@@ -161,9 +160,8 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
                 _item(1, [], order=0, item_type=enums.StageItemType.BRACKET_UPPER),
                 _item(2, [], order=1, item_type=enums.StageItemType.BRACKET_LOWER),
             ],
-            split_lower_bracket=True,
         )
-        source = SimpleNamespace(id=4, advance_count=3, items=[_item(10, []), _item(11, [])])
+        source = SimpleNamespace(id=4, advance_count=3, advance_upper_count=2, items=[_item(10, []), _item(11, [])])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
         with (

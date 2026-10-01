@@ -38,8 +38,8 @@ BRACKET_STAGE_TYPES = {
 _collect_item_team_ids = collect_item_team_ids
 
 
-def _bracket_seeds(stage, sorted_items, lb_item):
-    return bracket_seeds(stage, sorted_items, lb_item, collect=_collect_item_team_ids)
+def _bracket_seeds(sorted_items, lb_item):
+    return bracket_seeds(sorted_items, lb_item, collect=_collect_item_team_ids)
 
 
 def _pick_ban_config_signature(

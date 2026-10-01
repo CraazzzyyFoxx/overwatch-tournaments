@@ -607,9 +607,7 @@ class PlaceholderBracketInvariants(TestCase):
 
 
 class BracketSeedSplitInvariants(TestCase):
-    """`bracket_seeds` splitting one bracket item into upper/lower halves."""
-
-    STAGE = SimpleNamespace(stage_type=StageType.DOUBLE_ELIMINATION, split_lower_bracket=True)
+    """`bracket_seeds`: lower starters come from the BRACKET_LOWER item, nowhere else."""
 
     @staticmethod
     def _item(*inputs) -> SimpleNamespace:
@@ -619,9 +617,17 @@ class BracketSeedSplitInvariants(TestCase):
     def _input(slot: int, team_id: int | None, input_type=StageItemInputType.FINAL) -> SimpleNamespace:
         return SimpleNamespace(slot=slot, team_id=team_id, input_type=input_type)
 
-    def test_odd_seed_count_gives_the_extra_team_to_the_upper_bracket(self) -> None:
-        item = self._item(*(self._input(slot, slot) for slot in range(1, 6)))
-        self.assertEqual(([1, 2, 3], [4, 5]), bracket_seeds(self.STAGE, [item], None))
+    def test_a_single_item_keeps_every_seed_in_the_upper_bracket(self) -> None:
+        item = self._item(*(self._input(slot, slot) for slot in range(1, 9)))
+        self.assertEqual((list(range(1, 9)), []), bracket_seeds([item], None))
+
+    def test_the_lower_item_holds_exactly_the_lower_starters(self) -> None:
+        upper_item = self._item(*(self._input(slot, slot) for slot in range(1, 5)))
+        lower_item = self._item(*(self._input(slot, 4 + slot) for slot in range(1, 5)))
+        self.assertEqual(
+            ([1, 2, 3, 4], [5, 6, 7, 8]),
+            bracket_seeds([upper_item, lower_item], lower_item),
+        )
 
     def test_empty_inputs_never_reach_the_bracket(self) -> None:
         item = self._item(
@@ -629,4 +635,4 @@ class BracketSeedSplitInvariants(TestCase):
             self._input(2, 2, StageItemInputType.EMPTY),
             self._input(3, 3),
         )
-        self.assertEqual(([1], [3]), bracket_seeds(self.STAGE, [item], None))
+        self.assertEqual(([1, 3], []), bracket_seeds([item], None))

@@ -44854,6 +44854,19 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -44946,11 +44959,6 @@
           "title": "Seed Ranking",
           "type": "string"
         },
-        "split_lower_bracket": {
-          "default": false,
-          "title": "Split Lower Bracket",
-          "type": "boolean"
-        },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
         },
@@ -45003,6 +45011,19 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "name": {
           "title": "Name",
@@ -45218,6 +45239,18 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -45269,6 +45302,18 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "id": {
           "title": "Id",
@@ -45325,6 +45370,19 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "name": {
           "anyOf": [
             {
@@ -45377,6 +45435,18 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
@@ -45492,11 +45562,6 @@
           "title": "Seed Ranking",
           "type": "string"
         },
-        "split_lower_bracket": {
-          "default": false,
-          "title": "Split Lower Bracket",
-          "type": "boolean"
-        },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
         },
@@ -45602,6 +45667,18 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
@@ -45709,11 +45786,6 @@
           "title": "Seed Ranking",
           "type": "string"
         },
-        "split_lower_bracket": {
-          "default": false,
-          "title": "Split Lower Bracket",
-          "type": "boolean"
-        },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
         },
@@ -45788,6 +45860,19 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
@@ -45878,18 +45963,6 @@
           ],
           "title": "Seed Ranking",
           "type": "string"
-        },
-        "split_lower_bracket": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Split Lower Bracket"
         },
         "stage_type": {
           "anyOf": [

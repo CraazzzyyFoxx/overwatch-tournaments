@@ -1,6 +1,7 @@
 """Admin service layer for stage CRUD and bracket generation."""
 
 from collections.abc import Sequence
+from types import SimpleNamespace
 from typing import Any
 
 from loguru import logger
@@ -50,9 +51,6 @@ from src.domain.stage.seeds import (
     group_for_index,
     parse_seed_mode,
     rank_team_ids,
-)
-from src.domain.stage.seeds import (
-    advance_split as _advance_split,
 )
 from src.domain.stage.seeds import (
     build_seeding as _build_seeding,
@@ -266,7 +264,7 @@ class AdminStageService:
             return {"matches": []}
 
         sorted_items = sorted(stage.items, key=lambda item: (item.order, item.id))
-        upper_ids, lower_ids = _bracket_seeds(stage, sorted_items, _lower_bracket_item(stage, sorted_items))
+        upper_ids, lower_ids = _bracket_seeds(sorted_items, _lower_bracket_item(stage, sorted_items))
         upper_ids = await self._rank_seed_ids(session, stage, upper_ids)
         lower_ids = await self._rank_seed_ids(session, stage, lower_ids)
 
@@ -328,7 +326,7 @@ class AdminStageService:
         ``advance_count`` alone.
         """
         sorted_items = sorted(stage.items, key=lambda item: (item.order, item.id))
-        upper, lower = _bracket_seeds(stage, sorted_items, _lower_bracket_item(stage, sorted_items))
+        upper, lower = _bracket_seeds(sorted_items, _lower_bracket_item(stage, sorted_items))
         if len(upper) + len(lower) >= 2:
             return len(upper), len(lower)
         return await self._projected_bracket_seed_counts(session, stage)
@@ -337,28 +335,21 @@ class AdminStageService:
         """The upper/lower seed counts the preceding group stage will feed into
         ``stage``, mirroring ``_auto_wire_from_groups``: each group of the nearest
         earlier Swiss/round-robin stage sends its own ``advance_count`` (falling
-        back to the stage's), split the way that wiring will split it. ``(0, 0)``
-        when there is no such source, or nothing is configured to advance."""
+        back to the stage's), split per group by ``advance_upper_count`` (spec
+        §3.2). ``(0, 0)`` when there is no such source, or nothing is configured
+        to advance."""
         source = await self._preceding_group_stage(session, stage)
         if source is None:
             return 0, 0
-
-        top, top_lb = _advance_split(stage, source.advance_count or 0)
         items = sorted(source.items, key=lambda item: (item.order, item.id))
-        # ``or`` covers a source stage with no groups at all: one implicit group.
-        counts = group_advance_counts(stage, items, default_upper=top, default_lower=top_lb) or [(0, top, top_lb)]
+        # A source stage with no groups at all is one implicit group.
+        groups = items or [SimpleNamespace(id=0, advance_count=None, advance_upper_count=None)]
+        counts = group_advance_counts(
+            groups, default_advance=source.advance_count or 0, default_upper=source.advance_upper_count
+        )
         upper = sum(item_upper for _, item_upper, _ in counts)
         lower = sum(item_lower for _, _, item_lower in counts)
-        if upper + lower == 0:
-            return 0, 0
-        if lower:
-            return upper, lower
-
-        if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(stage, "split_lower_bracket", False):
-            # One bracket item holds both halves — ``_bracket_seeds`` splits the
-            # seed list down the middle instead of wiring a separate item.
-            return upper - upper // 2, upper // 2
-        return upper, 0
+        return (upper, lower) if upper + lower else (0, 0)
 
     async def get_stage_item(self, session: AsyncSession, stage_item_id: int) -> models.StageItem:
         item = await self.stage_item_repo.get(session, stage_item_id, options=[selectinload(models.StageItem.inputs)])
@@ -1546,6 +1537,7 @@ class AdminStageService:
         top: int,
         *,
         top_lb: int = 0,
+        upper_per_group: int | None = None,
         mode: str = "cross",
         notify: bool = True,
         commit: bool = True,
@@ -1565,10 +1557,12 @@ class AdminStageService:
         - ``snake``: simple top-down (all 1st-seeds first, then all 2nd-seeds, ...).
 
         Each group sends its own ``StageItem.advance_count`` when that is set,
-        split upper/lower by the same rule auto-wiring uses; groups without one
-        take the caller's ``top``/``top_lb`` verbatim. A group's lower-bracket
-        band starts right after its own upper band, so uneven groups do not share
-        one offset. ``top_lb > 0`` requires a DOUBLE_ELIMINATION target with a
+        else ``top + top_lb``; of those, ``upper_per_group`` (defaulting to
+        ``top`` once ``top_lb > 0``, otherwise "all of them") start in the upper
+        bracket and the rest in the lower one, with a group's own
+        ``advance_upper_count`` overriding that. A group's lower-bracket band
+        starts right after its own upper band, so uneven groups do not share one
+        offset. Lower-bracket starters require a DOUBLE_ELIMINATION target with a
         BRACKET_LOWER stage item.
 
         Idempotent: existing FINAL inputs are preserved; existing TENTATIVE inputs
@@ -1606,17 +1600,11 @@ class AdminStageService:
             (i for i in target_stage.items if i.type == enums.StageItemType.BRACKET_LOWER),
             None,
         )
-        if top_lb > 0:
-            if target_stage.stage_type != enums.StageType.DOUBLE_ELIMINATION:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="`top_lb` requires a double_elimination target stage",
-                )
-            if lb_item is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=("Target stage has no BRACKET_LOWER stage item; create one before using top_lb"),
-                )
+        if top_lb > 0 and target_stage.stage_type != enums.StageType.DOUBLE_ELIMINATION:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="`top_lb` requires a double_elimination target stage",
+            )
 
         source_items = sorted(source_stage.items, key=lambda item: (item.order, item.id))
         if not source_items:
@@ -1627,12 +1615,33 @@ class AdminStageService:
 
         num_groups = len(source_items)
 
-        # Per group: its own ``advance_count`` if set, else the caller's top/top_lb.
-        counts = group_advance_counts(target_stage, source_items, default_upper=top, default_lower=top_lb)
+        # Per group: its own ``advance_count`` if set, else ``top + top_lb``, split
+        # by its own ``advance_upper_count`` if set, else ``upper_per_group``.
+        counts = group_advance_counts(
+            source_items,
+            default_advance=top + top_lb,
+            default_upper=upper_per_group if upper_per_group is not None else (top if top_lb > 0 else None),
+        )
         if not any(upper or lower for _, upper, lower in counts):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Nothing advances: set `top`, or an advance count on the source stage or its groups",
+            )
+        if sum(lower for _, _, lower in counts) > 0:
+            if target_stage.stage_type != enums.StageType.DOUBLE_ELIMINATION:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="`top_lb` requires a double_elimination target stage",
+                )
+            if lb_item is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=("Target stage has no BRACKET_LOWER stage item; create one before using top_lb"),
+                )
+        if sum(upper for _, upper, _ in counts) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Fewer than 2 teams reach the upper bracket",
             )
 
         # UB: first stage_item by order. A group's lower-bracket band starts right
@@ -1935,9 +1944,9 @@ class AdminStageService:
         strict: bool = False,
         source_stage_id: int | None = None,
     ) -> bool:
-        """Derive playoff seeding from a group stage's ``advance_count`` and this
-        stage's ``split_lower_bracket`` flag, then wire TENTATIVE inputs (cross
-        seeding). Replaces the manual Automation block.
+        """Derive playoff seeding from a group stage's ``advance_count`` and
+        ``advance_upper_count``, then wire TENTATIVE inputs (cross seeding).
+        Replaces the manual Automation block.
 
         ``source_stage_id`` names the feeding group stage explicitly — required
         when several divisions share the earlier phase, since none of them is
@@ -1992,8 +2001,9 @@ class AdminStageService:
                 )
             return False
 
-        top, top_lb = _advance_split(stage, stage_advance)
-
+        # ``default_advance = source.advance_count``, ``default_upper =
+        # source.advance_upper_count`` (NULL → everyone starts upper), spec §3.2.
+        #
         # The bracket engine applies standard 1-vs-N seeding (``_seeding_order``)
         # internally, which already spreads the top seeds across the bracket. Feeding
         # it a plain group-major order ("snake": A1, B1, …, A2, B2, …) therefore
@@ -2003,8 +2013,9 @@ class AdminStageService:
             session,
             stage.id,
             source.id,
-            top,
-            top_lb=top_lb,
+            stage_advance,
+            top_lb=0,
+            upper_per_group=source.advance_upper_count,
             mode="snake",
             notify=False,
             commit=False,
@@ -2206,7 +2217,7 @@ class AdminStageService:
         lb_item = _lower_bracket_item(stage, sorted_items)
         lb_stage_item_id = lb_item.id if lb_item is not None else None
 
-        team_ids, lower_bracket_team_ids = _bracket_seeds(stage, sorted_items, lb_item)
+        team_ids, lower_bracket_team_ids = _bracket_seeds(sorted_items, lb_item)
         is_bracket = stage.stage_type in BRACKET_STAGE_TYPES
         if is_bracket:
             team_ids = await self._rank_seed_ids(session, stage, team_ids)

@@ -186,6 +186,7 @@ class StageItemRead(BaseRead):
     type: enums.StageItemType
     order: int
     advance_count: int | None = None
+    advance_upper_count: int | None = None
     inputs: list[StageItemInputRead] = []
 
 
@@ -195,6 +196,7 @@ class StageItemSummaryRead(BaseRead):
     type: enums.StageItemType
     order: int
     advance_count: int | None = None
+    advance_upper_count: int | None = None
 
 
 class StageSummaryRead(BaseRead, _StageRegulationRead):
@@ -204,7 +206,7 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     stage_type: enums.StageType
     max_rounds: int = 5
     advance_count: int | None = None
-    split_lower_bracket: bool = False
+    advance_upper_count: int | None = None
     order: int
     is_active: bool
     is_published: bool = False
@@ -220,7 +222,7 @@ class StageRead(BaseRead, _StageRegulationRead):
     stage_type: enums.StageType
     max_rounds: int = 5
     advance_count: int | None = None
-    split_lower_bracket: bool = False
+    advance_upper_count: int | None = None
     order: int
     is_active: bool
     is_published: bool = False

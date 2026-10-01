@@ -17,9 +17,10 @@ Three layers, all of them here, none of them touching a session:
    snake/round-robin deal across a stage's groups.
 
 3. Group -> playoff wiring — ``group_advance_counts`` + ``build_seeding``: how
-   many teams each group sends (``StageItem.advance_count`` overriding
-   ``Stage.advance_count``) and which (group, position) pair lands in which
-   playoff slot, ``cross`` or ``snake``.
+   many teams each group sends and how many of them start upper
+   (``advance_count`` / ``advance_upper_count``, a group's own value overriding
+   its stage's), and which (group, position) pair lands in which playoff slot,
+   ``cross`` or ``snake``.
 
 The one seeding rule NOT here is the engine's 1-vs-N slot layout
 (``shared.services.bracket.seeding_order``): it is shared by every service that
@@ -41,7 +42,6 @@ __all__ = (
     "SEED_TEAMS_MODES",
     "GroupSlice",
     "SeedRanking",
-    "advance_split",
     "apply_seed_ranking",
     "bracket_seeds",
     "build_seeding",
@@ -151,33 +151,18 @@ def collect_item_team_ids(item: Any) -> list[int]:
 
 
 def bracket_seeds(
-    stage: Any,
     sorted_items: list,
     lb_item: Any | None,
     *,
     collect: Any = collect_item_team_ids,
 ) -> tuple[list[int], list[int]]:
-    """The teams wired into ``stage``, split into upper vs lower starters."""
-    if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(stage, "split_lower_bracket", False):
-        if lb_item is not None:
-            upper = [tid for item in sorted_items if item is not lb_item for tid in collect(item)]
-            return upper, collect(lb_item)
-        all_ids = [tid for item in sorted_items for tid in collect(item)]
-        half = (len(all_ids) + 1) // 2
-        return all_ids[:half], all_ids[half:]
-    return [tid for item in sorted_items for tid in collect(item)], []
+    """The teams wired into a bracket stage, split into upper vs lower starters.
 
-
-def advance_split(stage: Any, advance: int) -> tuple[int, int]:
-    """How many of each group's ``advance_count`` teams seed upper vs lower."""
-    if (
-        stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-        and getattr(stage, "split_lower_bracket", False)
-        and any(item.type == enums.StageItemType.BRACKET_LOWER for item in stage.items)
-    ):
-        lower = advance // 2
-        return advance - lower, lower
-    return advance, 0
+    Lower-bracket starters are exactly the ``BRACKET_LOWER`` item's inputs
+    (``lower_bracket_item`` is None for anything but double elimination).
+    """
+    upper = [tid for item in sorted_items if item is not lb_item for tid in collect(item)]
+    return upper, (collect(lb_item) if lb_item is not None else [])
 
 
 def resolve_seeds(skeleton: BracketSkeleton, teams: dict[int, int]) -> BracketSkeleton:
@@ -207,34 +192,26 @@ class GroupSlice(NamedTuple):
 
 
 def group_advance_counts(
-    stage: Any,
     source_items: Sequence[Any],
     *,
-    default_upper: int,
-    default_lower: int = 0,
+    default_advance: int,
+    default_upper: int | None,
 ) -> list[tuple[int, int, int]]:
     """Per source group: ``(item_id, upper_count, lower_count)``.
 
-    A group's own ``advance_count`` overrides the stage-wide default for that
-    group alone, and is split upper/lower by :func:`advance_split` — the same
-    rule auto-wiring applies to ``Stage.advance_count``. Groups without an
-    override keep the caller's explicit ``default_upper``/``default_lower``
-    verbatim, so a manual wire asking for "3 up, 1 down" is not silently
-    re-split into 2/2.
-
-    ``0`` is deliberately NOT "nobody advances from this group": the schema
-    rejects it (``ge=1``) and a stored 0 reads here as "no override". A group
-    that sends nobody is expressed by leaving it out of the wiring, not by a
-    number that is indistinguishable from an unset column.
+    A group's own ``advance_count`` overrides ``default_advance`` (0 / NULL reads
+    as "no override": the schema rejects 0). Its own ``advance_upper_count``
+    overrides ``default_upper``; NULL on both means everyone it sends starts in
+    the upper bracket. ``0`` upper is real: the whole group starts lower. Upper
+    never exceeds what the group actually sends.
     """
     counts: list[tuple[int, int, int]] = []
     for item in source_items:
-        override = getattr(item, "advance_count", None)
-        if override:
-            upper, lower = advance_split(stage, override)
-        else:
-            upper, lower = default_upper, default_lower
-        counts.append((item.id, upper, lower))
+        advance = getattr(item, "advance_count", None) or default_advance
+        own_upper = getattr(item, "advance_upper_count", None)
+        upper = own_upper if own_upper is not None else (default_upper if default_upper is not None else advance)
+        upper = min(upper, advance)
+        counts.append((item.id, upper, advance - upper))
     return counts
 
 

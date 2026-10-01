@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`owmapfix01`** (94 revisions in `backend/migrations/versions/`).
+Alembic head: **`bsplit01`** (95 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1168,7 +1168,7 @@ erDiagram
         stagetype stage_type
         int max_rounds
         int advance_count "nullable"
-        boolean split_lower_bracket
+        int advance_upper_count "nullable"
         int order
         boolean is_active
         boolean is_published
@@ -1197,6 +1197,7 @@ erDiagram
         stageitemtype type
         int order
         int advance_count "nullable"
+        int advance_upper_count "nullable"
     }
     TOURNAMENT_STAGE_ITEM_INPUT {
         bigint id PK
