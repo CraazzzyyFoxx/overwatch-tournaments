@@ -42,6 +42,8 @@ export const adminQueryKeys = {
   settings: () => ["admin", "settings"] as const,
   stageBracketPreview: (stageId: KeyPart, stage: unknown) =>
     ["admin", "stage", stageId, "bracket-preview", stage] as const,
+  stageBracketTemplate: (stageId: KeyPart) =>
+    ["admin", "stage", stageId, "bracket-template"] as const,
   // The editor keys on the whole draft `stage` the way `stageBracketPreview`
   // does, so a save that changes seeds or format refetches the rounds; the
   // plain one-argument form reads an already-saved stage.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
+from shared.services.bracket.template import BracketTemplate
 from shared.services.chat import (
     HISTORY_DEFAULT,
     HISTORY_MAX,
@@ -156,6 +157,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.stage_auto_wire": Op(response=schemas.StageRead),
     "rpc.tournament.stage_wire": Op(request=schemas.WireFromGroupsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_seed": Op(request=schemas.SeedTeamsRequest, response=schemas.StageRead),
+    "rpc.tournament.stage_bracket_template_get": Op(response=schemas.BracketTemplateRead),
+    "rpc.tournament.stage_bracket_template_set": Op(request=BracketTemplate, response=schemas.BracketTemplateRead),
+    "rpc.tournament.stage_bracket_template_clear": Op(response=schemas.BracketTemplateRead),
     # ── integrations: division grids ───────────────────────────────────────
     "rpc.tournament.grid_workspace_create": Op(request=schemas.DivisionGridCreate, response=schemas.DivisionGridRead),
     "rpc.tournament.grid_update": Op(request=schemas.DivisionGridUpdate, response=schemas.DivisionGridRead),

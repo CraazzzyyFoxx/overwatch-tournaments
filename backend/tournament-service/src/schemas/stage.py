@@ -12,6 +12,7 @@ from shared.domain.ffa_scoring import (
     FFA_MAX_COLUMNS,
     FFA_MAX_LOBBY_SIZE,
 )
+from shared.services.bracket.template import BracketTemplate
 from src.core import enums
 from src.schemas.base import BaseRead
 
@@ -27,10 +28,31 @@ __all__ = (
     "FfaScoring",
     "GrandFinalType",
     "SeedRankingValue",
+    "BracketSeedCounts",
+    "BracketTemplateRead",
 )
 
 GrandFinalType = Literal["no_reset", "with_reset"]
 SeedRankingValue = Literal["slot", "avg_sr", "total_sr", "random"]
+
+
+class BracketSeedCounts(BaseModel):
+    """How many teams start in each half of a bracket stage."""
+
+    upper: int
+    lower: int
+
+
+class BracketTemplateRead(BaseModel):
+    """A stage's bracket layout: its custom template, or the one its format generates now.
+
+    ``template`` is ``None`` only when fewer than two upper seeds are known, so
+    there is nothing to draw yet.
+    """
+
+    custom: bool
+    template: BracketTemplate | None = None
+    seeds: BracketSeedCounts
 
 
 class StageScoring(BaseModel):
