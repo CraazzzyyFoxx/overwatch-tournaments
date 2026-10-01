@@ -432,8 +432,10 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
             PLAYOFF_PROD_MATCHES[1],
             {frozenset({p.home_team_id, p.away_team_id}) for p in by_round[1]},
         )
+        # The engine seeds LB R1 1-vs-N (production paired 1v2 / 3v4), so the
+        # top lower seed meets the last one.
         self.assertEqual(
-            PLAYOFF_PROD_MATCHES[-1],
+            {frozenset({2067, 2056}), frozenset({2058, 2060})},
             {frozenset({p.home_team_id, p.away_team_id}) for p in by_round[-1]},
         )
 
@@ -454,7 +456,7 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
         calculator = standings_service.PLAYOFF_CALCULATORS[StageType.DOUBLE_ELIMINATION]
         rankings = {row.id: row.ranking for row in calculator(encounters)}
         self.assertEqual(
-            {2071: 1, 2069: 2, 2068: 3, 2055: 4, 2067: 5, 2060: 5, 2058: 7, 2056: 7},
+            {2071: 1, 2069: 2, 2068: 3, 2055: 4, 2067: 5, 2058: 5, 2060: 7, 2056: 7},
             rankings,
         )
 

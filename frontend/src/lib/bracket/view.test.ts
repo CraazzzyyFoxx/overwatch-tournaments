@@ -339,3 +339,47 @@ describe("slot hints follow the bracket's recorded advancement edges", () => {
     });
   });
 });
+
+// 2026-10-01: with three teams in the upper bracket the generator gives UB R1
+// (1 match), UB Final (1) and the Grand Final (1) -- three trailing
+// single-match rounds, so counting matches read the UB Final as a final too.
+// The advancement edges say it plainly: the Grand Final is the positive match
+// that takes a lower-bracket winner.
+describe("the grand final follows the bracket's advancement edges", () => {
+  //  UB: M1 -> M2 (UB Final)   LB: M3 -> M4   GF: M5 (-> reset M6)
+  const encounters = [
+    createEncounter(1, 1),
+    createEncounter(2, 2, [{ encounter_id: 1, role: "winner", slot: "home" }]),
+    createEncounter(3, -1, [{ encounter_id: 1, role: "loser", slot: "home" }]),
+    createEncounter(4, -2, [
+      { encounter_id: 3, role: "winner", slot: "home" },
+      { encounter_id: 2, role: "loser", slot: "away" }
+    ]),
+    createEncounter(5, 3, [
+      { encounter_id: 2, role: "winner", slot: "home" },
+      { encounter_id: 4, role: "winner", slot: "away" }
+    ])
+  ];
+
+  it("leaves the upper bracket final out of the finals for three upper seeds", () => {
+    expect(getDoubleEliminationFinalRounds(encounters)).toEqual(new Set([3]));
+  });
+
+  it("adds the reset, whose two teams both come from the grand final", () => {
+    const withReset = [
+      ...encounters,
+      createEncounter(6, 4, [
+        { encounter_id: 5, role: "winner", slot: "home" },
+        { encounter_id: 5, role: "loser", slot: "away" }
+      ])
+    ];
+
+    expect(getDoubleEliminationFinalRounds(withReset)).toEqual(new Set([3, 4]));
+  });
+
+  it("falls back to counting matches when no edges were recorded", () => {
+    const legacy = encounters.map((match) => createEncounter(match.id, match.round));
+
+    expect(getDoubleEliminationFinalRounds(legacy)).toEqual(new Set([2, 3]));
+  });
+});

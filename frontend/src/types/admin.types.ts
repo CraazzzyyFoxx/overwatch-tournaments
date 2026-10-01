@@ -392,7 +392,7 @@ export interface StageCreateInput extends Partial<StageRegulation> {
   stage_type: StageType;
   max_rounds?: number;
   advance_count?: number | null;
-  split_lower_bracket?: boolean;
+  advance_upper_count?: number | null;
   order?: number;
 }
 
@@ -402,7 +402,7 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   stage_type?: StageType;
   max_rounds?: number;
   advance_count?: number | null;
-  split_lower_bracket?: boolean;
+  advance_upper_count?: number | null;
   order?: number;
 }
 
@@ -411,6 +411,7 @@ export interface StageItemCreateInput {
   type: StageItemType;
   order?: number;
   advance_count?: number | null;
+  advance_upper_count?: number | null;
 }
 
 export interface StageItemInputCreateInput {
@@ -473,6 +474,59 @@ export interface StageBracketPreviewMatch {
     role: "winner" | "loser";
     slot: "home" | "away";
   }[];
+}
+
+/**
+ * Where one slot of a template match gets its team: exactly one field is set.
+ *
+ * `seed` is a placeholder label — `"U3"` is the third upper-bracket seed, `"L1"`
+ * the first lower one — and `winner_of`/`loser_of` name another
+ * `TemplateMatch.id` in the same template.
+ */
+export type TemplateSlot =
+  | { seed: string; winner_of?: null; loser_of?: null }
+  | { winner_of: number; seed?: null; loser_of?: null }
+  | { loser_of: number; seed?: null; winner_of?: null };
+
+export interface TemplateMatch {
+  /** Template-local and stable across edits; not an encounter id. */
+  id: number;
+  /** Positive upstairs and in the finals, negative downstairs; never 0. */
+  round: number;
+  home: TemplateSlot;
+  away: TemplateSlot;
+}
+
+/**
+ * A stage's bracket drawn without teams — the blueprint every generation path
+ * builds from. Order inside a round is the order of `matches`.
+ */
+export interface BracketTemplate {
+  version: 1;
+  upper_seeds: number;
+  lower_seeds: number;
+  matches: TemplateMatch[];
+}
+
+/** One reason a template was refused, from the PUT's 422 `problems` array. */
+export interface TemplateProblem {
+  match_id: number | null;
+  slot: "home" | "away" | null;
+  code: string;
+  message: string;
+}
+
+/**
+ * `GET/PUT/DELETE /admin/stages/{id}/bracket-template`.
+ *
+ * `custom` says whether the stage has a saved template; without one `template`
+ * is what its format generates for `seeds` right now, or `null` when fewer than
+ * two upper seeds are known and there is nothing to draw.
+ */
+export interface BracketTemplateRead {
+  custom: boolean;
+  template: BracketTemplate | null;
+  seeds: { upper: number; lower: number };
 }
 
 

@@ -49,9 +49,13 @@ def _item(
     return SimpleNamespace(id=item_id, order=order, inputs=inputs, type=item_type)
 
 
+def _stage(stage_type, items: list[SimpleNamespace]) -> SimpleNamespace:
+    return SimpleNamespace(id=5, stage_type=stage_type, items=items, bracket_template=None)
+
+
 class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
     async def test_returns_existing_rounds_once_the_bracket_is_built(self) -> None:
-        stage = SimpleNamespace(id=5, stage_type=enums.StageType.DOUBLE_ELIMINATION, items=[])
+        stage = _stage(enums.StageType.DOUBLE_ELIMINATION, [])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(1,), (-2,), (2,)])))
 
         with patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)):
@@ -62,12 +66,7 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
 
     async def test_predicts_double_elimination_rounds_from_planned_team_inputs(self) -> None:
         inputs = [_input(team_id, team_id) for team_id in range(1, 9)]
-        stage = SimpleNamespace(
-            id=5,
-            stage_type=enums.StageType.DOUBLE_ELIMINATION,
-            items=[_item(1, inputs)],
-            split_lower_bracket=False,
-        )
+        stage = _stage(enums.StageType.DOUBLE_ELIMINATION, [_item(1, inputs)])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
         with patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)):
@@ -85,7 +84,7 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
             _input(3, 4),
             _input(4, 5),
         ]
-        stage = SimpleNamespace(id=5, stage_type=enums.StageType.SINGLE_ELIMINATION, items=[_item(1, inputs)])
+        stage = _stage(enums.StageType.SINGLE_ELIMINATION, [_item(1, inputs)])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
         with patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)):
@@ -94,11 +93,7 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
         self.assertEqual([1, 2], rounds)  # 4 known teams -> 2 rounds
 
     async def test_predicts_nothing_for_a_non_bracket_stage_type(self) -> None:
-        stage = SimpleNamespace(
-            id=5,
-            stage_type=enums.StageType.SWISS,
-            items=[_item(1, [_input(1, 1), _input(2, 2)])],
-        )
+        stage = _stage(enums.StageType.SWISS, [_item(1, [_input(1, 1), _input(2, 2)])])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
         with patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)):
@@ -107,11 +102,7 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
         self.assertEqual([], rounds)
 
     async def test_predicts_nothing_with_fewer_than_two_teams_wired_in(self) -> None:
-        stage = SimpleNamespace(
-            id=5,
-            stage_type=enums.StageType.SINGLE_ELIMINATION,
-            items=[_item(1, [_input(1, 1)])],
-        )
+        stage = _stage(enums.StageType.SINGLE_ELIMINATION, [_item(1, [_input(1, 1)])])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
         with (
@@ -123,20 +114,16 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
         self.assertEqual([], rounds)
 
     async def test_projects_rounds_from_the_preceding_group_stage(self) -> None:
-        # An unseeded split double elimination playoff: no teams are wired yet,
-        # so the rounds are projected from the group stage that will seed it --
-        # `advance_count` (4) per group × 2 groups = 8 teams, split into a
-        # 4-team upper bracket and 4 lower-bracket seeds. Matches the rounds
-        # `generate_encounters` will build once the groups finish.
-        stage = SimpleNamespace(
-            id=5,
-            stage_type=enums.StageType.DOUBLE_ELIMINATION,
-            items=[_item(1, [])],
-            split_lower_bracket=True,
-        )
+        # An unseeded double elimination playoff: no teams are wired yet, so the
+        # rounds are projected from the group stage that will seed it --
+        # `advance_count` (4) per group × 2 groups = 8 teams, of which 2 per group
+        # start upper: a 4-team upper bracket and 4 lower-bracket seeds. Matches
+        # the rounds `generate_encounters` will build once the groups finish.
+        stage = _stage(enums.StageType.DOUBLE_ELIMINATION, [_item(1, [])])
         source = SimpleNamespace(
             id=4,
             advance_count=4,
+            advance_upper_count=2,
             items=[_item(10, []), _item(11, [])],
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
@@ -154,16 +141,14 @@ class GetPlannedRoundsTests(IsolatedAsyncioTestCase):
         # bracket item. The wiring splits EACH group's 3 (2 up, 1 down), so the
         # upper bracket gets 4 and the lower 2 -- not the 3/3 a split of the
         # 6-team total would give, which is a differently shaped bracket.
-        stage = SimpleNamespace(
-            id=5,
-            stage_type=enums.StageType.DOUBLE_ELIMINATION,
-            items=[
+        stage = _stage(
+            enums.StageType.DOUBLE_ELIMINATION,
+            [
                 _item(1, [], order=0, item_type=enums.StageItemType.BRACKET_UPPER),
                 _item(2, [], order=1, item_type=enums.StageItemType.BRACKET_LOWER),
             ],
-            split_lower_bracket=True,
         )
-        source = SimpleNamespace(id=4, advance_count=3, items=[_item(10, []), _item(11, [])])
+        source = SimpleNamespace(id=4, advance_count=3, advance_upper_count=2, items=[_item(10, []), _item(11, [])])
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])))
 
         with (

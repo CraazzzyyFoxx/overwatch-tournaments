@@ -56,8 +56,9 @@ def generate(
     ``team_ids`` seed the upper bracket. ``lower_bracket_team_ids`` (optional)
     are teams that *start* in the lower bracket: they play each other in LB
     Round 1, and the upper-bracket Round-1 losers join them in the next LB
-    round ("group winners → Upper, runners-up → Lower"). This works cleanly
-    when the upper and lower counts are equal (an even split).
+    round ("group winners → Upper, runners-up → Lower"). Lower seeds are laid
+    out 1-vs-N like the upper bracket, so any upper/lower split works and byes
+    go to the top lower seeds.
     """
     n = len(team_ids)
     if n < 2:
@@ -156,7 +157,11 @@ def generate(
     if lb_seeds:
         # Teams seeded straight into the lower bracket meet each other first;
         # the upper bracket's Round-1 losers join them in the next round.
-        carry, _ = pair_up([(_TEAM, tid) for tid in lb_seeds], -lb_round, _lb_label(lb_round))
+        # Seeded 1-vs-N like the upper bracket, so the top lower seeds take the
+        # byes (in this round only) instead of whoever is last in the list.
+        lb_size = 1 << math.ceil(math.log2(len(lb_seeds))) if len(lb_seeds) > 1 else 1
+        entrants = [(_TEAM, lb_seeds[seed]) if seed < len(lb_seeds) else None for seed in seeding_order(lb_size)]
+        carry, _ = pair_up(entrants, -lb_round, _lb_label(lb_round))
         dropout_start = 1
     else:
         # LB Round 1 pairs the upper bracket's Round-1 losers two by two.

@@ -95,10 +95,15 @@ class Stage(db.TimeStampIntegerMixin):
     # stage. NULL = not configured → the frontend derives it from bracket wiring
     # or falls back to a default. Mirrors the wire-from-groups ``top`` parameter.
     advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Double-elimination playoff stages only: when true, the teams advancing from
-    # each group (advance_count) are split evenly between the Upper and Lower
-    # bracket (extra team → Upper on an odd count). When false, all advancing
-    # teams seed the Upper bracket. Drives the auto-wire on activate-and-generate.
+    # Group stages only: how many of each group's ``advance_count`` start in the
+    # Upper bracket of the double elimination they feed; the rest start in its
+    # Lower bracket. NULL = all of them start Upper. A group's own value overrides it.
+    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # DEPRECATED, no reader or writer since migration bsplit01 (replaced by
+    # ``advance_upper_count``). Kept on the table and here until a flag-gated
+    # contract migration drops both in one deploy (CONTRIBUTING.md, "Destructive
+    # migrations are gated"): the previous release still selects it while the
+    # new migrations run.
     split_lower_bracket: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     order: Mapped[int] = mapped_column(Integer(), default=0)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
@@ -149,6 +154,9 @@ class Stage(db.TimeStampIntegerMixin):
     )
     #: The Challonge group this stage mirrors (Challonge sync's only link to it).
     challonge_group_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    # A custom bracket drawn in the admin editor (``shared.services.bracket.template``);
+    # NULL = the format's generator draws it.
+    bracket_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="stages")
     items: Mapped[list[StageItem]] = relationship(
@@ -168,6 +176,10 @@ class Stage(db.TimeStampIntegerMixin):
     @property
     def scoring(self) -> dict[str, float | None]:
         return {"win": self.win_points, "draw": self.draw_points, "loss": self.loss_points}
+
+    @property
+    def has_custom_bracket(self) -> bool:
+        return self.bracket_template is not None
 
     @property
     def best_of(self) -> dict[str, typing.Any]:
@@ -225,6 +237,8 @@ class StageItem(db.TimeStampIntegerMixin):
     # did before the column existed. Set it when groups are uneven and a flat
     # "top N from each" is the wrong bar.
     advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # Per-group override of ``Stage.advance_upper_count``; NULL = inherit.
+    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     stage: Mapped[Stage] = relationship(back_populates="items")
     inputs: Mapped[list[StageItemInput]] = relationship(

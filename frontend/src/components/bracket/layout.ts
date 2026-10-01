@@ -74,6 +74,8 @@ export interface LayoutEdge {
   targetId: number;
   /** The team that travelled this connector — the source's winner once it is settled. */
   teamId: number | null;
+  /** A `loser` connector is the editor's lower-bracket drop; the public view never draws one. */
+  kind: "winner" | "loser";
 }
 
 export interface LayoutHeader {
@@ -82,6 +84,8 @@ export interface LayoutHeader {
   y: number;
   label: string;
   section: "upper" | "lower";
+  /** The signed round this column holds — positive upstairs, negative downstairs. */
+  round: number;
 }
 
 export interface BracketLayout {
@@ -161,14 +165,19 @@ function buildPath(source: LayoutNode, target: LayoutNode) {
   ].join(" ");
 }
 
-function edgeBetween(source: LayoutNode, target: LayoutNode): LayoutEdge {
+function edgeBetween(
+  source: LayoutNode,
+  target: LayoutNode,
+  kind: LayoutEdge["kind"] = "winner"
+): LayoutEdge {
   return {
-    id: `edge-${source.encounter.id}-${target.encounter.id}`,
+    id: kind === "winner" ? `edge-${source.encounter.id}-${target.encounter.id}` : `edge-${source.encounter.id}-${target.encounter.id}-loser`,
     path: buildPath(source, target),
     isCompleted: isEncounterCompleted(source.encounter),
     sourceId: source.encounter.id,
     targetId: target.encounter.id,
-    teamId: winnerTeamId(source.encounter)
+    teamId: winnerTeamId(source.encounter),
+    kind
   };
 }
 
@@ -232,17 +241,22 @@ function addSequentialEdges(
 }
 
 /**
- * Winner lines from the bracket's own advancement edges.
+ * Connector lines from the bracket's own advancement edges.
  *
  * Returns the encounters whose feeders are recorded (any role — a lower-bracket
  * drop is a `loser` edge), so column-index inference can fill in only the
  * matches that have no provenance of their own, instead of being switched off
  * for the whole bracket by a single wired match.
+ *
+ * `includeLoserEdges` also draws the drops themselves. The public view leaves
+ * them out (spec §6); the layout editor needs them, because a drop the viewer
+ * cannot see is a drop they cannot check.
  */
-function addWinnerSourceEdges(
+function addSourceEdges(
   nodes: LayoutNode[],
   nodesById: Map<string, LayoutNode>,
-  edges: LayoutEdge[]
+  edges: LayoutEdge[],
+  includeLoserEdges: boolean
 ): Set<number> {
   const wired = new Set<number>();
   const seen = new Set<string>();
@@ -250,10 +264,10 @@ function addWinnerSourceEdges(
     const sources = node.encounter.sources ?? [];
     if (sources.length > 0) wired.add(node.encounter.id);
     for (const source of sources) {
-      if (source.role !== "winner") continue;
+      if (source.role !== "winner" && !(includeLoserEdges && source.role === "loser")) continue;
       const sourceNode = nodesById.get(`match-${source.encounter_id}`);
       if (!sourceNode) continue;
-      const edge = edgeBetween(sourceNode, node);
+      const edge = edgeBetween(sourceNode, node, source.role === "loser" ? "loser" : "winner");
       if (seen.has(edge.id)) continue;
       seen.add(edge.id);
       edges.push(edge);
@@ -286,7 +300,7 @@ function layoutColumn(params: {
   const { group, x, headerY, headerId, headerSection, label, startY, slotHints, matchNumbers, latestMatchByTeam } =
     params;
 
-  params.headers.push({ id: headerId, x, y: headerY, label, section: headerSection });
+  params.headers.push({ id: headerId, x, y: headerY, label, section: headerSection, round: group.round });
 
   group.matches.forEach((match, matchIndex) => {
     const hint = slotHints.get(match.id) ?? { home: null, away: null };
@@ -300,7 +314,8 @@ function layoutColumn(params: {
 export function buildLayout(
   encounters: BracketMatch[],
   type: StageType,
-  roundLabel: BracketRoundLabelFormatter
+  roundLabel: BracketRoundLabelFormatter,
+  options: { includeLoserEdges?: boolean } = {}
 ): BracketLayout {
   const hasBracketConnections = type === "single_elimination" || type === "double_elimination";
   const isDE = type === "double_elimination";
@@ -438,7 +453,7 @@ export function buildLayout(
   // Recorded advancement edges win; the column-index guesses below only fill in
   // the matches that carry none (a hand-created encounter, a legacy bracket).
   const wiredTargets = hasBracketConnections
-    ? addWinnerSourceEdges(nodes, nodesById, edges)
+    ? addSourceEdges(nodes, nodesById, edges, options.includeLoserEdges ?? false)
     : new Set<number>();
 
   if (hasBracketConnections) {

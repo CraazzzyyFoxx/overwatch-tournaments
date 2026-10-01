@@ -78,13 +78,21 @@ export interface StageBestOfShape {
   maxRounds: number;
   /**
    * The team count that fixes this bracket's depth: total teams for single
-   * elimination, upper-bracket teams (post-split) for double elimination.
+   * elimination, upper-bracket teams for double elimination.
    * `0` when nothing is seeded and no count can be derived, which falls back
    * to `maxRounds`.
    */
   bracketTeamCount?: number;
-  /** DE "split" seeding: half the teams start in the lower bracket. */
-  splitLowerBracket?: boolean;
+  /** Teams seeded straight into the lower bracket. */
+  lowerBracketTeamCount?: number;
+  /**
+   * The rounds the engine says this stage has, from
+   * `GET /admin/stages/{id}/planned-rounds` — the generated encounters' rounds
+   * once they exist, else the generator's own prediction (and a custom bracket
+   * template once one is saved). Empty or absent while the query loads, which
+   * falls back to the team-count formula.
+   */
+  plannedRounds?: readonly number[];
   /** Round keys already configured, so an override is never hidden. */
   configuredRounds?: number[];
 }
@@ -103,11 +111,14 @@ export interface StageBestOfShape {
  * precedence over `by_round`), so giving it a second key would let the two
  * disagree with `final` silently winning.
  *
- * The depth is derived from the team count, exact for the power-of-two sizes
- * the generator builds cleanly and possibly over-counting a lower bracket
+ * The engine's `plannedRounds` win whenever it has them: the team-count formula
+ * below cannot express an uneven upper/lower split (4 upper + 8 lower plays 5
+ * lower rounds, the formula says 4), nor a hand-edited bracket template. The
+ * formula is the fallback while that query loads — exact for the power-of-two
+ * sizes the generator builds cleanly and possibly over-counting a lower bracket
  * shortened by first-round byes. Over-counting is the safe direction: a key no
  * encounter carries is inert, while a missing row is a round the organizer
- * cannot configure at all. `maxRounds` is only a last-resort fallback for a
+ * cannot configure at all. `maxRounds` is the last-resort fallback for a
  * bracket whose team count is still unknown — it is an independent admin
  * planning field, not the real round count.
  */
@@ -115,10 +126,15 @@ export function stageBestOfRoundSections({
   stageType,
   maxRounds,
   bracketTeamCount = 0,
-  splitLowerBracket = false,
-  configuredRounds = []
+  lowerBracketTeamCount = 0,
+  configuredRounds = [],
+  plannedRounds
 }: StageBestOfShape): BestOfRoundSection[] {
   const flatRounds = Math.max(1, Math.floor(maxRounds) || 1);
+  // `planned-rounds` is signed the same way the generator is, so the two halves
+  // read independently: an empty half means "the engine does not know yet".
+  const plannedUpper = (plannedRounds ?? []).filter((round) => round > 0);
+  const plannedLower = (plannedRounds ?? []).filter((round) => round < 0);
 
   if (stageType !== "double_elimination") {
     // A single elimination's round count is `ceil(log2(teams))`
@@ -127,9 +143,11 @@ export function stageBestOfRoundSections({
     // cannot express. Swiss / round-robin play a flat `1..max_rounds` the
     // caller already knows.
     const depth =
-      stageType === "single_elimination" && bracketTeamCount >= 2
-        ? Math.ceil(Math.log2(bracketTeamCount))
-        : flatRounds;
+      plannedUpper.length > 0
+        ? Math.max(...plannedUpper)
+        : stageType === "single_elimination" && bracketTeamCount >= 2
+          ? Math.ceil(Math.log2(bracketTeamCount))
+          : flatRounds;
     const shape: BracketRoundShape = { rounds: countUp(depth), finalRounds: [] };
     return withUnlistedRounds(
       [{ key: "rounds", label: null, rounds: labelRounds(shape.rounds, shape) }],
@@ -138,14 +156,28 @@ export function stageBestOfRoundSections({
     );
   }
 
-  // `maxRounds` counts the grand final, the bracket's rounds do not.
+  // The highest planned positive round is the grand final: the engine never
+  // predicts the lazily-created reset. Known edge: once a reset HAS been played
+  // it is in the list, which reads one upper round too many — an inert extra
+  // row, never a missing one.
+  // Without planned rounds, `maxRounds` counts the grand final and the
+  // bracket's rounds do not.
   const upperRounds =
-    bracketTeamCount >= 2 ? Math.ceil(Math.log2(bracketTeamCount)) : Math.max(1, flatRounds - 1);
+    plannedUpper.length > 0
+      ? Math.max(1, Math.max(...plannedUpper) - 1)
+      : bracketTeamCount >= 2
+        ? Math.ceil(Math.log2(bracketTeamCount))
+        : Math.max(1, flatRounds - 1);
 
   // Each upper round after the first drops losers into a lower round and the
   // survivors play a reduction round; lower-bracket seeds add an opening round
   // plus the reduction that merges them with the upper bracket's first losers.
-  const lowerRounds = Math.max(0, 2 * (upperRounds - 1) + (splitLowerBracket ? 2 : 0));
+  // That formula cannot see an uneven split, so it only stands in until the
+  // engine's own rounds arrive.
+  const lowerRounds =
+    plannedLower.length > 0
+      ? -Math.min(...plannedLower)
+      : Math.max(0, 2 * (upperRounds - 1) + (lowerBracketTeamCount > 0 ? 2 : 0));
 
   // The grand final is `upperRounds + 1` and its reset the round after
   // (`double_elimination.generate`). Neither is an editable row — `final` owns

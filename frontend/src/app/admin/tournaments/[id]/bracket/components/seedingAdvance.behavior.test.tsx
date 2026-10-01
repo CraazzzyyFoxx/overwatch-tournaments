@@ -10,13 +10,13 @@
 // the stage again" — an explicit `null`, not an omitted key, which the API reads
 // as "leave it alone".
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Stage, StageItem } from "@/types/tournament.types";
 
-import { stageFormFromStage } from "../stageForm";
+import { buildStageUpdatePayload, stageFormFromStage, type StageForm } from "../stageForm";
 import { SeedingSection } from "./StageSettingsSections";
 
 declare global {
@@ -49,6 +49,7 @@ function item(id: number, overrides: Partial<StageItem> = {}): StageItem {
     type: "group",
     order: 0,
     advance_count: null,
+    advance_upper_count: null,
     inputs: [],
     ...overrides
   };
@@ -63,7 +64,7 @@ function groupStage(items: StageItem[], overrides: Partial<Stage> = {}): Stage {
     stage_type: "round_robin",
     max_rounds: 3,
     advance_count: 2,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 0,
     is_active: true,
     is_published: true,
@@ -96,18 +97,38 @@ async function settle() {
   }
 }
 
+/** Every draft patch the section handed back, so a test can build the save payload. */
+const patches: Partial<StageForm>[] = [];
+
+/** The draft as "Save changes" would see it. */
+function draft(stage: Stage): StageForm {
+  return patches.reduce<StageForm>(
+    (acc, patch) => ({ ...acc, ...patch }),
+    stageFormFromStage(stage)
+  );
+}
+
 async function mount(stage: Stage, extras: { stages?: Stage[] } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function Harness() {
+    const [form, setForm] = useState<StageForm>(() => stageFormFromStage(stage));
+    return (
+      <SeedingSection
+        stage={stage}
+        form={form}
+        stages={extras.stages}
+        onChange={(patch) => {
+          patches.push(patch);
+          setForm((current) => ({ ...current, ...patch }));
+        }}
+        onChanged={() => {}}
+      />
+    );
+  }
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <SeedingSection
-          stage={stage}
-          form={stageFormFromStage(stage)}
-          stages={extras.stages}
-          onChange={() => {}}
-          onChanged={() => {}}
-        />
+        <Harness />
       </QueryClientProvider>
     );
   });
@@ -118,6 +139,18 @@ async function mount(stage: Stage, extras: { stages?: Stage[] } = {}) {
 function advanceInput(stageItemId: number) {
   const input = container.querySelector<HTMLInputElement>(`input[id$="-advance-${stageItemId}"]`);
   if (!input) throw new Error(`No advance field for item ${stageItemId}`);
+  return input;
+}
+
+function upperInput(stageItemId: number) {
+  const input = container.querySelector<HTMLInputElement>(`input[id$="-upper-${stageItemId}"]`);
+  if (!input) throw new Error(`No upper-bracket field for item ${stageItemId}`);
+  return input;
+}
+
+function stageUpperInput() {
+  const input = container.querySelector<HTMLInputElement>('input[id$="-advance-upper"]');
+  if (!input) throw new Error("No stage-wide upper-bracket field");
   return input;
 }
 
@@ -140,6 +173,7 @@ async function typeAndBlur(input: HTMLInputElement, value: string) {
 beforeEach(() => {
   updateStageItem.mockReset();
   updateStageItem.mockResolvedValue({});
+  patches.length = 0;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -190,6 +224,68 @@ describe("per-group advance count", () => {
   });
 });
 
+describe("per-group upper bracket share", () => {
+  it("saves the stage-wide share with the rest of the form", async () => {
+    const stage = groupStage([item(100)]);
+    await mount(stage);
+
+    await typeAndBlur(stageUpperInput(), "2");
+
+    expect(buildStageUpdatePayload(stage, draft(stage))).toMatchObject({
+      advance_upper_count: 2
+    });
+  });
+
+  it("reads an unset share as All, and keeps 0 as a real answer", async () => {
+    const stage = groupStage([item(100)]);
+    await mount(stage);
+    expect(stageUpperInput().placeholder).toBe("All");
+    expect(stageUpperInput().value).toBe("");
+
+    await typeAndBlur(stageUpperInput(), "0");
+    expect(buildStageUpdatePayload(stage, draft(stage))).toMatchObject({
+      advance_upper_count: 0
+    });
+  });
+
+  it("saves a group's own share on blur, like the advance count beside it", async () => {
+    await mount(groupStage([item(100)], { advance_upper_count: 2 }));
+
+    expect(upperInput(100).placeholder).toBe("Inherit (2)");
+    await typeAndBlur(upperInput(100), "3");
+
+    expect(updateStageItem).toHaveBeenCalledTimes(1);
+    expect(updateStageItem).toHaveBeenCalledWith(100, { advance_upper_count: 3 });
+  });
+
+  it("no longer offers the all-or-half Group seeding switch", async () => {
+    // Half-and-half was the only split the stage could express; the share is a
+    // number per group now, so the switch has nothing left to say.
+    await mount(
+      groupStage([], { id: 20, stage_type: "double_elimination", order: 2 })
+    );
+
+    expect(container.textContent).not.toContain("Group seeding");
+  });
+
+  it("shows what the next playoff will be seeded with", async () => {
+    const groups = groupStage([item(100), item(101, { order: 1 })], {
+      advance_count: 6,
+      advance_upper_count: 2
+    });
+    const playoff = groupStage([], {
+      id: 20,
+      name: "Playoff",
+      stage_type: "double_elimination",
+      order: 2
+    });
+
+    await mount(groups, { stages: [groups, playoff] });
+
+    expect(container.textContent).toContain("→ 4 upper, 8 lower");
+  });
+});
+
 describe("parallel division wiring", () => {
   it("lists earlier group stages as wire sources for a playoff", async () => {
     const low = groupStage([], { id: 1, name: "Groups Low", order: 1 });
@@ -215,7 +311,7 @@ describe("parallel division wiring", () => {
       name: "Playoff",
       stage_type: "double_elimination",
       order: 2,
-      split_lower_bracket: true
+      advance_upper_count: 2
     });
     await mount(playoff, { stages: [groups, playoff] });
 

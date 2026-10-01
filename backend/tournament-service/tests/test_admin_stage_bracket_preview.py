@@ -92,16 +92,15 @@ class GetBracketPreviewTests(IsolatedAsyncioTestCase):
 
     async def test_projects_an_unseeded_playoff_with_every_slot_tbd(self) -> None:
         # No teams wired: same fallback generation takes -- advance_count (4)
-        # from each of 2 groups, split into a 4-team upper bracket and 4 lower
-        # seeds -- so the drawn tree is the one that will be generated.
+        # from each of 2 groups, of which 2 start upper -- so the drawn tree is
+        # the one that will be generated: a 4-team upper bracket and 4 lower seeds.
         stage = SimpleNamespace(
             **stage_regulation(),
             id=5,
             stage_type=enums.StageType.DOUBLE_ELIMINATION,
             items=[_item(1, [])],
-            split_lower_bracket=True,
         )
-        source = SimpleNamespace(id=4, advance_count=4, items=[_item(10, []), _item(11, [])])
+        source = SimpleNamespace(id=4, advance_count=4, advance_upper_count=2, items=[_item(10, []), _item(11, [])])
 
         with (
             patch.object(service, "get_stage", AsyncMock(return_value=stage)),

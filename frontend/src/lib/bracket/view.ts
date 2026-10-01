@@ -100,12 +100,16 @@ export function computeMatchNumbers(
  * The signed rounds a bracket's Grand Final (and its reset) occupy — empty for
  * anything that has none.
  *
- * ``matchesPerRound`` tells the Grand Final apart from its reset the way the
- * bracket itself does: both are trailing single-match rounds, so the last
- * `trailing - 1` of them are finals and the one before is the upper-bracket
- * final. Without it — a bracket predicted before it exists, which never carries
- * a reset (`placeholder_bracket` omits it) — the highest positive round is the
- * Grand Final.
+ * This is the fallback for a bracket that records no advancement edges (older
+ * brackets and Challonge imports): ``matchesPerRound`` tells the Grand Final
+ * apart from its reset the way the bracket itself does — both are trailing
+ * single-match rounds, so the last `trailing - 1` of them are finals and the
+ * one before is the upper-bracket final. It misreads a bracket whose upper
+ * half starts with three teams, where the UB Final is a trailing single-match
+ * round too; `getDoubleEliminationFinalRounds` reads the edges instead when
+ * there are any. Without ``matchesPerRound`` — a bracket predicted before it
+ * exists, which never carries a reset (`placeholder_bracket` omits it) — the
+ * highest positive round is the Grand Final.
  */
 function getFinalRounds(
   isDoubleElimination: boolean,
@@ -128,6 +132,32 @@ function getFinalRounds(
 }
 
 export function getDoubleEliminationFinalRounds(encounters: BracketMatch[]): Set<number> {
+  if (encounters.some((match) => (match.sources ?? []).length > 0)) {
+    const byId = new Map(encounters.map((match) => [match.id, match]));
+    // The grand final is where the lower bracket's winner comes back up; the
+    // reset is the match both of whose teams come from that grand final.
+    const grandFinal = encounters.find(
+      (match) =>
+        match.round > 0 &&
+        (match.sources ?? []).some(
+          (source) => source.role === "winner" && (byId.get(source.encounter_id)?.round ?? 0) < 0
+        )
+    );
+    if (grandFinal) {
+      const finals = new Set([grandFinal.round]);
+      for (const match of encounters) {
+        const sources = match.sources ?? [];
+        if (
+          sources.length === 2 &&
+          sources.every((source) => source.encounter_id === grandFinal.id)
+        ) {
+          finals.add(match.round);
+        }
+      }
+      return finals;
+    }
+  }
+
   const matchesPerRound = new Map<number, number>();
   for (const match of encounters) {
     matchesPerRound.set(match.round, (matchesPerRound.get(match.round) ?? 0) + 1);

@@ -9831,6 +9831,34 @@
       "description": "Permission: workspace `stage.read` on the stage's workspace. Returns the bracket a stage would generate \u2014 the real generator's pairings, seed order, advancement edges and per-round best-of, with skeleton-local ids because nothing is written; wired teams appear by name, an unseeded playoff is projected from the preceding group stage.",
       "summary": "Preview stage bracket"
     },
+    "rpc.tournament.stage_bracket_template_clear": {
+      "description": "Permission: workspace `stage.update`. Drops the custom template; refused with 409 while the stage has matches.",
+      "response": {
+        "array": false,
+        "ref": "tournament.BracketTemplateRead"
+      },
+      "summary": "Reset to the generated bracket layout"
+    },
+    "rpc.tournament.stage_bracket_template_get": {
+      "description": "Permission: workspace `stage.read`. The stage's custom bracket template, or the one its format would generate for the current seed counts, plus those counts.",
+      "response": {
+        "array": false,
+        "ref": "tournament.BracketTemplateRead"
+      },
+      "summary": "Read a stage's bracket layout"
+    },
+    "rpc.tournament.stage_bracket_template_set": {
+      "description": "Permission: workspace `stage.update`. Validates the template (spec rules) and stores it; refused with 409 while the stage has matches. An invalid template is a 422 whose `details.fields[0]` carries `code: \"invalid_bracket_template\"` plus a `problems` array of `{match_id, slot, code, message}`.",
+      "request": {
+        "array": false,
+        "ref": "tournament.BracketTemplate-Input"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.BracketTemplateRead"
+      },
+      "summary": "Save a custom bracket layout"
+    },
     "rpc.tournament.stage_deactivate": {
       "description": "Permission: workspace `stage.update` on the stage's workspace. Reverts an accidentally-activated stage back to Draft/preview; refuses (409) once any of its matches has been reported or started.",
       "response": {
@@ -34036,6 +34064,132 @@
       "title": "BalancerRegistrationUpdateRequest",
       "type": "object"
     },
+    "tournament.BracketSeedCounts": {
+      "description": "How many teams start in each half of a bracket stage.",
+      "properties": {
+        "lower": {
+          "title": "Lower",
+          "type": "integer"
+        },
+        "upper": {
+          "title": "Upper",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "upper",
+        "lower"
+      ],
+      "title": "BracketSeedCounts",
+      "type": "object"
+    },
+    "tournament.BracketTemplate-Input": {
+      "additionalProperties": false,
+      "properties": {
+        "lower_seeds": {
+          "maximum": 512,
+          "minimum": 0,
+          "title": "Lower Seeds",
+          "type": "integer"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.TemplateMatch"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "title": "Matches",
+          "type": "array"
+        },
+        "upper_seeds": {
+          "maximum": 512,
+          "minimum": 2,
+          "title": "Upper Seeds",
+          "type": "integer"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "upper_seeds",
+        "lower_seeds",
+        "matches"
+      ],
+      "title": "BracketTemplate",
+      "type": "object"
+    },
+    "tournament.BracketTemplate-Output": {
+      "additionalProperties": false,
+      "properties": {
+        "lower_seeds": {
+          "maximum": 512,
+          "minimum": 0,
+          "title": "Lower Seeds",
+          "type": "integer"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.TemplateMatch"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "title": "Matches",
+          "type": "array"
+        },
+        "upper_seeds": {
+          "maximum": 512,
+          "minimum": 2,
+          "title": "Upper Seeds",
+          "type": "integer"
+        },
+        "version": {
+          "const": 1,
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "upper_seeds",
+        "lower_seeds",
+        "matches"
+      ],
+      "title": "BracketTemplate",
+      "type": "object"
+    },
+    "tournament.BracketTemplateRead": {
+      "description": "A stage's bracket layout: its custom template, or the one its format generates now.\n\n``template`` is ``None`` only when fewer than two upper seeds are known, so\nthere is nothing to draw yet.",
+      "properties": {
+        "custom": {
+          "title": "Custom",
+          "type": "boolean"
+        },
+        "seeds": {
+          "$ref": "#/components/schemas/tournament.BracketSeedCounts"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.BracketTemplate-Output"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "custom",
+        "seeds"
+      ],
+      "title": "BracketTemplateRead",
+      "type": "object"
+    },
     "tournament.BulkApproveResponse": {
       "properties": {
         "approved": {
@@ -44854,6 +45008,19 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -44946,11 +45113,6 @@
           "title": "Seed Ranking",
           "type": "string"
         },
-        "split_lower_bracket": {
-          "default": false,
-          "title": "Split Lower Bracket",
-          "type": "boolean"
-        },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
         },
@@ -45003,6 +45165,19 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "name": {
           "title": "Name",
@@ -45218,6 +45393,18 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -45269,6 +45456,18 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "id": {
           "title": "Id",
@@ -45325,6 +45524,19 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "name": {
           "anyOf": [
             {
@@ -45378,6 +45590,18 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -45427,6 +45651,11 @@
         },
         "ffa_scoring": {
           "$ref": "#/components/schemas/tournament.FfaScoring"
+        },
+        "has_custom_bracket": {
+          "default": false,
+          "title": "Has Custom Bracket",
+          "type": "boolean"
         },
         "id": {
           "title": "Id",
@@ -45491,11 +45720,6 @@
           ],
           "title": "Seed Ranking",
           "type": "string"
-        },
-        "split_lower_bracket": {
-          "default": false,
-          "title": "Split Lower Bracket",
-          "type": "boolean"
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
@@ -45603,6 +45827,18 @@
           "default": null,
           "title": "Advance Count"
         },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
+        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -45652,6 +45888,11 @@
         },
         "ffa_scoring": {
           "$ref": "#/components/schemas/tournament.FfaScoring"
+        },
+        "has_custom_bracket": {
+          "default": false,
+          "title": "Has Custom Bracket",
+          "type": "boolean"
         },
         "id": {
           "title": "Id",
@@ -45708,11 +45949,6 @@
           ],
           "title": "Seed Ranking",
           "type": "string"
-        },
-        "split_lower_bracket": {
-          "default": false,
-          "title": "Split Lower Bracket",
-          "type": "boolean"
         },
         "stage_type": {
           "$ref": "#/components/schemas/tournament.StageType"
@@ -45788,6 +46024,19 @@
           ],
           "default": null,
           "title": "Advance Count"
+        },
+        "advance_upper_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advance Upper Count"
         },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
@@ -45878,18 +46127,6 @@
           ],
           "title": "Seed Ranking",
           "type": "string"
-        },
-        "split_lower_bracket": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Split Lower Bracket"
         },
         "stage_type": {
           "anyOf": [
@@ -47225,6 +47462,82 @@
         "group"
       ],
       "title": "TeamWithMatchStats",
+      "type": "object"
+    },
+    "tournament.TemplateMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "away": {
+          "$ref": "#/components/schemas/tournament.TemplateSlot"
+        },
+        "home": {
+          "$ref": "#/components/schemas/tournament.TemplateSlot"
+        },
+        "id": {
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "round": {
+          "maximum": 256,
+          "minimum": -256,
+          "title": "Round",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "round",
+        "home",
+        "away"
+      ],
+      "title": "TemplateMatch",
+      "type": "object"
+    },
+    "tournament.TemplateSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "loser_of": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loser Of"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "maxLength": 5,
+              "pattern": "^[UL][1-9][0-9]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed"
+        },
+        "winner_of": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Winner Of"
+        }
+      },
+      "title": "TemplateSlot",
       "type": "object"
     },
     "tournament.TournamentComputationJobRead": {

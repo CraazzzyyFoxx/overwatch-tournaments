@@ -12,6 +12,7 @@ from shared.domain.ffa_scoring import (
     FFA_MAX_COLUMNS,
     FFA_MAX_LOBBY_SIZE,
 )
+from shared.services.bracket.template import BracketTemplate
 from src.core import enums
 from src.schemas.base import BaseRead
 
@@ -27,10 +28,31 @@ __all__ = (
     "FfaScoring",
     "GrandFinalType",
     "SeedRankingValue",
+    "BracketSeedCounts",
+    "BracketTemplateRead",
 )
 
 GrandFinalType = Literal["no_reset", "with_reset"]
 SeedRankingValue = Literal["slot", "avg_sr", "total_sr", "random"]
+
+
+class BracketSeedCounts(BaseModel):
+    """How many teams start in each half of a bracket stage."""
+
+    upper: int
+    lower: int
+
+
+class BracketTemplateRead(BaseModel):
+    """A stage's bracket layout: its custom template, or the one its format generates now.
+
+    ``template`` is ``None`` only when fewer than two upper seeds are known, so
+    there is nothing to draw yet.
+    """
+
+    custom: bool
+    template: BracketTemplate | None = None
+    seeds: BracketSeedCounts
 
 
 class StageScoring(BaseModel):
@@ -186,6 +208,7 @@ class StageItemRead(BaseRead):
     type: enums.StageItemType
     order: int
     advance_count: int | None = None
+    advance_upper_count: int | None = None
     inputs: list[StageItemInputRead] = []
 
 
@@ -195,6 +218,7 @@ class StageItemSummaryRead(BaseRead):
     type: enums.StageItemType
     order: int
     advance_count: int | None = None
+    advance_upper_count: int | None = None
 
 
 class StageSummaryRead(BaseRead, _StageRegulationRead):
@@ -204,13 +228,14 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     stage_type: enums.StageType
     max_rounds: int = 5
     advance_count: int | None = None
-    split_lower_bracket: bool = False
+    advance_upper_count: int | None = None
     order: int
     is_active: bool
     is_published: bool = False
     is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
+    has_custom_bracket: bool = False
 
 
 class StageRead(BaseRead, _StageRegulationRead):
@@ -220,11 +245,12 @@ class StageRead(BaseRead, _StageRegulationRead):
     stage_type: enums.StageType
     max_rounds: int = 5
     advance_count: int | None = None
-    split_lower_bracket: bool = False
+    advance_upper_count: int | None = None
     order: int
     is_active: bool
     is_published: bool = False
     is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
+    has_custom_bracket: bool = False
     items: list[StageItemRead] = []

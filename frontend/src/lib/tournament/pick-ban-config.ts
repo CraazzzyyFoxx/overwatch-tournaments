@@ -715,7 +715,6 @@ export function resolveSeriesLength(
       stage,
       stages,
       stageType: stage.stage_type,
-      splitLowerBracket: stage.split_lower_bracket,
       maxRounds: stage.max_rounds,
       bestOf: stage.best_of,
     }).rounds.find((candidate) => candidate.round === round);

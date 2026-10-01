@@ -107,6 +107,9 @@ describe("buildLayout", () => {
     // Lower headers sit in their own section, below the upper bracket's cards.
     const lower = layout.headers.find((header) => header.section === "lower")!;
     expect(lower.y).toBeGreaterThan(nodeOf(layout, 2).y + CARD_HEIGHT);
+    // Each header names the signed round its column holds — the editor adds a
+    // match to that round, and an id-derived guess gets the sign wrong.
+    expect(layout.headers.map((header) => header.round)).toEqual([1, 2, -1, 3, 4]);
   });
 
   // The team path highlight follows a connector only once the source is played:

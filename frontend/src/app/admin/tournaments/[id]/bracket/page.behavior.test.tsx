@@ -45,7 +45,8 @@ vi.mock("@/services/admin.service", () => ({
     updateStage: vi.fn(),
     // The Bracket preview draws the generator's own skeleton; this tab's
     // assertions are about routing and permissions, so it stays empty here.
-    getStageBracketPreview: vi.fn().mockResolvedValue([])
+    getStageBracketPreview: vi.fn().mockResolvedValue([]),
+    getStagePlannedRounds: vi.fn().mockResolvedValue([])
   }
 }));
 
@@ -115,7 +116,7 @@ function groupStage(): Stage {
     stage_type: "round_robin",
     max_rounds: 3,
     advance_count: 2,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 0,
     is_active: true,
     is_published: true,
@@ -162,7 +163,7 @@ function playoffStage(): Stage {
     stage_type: "double_elimination",
     max_rounds: 4,
     advance_count: null,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 1,
     is_active: false,
     is_published: false,

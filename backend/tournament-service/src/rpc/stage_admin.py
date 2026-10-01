@@ -9,7 +9,8 @@ returned (admin routes do NOT use ``response_model_exclude_none`` -> plain
 job-returning routes return their payloads as the route did).
 
 Scope: ONLY the stage workflow endpoints (progress, merge-group-stages, activate,
-generate, activate-and-generate, auto-wire, wire-from-groups, seed-teams). Stage /
+generate, activate-and-generate, auto-wire, wire-from-groups, seed-teams,
+bracket-template read/save/reset). Stage /
 stage_item / stage_item_input CRUD create/update/delete go through the generic CRUD
 engine and are handled separately.
 
@@ -19,7 +20,8 @@ The gateway passes path params as ``data["<name>"]`` (and the primary id as
 
 Commit semantics:
 - ``get_stage_progress`` is read-only.
-- ``merge_group_stages``, ``seed_teams``, ``wire_from_groups`` commit internally.
+- ``merge_group_stages``, ``seed_teams``, ``wire_from_groups``,
+  ``set_bracket_template``, ``clear_bracket_template`` commit internally.
 - ``activate_stage`` commits internally (``commit=True`` default; route calls it
   plainly).
 - ``request_bracket_job`` (generate / activate-and-generate) does NOT commit —
@@ -35,6 +37,7 @@ from faststream.rabbit.annotations import RabbitMessage
 
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
+from shared.services.bracket.template import BracketTemplate
 from shared.services.tournament.computation import request_bracket_job
 from src import schemas
 from src.core import auth
@@ -83,6 +86,72 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "read")
             return await stage_service.get_bracket_preview(session, stage_id)
+
+        return await _run(logger, op)
+
+    # ── bracket template (read / save / reset) ────────────────────────────
+
+    @broker.subscriber("rpc.tournament.stage_bracket_template_get")
+    async def _stage_bracket_template_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            stage_id = _path_int(data, "stage_id")
+            # Route: require_stage_permission("stage", "read").
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
+            ensure_workspace_permission(user, ws_id, "stage", "read")
+            return await stage_service.get_bracket_template(session, stage_id)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.stage_bracket_template_set")
+    async def _stage_bracket_template_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            stage_id = _path_int(data, "stage_id")
+            # Route: require_stage_permission("stage", "update").
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
+            ensure_workspace_permission(user, ws_id, "stage", "update")
+            body = BracketTemplate.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="stage.bracket_template.set",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="stage",
+                entity_id=stage_id,
+                after={
+                    "upper_seeds": body.upper_seeds,
+                    "lower_seeds": body.lower_seeds,
+                    "matches": len(body.matches),
+                },
+            )
+            # set_bracket_template commits internally; the audit row is staged
+            # first, so a refused write (409/422) leaves no row behind.
+            return await stage_service.set_bracket_template(session, stage_id, body)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.stage_bracket_template_clear")
+    async def _stage_bracket_template_clear(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            stage_id = _path_int(data, "stage_id")
+            # Route: require_stage_permission("stage", "update").
+            ws_id = await auth.get_stage_workspace_id(session, stage_id)
+            ensure_workspace_permission(user, ws_id, "stage", "update")
+            await record_admin_audit(
+                session,
+                action="stage.bracket_template.clear",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="stage",
+                entity_id=stage_id,
+                after={},
+            )
+            # clear_bracket_template commits internally.
+            return await stage_service.clear_bracket_template(session, stage_id)
 
         return await _run(logger, op)
 

@@ -7030,6 +7030,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/stages/{stage_id}/bracket-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a stage's bracket layout
+         * @description Permission: workspace `stage.read`. The stage's custom bracket template, or the one its format would generate for the current seed counts, plus those counts.
+         *
+         *     RPC subject: `rpc.tournament.stage_bracket_template_get`
+         */
+        get: operations["get__api_v1_admin_stages__stage_id__bracket_template"];
+        /**
+         * Save a custom bracket layout
+         * @description Permission: workspace `stage.update`. Validates the template (spec rules) and stores it; refused with 409 while the stage has matches. An invalid template is a 422 whose `details.fields[0]` carries `code: "invalid_bracket_template"` plus a `problems` array of `{match_id, slot, code, message}`.
+         *
+         *     RPC subject: `rpc.tournament.stage_bracket_template_set`
+         */
+        put: operations["put__api_v1_admin_stages__stage_id__bracket_template"];
+        post?: never;
+        /**
+         * Reset to the generated bracket layout
+         * @description Permission: workspace `stage.update`. Drops the custom template; refused with 409 while the stage has matches.
+         *
+         *     RPC subject: `rpc.tournament.stage_bracket_template_clear`
+         */
+        delete: operations["delete__api_v1_admin_stages__stage_id__bracket_template"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/stages/{stage_id}/deactivate": {
         parameters: {
             query?: never;
@@ -17945,6 +17979,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             /** Id */
             id: number;
             /**
@@ -17967,6 +18006,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             /** Id */
             id: number;
             /** Name */
@@ -17989,6 +18033,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -18009,6 +18058,11 @@ export interface components {
             /** Description */
             description: string | null;
             ffa_scoring?: components["schemas"]["tournament.FfaScoring"];
+            /**
+             * Has Custom Bracket
+             * @default false
+             */
+            has_custom_bracket: boolean;
             /** Id */
             id: number;
             /** Is Active */
@@ -18046,11 +18100,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageReadSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default false
-             */
-            split_lower_bracket: boolean;
             stage_type: components["schemas"]["tournament.StageType"];
             /**
              * Swiss Bye Points
@@ -18093,6 +18142,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -18113,6 +18167,11 @@ export interface components {
             /** Description */
             description: string | null;
             ffa_scoring?: components["schemas"]["tournament.FfaScoring"];
+            /**
+             * Has Custom Bracket
+             * @default false
+             */
+            has_custom_bracket: boolean;
             /** Id */
             id: number;
             /** Is Active */
@@ -18145,11 +18204,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageSummaryReadSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default false
-             */
-            split_lower_bracket: boolean;
             stage_type: components["schemas"]["tournament.StageType"];
             /**
              * Swiss Bye Points
@@ -22638,6 +22692,60 @@ export interface components {
              */
             status: string | null;
         };
+        /**
+         * BracketSeedCounts
+         * @description How many teams start in each half of a bracket stage.
+         */
+        "tournament.BracketSeedCounts": {
+            /** Lower */
+            lower: number;
+            /** Upper */
+            upper: number;
+        };
+        /** BracketTemplate */
+        "tournament.BracketTemplate-Input": {
+            /** Lower Seeds */
+            lower_seeds: number;
+            /** Matches */
+            matches: components["schemas"]["tournament.TemplateMatch"][];
+            /** Upper Seeds */
+            upper_seeds: number;
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+        };
+        /** BracketTemplate */
+        "tournament.BracketTemplate-Output": {
+            /** Lower Seeds */
+            lower_seeds: number;
+            /** Matches */
+            matches: components["schemas"]["tournament.TemplateMatch"][];
+            /** Upper Seeds */
+            upper_seeds: number;
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+        };
+        /**
+         * BracketTemplateRead
+         * @description A stage's bracket layout: its custom template, or the one its format generates now.
+         *
+         *     ``template`` is ``None`` only when fewer than two upper seeds are known, so
+         *     there is nothing to draw yet.
+         */
+        "tournament.BracketTemplateRead": {
+            /** Custom */
+            custom: boolean;
+            seeds: components["schemas"]["tournament.BracketSeedCounts"];
+            /** @default null */
+            template: components["schemas"]["tournament.BracketTemplate-Output"] | null;
+        };
         /** BulkApproveResponse */
         "tournament.BulkApproveResponse": {
             /** Approved */
@@ -24931,6 +25039,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -24978,11 +25091,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageCreateSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default false
-             */
-            split_lower_bracket: boolean;
             stage_type: components["schemas"]["tournament.StageType"];
             /**
              * Swiss Bye Points
@@ -25002,6 +25110,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             /** Name */
             name: string;
             /**
@@ -25061,6 +25174,11 @@ export interface components {
              */
             advance_count: number | null;
             /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
+            /**
              * Name
              * @default null
              */
@@ -25086,6 +25204,11 @@ export interface components {
              * @default null
              */
             advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
+             */
+            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * De Grand Final Type
@@ -25126,11 +25249,6 @@ export interface components {
              * @enum {string}
              */
             seed_ranking: TournamentStageUpdateSeed_ranking;
-            /**
-             * Split Lower Bracket
-             * @default null
-             */
-            split_lower_bracket: boolean | null;
             /** @default null */
             stage_type: components["schemas"]["tournament.StageType"] | null;
             /**
@@ -25424,6 +25542,33 @@ export interface components {
              * @default null
              */
             name: string | null;
+        };
+        /** TemplateMatch */
+        "tournament.TemplateMatch": {
+            away: components["schemas"]["tournament.TemplateSlot"];
+            home: components["schemas"]["tournament.TemplateSlot"];
+            /** Id */
+            id: number;
+            /** Round */
+            round: number;
+        };
+        /** TemplateSlot */
+        "tournament.TemplateSlot": {
+            /**
+             * Loser Of
+             * @default null
+             */
+            loser_of: number | null;
+            /**
+             * Seed
+             * @default null
+             */
+            seed: string | null;
+            /**
+             * Winner Of
+             * @default null
+             */
+            winner_of: number | null;
         };
         /** TournamentComputationJobRead */
         "tournament.TournamentComputationJobRead": {
@@ -52130,6 +52275,244 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_admin_stages__stage_id__bracket_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.BracketTemplateRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_admin_stages__stage_id__bracket_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.BracketTemplate-Input"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.BracketTemplateRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete__api_v1_admin_stages__stage_id__bracket_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.BracketTemplateRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */

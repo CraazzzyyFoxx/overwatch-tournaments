@@ -70,7 +70,7 @@ function stage(): Stage {
     stage_type: "single_elimination",
     max_rounds: 2,
     advance_count: null,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 1,
     is_active: false,
     is_published: false,
@@ -194,7 +194,6 @@ async function mount(current: Stage = stage()) {
               stage: current,
               stages: [current],
               stageType: current.stage_type,
-              splitLowerBracket: false,
               maxRounds: current.max_rounds,
               bestOf: current.best_of
             })}

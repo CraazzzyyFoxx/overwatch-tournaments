@@ -125,6 +125,8 @@ import {
   AuditLogQuery,
   AuditLogRead,
   StageBracketPreviewMatch,
+  BracketTemplate,
+  BracketTemplateRead,
 } from "@/types/admin.types";
 
 /**
@@ -1561,6 +1563,36 @@ class AdminService {
     return data.matches;
   }
 
+  /**
+   * `stageId`'s bracket layout: its saved custom template, or the one its
+   * format generates for the current seed counts, plus those counts.
+   */
+  async getStageBracketTemplate(stageId: number): Promise<BracketTemplateRead> {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/bracket-template`);
+    return response.json();
+  }
+
+  /**
+   * Save a hand-drawn bracket. Rejected with 409 once the stage has matches and
+   * with 422 when the template breaks the bracket rules — that body's
+   * `details.fields[0].problems` is a `TemplateProblem[]`.
+   */
+  async setStageBracketTemplate(stageId: number, template: BracketTemplate): Promise<BracketTemplateRead> {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/bracket-template`, {
+      method: "PUT",
+      body: template
+    });
+    return response.json();
+  }
+
+  /** Drop the custom layout and go back to the generated one. */
+  async clearStageBracketTemplate(stageId: number): Promise<BracketTemplateRead> {
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/bracket-template`, {
+      method: "DELETE"
+    });
+    return response.json();
+  }
+
   async mergeGroupStages(stageId: number, data: StageMergeGroupStagesInput): Promise<Stage> {
     const response = await apiFetch(`/api/v1/admin/stages/${stageId}/merge-group-stages`, {
       method: "POST",
@@ -1579,7 +1611,13 @@ class AdminService {
 
   async updateStageItem(
     stageItemId: number,
-    data: { name?: string; type?: StageItemType; order?: number; advance_count?: number | null }
+    data: {
+      name?: string;
+      type?: StageItemType;
+      order?: number;
+      advance_count?: number | null;
+      advance_upper_count?: number | null;
+    }
   ): Promise<StageItem> {
     const response = await apiFetch(`/api/v1/admin/stages/items/${stageItemId}`, {
       method: "PATCH",

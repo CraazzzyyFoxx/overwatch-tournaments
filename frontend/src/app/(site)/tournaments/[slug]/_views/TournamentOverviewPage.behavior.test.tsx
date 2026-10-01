@@ -120,7 +120,7 @@ function makeStage(overrides: Partial<StageSummary> & { id: number }): StageSumm
     stage_type: "double_elimination",
     max_rounds: 2,
     advance_count: null,
-    split_lower_bracket: true,
+    advance_upper_count: null,
     order: 1,
     is_active: true,
     is_published: true,

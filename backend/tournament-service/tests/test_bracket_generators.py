@@ -8,6 +8,7 @@ Does not touch the database — purely tests the pure-function shared library.
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -267,8 +268,11 @@ class DoubleEliminationInvariants(TestCase):
 
         lb_r1 = [p for p in s.pairings if p.round_number == -1]
         self.assertEqual(2, len(lb_r1))
-        lb_r1_teams = {tid for p in lb_r1 for tid in (p.home_team_id, p.away_team_id)}
-        self.assertEqual({5, 6, 7, 8}, lb_r1_teams)
+        # Seeded 1-vs-N, like the upper bracket: top lower seed meets the last.
+        self.assertEqual(
+            {frozenset({5, 8}), frozenset({6, 7})},
+            {frozenset({p.home_team_id, p.away_team_id}) for p in lb_r1},
+        )
 
         # local ids unique and every edge references a real pairing.
         local_ids = [p.local_id for p in s.pairings]
@@ -290,6 +294,32 @@ class DoubleEliminationInvariants(TestCase):
         for p in lb_r1:
             self.assertIsNone(p.home_team_id)
             self.assertIsNone(p.away_team_id)
+
+    def test_lower_entrants_wait_at_most_one_round_and_only_the_top_seeds_wait(self) -> None:
+        for upper in range(2, 9):
+            for lower in range(1, 13):
+                lb_ids = list(range(101, 101 + lower))
+                s = double_elimination.generate(list(range(1, upper + 1)), lower_bracket_team_ids=lb_ids)
+                first_round = {}
+                for p in s.pairings:
+                    if p.round_number < 0:
+                        for t in (p.home_team_id, p.away_team_id):
+                            if t is not None and t > 100:
+                                first_round.setdefault(t, -p.round_number)
+                self.assertEqual(set(lb_ids), set(first_round), (upper, lower))
+                lb_size = 1 << math.ceil(math.log2(lower)) if lower > 1 else 1
+                byes = lb_size - lower
+                # A lone entrant has no LB R1 partner, and an upper bracket that
+                # is not a power of two drops nothing opposite an LB R1 bye, so
+                # there a waiting seed can idle one round longer.
+                waits_exactly_one = lower > 1 and upper == 1 << math.ceil(math.log2(upper))
+                for seed, team in enumerate(lb_ids, start=1):
+                    if lower > 1 and seed > byes:
+                        self.assertEqual(1, first_round[team], (upper, lower, seed))
+                    elif waits_exactly_one:
+                        self.assertEqual(2, first_round[team], (upper, lower, seed))
+                    else:
+                        self.assertGreater(first_round[team], 1, (upper, lower, seed))
 
 
 class RoundRobinInvariants(TestCase):
@@ -607,9 +637,7 @@ class PlaceholderBracketInvariants(TestCase):
 
 
 class BracketSeedSplitInvariants(TestCase):
-    """`bracket_seeds` splitting one bracket item into upper/lower halves."""
-
-    STAGE = SimpleNamespace(stage_type=StageType.DOUBLE_ELIMINATION, split_lower_bracket=True)
+    """`bracket_seeds`: lower starters come from the BRACKET_LOWER item, nowhere else."""
 
     @staticmethod
     def _item(*inputs) -> SimpleNamespace:
@@ -619,9 +647,17 @@ class BracketSeedSplitInvariants(TestCase):
     def _input(slot: int, team_id: int | None, input_type=StageItemInputType.FINAL) -> SimpleNamespace:
         return SimpleNamespace(slot=slot, team_id=team_id, input_type=input_type)
 
-    def test_odd_seed_count_gives_the_extra_team_to_the_upper_bracket(self) -> None:
-        item = self._item(*(self._input(slot, slot) for slot in range(1, 6)))
-        self.assertEqual(([1, 2, 3], [4, 5]), bracket_seeds(self.STAGE, [item], None))
+    def test_a_single_item_keeps_every_seed_in_the_upper_bracket(self) -> None:
+        item = self._item(*(self._input(slot, slot) for slot in range(1, 9)))
+        self.assertEqual((list(range(1, 9)), []), bracket_seeds([item], None))
+
+    def test_the_lower_item_holds_exactly_the_lower_starters(self) -> None:
+        upper_item = self._item(*(self._input(slot, slot) for slot in range(1, 5)))
+        lower_item = self._item(*(self._input(slot, 4 + slot) for slot in range(1, 5)))
+        self.assertEqual(
+            ([1, 2, 3, 4], [5, 6, 7, 8]),
+            bracket_seeds([upper_item, lower_item], lower_item),
+        )
 
     def test_empty_inputs_never_reach_the_bracket(self) -> None:
         item = self._item(
@@ -629,4 +665,4 @@ class BracketSeedSplitInvariants(TestCase):
             self._input(2, 2, StageItemInputType.EMPTY),
             self._input(3, 3),
         )
-        self.assertEqual(([1], [3]), bracket_seeds(self.STAGE, [item], None))
+        self.assertEqual(([1, 3], []), bracket_seeds([item], None))

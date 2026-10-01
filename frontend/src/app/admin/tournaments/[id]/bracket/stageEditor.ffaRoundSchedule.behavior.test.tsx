@@ -48,7 +48,8 @@ vi.mock("@/services/admin.service", () => ({
     getTournament: (...args: unknown[]) => getTournament(...args),
     getStagesProgress: (...args: unknown[]) => getStagesProgress(...args),
     updateEncounter: (...args: unknown[]) => updateEncounter(...args),
-    updateStage: vi.fn()
+    updateStage: vi.fn(),
+    getStagePlannedRounds: vi.fn().mockResolvedValue([])
   }
 }));
 
@@ -105,7 +106,7 @@ function ffaStage(): Stage {
     stage_type: "ffa_league",
     max_rounds: 1,
     advance_count: 2,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 0,
     is_active: true,
     is_published: true,

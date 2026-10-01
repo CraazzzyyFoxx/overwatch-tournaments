@@ -38,6 +38,7 @@ const getTournament = vi.fn();
 const getStagesProgress = vi.fn();
 const updateStage = vi.fn();
 const getTeams = vi.fn();
+const getStagePlannedRounds = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
@@ -45,7 +46,10 @@ vi.mock("@/services/admin.service", () => ({
     getTournament: (...args: unknown[]) => getTournament(...args),
     getStagesProgress: (...args: unknown[]) => getStagesProgress(...args),
     updateStage: (...args: unknown[]) => updateStage(...args),
-    applyStageBestOf: vi.fn()
+    applyStageBestOf: vi.fn(),
+    // The rounds the engine says the stage has; empty means "not known yet",
+    // which falls the editor back to the team-count formula.
+    getStagePlannedRounds: (...args: unknown[]) => getStagePlannedRounds(...args)
   }
 }));
 
@@ -92,7 +96,7 @@ function singleBracketStage(seededTeams = 8): Stage {
     stage_type: "double_elimination",
     max_rounds: 5,
     advance_count: null,
-    split_lower_bracket: false,
+    advance_upper_count: null,
     order: 1,
     is_active: true,
     is_completed: false,
@@ -145,11 +149,12 @@ async function settle(times = 12) {
   }
 }
 
-async function mount(stage: Stage) {
+async function mount(stage: Stage, plannedRounds: number[] = []) {
   getStages.mockResolvedValue([stage]);
   getTournament.mockResolvedValue({ id: 84, name: "Cup" });
   getStagesProgress.mockResolvedValue([]);
   getTeams.mockResolvedValue({ results: [] });
+  getStagePlannedRounds.mockResolvedValue(plannedRounds);
 
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -326,5 +331,25 @@ describe("Stage editor best-of, double elimination", () => {
       "UB Semifinal",
       "UB Final"
     ]);
+  });
+
+  it("offers the lower-bracket round the engine plans, which the formula misses", async () => {
+    // 4 upper seeds + 8 teams starting below: the engine builds LB -1..-5,
+    // while the team-count formula tops out at -4. Without the fifth row that
+    // round is unconfigurable.
+    await mount(singleBracketStage(4), [-5, -4, -3, -2, -1, 1, 2, 3]);
+
+    const lower = roundLabelsBySection()["Lower bracket"];
+    expect(lower).toHaveLength(5);
+
+    await click(roundSelect(lower[4]));
+    await choose("Bo5");
+    await click(only("Save changes"));
+
+    const [, payload] = updateStage.mock.calls[0] as [
+      number,
+      { best_of: { by_round: Record<string, number> } }
+    ];
+    expect(payload.best_of.by_round).toEqual({ "-5": 5 });
   });
 });

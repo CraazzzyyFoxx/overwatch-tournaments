@@ -146,7 +146,6 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[item],
-            split_lower_bracket=False,
             **stage_regulation(),
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])), flush=AsyncMock())
@@ -175,7 +174,6 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[item],
-            split_lower_bracket=False,
             **stage_regulation(seed_ranking="avg_sr"),
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])), flush=AsyncMock())
@@ -210,10 +208,11 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
-            split_lower_bracket=False,
             **stage_regulation(),
         )
-        source = SimpleNamespace(id=4, advance_count=2, items=[_item(i, order=i) for i in range(4)])
+        source = SimpleNamespace(
+            id=4, advance_count=2, advance_upper_count=None, items=[_item(i, order=i) for i in range(4)]
+        )
         session = _queued_session([_rows_result([])])
 
         with (
@@ -242,10 +241,11 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
-            split_lower_bracket=False,
             **stage_regulation(),
         )
-        source = SimpleNamespace(id=4, advance_count=2, items=[_item(i, order=i) for i in range(4)])
+        source = SimpleNamespace(
+            id=4, advance_count=2, advance_upper_count=None, items=[_item(i, order=i) for i in range(4)]
+        )
         source.items[0].advance_count = 3
         session = _queued_session([_rows_result([])])
 
@@ -269,7 +269,6 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
-            split_lower_bracket=False,
             **stage_regulation(),
         )
         # The TBD bracket generated earlier: two semifinals and a final.
@@ -304,7 +303,6 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
-            split_lower_bracket=False,
             **stage_regulation(),
         )
         existing = [_encounter(1, 10, home_team_id=7), _encounter(1, 11), _encounter(2, 12)]
@@ -327,7 +325,6 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
-            split_lower_bracket=False,
             **stage_regulation(),
         )
         # A 4-team bracket was generated; 8 teams resolved. Reseeding in place

@@ -1,6 +1,6 @@
 A stage is one part of a tournament: a group phase, a Swiss round, or a playoff bracket. This page covers building stages, generating the bracket, and setting seeding, points and tiebreakers.
 
-It all lives in the admin: open **Tournaments**, pick the tournament and go to the **Bracket** tab. The stage list is on the left; the editor for the selected stage is on the right, with the sections **General**, **Seeding**, **Tiebreakers**, **Best-of**, **Round schedule** and **Items**.
+It all lives in the admin: open **Tournaments**, pick the tournament and go to the **Bracket** tab. The stage list is on the left; the editor for the selected stage is on the right, with the sections **General**, **Seeding**, **Tiebreakers**, **Best-of**, **Round schedule**, **Bracket layout** and **Items**.
 
 ## Stage formats
 
@@ -64,10 +64,9 @@ The **Seeding** section.
 
 ### Lower-bracket seeds in double elimination
 
-**Group seeding** decides where the advancing teams land:
+On the **group** stage, **Of them to upper bracket (per group)** says how many of each group's advancing teams start in the upper bracket. Leave it empty and every advancing team starts upper. The rest start in the lower bracket, and the **upper** field next to a group in **Advance count per group** overrides the number for that one group.
 
-- **All advancing → Upper bracket** — everyone starts in the upper bracket.
-- **Split: half Upper, half Lower** — half of them start in the lower bracket.
+The playoff's **Lower bracket** item is created for you when the stages are wired — you do not add it by hand.
 
 ### The grand final
 
@@ -107,6 +106,21 @@ Standings count closed rounds only: while a round still has an unplayed encounte
 In **Best-of**, the **Default** field sets the series length, **Final** (in double elimination, **Grand Final**) sets it for the deciding match, and the rows below set it per round. In double elimination the upper and lower bracket rounds are configured separately.
 
 The length is baked into matches when the bracket is generated. **Apply to existing matches** writes it into matches that already exist, without regenerating.
+
+## Custom bracket layout
+
+**Bracket layout** (elimination stages only) draws the bracket the stage will be generated from, without teams: each slot holds a seed placeholder (`U1` upper, `L1` lower) or the winner or loser of another match. Loser drops are the dashed connectors.
+
+- Click a card's **W** or **L** output, then the slot it feeds. `Esc` cancels. A result can only feed one slot, so wiring it somewhere new empties the slot it left.
+- A slot's own menu places a free seed or clears it; the card menu moves the card inside its round or deletes it, which also clears every slot that pointed at it.
+- **+ match** adds a match to a column, **+ round** adds a column — on the upper section it goes in before the final.
+- **Save** stays off while any slot is empty. Everything else is checked by the server, and what it refuses comes back as a list under the canvas; click a line to find the match it names.
+- **U** and **L** are how many seeds the layout expects. When they differ from the seeds the stage really has, the stage refuses to generate until they match.
+- **Reset to generated** deletes the custom layout and goes back to the one the format generates.
+
+<Callout type="warning">
+The layout can only be edited while the stage has no matches. Delete the generated matches first.
+</Callout>
 
 ## How teams advance
 

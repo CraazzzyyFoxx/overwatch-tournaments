@@ -24,7 +24,7 @@ class StageCreate(BaseModel):
     stage_type: StageType
     max_rounds: int = Field(default=5, ge=1)
     advance_count: int | None = Field(default=None, ge=1)
-    split_lower_bracket: bool = False
+    advance_upper_count: int | None = Field(default=None, ge=0)
     order: int = 0
     ranking_preset: str | None = None
     tiebreak_order: list[str] | None = None
@@ -49,7 +49,7 @@ class StageUpdate(BaseModel):
     stage_type: StageType | None = None
     max_rounds: int | None = Field(default=None, ge=1)
     advance_count: int | None = Field(default=None, ge=1)
-    split_lower_bracket: bool | None = None
+    advance_upper_count: int | None = Field(default=None, ge=0)
     order: int | None = None
     ranking_preset: str | None = None
     tiebreak_order: list[str] | None = None
@@ -67,6 +67,8 @@ class StageItemCreate(BaseModel):
     order: int = 0
     #: Overrides ``Stage.advance_count`` for this group only; None = inherit.
     advance_count: int | None = Field(default=None, ge=1)
+    #: Overrides ``Stage.advance_upper_count`` for this group only; None = inherit.
+    advance_upper_count: int | None = Field(default=None, ge=0)
 
 
 class StageItemUpdate(BaseModel):
@@ -74,6 +76,7 @@ class StageItemUpdate(BaseModel):
     type: StageItemType | None = None
     order: int | None = None
     advance_count: int | None = Field(default=None, ge=1)
+    advance_upper_count: int | None = Field(default=None, ge=0)
 
 
 class StageItemInputCreate(BaseModel):

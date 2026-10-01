@@ -556,6 +556,18 @@ DOCS: dict[str, dict] = {
         "summary": "Preview stage bracket",
         "description": "Permission: workspace `stage.read` on the stage's workspace. Returns the bracket a stage would generate — the real generator's pairings, seed order, advancement edges and per-round best-of, with skeleton-local ids because nothing is written; wired teams appear by name, an unseeded playoff is projected from the preceding group stage.",
     },
+    "rpc.tournament.stage_bracket_template_get": {
+        "summary": "Read a stage's bracket layout",
+        "description": "Permission: workspace `stage.read`. The stage's custom bracket template, or the one its format would generate for the current seed counts, plus those counts.",
+    },
+    "rpc.tournament.stage_bracket_template_set": {
+        "summary": "Save a custom bracket layout",
+        "description": 'Permission: workspace `stage.update`. Validates the template (spec rules) and stores it; refused with 409 while the stage has matches. An invalid template is a 422 whose `details.fields[0]` carries `code: "invalid_bracket_template"` plus a `problems` array of `{match_id, slot, code, message}`.',
+    },
+    "rpc.tournament.stage_bracket_template_clear": {
+        "summary": "Reset to the generated bracket layout",
+        "description": "Permission: workspace `stage.update`. Drops the custom template; refused with 409 while the stage has matches.",
+    },
     "rpc.tournament.stage_merge": {
         "summary": "Merge group stages",
         "description": "Permission: workspace `stage.update` on the target stage's workspace. Merges source group stages into a target stage.",
