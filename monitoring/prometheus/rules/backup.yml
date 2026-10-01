@@ -48,7 +48,7 @@ groups:
             This run uploaded {{ $value | humanize1024 }}B vs the 14-day maximum.
             Confirm the right database is dumped and pg_dump is not aborting.
 
-  # Log archive: ops/logship/logship.sh, textfile owt_logship.prom. Rotated logs stay on the
+  # Log archive: textfile owt_logship.prom, written by the host's nightly log upload. Rotated logs stay on the
   # host for 14 days and the upload is idempotent, so one missed night loses nothing; a
   # silent week does, which is what this catches.
   - name: logship
