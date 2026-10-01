@@ -257,6 +257,22 @@ describe("projectedBracketSeedCounts", () => {
       lower: 0
     });
   });
+
+  test("an ffa league qualifies too — the server's QUALIFYING_SOURCE_STAGE_TYPES has three", () => {
+    const groups = stage({
+      id: 1,
+      stage_type: "ffa_league",
+      advance_count: 4,
+      advance_upper_count: 2,
+      items: [item(10, "group")]
+    });
+    const playoff = stage({ id: 2, stage_type: "double_elimination" });
+
+    expect(projectedBracketSeedCounts(playoff, [groups, playoff])).toEqual({
+      upper: 2,
+      lower: 2
+    });
+  });
 });
 
 // A round robin's length is its team count, not `max_rounds`: everyone plays

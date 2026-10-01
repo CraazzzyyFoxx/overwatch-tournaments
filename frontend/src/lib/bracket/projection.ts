@@ -268,7 +268,10 @@ export function projectedBracketSeedCounts(
     .filter(
       (candidate) =>
         candidate.order < stage.order &&
-        (candidate.stage_type === "swiss" || candidate.stage_type === "round_robin")
+        // Backend QUALIFYING_SOURCE_STAGE_TYPES.
+        (candidate.stage_type === "swiss" ||
+          candidate.stage_type === "round_robin" ||
+          candidate.stage_type === "ffa_league")
     )
     .sort((left, right) => right.order - left.order || right.id - left.id);
   const phase = earlier.at(0)?.order;
