@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { hashKey, queryOptions, useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -11,6 +11,7 @@ import userService from "@/services/user.service";
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
 import { applyResourcePatch, registerRealtimeResource } from "@/services/realtime-patch";
+import { type Coalescer, createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import type {
   DraftBoard,
   DraftEventData,
@@ -21,10 +22,58 @@ import type {
 } from "@/types/draft.types";
 import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
-import { applyDraftEvent, draftEventNeedsSnapshot, presenceFromEvent } from "@/lib/draft/logic";
+import {
+  applyDraftEvent,
+  draftDerivedScope,
+  draftEventNeedsSnapshot,
+  presenceFromEvent,
+  type DraftDerivedScope
+} from "@/lib/draft/logic";
 
 const MAX_PENDING_DRAFT_EVENTS = 100;
 const EMPTY_DRAFT_PRESENCE: DraftPresenceState = { users: {}, anonymous_viewer_count: 0 };
+
+/**
+ * Fit, queue and feasibility: server derivations of the board that
+ * `useDraftRealtime` re-reads on exactly the events that move them. Never stale
+ * by age -- a focus or remount refetch would re-ask what no event changed -- and
+ * never retried: the next event re-asks anyway, and retried 504s are what held
+ * the balancer at its timeout during the 2026-09-30 draft.
+ */
+const REALTIME_DERIVED = { staleTime: Infinity, retry: false } as const;
+
+/**
+ * One re-read of the derived reads per burst: a pick publishes `pick_made` and
+ * `pick_started` in one transaction, milliseconds apart. Short and unjittered:
+ * the captain on the clock waits on it for the autopick preview, and requests
+ * that arrive together are what the server's single-flight folds into one run.
+ */
+const DERIVED_FLUSH_MS = 250;
+const ALL_DERIVED: DraftDerivedScope = { teams: "all", feasibility: true };
+
+/**
+ * The board poll is a safety net that every viewer runs, anonymous spectators
+ * included. While the socket is up it only repairs a pub/sub frame lost without
+ * a disconnect, so it is slow; while the socket is down it is the only feed.
+ */
+const BOARD_POLL_CONNECTED_MS = 120_000;
+const BOARD_POLL_DISCONNECTED_MS = 30_000;
+
+function derivedQueryKeys(sessionId: number, scope: DraftDerivedScope | null): QueryKey[] {
+  // The journal logs clock changes too; it is only read while an organizer has it open.
+  const keys: QueryKey[] = [tournamentQueryKeys.draftJournal(sessionId)];
+  if (scope == null) return keys;
+  if (scope.teams === "all") {
+    keys.push(tournamentQueryKeys.draftTeamFits(sessionId), tournamentQueryKeys.draftTeamQueues(sessionId));
+  } else {
+    keys.push(
+      tournamentQueryKeys.draftTeamFit(sessionId, scope.teams),
+      tournamentQueryKeys.draftTeamQueue(sessionId, scope.teams)
+    );
+  }
+  if (scope.feasibility) keys.push(tournamentQueryKeys.draftFeasibility(sessionId));
+  return keys;
+}
 
 function applyDraftEvents(
   board: DraftBoard,
@@ -56,13 +105,13 @@ registerRealtimeResource<DraftBoard, DraftEventData>(DRAFT_BOARD_RESOURCE, (boar
 );
 
 export function useDraftBoardQuery(tournamentId: number) {
+  const connected = useRealtimeStore((s) => s.connectionState === "connected");
+  const pollMs = connected ? BOARD_POLL_CONNECTED_MS : BOARD_POLL_DISCONNECTED_MS;
   return useQuery({
     queryKey: tournamentQueryKeys.draftBoard(tournamentId),
     queryFn: () => draftService.getTournamentBoard(tournamentId),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
-    // Realtime drives freshness; a slow poll while live is a safety net.
-    refetchInterval: (query) =>
-      query.state.data?.session.status === "live" ? 30_000 : false,
+    refetchInterval: (query) => (query.state.data?.session.status === "live" ? pollMs : false),
   });
 }
 
@@ -70,7 +119,8 @@ export function useDraftFeasibilityQuery(sessionId: number | null, enabled = tru
   return useQuery({
     queryKey: tournamentQueryKeys.draftFeasibility(sessionId ?? 0),
     queryFn: () => draftService.getFeasibility(sessionId!),
-    enabled: enabled && sessionId != null && sessionId > 0
+    enabled: enabled && sessionId != null && sessionId > 0,
+    ...REALTIME_DERIVED
   });
 }
 
@@ -91,7 +141,11 @@ export function useDraftTeamFitQuery(sessionId: number | null, teamId: number | 
   return useQuery({
     queryKey: tournamentQueryKeys.draftTeamFit(sessionId ?? 0, teamId ?? 0),
     queryFn: () => draftService.getTeamFit(sessionId!, teamId!),
-    enabled: enabled && sessionId != null && teamId != null
+    enabled: enabled && sessionId != null && teamId != null,
+    ...REALTIME_DERIVED,
+    // Without retries one 504 would toast every captain at once; a missing fit
+    // column already says it, and the next event re-reads it.
+    meta: { suppressErrorToast: true }
   });
 }
 
@@ -106,7 +160,8 @@ export function useDraftTeamQueue(sessionId: number | null, teamId: number | nul
   const query = useQuery({
     queryKey,
     queryFn: () => draftService.getTeamQueue(sessionId!, teamId!),
-    enabled: sessionId != null && teamId != null
+    enabled: sessionId != null && teamId != null,
+    ...REALTIME_DERIVED
   });
   const setQueue = useMutation({
     mutationFn: (playerIds: number[]) => draftService.setTeamQueue(sessionId!, teamId!, playerIds),
@@ -194,6 +249,45 @@ export function useDraftRealtime(
     resubscribedBaselineTopicRef.current = null;
   }, [topic]);
 
+  // Derived reads collect here and are re-read once per burst (DERIVED_FLUSH_MS).
+  const derivedRef = useRef(new Map<string, QueryKey>());
+  const derivedFlushRef = useRef<Coalescer | null>(null);
+  useEffect(() => {
+    const pending = derivedRef.current;
+    const coalescer = createTrailingCoalescer(() => {
+      const keys = [...pending.values()];
+      pending.clear();
+      // A read already in flight is left to land, never cancelled and
+      // restarted: the server finishes a cancelled read anyway, so a restart is
+      // the same work twice. It is queued again instead and re-read once it
+      // lands -- one extra request, and only when the burst overtook it.
+      // Collected before any invalidation below starts a fetch of its own.
+      const cache = queryClient.getQueryCache();
+      for (const key of keys) {
+        for (const query of cache.findAll({ queryKey: key, fetchStatus: "fetching" })) {
+          pending.set(query.queryHash, query.queryKey);
+        }
+      }
+      for (const key of keys) {
+        void queryClient.invalidateQueries({
+          queryKey: key,
+          predicate: (query) => query.state.fetchStatus !== "fetching",
+        });
+      }
+      if (pending.size > 0) derivedFlushRef.current?.schedule();
+    }, DERIVED_FLUSH_MS);
+    derivedFlushRef.current = coalescer;
+    return () => {
+      coalescer.cancel();
+      pending.clear();
+      derivedFlushRef.current = null;
+    };
+  }, [queryClient, topic]);
+  const scheduleDerived = useCallback((keys: readonly QueryKey[]) => {
+    for (const key of keys) derivedRef.current.set(hashKey(key), key);
+    derivedFlushRef.current?.schedule();
+  }, []);
+
   useRealtimeTopic<DraftEventData>(
     topic,
     (event) => {
@@ -226,28 +320,23 @@ export function useDraftRealtime(
         void queryClient.invalidateQueries({ queryKey });
       }
 
-      // Two derived reads the patch cannot fold in: feasibility is keyed by
-      // SESSION id, which does not change when a pick lands, and pick options
-      // by pick id, which a role edit changes without advancing the pick.
-      // Deliberately handled here instead of through the invalidation
-      // vocabulary: no server cache holds either of them and no other consumer
-      // has an opinion about them, so there is nothing for a shared resource
-      // name to keep in agreement.
+      // Derived reads the patch cannot fold in, re-read only where the event
+      // moves them (`draftDerivedScope`). Handled here instead of through the
+      // invalidation vocabulary: no other consumer has an opinion about them,
+      // so there is nothing for a shared resource name to keep in agreement.
       const sessionId = cachedBoard.session?.id;
       if (sessionId != null) {
-        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftFeasibility(sessionId) });
-        // Fit, the autopick preview and the journal are server derivations of
-        // the board, so any board event can move them.
-        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftTeamFits(sessionId) });
-        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftTeamQueues(sessionId) });
-        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftJournal(sessionId) });
+        scheduleDerived(derivedQueryKeys(sessionId, draftDerivedScope(cachedBoard, event)));
       }
+      // Pick options are keyed by pick id, and a role edit or a clock change
+      // bumps the pick's version without advancing it. Read only by the captain
+      // on the clock, whose confirm waits on it, so it skips the batch.
       const affectedPickId = event.data.pick_id ?? cachedBoard.current_pick?.id;
       if (affectedPickId != null) {
         void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftPickOptions(affectedPickId) });
       }
     },
-    [queryClient, queryKey, topic]
+    [queryClient, queryKey, topic, scheduleDerived]
   );
 
   useEffect(() => {
@@ -276,18 +365,19 @@ export function useDraftRealtime(
     }
   }, [board, queryClient, queryKey, topic]);
 
-  // On reconnect, the client replays from the cursor; refetch the snapshot as a
-  // safety net so the board converges even after a long disconnect.
+  // On reconnect, the client replays from the cursor; refetch the snapshot and
+  // every derived read as a safety net so the room converges even after a long
+  // disconnect -- the derived reads never go stale on their own.
   const connectionState = useRealtimeStore((s) => s.connectionState);
   const prev = useRef(connectionState);
   useEffect(() => {
     if (prev.current === "reconnecting" && connectionState === "connected") {
-      queryClient.invalidateQueries({
-        queryKey: tournamentQueryKeys.draftBoard(tournamentId),
-      });
+      queryClient.invalidateQueries({ queryKey });
+      const sessionId = queryClient.getQueryData<DraftBoard | null>(queryKey)?.session.id;
+      if (sessionId != null) scheduleDerived(derivedQueryKeys(sessionId, ALL_DERIVED));
     }
     prev.current = connectionState;
-  }, [connectionState, queryClient, tournamentId]);
+  }, [connectionState, queryClient, queryKey, scheduleDerived]);
 
   return { presence, connectionState };
 }

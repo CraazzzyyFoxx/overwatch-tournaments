@@ -29,7 +29,7 @@ Of particular interest, because these are the trust boundaries:
   bot attachments, and anything reaching the parser.
 
 Out of scope: the live deployment at `owt.craazzzyyfoxx.me` (do not test against it), the
-hosting provider's infrastructure, Traefik's TLS termination, and third-party services
+hosting infrastructure in front of the nginx edge, and third-party services
 (Discord, Twitch, Battle.net, Challonge, OverFast).
 
 ## Self-hosting
@@ -43,5 +43,4 @@ to a network must, at minimum:
 - set the allowed WebSocket origins explicitly rather than leaving them open;
 - keep every environment file untracked.
 
-Backup and restore procedures, including the off-site replication that protects against
-ransomware on the primary, are in [`docs/backup-rustfs.md`](./docs/backup-rustfs.md).
+Backup and restore procedures are in [`docs/backup-rustfs.md`](./docs/backup-rustfs.md).

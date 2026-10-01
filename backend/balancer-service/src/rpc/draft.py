@@ -362,8 +362,16 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_draft_session_workspace_id(session, session_id)
             c.require_workspace_permission(data, user, ws_id, "team", "read")
             draft = await _load_session(session, session_id)
-            report = await feasibility_service.analyze_session(session, draft)
-            return schemas.DraftFeasibilityResponse.model_validate(report)
+
+            async def compute() -> schemas.DraftFeasibilityResponse:
+                snapshot = await feasibility_service.load_read_snapshot(session, draft)
+                state = await feasibility_service.state_from_snapshot(session, draft, snapshot)
+                report = await feasibility_service.analyze_session(session, draft, state=state)
+                return schemas.DraftFeasibilityResponse.model_validate(report)
+
+            # Refetched by every organizer in the room after every pick: one
+            # analysis per board state, on the snapshot fit and queue share.
+            return await board_service.shared_read(session, draft, ("feasibility",), compute)
 
         return await c.envelope(logger, "draft.feasibility", op, session_factory=_SF)
 

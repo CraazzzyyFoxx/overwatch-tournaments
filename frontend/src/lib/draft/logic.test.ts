@@ -7,6 +7,7 @@ import {
   applyDraftEvent,
   canConfirmPick,
   computeGating,
+  draftDerivedScope,
   draftEventNeedsSnapshot,
   isUrgent,
   presenceFromEvent,
@@ -201,9 +202,33 @@ describe("applyDraftEvent", () => {
     expect(draftEventNeedsSnapshot(ev("draft.rollback", { status: "paused", pick_id: 1 }))).toBe(true);
     expect(draftEventNeedsSnapshot(ev("draft.blocked", { blocked_reason: "order_recalculated" }))).toBe(true);
     expect(draftEventNeedsSnapshot(ev("draft.blocked", { blocked_reason: "role_shortage" }))).toBe(false);
+    expect(draftEventNeedsSnapshot(ev("draft.player_updated", { player_id: 50, player_version: 1 }))).toBe(true);
     expect(draftEventNeedsSnapshot(ev("draft.pick_made", { pick_id: 1 }))).toBe(false);
     // The fold still flips the status at once, before the snapshot lands.
     expect(applyDraftEvent(makeBoard(), ev("draft.rollback", { status: "paused" })).session.status).toBe("paused");
+  });
+
+  it("derived reads move only for the team an event touches", () => {
+    const board = makeBoard();
+    // A clock change moves no fit, queue or feasibility.
+    expect(draftDerivedScope(board, ev("draft.clock_extended", { pick_id: 1 }))).toBeNull();
+    expect(draftDerivedScope(board, ev("draft.overtime_started", { pick_id: 1 }))).toBeNull();
+    expect(draftDerivedScope(board, ev("draft.paused", {}))).toBeNull();
+    // A pick moves the team that made it, and the pool everyone reads.
+    expect(draftDerivedScope(board, ev("draft.pick_made", { pick_id: 1, draft_team_id: 10 }))).toEqual({
+      teams: 10,
+      feasibility: true
+    });
+    // Going on the clock moves that team's autopick preview only.
+    expect(draftDerivedScope(board, ev("draft.pick_started", { pick_id: 2, draft_team_id: 11 }))).toEqual({
+      teams: 11,
+      feasibility: false
+    });
+    // `resumed` may not name the team: the board's pick does.
+    expect(draftDerivedScope(board, ev("draft.resumed", { pick_id: 2 }))).toEqual({ teams: 11, feasibility: false });
+    // Rewrites, and events this client does not know, move everything.
+    expect(draftDerivedScope(board, ev("draft.rollback", { pick_id: 1 }))).toEqual({ teams: "all", feasibility: true });
+    expect(draftDerivedScope(board, ev("draft.something_new", {}))).toEqual({ teams: "all", feasibility: true });
   });
 
   it("presence does not mutate the board", () => {

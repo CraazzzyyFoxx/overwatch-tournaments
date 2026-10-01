@@ -98,6 +98,20 @@ prometheus.scrape "services" {
 	forward_to      = [prometheus.remote_write.home.receiver]
 }
 
+// HAProxy on the host (the TLS edge): built-in exporter on :8405, reachable
+// through host.docker.internal. No server scope: every backend has one server,
+// so it would repeat the backend series.
+prometheus.scrape "haproxy" {
+	targets = [{
+		__address__ = "host.docker.internal:8405",
+		job         = "haproxy",
+		instance    = "haproxy",
+	}]
+	params          = {"scope" = ["global", "frontend", "backend", "sticktable"]}
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.home.receiver]
+}
+
 // RabbitMQ's built-in rabbitmq_prometheus plugin replaces kbudde's exporter.
 // Its per-object endpoint uses the same queue metric names the rules use.
 prometheus.scrape "rabbitmq" {

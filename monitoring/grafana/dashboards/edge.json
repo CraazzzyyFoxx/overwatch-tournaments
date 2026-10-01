@@ -1,0 +1,182 @@
+{
+  "title": "Edge",
+  "uid": "edge",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["edge", "haproxy", "tls"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HAProxy",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ]
+        }
+      },
+      "targets": [{ "expr": "up{job=\"haproxy\"}", "legendFormat": "HAProxy", "instant": true }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Requests / s",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1 } },
+      "targets": [{ "expr": "sum(rate(haproxy_frontend_http_requests_total{proxy=\"owt\"}[5m]))", "legendFormat": "site", "instant": true }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Refused / s",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "haproxy:refused:rate5m", "legendFormat": "refused", "instant": true }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Connections",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 20000 }, { "color": "red", "value": 32000 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "haproxy_process_current_connections", "legendFormat": "connections", "instant": true }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "IP table (st_src)",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 0.8 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "haproxy_sticktable_used{name=\"st_src\"} / haproxy_sticktable_size{name=\"st_src\"}", "legendFormat": "used", "instant": true }]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "TLS certificate expires in",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 259200 }, { "color": "green", "value": 1209600 }] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "expr": "min(probe_ssl_earliest_cert_expiry{job=\"blackbox-http\"}) - time()", "legendFormat": "expires", "instant": true }]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Site responses by class",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        { "expr": "sum by (code) (rate(haproxy_frontend_http_responses_total{proxy=\"owt\"}[5m]))", "legendFormat": "{{ code }}" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Refused by HAProxy",
+      "description": "Banned IPs refused at accept, the per-IP connection cap, and requests that tripped a ban on an open connection.",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "cps" } },
+      "targets": [
+        { "expr": "sum(rate(haproxy_frontend_denied_connections_total[5m]))", "legendFormat": "banned, at accept" },
+        { "expr": "sum(rate(haproxy_frontend_denied_sessions_total[5m]))", "legendFormat": "over 300 connections per IP" },
+        { "expr": "sum(rate(haproxy_frontend_requests_denied_total{proxy=\"owt\"}[5m]))", "legendFormat": "banned, mid-connection" }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Open sessions by frontend",
+      "description": "tls is every connection on :443 (site and passthrough); owt is the decrypted site traffic.",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "haproxy_frontend_current_sessions{proxy!=\"metrics\"}", "legendFormat": "{{ proxy }}" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "New sessions and TLS handshakes",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "cps" } },
+      "targets": [
+        { "expr": "haproxy_process_current_session_rate", "legendFormat": "sessions" },
+        { "expr": "haproxy_process_current_ssl_rate", "legendFormat": "TLS handshakes" }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "nginx behind HAProxy: response time",
+      "description": "Average over the last 1024 responses, as HAProxy computes it.",
+      "gridPos": { "x": 0, "y": 20, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "haproxy_backend_response_time_average_seconds{proxy=\"nginx\"}", "legendFormat": "response" },
+        { "expr": "haproxy_backend_connect_time_average_seconds{proxy=\"nginx\"}", "legendFormat": "connect" }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "nginx behind HAProxy: errors",
+      "gridPos": { "x": 8, "y": 20, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "cps" } },
+      "targets": [
+        { "expr": "rate(haproxy_backend_connection_errors_total{proxy=\"nginx\"}[5m])", "legendFormat": "connection errors" },
+        { "expr": "rate(haproxy_backend_response_errors_total{proxy=\"nginx\"}[5m])", "legendFormat": "response errors" },
+        { "expr": "rate(haproxy_backend_http_responses_total{proxy=\"nginx\",code=\"5xx\"}[5m])", "legendFormat": "5xx" }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Site traffic",
+      "gridPos": { "x": 16, "y": 20, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "rate(haproxy_frontend_bytes_out_total{proxy=\"owt\"}[5m])", "legendFormat": "out" },
+        { "expr": "rate(haproxy_frontend_bytes_in_total{proxy=\"owt\"}[5m])", "legendFormat": "in" }
+      ]
+    }
+  ]
+}

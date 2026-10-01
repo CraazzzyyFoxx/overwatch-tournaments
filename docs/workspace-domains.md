@@ -2,7 +2,7 @@
 
 **Platform Zone:** `owt.craazzzyyfoxx.me`
 
-This document describes the out-of-repo operational steps required to enable workspace multi-domain support. Sections 1-4 cover platform-zone subdomains (wildcard DNS-01 TLS). **Section 5 covers customer-owned custom domains (on-demand HTTP-01 TLS)** — read Section 2 first, since Section 5 builds on the same external Traefik instance rather than re-explaining it.
+This document describes the out-of-repo operational steps required to enable workspace multi-domain support. Sections 1-4 cover platform-zone subdomains (wildcard DNS-01 TLS). **Section 5 covers customer-owned custom domains (per-domain HTTP-01 TLS)** — read Section 2 first, since Section 5 builds on the same TLS edge rather than re-explaining it.
 
 ---
 
@@ -17,7 +17,7 @@ Create a wildcard DNS record that resolves all tenant subdomains to the ingress 
 
 **Where to configure:** Your DNS provider (CloudFlare, Route53, etc.)  
 **TTL:** 300 seconds (or provider default)  
-**Value:** Replace `<INGRESS_IP>` with the actual IP address of your ingress/load balancer (the external IP that nginx/Traefik binds to).
+**Value:** Replace `<INGRESS_IP>` with the actual IP address of your ingress (the TLS terminator in front of nginx).
 
 ### Apex Record
 Ensure the apex domain also resolves:
@@ -39,125 +39,21 @@ nslookup owt.craazzzyyfoxx.me
 
 ---
 
-## 2. TLS / HTTPS (External Traefik)
+## 2. TLS / HTTPS
 
-The TLS termination is handled by Traefik (external to the docker-compose stack, running on the production host). The Gateway and nginx services receive plain HTTP from Traefik and do not manage certificates.
+TLS is terminated outside the stack, in front of nginx. nginx and the gateway receive plain HTTP and hold no certificates. The terminator must pass `Host` through unchanged (the workspace is resolved from it) and set `X-Forwarded-For` and `X-Forwarded-Proto`; nginx trusts `X-Forwarded-For` only from private ranges and loopback.
 
-### Wildcard Certificate via DNS-01 ACME
+Certificates it needs:
 
-**Rationale:** A wildcard certificate for `*.owt.craazzzyyfoxx.me` covers all subdomains. To also cover the bare apex domain `owt.craazzzyyfoxx.me`, both the apex and the wildcard must be included as SANs (Subject Alternative Names) on the same certificate. This avoids Let's Encrypt's per-domain rate limits and simplifies multi-tenant DNS validation.
+| Certificate | Challenge | Why |
+|---|---|---|
+| `owt.craazzzyyfoxx.me` + `*.owt.craazzzyyfoxx.me`, one certificate with both SANs | DNS-01 | a wildcard can only be issued over DNS-01 |
+| each verified custom domain (Section 5) | HTTP-01 | we have no API access to a customer's DNS |
 
-#### Prerequisites
-
-1. **DNS API Credentials**: Your DNS provider must support API-driven ACME DNS-01 challenges.
-   - Supported providers: CloudFlare, Route53, Azure DNS, Linode, DigitalOcean, etc.
-   - Store credentials securely (e.g., in a `.env` file for Traefik).
-
-2. **Traefik ACME Configuration** (host-level, `/root/overwatch-tournaments/traefik.yml` or equivalent):
-
-```yaml
-certificatesResolvers:
-  dns-acme:
-    acme:
-      email: admin@example.com
-      storage: ./acme.json
-      dnsChallenge:
-        provider: cloudflare  # or route53, azure, etc.
-        resolvers:
-          - 1.1.1.1:53
-          - 8.8.8.8:53
-      
-      entryPoint: web  # or appropriate entrypoint
+```bash
+echo | openssl s_client -connect owt.craazzzyyfoxx.me:443 -servername owt.craazzzyyfoxx.me 2>/dev/null \
+  | openssl x509 -noout -subject -enddate
 ```
-
-3. **Provider-Specific Environment Variables**: Add credentials for your DNS provider:
-
-   **CloudFlare example:**
-   ```bash
-   export CF_API_EMAIL="your-email@example.com"
-   export CF_API_KEY="your-global-api-key"
-   # or
-   export CF_DNS_API_TOKEN="your-dns-only-token"
-   ```
-
-   **Route53 example:**
-   ```bash
-   export AWS_ACCESS_KEY_ID="..."
-   export AWS_SECRET_ACCESS_KEY="..."
-   export AWS_REGION="us-east-1"
-   ```
-
-#### Certificate Issuance
-
-Traefik will automatically request and renew the certificate when a matching route (host rule) is first accessed. The `tls.domains` configuration explicitly specifies that both the apex and wildcard must be on the same certificate:
-
-```yaml
-# In Traefik router/service config
-- Host(`owt.craazzzyyfoxx.me`) || HostRegexp(`{subdomain:[a-zA-Z0-9-]+}.owt.craazzzyyfoxx.me`)
-  tls:
-    certResolver: dns-acme
-    domains:
-      - main: "owt.craazzzyyfoxx.me"
-        sans:
-          - "*.owt.craazzzyyfoxx.me"
-```
-
-**Important:** The `tls.domains` entry ensures that both the apex (`main`) and the wildcard (`sans`) are included on the certificate. Without explicit SAN configuration, Let's Encrypt may issue separate certificates.
-
-**Note on HostRegexp (Traefik version):** Traefik v2 supports named captures in `HostRegexp` (e.g., `{subdomain:[a-zA-Z0-9-]+}`). Traefik v3 removed named-capture support from `HostRegexp` — use a plain regex pattern instead if upgrading to v3.
-
-**Traefik will:**
-1. Create a DNS TXT record in your domain via API (DNS-01 challenge)
-2. Validate the record with Let's Encrypt
-3. Issue the wildcard certificate
-4. Store it in `./acme.json`
-
-**Expected output in Traefik logs:**
-```
-[dns] acme: Using DNS provider (cloudflare)
-[acme] Registering account...
-[acme] Sending certificate request...
-[acme] Cert obtained for *.owt.craazzzyyfoxx.me
-```
-
-#### Renewal
-
-Traefik automatically renews certificates 30 days before expiry. Monitor Traefik logs to confirm renewals are working.
-
-#### Manual Renewal (if needed)
-
-In Traefik v2/v3, certificates are managed automatically by the `certificatesResolvers.<name>.acme` configuration and renew 30 days before expiry. If you need to force an immediate renewal:
-
-1. **Locate the ACME storage file** (typically `/root/overwatch-tournaments/acme.json`):
-   ```bash
-   # On the host running Traefik
-   ls -lh /root/overwatch-tournaments/acme.json
-   ```
-
-2. **Remove the stored certificate entry** (this forces re-issuance on next route access):
-   ```bash
-   # Backup first
-   cp /root/overwatch-tournaments/acme.json /root/overwatch-tournaments/acme.json.backup
-   
-   # Remove the certificate entry (or delete the entire file to force re-issuance)
-   rm /root/overwatch-tournaments/acme.json
-   ```
-
-3. **Restart Traefik** to trigger certificate re-issuance:
-   ```bash
-   # If Traefik runs as systemd service
-   sudo systemctl restart traefik
-   
-   # Or if running in Docker
-   docker restart traefik
-   ```
-
-4. **Monitor logs** to confirm the new certificate is issued:
-   ```bash
-   docker logs traefik | grep -i acme
-   # or
-   journalctl -u traefik -f
-   ```
 
 ---
 
@@ -327,7 +223,7 @@ Two records, two different purposes — give the customer **both**, but understa
 | Record | Name | Value | Purpose |
 |---|---|---|---|
 | TXT | `_owt-verify.<custom-domain>` | The exact token shown in admin, e.g. `owt-verify-<random>` | **Ownership verification only.** Read once by "Verify"; not consulted again after `custom_domain_verified_at` is set. Can be removed after verification if the customer wants (re-verification, e.g. after `clear_custom_domain` + re-`set_custom_domain`, would need it added back). |
-| CNAME (or A, if the domain is an apex and the registrar doesn't allow CNAME-at-apex) | `<custom-domain>` | `owt.craazzzyyfoxx.me` (CNAME) or the ingress IP (A record — same IP as Section 1's wildcard `A` record) | **Serving traffic + TLS issuance.** Must resolve to the ingress before Traefik's HTTP-01 challenge (Section 5.3) can succeed, and before real visitors reach the site. |
+| CNAME (or A, if the domain is an apex and the registrar doesn't allow CNAME-at-apex) | `<custom-domain>` | `owt.craazzzyyfoxx.me` (CNAME) or the ingress IP (A record — same IP as Section 1's wildcard `A` record) | **Serving traffic + TLS issuance.** Must resolve to the ingress before the HTTP-01 challenge (Section 5.3) can succeed, and before real visitors reach the site. |
 
 Both records are exactly what the admin UI (`frontend/src/app/admin/workspaces/page.tsx`) displays to the organiser once a custom domain is saved (unverified):
 
@@ -338,44 +234,17 @@ CNAME tourney.example.com               owt.craazzzyyfoxx.me
 
 Verification (Step 5.4 below) only needs the TXT record. Real traffic and TLS need the CNAME/A record. They can be added at the same time — there's no ordering requirement between them.
 
-### 5.3 Traefik / TLS: on-demand HTTP-01 per custom domain
+### 5.3 TLS: an HTTP-01 certificate per custom domain
 
-Section 2 already covers the wildcard `*.owt.craazzzyyfoxx.me` + apex certificate via **DNS-01** — that setup is unchanged and still the only cert covering the platform zone. Custom domains need a **separate, additional** certificate resolver because DNS-01 is not an option here: we do not have API credentials for a customer's DNS provider, and never will.
+Section 2's DNS-01 certificate covers only the platform zone. A customer's domain gets its own certificate over HTTP-01: we never have API access to a customer's DNS, and HTTP-01 needs only the CNAME/A record from Section 5.2 plus an answer at `http://<domain>/.well-known/acme-challenge/...` from the TLS terminator.
 
-**Why HTTP-01 instead of DNS-01:** HTTP-01 only requires that the domain's DNS already resolves to our ingress (the CNAME/A record from Section 5.2) and that Traefik can answer an HTTP challenge request on that host at `/.well-known/acme-challenge/...`. No DNS API access is needed — it works for any domain pointed at us, regardless of registrar/provider.
+Once the domain is verified and resolves to us, issue its certificate on the terminator and keep it renewed.
 
-**EXAMPLE Traefik dynamic config (file-provider style, matching the existing wildcard setup)** — adapt paths/entrypoint names to the actual host config:
+Routing needs nothing: the terminator sends every host to nginx, and the workspace is resolved from the Host header. Until the certificate exists the domain is served the platform certificate and browsers warn.
 
-```yaml
-# EXAMPLE — add alongside the existing dns-acme resolver from Section 2,
-# in the same Traefik file-provider directory.
-certificatesResolvers:
-  http-01:
-    acme:
-      email: admin@example.com
-      storage: ./acme-http01.json   # separate storage file from the wildcard's acme.json
-      httpChallenge:
-        entryPoint: web             # the plain-HTTP (port 80) entrypoint
+To drop a domain, remove its certificate from the terminator.
 
-http:
-  routers:
-    custom-domains-catchall:
-      # Broad catch-all: matches any host NOT already claimed by the named
-      # apex/wildcard router from Section 2. Give the Section 2 router a
-      # higher explicit `priority` (or rely on Traefik's longer-rule-wins
-      # default, but an explicit priority is safer once both routers exist
-      # in the same file) so `owt.craazzzyyfoxx.me` / `*.owt.craazzzyyfoxx.me`
-      # traffic never falls into this catch-all.
-      rule: "HostRegexp(`{domain:.+}`)"
-      priority: 1
-      entryPoints:
-        - websecure
-      service: gateway   # same backend service the Section 2 router points at
-      tls:
-        certResolver: http-01
-```
-
-**Let's Encrypt rate limits:** the "Certificates per Registered Domain" limit (currently 50/week, per LE's published limits — https://letsencrypt.org/docs/rate-limits/) is scoped to *the customer's own registered domain*, not to us — onboarding N customers does **not** share or exhaust a single aggregate budget across tenants the way the shared wildcard would. The one limit that *is* shared across all custom domains is the "New Orders per Account per 3 hours" cap (currently 300), since every HTTP-01 order goes through the same Traefik ACME account as the wildcard — fine at the expected scale (a handful to low dozens of custom domains), but worth knowing if custom-domain onboarding ever needs to happen in a burst.
+**Let's Encrypt rate limits:** the "Certificates per Registered Domain" limit (currently 50/week, per LE's published limits — https://letsencrypt.org/docs/rate-limits/) is scoped to *the customer's own registered domain*, not to us — onboarding N customers does **not** share or exhaust a single aggregate budget across tenants the way the shared wildcard would. The one limit that *is* shared across all custom domains is the "New Orders per Account per 3 hours" cap (currently 300), since every order goes through the same ACME account as the wildcard — fine at the expected scale (a handful to low dozens of custom domains).
 
 ### 5.4 Organiser steps (Admin UI)
 
@@ -429,9 +298,8 @@ If DNS changes don't resolve immediately:
 - Use `dig` or `nslookup` with a public resolver: `nslookup owt.craazzzyyfoxx.me 8.8.8.8`
 
 ### TLS Certificate Errors
-- Check Traefik logs: `docker logs traefik` or `journalctl -u traefik` (systemd)
-- Ensure DNS provider credentials are set and correct
-- Clear `acme.json` and restart Traefik to force a re-issue (caution: rate limits may apply)
+- Check which certificate is served (the `openssl s_client` command in Section 2)
+- A custom domain that gets the platform certificate has no certificate of its own yet (Section 5.3)
 
 ### OAuth Redirect Loop
 - Verify `OAUTH_REDIRECT` in `backend/env/auth.env` matches the provider console entry exactly
@@ -447,8 +315,6 @@ If DNS changes don't resolve immediately:
 
 ## References
 
-- **Traefik ACME & DNS-01:** https://doc.traefik.io/traefik/https/acme/
-- **Traefik ACME & HTTP-01** (Section 5): https://doc.traefik.io/traefik/https/acme/#httpchallenge
 - **Let's Encrypt Rate Limits:** https://letsencrypt.org/docs/rate-limits/
 - **OAuth 2.0 Redirect URI Security:** https://oauth.net/2/redirect-uris/
 - **Custom-domain source of truth:** `backend/app-service/src/services/workspace/service.py` (`set_custom_domain`, `verify_custom_domain`, `_dns_txt_contains`), `backend/app-service/src/rpc/workspaces.py` (RPC gates), `backend/shared/tenancy/hostnames.py` (`normalize_custom_domain`), `gateway/internal/workspace/workspace.go` (`IsVerifiedCustomDomain`), `gateway/internal/ws/handler.go` (dynamic WS origin check), `frontend/src/app/admin/workspaces/page.tsx` (organiser UI), `frontend/src/lib/auth/oauth-login.ts` / `frontend/src/app/(site)/auth/sso/route.ts` / `frontend/src/app/(site)/auth/link/complete/route.ts` (OAuth apex-bounce + ticket handoff)

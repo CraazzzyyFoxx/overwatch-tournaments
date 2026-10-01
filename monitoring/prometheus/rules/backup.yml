@@ -47,3 +47,22 @@ groups:
           description: >-
             This run uploaded {{ $value | humanize1024 }}B vs the 14-day maximum.
             Confirm the right database is dumped and pg_dump is not aborting.
+
+  # Log archive: textfile owt_logship.prom, written by the host's nightly log upload. Rotated logs stay on the
+  # host for 14 days and the upload is idempotent, so one missed night loses nothing; a
+  # silent week does, which is what this catches.
+  - name: logship
+    rules:
+      - alert: LogShipMissing
+        # Daily cron (02:10 UTC); 30 hours = one miss plus slack.
+        expr: |
+          time() - max(owt_logship_last_success_timestamp_seconds) > 30 * 3600
+          or absent(owt_logship_last_success_timestamp_seconds)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No log upload to S3 for over 30 hours"
+          description: >-
+            owt_logship_last_success_timestamp_seconds has not updated in 30+ hours.
+            Check: crontab -l; tail -n 100 /var/log/logship.log.

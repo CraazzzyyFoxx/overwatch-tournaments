@@ -56,16 +56,68 @@ function patchPick(board: DraftBoard, pickId: number, patch: Partial<DraftPick>)
  *    pick it rewound — folding only the status left captains picking against
  *    stale versions with the wrong team on the clock;
  *  - a live re-seat (`order_recalculated`) moves a whole round to other teams;
- *  - `session_updated` is a (re-)seed, a settings resync or a deleted session.
- * All three leave the draft paused or not yet live, so nothing else lands while
+ *  - `session_updated` is a (re-)seed, a settings resync or a deleted session;
+ *  - `player_updated` is an emergency role: the payload names the role, not the
+ *    ranks and sub-roles the board shows for it.
+ * All four leave the draft paused or not yet live, so nothing else lands while
  * the snapshot is in flight.
  */
 export function draftEventNeedsSnapshot(event: RealtimeEventEnvelope<DraftEventData>): boolean {
   return (
     event.event_type === "draft.rollback" ||
     event.event_type === "draft.session_updated" ||
+    event.event_type === "draft.player_updated" ||
     (event.event_type === "draft.blocked" && event.data.blocked_reason === "order_recalculated")
   );
+}
+
+/** Which team's fit and queue an event moves (`"all"`: every team's), and whether it moves feasibility. */
+export interface DraftDerivedScope {
+  teams: "all" | number;
+  feasibility: boolean;
+}
+
+/**
+ * The server derivations of the board an event can move, or `null` for none.
+ *
+ * Every captain and admin holds a fit and a queue, and re-reading all of them
+ * on every event made a draft cost viewers x events x snapshot
+ * (docs/incidents/2026-09-30). What each one reads:
+ *  - fit: the available pool and the team's OWN roster, never the clock. A pick
+ *    by another team only takes a player out of the pool, which the board
+ *    already shows; the rest of the scores move by the 1..99 rescale alone, and
+ *    are re-read when the team's own turn starts.
+ *  - queue: stored ids the room narrows against the board itself, plus the
+ *    autopick preview, which exists only for the team on the clock.
+ *  - feasibility: the whole pool against every open seat.
+ * So a pick moves the team that made it (and feasibility), a pick going on the
+ * clock moves its team, a clock or pause change moves nothing, and anything
+ * else -- a rollback, a re-seed, a role edit, an event this client does not
+ * know -- moves everything.
+ */
+export function draftDerivedScope(
+  board: DraftBoard,
+  event: RealtimeEventEnvelope<DraftEventData>
+): DraftDerivedScope | null {
+  const data = event.data;
+  switch (event.event_type) {
+    case "draft.presence":
+    case "draft.overtime_started":
+    case "draft.clock_extended":
+    case "draft.paused":
+      return null;
+    case "draft.pick_made":
+    case "draft.autopicked":
+      return { teams: data.draft_team_id ?? "all", feasibility: true };
+    case "draft.pick_started":
+    case "draft.resumed": {
+      const pickId = data.pick_id ?? board.session.current_pick_id;
+      const teamId = data.draft_team_id ?? board.picks.find((pick) => pick.id === pickId)?.draft_team_id;
+      return { teams: teamId ?? "all", feasibility: false };
+    }
+    default:
+      return { teams: "all", feasibility: true };
+  }
 }
 
 /**

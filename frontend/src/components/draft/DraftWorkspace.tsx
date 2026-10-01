@@ -126,12 +126,23 @@ export function DraftWorkspace({
   const showTargets =
     seat === "captain_admin" && clockId != null && clockId !== gating.myTeamId && actingTeam != null;
 
-  // Only a captain has a list. The server narrows it to available players.
+  // Only a captain has a list. The server narrows it to available players, but
+  // re-reads it only when this team's own turn moves (`draftDerivedScope`), so a
+  // player another team took is narrowed out here, against the board: a save
+  // that still carried him would be refused.
   const queueTeamId = gating.isCaptain ? gating.myTeamId : null;
-  const { query: queueQuery, playerIds: queueIds, setQueue } = useDraftTeamQueue(sessionId, queueTeamId);
+  const { query: queueQuery, playerIds: storedQueueIds, setQueue } = useDraftTeamQueue(sessionId, queueTeamId);
+  const queueIds = useMemo(() => {
+    const available = new Set(board.players.filter((player) => player.status === "available").map((player) => player.id));
+    const live = storedQueueIds.filter((id) => available.has(id));
+    return live.length === storedQueueIds.length ? storedQueueIds : live;
+  }, [storedQueueIds, board.players]);
   const mutateQueue = setQueue.mutate;
+  const queueLoaded = queueQuery.data !== undefined;
   const queue = useMemo<QueueControls | null>(() => {
-    if (queueTeamId == null) return null;
+    // No controls over a list that has not loaded: the first save would replace
+    // the stored one with a list of one.
+    if (queueTeamId == null || !queueLoaded) return null;
     const save = (ids: number[]) => mutateQueue(ids, { onError: (error) => notify.apiError(error) });
     return {
       ids: queueIds,
@@ -146,7 +157,7 @@ export function DraftWorkspace({
         save(next);
       }
     };
-  }, [queueTeamId, queueIds, mutateQueue]);
+  }, [queueTeamId, queueLoaded, queueIds, mutateQueue]);
   const autopickPreview = queueQuery.data?.autopick_preview ?? null;
 
   const fitQuery = useDraftTeamFitQuery(sessionId, actingId, actingId != null);

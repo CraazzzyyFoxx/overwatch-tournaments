@@ -1,4 +1,4 @@
-# Disk cleanup: production host (Moscow)
+# Disk cleanup: production host
 
 Two layers, and only the second one is a cron job:
 
@@ -11,17 +11,16 @@ Two layers, and only the second one is a cron job:
 2. **Images and build cache** are reclaimed daily by `ops/cleanup/cleanup.sh`:
 
 ```
-15 5 * * * /root/overwatch-tournaments/ops/cleanup/cleanup.sh >> /var/log/disk-cleanup.log 2>&1
+15 5 * * * <checkout>/ops/cleanup/cleanup.sh >> /var/log/disk-cleanup.log 2>&1
 ```
 
-That path is the **deployed repo checkout** (`ops/deploy/remote-deploy.sh` keeps
-`/root/overwatch-tournaments` at the released tag), so the host always runs the
-current script. Do not copy it somewhere else — a hand-made copy silently freezes
-at whatever was copied, and a missing one fails in a log nobody reads. 05:15 UTC,
-after the nightly backup (`docs/backup-rustfs.md`, 04:30 UTC).
+Point cron at the **deployed repo checkout** (`ops/deploy/remote-deploy.sh` keeps it at the
+released tag), so the host always runs the current script. Do not copy it somewhere else — a
+hand-made copy silently freezes at whatever was copied, and a missing one fails in a log
+nobody reads. Schedule it after the nightly backup ([`backup-rustfs.md`](./backup-rustfs.md)).
 
-Daily, not weekly: releases land several times a day and a full image set is ~9 GB
-unpacked, so a week between runs is ~30 GB of dead images on a 77 GB disk.
+Daily, not weekly: releases can land several times a day and a full image set is ~9 GB
+unpacked, so a week between runs can leave ~30 GB of dead images.
 
 ---
 
@@ -83,16 +82,13 @@ Nothing alerts on the cron job itself; `HostDiskSpaceLow` / `HostDiskSpaceCritic
 
 ```bash
 crontab -l | grep cleanup            # 1. is the entry there at all?
-ls -l /root/overwatch-tournaments/ops/cleanup/cleanup.sh   # 2. right path, mode 755?
+ls -l <checkout>/ops/cleanup/cleanup.sh   # 2. right path, mode 755?
 tail -n 40 /var/log/disk-cleanup.log # 3. did it run, and did it end with "disk cleanup ok"?
 systemctl status cron                # 4. is cron even running on this box?
 journalctl -u cron --since '2 weeks ago' | grep -i cleanup  # 5. what cron itself saw
 ```
 
-- No `disk cleanup start` line for yesterday → cron never fired it (1, 2, 4, 5). This is
-  what was actually wrong on 2026-09-21: there was no crontab entry at all, the
-  `/root/disk-cleanup/` path the first version of this doc named never existed, and the
-  disk had reached 94% with 147 images / 56 GB under `/var/lib/containerd`.
+- No `disk cleanup start` line for yesterday → cron never fired it (1, 2, 4, 5).
 - `start` but no `ok` → it aborted mid-run (`set -euo pipefail`); the last line printed
   names the step. The two `docker system df` calls are `|| true`, so a failure there is
   not it — a prune failing is. Before that `|| true` existed, one broken container record
@@ -101,8 +97,8 @@ journalctl -u cron --since '2 weeks ago' | grep -i cleanup  # 5. what cron itsel
 - `ok`, disk still climbing → it is not images/cache/logs. `docker system df -v`, then
   `du -xh --max-depth=2 / | sort -rh | head -20` before widening any retention window.
 
-**This host keeps images in `/var/lib/containerd`, not `/var/lib/docker`** (Docker runs
-with the containerd snapshotter: `docker info` shows `io.containerd.snapshotter.v1`).
-`du /var/lib/docker` reports ~2 GB while the images sit in
-`/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs` — don't conclude from it
-that Docker is innocent.
+**With the containerd snapshotter, images live in `/var/lib/containerd`, not
+`/var/lib/docker`** (`docker info` shows `io.containerd.snapshotter.v1`). `du
+/var/lib/docker` then reports a few GB while the images sit in
+`/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs` — don't conclude from it that
+Docker is innocent.

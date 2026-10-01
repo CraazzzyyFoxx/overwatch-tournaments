@@ -44,7 +44,7 @@ speaks HTTP to the outside world.
 ## Request flow
 
 ```
-internet → Traefik (TLS) → nginx :80 → gateway :8080 →
+internet → nginx :80 → gateway :8080 →
     ├─ RPC over RabbitMQ → headless workers (rpc.app.* / rpc.identity.* / rpc.tournament.* / rpc.parser.* / rpc.balancer.* / rpc.analytics.*)
     ├─ reverse proxy → frontend (Next.js)
     └─ /ws + /api/v1/realtime/ws → Redis→WebSocket hub (replay from realtime.workspace_event)
@@ -194,6 +194,6 @@ go run ./cmd/gateway
 docker compose up -d gateway
 ```
 
-nginx fronts the gateway on `:80`; TLS is terminated upstream by Traefik. In dev, compose
+nginx fronts the gateway on `:80`. In dev, compose
 publishes the gateway directly (`GATEWAY_HOST_PORT:8080`) for testing; in production only
 nginx ingresses.
