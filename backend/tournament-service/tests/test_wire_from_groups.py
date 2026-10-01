@@ -12,6 +12,8 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock, patch
 
+import sqlalchemy as sa
+
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
@@ -343,6 +345,24 @@ def _de_stage_with_lb(
     )
 
 
+def _de_stage_single_item(*, stage_id: int, tournament_id: int, ub_item_id: int = 200) -> SimpleNamespace:
+    """A double-elimination stage that has no Lower bracket item yet."""
+    return SimpleNamespace(
+        id=stage_id,
+        tournament_id=tournament_id,
+        stage_type=enums.StageType.DOUBLE_ELIMINATION,
+        items=[
+            SimpleNamespace(
+                id=ub_item_id,
+                name="Upper Bracket",
+                type=enums.StageItemType.BRACKET_UPPER,
+                order=0,
+                inputs=[],
+            )
+        ],
+    )
+
+
 class SplitSeedingTests(IsolatedAsyncioTestCase):
     async def test_split_seeding_ub_and_lb(self) -> None:
         """top=2, top_lb=2 with 2 groups → 4 UB slots and 4 LB slots."""
@@ -442,42 +462,35 @@ class SplitSeedingTests(IsolatedAsyncioTestCase):
 
         self.assertIn("double_elimination", str(ctx.exception).lower())
 
-    async def test_split_seeding_lb_requires_lb_item(self) -> None:
-        """top_lb > 0 when the DE stage has no BRACKET_LOWER item must be rejected."""
+    async def test_split_seeding_creates_the_missing_lb_item(self) -> None:
+        """A DE stage with one bracket item gets its Lower bracket item here (spec §3.2)."""
         source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
-        # DE stage but only an UB item, no LB item
-        target = SimpleNamespace(
-            id=2,
-            tournament_id=99,
-            stage_type=enums.StageType.DOUBLE_ELIMINATION,
-            items=[
-                SimpleNamespace(
-                    id=200,
-                    name="Upper Bracket",
-                    type=enums.StageItemType.BRACKET_UPPER,
-                    order=0,
-                    inputs=[],
-                )
-            ],
-        )
+        target = _de_stage_single_item(stage_id=2, tournament_id=99)
 
-        session = SimpleNamespace(add=Mock(), commit=AsyncMock())
+        session = SimpleNamespace(add=Mock(), commit=AsyncMock(), flush=AsyncMock())
 
         with patch.object(
             stage_service.stage_service,
             "get_stage",
-            AsyncMock(side_effect=[target, source]),
+            AsyncMock(side_effect=[target, source, target]),
         ):
-            with self.assertRaises(Exception) as ctx:
-                await stage_service.stage_service.wire_from_groups(
-                    session,
-                    target_stage_id=target.id,
-                    source_stage_id=source.id,
-                    top=2,
-                    top_lb=2,
-                )
+            await stage_service.stage_service.wire_from_groups(
+                session,
+                target_stage_id=target.id,
+                source_stage_id=source.id,
+                top=2,
+                top_lb=4,
+            )
 
-        self.assertIn("BRACKET_LOWER", str(ctx.exception))
+        lb_item = next(item for item in target.items if item.type == enums.StageItemType.BRACKET_LOWER)
+        self.assertEqual("Lower bracket", lb_item.name)
+        self.assertEqual(1, lb_item.order)
+        # 2 groups × positions 3-6.
+        self.assertEqual(8, len(lb_item.inputs))
+        self.assertEqual(4, len(target.items[0].inputs))
+        # The collection must come into the world loaded: seeding it right after the
+        # flush would otherwise lazy-load, which on an async session raises.
+        self.assertNotIn("inputs", sa.inspect(lb_item).unloaded)
 
     async def test_split_seeding_zero_top_lb_unchanged(self) -> None:
         """top_lb=0 (default) should behave exactly like the original function."""
@@ -656,41 +669,64 @@ class PerGroupAdvanceCountTests(IsolatedAsyncioTestCase):
             [(inp.source_stage_item_id, inp.source_position) for inp in lb_inputs],
         )
 
-    async def test_lower_entrants_without_lower_item_are_refused(self) -> None:
+    async def test_lower_entrants_get_a_lower_item_created(self) -> None:
         """A group sending teams down needs somewhere to send them, even when the
-        caller asked for no lower seeds at all (``top_lb = 0``)."""
+        caller asked for no lower seeds at all (``top_lb = 0``): the stage gets a
+        Lower bracket item instead of a 400."""
         source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
         source.items[0].advance_upper_count = 2
-        target = SimpleNamespace(
-            id=2,
-            tournament_id=99,
-            stage_type=enums.StageType.DOUBLE_ELIMINATION,
-            items=[
-                SimpleNamespace(
-                    id=200,
-                    name="Upper Bracket",
-                    type=enums.StageItemType.BRACKET_UPPER,
-                    order=0,
-                    inputs=[],
-                )
-            ],
-        )
-        session = SimpleNamespace(add=Mock(), commit=AsyncMock())
+        target = _de_stage_single_item(stage_id=2, tournament_id=99)
+        session = SimpleNamespace(add=Mock(), commit=AsyncMock(), flush=AsyncMock())
 
         with patch.object(
             stage_service.stage_service,
             "get_stage",
-            AsyncMock(side_effect=[target, source]),
+            AsyncMock(side_effect=[target, source, target]),
         ):
-            with self.assertRaises(Exception) as ctx:
-                await stage_service.stage_service.wire_from_groups(
-                    session,
-                    target_stage_id=target.id,
-                    source_stage_id=source.id,
-                    top=4,
-                )
+            await stage_service.stage_service.wire_from_groups(
+                session,
+                target_stage_id=target.id,
+                source_stage_id=source.id,
+                top=4,
+            )
 
-        self.assertIn("BRACKET_LOWER", str(ctx.exception))
+        lb_item = next(item for item in target.items if item.type == enums.StageItemType.BRACKET_LOWER)
+        # Only group A drops anyone: its positions 3-4.
+        self.assertEqual(
+            [(100, 3), (100, 4)],
+            [(inp.source_stage_item_id, inp.source_position) for inp in lb_item.inputs],
+        )
+
+    async def test_rewire_without_lower_entrants_clears_the_lb_item(self) -> None:
+        """Upper 2 of 4, then upper 4 of 4: the lower item's TENTATIVE rows go."""
+        source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
+        target = _de_stage_with_lb(stage_id=2, tournament_id=99)
+        session = SimpleNamespace(add=Mock(), commit=AsyncMock(), flush=AsyncMock())
+
+        with patch.object(
+            stage_service.stage_service,
+            "get_stage",
+            AsyncMock(side_effect=[target, source, target, target, source, target]),
+        ):
+            await stage_service.stage_service.wire_from_groups(
+                session,
+                target_stage_id=target.id,
+                source_stage_id=source.id,
+                top=2,
+                top_lb=2,
+            )
+            self.assertEqual(4, len(target.items[1].inputs))
+
+            await stage_service.stage_service.wire_from_groups(
+                session,
+                target_stage_id=target.id,
+                source_stage_id=source.id,
+                top=4,
+                upper_per_group=None,
+            )
+
+        self.assertEqual([], target.items[1].inputs)
+        self.assertEqual(8, len(target.items[0].inputs))
 
 
 class AutoWireStageTests(IsolatedAsyncioTestCase):

@@ -1666,8 +1666,8 @@ class AdminStageService:
         bracket and the rest in the lower one, with a group's own
         ``advance_upper_count`` overriding that. A group's lower-bracket band
         starts right after its own upper band, so uneven groups do not share one
-        offset. Lower-bracket starters require a DOUBLE_ELIMINATION target with a
-        BRACKET_LOWER stage item.
+        offset. Lower-bracket starters require a DOUBLE_ELIMINATION target; its
+        BRACKET_LOWER stage item is created here when it has none (spec §3.2).
 
         Idempotent: existing FINAL inputs are preserved; existing TENTATIVE inputs
         with the same slot are overwritten.
@@ -1738,23 +1738,43 @@ class AdminStageService:
                     detail="`top_lb` requires a double_elimination target stage",
                 )
             if lb_item is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=("Target stage has no BRACKET_LOWER stage item; create one before using top_lb"),
+                # Spec §3.2 (amended): a DE stage that sends teams lower gets its
+                # Lower bracket item here, exactly as the bsplit01 migration made
+                # one for the stages that predate the split.
+                lb_item = models.StageItem(
+                    stage_id=target_stage.id,
+                    name="Lower bracket",
+                    type=enums.StageItemType.BRACKET_LOWER,
+                    order=max(item.order for item in target_stage.items) + 1,
+                    # Explicitly empty: once flushed, an untouched collection would
+                    # lazy-load, and a lazy load on an async session raises.
+                    inputs=[],
                 )
+                session.add(lb_item)
+                target_stage.items.append(lb_item)
+                await session.flush()
         if sum(upper for _, upper, _ in counts) < 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Fewer than 2 teams reach the upper bracket",
             )
 
-        # UB: first stage_item by order. A group's lower-bracket band starts right
-        # after its own upper one, which for uneven groups is not a shared offset.
-        ub_item = sorted(target_stage.items, key=lambda item: (item.order, item.id))[0]
+        # UB: first non-lower stage_item by order. A group's lower-bracket band
+        # starts right after its own upper one, which for uneven groups is not a
+        # shared offset.
+        ub_items = [item for item in target_stage.items if item.type != enums.StageItemType.BRACKET_LOWER]
+        if not ub_items:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target stage has only a lower bracket item; create an upper bracket item before wiring",
+            )
+        ub_item = sorted(ub_items, key=lambda item: (item.order, item.id))[0]
         _apply_seeding(session, _build_seeding([GroupSlice(i, 1, ub) for i, ub, _ in counts], mode), ub_item)
 
         lb_slices = [GroupSlice(i, ub + 1, lb) for i, ub, lb in counts if lb > 0]
-        if lb_slices and lb_item is not None:
+        # Unconditional on purpose: a re-wire that now sends nobody lower has to
+        # clear the TENTATIVE rows the previous one left on the lower item.
+        if lb_item is not None:
             _apply_seeding(session, _build_seeding(lb_slices, mode), lb_item)
 
         if notify:
