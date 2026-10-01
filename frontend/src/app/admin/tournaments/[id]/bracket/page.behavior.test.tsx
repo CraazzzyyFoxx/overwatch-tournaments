@@ -45,7 +45,8 @@ vi.mock("@/services/admin.service", () => ({
     updateStage: vi.fn(),
     // The Bracket preview draws the generator's own skeleton; this tab's
     // assertions are about routing and permissions, so it stays empty here.
-    getStageBracketPreview: vi.fn().mockResolvedValue([])
+    getStageBracketPreview: vi.fn().mockResolvedValue([]),
+    getStagePlannedRounds: vi.fn().mockResolvedValue([])
   }
 }));
 

@@ -385,13 +385,16 @@ export function projectStage({
   stages,
   stageType,
   maxRounds,
-  bestOf
+  bestOf,
+  plannedRounds
 }: {
   stage: Stage;
   stages: Stage[];
   stageType: StageType;
   maxRounds: number;
   bestOf: StageBestOfConfig;
+  /** The engine's own rounds, when `planned-rounds` has answered. */
+  plannedRounds?: readonly number[];
 }): StageProjection {
   const isBracket = BRACKET_STAGE_TYPES.includes(stageType);
   const isGroups = GROUP_STAGE_TYPES.includes(stageType);
@@ -421,7 +424,8 @@ export function projectStage({
     maxRounds,
     bracketTeamCount: bracketTeams.count,
     lowerBracketTeamCount,
-    configuredRounds: Object.keys(bestOf.by_round ?? {}).map(Number)
+    configuredRounds: Object.keys(bestOf.by_round ?? {}).map(Number),
+    plannedRounds
   });
 
   const upper = sections.find((section) => section.key === "upper");

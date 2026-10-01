@@ -402,6 +402,25 @@ describe("projectStage", () => {
     ]);
   });
 
+  test("follows the engine's planned rounds over the team-count formula", () => {
+    // 4 upper / 8 lower: the engine's rounds say UB 1..2, LB -1..-5, GF 3.
+    const projection = projectStage({
+      stage: playoff,
+      stages: [playoff],
+      stageType: "double_elimination",
+      maxRounds: 5,
+      bestOf: { default: 3, by_round: {}, final: null },
+      plannedRounds: [-5, -4, -3, -2, -1, 1, 2, 3]
+    });
+
+    expect(projection.rounds.map((round) => round.round)).toEqual([
+      1, 2, -1, -2, -3, -4, -5, 3
+    ]);
+    expect(projection.rounds.filter((round) => round.isFinal).map((round) => round.round)).toEqual([
+      3
+    ]);
+  });
+
   test("resolves each round's series length the way the backend does", () => {
     const projection = projectStage({
       stage: playoff,

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   GitMerge,
@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Stage, StageItem, Tournament } from "@/types/tournament.types";
@@ -143,6 +144,17 @@ export function StageEditor({
 
   const hasEncounters = (progress?.total ?? 0) > 0;
   const changes = stageFormChanges(stage, form);
+  // The engine's own round list: the shape the bracket will actually be
+  // generated in, including an uneven upper/lower split (and, later, a custom
+  // bracket template) that no team-count formula can derive. Keyed on the whole
+  // `stage` the way the bracket preview is, so a save refetches it.
+  const plannedRoundsQuery = useQuery({
+    queryKey: adminQueryKeys.stagePlannedRounds(stage.id, stage),
+    queryFn: () => adminService.getStagePlannedRounds(stage.id),
+    enabled: BRACKET_STAGE_TYPES.includes(stage.stage_type)
+  });
+  const plannedRounds = plannedRoundsQuery.data;
+
   const projection = useMemo(
     () =>
       projectStage({
@@ -150,9 +162,10 @@ export function StageEditor({
         stages,
         stageType: form.stageType,
         maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
-        bestOf: form.bestOf
+        bestOf: form.bestOf,
+        plannedRounds
       }),
-    [stage, stages, form.stageType, form.maxRounds, form.bestOf]
+    [stage, stages, form.stageType, form.maxRounds, form.bestOf, plannedRounds]
   );
 
   const mergeCandidates = isMergeableGroupStage(stage)
@@ -553,6 +566,7 @@ export function StageEditor({
             onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
             bracketTeamCount={projection.bracketTeams.count}
             lowerBracketTeamCount={projection.lowerBracketTeamCount}
+            plannedRounds={plannedRounds}
             onApplyToExisting={() => applyBestOfMutation.mutate()}
             applying={applyBestOfMutation.isPending}
           />
@@ -563,6 +577,7 @@ export function StageEditor({
             stage={stage}
             bracketTeamCount={projection.bracketTeams.count}
             lowerBracketTeamCount={projection.lowerBracketTeamCount}
+            plannedRounds={plannedRounds}
             onChanged={onChanged}
           />
         ) : null}

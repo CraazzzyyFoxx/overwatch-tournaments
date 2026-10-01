@@ -689,11 +689,14 @@ export function BestOfSection({
   onChange,
   bracketTeamCount,
   lowerBracketTeamCount,
+  plannedRounds,
   onApplyToExisting,
   applying
 }: SectionProps & {
   bracketTeamCount: number;
   lowerBracketTeamCount: number;
+  /** The engine's own rounds, from the editor's `planned-rounds` query. */
+  plannedRounds?: readonly number[];
   onApplyToExisting: () => void;
   applying: boolean;
 }) {
@@ -724,6 +727,7 @@ export function BestOfSection({
         bracketTeamCount,
         lowerBracketTeamCount:
           form.stageType === "double_elimination" ? lowerBracketTeamCount : 0,
+        plannedRounds,
         configuredRounds: Object.keys(form.bestOf.by_round).map(Number)
       });
 

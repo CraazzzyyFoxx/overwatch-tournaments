@@ -145,6 +145,30 @@ describe("stageBestOfRoundSections", () => {
     ).toEqual([-1, -2]);
   });
 
+  it("takes a double elimination's rounds from the engine when it has them", () => {
+    // 4 upper / 8 lower: the engine builds UB 1..2, LB -1..-5, GF 3 — the old
+    // formula said 4 lower rounds.
+    const sections = stageBestOfRoundSections({
+      stageType: "double_elimination",
+      maxRounds: 5,
+      bracketTeamCount: 4,
+      lowerBracketTeamCount: 8,
+      plannedRounds: [-5, -4, -3, -2, -1, 1, 2, 3]
+    });
+    expect(roundsOf(sections, "upper")).toEqual([1, 2]);
+    expect(roundsOf(sections, "lower")).toEqual([-1, -2, -3, -4, -5]);
+  });
+
+  it("takes a single elimination's depth from the engine when it has it", () => {
+    const sections = stageBestOfRoundSections({
+      stageType: "single_elimination",
+      maxRounds: 5,
+      bracketTeamCount: 4,
+      plannedRounds: [1, 2, 3]
+    });
+    expect(sections[0].rounds.map((row) => row.round)).toEqual([1, 2, 3]);
+  });
+
   it("offers no lower bracket for a two-team double elimination", () => {
     // `generate([a, b])` emits rounds [1, 2] only — UB Final and Grand Final.
     const sections = stageBestOfRoundSections({

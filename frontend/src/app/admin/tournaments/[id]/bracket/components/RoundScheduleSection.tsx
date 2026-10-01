@@ -43,6 +43,8 @@ interface RoundScheduleSectionProps {
   bracketTeamCount: number;
   /** Teams seeded straight into the lower bracket, from the same projection. */
   lowerBracketTeamCount: number;
+  /** The engine's own rounds, from the editor's `planned-rounds` query. */
+  plannedRounds?: readonly number[];
   onChanged: () => void;
 }
 
@@ -128,6 +130,7 @@ export function RoundScheduleSection({
   stage,
   bracketTeamCount,
   lowerBracketTeamCount,
+  plannedRounds,
   onChanged
 }: Readonly<RoundScheduleSectionProps>) {
   const t = useTranslations("admin.roundSchedule");
@@ -191,6 +194,7 @@ export function RoundScheduleSection({
       maxRounds: stage.max_rounds ?? 5,
       bracketTeamCount,
       lowerBracketTeamCount,
+      plannedRounds,
       configuredRounds: [...byRound.keys()]
     }).flatMap((section) => section.rounds);
 
@@ -205,6 +209,7 @@ export function RoundScheduleSection({
     stage.max_rounds,
     lowerBracketTeamCount,
     bracketTeamCount,
+    plannedRounds,
     t
   ]);
 

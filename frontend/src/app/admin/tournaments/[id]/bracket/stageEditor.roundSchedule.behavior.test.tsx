@@ -49,7 +49,8 @@ vi.mock("@/services/admin.service", () => ({
     getTournament: (...args: unknown[]) => getTournament(...args),
     getStagesProgress: (...args: unknown[]) => getStagesProgress(...args),
     updateEncounter: (...args: unknown[]) => updateEncounter(...args),
-    updateStage: vi.fn()
+    updateStage: vi.fn(),
+    getStagePlannedRounds: vi.fn().mockResolvedValue([])
   }
 }));
 
