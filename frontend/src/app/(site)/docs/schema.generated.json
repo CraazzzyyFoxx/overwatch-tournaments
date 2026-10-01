@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "btmpl01",
+  "alembic_head": "bsplit02",
   "packages": [
     {
       "key": "achievements",
