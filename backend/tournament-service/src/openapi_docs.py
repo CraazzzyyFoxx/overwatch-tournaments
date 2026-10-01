@@ -562,7 +562,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.stage_bracket_template_set": {
         "summary": "Save a custom bracket layout",
-        "description": "Permission: workspace `stage.update`. Validates the template (spec rules) and stores it; refused with 409 while the stage has matches. An invalid template is a 422 whose `details.fields[0]` carries `code: \"invalid_bracket_template\"` plus a `problems` array of `{match_id, slot, code, message}`.",
+        "description": 'Permission: workspace `stage.update`. Validates the template (spec rules) and stores it; refused with 409 while the stage has matches. An invalid template is a 422 whose `details.fields[0]` carries `code: "invalid_bracket_template"` plus a `problems` array of `{match_id, slot, code, message}`.',
     },
     "rpc.tournament.stage_bracket_template_clear": {
         "summary": "Reset to the generated bracket layout",
