@@ -10,10 +10,11 @@ group stage that feeds it -- ``tournament.stage.advance_upper_count``, overridab
 per group on ``tournament.stage_item``. NULL on both means every advancing team
 starts Upper, which is what a non-split playoff did.
 
-Existing split stages are carried over: their source group stage gets
-``a - a // 2`` (exactly what ``advance_split`` computed), and a split stage that
-held both halves in ONE bracket item gets a real ``bracket_lower`` item with the
-inputs that used to be cut off the end of the seed list. Matches are not touched.
+Existing split stages are carried over: a split stage that held both halves in ONE
+bracket item always gets a real ``bracket_lower`` item with the inputs that used to
+be cut off the end of the seed list, and when the group stage that fed it can be
+identified that stage gets ``a - a // 2`` (exactly what ``advance_split`` computed).
+Matches are not touched.
 """
 
 from __future__ import annotations
@@ -166,9 +167,12 @@ def upgrade() -> None:
         )
     ).all()
     for stage_id, tournament_id, stage_order in split_stages:
+        # The item split is what the stage reads today; it has to happen even when
+        # the backfill below cannot find the group stage that fed the split.
+        _split_single_item(bind, stage_id)
         source_id = _source_stage_id(bind, stage_id, tournament_id, stage_order)
         if source_id is None:
-            print(f"bsplit01: stage {stage_id}: no single source group stage, split not carried over")
+            print(f"bsplit01: stage {stage_id}: no single source group stage, upper count not backfilled")
             continue
         # advance - advance // 2: the old advance_split's upper share.
         bind.execute(
@@ -185,7 +189,6 @@ def upgrade() -> None:
             ),
             {"id": source_id},
         )
-        _split_single_item(bind, stage_id)
     op.drop_column("stage", "split_lower_bracket", schema="tournament")
 
 
