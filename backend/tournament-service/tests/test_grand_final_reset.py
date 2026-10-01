@@ -259,3 +259,155 @@ class GrandFinalResetTests(IsolatedAsyncioTestCase):
 
         self.assertEqual((None, []), await advancement._maybe_create_grand_final_reset(session, gf, LB_CHAMPION))
         self.assertEqual([], session.added)
+
+
+Encounter = importlib.import_module("shared.models.tournament.encounter").Encounter
+persist_skeleton = importlib.import_module("shared.services.bracket.persist").persist_skeleton
+resolve_seeds = importlib.import_module("src.domain.stage.seeds").resolve_seeds
+placeholder_seeds = importlib.import_module("shared.services.bracket.engine").placeholder_seeds
+bracket_template = importlib.import_module("shared.services.bracket.template")
+
+from tests.test_bracket_template import _sketch  # noqa: E402
+
+
+def _where_value(statement, key: str):
+    """The value a statement's WHERE clause compares ``key`` to."""
+    stack = [statement.whereclause]
+    while stack:
+        node = stack.pop()
+        if node is None:
+            continue
+        clauses = getattr(node, "clauses", None)
+        if clauses is not None:
+            stack.extend(clauses)
+            continue
+        if getattr(getattr(node, "left", None), "key", None) == key:
+            return node.right.value
+    return None
+
+
+class _BracketSession:
+    """A whole bracket in memory: enough of an ``AsyncSession`` for
+    ``persist_skeleton`` to write one and ``advance_winner`` to play it out."""
+
+    def __init__(self, stage: SimpleNamespace, team_ids: range) -> None:
+        self.stage = stage
+        self.encounters: dict[int, object] = {}
+        self.links: list = []
+        self.teams = {team_id: f"Team {team_id}" for team_id in team_ids}
+        self._pending: list = []
+        self._next_id = 1000
+
+    def add(self, obj) -> None:
+        self._pending.append(obj)
+
+    def add_all(self, objs) -> None:
+        self._pending.extend(objs)
+
+    async def flush(self) -> None:
+        while self._pending:
+            obj = self._pending.pop(0)
+            if getattr(obj, "id", None) is None:
+                self._next_id += 1
+                obj.id = self._next_id
+            if isinstance(obj, Encounter):
+                # The column defaults the INSERT would have applied.
+                if obj.result_status is None:
+                    obj.result_status = enums.EncounterResultStatus.NONE
+                self.encounters[obj.id] = obj
+            elif isinstance(obj, EncounterLink):
+                self.links.append(obj)
+
+    async def get(self, model, primary_key, with_for_update=False):
+        if model is Stage:
+            return self.stage
+        return self.encounters.get(primary_key)
+
+    async def scalar(self, statement):
+        # The Grand Final probe: the slot of the WINNER link fed by a negative round.
+        target_id = _where_value(statement, "target_encounter_id")
+        for link in self.links:
+            if (
+                link.target_encounter_id == target_id
+                and link.role == enums.EncounterLinkRole.WINNER
+                and self.encounters[link.source_encounter_id].round < 0
+            ):
+                return link.target_slot
+        return None
+
+    async def execute(self, statement):
+        entity = (statement.column_descriptions or [{}])[0].get("entity")
+        if entity is EncounterLink:
+            source_id = _where_value(statement, "source_encounter_id")
+            return _Result([link for link in self.links if link.source_encounter_id == source_id])
+        return _Result(list(self.teams.items()))
+
+    async def delete(self, obj) -> None:
+        self.encounters.pop(obj.id, None)
+
+
+class CustomTemplateBracketPlaythroughTests(IsolatedAsyncioTestCase):
+    """A hand-drawn template is a real bracket: persisted, its advancement links
+    carry every result to the Grand Final, and the Reset still fires off them."""
+
+    async def test_the_sketch_template_plays_through_to_a_grand_final_reset(self) -> None:
+        stage = SimpleNamespace(
+            id=175,
+            tournament_id=72,
+            stage_type=enums.StageType.DOUBLE_ELIMINATION,
+            de_grand_final_type="with_reset",
+        )
+        session = _BracketSession(stage, range(1, 9))
+        template = bracket_template.BracketTemplate.model_validate(_sketch())
+        skeleton = resolve_seeds(
+            bracket_template.template_to_skeleton(template),
+            dict(zip(placeholder_seeds(8), range(1, 9), strict=True)),
+        )
+
+        encounters = await persist_skeleton(
+            session,
+            stage=stage,
+            skeleton=skeleton,
+            stage_item_id=176,
+            team_names_by_id=session.teams,
+            best_of_for_round=lambda round_number, *, is_final: 5 if is_final else 3,
+            is_elimination=True,
+        )
+
+        self.assertEqual(10, len(encounters))
+        # Seeds only; every other slot waits on a link.
+        self.assertEqual(
+            [(1, 4), (2, 3), (None, None), (5, 8), (6, 7)],
+            [(e.home_team_id, e.away_team_id) for e in encounters[:5]],
+        )
+
+        # The upper seeds win their halves; team 5 runs the whole lower bracket
+        # and takes the Grand Final from the LB side.
+        for index, winner in ((0, 1), (1, 2), (2, 1), (3, 5), (4, 6), (5, 5), (6, 6), (7, 5), (8, 5)):
+            await self._play(session, encounters[index], winner)
+
+        grand_final = encounters[9]
+        self.assertEqual((1, 5), (grand_final.home_team_id, grand_final.away_team_id))
+        created = await self._play(session, grand_final, 5)
+
+        reset = next(encounter for encounter in created if encounter.round == grand_final.round + 1)
+        self.assertEqual((1, 5), (reset.home_team_id, reset.away_team_id))
+        self.assertEqual(5, reset.best_of)
+        self.assertEqual(
+            {
+                (enums.EncounterLinkRole.WINNER, enums.EncounterLinkSlot.AWAY),
+                (enums.EncounterLinkRole.LOSER, enums.EncounterLinkSlot.HOME),
+            },
+            {
+                (link.role, link.target_slot)
+                for link in session.links
+                if link.source_encounter_id == grand_final.id and link.target_encounter_id == reset.id
+            },
+        )
+
+    @staticmethod
+    async def _play(session: _BracketSession, encounter, winner_id: int) -> list:
+        home_wins = encounter.home_team_id == winner_id
+        encounter.home_score, encounter.away_score = (2, 0) if home_wins else (0, 2)
+        encounter.status = enums.EncounterStatus.COMPLETED
+        return await advancement.advance_winner(session, encounter)

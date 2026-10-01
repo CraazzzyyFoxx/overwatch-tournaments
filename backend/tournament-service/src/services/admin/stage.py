@@ -1,6 +1,7 @@
 """Admin service layer for stage CRUD and bracket generation."""
 
 from collections.abc import Sequence
+from dataclasses import asdict
 from types import SimpleNamespace
 from typing import Any
 
@@ -38,6 +39,12 @@ from shared.services.bracket.swiss_state import (
     mark_swiss_scope_stopped,
     record_swiss_bye,
     swiss_bye_team_ids,
+)
+from shared.services.bracket.template import (
+    BracketTemplate,
+    skeleton_to_template,
+    template_to_skeleton,
+    validate_template,
 )
 from shared.services.bracket.types import BracketSkeleton, Pairing
 from src import models, schemas
@@ -238,6 +245,9 @@ class AdminStageService:
         if stage.stage_type not in BRACKET_STAGE_TYPES:
             return []
 
+        if stage.bracket_template is not None:
+            return sorted({match["round"] for match in stage.bracket_template["matches"]})
+
         upper_count, lower_count = await self._bracket_seed_counts(session, stage)
         skeleton = placeholder_bracket(stage.stage_type, upper_count, lower_count=lower_count)
         return sorted({pairing.round_number for pairing in skeleton.pairings})
@@ -268,6 +278,14 @@ class AdminStageService:
         upper_ids = await self._rank_seed_ids(session, stage, upper_ids)
         lower_ids = await self._rank_seed_ids(session, stage, lower_ids)
 
+        if stage.bracket_template is not None:
+            template = BracketTemplate.model_validate(stage.bracket_template)
+            if (len(upper_ids), len(lower_ids)) != (template.upper_seeds, template.lower_seeds):
+                # Wired seeds do not fit the custom bracket (generation refuses until
+                # they do): draw it with every slot TBD instead.
+                upper_ids = placeholder_seeds(template.upper_seeds)
+                lower_ids = placeholder_seeds(template.lower_seeds, offset=template.upper_seeds)
+
         if len(upper_ids) + len(lower_ids) < 2:
             upper_count, lower_count = await self._projected_bracket_seed_counts(session, stage)
             if upper_count < 2:
@@ -275,14 +293,7 @@ class AdminStageService:
             upper_ids = placeholder_seeds(upper_count)
             lower_ids = placeholder_seeds(lower_count, offset=upper_count)
 
-        skeleton = _resolve_seeds(
-            generate_bracket(
-                stage.stage_type,
-                upper_ids,
-                lower_bracket_team_ids=lower_ids,
-            ),
-            {},
-        )
+        skeleton = _resolve_seeds(self._bracket_skeleton(stage, upper_ids, lower_ids), {})
 
         team_names_by_id = await self._load_team_names(session, upper_ids + lower_ids)
         best_of_cfg = best_of_config(stage)
@@ -315,6 +326,88 @@ class AdminStageService:
                 for pairing in skeleton.pairings
             ]
         }
+
+    def _bracket_skeleton(self, stage: models.Stage, upper_ids: list[int], lower_ids: list[int]) -> BracketSkeleton:
+        """What ``generate_bracket`` returns for these seeds (real ids or ``placeholder_seeds``),
+        drawn from the stage's custom template when it has one."""
+        if stage.bracket_template is None:
+            return generate_bracket(stage.stage_type, upper_ids, lower_bracket_team_ids=lower_ids)
+        template = BracketTemplate.model_validate(stage.bracket_template)
+        if (len(upper_ids), len(lower_ids)) != (template.upper_seeds, template.lower_seeds):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Custom bracket expects {template.upper_seeds}+{template.lower_seeds} seeds, stage has "
+                    f"{len(upper_ids)}+{len(lower_ids)}. Edit or reset the custom bracket."
+                ),
+            )
+        seeds = upper_ids + lower_ids
+        if len(set(seeds)) != len(seeds):
+            raise ValueError("team_ids must be unique within a stage item")
+        return _resolve_seeds(
+            template_to_skeleton(template),
+            dict(zip(placeholder_seeds(len(seeds)), seeds, strict=True)),
+        )
+
+    def _require_bracket_stage(self, stage: models.Stage) -> None:
+        if stage.stage_type not in BRACKET_STAGE_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only single/double elimination stages have a bracket layout",
+            )
+
+    async def _assert_no_encounters(self, session: AsyncSession, stage_id: int) -> None:
+        if await self.encounter_repo.count(session, filters=[models.Encounter.stage_id == stage_id]):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This stage already has generated matches. Delete them first to edit the bracket.",
+            )
+
+    async def get_bracket_template(self, session: AsyncSession, stage_id: int) -> dict:
+        """The stage's custom bracket, or the one its format would generate now, plus the seed counts it has."""
+        stage = await self.get_stage(session, stage_id)
+        self._require_bracket_stage(stage)
+        upper, lower = await self._bracket_seed_counts(session, stage)
+        if stage.bracket_template is not None:
+            template: dict | None = BracketTemplate.model_validate(stage.bracket_template).model_dump(mode="json")
+        elif upper >= 2:
+            generated = placeholder_bracket(stage.stage_type, upper, lower_count=lower)
+            template = skeleton_to_template(generated, upper_seeds=upper, lower_seeds=lower).model_dump(mode="json")
+        else:
+            template = None
+        return {
+            "custom": stage.bracket_template is not None,
+            "template": template,
+            "seeds": {"upper": upper, "lower": lower},
+        }
+
+    async def set_bracket_template(self, session: AsyncSession, stage_id: int, template: BracketTemplate) -> dict:
+        stage = await self.get_stage(session, stage_id)
+        self._require_bracket_stage(stage)
+        await self._assert_no_encounters(session, stage_id)
+        problems = validate_template(template, stage.stage_type)
+        if problems:
+            # A dict detail WITHOUT ``msg``: ``shared.rpc.common.http_error``'s attribute-bag
+            # branch is the one that carries ``problems`` to the client untouched.
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_bracket_template",
+                    "message": f"bracket template has {len(problems)} problem(s)",
+                    "problems": [asdict(problem) for problem in problems],
+                },
+            )
+        stage.bracket_template = template.model_dump(mode="json")
+        await self._finish_structure_write(session, stage, notify=True, commit=True, schedule_standings=False)
+        return await self.get_bracket_template(session, stage_id)
+
+    async def clear_bracket_template(self, session: AsyncSession, stage_id: int) -> dict:
+        stage = await self.get_stage(session, stage_id)
+        self._require_bracket_stage(stage)
+        await self._assert_no_encounters(session, stage_id)
+        stage.bracket_template = None
+        await self._finish_structure_write(session, stage, notify=True, commit=True, schedule_standings=False)
+        return await self.get_bracket_template(session, stage_id)
 
     async def _bracket_seed_counts(self, session: AsyncSession, stage: models.Stage) -> tuple[int, int]:
         """How many teams start in ``stage``'s upper and lower bracket.
@@ -477,6 +570,11 @@ class AdminStageService:
 
         next_type = update_data.get("stage_type", stage.stage_type)
         if next_type != stage.stage_type:
+            if stage.bracket_template is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Reset the custom bracket before changing the format",
+                )
             existing = await self.encounter_repo.count(session, filters=[models.Encounter.stage_id == stage_id])
             if existing:
                 raise HTTPException(
@@ -1253,6 +1351,9 @@ class AdminStageService:
         *,
         lower_bracket_team_ids: list[int] | None = None,
     ) -> BracketSkeleton:
+        if stage.stage_type in BRACKET_STAGE_TYPES:
+            return self._bracket_skeleton(stage, team_ids, lower_bracket_team_ids or [])
+
         swiss_standings = None
         swiss_played_pairs: set[frozenset[int]] | None = None
         swiss_round = 1
@@ -1294,7 +1395,6 @@ class AdminStageService:
                     if stage.stage_type == enums.StageType.SWISS
                     else set()
                 ),
-                lower_bracket_team_ids=lower_bracket_team_ids,
             )
         except SwissPairingImpossibleError:
             await mark_swiss_scope_stopped(session, stage.id, stage_item_id)
@@ -1376,7 +1476,11 @@ class AdminStageService:
 
         seed_ids = upper_ids + lower_ids
         skeleton = _resolve_seeds(
-            placeholder_bracket(stage.stage_type, len(upper_ids), lower_count=len(lower_ids)),
+            self._bracket_skeleton(
+                stage,
+                placeholder_seeds(len(upper_ids)),
+                placeholder_seeds(len(lower_ids), offset=len(upper_ids)),
+            ),
             dict(zip(placeholder_seeds(len(seed_ids)), seed_ids, strict=True)),
         )
 

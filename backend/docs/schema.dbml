@@ -1081,8 +1081,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
+    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -2828,8 +2828,8 @@ Table tournament.scrim_room {
   created_by_auth_user_id bigint [not null]
   closed_at timestamptz
   indexes {
-    (token) [unique, name: "uq_scrim_room_token"]
     (encounter_id) [unique, name: "uq_scrim_room_encounter"]
+    (token) [unique, name: "uq_scrim_room_token"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
     (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
     (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
@@ -2879,6 +2879,7 @@ Table tournament.stage {
   ffa_columns jsonb [not null, default: `'[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]'`]
   ffa_formula VARCHAR(500) [not null, default: `score`]
   challonge_group_id bigint
+  bracket_template jsonb
   indexes {
     (tournament_id) [name: "ix_tournament_stage_tournament_id"]
   }

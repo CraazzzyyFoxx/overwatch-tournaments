@@ -148,6 +148,9 @@ class Stage(db.TimeStampIntegerMixin):
     )
     #: The Challonge group this stage mirrors (Challonge sync's only link to it).
     challonge_group_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    # A custom bracket drawn in the admin editor (``shared.services.bracket.template``);
+    # NULL = the format's generator draws it.
+    bracket_template: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="stages")
     items: Mapped[list[StageItem]] = relationship(
@@ -167,6 +170,10 @@ class Stage(db.TimeStampIntegerMixin):
     @property
     def scoring(self) -> dict[str, float | None]:
         return {"win": self.win_points, "draw": self.draw_points, "loss": self.loss_points}
+
+    @property
+    def has_custom_bracket(self) -> bool:
+        return self.bracket_template is not None
 
     @property
     def best_of(self) -> dict[str, typing.Any]:

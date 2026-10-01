@@ -3070,6 +3070,7 @@ CREATE TABLE tournament.stage (
 	ffa_columns JSONB DEFAULT '[{"key": "score", "label": "Счёт", "public": true, "better": "higher"}]' NOT NULL, 
 	ffa_formula VARCHAR(500) DEFAULT 'score' NOT NULL, 
 	challonge_group_id BIGINT, 
+	bracket_template JSONB, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')), 
 	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')), 

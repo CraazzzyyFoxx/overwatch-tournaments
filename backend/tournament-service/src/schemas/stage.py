@@ -213,6 +213,7 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
+    has_custom_bracket: bool = False
 
 
 class StageRead(BaseRead, _StageRegulationRead):
@@ -229,4 +230,5 @@ class StageRead(BaseRead, _StageRegulationRead):
     is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
+    has_custom_bracket: bool = False
     items: list[StageItemRead] = []

@@ -45498,6 +45498,11 @@
         "ffa_scoring": {
           "$ref": "#/components/schemas/tournament.FfaScoring"
         },
+        "has_custom_bracket": {
+          "default": false,
+          "title": "Has Custom Bracket",
+          "type": "boolean"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -45729,6 +45734,11 @@
         },
         "ffa_scoring": {
           "$ref": "#/components/schemas/tournament.FfaScoring"
+        },
+        "has_custom_bracket": {
+          "default": false,
+          "title": "Has Custom Bracket",
+          "type": "boolean"
         },
         "id": {
           "title": "Id",

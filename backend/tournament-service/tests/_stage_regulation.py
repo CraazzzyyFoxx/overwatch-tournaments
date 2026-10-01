@@ -29,6 +29,7 @@ def stage_regulation(*, by_round: dict[int, int] | None = None, **overrides: Any
         "ffa_columns": [{"key": "score", "label": "Счёт", "public": True, "better": "higher"}],
         "ffa_formula": "score",
         "challonge_group_id": None,
+        "bracket_template": None,
     }
     values.update(overrides)
     if by_round:
