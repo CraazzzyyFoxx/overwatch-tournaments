@@ -274,12 +274,29 @@ export function StandingsBrowser({
             "—"
           )
       },
-      {
-        id: "scope",
-        header: "Stage",
-        enableSorting: false,
-        cell: ({ row }) => <span className="text-sm">{standingScopeLabel(row.original)}</span>
-      },
+      // Scoped to one stage, the stage itself is the pinned chip: the column only
+      // earns its place when the stage has groups to tell apart.
+      ...(stageId == null
+        ? [
+            {
+              id: "scope",
+              header: "Stage",
+              enableSorting: false,
+              cell: ({ row }) => <span className="text-sm">{standingScopeLabel(row.original)}</span>
+            } satisfies ColumnDef<Standings>
+          ]
+        : (scopedStage?.items.length ?? 0) > 1
+          ? [
+              {
+                id: "scope",
+                header: "Group",
+                enableSorting: false,
+                cell: ({ row }) => (
+                  <span className="text-sm">{row.original.stage_item?.name ?? "—"}</span>
+                )
+              } satisfies ColumnDef<Standings>
+            ]
+          : []),
       {
         accessorKey: "matches",
         header: "MP",
@@ -360,7 +377,7 @@ export function StandingsBrowser({
         { rowLabel: (row) => `standing for ${row.team?.name ?? "team"}` }
       )
     ],
-    [canUpdate, canDelete, updateMutation]
+    [canUpdate, canDelete, updateMutation, stageId, scopedStage]
   );
 
   if (workspaceId == null) {

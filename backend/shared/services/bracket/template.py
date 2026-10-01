@@ -180,7 +180,7 @@ def validate_template(template: BracketTemplate, stage_type: StageType) -> list[
                     # Round 0 is already out (``zero_round`` returns early).
                     add(
                         "seed_bracket",
-                        f"{slot.seed} is a {bracket} seed; it starts in the {bracket} bracket",
+                        f"{slot.seed} is {'an upper' if bracket == 'upper' else 'a lower'} seed; it starts in the {bracket} bracket",
                         match.id,
                         side,
                     )
