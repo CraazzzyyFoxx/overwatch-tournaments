@@ -92,14 +92,14 @@ things in this codebase are single-instance today and would need an owner first:
    (Web Locks / `BroadcastChannel`).
 4. **Host → workspace resolution** — `src/proxy.ts` resolves the request host to a
    workspace and injects `x-owt-workspace-id`, with its own 60 s TTL cache. N zones would run
-   N copies of that lookup and N caches. Moving it to the gateway is the obvious answer *then*
+   N copies of that lookup and N caches. Moving it to the edge is the obvious answer *then*
    and deliberately not now: the rule it implements (platform subdomain, or a custom domain
    whose DNS TXT verification has completed) lives in Python
    (`backend/app-service/src/rpc/workspaces.py` `by_host`, `backend/shared/tenancy/hostnames.py`),
-   and a second Go implementation on the hot path of every page view would silently render
+   and a second implementation on the hot path of every page view would silently render
    tenants as the platform site the day the two drift. What *did* move to the edge is header
-   hygiene: `gateway/internal/proxy` strips the whole `x-owt-*` prefix from inbound requests,
-   so the trust boundary — not the app being scoped — is what refuses a spoofed
+   hygiene: `nginx/nginx.conf` drops client-supplied `x-owt-*` scoping headers from inbound
+   requests, so the trust boundary — not the app being scoped — is what refuses a spoofed
    `x-owt-workspace-id`. The proxy still deletes before setting; two independent barriers.
 
 ## Message payload

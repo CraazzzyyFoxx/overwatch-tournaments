@@ -55,20 +55,6 @@ func TestDefersToUpstreamHeader(t *testing.T) {
 	}
 }
 
-// Non-API paths (the "/" frontend catch-all: Next HTML, /_next/static) must
-// pass through untouched — Next emits its own correct headers there.
-func TestSkipsNonAPIPaths(t *testing.T) {
-	h := Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	for _, path := range []string{"/tournaments/1", "/_next/static/chunk.js", "/"} {
-		rec := get(t, h, path)
-		if got := rec.Header().Get("Cache-Control"); got != "" {
-			t.Fatalf("path %s: Cache-Control = %q, want none", path, got)
-		}
-	}
-}
-
 // Error responses (404 guards, 429 from the anon limiter, 5xx) are API
 // responses too and must be stamped — a cached error body is as wrong as a
 // cached success.
@@ -85,7 +71,7 @@ func TestStampsErrorStatuses(t *testing.T) {
 }
 
 // Unwrap must expose the real ResponseWriter so http.ResponseController
-// (reverse-proxy flushing) keeps working through the wrapper.
+// keeps working through the wrapper.
 func TestUnwrapExposesUnderlyingWriter(t *testing.T) {
 	rec := httptest.NewRecorder()
 	s := &stamper{ResponseWriter: rec}

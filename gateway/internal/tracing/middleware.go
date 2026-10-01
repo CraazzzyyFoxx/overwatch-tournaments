@@ -50,8 +50,7 @@ func Middleware(next http.Handler) http.Handler {
 }
 
 // statusWriter captures the response status code. It exposes Unwrap so
-// http.ResponseController (used by the reverse proxy for flushing) reaches the
-// real ResponseWriter.
+// http.ResponseController reaches the real ResponseWriter.
 type statusWriter struct {
 	http.ResponseWriter
 	status int

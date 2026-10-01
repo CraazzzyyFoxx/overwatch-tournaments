@@ -9,10 +9,8 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 )
 
-// Route paths. The spec + UI live outside the guarded /api/{v1,auth,analytics,
-// balancer}/ namespaces and outside /ws + /health, so they reach the gateway
-// (nginx proxies everything here) and win over the "/" frontend proxy by
-// ServeMux specificity.
+// Route paths. The spec + UI live outside /api/v1 and outside /ws + /health,
+// and win over the REST mux's "/" 404 catch-all by ServeMux specificity.
 const (
 	publicSpecPath   = "/api/openapi.json"
 	publicUIPath     = "/api/docs"
@@ -59,7 +57,7 @@ func New(cfg config.Docs, info Info, publicGroups, adminGroups []Group) *Server 
 
 // Register mounts the docs routes on the REST mux. No-op when docs are disabled.
 // The admin routes are always registered but return 404 when AdminEnabled is
-// false, so an unmatched /api/docs/admin never falls through to the frontend.
+// false.
 func (s *Server) Register(mux *http.ServeMux) {
 	if !s.cfg.Enabled {
 		return
