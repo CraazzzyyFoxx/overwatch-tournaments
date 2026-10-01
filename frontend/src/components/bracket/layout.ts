@@ -84,6 +84,8 @@ export interface LayoutHeader {
   y: number;
   label: string;
   section: "upper" | "lower";
+  /** The signed round this column holds — positive upstairs, negative downstairs. */
+  round: number;
 }
 
 export interface BracketLayout {
@@ -298,7 +300,7 @@ function layoutColumn(params: {
   const { group, x, headerY, headerId, headerSection, label, startY, slotHints, matchNumbers, latestMatchByTeam } =
     params;
 
-  params.headers.push({ id: headerId, x, y: headerY, label, section: headerSection });
+  params.headers.push({ id: headerId, x, y: headerY, label, section: headerSection, round: group.round });
 
   group.matches.forEach((match, matchIndex) => {
     const hint = slotHints.get(match.id) ?? { home: null, away: null };

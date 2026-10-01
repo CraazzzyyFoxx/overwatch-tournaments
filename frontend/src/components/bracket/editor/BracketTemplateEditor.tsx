@@ -7,13 +7,7 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { StageType } from "@/types/tournament.types";
 
-import {
-  buildLayout,
-  CARD_HEIGHT,
-  CARD_WIDTH,
-  PADDING_Y,
-  type LayoutHeader
-} from "../layout";
+import { buildLayout, CARD_HEIGHT, CARD_WIDTH, PADDING_Y } from "../layout";
 import { useBracketViewport } from "../useBracketViewport";
 import { TemplateMatchCard, type ConnectSource } from "./TemplateMatchCard";
 import {
@@ -28,11 +22,6 @@ const ADD_COLUMN_WIDTH = 132;
 
 const ADD_BUTTON =
   "inline-flex items-center gap-1 rounded-full border border-dashed border-[color:var(--aqt-border-2)] px-2 py-0.5 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)] transition-colors hover:border-[color:var(--aqt-teal)] hover:text-[color:var(--aqt-teal)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
-
-/** `upper-header-2`, `lower-header--3`, `final-header-4` → the signed round. */
-function headerRound(header: LayoutHeader): number {
-  return Number(/(-?\d+)$/.exec(header.id)?.[1] ?? 0);
-}
 
 interface BracketTemplateEditorProps {
   draft: Draft;
@@ -158,8 +147,10 @@ export function BracketTemplateEditor({
               </span>
               <button
                 type="button"
+                aria-label={`Add match to ${header.label}`}
+                data-add-match={header.round}
                 className={ADD_BUTTON}
-                onClick={() => dispatch({ type: "addMatch", round: headerRound(header) })}
+                onClick={() => dispatch({ type: "addMatch", round: header.round })}
               >
                 <Plus className="size-3" aria-hidden />
                 match
@@ -172,7 +163,8 @@ export function BracketTemplateEditor({
           <div className="absolute" style={{ left: layout.width, top: PADDING_Y }}>
             <button
               type="button"
-              className={ADD_BUTTON}
+              aria-label="Add upper round"
+              className={cn(ADD_BUTTON, "whitespace-nowrap")}
               onClick={() =>
                 dispatch(
                   finalRound > 0
@@ -192,7 +184,8 @@ export function BracketTemplateEditor({
             >
               <button
                 type="button"
-                className={ADD_BUTTON}
+                aria-label="Add lower round"
+                className={cn(ADD_BUTTON, "whitespace-nowrap")}
                 onClick={() =>
                   dispatch({
                     type: "addMatch",

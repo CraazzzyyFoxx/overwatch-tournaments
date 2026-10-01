@@ -101,6 +101,30 @@ function generatedTemplate(): BracketTemplateRead {
   };
 }
 
+/** The same stage as a double elimination, so a layout has both sections. */
+function deStage(): Stage {
+  return { ...stage(), stage_type: "double_elimination", max_rounds: 3 };
+}
+
+/** Upper R1, two lower rounds, grand final — one column per section to add to. */
+function deTemplate(): BracketTemplateRead {
+  return {
+    custom: false,
+    seeds: { upper: 2, lower: 2 },
+    template: {
+      version: 1,
+      upper_seeds: 2,
+      lower_seeds: 2,
+      matches: [
+        { id: 1, round: 1, home: { seed: "U1" }, away: { seed: "U2" } },
+        { id: 2, round: -1, home: { seed: "L1" }, away: { seed: "L2" } },
+        { id: 3, round: -2, home: { winner_of: 2 }, away: { loser_of: 1 } },
+        { id: 4, round: 2, home: { winner_of: 1 }, away: { winner_of: 3 } }
+      ]
+    }
+  };
+}
+
 function generatedEncounter(): Encounter {
   return {
     id: 900,
@@ -147,14 +171,14 @@ async function settle() {
   }
 }
 
-async function mount() {
+async function mount(current: Stage = stage()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   root = createRoot(container);
   await act(async () => {
     root!.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en}>
-          <BracketLayoutSection stage={stage()} />
+          <BracketLayoutSection stage={current} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -266,6 +290,34 @@ describe("Bracket layout editor", () => {
     expect(container.querySelector('[data-match-id="2"][data-highlighted]')).toBeNull();
     await click(problem);
     expect(container.querySelector('[data-match-id="2"][data-highlighted]')).not.toBeNull();
+  });
+
+  it("adds a match to the column its button sits on, upper or lower", async () => {
+    // The round a column adds to comes from the layout, not from parsing its
+    // header's id: `upper-header-2` reads as -2 to a regex, which silently put
+    // every new upper match in the lower bracket.
+    getStageBracketTemplate.mockImplementation(() => Promise.resolve(deTemplate()));
+
+    await mount(deStage());
+
+    // Layout order: upper columns, then lower columns, then the finals.
+    const headers = Array.from(container.querySelectorAll<HTMLElement>("[data-add-match]")).map(
+      (addButton) => addButton.parentElement as HTMLElement
+    );
+    const upperHeader = headers[0];
+    const lowerHeader = headers[1];
+
+    await click(upperHeader.querySelector("[data-add-match]"));
+    const added = container.querySelector<HTMLElement>('[data-match-id="5"]');
+    expect(added?.style.left).toBe(upperHeader.style.left);
+    // Same section, not merely the same column: the upper band sits above the
+    // lower header, which is where the misparsed round used to land it.
+    expect(parseFloat(added!.style.top)).toBeLessThan(parseFloat(lowerHeader.style.top));
+
+    await click(lowerHeader.querySelector("[data-add-match]"));
+    const addedLower = container.querySelector<HTMLElement>('[data-match-id="6"]');
+    expect(addedLower?.style.left).toBe(lowerHeader.style.left);
+    expect(parseFloat(addedLower!.style.top)).toBeGreaterThan(parseFloat(lowerHeader.style.top));
   });
 
   it("asks before throwing a custom layout away", async () => {

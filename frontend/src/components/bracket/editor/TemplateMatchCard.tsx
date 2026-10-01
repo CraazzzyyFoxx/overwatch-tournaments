@@ -71,6 +71,10 @@ export function TemplateMatchCard({
         : slot?.loser_of != null
           ? `L M${slot.loser_of}`
           : "Empty");
+    // On screen the card's gutter says which match this row belongs to; an
+    // accessible name has to carry it itself, so a listener hears
+    // "M3 home: L1" rather than a bare "L1".
+    const name = `M${match.id} ${side}: ${slot === null ? "empty" : label}`;
     const rowClass = cn(
       "flex w-full items-center justify-between gap-2 px-2.5 text-left text-caption transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]",
       side === "home" && "border-b border-[color:var(--aqt-border)]",
@@ -83,6 +87,7 @@ export function TemplateMatchCard({
       return (
         <button
           type="button"
+          aria-label={`${name} — connect here`}
           data-template-slot={`${match.id}-${side}`}
           data-connect-target=""
           className={cn(
@@ -103,6 +108,7 @@ export function TemplateMatchCard({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            aria-label={name}
             data-template-slot={`${match.id}-${side}`}
             className={cn(rowClass, "hover:bg-[color:var(--aqt-overlay-3)]")}
             style={{ height: CARD_ROW_HEIGHT }}
@@ -171,7 +177,8 @@ export function TemplateMatchCard({
           type="button"
           data-template-port={`${match.id}-winner`}
           aria-pressed={connecting?.source === match.id && connecting.role === "winner"}
-          title={`Winner of M${match.id}`}
+          aria-label={`Connect winner of M${match.id}`}
+          title={`Connect winner of M${match.id}`}
           className={cn(
             PORT_BUTTON,
             connecting?.source === match.id && connecting.role === "winner"
@@ -187,7 +194,8 @@ export function TemplateMatchCard({
             type="button"
             data-template-port={`${match.id}-loser`}
             aria-pressed={connecting?.source === match.id && connecting.role === "loser"}
-            title={`Loser of M${match.id}`}
+            aria-label={`Connect loser of M${match.id}`}
+            title={`Connect loser of M${match.id}`}
             className={cn(
               PORT_BUTTON,
               connecting?.source === match.id && connecting.role === "loser"
