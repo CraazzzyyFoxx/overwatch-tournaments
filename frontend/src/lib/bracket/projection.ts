@@ -245,25 +245,14 @@ export function getDefaultMergedStageName(stage: Stage) {
 export type BracketTeamCountSource = "seeded" | "slots" | "projected" | "unknown";
 
 /**
- * The upper/lower seed counts the preceding group stage feeds into `stage`,
- * mirroring `_preceding_group_stage` + `_projected_bracket_seed_counts`: the
- * one Swiss/round-robin stage of the latest EARLIER phase sends on each group's
- * OWN `advance_count`, falling back to the stage's number where a group sets
- * none, and the first `advance_upper_count` of those start in the upper
- * bracket while the rest are seeded straight into the lower one.
- *
- * `advance_upper_count` is read with `??`, not a falsy fallback: `0` means
- * "this whole group starts a bracket down", which is a different answer from
- * "inherit".
+ * The group stage that will seed `stage`, mirroring `_preceding_group_stage`:
+ * the one Swiss/round-robin/FFA-league stage of the latest EARLIER phase.
  *
  * Stages sharing `order` run in parallel, so a same-phase group stage is a
  * sibling, not a source; several of them in the earlier phase is ambiguous and
- * projects nothing, exactly as the server refuses to wire one.
+ * resolves to nothing, exactly as the server refuses to wire one.
  */
-export function projectedBracketSeedCounts(
-  stage: Stage,
-  stages: Stage[]
-): { upper: number; lower: number } {
+export function qualifyingSourceStage(stage: Stage, stages: Stage[]): Stage | undefined {
   const earlier = stages
     .filter(
       (candidate) =>
@@ -276,16 +265,41 @@ export function projectedBracketSeedCounts(
     .sort((left, right) => right.order - left.order || right.id - left.id);
   const phase = earlier.at(0)?.order;
   const sources = earlier.filter((candidate) => candidate.order === phase);
-  const source = sources.length === 1 ? sources[0] : undefined;
+  return sources.length === 1 ? sources[0] : undefined;
+}
+
+/**
+ * The upper/lower seed counts the preceding group stage feeds into `stage`,
+ * mirroring `_projected_bracket_seed_counts`: each group sends on its OWN
+ * `advance_count`, falling back to the stage's number where a group sets none,
+ * and the first `advance_upper_count` of those start in the upper bracket
+ * while the rest are seeded straight into the lower one.
+ *
+ * `advance_upper_count` is read with `??`, not a falsy fallback: `0` means
+ * "this whole group starts a bracket down", which is a different answer from
+ * "inherit".
+ *
+ * Only a double elimination HAS a lower bracket to seed into: the server
+ * ignores the split for a single elimination, where every advancing team
+ * enters the one bracket there is.
+ */
+export function projectedBracketSeedCounts(
+  stage: Stage,
+  stages: Stage[]
+): { upper: number; lower: number } {
+  const source = qualifyingSourceStage(stage, stages);
   if (!source) return { upper: 0, lower: 0 };
 
   // A source stage with no items still behaves as one implicit group.
   const groups: (StageItem | null)[] = source.items.length > 0 ? source.items : [null];
+  const split = stage.stage_type === "double_elimination";
   let upper = 0;
   let lower = 0;
   for (const group of groups) {
     const advance = group?.advance_count || source.advance_count || 0;
-    const ownUpper = group?.advance_upper_count ?? source.advance_upper_count ?? advance;
+    const ownUpper = split
+      ? (group?.advance_upper_count ?? source.advance_upper_count ?? advance)
+      : advance;
     const groupUpper = Math.min(ownUpper, advance);
     upper += groupUpper;
     lower += advance - groupUpper;

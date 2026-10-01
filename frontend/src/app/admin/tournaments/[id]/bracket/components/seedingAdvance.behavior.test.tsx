@@ -284,6 +284,66 @@ describe("per-group upper bracket share", () => {
 
     expect(container.textContent).toContain("→ 4 upper, 8 lower");
   });
+
+  it("counts the seeds with the numbers being typed, before they are saved", async () => {
+    const groups = groupStage([item(100), item(101, { order: 1 })], {
+      advance_count: 6,
+      advance_upper_count: 2
+    });
+    const playoff = groupStage([], {
+      id: 20,
+      name: "Playoff",
+      stage_type: "double_elimination",
+      order: 2
+    });
+    await mount(groups, { stages: [groups, playoff] });
+
+    await typeAndBlur(stageUpperInput(), "1");
+
+    // The saved stage still says 2 up; the line has to answer the field.
+    expect(container.textContent).toContain("→ 2 upper, 10 lower");
+  });
+
+  it("stays quiet about a playoff fed by another division's groups", async () => {
+    // Two divisions in phase 1: the playoff in phase 2 resolves to neither (the
+    // server refuses to wire an ambiguous phase), so this stage may not claim
+    // its seed counts.
+    const groups = groupStage([item(100)], {
+      id: 1,
+      name: "Groups Low",
+      order: 1,
+      advance_count: 6,
+      advance_upper_count: 2
+    });
+    const sibling = groupStage([item(200)], { id: 2, name: "Groups High", order: 1 });
+    const playoff = groupStage([], {
+      id: 20,
+      name: "Playoff",
+      stage_type: "double_elimination",
+      order: 2
+    });
+
+    await mount(groups, { stages: [groups, sibling, playoff] });
+
+    expect(container.textContent).not.toContain("upper,");
+  });
+
+  it("says nothing about a single-elimination playoff, which has no lower bracket", async () => {
+    const groups = groupStage([item(100)], {
+      advance_count: 6,
+      advance_upper_count: 2
+    });
+    const playoff = groupStage([], {
+      id: 20,
+      name: "Playoff",
+      stage_type: "single_elimination",
+      order: 2
+    });
+
+    await mount(groups, { stages: [groups, playoff] });
+
+    expect(container.textContent).not.toContain("upper,");
+  });
 });
 
 describe("parallel division wiring", () => {

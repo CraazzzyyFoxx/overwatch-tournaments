@@ -120,11 +120,13 @@ describe("sub-tabs", () => {
     expect(allowedTeamsSubTab("draft", ALL_PERMS)).toBe(true);
   });
 
-  test("matches keeps the result views; standings and lobbies live under bracket", () => {
+  test("matches keeps the result views; lobbies lives under bracket", () => {
     expect(MATCHES_SUB_TABS).toEqual(["encounters", "reports", "parsed", "logs"]);
     // `report-form` is gone: it configures the report, it does not report.
     expect(MATCHES_SUB_TABS as readonly string[]).not.toContain("report-form");
-    expect(BRACKET_SUB_TABS).toEqual(["stages", "standings", "lobbies"]);
+    // Standings rank one stage, so they are a section of the stage editor, not
+    // a view of the whole tournament.
+    expect(BRACKET_SUB_TABS).toEqual(["stages", "lobbies"]);
   });
 
   test("bracket offers lobbies only where an FFA stage exists", () => {
@@ -132,7 +134,7 @@ describe("sub-tabs", () => {
     // view is the bug the layout's bounce pairs with this.
     expect(allowedBracketSubTab("lobbies", { hasFfaStage: false })).toBe(false);
     expect(allowedBracketSubTab("lobbies", { hasFfaStage: true })).toBe(true);
-    expect(allowedBracketSubTab("standings", { hasFfaStage: false })).toBe(true);
+    expect(allowedBracketSubTab("stages", { hasFfaStage: false })).toBe(true);
   });
 });
 

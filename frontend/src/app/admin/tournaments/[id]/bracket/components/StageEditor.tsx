@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { usePathname, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   GitMerge,
   MoreHorizontal,
@@ -63,6 +64,18 @@ import {
   SeedingSection,
   TiebreakersSection
 } from "./StageSettingsSections";
+import { tabFallback } from "../../hubQueries";
+import { MatchesView } from "../../matches/MatchesView";
+
+// The standings table is the heaviest thing the editor can show and only one
+// section of eight needs it, so it is split out of the Bracket tab's bundle.
+const StandingsBrowser = dynamic(
+  () =>
+    import("@/components/admin/StandingsBrowser").then((module) => ({
+      default: module.StandingsBrowser
+    })),
+  { loading: () => tabFallback }
+);
 
 export const BRACKET_SECTIONS = [
   "general",
@@ -72,6 +85,7 @@ export const BRACKET_SECTIONS = [
   "best-of",
   "schedule",
   "layout",
+  "standings",
   "items"
 ] as const;
 export type BracketSection = (typeof BRACKET_SECTIONS)[number];
@@ -84,6 +98,7 @@ const SECTION_LABELS: Record<BracketSection, string> = {
   "best-of": "Best-of",
   schedule: "Round schedule",
   layout: "Bracket layout",
+  standings: "Standings",
   items: "Items"
 };
 
@@ -156,7 +171,11 @@ export function StageEditor({
     queryFn: () => adminService.getStagePlannedRounds(stage.id),
     enabled: BRACKET_STAGE_TYPES.includes(stage.stage_type)
   });
-  const plannedRounds = plannedRoundsQuery.data;
+  // The engine answered for the SAVED format. With another one picked and not
+  // yet saved, its rounds describe a stage that is about to stop existing, so
+  // the projection falls back to the team-count formula until the save lands.
+  const plannedRounds =
+    form.stageType === stage.stage_type ? plannedRoundsQuery.data : undefined;
 
   const projection = useMemo(
     () =>
@@ -193,6 +212,7 @@ export function StageEditor({
     schedule: true,
     // Only an elimination bracket HAS a layout to draw.
     layout: BRACKET_STAGE_TYPES.includes(form.stageType),
+    standings: true,
     items: true
   };
   const requested = searchParams?.get("section") ?? "";
@@ -588,6 +608,18 @@ export function StageEditor({
         ) : null}
 
         {activeSection === "layout" ? <BracketLayoutSection stage={stage} /> : null}
+
+        {activeSection === "standings" ? (
+          <MatchesView tournamentId={stage.tournament_id}>
+            {({ workspaceId }) => (
+              <StandingsBrowser
+                tournamentId={stage.tournament_id}
+                workspaceId={workspaceId}
+                stageId={stage.id}
+              />
+            )}
+          </MatchesView>
+        ) : null}
 
         {activeSection === "items" ? (
           <StageItemsSection

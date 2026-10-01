@@ -38,6 +38,7 @@ import {
   GROUP_STAGE_TYPES,
   normalizeMaxRounds,
   projectedBracketSeedCounts,
+  qualifyingSourceStage,
   RANKING_PRESETS,
   SEED_RANKING_LABELS,
   STAGE_TYPE_LABELS,
@@ -131,7 +132,9 @@ export function GeneralSection({
                     }
               );
             }}
-            disabled={!isSuperuser}
+            // A drawn template is a bracket of one shape: switching format
+            // would leave the stage with a layout its engine cannot generate.
+            disabled={!isSuperuser || stage.has_custom_bracket}
           >
             <SelectTrigger id={`${ids}-type`}>
               <SelectValue />
@@ -144,6 +147,11 @@ export function GeneralSection({
               ))}
             </SelectContent>
           </Select>
+          {stage.has_custom_bracket ? (
+            <p className="text-xs text-muted-foreground">
+              Reset the custom bracket (Bracket layout) to change the format.
+            </p>
+          ) : null}
           {isSuperuser ? null : (
             <p className="text-xs text-muted-foreground">
               Only superusers can modify stage type after creation.
@@ -292,17 +300,30 @@ export function SeedingSection({
     upperMutation.mutate({ stageItemId: item.id, upperCount: next });
   };
 
-  // What the groups below will actually seed, read off the playoff they feed:
-  // the first later double elimination, the same stage the server wires from.
-  const nextPlayoff = stages
+  // What the groups below will actually seed, read off the playoff they feed —
+  // with the unsaved numbers already in place, so the line answers the field
+  // being typed into rather than the last save.
+  const projected = stages.map((candidate) =>
+    candidate.id === stage.id
+      ? {
+          ...candidate,
+          advance_count: form.advanceCount === "" ? null : Number(form.advanceCount),
+          advance_upper_count:
+            form.advanceUpperCount === "" ? null : Number(form.advanceUpperCount)
+        }
+      : candidate
+  );
+  // The playoff whose source really IS this stage: a later bracket in another
+  // division resolves to its own groups, and saying what IT is seeded with
+  // would be someone else's numbers.
+  const nextPlayoff = projected
     .filter(
       (candidate) =>
-        candidate.stage_type === "double_elimination" &&
-        (candidate.order > stage.order ||
-          (candidate.order === stage.order && candidate.id > stage.id))
+        BRACKET_STAGE_TYPES.includes(candidate.stage_type) &&
+        qualifyingSourceStage(candidate, projected)?.id === stage.id
     )
     .sort((left, right) => left.order - right.order || left.id - right.id)[0];
-  const seeds = nextPlayoff ? projectedBracketSeedCounts(nextPlayoff, stages) : null;
+  const seeds = nextPlayoff ? projectedBracketSeedCounts(nextPlayoff, projected) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -397,7 +418,7 @@ export function SeedingSection({
           />
           <p className="text-xs text-muted-foreground">
             The rest are seeded straight into the playoff&apos;s Lower bracket. Empty sends every
-            advancing team to the upper bracket.
+            advancing team to the upper bracket. Applies to a double-elimination playoff.
           </p>
         </div>
       ) : null}

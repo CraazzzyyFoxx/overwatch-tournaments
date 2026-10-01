@@ -221,14 +221,21 @@ export function draftToBracketMatches(draft: Draft): BracketMatch[] {
   });
 }
 
-/** `U1…Un`, `L1…Lm` that no slot holds — the slot menu's offer. */
-export function unusedSeeds(draft: Draft): string[] {
+/**
+ * `U1…Un`, `L1…Lm` that no slot holds — the slot menu's offer.
+ *
+ * `round` narrows it to the half that round belongs to: the validator refuses
+ * a lower seed in an upper-round match and the other way round, so offering
+ * both is offering a draft that cannot be saved.
+ */
+export function unusedSeeds(draft: Draft, round?: number): string[] {
   const placed = new Set(
     draft.matches.flatMap((match) => [match.home?.seed, match.away?.seed].filter(Boolean))
   );
+  const pool = round == null ? null : round < 0 ? "L" : "U";
   const all = [
     ...Array.from({ length: draft.upper_seeds }, (_, index) => `U${index + 1}`),
     ...Array.from({ length: draft.lower_seeds }, (_, index) => `L${index + 1}`)
   ];
-  return all.filter((seed) => !placed.has(seed));
+  return all.filter((seed) => !placed.has(seed) && (pool === null || seed.startsWith(pool)));
 }
