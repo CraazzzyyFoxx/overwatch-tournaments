@@ -669,6 +669,73 @@ class PerGroupAdvanceCountTests(IsolatedAsyncioTestCase):
             [(inp.source_stage_item_id, inp.source_position) for inp in lb_inputs],
         )
 
+    async def test_auto_wire_single_elimination_ignores_the_upper_split(self) -> None:
+        """Same source as above, but the playoff is single elimination: it has no
+        lower bracket, so the split is ignored and all 12 enter the bracket —
+        rather than the 400 a lower band would raise on a non-DE target."""
+        source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
+        source.advance_count = 6
+        source.advance_upper_count = 2
+        target = _playoff_stage(stage_id=2, tournament_id=99)
+
+        added_inputs: list = []
+        session = SimpleNamespace(
+            add=Mock(side_effect=lambda obj: added_inputs.append(obj)),
+            commit=AsyncMock(),
+            flush=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                stage_service.stage_service,
+                "get_stage",
+                AsyncMock(side_effect=[target, target, source, target]),
+            ),
+            patch.object(
+                stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[source])
+            ),
+        ):
+            await stage_service.stage_service.auto_wire_stage(session, target.id)
+
+        self.assertEqual({200}, {inp.stage_item_id for inp in added_inputs})
+        self.assertEqual(
+            [(100, p) for p in range(1, 7)] + [(101, p) for p in range(1, 7)],
+            sorted((inp.source_stage_item_id, inp.source_position) for inp in added_inputs),
+        )
+
+    async def test_auto_wire_single_elimination_ignores_a_groups_own_upper_split(self) -> None:
+        """The split can also sit on ONE group. A single elimination target has no
+        lower bracket either way: group A's 4 all enter the bracket, no 400."""
+        source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
+        source.items[0].advance_count = 4
+        source.items[0].advance_upper_count = 2
+        target = _playoff_stage(stage_id=2, tournament_id=99)
+
+        added_inputs: list = []
+        session = SimpleNamespace(
+            add=Mock(side_effect=lambda obj: added_inputs.append(obj)),
+            commit=AsyncMock(),
+            flush=AsyncMock(),
+        )
+
+        with (
+            patch.object(
+                stage_service.stage_service,
+                "get_stage",
+                AsyncMock(side_effect=[target, target, source, target]),
+            ),
+            patch.object(
+                stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[source])
+            ),
+        ):
+            await stage_service.stage_service.auto_wire_stage(session, target.id)
+
+        self.assertEqual({200}, {inp.stage_item_id for inp in added_inputs})
+        self.assertEqual(
+            [(100, 1), (100, 2), (100, 3), (100, 4)],
+            sorted((inp.source_stage_item_id, inp.source_position) for inp in added_inputs),
+        )
+
     async def test_lower_entrants_get_a_lower_item_created(self) -> None:
         """A group sending teams down needs somewhere to send them, even when the
         caller asked for no lower seeds at all (``top_lb = 0``): the stage gets a

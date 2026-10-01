@@ -51,6 +51,10 @@ def _codes(raw: dict, stage_type=StageType.DOUBLE_ELIMINATION) -> list[tuple[int
     return [(p.match_id, p.code) for p in validate_template(BracketTemplate.model_validate(raw), stage_type)]
 
 
+def _flags(raw: dict, stage_type=StageType.DOUBLE_ELIMINATION) -> list[tuple[int | None, str | None, str]]:
+    return [(p.match_id, p.slot, p.code) for p in validate_template(BracketTemplate.model_validate(raw), stage_type)]
+
+
 class TemplateValidationTests(TestCase):
     def test_the_sketch_is_valid(self) -> None:
         self.assertEqual([], _codes(_sketch()))
@@ -87,6 +91,16 @@ class TemplateValidationTests(TestCase):
         raw = _sketch()
         raw["matches"][0]["away"] = {"seed": "U2"}
         self.assertIn((0, "seed_duplicate"), _codes(raw))
+
+    def test_upper_seed_cannot_start_in_the_lower_bracket(self) -> None:
+        raw = _sketch()
+        raw["matches"][3]["home"] = {"seed": "U1"}  # an LB round-1 slot, handed an upper seed
+        self.assertIn((3, "home", "seed_bracket"), _flags(raw))
+
+    def test_lower_seed_cannot_start_in_the_upper_bracket(self) -> None:
+        raw = _sketch()
+        raw["matches"][0]["away"] = {"seed": "L1"}  # a UB round-1 slot, handed a lower seed
+        self.assertIn((0, "away", "seed_bracket"), _flags(raw))
 
     def test_result_reused(self) -> None:
         raw = _sketch()
