@@ -53,6 +53,7 @@ import {
   stageFormFromStage,
   type StageForm
 } from "../stageForm";
+import { BracketLayoutSection } from "./BracketLayoutSection";
 import { FfaScoringSection } from "./FfaScoringSection";
 import { RoundScheduleSection } from "./RoundScheduleSection";
 import { StageItemsSection } from "./StageItemsSection";
@@ -70,6 +71,7 @@ export const BRACKET_SECTIONS = [
   "tiebreakers",
   "best-of",
   "schedule",
+  "layout",
   "items"
 ] as const;
 export type BracketSection = (typeof BRACKET_SECTIONS)[number];
@@ -81,6 +83,7 @@ const SECTION_LABELS: Record<BracketSection, string> = {
   tiebreakers: "Tiebreakers",
   "best-of": "Best-of",
   schedule: "Round schedule",
+  layout: "Bracket layout",
   items: "Items"
 };
 
@@ -188,6 +191,8 @@ export function StageEditor({
       GROUP_STAGE_TYPES.includes(form.stageType) || FFA_STAGE_TYPES.includes(form.stageType),
     "best-of": true,
     schedule: true,
+    // Only an elimination bracket HAS a layout to draw.
+    layout: BRACKET_STAGE_TYPES.includes(form.stageType),
     items: true
   };
   const requested = searchParams?.get("section") ?? "";
@@ -581,6 +586,8 @@ export function StageEditor({
             onChanged={onChanged}
           />
         ) : null}
+
+        {activeSection === "layout" ? <BracketLayoutSection stage={stage} /> : null}
 
         {activeSection === "items" ? (
           <StageItemsSection
