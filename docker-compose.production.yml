@@ -664,9 +664,9 @@ services:
   #
   # Default 1 matches PROD_SIZE=small. medium/large raise this via
   # `docker compose --scale frontend=N` (Makefile prod-up / GitHub release).
-  # Compose DNS round-robins the `frontend` name across replica IPs, and the
-  # gateway's ReverseProxy re-dials per connection (default transport keeps
-  # only 2 idle conns per host), so traffic spreads with no extra config.
+  # Compose DNS returns every replica IP for the `frontend` name, and nginx
+  # (runtime resolver, nginx/nginx.conf) round-robins across them, so traffic
+  # spreads with no extra config.
   #
   # 1.50 per replica rather than the old 3.00: a single event loop cannot spend
   # three cores, and three replicas at the old ceiling would have oversubscribed
@@ -728,12 +728,13 @@ services:
 
   # ==========================================================================
   # Gateway architecture — part of the DEFAULT stack.
-  # The gateway is the single entry point: backend services validate tokens
+  # The gateway is the single API entry point: backend services validate tokens
   # through it (AUTH_SERVICE_URL=http://gateway:8080/api/auth is set on each
-  # consumer below) -> RPC -> identity-svc, and the gateway serves /api/auth/*,
-  # /api/v1 (typed RPC) + reverse-proxies the rest (parser/analytics/balancer/
-  # frontend). nginx is the external edge (Kong removed).
+  # consumer below) -> RPC -> identity-svc, and the gateway serves /api/* (typed
+  # RPC) + the WebSocket hub. nginx is the external edge (Kong removed) and
+  # routes pages straight to the frontend.
   #   TLS terminator -> nginx -> gateway -> RPC -> identity
+  #                          \-> frontend
   # ==========================================================================
 
   identity-svc:
@@ -810,8 +811,6 @@ services:
       - ./backend/env/auth.env
       - ./backend/env/gateway.env
     environment:
-      # In prod the frontend is a compose service (dev default points at the host).
-      - UPSTREAM_FRONTEND=http://frontend:3000
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # OpenTelemetry tracing into Alloy (same block as the Python services),

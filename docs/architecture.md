@@ -15,14 +15,15 @@ multitenancy, and deployment topology. Per-component detail lives in the linked 
 
 OWT is a **monorepo** with three tiers:
 
-1. **Edge** — nginx → a **Go gateway**. The gateway is the only process that
-   speaks HTTP and WebSocket to the outside world.
+1. **Edge** — nginx → a **Go gateway** for the API and WebSocket, nginx → the frontend for
+   everything else. The gateway is the only backend process that speaks HTTP and WebSocket
+   to the outside world.
 2. **Backend** — a set of **Python 3.14 headless workers** built on
    [FastStream](https://faststream.airt.ai/). They expose no HTTP; the gateway reaches them
    with **request/reply RPC over RabbitMQ**. All workers share one PostgreSQL database
    through a single ORM layer in [`backend/shared/`](../backend/shared/README.md).
-3. **Frontend** — a [Next.js 16](https://nextjs.org/) app that talks to the backend through
-   the gateway on a single origin.
+3. **Frontend** — a [Next.js 16](https://nextjs.org/) app served by nginx on the same origin
+   as the API; it talks to the backend through the gateway.
 
 ```mermaid
 flowchart TB
@@ -50,8 +51,10 @@ flowchart TB
       S3[("S3 / MinIO")]
     end
 
-    Browser --> Nginx --> GW
-    GW -- "reverse proxy /" --> FE
+    Browser --> Nginx
+    Nginx -- "/api/*, WebSocket" --> GW
+    Nginx -- "pages, /bff/*, /_next/*" --> FE
+    FE -- "SSR + route handlers" --> GW
     GW -- "rpc.<svc>.<method>" --> MQ
     MQ --> APP & ID & TOUR & PARSE & BAL & ANARPC & STREAM
     GW -- "read-only: ACL, replay, custom domains" --> PG
@@ -68,7 +71,7 @@ flowchart TB
     MQ --> DISC
 ```
 
-The Go gateway is the single ingress. The Python services are headless workers driven
+The Go gateway is the single API ingress. The Python services are headless workers driven
 entirely by RabbitMQ; the only one that runs as a plain process rather than an RPC worker is
 `discord-service`, a `discord.py` bot.
 
@@ -80,7 +83,12 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    zones for ordinary traffic, auth, WebSocket handshakes and the upload paths, with internal
    networks exempted via an empty zone key), applies anti-slowloris timeouts, allows
    WebSocket upgrades, caps body size at 12 MB (60 MB for match-log upload paths), and
-   `proxy_pass`es to `gateway:8080` with runtime DNS re-resolution. It emits a JSON access log
+   `proxy_pass`es by path with runtime DNS re-resolution: `/api/*`, the WebSocket endpoints
+   and `/health` to `gateway:8080`; everything else — pages, `/_next/*`, the frontend's own
+   cookie-authenticated `/bff/*` and `/auth/*` route handlers, `/api/health` — to
+   `frontend:3000`. It drops client-supplied `x-owt-*` scoping headers, stamps
+   `Cache-Control: private, no-store` on `/bff/*` responses that carry none, and caches the
+   signed-out homepage for 30 s. It emits a JSON access log
    (`$uri` only — the WS token must never be logged) carrying `$limit_req_status`, which
    promtail turns into both Loki streams and Prometheus rejection counters. The limits are
    enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
@@ -91,8 +99,6 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    - dispatches typed REST routes to workers as **RabbitMQ request/reply RPC**
      (`rpc.app.*`, `rpc.identity.*`, `rpc.tournament.*`, `rpc.parser.*`, `rpc.balancer.*`,
      `rpc.analytics.*`), carrying an `x-deadline-ms` budget;
-   - reverse-proxies non-API requests (`/`) to the Next.js frontend, including the frontend's
-     own cookie-authenticated `/bff/*` endpoints;
    - serves `/api/v1/realtime/ws` (and the legacy `/ws`, `/api/realtime/ws`) from an in-process
      **Redis → WebSocket hub**, replaying missed events from `realtime.workspace_event`;
    - caches anonymous public reads in-process (30 s TTL), invalidated by the workers' Redis
@@ -142,7 +148,7 @@ via FastStream. See [`backend/shared/README.md`](../backend/shared/README.md) fo
 
 | Component | Kind | Responsibility |
 | --- | --- | --- |
-| [`gateway`](../gateway/README.md) | Go, HTTP/WS | Sole ingress: JWT, RPC dispatch, reverse proxy, realtime hub, response cache, rate limit, docs, metrics |
+| [`gateway`](../gateway/README.md) | Go, HTTP/WS | Sole API ingress: JWT, RPC dispatch, realtime hub, response cache, rate limit, docs, metrics |
 | [`app-service`](../backend/app-service/README.md) | RPC worker | Core read/data API (tournaments, players, teams, heroes, maps, matches, stats), workspace/user/metadata admin, binary assets, cache |
 | [`identity-service`](../backend/identity-service/README.md) | RPC worker | JWT auth, Discord OAuth, RBAC, workspace membership, custom domains/subdomains, API keys, player linking, service tokens, SSO |
 | [`tournament-service`](../backend/tournament-service/README.md) | RPC worker + scheduler | Tournament lifecycle, registration, brackets/standings, Challonge + Google Sheets sync, map veto, state machine, outbox sweeper |

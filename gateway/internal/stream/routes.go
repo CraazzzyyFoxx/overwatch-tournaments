@@ -3,9 +3,8 @@
 // dispatcher is generic.
 //
 // The whole /api/v1/streams/* namespace is typed RPC — there is no HTTP
-// stream-service to proxy to, so unmatched paths are guarded with 404 in
-// cmd/gateway/main.go (the frontend rewrites /api/v1/streams/* back to the
-// gateway, so falling through to the "/" catch-all would loop).
+// stream-service to proxy to; unmatched paths get the REST mux's 404 catch-all
+// in cmd/gateway/main.go.
 package stream
 
 import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"

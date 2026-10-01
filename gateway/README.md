@@ -13,11 +13,11 @@ See [`../docs/architecture.md`](../docs/architecture.md) for the full system ove
 
 ## Overview
 
-Every browser and API request enters through the gateway. Public reads are served from an
-in-process cache or fanned out as RPC to workers; realtime updates are relayed from a
-Redis bus to WebSocket subscribers; the frontend is reverse-proxied. The Python workers
-expose **no HTTP** — the gateway is the only thing that
-speaks HTTP to the outside world.
+Every API request enters through the gateway (nginx sends page traffic straight to the
+Next.js frontend). Public reads are served from an in-process cache or fanned out as RPC to
+workers; realtime updates are relayed from a Redis bus to WebSocket subscribers. The Python
+workers expose **no HTTP** — the gateway is the only backend that speaks HTTP to the outside
+world.
 
 ## Responsibilities
 
@@ -29,7 +29,6 @@ speaks HTTP to the outside world.
   (`app`, `identity`, `tournament`, `parser`, `balancer`, `analytics`), with `reply_to` +
   `correlation_id`, an `x-deadline-ms` deadline, and a per-queue in-flight bulkhead
   (`GATEWAY_RPC_MAX_INFLIGHT`) that sheds with a 503 when a queue is saturated.
-- **Reverse proxy** — proxies non-API requests (`/`) to the Next.js frontend.
 - **Realtime hub** — a Redis→WebSocket hub at `/ws` and `/api/v1/realtime/ws`, replaying
   `realtime.workspace_event` rows from Postgres so reconnecting clients catch up.
 - **Response cache** — an in-process, in-memory cache of anonymous public reads
@@ -44,17 +43,17 @@ speaks HTTP to the outside world.
 ## Request flow
 
 ```
-internet → nginx :80 → gateway :8080 →
-    ├─ RPC over RabbitMQ → headless workers (rpc.app.* / rpc.identity.* / rpc.tournament.* / rpc.parser.* / rpc.balancer.* / rpc.analytics.*)
-    ├─ reverse proxy → frontend (Next.js)
-    └─ /ws + /api/v1/realtime/ws → Redis→WebSocket hub (replay from realtime.workspace_event)
+internet → nginx :80 ─┬─ /api/*, /ws, /api/v1/realtime/ws, /health → gateway :8080 →
+                      │      ├─ RPC over RabbitMQ → headless workers (rpc.app.* / rpc.identity.* / rpc.tournament.* / rpc.parser.* / rpc.balancer.* / rpc.analytics.*)
+                      │      └─ /ws + /api/v1/realtime/ws → Redis→WebSocket hub (replay from realtime.workspace_event)
+                      └─ everything else (pages, /_next/*, /bff/*, /api/health) → frontend :3000
 ```
 
 ## URL shape
 
 Every route is `/api/v{n}/<domain>/...` — one version axis, always the second segment, and no
 namespace beside it. `internal/apiver` normalises the inbound path onto that one table before
-routing, which is why there is a single `/api/v1/` 404 guard in `cmd/gateway/main.go` instead
+routing, which is why there is a single 404 catch-all in `cmd/gateway/main.go` instead
 of one per namespace, and why `internal/respcache` and the OpenAPI specs only ever see
 canonical paths.
 
@@ -63,8 +62,8 @@ canonical paths.
 | `/api/v1/...` | the contract: unwrapped, FastAPI-shaped JSON |
 | `/api/v2/...` | the same paths, handlers and statuses; body is the RPC envelope (`internal/apierr`) |
 | `/api/docs`, `/api/openapi*.json` | the generated reference — outside the version because it describes the versions |
-| `/api/health` | the frontend container's probe, proxied through |
-| `/bff/*` | the frontend's own cookie-authenticated endpoints, reverse-proxied to Next and never served here |
+| `/api/health` | the frontend container's probe; nginx routes it to Next, not here |
+| `/bff/*` | the frontend's own cookie-authenticated endpoints; nginx routes them to Next, never here |
 
 `auth`, `analytics`, `balancer`, `streams`, `notifications` and `announcements` used to sit
 beside the version. Those spellings are still answered — the table is `apiver.LegacyPrefixes`,
@@ -146,7 +145,6 @@ Under `internal/`:
 | `acl` | workspace membership authorization |
 | `rpc` | RabbitMQ request-reply client (per-queue bulkhead, `x-deadline-ms`) |
 | `edge` | typed route dispatcher |
-| `proxy` | reverse proxy to HTTP upstreams |
 | `respcache` | in-memory anonymous response cache |
 | `cachecontrol` | cache-control policy |
 | `ratelimit` | per-IP rate limiting |
@@ -174,7 +172,6 @@ annotated set. Highlights:
 - `JWT_SECRET_KEY` — **required**, ≥ 32 chars (shared with the workers).
 - `GATEWAY_PORT=8080`, `GATEWAY_METRICS_PORT=9110`.
 - `RABBITMQ_URL`, `REDIS_URL`, `POSTGRES_*` / `DB_PGBOUNCER` (shared with the workers).
-- Upstreams: `UPSTREAM_FRONTEND`, `UPSTREAM_PARSER`, `UPSTREAM_ANALYTICS`.
 - WebSocket knobs (`WS_IDLE_TIMEOUT`, `WS_REPLAY_LIMIT`, `GATEWAY_WS_ALLOWED_ORIGINS`,
   per-IP conn/topic caps), rate-limit knobs (`GATEWAY_AUTH_RATE_LIMIT`,
   `GATEWAY_ANON_RATE_LIMIT`, WS custom-domain lookup limits), the response-cache TTL

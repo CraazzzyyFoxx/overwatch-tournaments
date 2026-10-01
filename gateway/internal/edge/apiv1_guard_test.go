@@ -25,10 +25,17 @@ func (errCaller) Call(_ context.Context, _ string, _ []byte) ([]byte, error) {
 	return nil, context.Canceled
 }
 
-func marker(name string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("X-Route", name)
-		w.WriteHeader(http.StatusOK)
+// assertGuard fails unless method+path is answered by the "/" catch-all 404.
+func assertGuard(t *testing.T, base, method, path string) {
+	t.Helper()
+	req, _ := http.NewRequest(method, base+path, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+	if route := resp.Header.Get("X-Route"); resp.StatusCode != http.StatusNotFound || route != "guard" {
+		t.Fatalf("%s %s: got route=%q status=%d, want the 404 guard", method, path, route, resp.StatusCode)
 	}
 }
 
@@ -43,10 +50,9 @@ func marker(name string) http.HandlerFunc {
 // domains (now all under /api/v1/) was unreachable by any test. Folding them
 // into the version folded the four muxes into this one.
 //
-// Any unmatched /api/v1/* must hit the single /api/v1/ guard (404), never the
-// "/" frontend catch-all (which rewrites /api/v1/* back to the gateway ->
-// infinite proxy loop). Legacy spellings reach that same guard because
-// `apiver` rewrites them onto /api/v1/... before routing.
+// Anything no typed route claims must hit the "/" catch-all guard (404), as
+// in main.go. Legacy spellings reach it the same way because `apiver`
+// rewrites them onto /api/v1/... before routing.
 func buildGuardedMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	d := edge.New(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -153,58 +159,30 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	identityBin := identity.NewBinary(h, nil)
 	mux.HandleFunc("POST /api/v1/auth/me/avatar", identityBin.AvatarSet)
 	mux.HandleFunc("DELETE /api/v1/auth/me/avatar", identityBin.AvatarDelete)
-	// Unmatched /api/v1/* falls to the /api/v1/ guard (404), never the "/" frontend
-	// catch-all.
-	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
+	// Unmatched paths fall to the "/" catch-all (404), as in main.go.
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Route", "guard")
 		w.WriteHeader(http.StatusNotFound)
 	})
-	mux.Handle("/", marker("frontend"))
 	return mux
 }
 
-func TestApiV1Guard_NoConflictAndNoLoop(t *testing.T) {
+func TestApiV1Guard_NoConflictAndUnmatched404(t *testing.T) {
 	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cases := []struct {
-		name      string
-		method    string
-		path      string
-		wantRoute string // "" => expect the /api/v1/ guard 404
-	}{
-		{"unknown top-level api path", "GET", "/api/v1/does-not-exist", ""},
-		{"deep unmatched tournament path", "GET", "/api/v1/tournaments/123/nope", ""},
-		{"unknown deep api path hits guard", "GET", "/api/v1/nonexistent-xyz", ""},
-		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			req, _ := http.NewRequest(c.method, srv.URL+c.path, nil)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatalf("%s %s: %v", c.method, c.path, err)
-			}
-			defer resp.Body.Close()
-			route := resp.Header.Get("X-Route")
-			if c.wantRoute == "" {
-				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/ guard (404). "+
-						"Falling through to the frontend would re-create the proxy loop.",
-						c.method, c.path, route, resp.StatusCode)
-				}
-				return
-			}
-			if route != c.wantRoute {
-				t.Fatalf("%s %s: routed to %q, want %q", c.method, c.path, route, c.wantRoute)
-			}
-		})
+	for _, c := range []struct{ name, method, path string }{
+		{"unknown top-level api path", "GET", "/api/v1/does-not-exist"},
+		{"deep unmatched tournament path", "GET", "/api/v1/tournaments/123/nope"},
+		{"unknown deep api path hits guard", "GET", "/api/v1/nonexistent-xyz"},
+	} {
+		t.Run(c.name, func(t *testing.T) { assertGuard(t, srv.URL, c.method, c.path) })
 	}
 }
 
 // A new /api/v1/admin/... path is only reachable if it is in a table main.go
-// registers — otherwise the /api/v1/ guard answers 404 and the feature is dead
+// registers — otherwise the 404 guard answers and the feature is dead
 // on arrival with no compile error to warn anyone. These ride the existing
 // AdminMiscRoutes table, and this pins that they actually made it onto the mux.
 func TestApiV1Guard_MatchSurfaceRoutesAreRegistered(t *testing.T) {
@@ -230,7 +208,7 @@ func TestApiV1Guard_MatchSurfaceRoutesAreRegistered(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			if route := resp.Header.Get("X-Route"); route == "guard" {
-				t.Fatalf("GET %s hit the /api/v1/ guard — the route is not registered", path)
+				t.Fatalf("GET %s hit the 404 guard — the route is not registered", path)
 			}
 		})
 	}
@@ -239,8 +217,7 @@ func TestApiV1Guard_MatchSurfaceRoutesAreRegistered(t *testing.T) {
 // Notifications and announcements ride their own tables
 // (app.NotificationRoutes / app.AnnouncementPublicRoutes /
 // app.AnnouncementAdminRoutes, docs/plans/2026-09-07-notifications.md). A
-// missing main.go registration leaves the admin paths at the /api/v1/ guard's
-// 404 and the two /api/* ones at the frontend catch-all — the feature dead on
+// missing main.go registration leaves every path at the 404 guard — the feature dead on
 // arrival with no compile error. The bare admin collection must also keep its
 // own pattern instead of being read as an {id}.
 func TestApiV1Guard_NotificationRoutesAreRegistered(t *testing.T) {
@@ -268,7 +245,7 @@ func TestApiV1Guard_NotificationRoutesAreRegistered(t *testing.T) {
 				t.Fatalf("%s %s: %v", c.method, c.path, err)
 			}
 			defer resp.Body.Close()
-			if route := resp.Header.Get("X-Route"); route == "guard" || route == "frontend" {
+			if route := resp.Header.Get("X-Route"); route == "guard" {
 				t.Fatalf("%s %s routed to %q — the route is not registered", c.method, c.path, route)
 			}
 		})
@@ -277,7 +254,7 @@ func TestApiV1Guard_NotificationRoutesAreRegistered(t *testing.T) {
 
 // Scrim rooms ride their own table (tournament.ScrimRoutes,
 // docs/plans/2026-08-12-scrim-rooms.md), so a missing main.go registration
-// would leave every path answered by the /api/v1/ guard with no compile error.
+// would leave every path answered by the 404 guard with no compile error.
 // The bare collection and the {token} routes must also not shadow each other:
 // the share token is an opaque string, so /api/v1/scrims must keep matching the
 // collection rather than being read as a token.
@@ -304,14 +281,14 @@ func TestApiV1Guard_ScrimRoutesAreRegistered(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			if route := resp.Header.Get("X-Route"); route == "guard" {
-				t.Fatalf("%s %s hit the /api/v1/ guard — the route is not registered", tc.method, tc.path)
+				t.Fatalf("%s %s hit the 404 guard — the route is not registered", tc.method, tc.path)
 			}
 		})
 	}
 }
 
 // The self-service /api/v1/me/* surface rides app.UsersAdminRoutes. Two things
-// can break it silently: a missing registration (the /api/v1/ guard answers 404
+// can break it silently: a missing registration (the 404 guard answers
 // with no compile error), and a new leaf being read as a {account_id} of the
 // social routes. /me/stream-visibility is a sibling leaf of /me/social/..., so
 // this pins that it keeps its own pattern instead of being swallowed.
@@ -337,7 +314,7 @@ func TestApiV1Guard_MeRoutesAreRegistered(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			switch route := resp.Header.Get("X-Route"); route {
-			case "frontend", "guard":
+			case "guard":
 				t.Fatalf("%s %s: routed to %q, want the typed dispatcher — the route is not registered",
 					tc.method, tc.path, route)
 			}
@@ -345,55 +322,27 @@ func TestApiV1Guard_MeRoutesAreRegistered(t *testing.T) {
 	}
 }
 
-// buildBalancerGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1/balancer
-// wiring. Building it must NOT panic (a ServeMux pattern conflict would crash the
-// gateway at startup). The HTTP balancer-service is decommissioned: every
-// /api/v1/balancer/* path is a typed RPC route here, and unmatched paths must hit the
-// /api/v1/balancer/ guard (404), never the "/" frontend catch-all (which rewrites
-// /api/v1/balancer/* back to the gateway -> infinite proxy loop).
-func TestApiBalancerGuard_NoConflictAndNoLoop(t *testing.T) {
+// The /api/v1/balancer wiring must build without a ServeMux pattern conflict
+// (which would crash the gateway at startup). The HTTP balancer-service is
+// decommissioned: every /api/v1/balancer/* path is a typed RPC route, and
+// unmatched paths must hit the 404 guard.
+func TestApiBalancerGuard_NoConflictAndUnmatched404(t *testing.T) {
 	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cases := []struct {
-		name      string
-		method    string
-		path      string
-		wantRoute string // "" => expect the /api/v1/balancer/ guard 404
-	}{
-		{"unmatched balancer path", "GET", "/api/v1/balancer/does-not-exist", ""},
-		{"unmatched draft path", "GET", "/api/v1/balancer/draft/nope", ""},
-		{"dead sse stream is gone", "GET", "/api/v1/balancer/jobs/abc/stream", ""},
-		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			req, _ := http.NewRequest(c.method, srv.URL+c.path, nil)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatalf("%s %s: %v", c.method, c.path, err)
-			}
-			defer resp.Body.Close()
-			route := resp.Header.Get("X-Route")
-			if c.wantRoute == "" {
-				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/balancer/ guard (404). "+
-						"Falling through to the frontend would re-create the proxy loop.",
-						c.method, c.path, route, resp.StatusCode)
-				}
-				return
-			}
-			if route != c.wantRoute {
-				t.Fatalf("%s %s: routed to %q, want %q", c.method, c.path, route, c.wantRoute)
-			}
-		})
+	for _, c := range []struct{ name, method, path string }{
+		{"unmatched balancer path", "GET", "/api/v1/balancer/does-not-exist"},
+		{"unmatched draft path", "GET", "/api/v1/balancer/draft/nope"},
+		{"dead sse stream is gone", "GET", "/api/v1/balancer/jobs/abc/stream"},
+	} {
+		t.Run(c.name, func(t *testing.T) { assertGuard(t, srv.URL, c.method, c.path) })
 	}
 }
 
 // TestApiBalancer_MigratedRoutesHitDispatcher asserts the typed balancer routes win
-// over the /api/v1/balancer/ guard (ServeMux specificity) and reach the dispatcher
-// (empty X-Route with the stub RPC caller), never "frontend"/"guard".
+// over the 404 guard (ServeMux specificity) and reach the dispatcher
+// (empty X-Route with the stub RPC caller), never the guard.
 func TestApiBalancer_MigratedRoutesHitDispatcher(t *testing.T) {
 	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
@@ -413,8 +362,8 @@ func TestApiBalancer_MigratedRoutesHitDispatcher(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			switch resp.Header.Get("X-Route") {
-			case "frontend", "guard":
-				t.Fatalf("GET %s: routed to %q, want the typed dispatcher (not proxied)",
+			case "guard":
+				t.Fatalf("GET %s: routed to %q, want the typed dispatcher",
 					p, resp.Header.Get("X-Route"))
 			}
 		})
@@ -422,10 +371,10 @@ func TestApiBalancer_MigratedRoutesHitDispatcher(t *testing.T) {
 }
 
 // TestApiV1_MigratedReadsHitDispatcher asserts the migrated app + parser read
-// patterns win over the /api/v1/ guard (ServeMux specificity) and reach the typed
+// patterns win over the 404 guard (ServeMux specificity) and reach the typed
 // dispatcher. With the stub RPC caller the dispatcher returns 504 (or 401 for
 // auth'd routes), so a migrated path yields an empty X-Route (typed handler) —
-// never "frontend"/"guard".
+// never the guard.
 func TestApiV1_MigratedReadsHitDispatcher(t *testing.T) {
 	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
@@ -472,64 +421,37 @@ func TestApiV1_MigratedReadsHitDispatcher(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			switch resp.Header.Get("X-Route") {
-			case "frontend", "guard":
-				t.Fatalf("GET %s: routed to %q, want the typed dispatcher (not proxied)",
+			case "guard":
+				t.Fatalf("GET %s: routed to %q, want the typed dispatcher",
 					p, resp.Header.Get("X-Route"))
 			}
 		})
 	}
 }
 
-// buildAuthGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1/auth wiring. The
-// HTTP-over-RPC tunnel + auth-service proxy are decommissioned: every /api/v1/auth/*
-// path is now a typed RPC route here, and unmatched paths must hit the /api/v1/auth/
-// guard (404), never the "/" frontend catch-all (which rewrites /api/v1/auth/* back
-// to the gateway -> infinite proxy loop). Building it must NOT panic — the rbac
-// users/{user_id} vs users/assign-role and the player linked/{player_id}/primary
-// patterns are the cases that would conflict under ServeMux.
-func TestApiAuthGuard_NoConflictAndNoLoop(t *testing.T) {
+// The /api/v1/auth wiring: the HTTP-over-RPC tunnel + auth-service proxy are
+// decommissioned, every /api/v1/auth/* path is a typed RPC route, and
+// unmatched paths must hit the 404 guard. Building it must NOT panic — the
+// rbac users/{user_id} vs users/assign-role and the player
+// linked/{player_id}/primary patterns are the cases that would conflict
+// under ServeMux.
+func TestApiAuthGuard_NoConflictAndUnmatched404(t *testing.T) {
 	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cases := []struct {
-		name      string
-		method    string
-		path      string
-		wantRoute string // "" => expect the /api/v1/auth/ guard 404
-	}{
-		{"unmatched auth path", "GET", "/api/v1/auth/does-not-exist", ""},
-		{"removed tunnel rbac typo path", "GET", "/api/v1/auth/rbac/nope", ""},
-		{"unmatched player path", "GET", "/api/v1/auth/player/nope", ""},
-		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			req, _ := http.NewRequest(c.method, srv.URL+c.path, nil)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatalf("%s %s: %v", c.method, c.path, err)
-			}
-			defer resp.Body.Close()
-			route := resp.Header.Get("X-Route")
-			if c.wantRoute == "" {
-				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/auth/ guard (404). "+
-						"Falling through to the frontend would re-create the proxy loop.",
-						c.method, c.path, route, resp.StatusCode)
-				}
-				return
-			}
-			if route != c.wantRoute {
-				t.Fatalf("%s %s: routed to %q, want %q", c.method, c.path, route, c.wantRoute)
-			}
-		})
+	for _, c := range []struct{ name, method, path string }{
+		{"unmatched auth path", "GET", "/api/v1/auth/does-not-exist"},
+		{"removed tunnel rbac typo path", "GET", "/api/v1/auth/rbac/nope"},
+		{"unmatched player path", "GET", "/api/v1/auth/player/nope"},
+	} {
+		t.Run(c.name, func(t *testing.T) { assertGuard(t, srv.URL, c.method, c.path) })
 	}
 }
 
 // TestApiAuth_TypedRoutesHitHandler asserts the typed RBAC/player/avatar routes win
-// over the /api/v1/auth/ guard (ServeMux specificity) and reach the identity handler
-// (401 without a bearer, or 504 with the stub caller), never "frontend"/"guard".
+// over the 404 guard (ServeMux specificity) and reach the identity handler
+// (401 without a bearer, or 504 with the stub caller), never the guard.
 func TestApiAuth_TypedRoutesHitHandler(t *testing.T) {
 	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
@@ -569,64 +491,36 @@ func TestApiAuth_TypedRoutesHitHandler(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			switch resp.Header.Get("X-Route") {
-			case "frontend", "guard":
-				t.Fatalf("%s %s: routed to %q, want the typed identity handler (not proxied)",
+			case "guard":
+				t.Fatalf("%s %s: routed to %q, want the typed identity handler",
 					c.method, c.path, resp.Header.Get("X-Route"))
 			}
 		})
 	}
 }
 
-// buildStreamsGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1/streams
-// wiring. Building it must NOT panic (a ServeMux pattern conflict would crash
-// the gateway at startup): the repoll route nests under the read route's
-// {tournament_id}, so the two must coexist. There is no HTTP stream-service —
-// every /api/v1/streams/* path is a typed RPC route here, and unmatched paths must
-// hit the /api/v1/streams/ guard (404), never the "/" frontend catch-all (which
-// rewrites /api/v1/streams/* back to the gateway -> infinite proxy loop).
-func TestApiStreamsGuard_NoConflictAndNoLoop(t *testing.T) {
+// The /api/v1/streams wiring must build without a ServeMux pattern conflict
+// (which would crash the gateway at startup): the repoll route nests under the
+// read route's {tournament_id}, so the two must coexist. There is no HTTP
+// stream-service — every /api/v1/streams/* path is a typed RPC route, and
+// unmatched paths must hit the 404 guard.
+func TestApiStreamsGuard_NoConflictAndUnmatched404(t *testing.T) {
 	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cases := []struct {
-		name      string
-		method    string
-		path      string
-		wantRoute string // "" => expect the /api/v1/streams/ guard 404
-	}{
-		{"unmatched streams path", "GET", "/api/v1/streams/does-not-exist", ""},
-		{"unmatched tournament leaf", "GET", "/api/v1/streams/tournament/7/nope", ""},
-		{"read is GET-only", "DELETE", "/api/v1/streams/tournament/7", ""},
-		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			req, _ := http.NewRequest(c.method, srv.URL+c.path, nil)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatalf("%s %s: %v", c.method, c.path, err)
-			}
-			defer resp.Body.Close()
-			route := resp.Header.Get("X-Route")
-			if c.wantRoute == "" {
-				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/streams/ guard (404). "+
-						"Falling through to the frontend would re-create the proxy loop.",
-						c.method, c.path, route, resp.StatusCode)
-				}
-				return
-			}
-			if route != c.wantRoute {
-				t.Fatalf("%s %s: routed to %q, want %q", c.method, c.path, route, c.wantRoute)
-			}
-		})
+	for _, c := range []struct{ name, method, path string }{
+		{"unmatched streams path", "GET", "/api/v1/streams/does-not-exist"},
+		{"unmatched tournament leaf", "GET", "/api/v1/streams/tournament/7/nope"},
+		{"read is GET-only", "DELETE", "/api/v1/streams/tournament/7"},
+	} {
+		t.Run(c.name, func(t *testing.T) { assertGuard(t, srv.URL, c.method, c.path) })
 	}
 }
 
 // The streams surface rides its own tables (stream.PublicRoutes /
 // stream.AdminRoutes), so a missing main.go registration would leave every path
-// answered by the /api/v1/streams/ guard with 404 — the feature dead on arrival
+// answered by the 404 guard — the feature dead on arrival
 // with no compile error to warn anyone. This pins that both made it onto the mux.
 func TestApiStreamsGuard_RoutesAreRegistered(t *testing.T) {
 	mux := buildGuardedMux(t)
@@ -648,7 +542,7 @@ func TestApiStreamsGuard_RoutesAreRegistered(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			switch route := resp.Header.Get("X-Route"); route {
-			case "frontend", "guard":
+			case "guard":
 				t.Fatalf("%s %s: routed to %q, want the typed dispatcher — the route is not registered",
 					tc.method, tc.path, route)
 			}

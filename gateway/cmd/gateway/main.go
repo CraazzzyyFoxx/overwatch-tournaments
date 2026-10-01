@@ -1,4 +1,4 @@
-// Command gateway is the thin Go edge service: REST reverse-proxy + WebSocket
+// Command gateway is the thin Go edge service: REST API (typed RPC) + WebSocket
 // hub + local JWT validation. Phase 0 of the gateway architecture rewrite.
 //
 // It replaces Kong (REST routing) and realtime-service (WebSocket fan-out) with
@@ -42,7 +42,6 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/openapi"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/parser"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/principal"
-	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ratelimit"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/respcache"
@@ -129,7 +128,7 @@ func run() error {
 	identityHandler := identity.NewHandler(rpcClient, logger)
 	// Tournament-service routes served via typed RPC through the shared edge
 	// dispatcher. The resolver validates JWTs via identity-svc and injects the
-	// RBAC identity for auth'd routes. Specific patterns win over the /api/v1 proxy.
+	// RBAC identity for auth'd routes.
 	resolver := principal.New(rpcClient)
 	tournamentEdge := edge.New(rpcClient, logger, resolver.Resolve)
 
@@ -175,18 +174,12 @@ func run() error {
 		},
 	)
 
-	rev, err := proxy.New(cfg.Upstreams)
-	if err != nil {
-		return err
-	}
-
 	// mux holds the REST surface only. The WebSocket endpoints and /health are
 	// registered on the outer router below so they bypass the sentryhttp
 	// middleware (which would otherwise open a transaction spanning the whole
 	// long-lived WS connection, and trace every health probe).
 	mux := http.NewServeMux()
-	// Identity HTTP face (RPC into identity-svc). Additive: these specific
-	// /api/v1/auth/* paths are served here; the rest still proxy to auth-service.
+	// Identity HTTP face (RPC into identity-svc).
 	mux.HandleFunc("POST /api/v1/auth/validate", identityHandler.Validate)
 	// Rate-limited (anti-brute-force): register/login/refresh + oauth callbacks.
 	mux.HandleFunc("POST /api/v1/auth/register", authLimiter.Wrap(identityHandler.Register))
@@ -272,8 +265,7 @@ func run() error {
 	identityBinary := identity.NewBinary(identityHandler, resolver.Resolve)
 	mux.HandleFunc("POST /api/v1/auth/me/avatar", identityBinary.AvatarSet)
 	mux.HandleFunc("DELETE /api/v1/auth/me/avatar", identityBinary.AvatarDelete)
-	// tournament-service: typed RPC reads + generic admin CRUD (the rest of
-	// /api/v1 still proxies). Specific patterns win over the proxy.
+	// tournament-service: typed RPC reads + generic admin CRUD.
 	// Public reads go through the anonymous response cache (respcache): one
 	// upstream RPC per unique URL per TTL/invalidation window instead of one
 	// per page view. Invalidated below by the worker's realtime
@@ -304,15 +296,13 @@ func run() error {
 	mux.HandleFunc("POST /api/v1/admin/teams/{team_id}/image", tournamentBinary.TeamImageUpload)
 	mux.HandleFunc("POST /api/v1/registration-teams/{team_id}/image", tournamentBinary.RegistrationTeamImageUpload)
 	mux.HandleFunc("POST /api/v1/admin/tournaments/{tournament_id}/images/{slot}", tournamentBinary.TournamentImageUpload)
-	// analytics-service: typed RPC reads + job-control (the rest of /api/v1/analytics
-	// still proxies). Specific patterns win over the proxy.
+	// analytics-service: typed RPC reads + job-control.
 	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
 	analyticsEdge.Register(mux, analytics.WriteRoutes)
 	// parser-service domains folded into /api/v1 (match-log, OverFast rank,
 	// achievement engine + rules admin, metadata sync, settings, discord-channel,
-	// bootstrap importers), served as typed RPC. Un-migrated parser paths still
-	// proxy to parser-service on their original /api/parser/* addresses.
+	// bootstrap importers), served as typed RPC.
 	parserEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	parserEdge.Register(mux, parser.Routes)
 	// Multipart match-log upload (files[] -> base64 RPC body) the JSON dispatcher
@@ -324,12 +314,11 @@ func run() error {
 	// shared /api/v1/admin/ws/ prefix; tournament's balancer-statuses routes there
 	// are more specific and win, so the two coexist.
 	mux.Handle("/api/v1/admin/ws/", parserEdge.Subtree(parser.AchievementAdminRoutes))
-	// app-service: typed RPC public reads (the rest of /api/v1 still proxies).
+	// app-service: typed RPC public reads.
 	// hero/map/gamemode/achievement get+list use the shared CRUD read engine.
-	// Specific patterns win over the /api/v1 proxy below. Home-page aggregates
-	// and /users/[slug] profile reads go through the same anonymous response
-	// cache as the tournament page (mostly TTL-only — no per-user realtime
-	// signal exists; see app.PublicCacheableReads).
+	// Home-page aggregates and /users/[slug] profile reads go through the same
+	// anonymous response cache as the tournament page (mostly TTL-only — no
+	// per-user realtime signal exists; see app.PublicCacheableReads).
 	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	respcache.RegisterCached(mux, appEdge, app.ReadRoutes, app.PublicCacheableReads, respCache)
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
@@ -379,12 +368,9 @@ func run() error {
 	streamEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	respcache.RegisterCached(mux, streamEdge, stream.PublicRoutes, stream.PublicCacheableReads, respCache)
 	streamEdge.Register(mux, stream.AdminRoutes)
-	// Guard the whole `/api/v1` namespace: anything not matched by a typed route
-	// above must NOT fall through to the "/" frontend catch-all. The frontend
-	// rewrites /api/v1/* back to the gateway (next.config.mjs), so proxying an
-	// unmatched /api/v1 path to the frontend creates an infinite
-	// gateway<->frontend proxy loop (hang + resource exhaustion that crash-loops
-	// the frontend). Return 404 instead.
+	// Catch-all: anything no typed route above claims is a JSON 404. The
+	// gateway serves only its route table — nginx sends the frontend's paths
+	// straight to Next — so there is nothing to fall through to.
 	//
 	// This is the ONLY namespace guard, and that is the point of folding auth,
 	// analytics, balancer, streams, notifications and announcements inside the
@@ -393,15 +379,15 @@ func run() error {
 	// rewrites every legacy spelling onto /api/v1/... before routing, so an
 	// unmatched legacy path lands here too — with the right body shape for the
 	// version it asked for.
-	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		apierr.WriteError(w, http.StatusNotFound, "Not Found", "", nil)
 	})
 
 	// Scalar API docs: two pages generated from the route tables above. The
 	// public page (/api/docs) is always served; the admin page (/api/docs/admin)
 	// is gated to non-production environments (config.Docs.AdminEnabled). The spec
-	// + UI paths sit outside the guarded namespaces, so they win over the "/"
-	// proxy by ServeMux specificity.
+	// + UI paths sit outside /api/v1, so they win over the "/" catch-all by
+	// ServeMux specificity.
 	publicGroups, adminGroups := apidocs.Groups()
 	docs := openapi.New(cfg.Docs, openapi.Info{
 		Title:       "anak-tournaments gateway API",
@@ -409,8 +395,6 @@ func run() error {
 		Description: "Auto-generated from the gateway route tables. Request/response bodies are generic objects — the concrete schemas live in the domain services.",
 	}, publicGroups, adminGroups)
 	docs.Register(mux)
-
-	mux.Handle("/", rev)
 
 	// Relay the realtime Redis bus to WebSocket subscribers, and tee it into
 	// the response cache's invalidator: the worker's tournament_changed
@@ -464,7 +448,7 @@ func run() error {
 	// by mux — is the matched route template for the access log and metrics
 	// labels; httplog copies Pattern back to the tracing middleware's request so
 	// the OTel span is named by route too. tracing sits outside httplog so the
-	// request logger picks up the OTel trace_id and rpc.Call/proxy see the span
+	// request logger picks up the OTel trace_id and rpc.Call sees the span
 	// context. Sentry stays outermost for per-request hub + panic recovery
 	// (Repanic lets net/http's own recovery run after capture).
 	// Anonymous (no-bearer) per-IP throttle across the whole API mux, layered

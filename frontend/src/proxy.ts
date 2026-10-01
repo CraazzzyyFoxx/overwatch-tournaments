@@ -49,9 +49,9 @@ async function resolveWorkspace(origin: string, host: string): Promise<Lookup> {
 /**
  * Scoping headers this proxy owns. Every one is set (or deleted outright)
  * here, so a client-supplied value can never survive even if the set logic
- * below changes. The gateway strips the whole `x-owt-*` prefix at the edge as
- * well — `gateway/internal/proxy` — making this the second of two independent
- * barriers, not the only one.
+ * below changes. nginx drops client-supplied copies at the edge as well —
+ * `nginx/nginx.conf` — making this the second of two independent barriers,
+ * not the only one.
  *
  * `x-owt-pathname` is the request path (with its query), which a server
  * component otherwise cannot see: layouts get no pathname prop. The admin

@@ -16,19 +16,12 @@
 // `public, s-maxage=30` on a public tournament read) without touching the
 // gateway — the middleware defers to any explicit upstream decision.
 //
-// Scope: paths under /api/ and /bff/ only. `/bff/*` is the frontend's own
-// cookie-authenticated surface (account settings, API keys) — served by Next,
-// not the gateway, but reverse-proxied through it, and every bit as
-// viewer-dependent as the API. The "/" frontend catch-all (Next.js HTML,
-// /_next/static assets) is untouched — Next already emits correct headers
-// there (`no-store` for dynamic HTML, `immutable` for hashed static assets),
-// and stamping those would either duplicate or fight them.
+// Scope: the whole REST mux. The gateway serves only the API (pages and the
+// frontend's /bff/* go nginx -> Next directly; nginx applies the same policy
+// to /bff/*), so every response it wraps is viewer-dependent API output.
 package cachecontrol
 
-import (
-	"net/http"
-	"strings"
-)
+import "net/http"
 
 // directive is what an API response with no explicit upstream Cache-Control
 // gets: never stored by any cache, shared or private. `private` is technically
@@ -37,25 +30,17 @@ import (
 const directive = "private, no-store"
 
 // Middleware wraps next, stamping `Cache-Control: private, no-store` on every
-// /api/* and /bff/* response whose handler (or proxied upstream) did not set
-// its own Cache-Control. Other paths pass through with the original
-// ResponseWriter — zero overhead for the frontend proxy and static assets.
+// response whose handler did not set its own Cache-Control.
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := r.URL.Path
-		if !strings.HasPrefix(p, "/api/") && !strings.HasPrefix(p, "/bff/") {
-			next.ServeHTTP(w, r)
-			return
-		}
 		next.ServeHTTP(&stamper{ResponseWriter: w}, r)
 	})
 }
 
-// stamper defers the decision to WriteHeader time: by then the handler (or the
-// reverse proxy copying upstream headers) has populated the header map, so
-// "only if absent" can be judged correctly. It exposes Unwrap so
-// http.ResponseController (used by the reverse proxy to flush) reaches the
-// real ResponseWriter, mirroring httplog.responseRecorder.
+// stamper defers the decision to WriteHeader time: by then the handler has
+// populated the header map, so "only if absent" can be judged correctly. It
+// exposes Unwrap so http.ResponseController reaches the real ResponseWriter,
+// mirroring httplog.responseRecorder.
 type stamper struct {
 	http.ResponseWriter
 	wroteHeader bool

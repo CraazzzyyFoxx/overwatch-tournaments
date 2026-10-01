@@ -99,7 +99,6 @@ type Config struct {
 	// When a queue is saturated the gateway sheds the request with an immediate
 	// 503 instead of queueing it for up to the full RPC timeout. 0 disables.
 	RPCMaxInFlight int
-	Upstreams      Upstreams
 	Sentry         Sentry
 	Tracing        Tracing
 	Log            Log
@@ -135,14 +134,6 @@ type Docs struct {
 type Log struct {
 	Level string
 	File  string
-}
-
-// Upstreams are the base URLs of the existing services the gateway proxies to.
-// Defaults match the docker-compose service names / ports.
-type Upstreams struct {
-	Parser    string
-	Analytics string
-	Frontend  string
 }
 
 // Sentry holds the optional error-monitoring / tracing settings. An empty DSN
@@ -219,11 +210,6 @@ func Load() (*Config, error) {
 		APIKeyRateLimit:          getenvInt("GATEWAY_API_KEY_RATE_LIMIT", 60),
 		ResponseCacheTTL:         time.Duration(getenvInt("GATEWAY_RESPONSE_CACHE_TTL", 30)) * time.Second,
 		RPCMaxInFlight:           getenvInt("GATEWAY_RPC_MAX_INFLIGHT", 64),
-		Upstreams: Upstreams{
-			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
-			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),
-			Frontend:  getenv("UPSTREAM_FRONTEND", "http://frontend:3000"),
-		},
 		Sentry: Sentry{
 			DSN:              os.Getenv("SENTRY_DSN"),
 			Environment:      getenv("SENTRY_ENVIRONMENT", "development"),

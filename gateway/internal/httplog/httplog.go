@@ -173,8 +173,7 @@ func routeLabel(pattern string) string {
 }
 
 // responseRecorder captures the status code and bytes written. It exposes
-// Unwrap so http.ResponseController (used by the reverse proxy to flush) reaches
-// the real ResponseWriter.
+// Unwrap so http.ResponseController reaches the real ResponseWriter.
 type responseRecorder struct {
 	http.ResponseWriter
 	status int

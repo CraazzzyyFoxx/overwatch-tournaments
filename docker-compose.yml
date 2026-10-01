@@ -567,9 +567,9 @@ services:
           memory: 128M
 
   # --------------------------------------------------------------------------
-  # Gateway (Go) — REST reverse-proxy + WebSocket hub + local JWT.
-  # Sole entry point (Kong removed): nginx (APP_PORT) -> gateway:8080 -> RPC.
-  # The gateway is also published on :8080 for direct testing.
+  # Gateway (Go) — REST API (typed RPC) + WebSocket hub + local JWT.
+  # nginx (APP_PORT) sends /api/*, the WS endpoints and /health here; it never
+  # sees page traffic. The gateway is also published on :8080 for direct testing.
   # --------------------------------------------------------------------------
   gateway:
     image: registry.craazzzyyfoxx.me/owt-gateway:dev
@@ -610,10 +610,11 @@ services:
           cpus: '0.10'
           memory: 64M
 
-  # nginx: plain-HTTP app entry in front of the gateway (gateway keeps routing
-  # REST + WS). Single upstream -> gateway:8080. TLS is terminated upstream
-  # (Traefik in prod), not here. Sole external edge (Kong removed). Binds
-  # APP_PORT so the frontend dev env (http://localhost/api/...) works unchanged.
+  # nginx: plain-HTTP app entry. Routes by path: /api/* + WS + /health ->
+  # gateway:8080, everything else -> frontend:3000 (the `frontend` service
+  # above; a host-run `bun run dev` is reached on :3000 directly). TLS is
+  # terminated upstream (Traefik in prod), not here. Sole external edge (Kong
+  # removed). Binds APP_PORT so http://localhost/... works unchanged.
   nginx:
     # Pinned to the same tag as production: nginx.conf is shared between the two,
     # so a version skew here means dev validates a config prod does not run.

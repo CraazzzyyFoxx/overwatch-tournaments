@@ -44,8 +44,9 @@ OWT is a monorepo with one public edge and headless backend workers:
 ```mermaid
 flowchart LR
     Client[Browser / API client] --> Nginx[nginx]
-    Nginx --> Gateway[Go gateway\nHTTP + WebSocket]
-    Gateway --> Frontend[Next.js frontend]
+    Nginx -- "/api, WebSocket" --> Gateway[Go gateway\nHTTP + WebSocket]
+    Nginx -- "pages" --> Frontend[Next.js frontend]
+    Frontend -- "SSR" --> Gateway
     Gateway --> RabbitMQ[(RabbitMQ RPC)]
     RabbitMQ --> Workers[Python FastStream workers]
     Gateway --> PostgreSQL[(PostgreSQL)]
@@ -55,7 +56,7 @@ flowchart LR
     Workers --> Storage[(S3-compatible storage)]
 ```
 
-The Go gateway is the only HTTP/WebSocket backend entry point. It validates JWTs, applies edge policy, maps REST routes to request/reply RPC over RabbitMQ, proxies the frontend, serves API documentation, caches anonymous reads, and relays Redis-backed realtime events. Python services expose no HTTP API; they share SQLAlchemy models and cross-service infrastructure from `backend/shared/`.
+The Go gateway is the only HTTP/WebSocket backend entry point. It validates JWTs, applies edge policy, maps REST routes to request/reply RPC over RabbitMQ, serves API documentation, caches anonymous reads, and relays Redis-backed realtime events. nginx routes `/api/*` and the WebSocket endpoints to the gateway and every other path straight to the Next.js frontend. Python services expose no HTTP API; they share SQLAlchemy models and cross-service infrastructure from `backend/shared/`.
 
 See [docs/architecture.md](./docs/architecture.md) for request flow, messaging guarantees, multitenancy, realtime replay, and deployment topology.
 
