@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Clock } from "lucide-react";
+import { Clock, UserX } from "lucide-react";
 
 import { notify } from "@/lib/notify";
 import pickBanService, {
@@ -86,6 +86,11 @@ export function PickBanPanel({
     null
   );
   const draftItems = localDraft?.key === stepKey ? localDraft.items : serverDraft;
+  // The Lock trusts `draft_issues`, and those judge the SAVED draft — so it
+  // waits until the local edits are that draft.
+  const draftKey = (items: PickBanSubmissionItem[]) =>
+    items.map((item) => `${item.item_id}:${item.target_player_id ?? ""}`).join(",");
+  const draftDirty = draftKey(draftItems) !== draftKey(serverDraft);
 
   const selectedItemId =
     pickedItemId != null &&
@@ -242,20 +247,34 @@ export function PickBanPanel({
             sideName={sideName}
             session={session}
           />
-          {step?.target != null && targetRoster.length > 0 && opponentSide != null ? (
-            <div className="lg:sticky lg:top-[var(--aqt-sticky-top)]">
-              <PickBanTargetBoard
-                targets={targetRoster}
-                selectedPlayerId={selectedTargetId}
-                assignedByPlayer={assignedByPlayer}
-                itemsById={itemsById}
-                onSelect={(playerId) =>
-                  setSelectedTargetId((current) => (current === playerId ? null : playerId))
-                }
-                teamName={sideName(opponentSide)}
-                disabled={!canSelect}
-              />
-            </div>
+          {step?.target != null && opponentSide != null ? (
+            targetRoster.length > 0 ? (
+              <div className="lg:sticky lg:top-[var(--aqt-sticky-top)]">
+                <PickBanTargetBoard
+                  targets={targetRoster}
+                  selectedPlayerId={selectedTargetId}
+                  assignedByPlayer={assignedByPlayer}
+                  itemsById={itemsById}
+                  onSelect={(playerId) =>
+                    setSelectedTargetId((current) => (current === playerId ? null : playerId))
+                  }
+                  teamName={sideName(opponentSide)}
+                  disabled={!canSelect}
+                />
+              </div>
+            ) : (
+              // Without the opponent's roster nobody can be named, so the whole
+              // pool is ineligible — say why instead of leaving a grey grid.
+              <div
+                data-pick-ban-no-roster
+                className="flex items-start gap-2 rounded-xl border border-[color:var(--aqt-amber)]/45 bg-[color:var(--aqt-card-2)]/40 p-3 text-sm"
+              >
+                <UserX className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--aqt-amber)]" aria-hidden />
+                <p className="text-[color:var(--aqt-fg-muted)]">
+                  {t("target.noRoster", { team: sideName(opponentSide) })}
+                </p>
+              </div>
+            )
           ) : null}
         </div>
         <div className="flex flex-col gap-4">
@@ -335,6 +354,7 @@ export function PickBanPanel({
                 step={step}
                 items={draftItems}
                 locked={draftLocked}
+                dirty={draftDirty}
                 issues={state.draft_issues}
                 locking={submitMutation.isPending}
                 itemsById={itemsById}

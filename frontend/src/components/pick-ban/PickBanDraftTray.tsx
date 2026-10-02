@@ -63,6 +63,7 @@ export function PickBanDraftTray({
   step,
   items,
   locked,
+  dirty,
   issues,
   locking,
   itemsById,
@@ -79,7 +80,14 @@ export function PickBanDraftTray({
   items: PickBanSubmissionItem[];
   /** True once the viewer locked: the tray freezes and waits. */
   locked: boolean;
-  /** Server-side reasons the draft cannot be locked yet; empty = lockable. */
+  /** Local edits the autosave has not stored yet — `issues` do not cover them. */
+  dirty: boolean;
+  /**
+   * The server's reasons the SAVED draft cannot be locked; empty = lockable.
+   * It already caps `min` by what is actually choosable (`effective_min`), so
+   * the room must not re-check `step.min`: an exhausted pool or an opponent
+   * with no roster would leave a Lock the server accepts permanently disabled.
+   */
   issues: string[];
   /** A save or the lock is in flight. */
   locking: boolean;
@@ -93,7 +101,7 @@ export function PickBanDraftTray({
   onLock: () => void;
 }>) {
   const t = useTranslations("pickBan.room");
-  const lockable = !locked && issues.length === 0 && items.length >= step.min;
+  const lockable = !locked && !dirty && issues.length === 0;
   const emptySlots = Math.max(0, step.count - items.length);
   // Same box the thumb draws: heroes are circles, maps 4:3 stills.
   const slotShape = kind === "hero" ? "w-[30px] rounded-full" : "w-10 rounded-md";

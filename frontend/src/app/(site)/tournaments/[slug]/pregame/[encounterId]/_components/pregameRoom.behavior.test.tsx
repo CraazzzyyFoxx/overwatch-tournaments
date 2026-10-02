@@ -794,6 +794,42 @@ describe("phase selection", () => {
     });
   });
 
+  it("says why and still locks when the opponent has no roster to ban for", async () => {
+    // No roster means no target and no eligible hero. The server caps `min` by
+    // what is choosable (so `draft_issues` is empty) — a room that re-checked
+    // the step's raw `min` would hold a Lock the server accepts disabled forever.
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    submitDraft.mockResolvedValue(readyState({ session: session({ kind: "hero" }) }));
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound({ target: "opponent_player", count: 5, min: 5 }),
+        viewer_side: "home",
+        viewer_can_act: true,
+        allowed_actions: ["ban"],
+        eligible: { item_ids: [], by_target: {} },
+        draft_issues: [],
+        targets: { home: [], away: [] }
+      })
+    );
+    await render();
+
+    expect(document.body.querySelector("[data-pick-ban-no-roster]")?.textContent).toContain(
+      ROOM.target.noRoster.replace("{team}", "Quiet Foxes")
+    );
+    const lock = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(ROOM.draft.lock)
+    );
+    expect(lock?.disabled).toBe(false);
+
+    await act(async () => lock!.click());
+    await settle();
+
+    expect(submitDraft).toHaveBeenCalledWith("hero", 4242, { items: [], lock: true });
+  });
+
   it("marks the heroes both sides banned once the blind step reveals", async () => {
     // Duplicates merge into ONE banned entry, so without the mark a captain
     // reads the board and finds a ban they paid for missing from their column.
