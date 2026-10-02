@@ -45338,6 +45338,19 @@
           ],
           "default": null
         },
+        "slot": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slot"
+        },
         "source_position": {
           "anyOf": [
             {
@@ -45362,6 +45375,18 @@
           ],
           "default": null,
           "title": "Source Stage Item Id"
+        },
+        "stage_item_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Item Id"
         },
         "team_id": {
           "anyOf": [

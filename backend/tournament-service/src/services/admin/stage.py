@@ -359,7 +359,8 @@ class AdminStageService:
     async def _lock_stage(self, session: AsyncSession, stage_id: int) -> None:
         """Serialize the writers that race over one stage's bracket: a template
         swap and a generation job must not interleave around their "does this
-        stage have encounters yet" check. Lock order is stage → encounters
+        stage have encounters yet" check, nor two seed moves around one item's
+        slot numbering. Lock order is stage → encounters
         everywhere (``computation.bracket_worker`` takes tournament → stage first)."""
         await session.execute(select(models.Stage.id).where(models.Stage.id == stage_id).with_for_update())
 
@@ -1059,6 +1060,9 @@ class AdminStageService:
         if not update_data:
             return inp
 
+        if update_data.get("stage_item_id") is not None or update_data.get("slot") is not None:
+            await self._move_input(session, inp, update_data.get("stage_item_id"), update_data.get("slot"))
+
         next_input_type = update_data.get("input_type", inp.input_type)
         next_team_id = update_data.get("team_id", inp.team_id)
         next_source_stage_item_id = update_data.get("source_stage_item_id", inp.source_stage_item_id)
@@ -1136,10 +1140,76 @@ class AdminStageService:
         if not inp:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item input not found")
         tournament_id = inp.stage_item.stage.tournament_id
+        await self._lock_stage(session, inp.stage_item.stage_id)
+        await session.refresh(inp, ["stage_item_id"])  # a move may have committed before the lock
+        stage_item_id = inp.stage_item_id
         await self.stage_item_input_repo.delete(session, inp)
+        # The seeds below the removed one move up: a group is seeded 1..N, not 1..N with a hole.
+        await self._reseat_slots(session, await self._item_inputs(session, [stage_item_id]))
         await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
+
+    async def _item_inputs(self, session: AsyncSession, stage_item_ids: list[int]) -> list[models.StageItemInput]:
+        """These items' inputs in seed order."""
+        return list(
+            await session.scalars(
+                self.stage_item_input_repo.select()
+                .where(models.StageItemInput.stage_item_id.in_(stage_item_ids))
+                .order_by(models.StageItemInput.slot, models.StageItemInput.id)
+            )
+        )
+
+    async def _move_input(
+        self,
+        session: AsyncSession,
+        inp: models.StageItemInput,
+        stage_item_id: int | None,
+        slot: int | None,
+    ) -> None:
+        """Re-seat ``inp`` at seed ``slot`` of ``stage_item_id`` (default: its own item, at the end).
+
+        An insert, not a swap: the inputs between the old and the new seat shift
+        by one, and the item it leaves closes the gap.
+        """
+        stage_id = inp.stage_item.stage_id
+        await self._lock_stage(session, stage_id)
+        await session.refresh(inp, ["stage_item_id"])  # a move may have committed before the lock
+        source_item_id = inp.stage_item_id
+        target_item_id = stage_item_id or source_item_id
+        if target_item_id != source_item_id:
+            target_item = await self.stage_item_repo.get(session, target_item_id)
+            if target_item is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item not found")
+            if target_item.stage_id != stage_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A team can only move between the groups of its own stage",
+                )
+
+        rows = await self._item_inputs(session, [source_item_id, target_item_id])
+        source = [row for row in rows if row.stage_item_id == source_item_id and row.id != inp.id]
+        target = (
+            source if target_item_id == source_item_id else [row for row in rows if row.stage_item_id == target_item_id]
+        )
+        target.insert(len(target) if slot is None else min(slot - 1, len(target)), inp)
+        inp.stage_item_id = target_item_id
+        await self._reseat_slots(session, *([target] if target is source else [source, target]))
+
+    async def _reseat_slots(self, session: AsyncSession, *items: list[models.StageItemInput]) -> None:
+        """Number each list's inputs 1..N in list order.
+
+        Through negative slots first: ``uq_stage_item_input_item_slot`` is checked
+        row by row, so renumbering in place can hand a row the slot a neighbour
+        has not given up yet.
+        """
+        for temporary, row in enumerate((row for rows in items for row in rows), 1):
+            row.slot = -temporary
+        await session.flush()
+        for rows in items:
+            for slot, row in enumerate(rows, 1):
+                row.slot = slot
+        await session.flush()
 
     async def activate_stage(
         self,
