@@ -227,58 +227,38 @@ export function PickBanPanel({
         </div>
       ) : null}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,1fr)_2fr]">
-        <PickBanStepTimeline
-          kind={kind}
-          sequence={state.sequence}
-          submissions={state.submissions}
-          currentStepIndex={state.current_step_index}
-          isComplete={state.is_complete}
-          currentRound={state.current_round}
-          itemsById={itemsById}
-          sideName={sideName}
-          session={session}
-        />
-        <div className="flex flex-col gap-4">
+        {/* Stretched to the row so the per-player board can stick inside it for
+            the whole height of the pool beside it: the captain alternates
+            "who" (here) and "which hero" (the grid) five times in a row. */}
+        <div className="flex flex-col gap-4 lg:self-stretch">
+          <PickBanStepTimeline
+            kind={kind}
+            sequence={state.sequence}
+            submissions={state.submissions}
+            currentStepIndex={state.current_step_index}
+            isComplete={state.is_complete}
+            currentRound={state.current_round}
+            itemsById={itemsById}
+            sideName={sideName}
+            session={session}
+          />
           {step?.target != null && targetRoster.length > 0 && opponentSide != null ? (
-            <PickBanTargetBoard
-              targets={targetRoster}
-              selectedPlayerId={selectedTargetId}
-              assignedByPlayer={assignedByPlayer}
-              itemsById={itemsById}
-              onSelect={(playerId) =>
-                setSelectedTargetId((current) => (current === playerId ? null : playerId))
-              }
-              teamName={sideName(opponentSide)}
-              disabled={!canSelect}
-            />
+            <div className="lg:sticky lg:top-[var(--aqt-sticky-top)]">
+              <PickBanTargetBoard
+                targets={targetRoster}
+                selectedPlayerId={selectedTargetId}
+                assignedByPlayer={assignedByPlayer}
+                itemsById={itemsById}
+                onSelect={(playerId) =>
+                  setSelectedTargetId((current) => (current === playerId ? null : playerId))
+                }
+                teamName={sideName(opponentSide)}
+                disabled={!canSelect}
+              />
+            </div>
           ) : null}
-
-          {isBlindStep && step != null && viewerSide != null ? (
-            <PickBanDraftTray
-              kind={kind}
-              step={step}
-              items={draftItems}
-              locked={draftLocked}
-              issues={state.draft_issues}
-              saving={submitMutation.isPending}
-              locking={submitMutation.isPending}
-              itemsById={itemsById}
-              targetName={targetName}
-              opponentSide={opponentSide}
-              opponentProgress={
-                opponentSide != null ? state.step_progress?.[opponentSide] : undefined
-              }
-              opponentName={opponentSide != null ? sideName(opponentSide) : ""}
-              onRemove={(index) =>
-                setLocalDraft({
-                  key: stepKey,
-                  items: draftItems.filter((_, position) => position !== index)
-                })
-              }
-              onLock={() => submitDraft({ items: draftItems, lock: true })}
-            />
-          ) : null}
-
+        </div>
+        <div className="flex flex-col gap-4">
           {revealedStep != null ? (
             <PickBanRevealPanel
               kind={kind}
@@ -348,6 +328,33 @@ export function PickBanPanel({
           state={state}
           sideName={sideName}
           captainAction={state.is_complete ? null : captainAction}
+          draft={
+            isBlindStep && step != null && viewerSide != null ? (
+              <PickBanDraftTray
+                kind={kind}
+                step={step}
+                items={draftItems}
+                locked={draftLocked}
+                issues={state.draft_issues}
+                locking={submitMutation.isPending}
+                itemsById={itemsById}
+                targetName={targetName}
+                opponentSide={opponentSide}
+                opponentProgress={
+                  opponentSide != null ? state.step_progress?.[opponentSide] : undefined
+                }
+                opponentName={opponentSide != null ? sideName(opponentSide) : ""}
+                onRemove={(index) =>
+                  setLocalDraft({
+                    key: stepKey,
+                    items: draftItems.filter((_, position) => position !== index)
+                  })
+                }
+                onLock={() => submitDraft({ items: draftItems, lock: true })}
+              />
+            ) : null
+          }
+          draftOpen={isBlindStep && state.viewer_can_act && !draftLocked && !state.is_complete}
           kind={kind}
           selectedItemId={selectedItemId}
           selectedItemName={selectedItemName}

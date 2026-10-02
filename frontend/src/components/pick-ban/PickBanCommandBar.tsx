@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { Ban, EyeOff, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -18,10 +19,14 @@ interface PickBanCommandBarProps {
   sideName: (side: PickBanSide) => string;
   /**
    * The viewer's own pending action on an OPEN step, or null — on a blind step
-   * nothing is confirmed here (the draft tray owns that), and a spectator never
+   * nothing is confirmed here (`draft` takes this slot), and a spectator never
    * has one.
    */
   captainAction: PickBanAction | null;
+  /** The viewer's blind-step draft tray, shown where the confirmation goes. */
+  draft?: ReactNode;
+  /** The viewer still has to fill/lock that draft — the bar reads "your turn". */
+  draftOpen?: boolean;
   kind: PickBanKind;
   selectedItemId: number | null;
   selectedItemName: string | null;
@@ -35,8 +40,8 @@ interface PickBanCommandBarProps {
 /**
  * Fixed bottom overlay for the pregame room, anchored via the shared
  * `OverlayBar` shell. Always shows the step/countdown status (every viewer),
- * and additionally the ban/pick/protect confirmation when the viewer is a
- * captain on an OPEN step.
+ * and additionally the viewer's own commit control: the ban/pick/protect
+ * confirmation on an OPEN step, the draft tray and its Lock on a BLIND one.
  *
  * "Whose turn" is no longer one side: a v2 step can put BOTH captains on the
  * clock at once, and `acting_sides` is exactly the ones that have not locked —
@@ -47,6 +52,8 @@ export function PickBanCommandBar({
   state,
   sideName,
   captainAction,
+  draft,
+  draftOpen = false,
   kind,
   selectedItemId,
   selectedItemName,
@@ -60,6 +67,7 @@ export function PickBanCommandBar({
   const step = state.current_step;
   const summary = step != null ? stepSummary(step) : null;
   const acting = state.acting_sides;
+  const yourTurn = captainAction != null || draftOpen;
 
   const turnBanner = state.is_complete
     ? t("completedBanner")
@@ -84,7 +92,7 @@ export function PickBanCommandBar({
         : t("captain.confirmPick", { item: selectedItemName ?? "—" });
 
   return (
-    <OverlayBar tone={captainAction != null ? "active" : "neutral"} ariaLabel={t("commandBar")}>
+    <OverlayBar tone={yourTurn ? "active" : "neutral"} ariaLabel={t("commandBar")}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:contents">
           {deadline != null && step?.timer_seconds != null ? (
@@ -92,7 +100,7 @@ export function PickBanCommandBar({
           ) : null}
           <div className="min-w-0 flex-1">
             <p className="text-label uppercase tracking-[0.15em] text-[color:var(--aqt-teal)]">
-              {captainAction != null ? t("captain.yourTurn") : "\u00A0"}
+              {yourTurn ? t("captain.yourTurn") : "\u00A0"}
             </p>
             <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium">
               {summary?.blind && !state.is_complete ? (
@@ -140,6 +148,8 @@ export function PickBanCommandBar({
               {pending ? t("captain.sending") : confirmLabel}
             </Button>
           </div>
+        ) : draft != null ? (
+          <div className="sm:ml-auto sm:shrink-0">{draft}</div>
         ) : null}
       </div>
     </OverlayBar>

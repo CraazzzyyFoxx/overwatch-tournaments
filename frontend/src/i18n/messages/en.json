@@ -3191,9 +3191,6 @@
       },
       "draft": {
         "title": "Your draft",
-        "filled": "{filled}/{count}",
-        "saving": "saving…",
-        "empty": "Choose in the pool below. The opponent only sees how many you have.",
         "remove": "Remove {item}",
         "forPlayer": "for {player}",
         "lock": "Lock the draft",
