@@ -1176,7 +1176,7 @@ class AdminStageService:
         await self._lock_stage(session, stage_id)
         await session.refresh(inp, ["stage_item_id"])  # a move may have committed before the lock
         source_item_id = inp.stage_item_id
-        target_item_id = stage_item_id or source_item_id
+        target_item_id = source_item_id if stage_item_id is None else stage_item_id
         if target_item_id != source_item_id:
             target_item = await self.stage_item_repo.get(session, target_item_id)
             if target_item is None:
