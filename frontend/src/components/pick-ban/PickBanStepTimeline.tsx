@@ -1,9 +1,20 @@
 "use client";
 
-import { Ban, Check, CircleDashed, EyeOff, Flag, Info, MapPin, Shield, Shuffle, Users } from "lucide-react";
+import {
+  Ban,
+  Check,
+  CircleDashed,
+  EyeOff,
+  Flag,
+  Info,
+  Layers,
+  MapPin,
+  Shield,
+  Shuffle,
+  Users
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -21,7 +32,7 @@ import {
   type PickBanSide,
   type PickBanStepSummary
 } from "./pick-ban-model";
-import type { PickBanItemLike } from "./PickBanGrid";
+import { PickBanRoundLabel, type PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";
 
 interface PickBanStepTimelineProps {
@@ -143,7 +154,7 @@ export function PickBanStepTimeline({
             </TooltipProvider>
           ) : null}
         </span>
-        <StepChips summary={summary} />
+        <StepMeta summary={summary} />
         {taken.length > 0 ? (
           <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
             {taken.map((item, position) => {
@@ -171,13 +182,15 @@ export function PickBanStepTimeline({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("steps.title")}</CardTitle>
         {session.first_side ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--aqt-fg-muted)]">
-            <Flag className="h-4 w-4 text-[color:var(--aqt-teal)]" aria-hidden />
-            <span>{t("firstBanner", { team: sideName(session.first_side) })}</span>
-            <Badge variant="outline" className="font-normal text-[color:var(--aqt-fg-muted)]">
-              {t(`seedSource.${session.seed_source}`)}
-            </Badge>
-          </div>
+          <p className="flex items-center gap-2 text-sm text-[color:var(--aqt-fg-muted)]">
+            <Flag className="h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]" aria-hidden />
+            <span>
+              {t("firstBanner", { team: sideName(session.first_side) })}{" "}
+              <span className="text-[color:var(--aqt-fg-dim)]">
+                ({t(`seedSource.${session.seed_source}`)})
+              </span>
+            </span>
+          </p>
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-1.5">
@@ -195,20 +208,17 @@ export function PickBanStepTimeline({
                   data-pick-ban-step-round={group.round}
                   className={cn("flex-col gap-1.5", folded ? "hidden lg:flex" : "flex")}
                 >
-                  <div className="flex flex-wrap items-center gap-2 pt-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-                      {t("round.label", { n: group.round })}
-                    </span>
-                    <Badge
-                      variant={group.round === currentRound ? "default" : "outline"}
-                      className="px-1.5 py-0 text-label font-normal"
-                    >
-                      {group.round === currentRound
-                        ? t("round.current")
-                        : currentRound != null && group.round < currentRound
-                          ? t("round.resolved")
-                          : t("round.upcoming")}
-                    </Badge>
+                  <div className="pt-1.5">
+                    <PickBanRoundLabel
+                      round={group.round}
+                      state={
+                        group.round === currentRound
+                          ? "current"
+                          : currentRound != null && group.round < currentRound
+                            ? "resolved"
+                            : "upcoming"
+                      }
+                    />
                   </div>
                   {group.steps.map((resolved) => renderStep(resolved))}
                 </div>
@@ -223,35 +233,38 @@ export function PickBanStepTimeline({
  * The parameters that make a v2 step different from a v1 token: how many items
  * each side takes, whether it is blind, whether every item names an opponent
  * player, and how long its bans hold. Each one is omitted when it says nothing
- * — a count of 1 and a one-map ban are the default shape.
+ * — a count of 1 and a one-map ban are the default shape. Plain glyph-and-text
+ * pairs, not chips: they qualify the headline beside them, they do not compete
+ * with it.
  */
-function StepChips({ summary }: Readonly<{ summary: PickBanStepSummary }>) {
+function StepMeta({ summary }: Readonly<{ summary: PickBanStepSummary }>) {
   const t = useTranslations("pickBan.room");
   return (
-    <span className="flex flex-wrap items-center gap-1 text-[color:var(--aqt-fg-muted)]">
+    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-[color:var(--aqt-fg-muted)]">
       {summary.count != null ? (
-        <Badge variant="outline" className="px-1.5 py-0 text-label font-normal tabular-nums">
+        <span className="font-semibold tabular-nums text-[color:var(--aqt-fg)]">
           {t("step.count", { n: summary.count })}
-        </Badge>
+        </span>
       ) : null}
       {summary.blind ? (
-        <Badge variant="outline" className="gap-1 px-1.5 py-0 text-label font-normal">
+        <span className="inline-flex items-center gap-1">
           <EyeOff className="h-3 w-3" aria-hidden />
           {t("step.blind")}
-        </Badge>
+        </span>
       ) : null}
       {summary.targeted ? (
-        <Badge variant="outline" className="gap-1 px-1.5 py-0 text-label font-normal">
+        <span className="inline-flex items-center gap-1">
           <Users className="h-3 w-3" aria-hidden />
           {t("step.targeted")}
-        </Badge>
+        </span>
       ) : null}
       {summary.lifetime != null ? (
-        <Badge variant="outline" className="px-1.5 py-0 text-label font-normal">
+        <span className="inline-flex items-center gap-1">
+          <Layers className="h-3 w-3" aria-hidden />
           {summary.lifetime === "series"
             ? t("step.lifetimeSeries")
             : t("step.lifetime", { n: summary.lifetime })}
-        </Badge>
+        </span>
       ) : null}
     </span>
   );

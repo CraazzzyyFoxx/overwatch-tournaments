@@ -2,18 +2,24 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Ban, History, Shield } from "lucide-react";
+import { Ban, Check, History, Shield, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { StatusDot } from "@/components/ui/status-dot";
 import { cn } from "@/lib/utils";
 import HeroImage from "@/components/hero/HeroImage";
 import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import type { PickBanEntry, PickBanEntryStatus, PickBanKind } from "@/types/tournament.types";
 
-import { poolRoundGroups, roundState, statusLabelKey, tileStatus } from "./pick-ban-model";
+import {
+  poolRoundGroups,
+  roundState,
+  statusLabelKey,
+  tileStatus,
+  type PickBanRoundState
+} from "./pick-ban-model";
 
 /** Generic catalog entry the grid needs to render one item's tile — either a
  * `MapRead` or a `Hero`, reduced to the fields both shapes carry. */
@@ -56,14 +62,12 @@ interface PickBanGridProps {
   header: React.ReactNode;
 }
 
-const STATUS_BADGE_VARIANT: Record<
-  PickBanEntryStatus,
-  "secondary" | "destructive" | "default" | "outline"
-> = {
-  available: "outline",
-  banned: "destructive",
-  picked: "default",
-  protected: "secondary"
+/** A map tile's status as coloured text: the same hue and glyph the step timeline uses per action. */
+const STATUS_STYLE: Record<PickBanEntryStatus, { icon: LucideIcon | null; className: string }> = {
+  available: { icon: null, className: "text-[color:var(--aqt-fg-muted)]" },
+  banned: { icon: Ban, className: "text-[color:var(--aqt-rose)]" },
+  picked: { icon: Check, className: "text-[color:var(--aqt-support)]" },
+  protected: { icon: Shield, className: "text-[color:var(--aqt-amber)]" }
 };
 
 /** Hero Pool role filter display order; each code is its own `common.roles.*` key. */
@@ -130,6 +134,7 @@ export function PickBanGrid({
   const tile = (entry: PickBanEntry, lockedRound: number | null) => {
     const item = itemsById[entry.item_id];
     const status = tileStatus(entry, { canSelect, currentRound, eligibleIds, draftItemIds });
+    const StatusIcon = STATUS_STYLE[entry.status].icon;
     const selected = selectedItemId === entry.item_id || status.drafted;
     const dimmed = entry.status === "banned";
     const initials = itemName(entry.item_id)
@@ -201,33 +206,31 @@ export function PickBanGrid({
           >
             {itemName(entry.item_id)}
           </span>
-          <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant={STATUS_BADGE_VARIANT[entry.status]} className="px-1.5 py-0 text-label">
+          <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 font-medium",
+                STATUS_STYLE[entry.status].className
+              )}
+            >
+              {StatusIcon ? <StatusIcon className="h-3 w-3" aria-hidden /> : null}
               {t(statusLabelKey(entry))}
-            </Badge>
+            </span>
             {entry.carried_from_round != null ? (
-              <Badge
-                variant="outline"
+              <span
                 data-carried-from={entry.carried_from_round}
-                className="px-1.5 py-0 text-label font-normal text-[color:var(--aqt-fg-muted)]"
+                className="inline-flex items-center gap-1 text-[color:var(--aqt-fg-muted)]"
               >
+                <History className="h-3 w-3" aria-hidden />
                 {t("carried.badge", { n: entry.carried_from_round })}
-              </Badge>
+              </span>
             ) : entry.picked_by ? (
-              <Badge
-                variant="outline"
-                className="px-1.5 py-0 text-label font-normal text-[color:var(--aqt-fg-muted)]"
-              >
-                {t(`by.${entry.picked_by}`)}
-              </Badge>
+              <span className="text-[color:var(--aqt-fg-muted)]">{t(`by.${entry.picked_by}`)}</span>
             ) : null}
             {entry.protected_by ? (
-              <Badge
-                variant="outline"
-                className="px-1.5 py-0 text-label font-normal text-[color:var(--aqt-fg-muted)]"
-              >
+              <span className="text-[color:var(--aqt-fg-muted)]">
                 {t(`protectedBy.${entry.protected_by}`)}
-              </Badge>
+              </span>
             ) : null}
           </span>
         </div>
@@ -338,9 +341,9 @@ export function PickBanGrid({
         <div className="flex flex-row items-center justify-between gap-2 border-t border-[color:var(--aqt-border)] pt-4">
           <CardTitle className="text-base">{t(`${kind}.title`)}</CardTitle>
           {roundGroups ? (
-            <Badge variant="outline" className="font-normal text-[color:var(--aqt-fg-muted)]">
+            <span className="text-sm text-[color:var(--aqt-fg-muted)]">
               {t("round.inPlayCount", { count: roundGroups.length })}
-            </Badge>
+            </span>
           ) : null}
         </div>
       </CardHeader>
@@ -387,21 +390,7 @@ export function PickBanGrid({
                 aria-current={state === "current" ? "step" : undefined}
                 className="flex flex-col gap-2"
               >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">
-                    {t("round.label", { n: group.round })}
-                  </span>
-                  <Badge
-                    variant={state === "current" ? "default" : "outline"}
-                    className="px-1.5 py-0 text-label font-normal"
-                  >
-                    {state === "current"
-                      ? t("round.current")
-                      : state === "resolved"
-                        ? t("round.resolved")
-                        : t("round.upcoming")}
-                  </Badge>
-                </div>
+                <PickBanRoundLabel round={group.round} state={state} />
                 {locked ? (
                   <p
                     id={lockedHintId(group.round)}
@@ -426,5 +415,33 @@ export function PickBanGrid({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+const ROUND_STATE_CLASS: Record<PickBanRoundState, string> = {
+  current: "text-[color:var(--aqt-teal)]",
+  resolved: "text-[color:var(--aqt-fg-muted)]",
+  upcoming: "text-[color:var(--aqt-fg-muted)]"
+};
+
+/**
+ * A round's heading, shared by the pool and the step timeline so both say it
+ * the same way: the number, then where the round stands as coloured text — a
+ * dot while it is live, a check once it is decided, nothing while it waits.
+ */
+export function PickBanRoundLabel({
+  round,
+  state
+}: Readonly<{ round: number; state: PickBanRoundState }>) {
+  const t = useTranslations("pickBan.room");
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+      <span className="text-sm font-semibold">{t("round.label", { n: round })}</span>
+      <span className={cn("inline-flex items-center gap-1.5 text-xs", ROUND_STATE_CLASS[state])}>
+        {state === "current" ? <StatusDot /> : null}
+        {state === "resolved" ? <Check className="h-3 w-3" aria-hidden /> : null}
+        {t(`round.${state}`)}
+      </span>
+    </div>
   );
 }

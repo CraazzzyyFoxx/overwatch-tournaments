@@ -476,6 +476,8 @@ export interface PickBanTarget {
   role: "tank" | "damage" | "support" | "flex" | null;
   sub_role: string | null;
   is_substitution: boolean;
+  /** Resolved against the tournament's grid, like `Player.division`. */
+  division: number;
 }
 
 export interface PickBanStepProgress {

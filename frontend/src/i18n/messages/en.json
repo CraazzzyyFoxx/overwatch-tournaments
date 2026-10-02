@@ -3214,9 +3214,9 @@
         "min_per_group": "A group is short of its minimum"
       },
       "target": {
-        "eyebrow": "One ban per opponent player",
+        "title": "One ban per opponent player",
         "hint": "Choose a player of {team}, then the hero you ban for them.",
-        "sub": "sub",
+        "sub": "substitute",
         "empty": "not set",
         "selectFirst": "Choose the player first",
         "noRoster": "{team} has no players on its roster, so there is nobody to ban for and no hero can be chosen. An organizer has to add the roster."

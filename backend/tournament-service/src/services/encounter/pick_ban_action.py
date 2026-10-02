@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import http_status as status
 from shared.core.enums import EncounterGameState, MapVetoSessionStatus, PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.division_grid import DivisionGrid
 from shared.domain import pick_ban_engine as engine
 from shared.domain import pick_ban_rules as pbr
 from shared.models.tournament.encounter import Encounter
@@ -42,6 +43,8 @@ from shared.repository import (
     PickBanSubmissionRepository,
 )
 from shared.services.bracket.usability import is_encounter_live
+from shared.services.division_grid.resolution import resolve_tournament_division
+from src.core.workspace import get_division_grid
 from src.services.encounter import pick_ban_undo
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import (
@@ -119,7 +122,7 @@ def serialize_submission(row: pbr.SubmissionLike) -> dict[str, Any]:
     }
 
 
-def serialize_target(player: Player) -> dict[str, Any]:
+def serialize_target(player: Player, grid: DivisionGrid) -> dict[str, Any]:
     role = getattr(player.role, "value", player.role)
     return {
         "player_id": player.id,
@@ -129,6 +132,8 @@ def serialize_target(player: Player) -> dict[str, Any]:
         "role": role.lower() if isinstance(role, str) else None,
         "sub_role": player.sub_role,
         "is_substitution": bool(player.is_substitution),
+        # Against the tournament's own grid, exactly as `PlayerRead.division`.
+        "division": resolve_tournament_division(player.rank, tournament_grid=grid),
     }
 
 
@@ -771,6 +776,14 @@ class PickBanActionService:
                 step, viewer_side, list(row.items_json or []) if row is not None else [], ctx, final=True
             )
 
+        targets: dict[str, list[dict[str, Any]]] | None = None
+        if any(candidate.target is not None for candidate in rt.steps):
+            grid = await get_division_grid(session, None, tournament_id=rt.encounter.tournament_id)
+            targets = {
+                side: [serialize_target(player, grid) for player in rt.rosters.get(side, [])]
+                for side in ("home", "away")
+            }
+
         state: dict[str, Any] = {
             "session": serialize_pick_ban_session(rt.pick_ban),
             "readiness": readiness,
@@ -796,11 +809,7 @@ class PickBanActionService:
             "is_complete": step is None,
             "eligible": eligible,
             "draft_issues": draft_issues,
-            "targets": (
-                {side: [serialize_target(player) for player in rt.rosters.get(side, [])] for side in ("home", "away")}
-                if any(candidate.target is not None for candidate in rt.steps)
-                else None
-            ),
+            "targets": targets,
             "dispute": pbr.dispute_target(
                 rt.steps,
                 rt.submissions,

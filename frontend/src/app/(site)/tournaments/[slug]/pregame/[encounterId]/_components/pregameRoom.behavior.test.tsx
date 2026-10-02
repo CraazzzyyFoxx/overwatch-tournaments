@@ -768,8 +768,22 @@ describe("phase selection", () => {
         targets: {
           home: [],
           away: [
-            { player_id: 55, name: "Foxy", role: "tank", sub_role: null, is_substitution: false },
-            { player_id: 56, name: "Vixen", role: "tank", sub_role: null, is_substitution: true }
+            {
+              player_id: 55,
+              name: "Foxy",
+              role: "tank",
+              sub_role: null,
+              is_substitution: false,
+              division: 7
+            },
+            {
+              player_id: 56,
+              name: "Vixen",
+              role: "tank",
+              sub_role: null,
+              is_substitution: true,
+              division: 12
+            }
           ]
         }
       })
