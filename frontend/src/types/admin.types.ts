@@ -427,6 +427,10 @@ export interface StageItemInputUpdateInput {
   team_id?: number | null;
   source_stage_item_id?: number | null;
   source_position?: number | null;
+  /** Moves the input into this item of the same stage. */
+  stage_item_id?: number;
+  /** Seed to insert at; the seeds it passes shift by one, both items stay 1..N. */
+  slot?: number;
 }
 
 /** `POST /admin/encounters/{id}/swap-slot`: exchange the teams in two bracket slots. */
