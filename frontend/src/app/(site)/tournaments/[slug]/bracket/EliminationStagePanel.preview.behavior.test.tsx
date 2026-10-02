@@ -251,9 +251,13 @@ describe("EliminationStagePanel preview", () => {
       }
     ]);
     renderPanel(false, []);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    // Until the query resolves and the tree renders; one tick is not enough on a
+    // busy runner.
+    for (let tick = 0; tick < 50 && !container.textContent?.includes("M3"); tick += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
 
     expect(getStageBracketPreview).toHaveBeenCalledWith(1, 3);
     expect(container.textContent).not.toContain(en.common.noMatches.replace("{stage}", "Playoffs"));
