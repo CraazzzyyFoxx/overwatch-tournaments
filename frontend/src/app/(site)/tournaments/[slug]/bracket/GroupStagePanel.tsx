@@ -32,7 +32,7 @@ type GroupStagePanelProps = {
   ) => Promise<unknown>;
   bracketTabs?: readonly SegmentedLinkItem[];
   liveTeamStreams?: ReadonlyMap<number, StreamEntry>;
-  /** `?view=standings` opens the table first; anything else opens the matches. */
+  /** `?view=standings` opens the table first; anything else opens the matches, unless there are none yet. */
   defaultView?: "matches" | "standings";
   highlightMatchId?: number | null;
 };
@@ -60,7 +60,11 @@ export function GroupStagePanel({
 
   return (
     <Tabs
-      defaultValue={defaultView === "standings" && hasStandings ? "standings" : "matches"}
+      defaultValue={
+        hasStandings && (defaultView === "standings" || encounters.length === 0)
+          ? "standings"
+          : "matches"
+      }
       className="overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]"
     >
       <StagePanelHeader
