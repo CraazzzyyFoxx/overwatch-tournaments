@@ -2,14 +2,19 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from uuid import uuid4
 
+import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from shared.models.identity.auth_user import AuthUser
+from shared.schemas.user_merge_auth import AuthMergeFinalizationRequest
 from src.core import cache as cache_module  # noqa: E402
 from src.core import redis as redis_module  # noqa: E402
+from src.services.rbac_admin import AuthUserAdminService
 from src.services.session_cache import session_cache  # noqa: E402
 
 
@@ -161,3 +166,13 @@ def test_corrupt_rbac_entry_is_evicted_instead_of_pinning_the_slow_path(monkeypa
     # Sanity: the eviction above targeted the key the cache actually writes.
     asyncio.run(session_cache.set_rbac(7, roles=[], permissions=[]))
     assert json.loads(client.store[key])["workspaces"] == []
+
+
+def test_profile_merge_finalization_fails_closed_when_redis_is_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr(redis_module, "_redis", None)
+    operator = AuthUser(
+        id=7, email="merge-operator@test.invalid", username="merge-operator", is_active=True, is_superuser=True
+    )
+    request = AuthMergeFinalizationRequest(auth_user_ids=[11, 12], session_ids=[uuid4()])
+    with pytest.raises(RuntimeError, match="not initialised"):
+        asyncio.run(AuthUserAdminService().finalize_profile_merge(operator, request))

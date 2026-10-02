@@ -35,11 +35,13 @@ from shared.repository import (
     WorkspaceMemberRepository,
     WorkspaceRepository,
 )
+from shared.schemas.user_merge_auth import AuthMergeFinalizationRequest
 from shared.services.audit import record_audit
 from src import models, schemas
 from src.services.auth_users import AuthUserService, auth_users
 from src.services.players import PlayerLinkService, players
 from src.services.rbac_policy import RbacPolicy, rbac_policy
+from src.services.security import token_codec
 from src.services.session_cache import SessionCache, session_cache
 from src.services.sessions import SessionService, sessions
 
@@ -801,6 +803,19 @@ class AuthUserAdminService:
         await session.commit()
         await self._cache.invalidate_rbac(user_id)
         logger.info(f"Auth user deleted by admin: user_id={user_id} email={email} actor_user_id={current_user.id}")
+
+    async def finalize_profile_merge(
+        self,
+        current_user: models.AuthUser,
+        request: AuthMergeFinalizationRequest,
+    ) -> None:
+        """Retire merge-affected sessions using identity's configured token lifetime."""
+        self._policy.require_superuser(current_user)
+        await self._cache.finalize_profile_merge(
+            request.auth_user_ids,
+            {str(session_id) for session_id in request.session_ids},
+            token_codec.access_token_ttl_seconds,
+        )
 
     async def list_oauth_connections(
         self,

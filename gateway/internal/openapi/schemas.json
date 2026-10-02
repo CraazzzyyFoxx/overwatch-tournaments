@@ -2930,7 +2930,7 @@
       "summary": "Set my social account visibility"
     },
     "rpc.app.users.merge_execute": {
-      "description": "Permission: superuser only. Merges one player profile into another, stamping the operator's auth-user id.",
+      "description": "Permission: superuser only. Atomically merges player references, selected social identities, auth ownership, preserved resources and audit after rechecking the locked preview fingerprint. Requires independent confirmations for auth changes, auth deletion and permission/access changes. Both accounts' refresh tokens/API keys are revoked; identity-service session blacklisting and RBAC invalidation must succeed before commit. Password, email, active and superuser flags are never combined.",
       "request": {
         "array": false,
         "ref": "app.UserMergeExecuteRequest"
@@ -2942,7 +2942,7 @@
       "summary": "Execute user merge"
     },
     "rpc.app.users.merge_preview": {
-      "description": "Permission: superuser only. Previews merging one player profile into another without applying changes.",
+      "description": "Permission: superuser only. Previews merging player profiles, including two auth-linked profiles. auth_policy chooses the surviving auth account, keeping/deleting the other, each OAuth connection destination, and explicit resource-conflict choices. Returns account roles/denies, preservation counts, blockers and a state fingerprint without exposing credentials.",
       "request": {
         "array": false,
         "ref": "app.UserMergePreviewRequest"
@@ -12723,6 +12723,358 @@
       "title": "AuditLogRead",
       "type": "object"
     },
+    "app.AuthMergeAccount": {
+      "properties": {
+        "denies": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeDeny"
+          },
+          "title": "Denies",
+          "type": "array"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "has_password": {
+          "title": "Has Password",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "is_superuser": {
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeRole"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email",
+        "has_password",
+        "is_active",
+        "is_superuser"
+      ],
+      "title": "AuthMergeAccount",
+      "type": "object"
+    },
+    "app.AuthMergeDataConflict": {
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "resource": {
+          "title": "Resource",
+          "type": "string"
+        },
+        "source_value": {
+          "title": "Source Value"
+        },
+        "target_value": {
+          "title": "Target Value"
+        }
+      },
+      "required": [
+        "key",
+        "resource",
+        "label",
+        "source_value",
+        "target_value"
+      ],
+      "title": "AuthMergeDataConflict",
+      "type": "object"
+    },
+    "app.AuthMergeDeny": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "permission_id": {
+          "title": "Permission Id",
+          "type": "integer"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "resource": {
+          "title": "Resource",
+          "type": "string"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "permission_id",
+        "resource",
+        "action"
+      ],
+      "title": "AuthMergeDeny",
+      "type": "object"
+    },
+    "app.AuthMergeOAuthConnection": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_user_id": {
+          "title": "Provider User Id",
+          "type": "string"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "provider_user_id",
+        "username",
+        "auth_user_id"
+      ],
+      "title": "AuthMergeOAuthConnection",
+      "type": "object"
+    },
+    "app.AuthMergeOAuthDestination": {
+      "properties": {
+        "auth_user_id": {
+          "minimum": 1,
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "connection_id": {
+          "minimum": 1,
+          "title": "Connection Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connection_id",
+        "auth_user_id"
+      ],
+      "title": "AuthMergeOAuthDestination",
+      "type": "object"
+    },
+    "app.AuthMergePolicy": {
+      "properties": {
+        "conflict_choices": {
+          "additionalProperties": {
+            "enum": [
+              "source",
+              "target"
+            ],
+            "type": "string"
+          },
+          "title": "Conflict Choices",
+          "type": "object"
+        },
+        "oauth_destinations": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeOAuthDestination"
+          },
+          "title": "Oauth Destinations",
+          "type": "array"
+        },
+        "other_account_action": {
+          "default": "keep",
+          "enum": [
+            "keep",
+            "delete"
+          ],
+          "title": "Other Account Action",
+          "type": "string"
+        },
+        "surviving_auth_user_id": {
+          "minimum": 1,
+          "title": "Surviving Auth User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "surviving_auth_user_id"
+      ],
+      "title": "AuthMergePolicy",
+      "type": "object"
+    },
+    "app.AuthMergePreview": {
+      "properties": {
+        "accounts": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeAccount"
+          },
+          "title": "Accounts",
+          "type": "array"
+        },
+        "data_conflicts": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeDataConflict"
+          },
+          "title": "Data Conflicts",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "oauth_connections": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeOAuthConnection"
+          },
+          "title": "Oauth Connections",
+          "type": "array"
+        },
+        "permission_changes": {
+          "default": false,
+          "title": "Permission Changes",
+          "type": "boolean"
+        },
+        "policy": {
+          "$ref": "#/components/schemas/app.AuthMergePolicy"
+        },
+        "resource_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Resource Counts",
+          "type": "object"
+        },
+        "state_fingerprint": {
+          "title": "State Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "accounts",
+        "oauth_connections",
+        "policy",
+        "state_fingerprint"
+      ],
+      "title": "AuthMergePreview",
+      "type": "object"
+    },
+    "app.AuthMergeResult": {
+      "properties": {
+        "deleted_auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deleted Auth User Id"
+        },
+        "moved_oauth_connection_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Moved Oauth Connection Ids",
+          "type": "array"
+        },
+        "surviving_auth_user_id": {
+          "title": "Surviving Auth User Id",
+          "type": "integer"
+        },
+        "transferred_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Transferred Counts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "surviving_auth_user_id"
+      ],
+      "title": "AuthMergeResult",
+      "type": "object"
+    },
+    "app.AuthMergeRole": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "AuthMergeRole",
+      "type": "object"
+    },
     "app.CatalogAliasAttach": {
       "description": "Attach `alias` to one catalog entity and close the matching miss.",
       "properties": {
@@ -18713,6 +19065,32 @@
     },
     "app.UserMergeExecuteRequest": {
       "properties": {
+        "auth_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergePolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "confirm_auth_changes": {
+          "default": false,
+          "title": "Confirm Auth Changes",
+          "type": "boolean"
+        },
+        "confirm_auth_deletion": {
+          "default": false,
+          "title": "Confirm Auth Deletion",
+          "type": "boolean"
+        },
+        "confirm_permission_changes": {
+          "default": false,
+          "title": "Confirm Permission Changes",
+          "type": "boolean"
+        },
         "field_policy": {
           "$ref": "#/components/schemas/app.UserMergeFieldPolicy"
         },
@@ -18757,6 +19135,17 @@
         "audit_id": {
           "title": "Audit Id",
           "type": "integer"
+        },
+        "auth_merge": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergeResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "deleted_source_user_id": {
           "title": "Deleted Source User Id",
@@ -18921,6 +19310,17 @@
     },
     "app.UserMergePreviewRequest": {
       "properties": {
+        "auth_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergePolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "source_user_id": {
           "minimum": 1,
           "title": "Source User Id",
@@ -18947,6 +19347,17 @@
           },
           "title": "Affected Counts",
           "type": "object"
+        },
+        "auth_merge": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergePreview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "conflicts": {
           "$ref": "#/components/schemas/app.UserMergeConflictSummary"
@@ -18982,6 +19393,18 @@
           "default": 0,
           "title": "Auth Links",
           "type": "integer"
+        },
+        "auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Id"
         },
         "avatar_url": {
           "anyOf": [

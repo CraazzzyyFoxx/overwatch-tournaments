@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 import sqlalchemy as sa
 from cashews import cache
+from redis.asyncio import Redis
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -28,7 +29,10 @@ from sqlalchemy.orm import selectinload
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import normalize_social_handle
+from shared.rbac import RBAC_USER_KEY_PREFIX
 from shared.repository import SocialAccountRepository, UserMergeAuditRepository, get_or_create_workspace_member
+from shared.schemas.user_merge_auth import AuthMergeResult
+from shared.services.auth_merge import apply_auth_merge, preview_auth_merge
 from src import models, schemas
 from src.services import user_cache
 
@@ -96,16 +100,15 @@ def _build_preview_from_context(
         target_dup_keys=None,
     )
 
-    has_auth_conflict = context.source_auth_links > 0 and context.target_auth_links > 0
     summary = None
-    if has_auth_conflict:
-        summary = "Merge blocked: both profiles already have auth links."
+    if context.source_auth_links > 0 and context.target_auth_links > 0:
+        summary = "Both profiles have sign-in accounts. Review the auth merge plan and confirm account changes."
 
     preview = schemas.UserMergePreviewResponse(
         source=source_summary,
         target=target_summary,
         conflicts=schemas.UserMergeConflictSummary(
-            has_auth_conflict=has_auth_conflict,
+            has_auth_conflict=False,
             summary=summary,
         ),
         affected_counts=dict(context.affected_counts),
@@ -134,6 +137,7 @@ def _build_user_summary(
         avatar_url=user.avatar_url,
         social_accounts=_build_identity_options(user, target_dup_keys),
         auth_links=auth_links,
+        auth_user_id=user.auth_user_id,
     )
 
 
@@ -205,10 +209,22 @@ class UserMergeService:
         self,
         session: AsyncSession,
         request: schemas.UserMergePreviewRequest,
+        *,
+        operator_auth_user_id: int | None = None,
     ) -> schemas.UserMergePreviewResponse:
         _validate_merge_pair(request.source_user_id, request.target_user_id)
         context = await self._load_merge_context(session, request.source_user_id, request.target_user_id)
-        return _build_preview_from_context(context=context, request=request)
+        preview = _build_preview_from_context(context=context, request=request)
+        preview.auth_merge = await preview_auth_merge(
+            session,
+            context.source,
+            context.target,
+            request.auth_policy,
+            operator_auth_user_id=operator_auth_user_id,
+        )
+        preview.conflicts.has_auth_conflict = bool(preview.auth_merge and preview.auth_merge.issues)
+        preview.preview_fingerprint = _build_preview_fingerprint(preview)
+        return preview
 
     async def execute_merge(
         self,
@@ -216,116 +232,93 @@ class UserMergeService:
         request: schemas.UserMergeExecuteRequest,
         *,
         operator_auth_user_id: int | None,
+        auth_finalizer: Callable[[AuthMergeResult], Awaitable[None]] | None = None,
     ) -> schemas.UserMergeExecuteResponse:
         _validate_merge_pair(request.source_user_id, request.target_user_id)
-        preview_request = schemas.UserMergePreviewRequest(
-            source_user_id=request.source_user_id,
-            target_user_id=request.target_user_id,
-        )
-        preview = await self.preview_merge(session, preview_request)
-        if preview.preview_fingerprint != request.preview_fingerprint:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Merge preview is stale. Refresh preview and try again.",
-            )
-        if preview.conflicts.has_auth_conflict:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=preview.conflicts.summary or "Merge blocked by auth-link conflict.",
-            )
-
-        context = await self._load_merge_context(session, request.source_user_id, request.target_user_id)
-        desired_name = _pick_field_value(
-            request.field_policy.name,
-            context.source.name,
-            context.target.name,
-        )
-        desired_avatar_url = _pick_field_value(
-            request.field_policy.avatar_url,
-            context.source.avatar_url,
-            context.target.avatar_url,
-        )
-        identity_result_raw = await self.apply_identity_selection(
-            session,
-            context.source,
-            context.target,
-            request.identity_selection,
-        )
-        affected_counts = empty_affected_counts()
-
+        auth_result = None
         try:
-            await session.flush()
-            # tournament.player rows have no plain user-id column anymore (contract step,
-            # iwrefac07): a roster row's identity is its workspace_member_id, so moving a
-            # player's rows from source -> target means repointing each row at the
-            # target's member row in that row's own tournament's workspace (source and
-            # target may resolve to different / not-yet-existing members there). This
-            # replaces the old generic REFERENCE_CONFIG reassign for Player entirely.
-            affected_counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await self._repoint_player_workspace_members(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
+            # Consistent ordering serializes competing merges without A->B/B->A deadlocks.
+            await session.execute(
+                select(models.User.id)
+                .where(models.User.id.in_((request.source_user_id, request.target_user_id)))
+                .order_by(models.User.id)
+                .with_for_update()
             )
-            # achievements.evaluation_result / achievements.override moved to
-            # workspace_member_id (P6): each row's workspace is its own rule's
-            # workspace, so — like Player above — the merge must repoint each row
-            # at the target's workspace_member in that same workspace rather than
-            # a flat user_id reassign.
-            affected_counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = await self._merge_achievement_evaluation_results(
+            preview = await self.preview_merge(
                 session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
+                schemas.UserMergePreviewRequest(
+                    source_user_id=request.source_user_id,
+                    target_user_id=request.target_user_id,
+                    auth_policy=request.auth_policy,
+                ),
+                operator_auth_user_id=operator_auth_user_id,
+            )
+            if preview.preview_fingerprint != request.preview_fingerprint:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Merge preview is stale. Refresh preview and try again.",
+                )
+            context = await self._load_merge_context(session, request.source_user_id, request.target_user_id)
+            desired_name = _pick_field_value(request.field_policy.name, context.source.name, context.target.name)
+            desired_avatar_url = _pick_field_value(
+                request.field_policy.avatar_url, context.source.avatar_url, context.target.avatar_url
+            )
+            if preview.auth_merge is not None:
+                if auth_finalizer is None:
+                    raise RuntimeError("Auth merge requires identity session finalization.")
+                auth_result = await apply_auth_merge(
+                    session,
+                    context.source,
+                    context.target,
+                    preview.auth_merge,
+                    confirm_auth_changes=request.confirm_auth_changes,
+                    confirm_auth_deletion=request.confirm_auth_deletion,
+                    confirm_permission_changes=request.confirm_permission_changes,
+                    operator_auth_user_id=operator_auth_user_id,
+                )
+
+            identity_result_raw = await self.apply_identity_selection(
+                session, context.source, context.target, request.identity_selection
+            )
+            affected_counts = empty_affected_counts()
+            await session.flush()
+            affected_counts[PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY] = await self._repoint_player_workspace_members(
+                session, source_user_id=context.source.id, target_user_id=context.target.id
+            )
+            affected_counts[EVALUATION_RESULT_MEMBER_REFERENCE_KEY] = await self._merge_achievement_evaluation_results(
+                session, source_user_id=context.source.id, target_user_id=context.target.id
             )
             affected_counts[OVERRIDE_MEMBER_REFERENCE_KEY] = await self._repoint_achievement_override_workspace_members(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
+                session, source_user_id=context.source.id, target_user_id=context.target.id
             )
             for reference_key, model, column_name in REFERENCE_CONFIG:
                 affected_counts[reference_key] = await self._reassign_reference(
-                    session,
-                    model,
-                    column_name,
-                    source_user_id=context.source.id,
-                    target_user_id=context.target.id,
+                    session, model, column_name, source_user_id=context.source.id, target_user_id=context.target.id
                 )
-
-            # balancer.registration.workspace_member_id is ON DELETE SET NULL, and
-            # every registration still anchored on the source's workspace_member would
-            # otherwise be silently nulled out by the CASCADE from
-            # workspace_member.player_id once the source User row is deleted below.
-            # Since dbarch02 dropped registration.user_id, this repoint is the SOLE
-            # mechanism that moves registrations during a merge (the generic
-            # REFERENCE_CONFIG loop no longer touches the table) — same repoint
-            # pattern as Player/achievements above.
             affected_counts[REGISTRATION_MEMBER_REFERENCE_KEY] = await self._repoint_registration_workspace_members(
-                session,
-                source_user_id=context.source.id,
-                target_user_id=context.target.id,
+                session, source_user_id=context.source.id, target_user_id=context.target.id
             )
-
-            affected_counts["players.user.auth_user_id"] = await self._merge_auth_user_links(
-                session,
-                source=context.source,
-                target=context.target,
-                source_auth_links=context.source_auth_links,
-                target_auth_links=context.target_auth_links,
-            )
+            affected_counts["players.user.auth_user_id"] = int(preview.source.auth_user_id is not None)
+            if auth_result is not None:
+                affected_counts.update(auth_result.transferred_counts)
 
             await self._delete_source_user_row(session, context.source.id)
             await session.flush()
-
             context.target.name = desired_name
             context.target.avatar_url = desired_avatar_url
             await session.flush()
 
+            snapshot = preview.model_dump(mode="json")
+            if auth_result is not None:
+                snapshot["auth_execution"] = {
+                    "confirm_auth_changes": request.confirm_auth_changes,
+                    "confirm_auth_deletion": request.confirm_auth_deletion,
+                    "confirm_permission_changes": request.confirm_permission_changes,
+                    "result": auth_result.model_dump(mode="json"),
+                    "affected_auth_user_ids": auth_result.affected_auth_user_ids,
+                    "revoked_session_ids": auth_result.revoked_session_ids,
+                }
             audit = models.UserMergeAudit(
-                # dbarch01 put an FK (players.user.id, ON DELETE SET NULL) on
-                # source_user_id, and the source row was hard-deleted above in
-                # this same transaction — referencing it here would violate the
-                # FK. The deleted id survives in
-                # preview_snapshot_json["source"]["id"] and is returned to the
-                # caller as deleted_source_user_id.
                 source_user_id=None,
                 target_user_id=request.target_user_id,
                 operator_auth_user_id=operator_auth_user_id,
@@ -333,26 +326,31 @@ class UserMergeService:
                 moved_identity_ids_json=identity_result_raw["moved"],
                 deduped_identity_ids_json=identity_result_raw["deduped"],
                 affected_counts_json=affected_counts,
-                preview_snapshot_json=preview.model_dump(mode="json"),
+                preview_snapshot_json=snapshot,
             )
             await self.audits.create(session, audit)
+            if auth_result is not None:
+                # Fail closed before committing when identity cannot retire the old sessions.
+                await auth_finalizer(auth_result)
             await session.commit()
         except Exception:
             await session.rollback()
             raise
 
+        if auth_result is not None:
+            await self._invalidate_auth_rbac_caches(auth_result.affected_auth_user_ids)
         await self._invalidate_merge_caches(
             source_user_id=request.source_user_id,
             target_user_id=request.target_user_id,
             preview=preview,
         )
-
         return schemas.UserMergeExecuteResponse(
             deleted_source_user_id=request.source_user_id,
             surviving_target_user_id=request.target_user_id,
             affected_counts=affected_counts,
             identity_results=schemas.UserMergeIdentityResult(**identity_result_raw),
             audit_id=audit.id,
+            auth_merge=auth_result,
         )
 
     # ─── Identities ──────────────────────────────────────────────────────────
@@ -469,7 +467,10 @@ class UserMergeService:
 
     async def _get_user_for_merge(self, session: AsyncSession, user_id: int) -> models.User:
         result = await session.execute(
-            select(models.User).where(models.User.id == user_id).options(selectinload(models.User.social_accounts))
+            select(models.User)
+            .where(models.User.id == user_id)
+            .options(selectinload(models.User.social_accounts))
+            .execution_options(populate_existing=True)
         )
         user = result.scalar_one_or_none()
         if user is None:
@@ -845,34 +846,15 @@ class UserMergeService:
 
         return moved
 
-    async def _merge_auth_user_links(
-        self,
-        session: AsyncSession,
-        *,
-        source: models.User,
-        target: models.User,
-        source_auth_links: int,
-        target_auth_links: int,
-    ) -> int:
-        """Move ``players.user.auth_user_id`` from the losing (source) player to the
-        surviving (target) player. A player keeps at most one ``auth_user_id`` (the
-        column is unique), so the source must be unlinked before the target can be
-        linked — never both set to the same auth_user_id at once."""
-        if source_auth_links == 0:
-            return 0
-        if target_auth_links > 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Merge blocked: target profile already has auth links.",
-            )
-        auth_user_id = source.auth_user_id
-        source.auth_user_id = None
-        await session.flush()
-        target.auth_user_id = auth_user_id
-        await session.flush()
-        return 1
-
     # ─── Cache invalidation ──────────────────────────────────────────────────
+    async def _invalidate_auth_rbac_caches(self, auth_user_ids: list[int]) -> None:
+        from src.core.config import settings
+
+        redis = Redis.from_url(str(settings.redis_url), decode_responses=True)
+        try:
+            await redis.delete(*(f"{RBAC_USER_KEY_PREFIX}{user_id}" for user_id in auth_user_ids))
+        finally:
+            await redis.aclose()
 
     async def _invalidate_merge_caches(
         self,

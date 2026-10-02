@@ -1,9 +1,8 @@
 """Redis-backed session state: RBAC cache, revoked sessions, refresh idempotency.
 
-All three are best-effort by design (see ``RedisStore``): an outage costs extra
-database work or a shorter-lived guarantee, never a failed request. The durable
-source of truth is always the database — refresh tokens carry ``is_revoked``,
-roles and denies live in ``auth.*``.
+Ordinary session-cache operations are best-effort: an outage costs database work
+or a shorter-lived guarantee. Profile-merge finalization is strict: its session
+blacklist and RBAC invalidations must succeed before the database merge commits.
 """
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ from loguru import logger
 
 from shared.rbac import RBAC_USER_KEY_PREFIX
 from src.core.cache import RedisStore
+from src.core.redis import get_redis
 
 # v3: the cached payload now also carries the user's workspace memberships
 # (id + slug), so a hit answers the token path with no database round trip at
@@ -90,6 +90,21 @@ class SessionCache:
     async def blacklist_sessions(self, session_ids: set[str], ttl_seconds: int) -> None:
         for session_id in session_ids:
             await self.blacklist_session(session_id, ttl_seconds)
+
+    async def finalize_profile_merge(
+        self,
+        auth_user_ids: list[int],
+        session_ids: set[str],
+        ttl_seconds: int,
+    ) -> None:
+        """Retire affected claims atomically; an unavailable Redis must abort the merge."""
+        if ttl_seconds <= 0:
+            raise ValueError("Profile merge requires a positive access-token lifetime.")
+        async with get_redis().pipeline(transaction=True) as pipeline:
+            for session_id in sorted(session_ids):
+                pipeline.set(self._revoked_sessions.key(session_id), "1", ex=ttl_seconds)
+            pipeline.delete(*(self._rbac.key(user_id) for user_id in auth_user_ids))
+            await pipeline.execute()
 
     async def is_session_blacklisted(self, session_id: str | None) -> bool:
         """True only when the session is known-revoked (fails open otherwise).

@@ -8181,7 +8181,7 @@ export interface paths {
         put?: never;
         /**
          * Execute user merge
-         * @description Permission: superuser only. Merges one player profile into another, stamping the operator's auth-user id.
+         * @description Permission: superuser only. Atomically merges player references, selected social identities, auth ownership, preserved resources and audit after rechecking the locked preview fingerprint. Requires independent confirmations for auth changes, auth deletion and permission/access changes. Both accounts' refresh tokens/API keys are revoked; identity-service session blacklisting and RBAC invalidation must succeed before commit. Password, email, active and superuser flags are never combined.
          *
          *     RPC subject: `rpc.app.users.merge_execute`
          */
@@ -8203,7 +8203,7 @@ export interface paths {
         put?: never;
         /**
          * Preview user merge
-         * @description Permission: superuser only. Previews merging one player profile into another without applying changes.
+         * @description Permission: superuser only. Previews merging player profiles, including two auth-linked profiles. auth_policy chooses the surviving auth account, keeping/deleting the other, each OAuth connection destination, and explicit resource-conflict choices. Returns account roles/denies, preservation counts, blockers and a state fingerprint without exposing credentials.
          *
          *     RPC subject: `rpc.app.users.merge_preview`
          */
@@ -19162,6 +19162,145 @@ export interface components {
              */
             workspace_id: number | null;
         };
+        /** AuthMergeAccount */
+        "app.AuthMergeAccount": {
+            /** Denies */
+            denies?: components["schemas"]["app.AuthMergeDeny"][];
+            /** Email */
+            email: string;
+            /** Has Password */
+            has_password: boolean;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Is Superuser */
+            is_superuser: boolean;
+            /** Roles */
+            roles?: components["schemas"]["app.AuthMergeRole"][];
+            /** Username */
+            username: string;
+        };
+        /** AuthMergeDataConflict */
+        "app.AuthMergeDataConflict": {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Resource */
+            resource: string;
+            /** Source Value */
+            source_value: unknown;
+            /** Target Value */
+            target_value: unknown;
+        };
+        /** AuthMergeDeny */
+        "app.AuthMergeDeny": {
+            /** Action */
+            action: string;
+            /** Permission Id */
+            permission_id: number;
+            /**
+             * Reason
+             * @default null
+             */
+            reason: string | null;
+            /** Resource */
+            resource: string;
+            /**
+             * Workspace Id
+             * @default null
+             */
+            workspace_id: number | null;
+        };
+        /** AuthMergeOAuthConnection */
+        "app.AuthMergeOAuthConnection": {
+            /** Auth User Id */
+            auth_user_id: number;
+            /** Id */
+            id: number;
+            /** Provider */
+            provider: string;
+            /** Provider User Id */
+            provider_user_id: string;
+            /** Username */
+            username: string;
+        };
+        /** AuthMergeOAuthDestination */
+        "app.AuthMergeOAuthDestination": {
+            /** Auth User Id */
+            auth_user_id: number;
+            /** Connection Id */
+            connection_id: number;
+        };
+        /** AuthMergePolicy */
+        "app.AuthMergePolicy": {
+            /** Conflict Choices */
+            conflict_choices?: {
+                [key: string]: AppAuthMergePolicyConflict_choices;
+            };
+            /** Oauth Destinations */
+            oauth_destinations?: components["schemas"]["app.AuthMergeOAuthDestination"][];
+            /**
+             * Other Account Action
+             * @default keep
+             * @enum {string}
+             */
+            other_account_action: AppAuthMergePolicyOther_account_action;
+            /** Surviving Auth User Id */
+            surviving_auth_user_id: number;
+        };
+        /** AuthMergePreview */
+        "app.AuthMergePreview": {
+            /** Accounts */
+            accounts: components["schemas"]["app.AuthMergeAccount"][];
+            /** Data Conflicts */
+            data_conflicts?: components["schemas"]["app.AuthMergeDataConflict"][];
+            /** Issues */
+            issues?: string[];
+            /** Oauth Connections */
+            oauth_connections: components["schemas"]["app.AuthMergeOAuthConnection"][];
+            /**
+             * Permission Changes
+             * @default false
+             */
+            permission_changes: boolean;
+            policy: components["schemas"]["app.AuthMergePolicy"];
+            /** Resource Counts */
+            resource_counts?: {
+                [key: string]: number;
+            };
+            /** State Fingerprint */
+            state_fingerprint: string;
+        };
+        /** AuthMergeResult */
+        "app.AuthMergeResult": {
+            /**
+             * Deleted Auth User Id
+             * @default null
+             */
+            deleted_auth_user_id: number | null;
+            /** Moved Oauth Connection Ids */
+            moved_oauth_connection_ids?: number[];
+            /** Surviving Auth User Id */
+            surviving_auth_user_id: number;
+            /** Transferred Counts */
+            transferred_counts?: {
+                [key: string]: number;
+            };
+        };
+        /** AuthMergeRole */
+        "app.AuthMergeRole": {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Workspace Id
+             * @default null
+             */
+            workspace_id: number | null;
+        };
         /**
          * CatalogAliasAttach
          * @description Attach `alias` to one catalog entity and close the matching miss.
@@ -19650,6 +19789,23 @@ export interface components {
         };
         /** UserMergeExecuteRequest */
         "app.UserMergeExecuteRequest": {
+            /** @default null */
+            auth_policy: components["schemas"]["app.AuthMergePolicy"] | null;
+            /**
+             * Confirm Auth Changes
+             * @default false
+             */
+            confirm_auth_changes: boolean;
+            /**
+             * Confirm Auth Deletion
+             * @default false
+             */
+            confirm_auth_deletion: boolean;
+            /**
+             * Confirm Permission Changes
+             * @default false
+             */
+            confirm_permission_changes: boolean;
             field_policy: components["schemas"]["app.UserMergeFieldPolicy"];
             identity_selection: components["schemas"]["app.UserMergeIdentitySelection"];
             /** Preview Fingerprint */
@@ -19667,6 +19823,8 @@ export interface components {
             };
             /** Audit Id */
             audit_id: number;
+            /** @default null */
+            auth_merge: components["schemas"]["app.AuthMergeResult"] | null;
             /** Deleted Source User Id */
             deleted_source_user_id: number;
             identity_results: components["schemas"]["app.UserMergeIdentityResult"];
@@ -19727,6 +19885,8 @@ export interface components {
         };
         /** UserMergePreviewRequest */
         "app.UserMergePreviewRequest": {
+            /** @default null */
+            auth_policy: components["schemas"]["app.AuthMergePolicy"] | null;
             /** Source User Id */
             source_user_id: number;
             /** Target User Id */
@@ -19738,6 +19898,8 @@ export interface components {
             affected_counts: {
                 [key: string]: number;
             };
+            /** @default null */
+            auth_merge: components["schemas"]["app.AuthMergePreview"] | null;
             conflicts: components["schemas"]["app.UserMergeConflictSummary"];
             field_options: components["schemas"]["app.UserMergeFieldOptions"];
             /** Preview Fingerprint */
@@ -19752,6 +19914,11 @@ export interface components {
              * @default 0
              */
             auth_links: number;
+            /**
+             * Auth User Id
+             * @default null
+             */
+            auth_user_id: number | null;
             /**
              * Avatar Url
              * @default null
@@ -72036,6 +72203,14 @@ export enum AnalyticsAnomalyFeedbackBodyVerdict {
 export enum AppAnnouncementCreateAudience {
     workspace = "workspace",
     global = "global"
+}
+export enum AppAuthMergePolicyConflict_choices {
+    source = "source",
+    target = "target"
+}
+export enum AppAuthMergePolicyOther_account_action {
+    keep = "keep",
+    delete = "delete"
 }
 export enum AppCatalogEntityType {
     hero = "hero",

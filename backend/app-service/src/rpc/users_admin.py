@@ -49,8 +49,10 @@ from shared.clients.s3 import upload_avatar
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dump
 from shared.core.social import PROVIDERS, SOCIAL_PROVIDERS, matches_handle_pattern
+from shared.messaging.rpc import request_rpc
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
+from shared.schemas.user_merge_auth import AuthMergeFinalizationRequest, AuthMergeResult
 from shared.services.audit import record_admin_audit
 from src import schemas
 from src.core import clients, db
@@ -224,9 +226,12 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.merge_preview")
     async def _merge_preview(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            c.require_superuser(c.actor(data))
+            user = c.actor(data)
+            c.require_superuser(user)
             return await merge_service.preview_merge(
-                session, schemas.UserMergePreviewRequest.model_validate(c.payload(data))
+                session,
+                schemas.UserMergePreviewRequest.model_validate(c.payload(data)),
+                operator_auth_user_id=user.id,
             )
 
         return await c.envelope(logger, "users.merge_preview", op, session_factory=_SF)
@@ -237,6 +242,28 @@ def register(broker: Any, logger: Any) -> None:
             user = c.actor(data)
             c.require_superuser(user)
             payload = schemas.UserMergeExecuteRequest.model_validate(c.payload(data))
+
+            async def finalize_auth(result: AuthMergeResult) -> None:
+                request = AuthMergeFinalizationRequest(
+                    auth_user_ids=result.affected_auth_user_ids,
+                    session_ids=result.revoked_session_ids,
+                )
+                try:
+                    reply = await request_rpc(
+                        broker,
+                        {"identity": data.get("identity"), "payload": request.model_dump(mode="json")},
+                        "rpc.identity.rbac.finalize_profile_merge",
+                        timeout=5.0,
+                    )
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=503, detail="Identity session finalization is unavailable; merge was not committed."
+                    ) from exc
+                if reply is None or not reply.ok:
+                    raise HTTPException(
+                        status_code=503, detail="Identity session finalization failed; merge was not committed."
+                    )
+
             # ``execute_merge`` commits (and rolls back on failure), so this row is
             # staged first and shares that fate. Distinct from the merge's own
             # ``user_merge_audit`` detail row: this is the platform journal.
@@ -250,12 +277,14 @@ def register(broker: Any, logger: Any) -> None:
                 after={
                     "source_user_id": payload.source_user_id,
                     "target_user_id": payload.target_user_id,
+                    "auth_policy": payload.auth_policy.model_dump(mode="json") if payload.auth_policy else None,
                 },
             )
             return await merge_service.execute_merge(
                 session,
                 payload,
                 operator_auth_user_id=user.id,
+                auth_finalizer=finalize_auth,
             )
 
         return await c.envelope(logger, "users.merge_execute", op, session_factory=_SF)

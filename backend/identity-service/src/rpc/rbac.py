@@ -18,7 +18,9 @@ from faststream.rabbit.annotations import RabbitMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.common import actor
 from shared.rpc.query import build_query_model
+from shared.schemas.user_merge_auth import AuthMergeFinalizationRequest
 from src import schemas
 from src.services.rbac_admin import (
     auth_user_admin,
@@ -34,6 +36,16 @@ __all__ = ("register",)
 
 
 def register(broker: Any, logger: Any) -> None:
+    @broker.subscriber("rpc.identity.rbac.finalize_profile_merge")
+    async def _finalize_profile_merge(data: dict, msg: RabbitMessage) -> dict:
+        async def op() -> None:
+            await auth_user_admin.finalize_profile_merge(
+                actor(data),
+                AuthMergeFinalizationRequest.model_validate(data.get("payload")),
+            )
+
+        return await c.envelope(logger, "profile_merge.finalize", op)
+
     @broker.subscriber("rpc.identity.rbac.list_permissions")
     async def _rbac_list_permissions(data: dict, msg: RabbitMessage) -> dict:
         data = data or {}
