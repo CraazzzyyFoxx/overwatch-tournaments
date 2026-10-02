@@ -45,6 +45,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.forms import schema_from_form
 from shared.rpc.identity import rehydrate_user
 from shared.services.admission import AdmissionStage
+from shared.services.bracket.usability import assert_encounter_live
 from shared.services.chat import (
     HISTORY_DEFAULT,
     ChatMuteInput,
@@ -452,6 +453,7 @@ def register(broker: Any, logger: Any) -> None:
             game_id = _path_int(data, "game_id")
             body = GameMapSelectInput.model_validate(_payload(data))
             encounter = await captain_service._load_encounter(session, encounter_id)
+            await assert_encounter_live(session, encounter)
             await captain_service.resolve_captain_side(session, user, encounter)
             # Locked for the same reason a claim locks it: two captains naming a
             # map at once must not both win.
@@ -471,6 +473,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             encounter_id = _require_id(data)
             encounter = await captain_service._load_encounter(session, encounter_id)
+            await assert_encounter_live(session, encounter)
             captain_side, captain_user_id, _team_id = await captain_service.resolve_captain_identity(
                 session, user, encounter
             )

@@ -22,10 +22,12 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core import http_status as status
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.stage import Stage
 
-__all__ = ("is_encounter_live",)
+__all__ = ("assert_encounter_live", "is_encounter_live")
 
 
 async def is_encounter_live(session: AsyncSession, encounter: Encounter) -> bool:
@@ -39,3 +41,12 @@ async def is_encounter_live(session: AsyncSession, encounter: Encounter) -> bool
         return True
     stage = await session.get(Stage, encounter.stage_id)
     return stage is None or stage.is_published
+
+
+async def assert_encounter_live(session: AsyncSession, encounter: Encounter) -> None:
+    """409 for an encounter of a preview bracket: look-only until its stage is activated."""
+    if not await is_encounter_live(session, encounter):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stage bracket is a preview and is not active yet",
+        )
