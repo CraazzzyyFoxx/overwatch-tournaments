@@ -782,6 +782,82 @@ export interface EncounterReportsQuery {
   reported_count?: number | null;
 }
 
+// ─── Pre-game rooms overview ─────────────────────────────────────────────────
+
+/**
+ * Where an encounter stands in the pre-game sequence, as the server decides it
+ * (readiness → map veto → hero bans → per-map reports). `teams_unknown` is a
+ * bracket slot nobody has filled yet; `idle` is "nothing is waiting on anyone".
+ */
+export type PregameRoomPhase =
+  | "teams_unknown"
+  | "readiness"
+  | "map"
+  | "hero"
+  | "report"
+  | "done"
+  | "idle";
+
+/** Why a row is listed as needing someone. Rendered as chips, never as prose. */
+export type PregameRoomAttention =
+  | "game_disputed"
+  | "result_disputed"
+  | "awaiting_choice"
+  | "overdue"
+  | "late_not_ready";
+
+/**
+ * One pick-ban kind of one encounter, flattened for the overview: enough to
+ * say whose turn it is and how long they have had it, without the room's full
+ * state. `status: null` means the kind is configured but no session exists —
+ * `reason` then carries the server's `REASON_*` string for why not.
+ */
+export interface PregameKindSummary {
+  status: "active" | "completed" | "cancelled" | null;
+  reason: string | null;
+  current_round: number | null;
+  /** `null` when no step is open — a finished or blocked session. */
+  step_index: number | null;
+  step_count: number;
+  step_action: string | null;
+  step_blind: boolean;
+  acting_sides: ("home" | "away")[];
+  step_started_at: string | null;
+  /** `step_started_at` + the open step's timer, when that step has one. */
+  deadline_at: string | null;
+  awaiting_choice: boolean;
+}
+
+export interface PregameRoomRow {
+  encounter_id: number;
+  name: string;
+  stage_id: number | null;
+  stage_name: string | null;
+  round: number;
+  best_of: number;
+  scheduled_at: string | null;
+  status: string;
+  result_status: string | null;
+  home_team: { id: number; name: string } | null;
+  away_team: { id: number; name: string } | null;
+  home_score: number;
+  away_score: number;
+  readiness: { home: boolean; away: boolean };
+  phase: PregameRoomPhase;
+  /** `null` = the kind is not configured here and has no session either. */
+  map: PregameKindSummary | null;
+  hero: PregameKindSummary | null;
+  /** Cancelled games are excluded from every count. */
+  games: { total: number; confirmed: number; disputed: number; awaiting_result: number };
+  attention: PregameRoomAttention[];
+}
+
+export interface PregameRoomsRead {
+  tournament_id: number;
+  generated_at: string;
+  rooms: PregameRoomRow[];
+}
+
 /**
  * The ingestion record a parsed match came from. Deliberately thinner than the
  * log console's own row: this is provenance for one map, not the log's

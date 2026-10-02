@@ -3632,6 +3632,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tournaments/{id}/stages/{stage_id}/bracket-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview stage bracket (public)
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist, and a stage of another tournament is a 404. The same read-only skeleton as the admin bracket preview, for drawing an elimination stage whose matches are not generated yet.
+         *
+         *     RPC subject: `rpc.tournament.stage_bracket_preview_public`
+         */
+        get: operations["get__api_v1_tournaments__id__stages__stage_id__bracket_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tournaments/{id}/stages/{stage_id}/ffa": {
         parameters: {
             query?: never;
@@ -6006,6 +6028,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/encounters/{encounter_id}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Force a side's captain readiness
+         * @description Permission: workspace `match.result` on the encounter's workspace. Sets one side's captain readiness (body `{side, ready}`) for an organizer starting a match whose captain is unreachable, and answers `{readiness: {home, away}}`. Signals the room (`encounter:{id}:map-veto`) exactly as the captain's own ready does, so the opposite captain's screen moves without a reload. 404 for an unknown encounter, 409 for a preview bracket's encounter, and 409 on `ready: false` once a pick-ban session of either kind exists — readiness gates session CREATION only, so clearing it afterwards would change nothing; reset the session instead. The readiness row stays unattributed (it names a player identity, which an organizer may not have); the admin audit entry is what names who forced it.
+         *
+         *     RPC subject: `rpc.tournament.admin_encounter_readiness_set`
+         */
+        post: operations["post__api_v1_admin_encounters__encounter_id__readiness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/encounters/{encounter_id}/result": {
         parameters: {
             query?: never;
@@ -7836,6 +7880,28 @@ export interface paths {
          *     RPC subject: `rpc.tournament.admin_pick_ban_rules_validate`
          */
         post: operations["post__api_v1_admin_tournaments__tournament_id__pick_ban_rules_validate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tournaments/{tournament_id}/pregame-rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pre-game rooms
+         * @description Permission: workspace `match.read` on the tournament's workspace. The organizer's board of every pre-game room of a tournament: one row per non-FFA encounter that resolves to a pooled pick-ban config or already has a session, carrying readiness, the map and hero session summaries (open step, acting sides, deadline), the series' game counts, a single `phase` (`teams_unknown`/`readiness`/`map`/`hero`/`report`/`done`/`idle`) and the `attention` flags staff act on (`game_disputed`, `result_disputed`, `awaiting_choice`, `overdue`, `late_not_ready`). Strictly read-only, unlike the room's own state read: it never creates a session, opens a position or settles an expired step, and it answers the whole tournament in a constant number of queries. Rows are ordered stage, round, encounter id; preview-bracket encounters with no session are omitted.
+         *
+         *     RPC subject: `rpc.tournament.admin_pregame_rooms`
+         */
+        get: operations["get__api_v1_admin_tournaments__tournament_id__pregame_rooms"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21740,6 +21806,24 @@ export interface components {
             /** Tournament Name */
             tournament_name: string;
         };
+        /**
+         * AdminReadinessSet
+         * @description Body for the admin readiness override: force one side's captain
+         *     readiness on or off.
+         *
+         *     ``ready: false`` is only meaningful before a session exists -- readiness
+         *     gates session CREATION and nothing else -- so the service 409s once one
+         *     does (reset the session instead).
+         */
+        "tournament.AdminReadinessSet": {
+            /** Ready */
+            ready: boolean;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: TournamentAdminReadinessSetSide;
+        };
         /** BalancerGoogleSheetFeedRead */
         "tournament.BalancerGoogleSheetFeedRead": {
             /** Auto Sync Enabled */
@@ -24662,6 +24746,179 @@ export interface components {
              */
             sub_role: string | null;
         };
+        /**
+         * PregameGamesSummary
+         * @description The series' positions by state. Cancelled positions are history and are
+         *     counted nowhere -- a replayed map would otherwise read as two.
+         */
+        "tournament.PregameGamesSummary": {
+            /**
+             * Awaiting Result
+             * @default 0
+             */
+            awaiting_result: number;
+            /**
+             * Confirmed
+             * @default 0
+             */
+            confirmed: number;
+            /**
+             * Disputed
+             * @default 0
+             */
+            disputed: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * PregameKindSummary
+         * @description One kind's (map|hero) room, as the overview needs it.
+         */
+        "tournament.PregameKindSummary": {
+            /**
+             * Acting Sides
+             * @default []
+             */
+            acting_sides: TournamentPregameKindSummaryActing_sides[];
+            /**
+             * Awaiting Choice
+             * @default false
+             */
+            awaiting_choice: boolean;
+            /**
+             * Current Round
+             * @default null
+             */
+            current_round: number | null;
+            /**
+             * Deadline At
+             * @default null
+             */
+            deadline_at: string | null;
+            /**
+             * Reason
+             * @default null
+             */
+            reason: string | null;
+            /**
+             * Status
+             * @default null
+             */
+            status: TournamentPregameKindSummaryStatusAnyOf0 | null;
+            /**
+             * Step Action
+             * @default null
+             */
+            step_action: string | null;
+            /**
+             * Step Blind
+             * @default false
+             */
+            step_blind: boolean;
+            /**
+             * Step Count
+             * @default 0
+             */
+            step_count: number;
+            /**
+             * Step Index
+             * @default null
+             */
+            step_index: number | null;
+            /**
+             * Step Started At
+             * @default null
+             */
+            step_started_at: string | null;
+        };
+        /** PregameRoomRow */
+        "tournament.PregameRoomRow": {
+            /**
+             * Attention
+             * @default []
+             */
+            attention: TournamentPregameRoomRowAttention[];
+            /**
+             * Away Score
+             * @default 0
+             */
+            away_score: number;
+            /** @default null */
+            away_team: components["schemas"]["tournament.PregameRoomTeam"] | null;
+            /** Best Of */
+            best_of: number;
+            /** Encounter Id */
+            encounter_id: number;
+            games: components["schemas"]["tournament.PregameGamesSummary"];
+            /** @default null */
+            hero: components["schemas"]["tournament.PregameKindSummary"] | null;
+            /**
+             * Home Score
+             * @default 0
+             */
+            home_score: number;
+            /** @default null */
+            home_team: components["schemas"]["tournament.PregameRoomTeam"] | null;
+            /** @default null */
+            map: components["schemas"]["tournament.PregameKindSummary"] | null;
+            /** Name */
+            name: string;
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: TournamentPregameRoomRowPhase;
+            /** Readiness */
+            readiness: {
+                [key: string]: boolean;
+            };
+            /**
+             * Result Status
+             * @default null
+             */
+            result_status: string | null;
+            /** Round */
+            round: number;
+            /**
+             * Scheduled At
+             * @default null
+             */
+            scheduled_at: string | null;
+            /**
+             * Stage Id
+             * @default null
+             */
+            stage_id: number | null;
+            /**
+             * Stage Name
+             * @default null
+             */
+            stage_name: string | null;
+            /** Status */
+            status: string;
+        };
+        /** PregameRoomTeam */
+        "tournament.PregameRoomTeam": {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** PregameRoomsRead */
+        "tournament.PregameRoomsRead": {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Rooms */
+            rooms: components["schemas"]["tournament.PregameRoomRow"][];
+            /** Tournament Id */
+            tournament_id: number;
+        };
         /** RegistrationFormRead */
         "tournament.RegistrationFormRead": {
             /**
@@ -25151,6 +25408,11 @@ export interface components {
             /** @default null */
             input_type: components["schemas"]["tournament.StageItemInputType"] | null;
             /**
+             * Slot
+             * @default null
+             */
+            slot: number | null;
+            /**
              * Source Position
              * @default null
              */
@@ -25160,6 +25422,11 @@ export interface components {
              * @default null
              */
             source_stage_item_id: number | null;
+            /**
+             * Stage Item Id
+             * @default null
+             */
+            stage_item_id: number | null;
             /**
              * Team Id
              * @default null
@@ -39066,6 +39333,67 @@ export interface operations {
             };
         };
     };
+    get__api_v1_tournaments__id__stages__stage_id__bracket_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_tournaments__id__stages__stage_id__ffa: {
         parameters: {
             query?: never;
@@ -47816,6 +48144,88 @@ export interface operations {
             };
         };
     };
+    post__api_v1_admin_encounters__encounter_id__readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                encounter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.AdminReadinessSet"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_admin_encounters__encounter_id__result: {
         parameters: {
             query?: never;
@@ -56004,6 +56414,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_admin_tournaments__tournament_id__pregame_rooms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["tournament.PregameRoomsRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -70968,6 +71456,10 @@ export enum StreamStreamPollHealthReadStatusAnyOf0 {
     unavailable = "unavailable",
     error = "error"
 }
+export enum TournamentAdminReadinessSetSide {
+    home = "home",
+    away = "away"
+}
 export enum TournamentBalancerRankAutofillStageOw_value {
     composite = "composite",
     current = "current",
@@ -71149,6 +71641,31 @@ export enum TournamentPickBanAdminActSide {
 export enum TournamentPickBanAdminSubmitSide {
     home = "home",
     away = "away"
+}
+export enum TournamentPregameKindSummaryActing_sides {
+    home = "home",
+    away = "away"
+}
+export enum TournamentPregameKindSummaryStatusAnyOf0 {
+    active = "active",
+    completed = "completed",
+    cancelled = "cancelled"
+}
+export enum TournamentPregameRoomRowAttention {
+    game_disputed = "game_disputed",
+    result_disputed = "result_disputed",
+    awaiting_choice = "awaiting_choice",
+    overdue = "overdue",
+    late_not_ready = "late_not_ready"
+}
+export enum TournamentPregameRoomRowPhase {
+    teams_unknown = "teams_unknown",
+    readiness = "readiness",
+    map = "map",
+    hero = "hero",
+    report = "report",
+    done = "done",
+    idle = "idle"
 }
 export enum TournamentRegistrationFormReadSubscription_scope {
     player = "player",

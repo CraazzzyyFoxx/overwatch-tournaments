@@ -22,13 +22,13 @@ import {
 } from "@/components/pick-ban/pick-ban-model";
 import { PickBanUndoControl } from "@/components/pick-ban/PickBanUndoControl";
 import { FfaPregameRoom } from "./FfaPregameRoom";
-import { PregameAdminControls } from "./PregameAdminControls";
+import { PregameAdminPanel } from "./PregameAdminPanel";
 import { PregameHeader } from "./PregameHeader";
 import { PregameFinalReport } from "./PregameFinalReport";
 import { PregameMapResult } from "./PregameMapResult";
 import { PregameReadiness } from "./PregameReadiness";
 import { EmptyRoomCard, UNAVAILABLE_ICON } from "./EmptyRoomCard";
-import { PickBanPanel } from "./PickBanPanel";
+import { PickBanPanel, type PickBanAdminSlot } from "./PickBanPanel";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { usePregameRoomData } from "./usePregameRoomData";
 import {
@@ -191,6 +191,23 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
     />
   );
 
+  // One organizer surface per screen, on every phase — the readiness gate, the
+  // board, the map report and the closing screen all need overrides, and the
+  // panel picks what to offer from the sessions that exist. `grid` is only
+  // non-null where a pool is actually on screen to select from.
+  const activeKind: PickBanKind = loop.phase === "hero" ? "hero" : "map";
+  const adminPanel = (grid: PickBanAdminSlot | null = null) =>
+    isAdmin ? (
+      <PregameAdminPanel
+        encounterId={encounterId}
+        statesByKind={loop.statesByKind}
+        activeKind={activeKind}
+        sideNameOf={sideNameOf}
+        onMutated={room.invalidateRoom}
+        grid={grid}
+      />
+    ) : null;
+
   if (loop.waitingOnReadiness) {
     // One real card, header and all — no skeleton column beside it. Neither
     // session exists yet, so there is no pool and no step sequence to render,
@@ -207,6 +224,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
             pending={room.readyPending}
             onReady={room.markReady}
           />
+          {adminPanel()}
         </CardContent>
       </Card>
     );
@@ -258,18 +276,9 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           }
         />
         {/* A dispute parks the room on this screen until an organizer rules on
-            it, and the pick-ban board — where these controls otherwise live —
-            is not on screen here. */}
-        {isAdmin ? (
-          <PregameAdminControls
-            kind="map"
-            encounterId={encounterId}
-            state={mapState}
-            selectedItemId={null}
-            selectedItemName={null}
-            onMutated={room.invalidateRoom}
-          />
-        ) : null}
+            it, and ruling means correcting the game's result — which is in
+            this panel, with no pool on screen to select from. */}
+        {adminPanel()}
       </div>
     );
   }
@@ -287,22 +296,25 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           header={header}
           returnTo={returnTo}
         />
+        {adminPanel()}
       </div>
     );
   }
 
-  const activeKind: PickBanKind = loop.phase === "hero" ? "hero" : "map";
   const activeState = loop.statesByKind[activeKind];
 
   if (activeState.session == null) {
     const copy = PICK_BAN_UNAVAILABLE_COPY[activeState.reason ?? "not_configured"];
     return (
-      <EmptyRoomCard
-        icon={UNAVAILABLE_ICON[copy.icon]}
-        title={t(copy.titleKey)}
-        hint={t(copy.hintKey)}
-        returnTo={returnTo}
-      />
+      <div className="flex flex-col gap-4">
+        <EmptyRoomCard
+          icon={UNAVAILABLE_ICON[copy.icon]}
+          title={t(copy.titleKey)}
+          hint={t(copy.hintKey)}
+          returnTo={returnTo}
+        />
+        {adminPanel()}
+      </div>
     );
   }
 
@@ -320,6 +332,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
         queryKey={activeKind === "map" ? room.mapKey : room.heroKey}
         itemsById={room.itemsByKind[activeKind]}
         isAdmin={isAdmin}
+        adminPanel={adminPanel}
         header={header}
       />
     </div>

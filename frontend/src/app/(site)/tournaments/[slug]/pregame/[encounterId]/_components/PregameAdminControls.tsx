@@ -33,6 +33,12 @@ interface PregameAdminControlsProps {
   selectedItemId: number | null;
   selectedItemName: string | null;
   onMutated: () => void;
+  /**
+   * Which pick-ban kind these controls act on, when the room has more than
+   * one session to offer. Lives in the title row because that is the only
+   * place a switch reads as "this panel's scope" rather than another command.
+   */
+  kindSwitch?: React.ReactNode;
 }
 
 /**
@@ -54,7 +60,8 @@ export function PregameAdminControls({
   state,
   selectedItemId,
   selectedItemName,
-  onMutated
+  onMutated,
+  kindSwitch
 }: Readonly<PregameAdminControlsProps>) {
   const t = useTranslations("pickBan.room");
   const step = state.current_step;
@@ -146,6 +153,7 @@ export function PregameAdminControls({
       <div className="mb-3 flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-[color:var(--aqt-amber)]" aria-hidden />
         <h2 className="text-sm font-semibold">{t("admin.title")}</h2>
+        {kindSwitch != null ? <div className="ml-auto">{kindSwitch}</div> : null}
       </div>
 
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">

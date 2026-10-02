@@ -96,6 +96,10 @@ func TestPickBanV2RouteContracts(t *testing.T) {
 		"rpc.tournament.admin_pick_ban_reopen":         adminEncounter,
 		"rpc.tournament.admin_pick_ban_rules_validate": adminTournament,
 		"rpc.tournament.admin_pick_ban_rules_preview":  adminTournament,
+		// The pre-game room overrides: readiness is a body write on an
+		// encounter, the rooms board a bodyless read on a tournament.
+		"rpc.tournament.admin_encounter_readiness_set": adminEncounter,
+		"rpc.tournament.admin_pregame_rooms":           {method: "GET", idParam: "tournament_id", auth: edge.AuthRequired},
 	}
 
 	seen := map[string]bool{}

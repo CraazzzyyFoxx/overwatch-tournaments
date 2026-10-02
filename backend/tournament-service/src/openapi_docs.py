@@ -496,6 +496,15 @@ DOCS: dict[str, dict] = {
         "summary": "Elect a round's opener for a side",
         "description": "Permission: workspace `match.result` on the encounter's workspace. Names who opens the round a `result_loser_choice` rotation is holding and appends it, on behalf of a losing captain who is unreachable; returns the new room state.",
     },
+    # ── bespoke: readiness override + the pre-game rooms board ────────────
+    "rpc.tournament.admin_encounter_readiness_set": {
+        "summary": "Force a side's captain readiness",
+        "description": "Permission: workspace `match.result` on the encounter's workspace. Sets one side's captain readiness (body `{side, ready}`) for an organizer starting a match whose captain is unreachable, and answers `{readiness: {home, away}}`. Signals the room (`encounter:{id}:map-veto`) exactly as the captain's own ready does, so the opposite captain's screen moves without a reload. 404 for an unknown encounter, 409 for a preview bracket's encounter, and 409 on `ready: false` once a pick-ban session of either kind exists — readiness gates session CREATION only, so clearing it afterwards would change nothing; reset the session instead. The readiness row stays unattributed (it names a player identity, which an organizer may not have); the admin audit entry is what names who forced it.",
+    },
+    "rpc.tournament.admin_pregame_rooms": {
+        "summary": "List pre-game rooms",
+        "description": "Permission: workspace `match.read` on the tournament's workspace. The organizer's board of every pre-game room of a tournament: one row per non-FFA encounter that resolves to a pooled pick-ban config or already has a session, carrying readiness, the map and hero session summaries (open step, acting sides, deadline), the series' game counts, a single `phase` (`teams_unknown`/`readiness`/`map`/`hero`/`report`/`done`/`idle`) and the `attention` flags staff act on (`game_disputed`, `result_disputed`, `awaiting_choice`, `overdue`, `late_not_ready`). Strictly read-only, unlike the room's own state read: it never creates a session, opens a position or settles an expired step, and it answers the whole tournament in a constant number of queries. Rows are ordered stage, round, encounter id; preview-bracket encounters with no session are omitted.",
+    },
     # ── bespoke: admin correction of one series position's result ──────────
     "rpc.tournament.admin_game_result": {
         "summary": "Correct a game result",

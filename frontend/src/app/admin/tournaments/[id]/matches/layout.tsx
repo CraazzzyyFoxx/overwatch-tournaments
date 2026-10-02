@@ -11,9 +11,12 @@ import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-quer
 import { useHubTournamentQuery } from "../hubQueries";
 import { MATCHES_SUB_TABS, type MatchesSubTabKey } from "../tab-guards";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { PREGAME_ROOMS_REFETCH_MS } from "@/components/admin/pregame-rooms/model";
 
 const SUB_TAB_LABELS: Record<MatchesSubTabKey, string> = {
   encounters: "Encounters",
+  rooms: "Pre-game rooms",
   reports: "Reports",
   parsed: "Parsed maps",
   logs: "Logs"
@@ -68,6 +71,15 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
     enabled: canReadMatch
   });
 
+  // Same key and interval as the view itself, so the two never disagree and
+  // mounting the bar beside it costs no second request.
+  const roomsQuery = useQuery({
+    queryKey: adminQueryKeys.pregameRooms(tournamentId),
+    queryFn: () => adminService.getPregameRooms(tournamentId),
+    refetchInterval: PREGAME_ROOMS_REFETCH_MS,
+    enabled: canReadMatch
+  });
+
   const scope = new URLSearchParams();
   for (const key of SHARED_SCOPE_PARAMS) {
     const value = searchParams.get(key);
@@ -79,6 +91,9 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
   const logQueue = logStatsQuery.data
     ? logStatsQuery.data.pending + logStatsQuery.data.processing
     : 0;
+  const roomsNeedingAttention = (roomsQuery.data?.rooms ?? []).filter(
+    (room) => room.attention.length > 0
+  ).length;
 
   const items: LinkTabItem[] = MATCHES_SUB_TABS.map((key) => ({
     key,
@@ -89,7 +104,9 @@ export default function MatchesLayout({ children }: Readonly<{ children: ReactNo
         ? disputed || undefined
         : key === "logs"
           ? logQueue || undefined
-          : undefined
+          : key === "rooms"
+            ? roomsNeedingAttention || undefined
+            : undefined
   }));
 
   return (

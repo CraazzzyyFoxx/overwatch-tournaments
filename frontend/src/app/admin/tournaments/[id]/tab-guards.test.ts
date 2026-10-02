@@ -121,7 +121,7 @@ describe("sub-tabs", () => {
   });
 
   test("matches keeps the result views; lobbies lives under bracket", () => {
-    expect(MATCHES_SUB_TABS).toEqual(["encounters", "reports", "parsed", "logs"]);
+    expect(MATCHES_SUB_TABS).toEqual(["encounters", "rooms", "reports", "parsed", "logs"]);
     // `report-form` is gone: it configures the report, it does not report.
     expect(MATCHES_SUB_TABS as readonly string[]).not.toContain("report-form");
     // Standings rank one stage, so they are a section of the stage editor, not

@@ -85,6 +85,9 @@ export const adminQueryKeys = {
     ["admin", "tournament", tournamentId, "encounters"] as const,
   tournamentLinks: (tournamentId: KeyPart) =>
     ["admin", "tournament", tournamentId, "links"] as const,
+  /** The Matches → Pre-game rooms overview; the sub-tab badge shares this key. */
+  pregameRooms: (tournamentId: KeyPart) =>
+    ["admin", "tournament", tournamentId, "pregame-rooms"] as const,
   tournamentStandings: (tournamentId: KeyPart) =>
     ["admin", "tournament", tournamentId, "standings"] as const,
   tournamentTeamsCount: (tournamentId: KeyPart) =>

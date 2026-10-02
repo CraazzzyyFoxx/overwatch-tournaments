@@ -330,6 +330,17 @@ class EncounterReadinessRepository(BaseRepository[models.EncounterReadiness]):
             sa.delete(models.EncounterReadiness).where(models.EncounterReadiness.encounter_id == encounter_id)
         )
 
+    async def delete_for_side(self, session: AsyncSession, *, encounter_id: int, side: str) -> None:
+        """Drop ONE side's confirmation, leaving the opponent's standing -- the
+        organizer's readiness override, where ``delete_for_encounter`` is the
+        team-change reset that must clear both."""
+        await session.execute(
+            sa.delete(models.EncounterReadiness).where(
+                models.EncounterReadiness.encounter_id == encounter_id,
+                models.EncounterReadiness.side == side,
+            )
+        )
+
 
 __all__ = (
     "EncounterReadinessRepository",

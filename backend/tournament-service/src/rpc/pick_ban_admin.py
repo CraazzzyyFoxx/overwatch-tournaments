@@ -35,14 +35,16 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_rules as pbr
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
+from shared.services.bracket.usability import assert_encounter_live
 from src import models
 from src.core import auth
-from src.rpc._helpers import _identity, _path_int, _payload, _require_id, _run
+from src.rpc._helpers import _dump, _identity, _path_int, _payload, _require_id, _run
 from src.schemas import captain as captain_schemas
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter import pick_ban_config
 from src.services.encounter import pick_ban_session as pick_ban_session
 from src.services.encounter.game_correction import game_correction_service
+from src.services.encounter.pregame_rooms import pregame_rooms_service
 
 _serialize_config = pick_ban_config.serialize_pick_ban_config
 
@@ -115,6 +117,18 @@ class PickBanAdminElectOpener(BaseModel):
 
     kind: PickBanKind
     first_side: Literal["home", "away"]
+
+
+class AdminReadinessSet(BaseModel):
+    """Body for the admin readiness override: force one side's captain
+    readiness on or off.
+
+    ``ready: false`` is only meaningful before a session exists -- readiness
+    gates session CREATION and nothing else -- so the service 409s once one
+    does (reset the session instead)."""
+
+    side: Literal["home", "away"]
+    ready: bool
 
 
 class AdminGameResultInput(BaseModel):
@@ -551,5 +565,58 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 reason=body.reason,
             )
+
+        return await _run(logger, op)
+
+    # ── bespoke: readiness override + the tournament-wide rooms overview ───
+
+    @broker.subscriber("rpc.tournament.admin_encounter_readiness_set")
+    async def _admin_encounter_readiness_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "result")
+            body = AdminReadinessSet.model_validate(_payload(data))
+            encounter = await _load_encounter(session, encounter_id)
+            # Same gate the captain's own ready button applies (public_rpc
+            # ``_captain_ready``): a preview bracket's room is look-only for an
+            # organizer too, or they would confirm readiness into a matchup the
+            # bracket may still re-draw.
+            await assert_encounter_live(session, encounter)
+            await record_admin_audit(
+                session,
+                action="encounter.readiness_set",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter.id,
+                after={"side": body.side, "ready": body.ready},
+            )
+            service = pick_ban_session.pick_ban_session_service
+            # ``ready_user_id`` is a PLAYER identity (``identity.user``), and an
+            # organizer acting here is an auth principal that may own no player
+            # row at all -- so the readiness row stays unattributed and the
+            # audit entry above is what names who forced it. Both calls commit
+            # internally and signal the room.
+            if body.ready:
+                readiness = await service.mark_ready(session, encounter, body.side, None)
+            else:
+                readiness = await service.clear_ready(session, encounter, body.side)
+            return {"readiness": readiness}
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pregame_rooms")
+    async def _admin_pregame_rooms(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            # ``read``, not ``result``: this writes nothing and shows nothing a
+            # staff member with match read access may not already open.
+            ensure_workspace_permission(user, ws_id, "match", "read")
+            return _dump(await pregame_rooms_service.list_rooms(session, tournament_id))
 
         return await _run(logger, op)

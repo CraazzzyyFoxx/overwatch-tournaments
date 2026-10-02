@@ -3299,7 +3299,12 @@
         "reopen": "Reopen step",
         "reopenSuccess": "Step reopened",
         "reopenFailed": "Failed to reopen the step",
-        "downstreamStarted": "A later match has already started on this result. Roll that one back first."
+        "downstreamStarted": "A later match has already started on this result. Roll that one back first.",
+        "readinessTitle": "Readiness (admin)",
+        "readinessSet": "Mark ready",
+        "readinessClear": "Clear",
+        "readinessFailed": "Failed to change readiness",
+        "kindSwitch": "Which pick-ban these controls act on"
       },
       "waitingMapTitle": "Waiting for this round's map",
       "waitingMapHint": "Hero bans open once the map for this round of the series is picked — they are banned for a known map.",
@@ -6345,12 +6350,12 @@
       },
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
+        "dispute_review": "{position, plural, =0 {{home_team_name} and {away_team_name} disagree on the final series score — an organizer has to decide} other {{home_team_name} and {away_team_name} disagree on the score of map # — an organizer has to decide}}",
         "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} is scheduled for {scheduled_at}"
       },
       "announcement": {
         "published": "New announcement"
       },
-        "dispute_review": "{position, plural, =0 {{home_team_name} and {away_team_name} disagree on the final series score — an organizer has to decide} other {{home_team_name} and {away_team_name} disagree on the score of map # — an organizer has to decide}}",
       "team": {
         "kicked": "You were removed from {team_name} ({tournament_name})",
         "rejected": "Team {team_name} was rejected from {tournament_name}. {reason}",
@@ -6452,12 +6457,12 @@
         },
         "encounter": {
           "report_disputed": "Report disputed",
+          "dispute_review": "Organizer decision needed",
           "scheduled": "Match scheduled"
         },
         "team": {
           "kicked": "Removed from team",
           "rejected": "Team rejected",
-          "dispute_review": "Organizer decision needed",
           "disbanded": "Team disbanded"
         }
       },

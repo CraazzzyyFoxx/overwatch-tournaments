@@ -2,12 +2,13 @@
 
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FileCheck2, FileX2, Pencil, Trash2 } from "lucide-react";
+import { FileCheck2, FileX2, ListChecks, Pencil, Trash2 } from "lucide-react";
 
 import { columnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
 import TeamName from "@/components/TeamName";
+import { pregameRoomHref } from "@/lib/encounter/pregame-room";
 import type { Encounter } from "@/types/encounter.types";
 
 import { EncounterStatusCell, ScheduledAtCell, encounterScopeLabel } from "./EncounterCells";
@@ -16,11 +17,14 @@ import { EncounterStatusCell, ScheduledAtCell, encounterScopeLabel } from "./Enc
 export function useEncounterColumns({
   canUpdate,
   canDelete,
+  returnTo,
   onEdit,
   onDelete
 }: Readonly<{
   canUpdate: boolean;
   canDelete: boolean;
+  /** Where the pre-game room hands the organizer back — this list, as filtered. */
+  returnTo: string;
   /** Stable identity required: the kebab column closes over both. */
   onEdit: (encounter: Encounter) => void;
   onDelete: (encounter: Encounter) => void;
@@ -114,6 +118,13 @@ export function useEncounterColumns({
       },
       createKebabColumn<Encounter>(
         (row) => [
+          {
+            label: "Open pre-game room",
+            icon: ListChecks,
+            // An FFA lobby has no captain room to open.
+            hidden: row.format === "ffa",
+            href: pregameRoomHref(row.tournament_id, row.id, returnTo)
+          },
           { label: "Edit encounter", icon: Pencil, hidden: !canUpdate, onSelect: () => onEdit(row) },
           {
             label: "Delete encounter",
@@ -128,6 +139,6 @@ export function useEncounterColumns({
     ],
     // `onEdit` was missing here once: the kebab's "Edit encounter" called
     // whichever closure the first render happened to build.
-    [canUpdate, canDelete, onEdit, onDelete]
+    [canUpdate, canDelete, returnTo, onEdit, onDelete]
   );
 }

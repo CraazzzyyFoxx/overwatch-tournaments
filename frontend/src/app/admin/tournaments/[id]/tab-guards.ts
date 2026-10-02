@@ -77,8 +77,12 @@ export function allowedBracketSubTab(
   return tab === "lobbies" ? p.hasFfaStage : true;
 }
 
-/** Sub-tabs of `matches`. `results` split into `encounters` + the stage editor's standings. */
-export const MATCHES_SUB_TABS = ["encounters", "reports", "parsed", "logs"] as const;
+/**
+ * Sub-tabs of `matches`. `results` split into `encounters` + the stage
+ * editor's standings; `rooms` is the live pre-game overview, which sits beside
+ * the encounter list it watches rather than inside any single encounter.
+ */
+export const MATCHES_SUB_TABS = ["encounters", "rooms", "reports", "parsed", "logs"] as const;
 export type MatchesSubTabKey = (typeof MATCHES_SUB_TABS)[number];
 
 /** Sections of `settings`, in navigation order (F9 ·1). */

@@ -30,6 +30,7 @@ from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import ffa as ffa_schemas
+from src.schemas import pregame_rooms as pregame_rooms_schemas
 from src.schemas import registration as reg_schemas
 from src.schemas import registration_form as reg_form_schemas
 from src.schemas import registration_team as reg_team_schemas
@@ -466,6 +467,10 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.admin_pick_ban_rules_preview": Op(request=pick_ban_admin.PickBanRulesPreviewInput),
     "rpc.tournament.admin_pick_ban_act": Op(request=pick_ban_admin.PickBanAdminAct),
     "rpc.tournament.admin_pick_ban_submit": Op(request=pick_ban_admin.PickBanAdminSubmit),
+    # The readiness override answers `{readiness}`, so only its body is mapped;
+    # the rooms board is the one organizer pick-ban read with a real model.
+    "rpc.tournament.admin_encounter_readiness_set": Op(request=pick_ban_admin.AdminReadinessSet),
+    "rpc.tournament.admin_pregame_rooms": Op(response=pregame_rooms_schemas.PregameRoomsRead),
     # ── pre-game room chat (shared chat service; same shapes in balancer) ──
     # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
     # documented in DOCS only — this module maps whole models.

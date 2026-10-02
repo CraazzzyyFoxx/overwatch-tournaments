@@ -37,6 +37,8 @@ const submitDraft = vi.fn();
 const disputeStep = vi.fn();
 const adminPickBanSubmit = vi.fn();
 const adminPickBanReopen = vi.fn();
+const resetPickBanSession = vi.fn();
+const setEncounterReadiness = vi.fn();
 const markReady = vi.fn();
 const getEncounter = vi.fn();
 const getAllMaps = vi.fn();
@@ -79,11 +81,12 @@ vi.mock("@/services/captain.service", () => ({
 }));
 vi.mock("@/services/admin.service", () => ({
   default: {
-    resetPickBanSession: vi.fn(),
+    resetPickBanSession: (...args: unknown[]) => resetPickBanSession(...args),
     adminPickBanAct: vi.fn(),
     adminPickBanElectOpener: vi.fn(),
     adminPickBanSubmit: (...args: unknown[]) => adminPickBanSubmit(...args),
-    adminPickBanReopen: (...args: unknown[]) => adminPickBanReopen(...args)
+    adminPickBanReopen: (...args: unknown[]) => adminPickBanReopen(...args),
+    setEncounterReadiness: (...args: unknown[]) => setEncounterReadiness(...args)
   }
 }));
 vi.mock("@/services/encounter.service", () => ({
@@ -2258,5 +2261,84 @@ describe("admin controls", () => {
     await render();
 
     expect(document.body.textContent).not.toContain(ROOM.admin.title);
+  });
+
+  it("lets an organizer mark an absent captain's side ready", async () => {
+    // The gate holds BOTH kinds' sessions shut at once, so one unreachable
+    // captain freezes the entire room — and the captains' own button only ever
+    // confirms the viewer's own side.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: false,
+      isWorkspaceAdmin: () => false,
+      hasWorkspacePermission: () => true
+    });
+    setEncounterReadiness.mockResolvedValue({ readiness: { home: false, away: true } });
+    mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
+    await render();
+
+    const buttons = Array.from(document.body.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === ROOM.admin.readinessSet
+    );
+    expect(buttons).toHaveLength(2);
+    const away = buttons.find((button) =>
+      button.parentElement?.textContent?.includes("Quiet Foxes")
+    );
+    await act(async () => away!.click());
+    await settle();
+
+    expect(setEncounterReadiness).toHaveBeenCalledWith(4242, { side: "away", ready: true });
+  });
+
+  it("keeps the readiness override off the waiting screen for a captain", async () => {
+    getMyRole.mockResolvedValue({ side: "home" });
+    mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
+    await render();
+
+    expect(document.body.textContent).toContain(ROOM.ready.button);
+    expect(document.body.textContent).not.toContain(ROOM.admin.readinessTitle);
+  });
+
+  it("still reaches the hero session's reset on the closing screen", async () => {
+    // The overrides used to live inside the pick-ban board, so once the series
+    // was over there was no screen left that rendered them at all.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    mockStates(
+      readyState({
+        session: session({ kind: "map" }),
+        is_complete: true,
+        viewer_side: null,
+        games: [confirmed(1, 21, 2, 1)],
+        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
+      }),
+      readyState({
+        session: session({ kind: "hero" }),
+        is_complete: true,
+        viewer_side: null,
+        sequence: [step({ index: 0 })],
+        pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
+      })
+    );
+    await render();
+
+    const tab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (node) => node.textContent?.trim() === ROOM.phase.hero
+    );
+    await act(async () => tab!.click());
+    await settle();
+
+    const byLabel = (label: string) =>
+      Array.from(document.body.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === label
+      );
+    await act(async () => byLabel(ROOM.admin.reset)!.click());
+    await settle();
+    await act(async () => byLabel(ROOM.admin.resetConfirmAction)!.click());
+    await settle();
+
+    expect(resetPickBanSession).toHaveBeenCalledWith(4242, "hero");
   });
 });

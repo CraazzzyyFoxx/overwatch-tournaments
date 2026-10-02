@@ -16,13 +16,13 @@ Design: docs/plans/2026-09-28-pick-ban-constructor.md §5
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from shared.core.enums import (
     EncounterFormat,
@@ -44,7 +44,6 @@ from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.pick_ban import (
     EncounterReadiness,
     PickBanConfig,
-    PickBanConfigSlot,
     PickBanEntry,
     PickBanSession,
 )
@@ -57,6 +56,10 @@ from shared.repository import (
 )
 from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter.games import EncounterGameService, encounter_game_service
+
+# The pool-load options every config read needs live next to the CRUD that owns
+# the rows; a second copy here had already drifted into a private alias.
+from src.services.encounter.pick_ban_config import CONFIG_POOL_LOAD
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.veto_session import (
     REASON_BRACKET_PREVIEW,
@@ -66,16 +69,6 @@ from src.services.encounter.veto_session import (
     REASON_TEAMS_UNKNOWN,
     SLOT_CANDIDATE_FLOOR,
     resolve_seeds,
-)
-
-# A config is only ever useful with its pool in hand (`items` in flat mode,
-# `slots.items` in slot mode), and both are plain lazy relationships: touching
-# either on a config that was loaded without them raises `MissingGreenlet`
-# under async SQLAlchemy. Every load of a config that will be read goes
-# through here.
-_CONFIG_POOL_LOAD = (
-    selectinload(PickBanConfig.items),
-    selectinload(PickBanConfig.slots).selectinload(PickBanConfigSlot.items),
 )
 
 # Session-creation blocker distinct from the ``veto_session``-derived
@@ -90,6 +83,47 @@ REASON_NOT_READY = "not_ready"
 # its own as the map phase progresses -- so it is reported separately from the
 # REASON_* set above.
 REASON_WAITING_MAP = "waiting_map"
+
+
+def unavailable_reason_for(
+    encounter: Encounter,
+    kind: PickBanKind,
+    config: PickBanConfig | None,
+    *,
+    live: bool,
+    both_ready: bool,
+    map_round_one_settled: bool,
+) -> str:
+    """Rank the blockers of one room, as a pure function of facts already read.
+
+    Pure so a caller that loaded the facts in BULK -- the pre-game rooms
+    overview, which answers dozens of encounters without re-querying each one --
+    reports exactly what the room itself would report. Most specific blocker
+    first: an unknown team, then a preview bracket, then the config, then
+    readiness, then the map phase a hero room waits on.
+    """
+    if encounter.home_team_id is None or encounter.away_team_id is None:
+        return REASON_TEAMS_UNKNOWN
+    if not live:
+        return REASON_BRACKET_PREVIEW
+    if config is None:
+        return REASON_NOT_CONFIGURED
+    # A rules template is not a configured room: report it as such rather than
+    # as a slot-count problem the organizer cannot fix at that scope.
+    if not PickBanSessionService.has_pool(config):
+        return REASON_NOT_CONFIGURED
+    if config.mode == MapVetoMode.SLOTS:
+        if not config.slots or encounter.best_of > len(config.slots):
+            return REASON_SLOT_COUNT_MISMATCH
+        ordered = sorted(config.slots, key=lambda s: s.position)[: encounter.best_of]
+        for slot in ordered:
+            if len(slot.items) < SLOT_CANDIDATE_FLOOR:
+                return REASON_SLOT_UNDERFILLED
+    if not both_ready:
+        return REASON_NOT_READY
+    if kind == PickBanKind.HERO and not map_round_one_settled:
+        return REASON_WAITING_MAP
+    return REASON_NOT_CONFIGURED
 
 
 def rounds_are_progressive(config: PickBanConfig, kind: PickBanKind) -> bool:
@@ -236,7 +270,7 @@ class PickBanSessionService:
         `pick_ban_action` fetched it for a scalar flag), and the pool would still
         come back unloaded. ``BaseRepository.get`` is that select.
         """
-        return await self.config_repo.get(session, config_id, options=_CONFIG_POOL_LOAD)
+        return await self.config_repo.get(session, config_id, options=CONFIG_POOL_LOAD)
 
     async def resolve_config_at_level(
         self,
@@ -276,10 +310,25 @@ class PickBanSessionService:
                     PickBanConfig.stage_id == stage_id,
                 ),
             )
-            .options(*_CONFIG_POOL_LOAD)
+            .options(*CONFIG_POOL_LOAD)
         )
+        return self.pick_config(result.scalars().all(), stage_id=stage_id, round=round)
+
+    @staticmethod
+    def pick_config(
+        candidates: Iterable[PickBanConfig], *, stage_id: int | None, round: int | None
+    ) -> PickBanConfig | None:
+        """The cascade's ranking, as a pure function of already-loaded rows.
+
+        Split out of the query above so a caller holding EVERY config of a
+        tournament -- the pre-game rooms overview, which resolves dozens of
+        encounters without dozens of round-trips -- answers the same question
+        the engine answers instead of re-deriving the rule and drifting from it.
+        ``candidates`` may contain rows of other stages/kinds; they rank into
+        nothing and are skipped.
+        """
         matched: list[tuple[int, PickBanConfig]] = []
-        for config in result.scalars().all():
+        for config in candidates:
             if config.round is not None and config.round == round and config.stage_id == stage_id:
                 rank = 2
             elif config.stage_id == stage_id and config.round is None:
@@ -291,7 +340,8 @@ class PickBanSessionService:
             matched.append((rank, config))
         if not matched:
             return None
-        pooled = [config for _, config in sorted(matched, key=lambda pair: -pair[0]) if self.has_pool(config)]
+        ranked = sorted(matched, key=lambda pair: -pair[0])
+        pooled = [config for _, config in ranked if PickBanSessionService.has_pool(config)]
         if pooled:
             return pooled[0]
         return max(matched, key=lambda pair: pair[0])[1]
@@ -368,11 +418,40 @@ class PickBanSessionService:
         self, session: AsyncSession, encounter: Encounter, side: str, user_id: int | None
     ) -> dict[str, bool]:
         """Idempotently record ``side``'s captain confirming readiness. Returns
-        the resulting ``{"home", "away"}`` readiness map."""
+        the resulting ``{"home", "away"}`` readiness map.
+
+        The INSERT signals the room before it commits. It has to: until both
+        sides are ready no session exists, and the room polls nothing while that
+        is true -- so without the signal the OPPOSITE captain's screen sits on
+        "waiting for them" until they reload. ``kind="map"`` carries it for both
+        kinds: the room's single ``encounter:{id}:map-veto`` subscription
+        refetches map and hero state together.
+        """
         existing = await self.readiness_repo.get_for_side(session, encounter_id=encounter.id, side=side)
         if existing is None:
             session.add(EncounterReadiness(encounter_id=encounter.id, side=side, ready_user_id=user_id))
+            await emit_pick_ban_update(session, encounter.id, kind="map")
             await session.commit()
+        return await self.get_readiness(session, encounter.id)
+
+    async def clear_ready(self, session: AsyncSession, encounter: Encounter, side: str) -> dict[str, bool]:
+        """Take ``side``'s readiness back -- the organizer's override of a
+        captain who confirmed too early.
+
+        409 once a session of EITHER kind exists: readiness gates session
+        CREATION only, so clearing it afterwards would change nothing while
+        looking to the organizer like it un-started the room. Resetting the
+        session is the action that actually does that.
+        """
+        for kind in PickBanKind:
+            if await self.get_pick_ban_session(session, encounter.id, kind) is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Pick-ban session has already started; reset it instead of clearing readiness",
+                )
+        await self.readiness_repo.delete_for_side(session, encounter_id=encounter.id, side=side)
+        await emit_pick_ban_update(session, encounter.id, kind="map")
+        await session.commit()
         return await self.get_readiness(session, encounter.id)
 
     async def reset_readiness(self, session: AsyncSession, encounter_id: int) -> None:
@@ -387,30 +466,32 @@ class PickBanSessionService:
         (same REASON_* string set, re-derived rather than handed over -- see that
         function's docstring for the rationale) against ``PickBanConfig`` instead
         of the legacy ``MapVetoConfig``, and the same slot-floor check
-        ``ensure_pick_ban_session`` itself applies, so the two cannot diverge."""
-        if encounter.home_team_id is None or encounter.away_team_id is None:
-            return REASON_TEAMS_UNKNOWN
-        if not await is_encounter_live(session, encounter):
-            return REASON_BRACKET_PREVIEW
+        ``ensure_pick_ban_session`` itself applies, so the two cannot diverge.
+
+        The ranking itself is :func:`unavailable_reason_for`; this gathers the
+        facts that answer it. The cheap ones are read unconditionally -- this
+        runs on a room that cannot open, and a second copy of the ranking would
+        cost correctness. The map-phase fact is read only when it can change
+        the answer: asking the map session for a hero room that is blocked on
+        its teams or its readiness anyway would be a query with no effect.
+        """
         config = await self._resolve_config(session, encounter, kind)
-        if config is None:
-            return REASON_NOT_CONFIGURED
-        # A rules template is not a configured room: report it as such rather than
-        # as a slot-count problem the organizer cannot fix at that scope.
-        if not self.has_pool(config):
-            return REASON_NOT_CONFIGURED
-        if config.mode == MapVetoMode.SLOTS:
-            if not config.slots or encounter.best_of > len(config.slots):
-                return REASON_SLOT_COUNT_MISMATCH
-            ordered = sorted(config.slots, key=lambda s: s.position)[: encounter.best_of]
-            for slot in ordered:
-                if len(slot.items) < SLOT_CANDIDATE_FLOOR:
-                    return REASON_SLOT_UNDERFILLED
-        if not await self.both_sides_ready(session, encounter.id):
-            return REASON_NOT_READY
-        if kind == PickBanKind.HERO and not await self.map_round_settled(session, encounter, 1):
-            return REASON_WAITING_MAP
-        return REASON_NOT_CONFIGURED
+        live = await is_encounter_live(session, encounter)
+        both_ready = await self.both_sides_ready(session, encounter.id)
+
+        def rank(map_round_one_settled: bool) -> str:
+            return unavailable_reason_for(
+                encounter,
+                kind,
+                config,
+                live=live,
+                both_ready=both_ready,
+                map_round_one_settled=map_round_one_settled,
+            )
+
+        if rank(True) == rank(False):
+            return rank(True)
+        return rank(await self.map_round_settled(session, encounter, 1))
 
     async def ensure_pick_ban_session(
         self,

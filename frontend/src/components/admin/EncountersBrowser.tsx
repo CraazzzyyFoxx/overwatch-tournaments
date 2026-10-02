@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { Plus, RefreshCw } from "lucide-react";
 
 import { DataTable } from "@/components/data-table";
@@ -64,6 +65,11 @@ export function EncountersBrowser({
   // the row is on, so nothing resets here.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [] });
   const openId = searchParams?.get("id") ?? null;
+  // A pre-game room opened from here hands the organizer back to this exact
+  // list — chips, page and open row included, since they all live in the URL.
+  const pathname = usePathname();
+  const returnToQuery = searchParams?.toString() ?? "";
+  const returnTo = returnToQuery ? `${pathname}?${returnToQuery}` : pathname;
 
   const canCreate = canAccessPermission("match.create", workspaceId);
   const canUpdate = canAccessPermission("match.update", workspaceId);
@@ -138,6 +144,7 @@ export function EncountersBrowser({
   const columns = useEncounterColumns({
     canUpdate,
     canDelete,
+    returnTo,
     onEdit: form.openEdit,
     onDelete: setPendingDelete
   });
@@ -290,6 +297,7 @@ export function EncountersBrowser({
               workspaceId={workspaceId}
               canUpdate={canUpdate}
               reportsHref={reportsHref}
+              returnTo={returnTo}
               onEdit={form.openEdit}
               onUploaded={invalidate}
             />

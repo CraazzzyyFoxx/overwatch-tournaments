@@ -276,7 +276,10 @@ class PickBanActionService:
 
     # -- settling ----------------------------------------------------------
     @staticmethod
-    def _deadline(pick_ban: PickBanSession, step: pbr.ResolvedStep) -> datetime | None:
+    def step_deadline(pick_ban: PickBanSession, step: pbr.ResolvedStep) -> datetime | None:
+        """When the open step runs out, or ``None`` when it is untimed. Public:
+        the pre-game rooms overview flags an overdue room with it, and a second
+        copy of "started_at + timer, naive rows are UTC" would drift."""
         if step.timer_seconds is None or pick_ban.current_step_started_at is None:
             return None
         started = pick_ban.current_step_started_at
@@ -285,7 +288,7 @@ class PickBanActionService:
         return started + timedelta(seconds=step.timer_seconds)
 
     def _expired(self, pick_ban: PickBanSession, step: pbr.ResolvedStep) -> bool:
-        deadline = self._deadline(pick_ban, step)
+        deadline = self.step_deadline(pick_ban, step)
         return deadline is not None and datetime.now(UTC) >= deadline
 
     def _pending(self, rt: _Runtime) -> bool:
@@ -786,7 +789,7 @@ class PickBanActionService:
             "step_progress": pbr.step_progress(step, rt.submissions) if step is not None else None,
             "step_deadline": (
                 deadline.isoformat()
-                if step is not None and (deadline := self._deadline(rt.pick_ban, step)) is not None
+                if step is not None and (deadline := self.step_deadline(rt.pick_ban, step)) is not None
                 else None
             ),
             "current_round": step.round if step is not None else engine.current_round(rt.entries),

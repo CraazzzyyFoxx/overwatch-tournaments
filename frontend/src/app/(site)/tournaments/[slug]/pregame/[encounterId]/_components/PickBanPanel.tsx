@@ -35,10 +35,21 @@ import { PickBanStepTimeline } from "@/components/pick-ban/PickBanStepTimeline";
 import { PickBanTargetBoard } from "@/components/pick-ban/PickBanTargetBoard";
 import { PickBanUndoControl } from "@/components/pick-ban/PickBanUndoControl";
 import { ElectOpenerDialog } from "@/components/pick-ban/ElectOpenerDialog";
-import { PregameAdminControls } from "./PregameAdminControls";
 
 /** How long a blind draft edit waits before it is saved, so five quick clicks are one request. */
 const DRAFT_SAVE_DELAY_MS = 300;
+
+/**
+ * What the board lends the room's admin panel: the tile the organizer has
+ * selected here, and the cleanup only this board can do (its selection and
+ * its unsaved draft are local state).
+ */
+export interface PickBanAdminSlot {
+  kind: PickBanKind;
+  selectedItemId: number | null;
+  selectedItemName: string | null;
+  onMutated: () => void;
+}
 
 /** The board for whichever pick-ban kind is on the clock: timeline, pool, command bar. */
 export function PickBanPanel({
@@ -50,6 +61,7 @@ export function PickBanPanel({
   queryKey,
   itemsById,
   isAdmin,
+  adminPanel,
   header
 }: Readonly<{
   kind: PickBanKind;
@@ -60,6 +72,11 @@ export function PickBanPanel({
   queryKey: unknown[];
   itemsById: Record<number, PickBanItemLike | undefined>;
   isAdmin: boolean;
+  /**
+   * The organizer's panel, rendered under the pool. The room owns it (one per
+   * screen, across every phase) and only borrows this board's selection.
+   */
+  adminPanel?: (slot: PickBanAdminSlot) => React.ReactNode;
   header: React.ReactNode;
 }>) {
   const t = useTranslations("pickBan.room");
@@ -325,20 +342,16 @@ export function PickBanPanel({
             invalidateKeys={[queryKey]}
           />
 
-          {isAdmin ? (
-            <PregameAdminControls
-              kind={kind}
-              encounterId={encounterId}
-              state={state}
-              selectedItemId={selectedItemId}
-              selectedItemName={selectedItemName}
-              onMutated={() => {
-                setSelectedItemId(null);
-                setLocalDraft(null);
-                void queryClient.invalidateQueries({ queryKey });
-              }}
-            />
-          ) : null}
+          {adminPanel?.({
+            kind,
+            selectedItemId,
+            selectedItemName,
+            onMutated: () => {
+              setSelectedItemId(null);
+              setLocalDraft(null);
+              void queryClient.invalidateQueries({ queryKey });
+            }
+          })}
         </div>
       </div>
 

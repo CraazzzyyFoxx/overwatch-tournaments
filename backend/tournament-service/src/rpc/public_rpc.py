@@ -477,7 +477,8 @@ def register(broker: Any, logger: Any) -> None:
             captain_side, captain_user_id, _team_id = await captain_service.resolve_captain_identity(
                 session, user, encounter
             )
-            # mark_ready commits internally.
+            # mark_ready commits internally and signals the opposite captain's
+            # room -- nothing polls it while no session exists.
             readiness = await pick_ban_session_service.mark_ready(session, encounter, captain_side, captain_user_id)
             return {"readiness": readiness}
 

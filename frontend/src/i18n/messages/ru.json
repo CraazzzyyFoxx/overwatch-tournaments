@@ -3299,7 +3299,12 @@
         "reopen": "Переоткрыть шаг",
         "reopenSuccess": "Шаг переоткрыт",
         "reopenFailed": "Не удалось переоткрыть шаг",
-        "downstreamStarted": "Следующий матч уже начался с этим результатом. Сначала откатите его."
+        "downstreamStarted": "Следующий матч уже начался с этим результатом. Сначала откатите его.",
+        "readinessTitle": "Готовность (администратор)",
+        "readinessSet": "Отметить готовым",
+        "readinessClear": "Снять готовность",
+        "readinessFailed": "Не удалось изменить готовность",
+        "kindSwitch": "К какому пик-бану относятся эти кнопки"
       },
       "waitingMapTitle": "Ожидание карты этого раунда",
       "waitingMapHint": "Баны героев откроются, когда будет выбрана карта этого раунда серии — героев банят под известную карту.",
@@ -6345,12 +6350,12 @@
       },
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {Отчёт по вашему матчу оспорен} other {Отчёт по карте # вашего матча оспорен}}",
+        "dispute_review": "{position, plural, =0 {Капитаны {home_team_name} и {away_team_name} разошлись в итоговом счёте серии — нужно решение организатора} other {Капитаны {home_team_name} и {away_team_name} разошлись в счёте карты # — нужно решение организатора}}",
         "scheduled": "Матч {home_team_name} — {away_team_name} на {tournament_name} назначен на {scheduled_at}"
       },
       "announcement": {
         "published": "Новое объявление"
       },
-        "dispute_review": "{position, plural, =0 {Капитаны {home_team_name} и {away_team_name} разошлись в итоговом счёте серии — нужно решение организатора} other {Капитаны {home_team_name} и {away_team_name} разошлись в счёте карты # — нужно решение организатора}}",
       "team": {
         "kicked": "Вас исключили из команды {team_name} ({tournament_name})",
         "rejected": "Команда {team_name} отклонена на {tournament_name}. {reason}",
@@ -6452,12 +6457,12 @@
         },
         "encounter": {
           "report_disputed": "Отчёт оспорен",
+          "dispute_review": "Нужно решение организатора",
           "scheduled": "Матч назначен"
         },
         "team": {
           "kicked": "Исключение из команды",
           "rejected": "Команда отклонена",
-          "dispute_review": "Нужно решение организатора",
           "disbanded": "Команда распущена"
         }
       },

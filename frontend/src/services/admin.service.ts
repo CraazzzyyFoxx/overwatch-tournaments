@@ -127,6 +127,7 @@ import {
   StageBracketPreviewMatch,
   BracketTemplate,
   BracketTemplateRead,
+  PregameRoomsRead,
 } from "@/types/admin.types";
 
 /**
@@ -1823,6 +1824,38 @@ class AdminService {
       method: "POST",
       body: data
     });
+    return response.json();
+  }
+
+  /**
+   * Flip one side's readiness for a captain who cannot press the button —
+   * the gate that holds BOTH kinds' sessions shut, so an absent captain
+   * otherwise freezes the whole room (backend:
+   * `pick_ban_session.ensure_pick_ban_session`). Clearing readiness is
+   * refused with a 409 once a session exists: by then the gate is behind us
+   * and only a reset undoes it.
+   */
+  async setEncounterReadiness(
+    encounterId: number,
+    data: { side: "home" | "away"; ready: boolean }
+  ): Promise<{ readiness: { home: boolean; away: boolean } }> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/readiness`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /**
+   * Every pre-game room of a tournament in one read: where each encounter sits
+   * in the sequence, whose turn it is, and what is already overdue.
+   *
+   * The organizer's view of the rooms used to be "open each encounter and
+   * look", which does not scale past a handful of concurrent matches — this is
+   * the list that says which of them needs a human right now.
+   */
+  async getPregameRooms(tournamentId: number): Promise<PregameRoomsRead> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/pregame-rooms`);
     return response.json();
   }
 
