@@ -20,11 +20,7 @@ import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import styles from "../TournamentDetail.module.css";
-import {
-  createBracketQueryPlan,
-  deriveBracketLoadState,
-  isStageVisibleToViewer
-} from "./bracketData";
+import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 import { buildLiveTeamStreams } from "./bracketLiveStreams";
 import { buildBracketTabs, buildGroupStagePanels, selectBracketStages } from "./bracketStages.model";
 import { EliminationStagePanel } from "./EliminationStagePanel";
@@ -61,12 +57,9 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
   const encountersQuery = useQuery(queryPlan.encounters);
   const standingsQuery = useQuery(queryPlan.standings);
   // A stage the organizer generated ahead of time (`is_published=false`) is a
-  // preview: hidden from spectators entirely, visible to admins with a badge
-  // and no report action (the backend rejects captain reports/veto for it
-  // regardless — see `shared.services.bracket.usability.is_encounter_live`).
-  const stages = (stagesQuery.data ?? []).filter((stage) =>
-    isStageVisibleToViewer(stage, viewer.isAdmin)
-  );
+  // preview: shown to everyone with a badge, look-only (`isStagePreview` — the
+  // panels drop every link and action for it).
+  const stages = useMemo(() => stagesQuery.data ?? [], [stagesQuery.data]);
   const stageById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
 
   // Read-only consumer of the stream cache the tournament shell already owns:

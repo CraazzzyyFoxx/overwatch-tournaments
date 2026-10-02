@@ -11,6 +11,7 @@ import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Stage, StageItem, Standings } from "@/types/tournament.types";
 
+import { isStagePreview } from "./bracketData";
 import { BracketScroller } from "./BracketScroller";
 import { ResponsiveBracket } from "./ResponsiveBracket";
 import { StagePanelHeader, ViewTabs } from "./StagePanelChrome";
@@ -55,7 +56,7 @@ export function GroupStagePanel({
 }: Readonly<GroupStagePanelProps>) {
   const t = useTranslations();
   const hasStandings = standings.length > 0;
-  const isPreview = !stage.is_published && !stage.is_completed;
+  const isPreview = isStagePreview(stage);
 
   return (
     <Tabs
@@ -103,6 +104,7 @@ export function GroupStagePanel({
             canReport={canReport}
             onSwapSlots={onSwapSlots}
             liveTeamStreams={liveTeamStreams}
+            interactive={!isPreview}
             highlightMatchId={highlightMatchId}
           />
         </BracketScroller>

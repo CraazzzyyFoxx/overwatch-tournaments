@@ -4,12 +4,14 @@ import { useTranslations } from "next-intl";
 
 import StandingsTable from "@/components/StandingsTable";
 import type { BracketSlotRef } from "@/components/bracket/BracketView";
+import { Badge } from "@/components/ui/badge";
 import type { SegmentedLinkItem } from "@/components/ui/segmented";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Stage, Standings } from "@/types/tournament.types";
 
+import { isStagePreview } from "./bracketData";
 import { BracketScroller } from "./BracketScroller";
 import { ResponsiveBracket } from "./ResponsiveBracket";
 import { StagePanelHeader, ViewTabs } from "./StagePanelChrome";
@@ -56,6 +58,7 @@ export function EliminationStagePanel({
 }: Readonly<EliminationStagePanelProps>) {
   const t = useTranslations();
   const hasStandings = standings.length > 0;
+  const isPreview = isStagePreview(stage);
 
   return (
     <Tabs
@@ -66,7 +69,8 @@ export function EliminationStagePanel({
         bracketTabs={bracketTabs}
         title={stage.name}
         subtitle={stage.stage_type.replace(/_/g, " ")}
-        isPreview={!stage.is_published && !stage.is_completed}
+        isPreview={isPreview}
+        railSuffix={isPreview && <Badge variant="outline">{t("common.bracketPreview")}</Badge>}
         viewTabs={<ViewTabs hasStandings={hasStandings} bracketValue="bracket" />}
       />
 
@@ -99,6 +103,7 @@ export function EliminationStagePanel({
               canReport={canReport}
               onSwapSlots={onSwapSlots}
               liveTeamStreams={liveTeamStreams}
+              interactive={!isPreview}
               highlightMatchId={highlightMatchId}
             />
           </BracketScroller>

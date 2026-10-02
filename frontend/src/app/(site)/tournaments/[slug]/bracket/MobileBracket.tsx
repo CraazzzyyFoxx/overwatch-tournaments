@@ -25,6 +25,8 @@ type MobileBracketProps = {
   onReport?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  /** `false`: cards do not link to the encounter page (a stage still in preview). */
+  interactive?: boolean;
 };
 
 const ACTION_BUTTON =
@@ -45,7 +47,8 @@ export function MobileBracket({
   onEdit,
   onReport,
   canEdit,
-  canReport
+  canReport,
+  interactive = true
 }: Readonly<MobileBracketProps>) {
   const t = useTranslations();
   const roundLabel = useBracketRoundLabel();
@@ -93,7 +96,7 @@ export function MobileBracket({
               <MatchCard
                 encounter={encounter}
                 eyebrow={`${label(match.round)} · Bo${encounter.best_of}`}
-                href={`/encounters/${match.id}`}
+                href={interactive ? `/encounters/${match.id}` : undefined}
               />
               {editable || reportable ? (
                 <div className="mt-1.5 flex justify-end gap-2">

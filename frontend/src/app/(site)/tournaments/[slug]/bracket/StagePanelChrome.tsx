@@ -45,8 +45,8 @@ type StagePanelHeaderProps = {
   isPreview: boolean;
   /**
    * Rendered beside the rail. The group panel puts the stage item's name and
-   * its preview badge here; the elimination panel's rail carries neither, so
-   * this is the caller's call rather than a flag.
+   * its preview badge here, the elimination panel only the badge — so this is
+   * the caller's call rather than a flag.
    */
   railSuffix?: ReactNode;
   viewTabs: ReactNode;

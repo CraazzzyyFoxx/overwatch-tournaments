@@ -21,6 +21,12 @@ type ResponsiveBracketProps = {
   ) => Promise<unknown> | void;
   liveTeamStreams?: ReadonlyMap<number, StreamEntry>;
   highlightMatchId?: number | null;
+  /**
+   * `false` for a stage still in preview: look-only for everyone — no links
+   * out, and none of the actions (edit, report, rearrange) or live markers,
+   * whatever the caller passed.
+   */
+  interactive?: boolean;
 };
 
 /**
@@ -28,20 +34,24 @@ type ResponsiveBracketProps = {
  * `false` until its effect runs, so SSR and the first client render agree on
  * the tree; phones swap to the list one frame later, before paint settles.
  */
-export function ResponsiveBracket(props: Readonly<ResponsiveBracketProps>) {
+export function ResponsiveBracket({ interactive = true, ...props }: Readonly<ResponsiveBracketProps>) {
   const isMobile = useIsMobile();
+  const view: Omit<ResponsiveBracketProps, "interactive"> = interactive
+    ? props
+    : { encounters: props.encounters, type: props.type, highlightMatchId: props.highlightMatchId };
   if (isMobile) {
     return (
       <MobileBracket
-        encounters={props.encounters}
-        type={props.type}
-        highlightMatchId={props.highlightMatchId}
-        onEdit={props.onEdit}
-        onReport={props.onReport}
-        canEdit={props.canEdit}
-        canReport={props.canReport}
+        encounters={view.encounters}
+        type={view.type}
+        highlightMatchId={view.highlightMatchId}
+        interactive={interactive}
+        onEdit={view.onEdit}
+        onReport={view.onReport}
+        canEdit={view.canEdit}
+        canReport={view.canReport}
       />
     );
   }
-  return <BracketView {...props} />;
+  return <BracketView {...view} interactive={interactive} />;
 }
