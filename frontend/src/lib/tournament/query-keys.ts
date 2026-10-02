@@ -9,6 +9,10 @@ export const tournamentQueryKeys = {
   // never the resolved numeric id.
   detail: (ref: string | number) => ["tournament", ref] as const,
   stages: (tournamentId: number) => ["tournament", tournamentId, "stages"] as const,
+  /** Under `stages`: the skeleton is a function of the saved stage, so the
+   *  stage itself is in the key and any change to it refetches. */
+  stageBracketPreview: (tournamentId: number, stageId: number, stage: unknown) =>
+    ["tournament", tournamentId, "stages", stageId, "bracket-preview", stage] as const,
   streams: (tournamentId: number) => ["tournament", tournamentId, "streams"] as const,
   links: (tournamentId: number) => ["tournament", tournamentId, "links"] as const,
   /** `tournamentId` is nullable here: the admin browsers key this list by the

@@ -27,6 +27,9 @@ var PublicReadRoutes = []edge.RouteSpec{
 	// like the reads above — the worker 404s a hidden tournament for an
 	// ineligible viewer and computes the body viewer-agnostically.
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages/{stage_id}/ffa", Queue: "rpc.tournament.ffa_stage", IDParam: "id", Path: []string{"stage_id"}, Auth: edge.AuthOptional},
+	// The bracket an elimination stage with no matches yet would generate,
+	// read-only. Same gating; the worker also 404s another tournament's stage.
+	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages/{stage_id}/bracket-preview", Queue: "rpc.tournament.stage_bracket_preview_public", IDParam: "id", Path: []string{"stage_id"}, Auth: edge.AuthOptional},
 	// encounter.py
 	{Method: "GET", Pattern: "/api/v1/encounters", Queue: "rpc.tournament.list_encounters", AllQuery: true, Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/encounters/overview", Queue: "rpc.tournament.encounters_overview", AllQuery: true, Auth: edge.AuthOptional},

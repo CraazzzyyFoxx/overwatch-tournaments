@@ -5,12 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
-import type { BracketMatch } from "@/lib/bracket/view";
+import { previewToBracketMatches, type BracketMatch } from "@/lib/bracket/view";
 import { notify } from "@/lib/notify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
-import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import type { Stage } from "@/types/tournament.types";
 
@@ -30,36 +29,6 @@ const COUNT_SOURCE_NOTE: Record<BracketTeamCountSource, string> = {
   projected: "projected from the preceding group stage's advancing count",
   unknown: "no seeds, slots or upstream group stage yet — depth falls back to Swiss max rounds"
 };
-
-/**
- * The generator's skeleton as the bracket view reads it.
- *
- * `local_id` becomes the match id, and each source edge points at another row's
- * `local_id`, so the view's own slot hints ("W M3") come out of the real
- * advancement edges rather than a shape guessed from round numbers.
- */
-function toBracketMatches(
-  rows: StageBracketPreviewMatch[],
-  teamById: Map<number, Team>
-): BracketMatch[] {
-  return rows.map((row) => ({
-    id: row.local_id,
-    name: row.name,
-    round: row.round,
-    status: "open",
-    score: { home: 0, away: 0 },
-    best_of: row.best_of,
-    home_team_id: row.home_team_id ?? 0,
-    away_team_id: row.away_team_id ?? 0,
-    home_team: row.home_team_id == null ? null : (teamById.get(row.home_team_id) ?? null),
-    away_team: row.away_team_id == null ? null : (teamById.get(row.away_team_id) ?? null),
-    sources: row.sources.map((source) => ({
-      encounter_id: source.local_id,
-      role: source.role,
-      slot: source.slot
-    }))
-  }));
-}
 
 /**
  * The stage as it would be generated right now — read only.
@@ -112,7 +81,7 @@ export function BracketPreview({
 
   const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
   const projected = useMemo(
-    () => toBracketMatches(previewQuery.data ?? [], teamById),
+    () => previewToBracketMatches(previewQuery.data ?? [], teamById),
     [previewQuery.data, teamById]
   );
 

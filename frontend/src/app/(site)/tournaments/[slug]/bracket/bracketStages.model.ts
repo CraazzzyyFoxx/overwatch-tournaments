@@ -160,13 +160,17 @@ export function buildBracketTabs({
     (!!activeStageId && groupStages.some((stage) => stage.id === activeStageId));
 
   // The tab you are standing on stays live even when empty; you are already
-  // looking at its empty state. An FFA stage never appears in the encounter
-  // list this counts — that list answers duels — so its tab is judged on the
-  // stage existing, not on matches nobody asked for.
-  const isDead = (isActive: boolean, stageIds: readonly number[]) =>
-    !isActive &&
-    matchCountsKnown &&
-    !stageIds.some((id) => stageIdsWithMatches.has(id) || ffaStageIds.has(id));
+  // looking at its empty state. A group stage has its table to show as soon as
+  // teams are seeded, before any match is played, and an FFA stage never appears
+  // in the encounter list this counts — that list answers duels — so neither is
+  // judged on matches alone. An unfinished bracket with no matches draws the one
+  // the generator would build; only a finished one with none has nothing.
+  const groupHasContent = (stage: Stage) =>
+    stageIdsWithMatches.has(stage.id) ||
+    ffaStageIds.has(stage.id) ||
+    stage.items.some((item) => item.inputs.length > 0);
+  const isDead = (isActive: boolean, hasContent: boolean) =>
+    !isActive && matchCountsKnown && !hasContent;
 
   if (groupScopeCount > 1) {
     tabs.push({
@@ -177,10 +181,7 @@ export function buildBracketTabs({
           : tournamentHref(tournament, "/bracket?view=groups"),
       label: labels.groupStage,
       isActive: isGroupViewActive,
-      disabled: isDead(
-        isGroupViewActive,
-        groupStages.map((stage) => stage.id)
-      )
+      disabled: isDead(isGroupViewActive, groupStages.some(groupHasContent))
     });
   } else if (groupStages.length === 1) {
     const stage = groupStages[0];
@@ -190,7 +191,7 @@ export function buildBracketTabs({
       href: tournamentHref(tournament, `/bracket?stage=${stage.id}`),
       label: stage.name,
       isActive,
-      disabled: isDead(isActive, [stage.id])
+      disabled: isDead(isActive, groupHasContent(stage))
     });
   }
 
@@ -202,7 +203,7 @@ export function buildBracketTabs({
       label:
         eliminationStages.length === 1 && groupStages.length > 0 ? labels.playoff : stage.name,
       isActive,
-      disabled: isDead(isActive, [stage.id])
+      disabled: isDead(isActive, stageIdsWithMatches.has(stage.id) || !stage.is_completed)
     });
   }
 

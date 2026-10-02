@@ -1,5 +1,6 @@
 import type { BracketRoundShape } from "@/lib/bracket/round-name";
 import { isEncounterCompleted } from "@/lib/encounter/status";
+import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import type { EncounterSlotSource, Score } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
 import type { EncounterResultStatus, StageType } from "@/types/tournament.types";
@@ -9,9 +10,9 @@ import type { EncounterResultStatus, StageType } from "@/types/tournament.types"
  * the card read, and nothing else.
  *
  * `Encounter` satisfies it structurally, and so does a match that has no
- * encounter row yet: the admin bracket preview draws the generator's own
- * skeleton (`GET /admin/stages/{id}/bracket-preview`) through the same view, so
- * the shape an organizer configures is the shape that will be generated.
+ * encounter row yet: the admin bracket preview and the public bracket of a
+ * stage with no matches draw the generator's own skeleton (`bracket-preview`)
+ * through the same view, so what is shown is the shape that will be generated.
  */
 export interface BracketMatch {
   id: number;
@@ -34,6 +35,36 @@ export interface BracketMatch {
   challonge_id?: number | null;
   /** Empty on a bracket whose advancement edges were never recorded. */
   sources?: EncounterSlotSource[];
+}
+
+/**
+ * The generator's skeleton as the bracket view reads it.
+ *
+ * `local_id` becomes the match id, and each source edge points at another row's
+ * `local_id`, so the view's own slot hints ("W M3") come out of the real
+ * advancement edges rather than a shape guessed from round numbers.
+ */
+export function previewToBracketMatches(
+  rows: StageBracketPreviewMatch[],
+  teamById: Map<number, Team>
+): BracketMatch[] {
+  return rows.map((row) => ({
+    id: row.local_id,
+    name: row.name,
+    round: row.round,
+    status: "open",
+    score: { home: 0, away: 0 },
+    best_of: row.best_of,
+    home_team_id: row.home_team_id ?? 0,
+    away_team_id: row.away_team_id ?? 0,
+    home_team: row.home_team_id == null ? null : (teamById.get(row.home_team_id) ?? null),
+    away_team: row.away_team_id == null ? null : (teamById.get(row.away_team_id) ?? null),
+    sources: row.sources.map((source) => ({
+      encounter_id: source.local_id,
+      role: source.role,
+      slot: source.slot
+    }))
+  }));
 }
 
 export interface RoundGroup {
