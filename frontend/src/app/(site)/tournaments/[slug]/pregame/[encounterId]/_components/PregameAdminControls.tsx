@@ -184,13 +184,15 @@ export function PregameAdminControls({
   const lossScoreShown = lossScore ?? lossDefault;
 
   const pauseMutation = useMutation({
-    mutationFn: (next: boolean) => adminService.adminPickBanPause(encounterId, { kind, paused: next }),
+    mutationFn: (next: boolean) =>
+      adminService.adminPickBanPause(encounterId, { kind, paused: next }),
     onSuccess: onMutated,
     onError: (error) => notify.apiError(error, { title: t("admin.pauseFailed") })
   });
 
   const extendMutation = useMutation({
-    mutationFn: (seconds: number) => adminService.adminPickBanExtend(encounterId, { kind, seconds }),
+    mutationFn: (seconds: number) =>
+      adminService.adminPickBanExtend(encounterId, { kind, seconds }),
     onSuccess: onMutated,
     onError: (error) => notify.apiError(error, { title: t("admin.extendFailed") })
   });
@@ -256,191 +258,172 @@ export function PregameAdminControls({
         {kindSwitch != null ? <div className="ml-auto">{kindSwitch}</div> : null}
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-        {active ? (
-          <>
-            <ChoiceGroup
-              label={t("admin.sideLabel")}
-              options={[
-                { value: "home", label: t("side.home") },
-                { value: "away", label: t("side.away") }
-              ]}
-              value={side}
-              onChange={(next) => {
-                setOverride({ step: step?.index ?? null, side: next });
-                // The draft so far was built for the other side: on a targeted
-                // step its players belong to the wrong roster entirely.
-                blind?.clear();
-              }}
-            />
-            <div className="flex flex-col gap-1">
-              <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-                {t("admin.actionLabel")}
-              </span>
-              <span className="text-sm font-medium capitalize">{t(`action.${action}`)}</span>
-            </div>
-            {step?.blind ? (
-              <>
-                {step.target != null ? (
-                  <ChoiceGroup
-                    label={t("admin.submitTargetLabel")}
-                    options={targetRoster.map((player) => ({
-                      value: String(player.player_id),
-                      label: player.name
-                    }))}
-                    value={String(blind?.targetPlayerId ?? "")}
-                    onChange={(value) => blind?.setTargetPlayerId(Number(value))}
-                  />
-                ) : null}
-                <div className="flex flex-col gap-1">
-                  <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-                    {t("admin.submitLabel")}
-                  </span>
-                  {blind != null && blind.items.length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-1">
-                      {blind.items.map((item, index) => (
-                        <Button
-                          key={`${item.item_id}:${item.target_player_id ?? ""}`}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          aria-label={t("admin.submitRemove", { item: itemName(item.item_id) })}
-                          onClick={() => blind.removeAt(index)}
-                        >
-                          {item.target_player_id != null
-                            ? `${itemName(item.item_id)} → ${
-                                targetRoster.find(
-                                  (player) => player.player_id === item.target_player_id
-                                )?.name ?? `#${item.target_player_id}`
-                              }`
-                            : itemName(item.item_id)}
-                          <span aria-hidden className="ml-2">
-                            ×
-                          </span>
-                        </Button>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="max-w-64 text-xs text-[color:var(--aqt-fg-muted)]">
-                      {t("admin.submitHint")}
+      {/* A completed or cancelled session has no step to act on and no opener
+          to name, so this row -- and the divider under it -- would be empty. */}
+      {active || awaitingChoice ? (
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+          {active ? (
+            <>
+              <ChoiceGroup
+                label={t("admin.sideLabel")}
+                options={[
+                  { value: "home", label: t("side.home") },
+                  { value: "away", label: t("side.away") }
+                ]}
+                value={side}
+                onChange={(next) => {
+                  setOverride({ step: step?.index ?? null, side: next });
+                  // The draft so far was built for the other side: on a targeted
+                  // step its players belong to the wrong roster entirely.
+                  blind?.clear();
+                }}
+              />
+              <div className="flex flex-col gap-1">
+                <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                  {t("admin.actionLabel")}
+                </span>
+                <span className="text-sm font-medium capitalize">{t(`action.${action}`)}</span>
+              </div>
+              {step?.blind ? (
+                <>
+                  {step.target != null ? (
+                    <ChoiceGroup
+                      label={t("admin.submitTargetLabel")}
+                      options={targetRoster.map((player) => ({
+                        value: String(player.player_id),
+                        label: player.name
+                      }))}
+                      value={String(blind?.targetPlayerId ?? "")}
+                      onChange={(value) => blind?.setTargetPlayerId(Number(value))}
+                    />
+                  ) : null}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                      {t("admin.submitLabel")}
                     </span>
-                  )}
-                </div>
-                <label className="flex items-center gap-2 pb-1.5 text-xs">
-                  <Checkbox
-                    checked={lockSubmission}
-                    onCheckedChange={(checked) => setLockSubmission(checked === true)}
-                  />
-                  {t("admin.submitLock")}
-                </label>
+                    {blind != null && blind.items.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-1">
+                        {blind.items.map((item, index) => (
+                          <Button
+                            key={`${item.item_id}:${item.target_player_id ?? ""}`}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            aria-label={t("admin.submitRemove", { item: itemName(item.item_id) })}
+                            onClick={() => blind.removeAt(index)}
+                          >
+                            {item.target_player_id != null
+                              ? `${itemName(item.item_id)} → ${
+                                  targetRoster.find(
+                                    (player) => player.player_id === item.target_player_id
+                                  )?.name ?? `#${item.target_player_id}`
+                                }`
+                              : itemName(item.item_id)}
+                            <span aria-hidden className="ml-2">
+                              ×
+                            </span>
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="max-w-64 text-xs text-[color:var(--aqt-fg-muted)]">
+                        {t("admin.submitHint")}
+                      </span>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 pb-1.5 text-xs">
+                    <Checkbox
+                      checked={lockSubmission}
+                      onCheckedChange={(checked) => setLockSubmission(checked === true)}
+                    />
+                    {t("admin.submitLock")}
+                  </label>
+                  <Button
+                    size="sm"
+                    disabled={blind == null || blind.items.length === 0 || pending}
+                    onClick={() => {
+                      if (blind == null) return;
+                      submitMutation.mutate({ side, items: blind.items, lock: lockSubmission });
+                    }}
+                  >
+                    {submitMutation.isPending ? <Spinner className="mr-2" /> : null}
+                    {t("admin.submitConfirm")}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={!canAct || pending}
+                    onClick={() => {
+                      if (selectedItemId == null) return;
+                      actMutation.mutate({ side, item_id: selectedItemId, action });
+                    }}
+                  >
+                    {actMutation.isPending ? <Spinner className="mr-2" /> : null}
+                    {t("admin.confirm")}
+                    {selectedItemName ? `: ${selectedItemName}` : ""}
+                  </Button>
+                  {selectedItemId == null ? (
+                    <span className="text-xs text-[color:var(--aqt-fg-muted)]">
+                      {t("admin.selectItemFirst")}
+                    </span>
+                  ) : null}
+                </>
+              )}
+              {state.dispute.step_index != null ? (
                 <Button
-                  size="sm"
-                  disabled={blind == null || blind.items.length === 0 || pending}
-                  onClick={() => {
-                    if (blind == null) return;
-                    submitMutation.mutate({ side, items: blind.items, lock: lockSubmission });
-                  }}
-                >
-                  {submitMutation.isPending ? <Spinner className="mr-2" /> : null}
-                  {t("admin.submitConfirm")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  disabled={!canAct || pending}
-                  onClick={() => {
-                    if (selectedItemId == null) return;
-                    actMutation.mutate({ side, item_id: selectedItemId, action });
-                  }}
-                >
-                  {actMutation.isPending ? <Spinner className="mr-2" /> : null}
-                  {t("admin.confirm")}
-                  {selectedItemName ? `: ${selectedItemName}` : ""}
-                </Button>
-                {selectedItemId == null ? (
-                  <span className="text-xs text-[color:var(--aqt-fg-muted)]">
-                    {t("admin.selectItemFirst")}
-                  </span>
-                ) : null}
-              </>
-            )}
-            {state.dispute.step_index != null ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={pending}
-                onClick={() => reopenMutation.mutate()}
-              >
-                {reopenMutation.isPending ? (
-                  <Spinner className="mr-2" />
-                ) : (
-                  <Undo2 className="mr-2 h-4 w-4" aria-hidden />
-                )}
-                {t("admin.reopen")}
-              </Button>
-            ) : null}
-          </>
-        ) : null}
-
-        {awaitingChoice ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-              {t("admin.electLabel")}
-            </span>
-            <div className="flex gap-1">
-              {(["home", "away"] as const).map((value) => (
-                <Button
-                  key={value}
-                  type="button"
                   size="sm"
                   variant="outline"
                   disabled={pending}
-                  onClick={() => electMutation.mutate(value)}
+                  onClick={() => reopenMutation.mutate()}
                 >
-                  {electMutation.isPending ? (
+                  {reopenMutation.isPending ? (
                     <Spinner className="mr-2" />
-                  ) : null}
-                  {t(value === "home" ? "side.home" : "side.away")}
+                  ) : (
+                    <Undo2 className="mr-2 h-4 w-4" aria-hidden />
+                  )}
+                  {t("admin.reopen")}
                 </Button>
-              ))}
-            </div>
-          </div>
-        ) : null}
+              ) : null}
+            </>
+          ) : null}
 
-        <Button
-          size="sm"
-          variant="destructive"
-          disabled={pending}
-          className="ml-auto"
-          onClick={() => setResetOpen(true)}
-        >
-          {resetMutation.isPending ? (
-            <Spinner className="mr-2" />
-          ) : (
-            <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
-          )}
-          {t("admin.reset")}
-        </Button>
-        <ConfirmDialog
-          open={resetOpen}
-          onOpenChange={setResetOpen}
-          intent={{
-            title: t("admin.resetConfirmTitle"),
-            description: t("admin.resetConfirmHint"),
-            confirmLabel: t("admin.resetConfirmAction"),
-            tone: "danger"
-          }}
-          pending={resetMutation.isPending}
-          onConfirm={() => resetMutation.mutate()}
-        />
-      </div>
+          {awaitingChoice ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                {t("admin.electLabel")}
+              </span>
+              <div className="flex gap-1">
+                {(["home", "away"] as const).map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => electMutation.mutate(value)}
+                  >
+                    {electMutation.isPending ? <Spinner className="mr-2" /> : null}
+                    {t(value === "home" ? "side.home" : "side.away")}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Commands that act on the session (or the whole encounter) rather than
           on one step — kept off the step row so an organizer never reaches for
           "cancel" while aiming at "perform action". */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-[color:var(--aqt-amber)]/35 pt-3">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-2",
+          (active || awaitingChoice) &&
+            "mt-4 border-t border-dashed border-[color:var(--aqt-amber)]/35 pt-3"
+        )}
+      >
         <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
           {t("admin.sessionLabel")}
         </span>
@@ -494,6 +477,35 @@ export function PregameAdminControls({
             {t("admin.cancelSession")}
           </Button>
         ) : null}
+        {/* A session-level command, like cancel: it drops this kind's session and
+            re-creates it, so it belongs beside the other session commands, not
+            at the end of the step row it never acts on. */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-danger"
+          disabled={pending}
+          onClick={() => setResetOpen(true)}
+        >
+          {resetMutation.isPending ? (
+            <Spinner className="mr-2" />
+          ) : (
+            <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
+          )}
+          {t("admin.reset")}
+        </Button>
+        <ConfirmDialog
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          intent={{
+            title: t("admin.resetConfirmTitle"),
+            description: t("admin.resetConfirmHint"),
+            confirmLabel: t("admin.resetConfirmAction"),
+            tone: "danger"
+          }}
+          pending={resetMutation.isPending}
+          onConfirm={() => resetMutation.mutate()}
+        />
         <Button
           size="sm"
           variant="destructive"
@@ -557,9 +569,7 @@ export function PregameAdminControls({
                     className="w-16"
                     aria-label={t("admin.correctScore", { team: sideNameOf("home") })}
                     value={lossScoreShown.home}
-                    onValueChange={(value) =>
-                      setLossScore({ ...lossScoreShown, home: value ?? 0 })
-                    }
+                    onValueChange={(value) => setLossScore({ ...lossScoreShown, home: value ?? 0 })}
                   />
                   <NumberInput
                     min={0}
@@ -567,9 +577,7 @@ export function PregameAdminControls({
                     className="w-16"
                     aria-label={t("admin.correctScore", { team: sideNameOf("away") })}
                     value={lossScoreShown.away}
-                    onValueChange={(value) =>
-                      setLossScore({ ...lossScoreShown, away: value ?? 0 })
-                    }
+                    onValueChange={(value) => setLossScore({ ...lossScoreShown, away: value ?? 0 })}
                   />
                 </span>
                 <Input
