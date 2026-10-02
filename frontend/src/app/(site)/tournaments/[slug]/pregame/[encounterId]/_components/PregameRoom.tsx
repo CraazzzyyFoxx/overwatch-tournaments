@@ -172,23 +172,36 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
       : (encounter.away_team?.name ?? t("side.away"));
   const seriesSummary = mapState.series ?? null;
   const header = (
-    <PregameHeader
-      encounter={encounter}
-      session={
-        loop.statesByKind[loop.phase === "hero" || !loop.mapApplies ? "hero" : "map"].session
-      }
-      activePhase={loop.phase}
-      phases={loop.phases}
-      round={loop.round}
-      series={series}
-      seriesScore={
-        seriesSummary != null
-          ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
-          : null
-      }
-      official={seriesSummary?.official ?? null}
-      returnTo={returnTo}
-    />
+    <>
+      <PregameHeader
+        encounter={encounter}
+        session={
+          loop.statesByKind[loop.phase === "hero" || !loop.mapApplies ? "hero" : "map"].session
+        }
+        activePhase={loop.phase}
+        phases={loop.phases}
+        round={loop.round}
+        series={series}
+        seriesScore={
+          seriesSummary != null
+            ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
+            : null
+        }
+        official={seriesSummary?.official ?? null}
+        returnTo={returnTo}
+      />
+      {/* A cancelled kind leaves no phase behind, so without this line the
+          room simply looks like one that never had a veto — and the captains
+          naming their own map have no idea why. */}
+      {loop.cancelledKinds.map((kind) => (
+        <p
+          key={kind}
+          className="rounded-lg border border-dashed border-[color:var(--aqt-amber)]/45 bg-[color:var(--aqt-card-2)]/40 px-3 py-2 text-xs text-[color:var(--aqt-fg-muted)]"
+        >
+          {t("cancelledNotice", { phase: t(`phase.${kind}`) })}
+        </p>
+      ))}
+    </>
   );
 
   // One organizer surface per screen, on every phase — the readiness gate, the
@@ -203,6 +216,13 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
         statesByKind={loop.statesByKind}
         activeKind={activeKind}
         sideNameOf={sideNameOf}
+        itemsByKind={room.itemsByKind}
+        bestOf={encounter.best_of ?? 0}
+        seriesWins={
+          seriesSummary != null
+            ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
+            : null
+        }
         onMutated={room.invalidateRoom}
         grid={grid}
       />

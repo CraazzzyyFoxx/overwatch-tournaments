@@ -73,6 +73,9 @@ export function stepActionLabel(action: string | null): string {
  * leaves an encounter in `hero`, but an encounter can also sit in `report`
  * with a hero session still waiting on a loser's choice, and the column must
  * name that rather than go blank. Map wins a tie because it always runs first.
+ *
+ * A session an organizer cancelled has no open step at all, yet it is the
+ * reason the room looks stalled — so it is named too, after every live one.
  */
 export function currentStep(
   room: PregameRoomRow
@@ -81,6 +84,10 @@ export function currentStep(
     const summary = room[kind];
     if (summary?.status !== "active") continue;
     if (summary.step_index != null || summary.awaiting_choice) return { kind, summary };
+  }
+  for (const kind of ["map", "hero"] as const) {
+    const summary = room[kind];
+    if (summary?.status === "cancelled") return { kind, summary };
   }
   return null;
 }

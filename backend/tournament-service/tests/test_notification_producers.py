@@ -83,6 +83,8 @@ TABLE_NAMES = (
     "tournament.encounter_captain_report",
     "tournament.encounter_map_code",
     "tournament.encounter_map_report",
+    # The map-report path journals the claim before it notifies anyone.
+    "tournament.encounter_room_event",
     "matches.match",
     "workspace",
     "players.user",

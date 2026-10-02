@@ -102,6 +102,35 @@ def require_workspace_member(user: models.AuthUser, workspace_id: int) -> None:
     )
 
 
+def is_workspace_staff(user: models.AuthUser | None, workspace_id: int) -> bool:
+    """Who polices a workspace's scrims: whoever may enter a match result.
+
+    The same grant the pre-game organizer controls run on (``match.result``), so a
+    referee already trusted with a tournament's scoreline can also find and retire
+    a room whose creator left the workspace. ``has_workspace_permission`` already
+    answers True for a superuser, so that case needs no branch of its own.
+    """
+    return user is not None and user.has_workspace_permission(workspace_id, "match", "result")
+
+
+def _may_close(room: ScrimRoom, user: models.AuthUser | None, side: Side | None) -> bool:
+    """Creator, either captain, or workspace staff.
+
+    One predicate for both the endpoint and the serialized ``can_close``, so the
+    button a viewer sees and the rule the write enforces cannot drift -- they did:
+    the page offered Close only to a captain, hiding it from a creator who plays
+    neither side even though the endpoint has always accepted them.
+    """
+    if user is None:
+        return False
+    return (
+        room.created_by_auth_user_id == user.id
+        or side is not None
+        or user.is_superuser
+        or is_workspace_staff(user, room.workspace_id)
+    )
+
+
 # ── pool ─────────────────────────────────────────────────────────────────────
 
 
@@ -400,9 +429,14 @@ class ScrimService:
         return await self.serialize_room(session, room, user)
 
     async def list_rooms_for_viewer(
-        self, session: AsyncSession, user: models.AuthUser, workspace_id: int
+        self, session: AsyncSession, user: models.AuthUser, workspace_id: int, *, scope: str = "mine"
     ) -> list[dict]:
         """The viewer's own rooms — created by them, or captained by them.
+
+        ``scope="workspace"`` drops that gate and lists every room of the workspace
+        instead, for staff who have to find a room they are in no way part of (a
+        creator who left, an abandoned room still eating a cap slot). Same ordering
+        and same serialization either way.
 
         Its own read rather than ``/encounters?scope=my_team``: that browse joins
         ``Player`` rows (a scrim team has none) and unconditionally excludes hidden
@@ -416,10 +450,25 @@ class ScrimService:
         ordering below sorts on a computed ``closed_at IS NULL``, which raises
         ``InvalidColumnReferenceError``. It shipped with one and 500'd the list.
         """
+        if scope not in ("mine", "workspace"):
+            raise HTTPException(status_code=422, detail="scope must be 'mine' or 'workspace'")
         require_workspace_member(user, workspace_id)
+        if scope == "workspace" and not is_workspace_staff(user, workspace_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied for workspace {workspace_id}: match.result required",
+            )
         player_ids = sa.select(models.User.id).where(models.User.auth_user_id == user.id).scalar_subquery()
         home = aliased(models.Team)
         away = aliased(models.Team)
+        # The team joins stay in both scopes: the workspace read does not filter on
+        # them, but dropping them would fork the statement for no gain -- each is to
+        # a primary key, so neither adds a row.
+        mine = sa.or_(
+            ScrimRoom.created_by_auth_user_id == user.id,
+            home.captain_id.in_(player_ids),
+            away.captain_id.in_(player_ids),
+        )
         # Stays in the service rather than ``ScrimRoomRepository.list_for_workspace``:
         # that read filters on workspace/closed/tournament only, while this one is a
         # three-join projection gated on "created by me OR captained by me" and
@@ -431,11 +480,7 @@ class ScrimService:
             .join(away, away.id == models.Encounter.away_team_id, isouter=True)
             .where(
                 ScrimRoom.workspace_id == workspace_id,
-                sa.or_(
-                    ScrimRoom.created_by_auth_user_id == user.id,
-                    home.captain_id.in_(player_ids),
-                    away.captain_id.in_(player_ids),
-                ),
+                *([] if scope == "workspace" else [mine]),
             )
             .options(*_ROOM_LOAD)
             # Open rooms first, then newest closed: the list's job is "what am I in
@@ -486,6 +531,7 @@ class ScrimService:
             "away_team": _team_payload(encounter.away_team),
             "viewer_side": side,
             "can_claim": can_claim,
+            "can_close": room.closed_at is None and _may_close(room, user, side),
             "created_at": room.created_at,
             "closed_at": room.closed_at,
         }
@@ -722,10 +768,10 @@ class ScrimService:
         """
         room = await self._load_room(session, token)
         side = await self._viewer_side(session, room, user)
-        if room.created_by_auth_user_id != user.id and side is None and not user.is_superuser:
+        if not _may_close(room, user, side):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the room's creator or a captain may close it",
+                detail="Only the room's creator, a captain of either side, or workspace staff may close it",
             )
         if room.closed_at is None:
             room.closed_at = datetime.now(UTC)

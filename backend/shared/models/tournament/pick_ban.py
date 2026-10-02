@@ -289,6 +289,11 @@ class PickBanSession(db.TimeStampIntegerMixin):
     undo_target_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
     current_step_started_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    # The organizer's hold on a live room: non-NULL = paused. The step keeps the
+    # time it had left (``resume`` pushes ``current_step_started_at`` forward by
+    # the paused span) and no captain write is accepted meanwhile, so this is the
+    # one state that suspends the clock without scrapping anything.
+    paused_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
 
     encounter: Mapped[Encounter] = relationship()
     config: Mapped[PickBanConfig | None] = relationship()

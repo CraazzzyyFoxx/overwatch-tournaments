@@ -48,6 +48,20 @@ export interface PickBanAdminSlot {
   kind: PickBanKind;
   selectedItemId: number | null;
   selectedItemName: string | null;
+  /**
+   * The blind draft being built out of THIS pool for an absent captain, or
+   * null when no blind step is open to an organizer. The board owns the tile
+   * clicks that fill it; the panel owns whose draft it is and when it is sent.
+   */
+  blind: {
+    items: PickBanSubmissionItem[];
+    /** The opponent player the next tile click lands on, on a targeted step. */
+    targetPlayerId: number | null;
+    setTargetPlayerId: (playerId: number | null) => void;
+    removeAt: (index: number) => void;
+    /** Drop the whole draft — the panel does this when the side changes. */
+    clear: () => void;
+  } | null;
   onMutated: () => void;
 }
 
@@ -92,6 +106,13 @@ export function PickBanPanel({
 
   const [pickedItemId, setSelectedItemId] = useState<number | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null);
+  /**
+   * The draft an organizer is building out of this pool for an absent captain.
+   * It lives here, not in the admin panel, because the clicks that fill it are
+   * this board's — the panel only names the side it is for and sends it.
+   */
+  const [adminDraft, setAdminDraft] = useState<PickBanSubmissionItem[]>([]);
+  const [adminTargetId, setAdminTargetId] = useState<number | null>(null);
   /**
    * The viewer's own edits since the last server read, keyed by the step and
    * attempt they were made on — so a reveal, a new round or a dispute
@@ -178,16 +199,22 @@ export function PickBanPanel({
     !isBlindStep && state.viewer_can_act && state.allowed_actions.length > 0
       ? state.allowed_actions[0]
       : null;
+  // An organizer standing in for an absent captain fills the blind draft out of
+  // this same pool — unless they ARE the captain on the clock, whose own draft
+  // keeps the clicks.
+  const adminDrafting = isAdmin && isBlindStep && !state.viewer_can_act;
   const canSelect =
     isSessionActive(session) &&
     !state.is_complete &&
-    ((state.viewer_can_act && !draftLocked) || (isAdmin && !isBlindStep));
+    ((state.viewer_can_act && !draftLocked) || (isAdmin && !isBlindStep) || adminDrafting);
   const selectedItemName =
     selectedItemId != null
       ? (itemsById[selectedItemId]?.name ?? t(`${kind}.itemNumber`, { id: selectedItemId }))
       : null;
 
-  const draftItemIds = new Set(draftItems.map((item) => item.item_id));
+  const draftItemIds = new Set(
+    (adminDrafting ? adminDraft : draftItems).map((item) => item.item_id)
+  );
   const eligibleIds = eligibleItemIds(state.eligible, selectedTargetId);
   const assignedByPlayer: Record<number, number | undefined> = {};
   for (const item of draftItems) {
@@ -195,35 +222,52 @@ export function PickBanPanel({
   }
 
   /**
-   * One tile click on a blind step: add the item to the private draft, or take
-   * it back out. On a per-player step the click lands on the SELECTED player,
-   * and a second hero for that player replaces the first — `one_per_target`
-   * makes two of them illegal anyway, and silently refusing the click would
-   * read as a broken tile.
+   * One tile click on a blind step against a draft: add the item, or take it
+   * back out. On a per-player step the click lands on the given player, and a
+   * second hero for that player replaces the first — `one_per_target` makes
+   * two of them illegal anyway, and silently refusing the click would read as
+   * a broken tile. `null` back means the step names a player and none is
+   * chosen yet — the caller says so, this only computes.
    */
-  const toggleDraftItem = (itemId: number) => {
-    if (step == null || draftLocked) return;
+  const toggleBlindItem = (
+    items: PickBanSubmissionItem[],
+    itemId: number,
+    targetPlayerId: number | null
+  ): PickBanSubmissionItem[] | null => {
+    if (step == null) return items;
     const targeted = step.target != null;
-    const existing = draftItems.findIndex(
+    const existing = items.findIndex(
       (item) =>
         item.item_id === itemId &&
-        (!targeted || item.target_player_id === selectedTargetId || selectedTargetId == null)
+        (!targeted || item.target_player_id === targetPlayerId || targetPlayerId == null)
     );
-    let next: PickBanSubmissionItem[];
-    if (existing >= 0) {
-      next = draftItems.filter((_, index) => index !== existing);
-    } else {
-      if (targeted && selectedTargetId == null) {
-        notify.info(t("target.selectFirst"));
-        return;
-      }
-      const room = targeted
-        ? draftItems.filter((item) => item.target_player_id !== selectedTargetId)
-        : draftItems;
-      if (room.length >= step.count) return;
-      next = [...room, { item_id: itemId, target_player_id: targeted ? selectedTargetId : null }];
+    if (existing >= 0) return items.filter((_, index) => index !== existing);
+    if (targeted && targetPlayerId == null) return null;
+    const room = targeted
+      ? items.filter((item) => item.target_player_id !== targetPlayerId)
+      : items;
+    if (room.length >= step.count) return items;
+    return [...room, { item_id: itemId, target_player_id: targeted ? targetPlayerId : null }];
+  };
+
+  const toggleDraftItem = (itemId: number) => {
+    if (step == null || draftLocked) return;
+    const next = toggleBlindItem(draftItems, itemId, selectedTargetId);
+    if (next == null) {
+      notify.info(t("target.selectFirst"));
+      return;
     }
     setLocalDraft({ key: stepKey, items: next });
+  };
+
+  /** The same click, for the side an organizer is standing in for. */
+  const toggleAdminDraftItem = (itemId: number) => {
+    const next = toggleBlindItem(adminDraft, itemId, adminTargetId);
+    if (next == null) {
+      notify.info(t("target.selectFirst"));
+      return;
+    }
+    setAdminDraft(next);
   };
 
   const revealedStep = lastRevealedBlindStep(state.sequence, state.submissions);
@@ -321,7 +365,8 @@ export function PickBanPanel({
             draftItemIds={draftItemIds}
             onSelect={(itemId) => {
               if (isBlindStep) {
-                toggleDraftItem(itemId);
+                if (adminDrafting) toggleAdminDraftItem(itemId);
+                else toggleDraftItem(itemId);
                 return;
               }
               setSelectedItemId((current) => (current === itemId ? null : itemId));
@@ -346,9 +391,20 @@ export function PickBanPanel({
             kind,
             selectedItemId,
             selectedItemName,
+            blind: adminDrafting
+              ? {
+                  items: adminDraft,
+                  targetPlayerId: adminTargetId,
+                  setTargetPlayerId: setAdminTargetId,
+                  removeAt: (index) =>
+                    setAdminDraft((items) => items.filter((_, position) => position !== index)),
+                  clear: () => setAdminDraft([])
+                }
+              : null,
             onMutated: () => {
               setSelectedItemId(null);
               setLocalDraft(null);
+              setAdminDraft([]);
               void queryClient.invalidateQueries({ queryKey });
             }
           })}

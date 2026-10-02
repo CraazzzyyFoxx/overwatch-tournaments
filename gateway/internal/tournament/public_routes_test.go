@@ -100,6 +100,15 @@ func TestPickBanV2RouteContracts(t *testing.T) {
 		// encounter, the rooms board a bodyless read on a tournament.
 		"rpc.tournament.admin_encounter_readiness_set": adminEncounter,
 		"rpc.tournament.admin_pregame_rooms":           {method: "GET", idParam: "tournament_id", auth: edge.AuthRequired},
+		// The room journal: a bodyless read keyed on the encounter, so it must
+		// not drift onto the tournament id the rooms board uses.
+		"rpc.tournament.admin_pregame_room_history": {method: "GET", idParam: "encounter_id", auth: edge.AuthRequired},
+		// The room's emergency controls, all four body writes on an encounter:
+		// a missing one strands the organizer panel's buttons on a 404.
+		"rpc.tournament.admin_pick_ban_pause":           adminEncounter,
+		"rpc.tournament.admin_pick_ban_extend":          adminEncounter,
+		"rpc.tournament.admin_pick_ban_cancel":          adminEncounter,
+		"rpc.tournament.admin_encounter_technical_loss": adminEncounter,
 	}
 
 	seen := map[string]bool{}

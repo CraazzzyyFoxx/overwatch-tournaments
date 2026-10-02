@@ -22,7 +22,7 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user_optional
 from src import models, schemas
-from src.rpc._helpers import _dump, _identity, _payload, _read, _require_q1, _run
+from src.rpc._helpers import _dump, _identity, _payload, _q1, _read, _require_q1, _run
 from src.services.scrim.service import scrim_service
 
 
@@ -67,7 +67,11 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             workspace_id = _require_q1(data, "workspace_id", int)
-            rooms = await scrim_service.list_rooms_for_viewer(session, user, workspace_id)
+            # Absent ``scope`` keeps the historical behaviour (the caller's own
+            # rooms); the service owns both the vocabulary and the staff gate the
+            # workspace-wide scope needs.
+            scope = _q1(data, "scope", str, "mine")
+            rooms = await scrim_service.list_rooms_for_viewer(session, user, workspace_id, scope=scope)
             return schemas.ScrimRoomListRead(rooms=[schemas.ScrimRoomRead.model_validate(r) for r in rooms])
 
         return await _read(logger, op)

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { RotateCcw, ShieldCheck, Undo2 } from "lucide-react";
+import { Ban, Pause, Play, RotateCcw, ShieldCheck, Timer, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import adminService from "@/services/admin.service";
 import pickBanService from "@/services/pickBan.service";
 import type {
@@ -24,7 +25,10 @@ import type {
 } from "@/types/tournament.types";
 
 import type { PickBanSide } from "@/components/pick-ban/pick-ban-model";
+import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { Spinner } from "@/components/ui/spinner";
+
+import type { PickBanAdminSlot } from "./PickBanPanel";
 
 interface PregameAdminControlsProps {
   kind: PickBanKind;
@@ -32,6 +36,18 @@ interface PregameAdminControlsProps {
   state: PickBanState;
   selectedItemId: number | null;
   selectedItemName: string | null;
+  /** This kind's catalog, to name the tiles an organizer clicked. */
+  itemsById: Record<number, PickBanItemLike | undefined>;
+  /**
+   * The blind draft the board on screen is building for an absent captain —
+   * null when no pool is on screen for this kind, or no blind step is open.
+   */
+  blind: PickBanAdminSlot["blind"];
+  sideNameOf: (side: PickBanSide) => string;
+  /** Series length and the wins already confirmed, for the technical loss's
+   * default score — neither is carried by a pick-ban state. */
+  bestOf: number;
+  seriesWins: { home: number; away: number } | null;
   onMutated: () => void;
   /**
    * Which pick-ban kind these controls act on, when the room has more than
@@ -41,6 +57,31 @@ interface PregameAdminControlsProps {
   kindSwitch?: React.ReactNode;
 }
 
+/** Enough to cover a reconnect, a short break and a long one. */
+const EXTEND_CHOICES = [30, 60, 120] as const;
+
+/**
+ * The score a technical loss defaults to — the backend's own rule, mirrored
+ * here so the dialog opens on the number it would apply and the organizer only
+ * types when they disagree.
+ *
+ * The winner takes the series (at least the wins it needs), the forfeiting
+ * side keeps the maps it actually won, capped one short of winning.
+ */
+function technicalLossScore(
+  bestOf: number,
+  wins: { home: number; away: number } | null,
+  loserSide: PickBanSide
+): { home: number; away: number } {
+  const need = Math.floor(bestOf / 2) + 1;
+  const winnerSide = loserSide === "home" ? "away" : "home";
+  const score = {
+    [winnerSide]: Math.max(wins?.[winnerSide] ?? 0, need),
+    [loserSide]: Math.min(wins?.[loserSide] ?? 0, Math.max(need - 1, 0))
+  } as { home: number; away: number };
+  return score;
+}
+
 /**
  * Workspace-admin overrides: reset the whole pick-ban session (drop +
  * re-create with seeds re-resolved), act or submit a draft on behalf of either
@@ -48,6 +89,10 @@ interface PregameAdminControlsProps {
  * is already confirmed or stuck in a dispute — the one command allowed to
  * overwrite a confirmed score, and the only way a disputed position ever
  * clears.
+ *
+ * Plus the commands that act on the session as a whole rather than on a step:
+ * hold the clock (pause), hand the side on the clock more time, cancel the
+ * session for good, and end the whole encounter against one side.
  *
  * Which action an override performs is NOT the organizer's choice any more: a
  * v2 step names its own action, so offering "ban / pick / protect" next to a
@@ -60,6 +105,11 @@ export function PregameAdminControls({
   state,
   selectedItemId,
   selectedItemName,
+  itemsById,
+  blind,
+  sideNameOf,
+  bestOf,
+  seriesWins,
   onMutated,
   kindSwitch
 }: Readonly<PregameAdminControlsProps>) {
@@ -74,8 +124,11 @@ export function PregameAdminControls({
   const [resetOpen, setResetOpen] = useState(false);
   const [override, setOverride] = useState<{ step: number | null; side: PickBanSide } | null>(null);
   const side = override?.step === (step?.index ?? null) ? override.side : defaultSide;
-  const [draftInput, setDraftInput] = useState("");
   const [lockSubmission, setLockSubmission] = useState(true);
+  const itemName = (itemId: number) =>
+    itemsById[itemId]?.name ?? t(`${kind}.itemNumber`, { id: itemId });
+  // A per-player step names an OPPONENT of the side being acted for.
+  const targetRoster = state.targets?.[side === "home" ? "away" : "home"] ?? [];
 
   const resetMutation = useMutation({
     mutationFn: () => adminService.resetPickBanSession(encounterId, kind),
@@ -97,10 +150,7 @@ export function PregameAdminControls({
   const submitMutation = useMutation({
     mutationFn: (input: { side: PickBanSide; items: PickBanSubmissionItem[]; lock: boolean }) =>
       adminService.adminPickBanSubmit(encounterId, { kind, ...input }),
-    onSuccess: () => {
-      setDraftInput("");
-      onMutated();
-    },
+    onSuccess: onMutated,
     onError: (error) => notify.apiError(error, { title: t("admin.submitFailed") })
   });
 
@@ -120,6 +170,64 @@ export function PregameAdminControls({
     onError: (error) => notify.apiError(error, { title: t("admin.electFailed") })
   });
 
+  const queryClient = useQueryClient();
+  const paused = state.session?.paused_at != null;
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [lossOpen, setLossOpen] = useState(false);
+  const [loserSide, setLoserSide] = useState<PickBanSide>("away");
+  const [lossReason, setLossReason] = useState("");
+  // Null = "whatever the default rule says for the side currently selected";
+  // a value is the organizer having overridden it by hand.
+  const [lossScore, setLossScore] = useState<{ home: number; away: number } | null>(null);
+  const lossDefault = technicalLossScore(bestOf, seriesWins, loserSide);
+  const lossScoreShown = lossScore ?? lossDefault;
+
+  const pauseMutation = useMutation({
+    mutationFn: (next: boolean) => adminService.adminPickBanPause(encounterId, { kind, paused: next }),
+    onSuccess: onMutated,
+    onError: (error) => notify.apiError(error, { title: t("admin.pauseFailed") })
+  });
+
+  const extendMutation = useMutation({
+    mutationFn: (seconds: number) => adminService.adminPickBanExtend(encounterId, { kind, seconds }),
+    onSuccess: onMutated,
+    onError: (error) => notify.apiError(error, { title: t("admin.extendFailed") })
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () =>
+      adminService.adminPickBanCancel(encounterId, { kind, reason: cancelReason.trim() }),
+    onSuccess: () => {
+      setCancelOpen(false);
+      setCancelReason("");
+      notify.success(t("admin.cancelSuccess"));
+      onMutated();
+    },
+    onError: (error) => notify.apiError(error, { title: t("admin.cancelFailed") })
+  });
+
+  const technicalLossMutation = useMutation({
+    mutationFn: () =>
+      adminService.adminTechnicalLoss(encounterId, {
+        loser_side: loserSide,
+        home_score: lossScoreShown.home,
+        away_score: lossScoreShown.away,
+        reason: lossReason.trim()
+      }),
+    onSuccess: () => {
+      setLossOpen(false);
+      setLossReason("");
+      setLossScore(null);
+      notify.success(t("admin.technicalLossSuccess"));
+      onMutated();
+      // This one writes the ENCOUNTER's result, not just a session, and the
+      // room's own refetch may be scoped to the board the organizer is on.
+      void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.detail(encounterId) });
+    },
+    onError: (error) => notify.apiError(error, { title: t("admin.technicalLossFailed") })
+  });
+
   // `result_loser_choice` is the one rotation whose next round cannot open
   // without a human naming its opener. When the losing captain is unreachable
   // the room has nothing to click, so the organizer names it for them.
@@ -133,14 +241,6 @@ export function PregameAdminControls({
     electMutation.isPending ||
     submitMutation.isPending ||
     reopenMutation.isPending;
-  // "101, 102" -> the submission payload. A blind step is the one place an
-  // organizer has to name several items at once, and there is no tile-by-tile
-  // path for a side they are not.
-  const draftItems: PickBanSubmissionItem[] = draftInput
-    .split(/[,\s]+/)
-    .map((token) => Number(token))
-    .filter((itemId) => Number.isInteger(itemId) && itemId > 0)
-    .map((itemId) => ({ item_id: itemId, target_player_id: null }));
   // Only a settled position can be corrected: `planned`/`awaiting_result` have
   // no accepted score to overwrite, and a captain claim is the normal path
   // there. A dispute is here because it is the ONLY way one ever clears.
@@ -166,7 +266,12 @@ export function PregameAdminControls({
                 { value: "away", label: t("side.away") }
               ]}
               value={side}
-              onChange={(next) => setOverride({ step: step?.index ?? null, side: next })}
+              onChange={(next) => {
+                setOverride({ step: step?.index ?? null, side: next });
+                // The draft so far was built for the other side: on a targeted
+                // step its players belong to the wrong roster entirely.
+                blind?.clear();
+              }}
             />
             <div className="flex flex-col gap-1">
               <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
@@ -176,17 +281,50 @@ export function PregameAdminControls({
             </div>
             {step?.blind ? (
               <>
+                {step.target != null ? (
+                  <ChoiceGroup
+                    label={t("admin.submitTargetLabel")}
+                    options={targetRoster.map((player) => ({
+                      value: String(player.player_id),
+                      label: player.name
+                    }))}
+                    value={String(blind?.targetPlayerId ?? "")}
+                    onChange={(value) => blind?.setTargetPlayerId(Number(value))}
+                  />
+                ) : null}
                 <div className="flex flex-col gap-1">
                   <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
                     {t("admin.submitLabel")}
                   </span>
-                  <Input
-                    className="w-48"
-                    aria-label={t("admin.submitLabel")}
-                    placeholder={t("admin.submitPlaceholder")}
-                    value={draftInput}
-                    onChange={(event) => setDraftInput(event.target.value)}
-                  />
+                  {blind != null && blind.items.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {blind.items.map((item, index) => (
+                        <Button
+                          key={`${item.item_id}:${item.target_player_id ?? ""}`}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          aria-label={t("admin.submitRemove", { item: itemName(item.item_id) })}
+                          onClick={() => blind.removeAt(index)}
+                        >
+                          {item.target_player_id != null
+                            ? `${itemName(item.item_id)} → ${
+                                targetRoster.find(
+                                  (player) => player.player_id === item.target_player_id
+                                )?.name ?? `#${item.target_player_id}`
+                              }`
+                            : itemName(item.item_id)}
+                          <span aria-hidden className="ml-2">
+                            ×
+                          </span>
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="max-w-64 text-xs text-[color:var(--aqt-fg-muted)]">
+                      {t("admin.submitHint")}
+                    </span>
+                  )}
                 </div>
                 <label className="flex items-center gap-2 pb-1.5 text-xs">
                   <Checkbox
@@ -197,10 +335,11 @@ export function PregameAdminControls({
                 </label>
                 <Button
                   size="sm"
-                  disabled={draftItems.length === 0 || pending}
-                  onClick={() =>
-                    submitMutation.mutate({ side, items: draftItems, lock: lockSubmission })
-                  }
+                  disabled={blind == null || blind.items.length === 0 || pending}
+                  onClick={() => {
+                    if (blind == null) return;
+                    submitMutation.mutate({ side, items: blind.items, lock: lockSubmission });
+                  }}
                 >
                   {submitMutation.isPending ? <Spinner className="mr-2" /> : null}
                   {t("admin.submitConfirm")}
@@ -295,6 +434,161 @@ export function PregameAdminControls({
           }}
           pending={resetMutation.isPending}
           onConfirm={() => resetMutation.mutate()}
+        />
+      </div>
+
+      {/* Commands that act on the session (or the whole encounter) rather than
+          on one step — kept off the step row so an organizer never reaches for
+          "cancel" while aiming at "perform action". */}
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-[color:var(--aqt-amber)]/35 pt-3">
+        <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+          {t("admin.sessionLabel")}
+        </span>
+        {active ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pauseMutation.isPending}
+            onClick={() => pauseMutation.mutate(!paused)}
+          >
+            {pauseMutation.isPending ? (
+              <Spinner className="mr-2" />
+            ) : paused ? (
+              <Play className="mr-2 h-4 w-4" aria-hidden />
+            ) : (
+              <Pause className="mr-2 h-4 w-4" aria-hidden />
+            )}
+            {t(paused ? "admin.resume" : "admin.pause")}
+          </Button>
+        ) : null}
+        {/* Nothing to extend without an open step that runs on a clock. */}
+        {active && step?.timer_seconds != null ? (
+          <div className="flex items-center gap-1">
+            <Timer className="h-4 w-4 text-[color:var(--aqt-fg-faint)]" aria-hidden />
+            {EXTEND_CHOICES.map((seconds) => (
+              <Button
+                key={seconds}
+                size="sm"
+                variant="outline"
+                disabled={extendMutation.isPending}
+                onClick={() => extendMutation.mutate(seconds)}
+              >
+                {t("admin.extendBy", { seconds })}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        {state.session != null && state.session.status !== "cancelled" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-danger"
+            disabled={cancelMutation.isPending}
+            onClick={() => setCancelOpen(true)}
+          >
+            {cancelMutation.isPending ? (
+              <Spinner className="mr-2" />
+            ) : (
+              <Ban className="mr-2 h-4 w-4" aria-hidden />
+            )}
+            {t("admin.cancelSession")}
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          variant="destructive"
+          className="ml-auto"
+          disabled={technicalLossMutation.isPending}
+          onClick={() => setLossOpen(true)}
+        >
+          {technicalLossMutation.isPending ? <Spinner className="mr-2" /> : null}
+          {t("admin.technicalLoss")}
+        </Button>
+        <ConfirmDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          intent={{
+            title: t("admin.cancelConfirmTitle"),
+            description: (
+              <span className="flex flex-col gap-2">
+                <span>{t(kind === "hero" ? "admin.cancelHeroHint" : "admin.cancelMapHint")}</span>
+                <span>{t("admin.cancelUndoHint")}</span>
+                <Input
+                  aria-label={t("admin.cancelReason")}
+                  placeholder={t("admin.correctReasonPlaceholder")}
+                  value={cancelReason}
+                  onChange={(event) => setCancelReason(event.target.value)}
+                />
+              </span>
+            ),
+            confirmLabel: t("admin.cancelConfirmAction"),
+            tone: "danger"
+          }}
+          pending={cancelMutation.isPending}
+          confirmDisabled={cancelReason.trim() === ""}
+          onConfirm={() => cancelMutation.mutate()}
+        />
+        <ConfirmDialog
+          open={lossOpen}
+          onOpenChange={setLossOpen}
+          intent={{
+            title: t("admin.technicalLossTitle"),
+            description: (
+              <span className="flex flex-col gap-3">
+                <span>{t("admin.technicalLossHint")}</span>
+                <ChoiceGroup
+                  label={t("admin.technicalLossSide")}
+                  options={[
+                    { value: "home" as PickBanSide, label: sideNameOf("home") },
+                    { value: "away" as PickBanSide, label: sideNameOf("away") }
+                  ]}
+                  value={loserSide}
+                  onChange={(next) => {
+                    setLoserSide(next);
+                    // The default score is read off who forfeits, so a hand
+                    // edit made for the other side must not survive the switch.
+                    setLossScore(null);
+                  }}
+                />
+                <span className="flex items-end gap-2">
+                  <NumberInput
+                    min={0}
+                    integer
+                    className="w-16"
+                    aria-label={t("admin.correctScore", { team: sideNameOf("home") })}
+                    value={lossScoreShown.home}
+                    onValueChange={(value) =>
+                      setLossScore({ ...lossScoreShown, home: value ?? 0 })
+                    }
+                  />
+                  <NumberInput
+                    min={0}
+                    integer
+                    className="w-16"
+                    aria-label={t("admin.correctScore", { team: sideNameOf("away") })}
+                    value={lossScoreShown.away}
+                    onValueChange={(value) =>
+                      setLossScore({ ...lossScoreShown, away: value ?? 0 })
+                    }
+                  />
+                </span>
+                <Input
+                  aria-label={t("admin.technicalLossReason")}
+                  placeholder={t("admin.correctReasonPlaceholder")}
+                  value={lossReason}
+                  onChange={(event) => setLossReason(event.target.value)}
+                />
+              </span>
+            ),
+            confirmLabel: t("admin.technicalLossAction"),
+            tone: "danger"
+          }}
+          pending={technicalLossMutation.isPending}
+          confirmDisabled={
+            lossReason.trim() === "" ||
+            lossScoreShown[loserSide] >= lossScoreShown[loserSide === "home" ? "away" : "home"]
+          }
+          onConfirm={() => technicalLossMutation.mutate()}
         />
       </div>
 

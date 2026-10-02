@@ -496,6 +496,23 @@ DOCS: dict[str, dict] = {
         "summary": "Elect a round's opener for a side",
         "description": "Permission: workspace `match.result` on the encounter's workspace. Names who opens the round a `result_loser_choice` rotation is holding and appends it, on behalf of a losing captain who is unreachable; returns the new room state.",
     },
+    # ── bespoke: the room's emergency controls ───────────────────────────
+    "rpc.tournament.admin_pick_ban_pause": {
+        "summary": "Pause or resume a pick-ban session",
+        "description": "Permission: workspace `match.result` on the encounter's workspace. Freezes (`{kind, paused: true}`) or releases one kind's room and returns its state. A paused session has no deadline at all: the open step's timer stops, nothing auto-resolves, reveals or times out, and every CAPTAIN write (act, submit, dispute, undo, elect-opener) answers 409 `Pick-ban session is paused` while the admin overrides keep working. Resuming gives the step back exactly the time it had left; a step that opened during the pause gets its full timer. Idempotent, and 409 when no session of that kind exists or it is not active.",
+    },
+    "rpc.tournament.admin_pick_ban_extend": {
+        "summary": "Extend the open step's timer",
+        "description": "Permission: workspace `match.result` on the encounter's workspace. Adds `seconds` (10..3600) to the open step's clock by moving its start forward, and returns the room state. Allowed while paused. 409 when no session of that kind is active or the open step has no timer (an untimed or already settled step has nothing to extend).",
+    },
+    "rpc.tournament.admin_pick_ban_cancel": {
+        "summary": "Cancel a pick-ban session",
+        "description": "Permission: workspace `match.result` on the encounter's workspace. Retires one kind's session (body `{kind, reason}`) as CANCELLED and clears any pause, for a room whose veto cannot be played out. A cancelled HERO session simply stops opening rounds; a cancelled MAP session hands the series back to FREEPLAY — the maps it already settled keep their positions and every later one is named by the captains through `captain_select_game_map`. The way back is the session reset. 409 when no session of that kind exists or it is already cancelled.",
+    },
+    "rpc.tournament.admin_encounter_technical_loss": {
+        "summary": "Record a technical loss",
+        "description": "Permission: workspace `match.result` on the encounter's workspace. Ends the encounter against `loser_side` without playing it out, in one transaction: every live pick-ban session is cancelled, every position that is not already CONFIRMED is cancelled, and the result is confirmed (same shape `encounter_set_result` returns). Omit the score and it is derived — the winner takes `best_of // 2 + 1` wins or more if it already had them, the forfeiting side keeps the maps it really won, capped one short of winning (a Bo5 standing 2:0 for the side that forfeits is recorded 2:3). An explicit score must put the forfeiting side below its opponent (422). Same guards as the result route: 409 on a preview bracket's encounter, on a result a later stage was already seeded from, and on an already confirmed result (reopen it first). The reason is required and lands in both the admin audit and the room journal.",
+    },
     # ── bespoke: readiness override + the pre-game rooms board ────────────
     "rpc.tournament.admin_encounter_readiness_set": {
         "summary": "Force a side's captain readiness",
@@ -504,6 +521,10 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.admin_pregame_rooms": {
         "summary": "List pre-game rooms",
         "description": "Permission: workspace `match.read` on the tournament's workspace. The organizer's board of every pre-game room of a tournament: one row per non-FFA encounter that resolves to a pooled pick-ban config or already has a session, carrying readiness, the map and hero session summaries (open step, acting sides, deadline), the series' game counts, a single `phase` (`teams_unknown`/`readiness`/`map`/`hero`/`report`/`done`/`idle`) and the `attention` flags staff act on (`game_disputed`, `result_disputed`, `awaiting_choice`, `overdue`, `late_not_ready`). Strictly read-only, unlike the room's own state read: it never creates a session, opens a position or settles an expired step, and it answers the whole tournament in a constant number of queries. Rows are ordered stage, round, encounter id; preview-bracket encounters with no session are omitted.",
+    },
+    "rpc.tournament.admin_pregame_room_history": {
+        "summary": "Read a pre-game room's journal",
+        "description": "Permission: workspace `match.read` on the encounter's workspace. One room's whole story, newest first: the pre-game journal (readiness, session opened/reset/completed, rounds, every captain and organizer action, step reveals, timeouts, disputes, undo, map and series reports, pause/extend/cancel/technical loss) merged with the encounter's result audit (confirm, reopen, auto_confirm, auto_dispute, import, cascade_reset, game_confirm, game_correct, game_cancel). Each entry carries `id` (`room:<id>`/`result:<id>`), `at`, `origin`, `action`, `kind`, `source` (`captain`/`admin`/`system`), `side`, `actor_auth_user_id`, `actor_name` (null for machine actors), `reason` and an action-specific `data` object. Query `limit` is clamped to 1..500, default 200. The journal is keyed by ENCOUNTER, so resetting a session never erases what it did.",
     },
     # ── bespoke: admin correction of one series position's result ──────────
     "rpc.tournament.admin_game_result": {
@@ -537,8 +558,8 @@ DOCS: dict[str, dict] = {
         "description": "Permission: authenticated user who is a member of the target workspace (membership only — no resource grant is checked; superusers pass). Creates an ad-hoc pre-game room outside any tournament: the workspace's hidden scrims container (lazily), an isolating stage, that stage's map and optional hero pick-ban configs either copied from an existing tournament round or authored ad hoc, both teams and the encounter; returns the room with its share token. 409s when the caller's active-room cap is reached.",
     },
     "rpc.tournament.scrim_list_mine": {
-        "summary": "List my scrim rooms",
-        "description": "Permission: authenticated user who is a member of the queried workspace (membership only — no resource grant is checked). Returns the calling user's scrim rooms in a workspace, open and closed alike (scrim history is kept forever).",
+        "summary": "List scrim rooms",
+        "description": "Permission: authenticated user who is a member of the queried workspace (membership only — no resource grant is checked), plus workspace `match.result` when `scope=workspace`. Returns the calling user's scrim rooms in a workspace, open and closed alike (scrim history is kept forever); `scope=workspace` instead returns every room of the workspace so staff can find one they neither created nor play, same open-first ordering.",
     },
     "rpc.tournament.scrim_get": {
         "summary": "Get scrim room",
@@ -550,7 +571,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.scrim_close": {
         "summary": "Close scrim room",
-        "description": "Permission: self-service — the room's creator, a captain of either side, or a superuser (workspace membership alone is not enough). Closes a scrim room so it stops counting against its creator's active-room cap, leaving the encounter and its pick-ban history readable by the participants forever.",
+        "description": "Permission: self-service — the room's creator, a captain of either side, a superuser, or workspace staff holding `match.result` (plain workspace membership is not enough). Closes a scrim room so it stops counting against its creator's active-room cap, leaving the encounter and its pick-ban history readable by the participants forever. The same rule is surfaced per room as `can_close`.",
     },
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_progress": {

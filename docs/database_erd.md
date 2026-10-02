@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`bsplit02`** (97 revisions in `backend/migrations/versions/`).
+Alembic head: **`pgroom01`** (98 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1016,6 +1016,19 @@ erDiagram
         text reason "nullable"
         varchar(32) source
     }
+    TOURNAMENT_ENCOUNTER_ROOM_EVENT {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint encounter_id FK
+        varchar(8) kind "nullable"
+        varchar(64) action
+        varchar(16) source
+        varchar(8) side "nullable"
+        bigint actor_auth_user_id FK "nullable"
+        text reason "nullable"
+        json data
+    }
     TOURNAMENT_PICK_BAN_CONFIG {
         bigint id PK
         timestamptz created_at
@@ -1089,6 +1102,7 @@ erDiagram
         int undo_target_index "nullable"
         timestamptz started_at "nullable"
         timestamptz current_step_started_at "nullable"
+        timestamptz paused_at "nullable"
     }
     TOURNAMENT_PICK_BAN_SUBMISSION {
         bigint id PK
@@ -1332,6 +1346,7 @@ erDiagram
     }
 
     AUTH_USER |o--o{ TOURNAMENT_COMPUTATION_JOB : "requested_by_user_id"
+    AUTH_USER |o--o{ TOURNAMENT_ENCOUNTER_ROOM_EVENT : "actor_auth_user_id"
     AUTH_USER ||--o{ TOURNAMENT_SCRIM_ROOM : "created_by_auth_user_id"
     AUTH_USER ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : "auth_user_id"
     OVERWATCH_MAP |o--o{ TOURNAMENT_ENCOUNTER_GAME : "map_id"
@@ -1357,6 +1372,7 @@ erDiagram
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PARTICIPANT : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_READINESS : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : "encounter_id"
+    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_ROOM_EVENT : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_PICK_BAN_SESSION : "encounter_id"
     TOURNAMENT_ENCOUNTER ||--o| TOURNAMENT_SCRIM_ROOM : "encounter_id"
     TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT ||--o{ TOURNAMENT_ENCOUNTER_MAP_CODE : "report_id"

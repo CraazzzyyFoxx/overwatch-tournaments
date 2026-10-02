@@ -43,6 +43,7 @@ from .encounter import (
     EncounterParticipantRepository,
     EncounterReportFormRepository,
     EncounterResultAuditRepository,
+    EncounterRoomEventRepository,
     EncounterSavedViewRepository,
 )
 from .identity import (
@@ -227,6 +228,7 @@ __all__ = (
     "EncounterReportFormRepository",
     "EncounterRepository",
     "EncounterResultAuditRepository",
+    "EncounterRoomEventRepository",
     "EncounterSavedViewRepository",
     "FavoritePlayerRepository",
     "GamemodeRepository",

@@ -128,6 +128,7 @@ import {
   BracketTemplate,
   BracketTemplateRead,
   PregameRoomsRead,
+  PregameRoomHistoryRead,
 } from "@/types/admin.types";
 
 /**
@@ -1821,6 +1822,72 @@ class AdminService {
     data: { kind: PickBanKind; first_side: "home" | "away" }
   ): Promise<PickBanState> {
     const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-elect-opener`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /** The room's journal: its own events merged with the encounter's result
+   * audit, newest first. Read only while an organizer has the panel open. */
+  async getPregameRoomHistory(encounterId: number, limit = 200): Promise<PregameRoomHistoryRead> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/room-history`, {
+      query: { limit }
+    });
+    return response.json();
+  }
+
+  /** Hold / release the clock on a live session: a paused session has no
+   * deadline and refuses every captain write until it is resumed. */
+  async adminPickBanPause(
+    encounterId: number,
+    data: { kind: PickBanKind; paused: boolean }
+  ): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-pause`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /** Give the open timed step `seconds` more, for a captain who lost their
+   * connection mid-turn. Allowed while paused. */
+  async adminPickBanExtend(
+    encounterId: number,
+    data: { kind: PickBanKind; seconds: number }
+  ): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-extend`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /** Cancel a session for good: hero bans stop for the rest of the series, a
+   * cancelled map veto drops the series into freeplay. Undo = a reset. */
+  async adminPickBanCancel(
+    encounterId: number,
+    data: { kind: PickBanKind; reason: string }
+  ): Promise<PickBanState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/pick-ban-cancel`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
+  /** End the encounter against one side: every session cancelled, every
+   * unconfirmed game cancelled, the result set and confirmed in one go. */
+  async adminTechnicalLoss(
+    encounterId: number,
+    data: {
+      loser_side: "home" | "away";
+      home_score?: number;
+      away_score?: number;
+      reason: string;
+    }
+  ): Promise<EncounterResultRead> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/technical-loss`, {
       method: "POST",
       body: data
     });

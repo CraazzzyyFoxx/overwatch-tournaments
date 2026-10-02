@@ -41,6 +41,7 @@ from src.services.encounter.dispute_review import notify_dispute_review
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
+from src.services.encounter.room_journal import record_room_event
 
 
 class MapReportService:
@@ -133,6 +134,7 @@ class MapReportService:
         reporter_user_id: int | None,
         home_score: int,
         away_score: int,
+        actor_auth_user_id: int | None = None,
     ) -> dict:
         """Upsert ``side``'s claim for one game; reconcile if both sides have now
         claimed. Returns ``{"disputed": bool, "resolved": bool, "game": dict}``.
@@ -187,10 +189,29 @@ class MapReportService:
                 ),
             )
             reports.append(row)
+            changed = True
         else:
+            # A captain re-sending the claim they already filed changes nothing;
+            # the journal records the claim, not the click.
+            changed = (row.home_score, row.away_score) != (home_score, away_score)
             row.reporter_user_id = reporter_user_id
             row.home_score = home_score
             row.away_score = away_score
+        if changed:
+            await record_room_event(
+                session,
+                encounter.id,
+                action="map_reported",
+                source="captain",
+                side=side,
+                actor_auth_user_id=actor_auth_user_id,
+                data={
+                    "position": game.position,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "game_id": game.id,
+                },
+            )
         # Unconditional, on both branches below: the opponent's tile only flips
         # from "not reported" to "sealed" on this signal, and the FIRST
         # captain's claim -- the one that resolves nothing -- is exactly the
@@ -210,6 +231,16 @@ class MapReportService:
 
         if reconciliation.resolved is None:
             if reconciliation.disputed:
+                # Only on the transition: a position that is already disputed and
+                # gets contradicted again did not newly become disputed.
+                if game.state != EncounterGameState.DISPUTED:
+                    await record_room_event(
+                        session,
+                        encounter.id,
+                        action="map_disputed",
+                        source="system",
+                        data={"position": game.position, "game_id": game.id},
+                    )
                 game.state = EncounterGameState.DISPUTED
                 await self._notify_dispute(session, encounter, game=game, reporter_auth_user_id=reporter_user_id)
             await session.commit()

@@ -61,6 +61,7 @@ from src.services.encounter.games import EncounterGameService, encounter_game_se
 # the rows; a second copy here had already drifted into a private alias.
 from src.services.encounter.pick_ban_config import CONFIG_POOL_LOAD
 from src.services.encounter.realtime_commit import emit_pick_ban_update
+from src.services.encounter.room_journal import record_room_event
 from src.services.encounter.veto_session import (
     REASON_BRACKET_PREVIEW,
     REASON_NOT_CONFIGURED,
@@ -157,6 +158,32 @@ def parse_ruleset(data: object) -> pbr.Ruleset:
 def resolved_steps(pick_ban: PickBanSession) -> list[pbr.ResolvedStep]:
     """``resolved_sequence_json`` as engine objects."""
     return pbr.resolved_steps_from_json(list(pick_ban.resolved_sequence_json or []))
+
+
+def assert_not_paused(pick_ban: PickBanSession) -> None:
+    """Refuse a CAPTAIN write on a room an organizer has frozen.
+
+    Lives here next to the session row every write path already loads, so the
+    three of them (act/submit/dispute, undo, elect-opener) share one answer and
+    one message instead of each deciding what a pause means.
+    """
+    if pick_ban.paused_at is not None:
+        raise HTTPException(status_code=409, detail="Pick-ban session is paused")
+
+
+def step_clock(pick_ban: PickBanSession) -> datetime:
+    """The instant a step that opens NOW starts its timer.
+
+    ``datetime.now`` on a running room, ``paused_at`` on a frozen one. Resume
+    moves ``current_step_started_at`` forward by the whole pause, so a step that
+    opened during it must start at the pause's beginning to come back with its
+    full timer -- and an extension granted while frozen, which also moves that
+    column, survives the resume instead of reading as a step that opened late.
+    """
+    if pick_ban.paused_at is None:
+        return datetime.now(UTC)
+    paused = pick_ban.paused_at
+    return paused if paused.tzinfo is not None else paused.replace(tzinfo=UTC)
 
 
 async def load_item_groups(session: AsyncSession, kind: PickBanKind, item_ids: list[int]) -> dict[int, str | None]:
@@ -415,10 +442,21 @@ class PickBanSessionService:
         return readiness["home"] and readiness["away"]
 
     async def mark_ready(
-        self, session: AsyncSession, encounter: Encounter, side: str, user_id: int | None
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        side: str,
+        user_id: int | None,
+        *,
+        actor_auth_user_id: int | None = None,
+        source: str = "captain",
     ) -> dict[str, bool]:
         """Idempotently record ``side``'s captain confirming readiness. Returns
         the resulting ``{"home", "away"}`` readiness map.
+
+        ``user_id`` is the PLAYER identity stored on the row;
+        ``actor_auth_user_id``/``source`` name whoever caused it for the journal
+        -- an organizer forcing readiness has an auth account but no player one.
 
         The INSERT signals the room before it commits. It has to: until both
         sides are ready no session exists, and the room polls nothing while that
@@ -430,11 +468,21 @@ class PickBanSessionService:
         existing = await self.readiness_repo.get_for_side(session, encounter_id=encounter.id, side=side)
         if existing is None:
             session.add(EncounterReadiness(encounter_id=encounter.id, side=side, ready_user_id=user_id))
+            await record_room_event(
+                session,
+                encounter.id,
+                action="ready_marked",
+                source=source,
+                side=side,
+                actor_auth_user_id=actor_auth_user_id,
+            )
             await emit_pick_ban_update(session, encounter.id, kind="map")
             await session.commit()
         return await self.get_readiness(session, encounter.id)
 
-    async def clear_ready(self, session: AsyncSession, encounter: Encounter, side: str) -> dict[str, bool]:
+    async def clear_ready(
+        self, session: AsyncSession, encounter: Encounter, side: str, *, actor_auth_user_id: int | None = None
+    ) -> dict[str, bool]:
         """Take ``side``'s readiness back -- the organizer's override of a
         captain who confirmed too early.
 
@@ -450,6 +498,15 @@ class PickBanSessionService:
                     detail="Pick-ban session has already started; reset it instead of clearing readiness",
                 )
         await self.readiness_repo.delete_for_side(session, encounter_id=encounter.id, side=side)
+        # Always ``admin``: a captain has no way to take their own readiness back.
+        await record_room_event(
+            session,
+            encounter.id,
+            action="ready_cleared",
+            source="admin",
+            side=side,
+            actor_auth_user_id=actor_auth_user_id,
+        )
         await emit_pick_ban_update(session, encounter.id, kind="map")
         await session.commit()
         return await self.get_readiness(session, encounter.id)
@@ -458,7 +515,13 @@ class PickBanSessionService:
         """Clear both sides' readiness -- called whenever either team assignment
         changes (a confirmation made against one opponent must not carry over to
         a different one)."""
+        # Read first so the journal records a reset that actually took something
+        # back: the team-change hook runs on every bracket propagation, and most
+        # of them touch an encounter nobody has confirmed readiness for yet.
+        had_readiness = bool(await self.readiness_repo.list_sides(session, encounter_id))
         await self.readiness_repo.delete_for_encounter(session, encounter_id)
+        if had_readiness:
+            await record_room_event(session, encounter_id, action="readiness_reset", source="system")
 
     async def unavailable_reason(self, session: AsyncSession, encounter: Encounter, kind: PickBanKind) -> str:
         """Why ``ensure_pick_ban_session`` returned ``None`` for this
@@ -626,6 +689,20 @@ class PickBanSessionService:
                 )
             )
 
+        await record_room_event(
+            session,
+            encounter.id,
+            action="session_opened",
+            source="system",
+            kind=kind.value,
+            data={
+                "first_side": str(getattr(seeds.first_side, "value", seeds.first_side)),
+                "seed_source": str(getattr(seeds.seed_source, "value", seeds.seed_source)),
+                "home_seed": seeds.home_seed,
+                "away_seed": seeds.away_seed,
+            },
+        )
+
         await emit_pick_ban_update(session, encounter.id, kind=kind.value)
         if commit:
             try:
@@ -644,6 +721,8 @@ class PickBanSessionService:
         kind: PickBanKind,
         *,
         commit: bool = True,
+        actor_auth_user_id: int | None = None,
+        source: str = "admin",
     ) -> PickBanSession | None:
         """Hard reset: delete this encounter's `kind`-scoped pick-ban session and
         recreate round 1 from scratch. Its entries AND its submission log -- the
@@ -654,7 +733,10 @@ class PickBanSessionService:
         A MAP reset also retires the series' live games: they were opened by the
         picks this is about to scrap, so leaving them would let a position of the
         OLD veto keep collecting claims (and counting into the live score) under
-        a pool that no longer names it."""
+        a pool that no longer names it.
+
+        ``source`` defaults to the organizer who normally asks for this; the
+        team-change hook passes ``system``, having no human behind it."""
         if kind == PickBanKind.MAP:
             await self.games.cancel_games(
                 session,
@@ -666,6 +748,16 @@ class PickBanSessionService:
         existing = await self.get_pick_ban_session(session, encounter.id, kind)
         if existing is not None:
             await self.session_repo.delete_by_id(session, existing.id)
+            # Only when there WAS a session: the journal records what was
+            # scrapped, and resetting a room that never opened scrapped nothing.
+            await record_room_event(
+                session,
+                encounter.id,
+                action="session_reset",
+                source=source,
+                kind=kind.value,
+                actor_auth_user_id=actor_auth_user_id,
+            )
         await session.flush()
         # Unconditional even if the re-ensure below no-ops: the room just lost its
         # session (same reasoning as veto_session.reset_veto_session).
@@ -703,7 +795,7 @@ class PickBanSessionService:
         games = await self.games.list_games(session, encounter.id)
         if any(game.state == EncounterGameState.CONFIRMED for game in games):
             return
-        await self.reset_pick_ban_session(session, encounter, kind, commit=False)
+        await self.reset_pick_ban_session(session, encounter, kind, commit=False, source="system")
 
     async def sync_all_pick_ban_sessions_after_team_change(self, session: AsyncSession, encounter: Encounter) -> None:
         """``sync_pick_ban_session_after_team_change`` for every kind, in the
@@ -920,7 +1012,7 @@ class PickBanSessionService:
         pick_ban.resolved_sequence_json = [*pick_ban.resolved_sequence_json, *(step.to_json() for step in new_steps)]
         pick_ban.awaiting_choice = False
         pick_ban.pending_loser_side = None
-        pick_ban.current_step_started_at = datetime.now(UTC)
+        pick_ban.current_step_started_at = step_clock(pick_ban)
         if pick_ban.status == MapVetoSessionStatus.COMPLETED and new_steps:
             pick_ban.status = MapVetoSessionStatus.ACTIVE
 
@@ -948,6 +1040,15 @@ class PickBanSessionService:
                 )
             )
 
+        await record_room_event(
+            session,
+            pick_ban.encounter_id,
+            action="round_opened",
+            source="system",
+            kind=str(pick_ban.kind),
+            data={"round": next_round, "first_side": str(getattr(opener, "value", opener))},
+        )
+
         await emit_pick_ban_update(session, pick_ban.encounter_id, kind=str(pick_ban.kind))
         if commit:
             await session.commit()
@@ -962,6 +1063,7 @@ class PickBanSessionService:
         *,
         first_side: str,
         acting_side: str | None,
+        actor_auth_user_id: int | None = None,
     ) -> PickBanSession:
         """Resolve an ``awaiting_choice`` round by naming who opens it, then append
         it (``advance_to_next_round`` with the choice supplied).
@@ -974,10 +1076,15 @@ class PickBanSessionService:
         """
         if not pick_ban.awaiting_choice:
             raise HTTPException(status_code=400, detail="No round is awaiting an opener choice")
-        # Only the loser of the round that triggered the choice may elect --
-        # otherwise either captain could dictate who opens the next round.
-        if acting_side is not None and acting_side != pick_ban.pending_loser_side:
-            raise HTTPException(status_code=403, detail="Only the losing captain may choose who opens the next round")
+        if acting_side is not None:
+            # A pause freezes the captains, never the organizer override below.
+            assert_not_paused(pick_ban)
+            # Only the loser of the round that triggered the choice may elect --
+            # otherwise either captain could dictate who opens the next round.
+            if acting_side != pick_ban.pending_loser_side:
+                raise HTTPException(
+                    status_code=403, detail="Only the losing captain may choose who opens the next round"
+                )
         # The side that did NOT lose is the outcome this rotation was suspended
         # on; a draw never suspends it (`resolve_round_opener` falls back).
         outcome = (
@@ -985,6 +1092,17 @@ class PickBanSessionService:
         )
         choice = MapPickSide(first_side)
         pick_ban.first_side = choice
+        await record_room_event(
+            session,
+            pick_ban.encounter_id,
+            action="opener_elected",
+            # ``acting_side is None`` IS the admin override -- see the docstring.
+            source="captain" if acting_side is not None else "admin",
+            kind=str(pick_ban.kind),
+            side=acting_side,
+            actor_auth_user_id=actor_auth_user_id,
+            data={"round": (await self.highest_round_of(session, pick_ban) or 0) + 1, "first_side": first_side},
+        )
         return await self.advance_to_next_round(
             session,
             pick_ban,
@@ -1046,7 +1164,15 @@ class PickBanSessionService:
             return
         confirmed = score.played
         map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
-        if map_config is not None and self.has_pool(map_config):
+        map_session = await self.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
+        if (
+            map_config is not None
+            and self.has_pool(map_config)
+            # A cancelled map session names no further maps, so its settled count
+            # would freeze the hero rounds for the rest of a series the captains
+            # now pick maps for themselves.
+            and (map_session is None or map_session.status != MapVetoSessionStatus.CANCELLED)
+        ):
             target = min(await self.settled_map_rounds(session, encounter.id), confirmed + 1, int(encounter.best_of))
         else:
             target = min(confirmed + 1, int(encounter.best_of))

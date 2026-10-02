@@ -34,6 +34,7 @@ from src.schemas import pregame_rooms as pregame_rooms_schemas
 from src.schemas import registration as reg_schemas
 from src.schemas import registration_form as reg_form_schemas
 from src.schemas import registration_team as reg_team_schemas
+from src.services.encounter import room_journal
 
 # Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
 _ENTITIES = QueryParam("entities", array=True)
@@ -467,10 +468,31 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.admin_pick_ban_rules_preview": Op(request=pick_ban_admin.PickBanRulesPreviewInput),
     "rpc.tournament.admin_pick_ban_act": Op(request=pick_ban_admin.PickBanAdminAct),
     "rpc.tournament.admin_pick_ban_submit": Op(request=pick_ban_admin.PickBanAdminSubmit),
+    # The room's emergency controls: the three pick-ban ones answer the room
+    # state dict, the technical loss answers the settled result model.
+    "rpc.tournament.admin_pick_ban_pause": Op(request=pick_ban_admin.PickBanAdminPause),
+    "rpc.tournament.admin_pick_ban_extend": Op(request=pick_ban_admin.PickBanAdminExtend),
+    "rpc.tournament.admin_pick_ban_cancel": Op(request=pick_ban_admin.PickBanAdminCancel),
+    "rpc.tournament.admin_encounter_technical_loss": Op(
+        request=pick_ban_admin.AdminTechnicalLossInput, response=schemas.EncounterResultRead
+    ),
     # The readiness override answers `{readiness}`, so only its body is mapped;
     # the rooms board is the one organizer pick-ban read with a real model.
     "rpc.tournament.admin_encounter_readiness_set": Op(request=pick_ban_admin.AdminReadinessSet),
     "rpc.tournament.admin_pregame_rooms": Op(response=pregame_rooms_schemas.PregameRoomsRead),
+    "rpc.tournament.admin_pregame_room_history": Op(
+        response=pregame_rooms_schemas.PregameRoomHistoryRead,
+        query_params=(
+            QueryParam(
+                "limit",
+                "integer",
+                description=(
+                    f"Page size, clamped to 1..{room_journal.HISTORY_LIMIT_MAX}, "
+                    f"default {room_journal.HISTORY_LIMIT_DEFAULT}."
+                ),
+            ),
+        ),
+    ),
     # ── pre-game room chat (shared chat service; same shapes in balancer) ──
     # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
     # documented in DOCS only — this module maps whole models.

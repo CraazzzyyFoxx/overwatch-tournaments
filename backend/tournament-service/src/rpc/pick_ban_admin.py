@@ -38,10 +38,11 @@ from shared.services.audit import record_admin_audit
 from shared.services.bracket.usability import assert_encounter_live
 from src import models
 from src.core import auth
-from src.rpc._helpers import _dump, _identity, _path_int, _payload, _require_id, _run
+from src.rpc import admin_misc
+from src.rpc._helpers import _dump, _identity, _path_int, _payload, _q1, _require_id, _run
 from src.schemas import captain as captain_schemas
 from src.services.encounter import pick_ban_action as pick_ban_action
-from src.services.encounter import pick_ban_config
+from src.services.encounter import pick_ban_config, room_control, room_journal
 from src.services.encounter import pick_ban_session as pick_ban_session
 from src.services.encounter.game_correction import game_correction_service
 from src.services.encounter.pregame_rooms import pregame_rooms_service
@@ -117,6 +118,41 @@ class PickBanAdminElectOpener(BaseModel):
 
     kind: PickBanKind
     first_side: Literal["home", "away"]
+
+
+class PickBanAdminPause(BaseModel):
+    """Body for the pause route: freeze (or unfreeze) one kind's clock while the
+    organizer sorts out whatever stopped the room."""
+
+    kind: PickBanKind
+    paused: bool
+
+
+class PickBanAdminExtend(BaseModel):
+    """Body for the extend route: more time on the open step's timer. Bounded at
+    an hour -- an organizer who needs longer than that wants the pause."""
+
+    kind: PickBanKind
+    seconds: int = Field(ge=10, le=3600)
+
+
+class PickBanAdminCancel(BaseModel):
+    """Body for the session-cancel route: retire a session the series cannot play
+    out, with the reason that goes into the room journal."""
+
+    kind: PickBanKind
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AdminTechnicalLossInput(BaseModel):
+    """Body for the technical-loss route: which side forfeits, optionally the
+    exact score to record it as (omitted = the default forfeit score), and the
+    reason -- a walkover is never anonymous."""
+
+    loser_side: Literal["home", "away"]
+    home_score: int | None = Field(default=None, ge=0)
+    away_score: int | None = Field(default=None, ge=0)
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class AdminReadinessSet(BaseModel):
@@ -388,7 +424,9 @@ def register(broker: Any, logger: Any) -> None:
             # reset_pick_ban_session commits internally; the response is the
             # same state shape the room polls (viewer_side stays null for
             # admins).
-            await pick_ban_session.pick_ban_session_service.reset_pick_ban_session(session, encounter, body.kind)
+            await pick_ban_session.pick_ban_session_service.reset_pick_ban_session(
+                session, encounter, body.kind, actor_auth_user_id=user.id
+            )
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
                 session, encounter_id, body.kind, viewer_side=None
             )
@@ -432,6 +470,7 @@ def register(broker: Any, logger: Any) -> None:
                 action=body.action,
                 target_player_id=body.target_player_id,
                 viewer_side=None,
+                actor_auth_user_id=user.id,
             )
 
         return await _run(logger, op)
@@ -467,6 +506,7 @@ def register(broker: Any, logger: Any) -> None:
                 items=[item.model_dump() for item in body.items],
                 lock=body.lock,
                 viewer_side=None,
+                actor_auth_user_id=user.id,
             )
 
         return await _run(logger, op)
@@ -489,7 +529,9 @@ def register(broker: Any, logger: Any) -> None:
                 entity_id=encounter_id,
                 after={"kind": body.kind},
             )
-            return await pick_ban_action.pick_ban_action_service.admin_reopen_step(session, encounter_id, body.kind)
+            return await pick_ban_action.pick_ban_action_service.admin_reopen_step(
+                session, encounter_id, body.kind, actor_auth_user_id=user.id
+            )
 
         return await _run(logger, op)
 
@@ -521,11 +563,128 @@ def register(broker: Any, logger: Any) -> None:
             # they are not playing in. Commits inside `advance_to_next_round`;
             # the response is the state shape the room polls.
             await pick_ban_session.pick_ban_session_service.elect_round_opener(
-                session, pick_ban, first_side=body.first_side, acting_side=None
+                session, pick_ban, first_side=body.first_side, acting_side=None, actor_auth_user_id=user.id
             )
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
                 session, encounter_id, body.kind, viewer_side=None
             )
+
+        return await _run(logger, op)
+
+    # ── bespoke: the room's emergency controls (pause / extend / cancel) ───
+    # One step above the overrides: those play the room FOR a captain, these
+    # change what the room is allowed to do at all. Same `match.result` gate,
+    # and each one journals the reason an organizer gave for it.
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_pause")
+    async def _admin_pick_ban_pause(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "result")
+            body = PickBanAdminPause.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="pick_ban.pause",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter_id,
+                after={"kind": body.kind, "paused": body.paused},
+            )
+            return await room_control.set_paused(
+                session, encounter_id, body.kind, paused=body.paused, actor_auth_user_id=user.id
+            )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_extend")
+    async def _admin_pick_ban_extend(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "result")
+            body = PickBanAdminExtend.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="pick_ban.extend",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter_id,
+                after={"kind": body.kind, "seconds": body.seconds},
+            )
+            return await room_control.extend_step_timer(
+                session, encounter_id, body.kind, seconds=body.seconds, actor_auth_user_id=user.id
+            )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pick_ban_cancel")
+    async def _admin_pick_ban_cancel(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "result")
+            body = PickBanAdminCancel.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="pick_ban.session_cancel",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter_id,
+                after={"kind": body.kind, "reason": body.reason},
+            )
+            return await room_control.cancel_session(
+                session, encounter_id, body.kind, reason=body.reason, actor_auth_user_id=user.id
+            )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_encounter_technical_loss")
+    async def _admin_encounter_technical_loss(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "result")
+            # A forfeit IS a result, so it answers to the same two gates
+            # ``encounter_set_result`` does: a preview bracket is look-only, and a
+            # result a later stage was seeded from is not rewritten behind its back.
+            await admin_misc._assert_bracket_live(session, encounter_id)
+            body = AdminTechnicalLossInput.model_validate(_payload(data))
+            encounter = await _load_encounter(session, encounter_id)
+            await record_admin_audit(
+                session,
+                action="encounter.technical_loss",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter.id,
+                after=body.model_dump(mode="json"),
+            )
+            await admin_misc._assert_source_correction_allowed(session, encounter_id)
+            encounter = await room_control.technical_loss(
+                session,
+                encounter,
+                loser_side=body.loser_side,
+                home_score=body.home_score,
+                away_score=body.away_score,
+                reason=body.reason,
+                actor_auth_user_id=user.id,
+                # The result audit's actor lives in PLAYER space, not auth space
+                # (admin_misc._actor_player_id explains the translation).
+                actor_player_id=await admin_misc._actor_player_id(session, user),
+            )
+            return admin_misc._serialize_result(encounter)
 
         return await _run(logger, op)
 
@@ -601,9 +760,11 @@ def register(broker: Any, logger: Any) -> None:
             # audit entry above is what names who forced it. Both calls commit
             # internally and signal the room.
             if body.ready:
-                readiness = await service.mark_ready(session, encounter, body.side, None)
+                readiness = await service.mark_ready(
+                    session, encounter, body.side, None, actor_auth_user_id=user.id, source="admin"
+                )
             else:
-                readiness = await service.clear_ready(session, encounter, body.side)
+                readiness = await service.clear_ready(session, encounter, body.side, actor_auth_user_id=user.id)
             return {"readiness": readiness}
 
         return await _run(logger, op)
@@ -618,5 +779,24 @@ def register(broker: Any, logger: Any) -> None:
             # staff member with match read access may not already open.
             ensure_workspace_permission(user, ws_id, "match", "read")
             return _dump(await pregame_rooms_service.list_rooms(session, tournament_id))
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.admin_pregame_room_history")
+    async def _admin_pregame_room_history(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            # ``read`` like the rooms board above: the journal only replays what
+            # already happened in a room this staff member may open.
+            ensure_workspace_permission(user, ws_id, "match", "read")
+            return _dump(
+                await room_journal.room_history_service.list_history(
+                    session,
+                    encounter_id,
+                    limit=_q1(data, "limit", int, room_journal.HISTORY_LIMIT_DEFAULT),
+                )
+            )
 
         return await _run(logger, op)

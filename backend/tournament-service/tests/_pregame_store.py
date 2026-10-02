@@ -34,6 +34,7 @@ from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.models.tournament.encounter_report import EncounterMapReport  # noqa: E402
 from shared.models.tournament.encounter_result_audit import EncounterResultAudit  # noqa: E402
+from shared.models.tournament.encounter_room_event import EncounterRoomEvent  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
     EncounterReadiness,
     PickBanConfig,
@@ -55,6 +56,7 @@ KNOWN_MODELS = (
     EncounterMapReport,
     EncounterGame,
     EncounterResultAudit,
+    EncounterRoomEvent,
     Match,
     Encounter,
     Player,

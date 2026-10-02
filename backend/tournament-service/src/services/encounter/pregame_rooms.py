@@ -36,6 +36,7 @@ from shared.core.enums import (
     EncounterResultStatus,
     EncounterStatus,
     MapPoolEntryStatus,
+    MapVetoSessionStatus,
     PickBanKind,
 )
 from shared.domain import pick_ban_rules as pbr
@@ -327,7 +328,10 @@ class PregameRoomsService:
             )
         rows = submissions.get(pick_ban.id, [])
         steps = resolved_steps(pick_ban)
-        step = pbr.current_step(steps, rows)
+        # A cancelled session's cursor is meaningless -- the step it stopped on
+        # is never going to be taken -- so the board shows it as open nothing.
+        cancelled = str(pick_ban.status) == MapVetoSessionStatus.CANCELLED
+        step = pbr.current_step(steps, rows) if not cancelled else None
         acting: list[str] = []
         if step is not None:
             progress = pbr.step_progress(step, rows)
@@ -347,6 +351,7 @@ class PregameRoomsService:
             step_started_at=pick_ban.current_step_started_at,
             deadline_at=PickBanActionService.step_deadline(pick_ban, step) if step is not None else None,
             awaiting_choice=bool(pick_ban.awaiting_choice),
+            paused_at=pick_ban.paused_at,
         )
 
 

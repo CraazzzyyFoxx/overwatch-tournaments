@@ -41,28 +41,33 @@ function ReadinessCell({ room }: Readonly<{ room: PregameRoomRow }>) {
 
 /**
  * The step the room is holding, in the words the room itself uses: which round
- * of the series, how far through its order, what the acting side has to do.
+ * of the series, how far through its order, what the acting side has to do —
+ * or, when an organizer stepped in, that the session is paused or cancelled.
  */
 function StepCell({ room }: Readonly<{ room: PregameRoomRow }>) {
   const step = currentStep(room);
   if (!step) return <span className="text-muted-foreground">—</span>;
   const { kind, summary } = step;
+  const cancelled = summary.status === "cancelled";
 
   return (
     <div className="min-w-0 text-sm">
-      <p className="truncate">
+      <p className="flex min-w-0 items-center gap-1.5 truncate">
         <span className="text-muted-foreground">{kind === "map" ? "Maps" : "Heroes"}</span>
         {summary.current_round != null ? (
-          <span className="text-muted-foreground"> · R{summary.current_round}</span>
+          <span className="text-muted-foreground">· R{summary.current_round}</span>
         ) : null}
         {summary.step_index != null ? (
           <span className="tabular-nums text-muted-foreground">
-            {" "}
             · {summary.step_index + 1}/{summary.step_count}
           </span>
         ) : null}
+        {cancelled ? <StatusPill tone="danger">Cancelled</StatusPill> : null}
+        {summary.paused_at != null ? <StatusPill tone="warning">Paused</StatusPill> : null}
       </p>
-      {summary.awaiting_choice ? (
+      {cancelled ? (
+        <p className="truncate text-xs text-muted-foreground">Cancelled by an organizer</p>
+      ) : summary.awaiting_choice ? (
         <p className="truncate text-xs text-warning">Waiting on who opens the round</p>
       ) : (
         <p className="truncate text-xs text-muted-foreground">

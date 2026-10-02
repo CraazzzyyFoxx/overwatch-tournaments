@@ -27,6 +27,8 @@ export interface PregameLoopState {
   /** Something WOULD open for this kind once teams/rules/readiness allow it. */
   mapApplies: boolean;
   heroApplies: boolean;
+  /** Kinds an organizer cancelled — no phase left, and the room says so. */
+  cancelledKinds: PickBanKind[];
   /** Neither kind has a rule set: there is no room to show at all. */
   unconfigured: boolean;
   waitingOnReadiness: boolean;
@@ -61,8 +63,16 @@ export function derivePregameLoop(
   heroState: PickBanState
 ): PregameLoopState {
   const statesByKind: Record<PickBanKind, PickBanState> = { map: mapState, hero: heroState };
+  // A cancelled session is over for good (the undo is a reset, which makes a
+  // new one), so the kind stops applying: no hero rounds for the rest of the
+  // series, and a cancelled veto leaves the series in freeplay — exactly the
+  // room that never had a veto at all.
+  const cancelledKinds = (["map", "hero"] as PickBanKind[]).filter(
+    (kind) => statesByKind[kind].session?.status === "cancelled"
+  );
   const applicable = (kind: PickBanKind) =>
-    statesByKind[kind].reason !== "not_configured" || statesByKind[kind].session != null;
+    !cancelledKinds.includes(kind) &&
+    (statesByKind[kind].reason !== "not_configured" || statesByKind[kind].session != null);
   const mapApplies = applicable("map");
   const heroApplies = applicable("hero");
 
@@ -133,7 +143,11 @@ export function derivePregameLoop(
     statesByKind,
     mapApplies,
     heroApplies,
-    unconfigured: !mapApplies && !heroApplies,
+    cancelledKinds,
+    // A cancelled session is not an unconfigured room: the room existed, an
+    // organizer ended it, and the screen must say that rather than "nothing
+    // is set up here".
+    unconfigured: !mapApplies && !heroApplies && cancelledKinds.length === 0,
     waitingOnReadiness,
     seriesMaps,
     games,

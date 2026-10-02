@@ -9,6 +9,7 @@ from .encounter_game_result import *
 from .encounter_link import *
 from .encounter_participant import *
 from .encounter_report import *
+from .encounter_room_event import *
 from .encounter_result_audit import *
 from .link import *
 from .pick_ban import *

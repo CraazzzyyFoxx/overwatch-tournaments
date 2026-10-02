@@ -11,8 +11,10 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { PickBanKind, PickBanState } from "@/types/tournament.types";
 import type { PickBanSide } from "@/components/pick-ban/pick-ban-model";
+import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 
 import { PregameAdminControls } from "./PregameAdminControls";
+import { PregameRoomHistory } from "./PregameRoomHistory";
 import type { PickBanAdminSlot } from "./PickBanPanel";
 
 const KINDS: readonly PickBanKind[] = ["map", "hero"];
@@ -37,6 +39,9 @@ export function PregameAdminPanel({
   statesByKind,
   activeKind,
   sideNameOf,
+  itemsByKind,
+  bestOf,
+  seriesWins,
   onMutated,
   grid = null
 }: Readonly<{
@@ -45,6 +50,12 @@ export function PregameAdminPanel({
   /** The kind the room itself is on, i.e. the tab to open by default. */
   activeKind: PickBanKind;
   sideNameOf: (side: PickBanSide) => string;
+  /** Map and hero catalogs, so the history can name what was banned. */
+  itemsByKind: Record<PickBanKind, Record<number, PickBanItemLike | undefined>>;
+  /** Series length and the wins already confirmed — the technical loss's
+   * default score is read off them, and neither is in a pick-ban state. */
+  bestOf: number;
+  seriesWins: { home: number; away: number } | null;
   onMutated: () => void;
   /** The board on screen, when one is: its selection and its own reset. */
   grid?: PickBanAdminSlot | null;
@@ -70,77 +81,98 @@ export function PregameAdminPanel({
     onError: (error) => notify.apiError(error, { title: t("admin.readinessFailed") })
   });
 
+  const history = (
+    <PregameRoomHistory
+      encounterId={encounterId}
+      sideNameOf={sideNameOf}
+      itemsByKind={itemsByKind}
+    />
+  );
+
   if (kind == null) {
     // Only `not_ready` is a gate an organizer can lift from here: unknown
     // teams, an unpublished stage or a broken slot config would open no
     // session however ready both sides were, so offering the toggle there
     // would be a button that changes nothing.
-    if (!KINDS.some((value) => statesByKind[value].reason === "not_ready")) return null;
+    // The journal stays on screen even with nothing to override: "why is this
+    // room not open yet" is one of the questions it answers.
+    if (!KINDS.some((value) => statesByKind[value].reason === "not_ready")) return history;
     return (
-      <section className="rounded-xl border border-dashed border-[color:var(--aqt-amber)]/45 bg-[color:var(--aqt-card-2)]/40 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-[color:var(--aqt-amber)]" aria-hidden />
-          <h2 className="text-sm font-semibold">{t("admin.readinessTitle")}</h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          {(["home", "away"] as const).map((side) => (
-            <div key={side} className="flex items-center gap-2">
-              <span className="text-sm font-medium">{sideNameOf(side)}</span>
-              <span className="text-xs text-[color:var(--aqt-fg-muted)]">
-                {t(readiness[side] ? "ready.stateReady" : "ready.statePending")}
-              </span>
-              <Button
-                size="sm"
-                variant={readiness[side] ? "outline" : "default"}
-                disabled={readinessMutation.isPending}
-                onClick={() => readinessMutation.mutate({ side, ready: !readiness[side] })}
-              >
-                {readinessMutation.isPending && readinessMutation.variables?.side === side ? (
-                  <Spinner className="mr-2" />
-                ) : null}
-                {t(readiness[side] ? "admin.readinessClear" : "admin.readinessSet")}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="flex flex-col gap-3">
+        <section className="rounded-xl border border-dashed border-[color:var(--aqt-amber)]/45 bg-[color:var(--aqt-card-2)]/40 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[color:var(--aqt-amber)]" aria-hidden />
+            <h2 className="text-sm font-semibold">{t("admin.readinessTitle")}</h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            {(["home", "away"] as const).map((side) => (
+              <div key={side} className="flex items-center gap-2">
+                <span className="text-sm font-medium">{sideNameOf(side)}</span>
+                <span className="text-xs text-[color:var(--aqt-fg-muted)]">
+                  {t(readiness[side] ? "ready.stateReady" : "ready.statePending")}
+                </span>
+                <Button
+                  size="sm"
+                  variant={readiness[side] ? "outline" : "default"}
+                  disabled={readinessMutation.isPending}
+                  onClick={() => readinessMutation.mutate({ side, ready: !readiness[side] })}
+                >
+                  {readinessMutation.isPending && readinessMutation.variables?.side === side ? (
+                    <Spinner className="mr-2" />
+                  ) : null}
+                  {t(readiness[side] ? "admin.readinessClear" : "admin.readinessSet")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+        {history}
+      </div>
     );
   }
 
   const onThisKind = grid != null && grid.kind === kind;
   return (
-    <PregameAdminControls
-      kind={kind}
-      encounterId={encounterId}
-      state={statesByKind[kind]}
-      selectedItemId={onThisKind ? grid.selectedItemId : null}
-      selectedItemName={onThisKind ? grid.selectedItemName : null}
-      onMutated={() => {
-        // The board's own reset also drops its selection and local draft; when
-        // the organizer acted on the OTHER kind that board is untouched, so a
-        // plain room refetch is the whole job.
-        if (onThisKind) grid.onMutated();
-        else onMutated();
-      }}
-      kindSwitch={
-        withSession.length > 1 ? (
-          <div role="tablist" aria-label={t("admin.kindSwitch")} className="flex gap-1">
-            {withSession.map((value) => (
-              <Button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={value === kind}
-                size="sm"
-                variant={value === kind ? "secondary" : "ghost"}
-                onClick={() => setPicked(value)}
-              >
-                {t(`phase.${value}`)}
-              </Button>
-            ))}
-          </div>
-        ) : null
-      }
-    />
+    <div className="flex flex-col gap-3">
+      <PregameAdminControls
+        kind={kind}
+        encounterId={encounterId}
+        state={statesByKind[kind]}
+        selectedItemId={onThisKind ? grid.selectedItemId : null}
+        selectedItemName={onThisKind ? grid.selectedItemName : null}
+        itemsById={itemsByKind[kind]}
+        blind={onThisKind ? grid.blind : null}
+        sideNameOf={sideNameOf}
+        bestOf={bestOf}
+        seriesWins={seriesWins}
+        onMutated={() => {
+          // The board's own reset also drops its selection and local draft; when
+          // the organizer acted on the OTHER kind that board is untouched, so a
+          // plain room refetch is the whole job.
+          if (onThisKind) grid.onMutated();
+          else onMutated();
+        }}
+        kindSwitch={
+          withSession.length > 1 ? (
+            <div role="tablist" aria-label={t("admin.kindSwitch")} className="flex gap-1">
+              {withSession.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={value === kind}
+                  size="sm"
+                  variant={value === kind ? "secondary" : "ghost"}
+                  onClick={() => setPicked(value)}
+                >
+                  {t(`phase.${value}`)}
+                </Button>
+              ))}
+            </div>
+          ) : null
+        }
+      />
+      {history}
+    </div>
   );
 }

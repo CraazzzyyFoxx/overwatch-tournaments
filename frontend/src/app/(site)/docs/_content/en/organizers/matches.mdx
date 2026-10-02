@@ -54,6 +54,19 @@ You can also **mark a side ready**, or clear readiness a captain set by mistake 
 Clearing readiness is refused once the veto or the bans have started: by then the gate is behind you and clearing it changes nothing. Reset the session instead.
 </Callout>
 
+### Stopping the clock, and stopping the room
+
+The **Session** row of the block holds the commands that act on the whole session rather than on one step.
+
+| Command | What it does | How to undo it |
+| --- | --- | --- |
+| **Pause** / **Resume** | Freezes the session: the countdown disappears for everyone, the step cannot time out, and no captain can act until you resume. The step keeps the time it had left. | **Resume**. |
+| **+30s / +60s / +120s** | Hands the side on the clock that much more time on the step that is open. Offered only while a timed step is open; works while paused too. | Nothing to undo — it only ever adds time. |
+| **Cancel session** | Ends this kind's pick-ban for good, with a required reason. Cancelling the **hero bans** means no later map of the series gets a ban phase. Cancelling the **map veto** leaves maps already picked where they are, and the captains name every later map themselves on the report screen. | **Reset session** — it drops the cancelled session and creates a new one from scratch. |
+| **Technical loss** | Ends the whole encounter against one side: both sessions are cancelled, every unplayed map is dropped, and the score shown is set and confirmed. It opens on the score the series would end on (the winner takes the maps it needs, the forfeiting side keeps the ones it actually won) — edit it if the ruling says otherwise. A reason is required. | Reopen the result on the **Encounters** tab, then reset the sessions. |
+
+A paused room tells everyone so — captains and spectators see **Paused by the organizer** on the board instead of a countdown — and the **Pre-game rooms** list marks the row **Paused** or **Cancelled**. Every one of these commands is recorded in the room's history with the organizer who ran it.
+
 ## Pre-game phase: map veto and hero bans
 
 Pre-game rules live in **Settings → Pre-game phase**. The scope tree is on the left, the four-step editor on the right.

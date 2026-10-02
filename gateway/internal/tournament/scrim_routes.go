@@ -28,7 +28,10 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 // literal-suffixed /claim and /close are more specific still.
 var ScrimRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/scrims", Queue: "rpc.tournament.scrim_create", Body: true, Auth: edge.AuthRequired, Success: 201},
-	{Method: "GET", Pattern: "/api/v1/scrims", Queue: "rpc.tournament.scrim_list_mine", Query: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	// `scope` is optional: absent (or "mine") lists the caller's own rooms, while
+	// "workspace" lists every room of the workspace for staff holding
+	// match.result — the worker owns both the vocabulary and that gate.
+	{Method: "GET", Pattern: "/api/v1/scrims", Queue: "rpc.tournament.scrim_list_mine", Query: []string{"workspace_id", "scope"}, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/scrims/{token}", Queue: "rpc.tournament.scrim_get", Path: []string{"token"}, Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/v1/scrims/{token}/claim", Queue: "rpc.tournament.scrim_claim", Path: []string{"token"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/scrims/{token}/close", Queue: "rpc.tournament.scrim_close", Path: []string{"token"}, Auth: edge.AuthRequired},

@@ -136,14 +136,18 @@ export function isSessionActive(session: PickBanSession | null): boolean {
 
 /**
  * Epoch-ms deadline of the step on the clock, or null when no countdown should
- * be shown (no timer on the step, session inactive, sequence complete).
+ * be shown (no timer on the step, session inactive, sequence complete, or an
+ * organizer paused the session).
  *
  * The server computes it — `step_deadline` already accounts for the step's own
  * `timer_seconds` and for every reopen that reset the clock, so the room never
- * adds a start time to a duration itself.
+ * adds a start time to a duration itself. A paused session has no deadline at
+ * all server-side; the guard here keeps a cached state from ticking down to a
+ * timeout that cannot happen.
  */
 export function stepDeadlineMs(state: PickBanState): number | null {
   if (!isSessionActive(state.session) || state.is_complete) return null;
+  if (state.session?.paused_at != null) return null;
   if (!state.step_deadline) return null;
   const deadline = Date.parse(state.step_deadline);
   return Number.isNaN(deadline) ? null : deadline;

@@ -46,6 +46,16 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// step (the organizer's dispute, without the attempt budget).
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-submit", Queue: "rpc.tournament.admin_pick_ban_submit", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-reopen", Queue: "rpc.tournament.admin_pick_ban_reopen", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// The room's emergency controls: freeze its clock, hand the open step more
+	// time, drop a session the series cannot play out, and record a walkover.
+	// A paused session refuses every CAPTAIN write (409) while these same admin
+	// routes keep working — that is the point of the pause.
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-pause", Queue: "rpc.tournament.admin_pick_ban_pause", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-extend", Queue: "rpc.tournament.admin_pick_ban_extend", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-cancel", Queue: "rpc.tournament.admin_pick_ban_cancel", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// A technical loss IS a result write (same `match.result` gate, same bracket
+	// and source-correction guards as /result), so it answers the result shape.
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/technical-loss", Queue: "rpc.tournament.admin_encounter_technical_loss", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	// Captain readiness, forced by an organizer: `{side, ready}`. Worker enforces
 	// the same "match"/"result" gate; `ready: false` is a 409 once a pick-ban
 	// session exists (readiness gates session creation only — reset instead).
@@ -77,6 +87,10 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// creates a session for it) and gated on workspace "match"/"read". NOT in
 	// cacheable.go: it is a live operations view, stale by the second.
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pregame-rooms", Queue: "rpc.tournament.admin_pregame_rooms", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	// One room's journal: the pre-game events merged with the encounter's result
+	// audit, newest first. Same "match"/"read" gate as the board above, and the
+	// same reason to stay out of cacheable.go — it is read while the room runs.
+	{Method: "GET", Pattern: "/api/v1/admin/encounters/{encounter_id}/room-history", Queue: "rpc.tournament.admin_pregame_room_history", IDParam: "encounter_id", Query: []string{"limit"}, Auth: edge.AuthRequired},
 	// The constructor's two read-only engine probes: "would this ruleset save?"
 	// and "what would a Bo5 of it look like?". Keyed by tournament_id because
 	// they gate on the same workspace "match"/"update" as the upsert they

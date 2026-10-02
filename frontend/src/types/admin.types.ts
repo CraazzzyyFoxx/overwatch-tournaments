@@ -701,6 +701,33 @@ export interface EncounterResultAuditRead {
 }
 
 /**
+ * One line of the pre-game room's journal: the room's own events merged with
+ * the encounter's result audit, newest first. `action` is open-ended on the
+ * wire — an unknown one is rendered generically rather than dropped.
+ */
+export interface PregameRoomHistoryEntry {
+  /** `"room:<id>"` / `"result:<id>"` — the two origins share no id space. */
+  id: string;
+  at: string;
+  origin: "room" | "result";
+  action: string;
+  kind: "map" | "hero" | null;
+  source: "captain" | "admin" | "system";
+  /** The side acted BY or FOR; null for room-level events. */
+  side: "home" | "away" | null;
+  actor_auth_user_id: number | null;
+  /** null = the clock or a machine actor, rendered as "System". */
+  actor_name: string | null;
+  reason: string | null;
+  data: Record<string, unknown>;
+}
+
+export interface PregameRoomHistoryRead {
+  encounter_id: number;
+  entries: PregameRoomHistoryEntry[];
+}
+
+/**
  * One captain's report inside an admin reports row. Mirrors the backend
  * `CaptainReportRead` — the same shape the public encounter read returns, plus
  * `reporter_name`.
@@ -826,6 +853,8 @@ export interface PregameKindSummary {
   /** `step_started_at` + the open step's timer, when that step has one. */
   deadline_at: string | null;
   awaiting_choice: boolean;
+  /** Set while an organizer holds the session: no deadline, nobody may act. */
+  paused_at: string | null;
 }
 
 export interface PregameRoomRow {

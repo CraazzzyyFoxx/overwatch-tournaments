@@ -669,6 +669,7 @@ class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
             pending_loser_side=None,
             status=MapVetoSessionStatus.COMPLETED if complete else MapVetoSessionStatus.ACTIVE,
             current_step_started_at=None,
+            paused_at=None,
         )
         entries = (
             [_entry(101, round=1, status="banned"), _entry(102, round=1, status="banned")]
@@ -1063,6 +1064,7 @@ class AdvanceToNextRoundCandidateFloorTests(IsolatedAsyncioTestCase):
             pending_loser_side=None,
             status="active",
             current_step_started_at=None,
+            paused_at=None,
         )
 
     async def test_raises_when_no_repeat_exclusion_depletes_the_next_round(self) -> None:
@@ -1238,6 +1240,7 @@ class AdvanceToNextRoundLoopTests(IsolatedAsyncioTestCase):
             pending_loser_side=None,
             status="completed",
             current_step_started_at=None,
+            paused_at=None,
         )
 
     async def test_a_fixed_rotation_also_advances(self) -> None:
@@ -1424,6 +1427,7 @@ class AdvanceLocksTheSessionTests(IsolatedAsyncioTestCase):
             pending_loser_side=None,
             status="completed",
             current_step_started_at=None,
+            paused_at=None,
         )
         session.existing = pick_ban
         locked: list[int] = []

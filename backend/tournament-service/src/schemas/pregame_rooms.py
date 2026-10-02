@@ -23,6 +23,8 @@ from pydantic import BaseModel
 __all__ = (
     "PregameGamesSummary",
     "PregameKindSummary",
+    "PregameRoomHistoryEntry",
+    "PregameRoomHistoryRead",
     "PregameRoomRow",
     "PregameRoomTeam",
     "PregameRoomsRead",
@@ -58,6 +60,9 @@ class PregameKindSummary(BaseModel):
     step_started_at: datetime | None = None
     #: ``step_started_at`` + the open step's timer, when it has one.
     deadline_at: datetime | None = None
+    #: Set while an organizer has frozen this kind's room: no clock runs and no
+    #: captain may write, so ``deadline_at`` is ``null`` for as long as it holds.
+    paused_at: datetime | None = None
     awaiting_choice: bool = False
 
 
@@ -101,3 +106,29 @@ class PregameRoomsRead(BaseModel):
     #: rather than against its own clock.
     generated_at: datetime
     rooms: list[PregameRoomRow]
+
+
+class PregameRoomHistoryEntry(BaseModel):
+    """One line of the room's journal, from either of the two tables it merges."""
+
+    #: ``"room:<id>"`` / ``"result:<id>"`` -- the two sources number their rows
+    #: independently, so a bare id would collide across them.
+    id: str
+    at: datetime
+    origin: Literal["room", "result"]
+    #: The room vocabulary (``room_journal``), or the result audit's own action
+    #: verbatim (``confirm``, ``reopen``, ``game_cancel``, ...).
+    action: str
+    kind: Literal["map", "hero"] | None = None
+    source: Literal["captain", "admin", "system"]
+    side: Literal["home", "away"] | None = None
+    actor_auth_user_id: int | None = None
+    #: Display name of whoever acted; null for the clock and the engine.
+    actor_name: str | None = None
+    reason: str | None = None
+    data: dict = {}
+
+
+class PregameRoomHistoryRead(BaseModel):
+    encounter_id: int
+    entries: list[PregameRoomHistoryEntry]

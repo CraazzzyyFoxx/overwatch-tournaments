@@ -58,6 +58,7 @@ from src.services.encounter import report_form
 from src.services.encounter.dispute_review import notify_dispute_review
 from src.services.encounter.finalize import FinalizeService, finalize_service
 from src.services.encounter.report_form import ReportFormService, report_form_service
+from src.services.encounter.room_journal import record_room_event
 from src.services.tournament.events import enqueue_tournament_recalculation
 
 # One per-map code: (map_index 1-based, replay/match code string). Defined by the
@@ -547,7 +548,7 @@ class CaptainService:
                 detail="Encounter result is confirmed; only an admin can change it",
             )
 
-        _side, captain_user_id, team_id = await self._resolve_captain_identity(session, auth_user, encounter)
+        side, captain_user_id, team_id = await self._resolve_captain_identity(session, auth_user, encounter)
 
         # A captain report is the FINAL series score, so it must actually end the
         # series: a Bo3 cannot finish 1:0, and no side can win more maps than the
@@ -601,6 +602,9 @@ class CaptainService:
             await self.map_code_repo.delete_for_report(session, report.id)
             report.map_codes.clear()
 
+        # Captured before the write: a captain re-sending the score they already
+        # filed (to fix a comment or a map code) did not re-report the series.
+        score_changed = (report.home_score, report.away_score) != (home_score, away_score)
         report.reporter_user_id = captain_user_id
         report.home_score = home_score
         report.away_score = away_score
@@ -618,6 +622,17 @@ class CaptainService:
                     code=code,
                     map_id=map_id_by_index.get(map_index),
                 )
+            )
+
+        if score_changed:
+            await record_room_event(
+                session,
+                encounter.id,
+                action="series_reported",
+                source="captain",
+                side=side,
+                actor_auth_user_id=auth_user.id,
+                data={"home_score": home_score, "away_score": away_score},
             )
 
         confirmed = await self._recompute_encounter_result(

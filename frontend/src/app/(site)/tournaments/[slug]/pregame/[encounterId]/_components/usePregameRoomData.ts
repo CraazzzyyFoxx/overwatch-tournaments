@@ -102,6 +102,9 @@ export function usePregameRoomData(encounterId: number): PregameRoomData {
     void queryClient.invalidateQueries({ queryKey: mapKey });
     void queryClient.invalidateQueries({ queryKey: heroKey });
     void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.detail(encounterId) });
+    // Every write the room signals is a line in the organizer's journal, so a
+    // panel left open follows the room instead of freezing at its first read.
+    void queryClient.invalidateQueries({ queryKey: encounterQueryKeys.roomHistory(encounterId) });
   };
   useRealtimeTopic(`encounter:${encounterId}:map-veto`, invalidateRoom);
   useRealtimeTopic(`encounter:${encounterId}:pick-ban:hero`, invalidateRoom);

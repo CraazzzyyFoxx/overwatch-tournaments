@@ -7060,6 +7060,18 @@
       },
       "summary": "Captain report counters"
     },
+    "rpc.tournament.admin_encounter_technical_loss": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Ends the encounter against `loser_side` without playing it out, in one transaction: every live pick-ban session is cancelled, every position that is not already CONFIRMED is cancelled, and the result is confirmed (same shape `encounter_set_result` returns). Omit the score and it is derived \u2014 the winner takes `best_of // 2 + 1` wins or more if it already had them, the forfeiting side keeps the maps it really won, capped one short of winning (a Bo5 standing 2:0 for the side that forfeits is recorded 2:3). An explicit score must put the forfeiting side below its opponent (422). Same guards as the result route: 409 on a preview bracket's encounter, on a result a later stage was already seeded from, and on an already confirmed result (reopen it first). The reason is required and lands in both the admin audit and the room journal.",
+      "request": {
+        "array": false,
+        "ref": "tournament.AdminTechnicalLossInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.EncounterResultRead"
+      },
+      "summary": "Record a technical loss"
+    },
     "rpc.tournament.admin_game_result": {
       "description": "Permission: workspace `match.result` on the encounter's workspace. Writes one series position's score as an `admin` result and journals the mandatory `reason`; this is the only way a `confirmed` game (locked against captains with 409 `result_locked`) ever changes. Flipping which side won a position scraps and re-opens the round that outcome had opened, so the response is `{game, rebuilt_rounds}`; 409 `downstream_started` when a later round was already acted in or a later position already has a claim, 409 `map_not_selected` while the position still has no map (an organizer names it through the pick-ban or the captain map choice first), and 404 when the game belongs to another encounter or is cancelled.",
       "request": {
@@ -7241,6 +7253,14 @@
       },
       "summary": "Act for a side"
     },
+    "rpc.tournament.admin_pick_ban_cancel": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Retires one kind's session (body `{kind, reason}`) as CANCELLED and clears any pause, for a room whose veto cannot be played out. A cancelled HERO session simply stops opening rounds; a cancelled MAP session hands the series back to FREEPLAY \u2014 the maps it already settled keep their positions and every later one is named by the captains through `captain_select_game_map`. The way back is the session reset. 409 when no session of that kind exists or it is already cancelled.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminCancel"
+      },
+      "summary": "Cancel a pick-ban session"
+    },
     "rpc.tournament.admin_pick_ban_config_delete": {
       "description": "Permission: workspace `match.update` on the workspace of the config's tournament. Deletes a pick-ban config by id (running sessions keep their snapshot).",
       "summary": "Delete pick-ban config"
@@ -7260,6 +7280,22 @@
     "rpc.tournament.admin_pick_ban_elect_opener": {
       "description": "Permission: workspace `match.result` on the encounter's workspace. Names who opens the round a `result_loser_choice` rotation is holding and appends it, on behalf of a losing captain who is unreachable; returns the new room state.",
       "summary": "Elect a round's opener for a side"
+    },
+    "rpc.tournament.admin_pick_ban_extend": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Adds `seconds` (10..3600) to the open step's clock by moving its start forward, and returns the room state. Allowed while paused. 409 when no session of that kind is active or the open step has no timer (an untimed or already settled step has nothing to extend).",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminExtend"
+      },
+      "summary": "Extend the open step's timer"
+    },
+    "rpc.tournament.admin_pick_ban_pause": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Freezes (`{kind, paused: true}`) or releases one kind's room and returns its state. A paused session has no deadline at all: the open step's timer stops, nothing auto-resolves, reveals or times out, and every CAPTAIN write (act, submit, dispute, undo, elect-opener) answers 409 `Pick-ban session is paused` while the admin overrides keep working. Resuming gives the step back exactly the time it had left; a step that opened during the pause gets its full timer. Idempotent, and 409 when no session of that kind exists or it is not active.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminPause"
+      },
+      "summary": "Pause or resume a pick-ban session"
     },
     "rpc.tournament.admin_pick_ban_reopen": {
       "description": "Permission: workspace `match.result` on the encounter's workspace. Voids the last fully revealed step's submissions and re-opens it for a fresh attempt \u2014 the organizer's version of a captain dispute, with no attempt budget and no `dispute.enabled` requirement. Returns the new room state. 400 when there is no revealed step to reopen or a later step has already been acted in.",
@@ -7292,6 +7328,24 @@
         "ref": "tournament.PickBanAdminSubmit"
       },
       "summary": "Submit a blind draft for a side"
+    },
+    "rpc.tournament.admin_pregame_room_history": {
+      "description": "Permission: workspace `match.read` on the encounter's workspace. One room's whole story, newest first: the pre-game journal (readiness, session opened/reset/completed, rounds, every captain and organizer action, step reveals, timeouts, disputes, undo, map and series reports, pause/extend/cancel/technical loss) merged with the encounter's result audit (confirm, reopen, auto_confirm, auto_dispute, import, cascade_reset, game_confirm, game_correct, game_cancel). Each entry carries `id` (`room:<id>`/`result:<id>`), `at`, `origin`, `action`, `kind`, `source` (`captain`/`admin`/`system`), `side`, `actor_auth_user_id`, `actor_name` (null for machine actors), `reason` and an action-specific `data` object. Query `limit` is clamped to 1..500, default 200. The journal is keyed by ENCOUNTER, so resetting a session never erases what it did.",
+      "query_params": [
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..500, default 200.",
+            "type": "integer"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "tournament.PregameRoomHistoryRead"
+      },
+      "summary": "Read a pre-game room's journal"
     },
     "rpc.tournament.admin_pregame_rooms": {
       "description": "Permission: workspace `match.read` on the tournament's workspace. The organizer's board of every pre-game room of a tournament: one row per non-FFA encounter that resolves to a pooled pick-ban config or already has a session, carrying readiness, the map and hero session summaries (open step, acting sides, deadline), the series' game counts, a single `phase` (`teams_unknown`/`readiness`/`map`/`hero`/`report`/`done`/`idle`) and the `attention` flags staff act on (`game_disputed`, `result_disputed`, `awaiting_choice`, `overdue`, `late_not_ready`). Strictly read-only, unlike the room's own state read: it never creates a session, opens a position or settles an expired step, and it answers the whole tournament in a constant number of queries. Rows are ordered stage, round, encounter id; preview-bracket encounters with no session are omitted.",
@@ -9685,7 +9739,7 @@
       "summary": "Claim a scrim side"
     },
     "rpc.tournament.scrim_close": {
-      "description": "Permission: self-service \u2014 the room's creator, a captain of either side, or a superuser (workspace membership alone is not enough). Closes a scrim room so it stops counting against its creator's active-room cap, leaving the encounter and its pick-ban history readable by the participants forever.",
+      "description": "Permission: self-service \u2014 the room's creator, a captain of either side, a superuser, or workspace staff holding `match.result` (plain workspace membership is not enough). Closes a scrim room so it stops counting against its creator's active-room cap, leaving the encounter and its pick-ban history readable by the participants forever. The same rule is surfaced per room as `can_close`.",
       "response": {
         "array": false,
         "ref": "tournament.ScrimRoomRead"
@@ -9713,7 +9767,7 @@
       "summary": "Get scrim room"
     },
     "rpc.tournament.scrim_list_mine": {
-      "description": "Permission: authenticated user who is a member of the queried workspace (membership only \u2014 no resource grant is checked). Returns the calling user's scrim rooms in a workspace, open and closed alike (scrim history is kept forever).",
+      "description": "Permission: authenticated user who is a member of the queried workspace (membership only \u2014 no resource grant is checked), plus workspace `match.result` when `scope=workspace`. Returns the calling user's scrim rooms in a workspace, open and closed alike (scrim history is kept forever); `scope=workspace` instead returns every room of the workspace so staff can find one they neither created nor play, same open-first ordering.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -9727,7 +9781,7 @@
         "array": false,
         "ref": "tournament.ScrimRoomListRead"
       },
-      "summary": "List my scrim rooms"
+      "summary": "List scrim rooms"
     },
     "rpc.tournament.sheet_get": {
       "description": "Permission: workspace `team.read` on the tournament's workspace. Returns a tournament's registration Google Sheets feed config, or null if none.",
@@ -31975,6 +32029,57 @@
       "title": "AdminReadinessSet",
       "type": "object"
     },
+    "tournament.AdminTechnicalLossInput": {
+      "description": "Body for the technical-loss route: which side forfeits, optionally the\nexact score to record it as (omitted = the default forfeit score), and the\nreason -- a walkover is never anonymous.",
+      "properties": {
+        "away_score": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Away Score"
+        },
+        "home_score": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Home Score"
+        },
+        "loser_side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Loser Side",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "loser_side",
+        "reason"
+      ],
+      "title": "AdminTechnicalLossInput",
+      "type": "object"
+    },
     "tournament.AdmissionRead": {
       "properties": {
         "blockers": {
@@ -41570,6 +41675,64 @@
       "title": "PickBanAdminAct",
       "type": "object"
     },
+    "tournament.PickBanAdminCancel": {
+      "description": "Body for the session-cancel route: retire a session the series cannot play\nout, with the reason that goes into the room journal.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "title": "PickBanAdminCancel",
+      "type": "object"
+    },
+    "tournament.PickBanAdminExtend": {
+      "description": "Body for the extend route: more time on the open step's timer. Bounded at\nan hour -- an organizer who needs longer than that wants the pause.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "seconds": {
+          "maximum": 3600,
+          "minimum": 10,
+          "title": "Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "seconds"
+      ],
+      "title": "PickBanAdminExtend",
+      "type": "object"
+    },
+    "tournament.PickBanAdminPause": {
+      "description": "Body for the pause route: freeze (or unfreeze) one kind's clock while the\norganizer sorts out whatever stopped the room.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "paused": {
+          "title": "Paused",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "paused"
+      ],
+      "title": "PickBanAdminPause",
+      "type": "object"
+    },
     "tournament.PickBanAdminSubmit": {
       "description": "Body for the admin submit-for-a-side route: replace a BLIND step's draft\non behalf of a captain who is not there to author it. Items reuse the\ncaptain schema so the two surfaces cannot drift.",
       "properties": {
@@ -42564,6 +42727,19 @@
           "default": null,
           "title": "Deadline At"
         },
+        "paused_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paused At"
+        },
         "reason": {
           "anyOf": [
             {
@@ -42642,6 +42818,145 @@
         }
       },
       "title": "PregameKindSummary",
+      "type": "object"
+    },
+    "tournament.PregameRoomHistoryEntry": {
+      "description": "One line of the room's journal, from either of the two tables it merges.",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "actor_auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Auth User Id"
+        },
+        "actor_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Name"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Data",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "map",
+                "hero"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "origin": {
+          "enum": [
+            "room",
+            "result"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "home",
+                "away"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side"
+        },
+        "source": {
+          "enum": [
+            "captain",
+            "admin",
+            "system"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "at",
+        "origin",
+        "action",
+        "source"
+      ],
+      "title": "PregameRoomHistoryEntry",
+      "type": "object"
+    },
+    "tournament.PregameRoomHistoryRead": {
+      "properties": {
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PregameRoomHistoryEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "entries"
+      ],
+      "title": "PregameRoomHistoryRead",
       "type": "object"
     },
     "tournament.PregameRoomRow": {
@@ -45159,6 +45474,10 @@
           "title": "Can Claim",
           "type": "boolean"
         },
+        "can_close": {
+          "title": "Can Close",
+          "type": "boolean"
+        },
         "closed_at": {
           "anyOf": [
             {
@@ -45236,6 +45555,7 @@
         "away_team",
         "viewer_side",
         "can_claim",
+        "can_close",
         "created_at",
         "closed_at"
       ],

@@ -293,6 +293,49 @@ class EncounterResultAuditRepository(BaseRepository[models.EncounterResultAudit]
         result = await session.execute(query)
         return result.unique().scalars().all()
 
+    async def list_with_actor(
+        self, session: AsyncSession, encounter_id: int, *, limit: int
+    ) -> Sequence[tuple[models.EncounterResultAudit, str | None, int | None]]:
+        """The result half of the room journal: newest first, each row with its
+        actor's display name and -- for a per-game row -- the series position it
+        decided.
+
+        ``actor_user_id`` is a PLAYER identity (``identity.user``), not the auth
+        account the room journal names, so the name comes from a different table
+        than :meth:`EncounterRoomEventRepository.list_with_actor`'s and the two
+        are merged by the reader. Both joins are LEFT OUTER: a series-level row
+        has no game, an imported or cascaded one has no actor, and a deleted
+        account must not erase what it decided.
+        """
+        result = await session.execute(
+            sa.select(self.model, models.User.name, models.EncounterGame.position)
+            .outerjoin(models.User, models.User.id == self.model.actor_user_id)
+            .outerjoin(models.EncounterGame, models.EncounterGame.id == self.model.game_id)
+            .where(self.model.encounter_id == encounter_id)
+            .order_by(self.model.created_at.desc(), self.model.id.desc())
+            .limit(limit)
+        )
+        return result.tuples().all()
+
+
+class EncounterRoomEventRepository(BaseRepository[models.EncounterRoomEvent]):
+    def __init__(self) -> None:
+        super().__init__(models.EncounterRoomEvent)
+
+    async def list_with_actor(
+        self, session: AsyncSession, encounter_id: int, *, limit: int
+    ) -> Sequence[tuple[models.EncounterRoomEvent, str | None]]:
+        """The room half of the journal: newest first, each row with its actor's
+        account name. LEFT OUTER -- a clock/engine row has no actor at all."""
+        result = await session.execute(
+            sa.select(self.model, models.AuthUser.username)
+            .outerjoin(models.AuthUser, models.AuthUser.id == self.model.actor_auth_user_id)
+            .where(self.model.encounter_id == encounter_id)
+            .order_by(self.model.created_at.desc(), self.model.id.desc())
+            .limit(limit)
+        )
+        return result.tuples().all()
+
 
 class EncounterReportFormRepository(BaseRepository[models.EncounterReportForm]):
     def __init__(self) -> None:

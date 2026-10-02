@@ -116,6 +116,7 @@ function session(overrides: Partial<PickBanSession> = {}): PickBanSession {
     slot_reserves: null,
     started_at: "2026-07-18T10:00:00Z",
     current_step_started_at: "2026-07-18T10:00:00Z",
+    paused_at: null,
     ...overrides
   };
 }

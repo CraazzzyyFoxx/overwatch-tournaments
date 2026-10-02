@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/fetch";
-import type { ScrimCreateInput, ScrimRoom } from "@/types/scrim.types";
+import type { ScrimCreateInput, ScrimListScope, ScrimRoom } from "@/types/scrim.types";
 
 /** The share token is a path segment, so it is escaped rather than interpolated raw. */
 function tokenPath(token: string): string {
@@ -12,9 +12,17 @@ class ScrimService {
     return response.json();
   }
 
-  async listMyRooms(workspaceId: number | null): Promise<{ rooms: ScrimRoom[] }> {
+  /**
+   * Rooms in a workspace. `scope` is "mine" (the caller's own, hosted or
+   * captained) or "workspace" — every room there, which the server allows only
+   * for staff holding `match.result`.
+   */
+  async listRooms(
+    workspaceId: number | null,
+    scope: ScrimListScope = "mine"
+  ): Promise<{ rooms: ScrimRoom[] }> {
     const response = await apiFetch("/api/v1/scrims", {
-      query: { workspace_id: workspaceId }
+      query: { workspace_id: workspaceId, scope }
     });
     return response.json();
   }

@@ -34,6 +34,8 @@ export const encounterQueryKeys = {
   matchDetail: (matchId: KeyPart) => ["match-detail", matchId] as const,
   pregameHeroState: (encounterId: KeyPart) => ["pregame-state", encounterId, "hero"] as const,
   pregameMapState: (encounterId: KeyPart) => ["pregame-state", encounterId, "map"] as const,
+  /** The organizer's room journal, only read while the history panel is open. */
+  roomHistory: (encounterId: KeyPart) => ["encounter", encounterId, "room-history"] as const,
   pregameState: (encounterId: KeyPart, kind: KeyPart) =>
     ["pregame-state", encounterId, kind] as const,
   bracket: () => ["bracket"] as const,

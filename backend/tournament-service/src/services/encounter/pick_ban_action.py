@@ -49,16 +49,26 @@ from src.services.encounter import pick_ban_undo
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import (
     PickBanSessionService,
+    assert_not_paused,
     load_item_groups,
     pick_ban_session_service,
     resolved_steps,
+    step_clock,
 )
 from src.services.encounter.realtime_commit import emit_pick_ban_update
+from src.services.encounter.room_journal import record_room_event
 
 #: ``viewer_side`` default meaning "the side that is acting". A plain ``None``
 #: default could not tell an admin acting FOR a side (who must get the neutral,
 #: privacy-free view) from the captain acting as themselves.
 ACTING_VIEWER = "__acting__"
+
+
+def _source_of(viewer_side: str | None) -> str:
+    """Who is writing, for the journal: the same read of ``viewer_side`` the
+    captain-only guards run on, so the two can never disagree."""
+    return "captain" if viewer_side == ACTING_VIEWER else "admin"
+
 
 _CAPTAIN_ACTIONS = ("ban", "pick", "protect")
 #: Roster reading order of a target board: the three roles in team order, mains
@@ -106,6 +116,8 @@ def serialize_pick_ban_session(pick_ban: PickBanSession) -> dict[str, Any]:
         "current_step_started_at": (
             pick_ban.current_step_started_at.isoformat() if pick_ban.current_step_started_at else None
         ),
+        # Set = the room is frozen by an organizer: no clock, no captain write.
+        "paused_at": pick_ban.paused_at.isoformat() if pick_ban.paused_at else None,
     }
 
 
@@ -284,8 +296,13 @@ class PickBanActionService:
     def step_deadline(pick_ban: PickBanSession, step: pbr.ResolvedStep) -> datetime | None:
         """When the open step runs out, or ``None`` when it is untimed. Public:
         the pre-game rooms overview flags an overdue room with it, and a second
-        copy of "started_at + timer, naive rows are UTC" would drift."""
-        if step.timer_seconds is None or pick_ban.current_step_started_at is None:
+        copy of "started_at + timer, naive rows are UTC" would drift.
+
+        A PAUSED session is untimed by the same answer: this one ``None`` is what
+        stops the expiry, the room's countdown and the overview's ``overdue`` flag
+        together, so there is no second place that has to remember the pause.
+        """
+        if step.timer_seconds is None or pick_ban.current_step_started_at is None or pick_ban.paused_at is not None:
             return None
         started = pick_ban.current_step_started_at
         if started.tzinfo is None:
@@ -380,6 +397,11 @@ class PickBanActionService:
         Only the step that was current when this started may EXPIRE: the clock
         belongs to that step, and a step that becomes current here has not been
         on it for a single second.
+
+        A paused room still settles -- system steps, reveals, completion -- so an
+        organizer acting during the pause sees the board move. Only the EXPIRY
+        stops, and it needs no check here: ``step_deadline`` is ``None`` while
+        paused. A step that opens during the pause starts on ``step_clock``.
         """
         if str(rt.pick_ban.status) == MapVetoSessionStatus.CANCELLED:
             return False
@@ -393,16 +415,37 @@ class PickBanActionService:
             if step is None:
                 break
             if step.is_system:
-                self._write(
-                    session, rt, step, "system", pbr.resolve_system_step(step, self._ctx(rt, step)), state=pbr.REVEALED
+                items = pbr.resolve_system_step(step, self._ctx(rt, step))
+                self._write(session, rt, step, "system", items, state=pbr.REVEALED)
+                await record_room_event(
+                    session,
+                    rt.encounter.id,
+                    action="step_auto_resolved",
+                    source="system",
+                    kind=str(rt.pick_ban.kind),
+                    data={
+                        "step_index": step.index,
+                        "round": step.round,
+                        "action": step.action,
+                        "item_ids": [int(item["item_id"]) for item in items],
+                    },
                 )
                 changed = True
                 continue
             if pbr.ready_to_reveal(step, rt.submissions):
                 self._reveal(rt, step)
+                await record_room_event(
+                    session,
+                    rt.encounter.id,
+                    action="step_revealed",
+                    source="system",
+                    kind=str(rt.pick_ban.kind),
+                    data={"step_index": step.index, "round": step.round},
+                )
                 changed = True
                 continue
             if step.index == timed_index and step.on_timeout != "wait" and self._expired(rt.pick_ban, step):
+                stood_in: list[str] = []
                 for side in step.acting_sides:
                     row = pbr.side_submission(rt.submissions, step.index, side)
                     if row is not None and row.state in (pbr.LOCKED, pbr.REVEALED):
@@ -414,6 +457,22 @@ class PickBanActionService:
                     # never answered must not be blocked by what they owed.
                     self._write(session, rt, step, side, items, state=pbr.LOCKED)
                     pbr.project_entries(rt.entries, rt.steps, rt.submissions)
+                    stood_in.append(side)
+                await record_room_event(
+                    session,
+                    rt.encounter.id,
+                    action="step_timed_out",
+                    source="system",
+                    kind=str(rt.pick_ban.kind),
+                    # ``sides`` is who the clock answered FOR, not who the step
+                    # belonged to: a side that locked in time was not timed out.
+                    data={
+                        "step_index": step.index,
+                        "round": step.round,
+                        "policy": step.on_timeout,
+                        "sides": stood_in,
+                    },
+                )
                 changed = True
                 continue
             break
@@ -421,10 +480,17 @@ class PickBanActionService:
         pbr.project_entries(rt.entries, rt.steps, rt.submissions)
         closing = pbr.current_step(rt.steps, rt.submissions)
         if (closing.index if closing is not None else None) != timed_index:
-            rt.pick_ban.current_step_started_at = datetime.now(UTC)
+            rt.pick_ban.current_step_started_at = step_clock(rt.pick_ban)
         if closing is None:
             if str(rt.pick_ban.status) == MapVetoSessionStatus.ACTIVE:
                 rt.pick_ban.status = MapVetoSessionStatus.COMPLETED
+                await record_room_event(
+                    session,
+                    rt.encounter.id,
+                    action="session_completed",
+                    source="system",
+                    kind=str(rt.pick_ban.kind),
+                )
                 changed = True
         elif str(rt.pick_ban.status) == MapVetoSessionStatus.COMPLETED:
             rt.pick_ban.status = MapVetoSessionStatus.ACTIVE
@@ -475,7 +541,7 @@ class PickBanActionService:
             session.add(row)
             rt.submissions.append(row)
         pbr.project_entries(rt.entries, rt.steps, rt.submissions)
-        rt.pick_ban.current_step_started_at = datetime.now(UTC)
+        rt.pick_ban.current_step_started_at = step_clock(rt.pick_ban)
         if str(rt.pick_ban.status) == MapVetoSessionStatus.COMPLETED:
             rt.pick_ban.status = MapVetoSessionStatus.ACTIVE
         pick_ban_undo.clear_undo_request(rt.pick_ban)
@@ -501,12 +567,17 @@ class PickBanActionService:
 
     # -- locking -----------------------------------------------------------
     async def _lock(
-        self, session: AsyncSession, encounter_id: int, kind: PickBanKind
+        self, session: AsyncSession, encounter_id: int, kind: PickBanKind, *, captain: bool = True
     ) -> tuple[Encounter, PickBanSession]:
         """The lock comes FIRST, before anything a decision reads: the cursor is
         derived from the submission log and written back to it, so two
         overlapping requests must not both resolve the same step (see
-        ``pick_ban_session.get_pick_ban_session``)."""
+        ``pick_ban_session.get_pick_ban_session``).
+
+        ``captain=False`` is the organizer override: a pause stops the CAPTAINS,
+        and the staff member who paused the room is exactly who still has to be
+        able to fix what they paused it for.
+        """
         encounter = await self.encounter_repo.get(session, encounter_id)
         if encounter is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
@@ -515,6 +586,8 @@ class PickBanActionService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is not initialized")
         if str(pick_ban.status) == MapVetoSessionStatus.CANCELLED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is cancelled")
+        if captain:
+            assert_not_paused(pick_ban)
         return encounter, pick_ban
 
     @staticmethod
@@ -547,11 +620,14 @@ class PickBanActionService:
         action: str,
         target_player_id: int | None = None,
         viewer_side: str | None = ACTING_VIEWER,
+        actor_auth_user_id: int | None = None,
     ) -> dict[str, Any]:
         """One item onto an OPEN step's submission. A blind step is answered
         with :meth:`submit_items` instead -- appending one item at a time to a
         draft nobody may see would leak its size through the progress counter."""
-        encounter, pick_ban = await self._lock(session, encounter_id, kind)
+        # ``viewer_side`` is the admin discriminator this module already runs on
+        # (see ACTING_VIEWER): an organizer acting FOR a side passes it as None.
+        encounter, pick_ban = await self._lock(session, encounter_id, kind, captain=viewer_side == ACTING_VIEWER)
         rt = await self._load(session, pick_ban, encounter, refresh=True)
         await self._settle(session, rt)
         step = self._require_step(rt)
@@ -574,6 +650,25 @@ class PickBanActionService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=", ".join(issues))
 
         self._write(session, rt, step, side, items, state=pbr.LOCKED if len(items) >= step.count else pbr.DRAFT)
+        await record_room_event(
+            session,
+            encounter_id,
+            action="acted",
+            # Derived from the SAME discriminator the lock above runs on, never a
+            # second flag: a journal that can disagree with who was allowed to
+            # act is worse than no journal.
+            source=_source_of(viewer_side),
+            kind=kind.value,
+            side=side,
+            actor_auth_user_id=actor_auth_user_id,
+            data={
+                "step_index": step.index,
+                "round": step.round,
+                "action": action,
+                "item_id": item_id,
+                "target_player_id": target_player_id,
+            },
+        )
         # Any open undo consent was given against the action that WAS last; this
         # one supersedes it, so the agreement dies with the state it was read on.
         pick_ban_undo.clear_undo_request(pick_ban)
@@ -592,10 +687,11 @@ class PickBanActionService:
         items: list[dict[str, Any]],
         lock: bool,
         viewer_side: str | None = ACTING_VIEWER,
+        actor_auth_user_id: int | None = None,
     ) -> dict[str, Any]:
         """Replace a BLIND step's draft, optionally locking it. A locked draft
         is final: the step reveals the moment every acting side has one."""
-        encounter, pick_ban = await self._lock(session, encounter_id, kind)
+        encounter, pick_ban = await self._lock(session, encounter_id, kind, captain=viewer_side == ACTING_VIEWER)
         rt = await self._load(session, pick_ban, encounter, refresh=True)
         await self._settle(session, rt)
         step = self._require_step(rt)
@@ -612,6 +708,21 @@ class PickBanActionService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=", ".join(issues))
 
         self._write(session, rt, step, side, draft, state=pbr.LOCKED if lock else pbr.DRAFT)
+        source = _source_of(viewer_side)
+        # A captain's unlocked draft is an autosave -- it changes nothing anyone
+        # else can see, and journalling every keystroke would bury the room's
+        # story. An organizer's is a deliberate write on someone else's behalf.
+        if lock or source == "admin":
+            await record_room_event(
+                session,
+                encounter_id,
+                action="draft_locked" if lock else "draft_set",
+                source=source,
+                kind=kind.value,
+                side=side,
+                actor_auth_user_id=actor_auth_user_id,
+                data={"step_index": step.index, "round": step.round, "items": draft},
+            )
         pick_ban_undo.clear_undo_request(pick_ban)
         await self._commit(session, rt, kind)
         return await self.get_pick_ban_state(
@@ -619,7 +730,13 @@ class PickBanActionService:
         )
 
     async def dispute_step(
-        self, session: AsyncSession, encounter_id: int, kind: PickBanKind, side: str
+        self,
+        session: AsyncSession,
+        encounter_id: int,
+        kind: PickBanKind,
+        side: str,
+        *,
+        actor_auth_user_id: int | None = None,
     ) -> dict[str, Any]:
         """A captain unilaterally reopens the blind step that just revealed --
         the answer to "they banned for the wrong player" that does not need the
@@ -639,16 +756,31 @@ class PickBanActionService:
                 detail="This step cannot be reopened",
             )
         step = next(candidate for candidate in rt.steps if candidate.index == state.step_index)
+        attempt = pbr.current_attempt(rt.submissions, step.index)
         self._reopen(session, rt, step)
+        await record_room_event(
+            session,
+            encounter_id,
+            action="step_disputed",
+            source="captain",
+            kind=kind.value,
+            side=side,
+            actor_auth_user_id=actor_auth_user_id,
+            # The attempt being thrown away, not the fresh one `_reopen` opened:
+            # "they disputed attempt 1" is what the dispute limit counts.
+            data={"step_index": step.index, "attempt": attempt},
+        )
         await self._commit(session, rt, kind)
         return await self.get_pick_ban_state(session, encounter_id, kind, viewer_side=side)
 
-    async def admin_reopen_step(self, session: AsyncSession, encounter_id: int, kind: PickBanKind) -> dict[str, Any]:
+    async def admin_reopen_step(
+        self, session: AsyncSession, encounter_id: int, kind: PickBanKind, *, actor_auth_user_id: int | None = None
+    ) -> dict[str, Any]:
         """The organizer's version of a dispute: the same replay, without the
         per-step attempt limit and without needing the step to allow disputes at
         all (design §5) -- the escape hatch for a room that revealed something
         wrong under a rule nobody anticipated."""
-        encounter, pick_ban = await self._lock(session, encounter_id, kind)
+        encounter, pick_ban = await self._lock(session, encounter_id, kind, captain=False)
         rt = await self._load(session, pick_ban, encounter, refresh=True)
         await self._settle(session, rt)
         step = self._reopenable(rt)
@@ -658,6 +790,15 @@ class PickBanActionService:
                 detail="There is no settled step to reopen",
             )
         self._reopen(session, rt, step)
+        await record_room_event(
+            session,
+            encounter_id,
+            action="step_reopened",
+            source="admin",
+            kind=kind.value,
+            actor_auth_user_id=actor_auth_user_id,
+            data={"step_index": step.index},
+        )
         await self._commit(session, rt, kind)
         return await self.get_pick_ban_state(session, encounter_id, kind, viewer_side=None)
 
@@ -673,8 +814,13 @@ class PickBanActionService:
         encounter whose slots are still waiting on an upstream result, has no
         series to open: creating its position on a mere READ wrote an
         ``encounter_game`` row for a matchup that may never exist.
+
+        A CANCELLED map session counts as no session here: the organizer dropped
+        the veto mid-series, so the maps it already settled keep their positions
+        and everything after them is named by the captains, exactly as a room
+        with no veto at all works.
         """
-        if pick_ban is not None:
+        if pick_ban is not None and str(pick_ban.status) != MapVetoSessionStatus.CANCELLED:
             games = await self.games.sync_games_with_picks(session, encounter, pick_ban)
         else:
             if (
@@ -764,6 +910,7 @@ class PickBanActionService:
             and viewer_side in acting
             and step.action in _CAPTAIN_ACTIONS
             and str(rt.pick_ban.status) != MapVetoSessionStatus.CANCELLED
+            and rt.pick_ban.paused_at is None
         )
 
         eligible: dict[str, Any] | None = None

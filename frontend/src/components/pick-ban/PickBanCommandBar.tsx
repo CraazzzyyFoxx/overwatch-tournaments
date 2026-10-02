@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { Ban, EyeOff, Shield } from "lucide-react";
+import { Ban, EyeOff, PauseCircle, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -67,22 +67,27 @@ export function PickBanCommandBar({
   const step = state.current_step;
   const summary = step != null ? stepSummary(step) : null;
   const acting = state.acting_sides;
-  const yourTurn = captainAction != null || draftOpen;
+  const paused = state.session?.paused_at != null;
+  const yourTurn = !paused && (captainAction != null || draftOpen);
 
-  const turnBanner = state.is_complete
-    ? t("completedBanner")
-    : summary == null
-      ? null
-      : summary.system
-        ? t("deciderResolving")
-        : acting.length === 0
-          ? t("turnRevealing")
-          : acting.length > 1
-            ? t("turnBoth", { action: t(`action.${summary.action}`) })
-            : t("turn", {
-                side: sideName(acting[0]),
-                action: t(`action.${summary.action}`)
-              });
+  // The pause outranks whose turn it is: nobody may act until an organizer
+  // lifts it, and the bar is the one surface every viewer of the room sees.
+  const turnBanner = paused
+    ? t("pausedBanner")
+    : state.is_complete
+      ? t("completedBanner")
+      : summary == null
+        ? null
+        : summary.system
+          ? t("deciderResolving")
+          : acting.length === 0
+            ? t("turnRevealing")
+            : acting.length > 1
+              ? t("turnBoth", { action: t(`action.${summary.action}`) })
+              : t("turn", {
+                  side: sideName(acting[0]),
+                  action: t(`action.${summary.action}`)
+                });
 
   const confirmLabel =
     captainAction === "ban"
@@ -103,7 +108,13 @@ export function PickBanCommandBar({
               {yourTurn ? t("captain.yourTurn") : "\u00A0"}
             </p>
             <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium">
-              {summary?.blind && !state.is_complete ? (
+              {paused ? (
+                <PauseCircle
+                  className="h-4 w-4 shrink-0 text-[color:var(--aqt-amber)]"
+                  aria-hidden
+                />
+              ) : null}
+              {summary?.blind && !state.is_complete && !paused ? (
                 <EyeOff className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-teal)]" aria-hidden />
               ) : null}
               {turnBanner ?? "\u00A0"}

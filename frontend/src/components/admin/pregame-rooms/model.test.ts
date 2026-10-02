@@ -17,6 +17,7 @@ function summary(overrides: Partial<PregameKindSummary> = {}): PregameKindSummar
     step_started_at: "2026-10-02T10:00:00Z",
     deadline_at: "2026-10-02T10:01:00Z",
     awaiting_choice: false,
+    paused_at: null,
     ...overrides
   };
 }
@@ -89,5 +90,18 @@ describe("currentStep", () => {
   it("ignores a session with nothing open", () => {
     expect(currentStep(room({ map: summary({ step_index: null }) }))).toBeNull();
     expect(currentStep(room({ map: summary({ status: null, reason: "not_ready" }) }))).toBeNull();
+  });
+
+  it("falls back to a session an organizer cancelled, so the cell is not blank", () => {
+    const step = currentStep(
+      room({
+        phase: "report",
+        map: summary({ status: "cancelled", step_index: null, current_round: null }),
+        hero: summary({ status: "completed", step_index: null })
+      })
+    );
+
+    expect(step?.kind).toBe("map");
+    expect(step?.summary.status).toBe("cancelled");
   });
 });
