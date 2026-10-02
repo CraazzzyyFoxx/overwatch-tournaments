@@ -25,6 +25,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
@@ -673,7 +674,18 @@ class PickBanActionService:
                 and encounter.away_team_id is not None
                 and await is_encounter_live(session, encounter)
             ):
-                await self.games.ensure_freeplay_game(session, encounter)
+                # Committed here: the read RPC never commits, so a position opened
+                # only on this session rolled back with it -- the room was handed a
+                # game id that did not exist, and naming its map 404'd. Savepoint:
+                # two viewers opening the room at once race onto
+                # `uq_encounter_game_encounter_position`; the loser reads the
+                # winner's row instead of failing the read.
+                try:
+                    async with session.begin_nested():
+                        await self.games.ensure_freeplay_game(session, encounter)
+                    await session.commit()
+                except IntegrityError:
+                    pass
             games = await self.games.list_games(session, encounter.id)
         reports = await self.games.reports_by_game(session, games)
         return (
