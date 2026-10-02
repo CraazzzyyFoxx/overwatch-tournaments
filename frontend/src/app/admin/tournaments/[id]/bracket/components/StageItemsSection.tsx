@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ArrowUpRight, CheckCircle2, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 
+import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -519,33 +520,24 @@ export function StageItemsSection({
                             >
                               {isEditing ? (
                                 <>
-                                  <Select
-                                    value={editingInputTeamDraft}
-                                    onValueChange={setEditingInputTeamDraft}
-                                  >
-                                    <SelectTrigger
-                                      aria-label={`Team for slot ${seed} of ${item.name}`}
-                                      className="h-7 w-40 text-xs"
-                                    >
-                                      <SelectValue placeholder="Pick team" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {teams.map((team) => (
-                                        <SelectItem
-                                          key={team.id}
-                                          value={team.id.toString()}
-                                          disabled={
-                                            assignedTeamIds.has(team.id) &&
-                                            team.id !== input.team_id &&
-                                            !canSwapAssignedTeams
-                                          }
-                                          className="text-xs"
-                                        >
-                                          {team.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <TeamCombobox
+                                    teams={teams}
+                                    value={
+                                      editingInputTeamDraft ? Number(editingInputTeamDraft) : null
+                                    }
+                                    onSelect={(team) =>
+                                      setEditingInputTeamDraft(team ? String(team.id) : "")
+                                    }
+                                    placeholder="Pick team"
+                                    allowClear={false}
+                                    isTeamDisabled={(team) =>
+                                      assignedTeamIds.has(team.id) &&
+                                      team.id !== input.team_id &&
+                                      !canSwapAssignedTeams
+                                    }
+                                    triggerAriaLabel={`Team for slot ${seed} of ${item.name}`}
+                                    triggerClassName="h-7 w-48 text-xs"
+                                  />
                                   <Button
                                     size="icon"
                                     variant="ghost"
@@ -635,30 +627,22 @@ export function StageItemsSection({
                   </SeedList>
 
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <Select
-                      value={teamDrafts[item.id]}
-                      onValueChange={(value) =>
-                        setTeamDrafts((current) => ({ ...current, [item.id]: value }))
+                    <TeamCombobox
+                      teams={teams}
+                      value={teamDrafts[item.id] ? Number(teamDrafts[item.id]) : null}
+                      onSelect={(team) =>
+                        setTeamDrafts((current) => ({
+                          ...current,
+                          [item.id]: team ? String(team.id) : ""
+                        }))
                       }
+                      placeholder={isTeamsLoading ? "Loading teams…" : "Select team"}
+                      allowClear={false}
                       disabled={isTeamsLoading || teams.length === 0}
-                    >
-                      <SelectTrigger aria-label={`Team to add to ${item.name}`} className="h-9">
-                        <SelectValue
-                          placeholder={isTeamsLoading ? "Loading teams…" : "Select team"}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teams.map((team) => (
-                          <SelectItem
-                            key={team.id}
-                            value={team.id.toString()}
-                            disabled={assignedTeamIds.has(team.id)}
-                          >
-                            {team.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      isTeamDisabled={(team) => assignedTeamIds.has(team.id)}
+                      triggerAriaLabel={`Team to add to ${item.name}`}
+                      triggerClassName="h-9"
+                    />
                     <Button
                       size="sm"
                       variant="outline"
