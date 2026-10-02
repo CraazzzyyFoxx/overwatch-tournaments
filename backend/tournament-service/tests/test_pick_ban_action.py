@@ -241,9 +241,10 @@ class TimeoutTests(IsolatedAsyncioTestCase):
             "both sides end with a full draft",
         )
         banned = {entry["item_id"] for entry in state["pool"] if entry["status"] == "banned"}
-        # 3 or 4 distinct entries: the two sides may have filled the same hero,
-        # which the board merges (D8).
-        self.assertIn(len(banned), (3, 4))
+        # 2 to 4 distinct entries: the board merges a hero both sides filled
+        # (D8), and a blind fill does not see the other side's draft, so the
+        # away side may even land on exactly the home pair.
+        self.assertIn(len(banned), (2, 3, 4))
         self.assertIn(1, banned, "the draft the captain HAD is kept, not replaced")
 
     async def test_lock_draft_seals_what_was_there_and_ignores_min(self) -> None:
