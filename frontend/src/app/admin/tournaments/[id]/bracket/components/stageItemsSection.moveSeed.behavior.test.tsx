@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 //
-// One claim: a seeded slot can be dragged onto another slot, and what that
-// costs depends on the target — a filled target is a single atomic swap the
-// API already does, an empty one is a move that has to empty the source first.
+// One claim: a team dragged by its handle is INSERTED where it is dropped, in
+// its own group or another one, and every group's seeds stay numbered 1..N.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -13,7 +12,7 @@ import adminService from "@/services/admin.service";
 import type { Team } from "@/types/team.types";
 import type { Stage, StageItem, StageItemInput } from "@/types/tournament.types";
 
-import { seedSwapRequests, StageItemsSection } from "./StageItemsSection";
+import { StageItemsSection } from "./StageItemsSection";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -95,7 +94,12 @@ function groupStage(items: StageItem[]): Stage {
   };
 }
 
-const team = { id: 7, name: "Wrong Team" } as Team;
+const teams = [
+  { id: 7, name: "Wrong Team" },
+  { id: 8, name: "Team 8" },
+  { id: 9, name: "Team 9" },
+  { id: 10, name: "Team 10" }
+] as Team[];
 
 let container: HTMLDivElement;
 let root: Root;
@@ -118,7 +122,7 @@ async function mount(stage: Stage) {
         <StageItemsSection
           stage={stage}
           stages={[stage]}
-          teams={[team]}
+          teams={teams}
           isTeamsLoading={false}
           progress={undefined}
           encountersHref="/admin/encounters"
@@ -136,36 +140,16 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  vi.mocked(adminService.updateStageItemInput).mockReset();
 });
 
-describe("swapping seeded slots", () => {
-  it("swaps two filled slots with the API's own one-call exchange", () => {
-    const source = input(501, { team_id: 7 });
-    const target = input(502, { id: 502, slot: 2, team_id: 9 });
-
-    // One PATCH: the server puts the displaced team (9) back into slot 501.
-    expect(seedSwapRequests(source, target)).toEqual([
-      { inputId: 502, data: { team_id: 7, input_type: "final" } }
-    ]);
-  });
-
-  it("empties the source before filling an empty target", () => {
-    const source = input(501, { team_id: 7 });
-    const target = input(502, { id: 502, slot: 2, team_id: null, input_type: "empty" });
-
-    // Order matters: filling first would leave the team seated twice.
-    expect(seedSwapRequests(source, target)).toEqual([
-      { inputId: 501, data: { input_type: "empty" } },
-      { inputId: 502, data: { team_id: 7, input_type: "final" } }
-    ]);
-  });
-
+describe("moving seeded teams", () => {
   it("offers a drag handle on seeded slots only", async () => {
     await mount(
       groupStage([
         item(100, [
           input(501, { team_id: 7 }),
-          input(502, { id: 502, slot: 2, team_id: null, input_type: "empty" })
+          input(502, { slot: 2, team_id: null, input_type: "empty" })
         ])
       ])
     );
@@ -173,16 +157,14 @@ describe("swapping seeded slots", () => {
     expect(
       container.querySelector('button[aria-label="Drag Wrong Team to another slot"]')
     ).not.toBeNull();
-    expect(
-      container.querySelectorAll('button[aria-label^="Drag "]')
-    ).toHaveLength(1);
+    expect(container.querySelectorAll('button[aria-label^="Drag "]')).toHaveLength(1);
   });
 
   describe("dragging with the pointer", () => {
     // happy-dom lays nothing out, so every slot row of THIS test's container gets
-    // a 40px band of its own (row i spans y = 50i .. 50i + 40) and everything
-    // inside a row shares it. dnd-kit measures the dragged row and the drop
-    // targets through this; earlier tests' containers stay out of the count.
+    // a 40px band of its own (row i spans y = 50i .. 50i + 40, counted across all
+    // groups in DOM order) and everything inside a row shares it. dnd-kit measures
+    // the dragged row and the drop targets through this.
     let restoreRect: () => void;
     beforeEach(() => {
       const original = HTMLElement.prototype.getBoundingClientRect;
@@ -205,30 +187,64 @@ describe("swapping seeded slots", () => {
       );
     }
 
-    it("moves a dragged team into the empty slot it is dropped on", async () => {
+    /** Picks Wrong Team's grip up at y=20 and walks it through `path`, dropping at the end. */
+    async function drag(path: number[]) {
+      const grip = container.querySelector('button[aria-label="Drag Wrong Team to another slot"]')!;
+      await act(async () => pointer("pointerdown", grip, 20));
+      for (const y of path) {
+        await act(async () => pointer("pointermove", document, y));
+      }
+      await act(async () => pointer("pointerup", document, path.at(-1)!));
+      await settle();
+    }
+
+    /** Each group's rows as rendered: seed number and team. */
+    function groups() {
+      return [...container.querySelectorAll("ul")].map((list) =>
+        [...list.querySelectorAll("li")].map((row) => row.querySelector("span")?.textContent)
+      );
+    }
+
+    it("inserts a team dragged down its group, shifting the teams it passes up", async () => {
       vi.mocked(adminService.updateStageItemInput).mockResolvedValue({} as never);
       await mount(
         groupStage([
           item(100, [
             input(501, { team_id: 7 }),
-            input(502, { id: 502, slot: 2, team_id: null, input_type: "empty" })
+            input(502, { slot: 2, team_id: 8 }),
+            input(503, { slot: 3, team_id: 9 })
           ])
         ])
       );
 
-      const grip = container.querySelector('button[aria-label="Drag Wrong Team to another slot"]')!;
-      await act(async () => pointer("pointerdown", grip, 20));
-      // Past the 6px activation distance, then over the second row (y 50..90).
-      for (const y of [30, 45, 60, 70]) {
-        await act(async () => pointer("pointermove", document, y));
-      }
-      await act(async () => pointer("pointerup", document, 70));
-      await settle();
+      // Onto the third row (y 100..140): a swap would trade places with Team 9.
+      await drag([30, 45, 70, 95, 120]);
 
       expect(vi.mocked(adminService.updateStageItemInput).mock.calls).toEqual([
-        [501, { input_type: "empty" }],
-        [502, { team_id: 7, input_type: "final" }]
+        [501, { stage_item_id: 100, slot: 3 }]
       ]);
+      expect(groups()).toEqual([["#1 Team 8", "#2 Team 9", "#3 Wrong Team"]]);
+    });
+
+    it("moves a team into another group and closes the gap it leaves", async () => {
+      vi.mocked(adminService.updateStageItemInput).mockResolvedValue({} as never);
+      await mount(
+        groupStage([
+          item(100, [input(501, { team_id: 7 }), input(502, { slot: 2, team_id: 8 })]),
+          item(200, [
+            input(601, { stage_item_id: 200, team_id: 9 }),
+            input(602, { stage_item_id: 200, slot: 2, team_id: 10 })
+          ])
+        ])
+      );
+
+      // Down past Team 8 into the second group, onto its last row.
+      await drag([30, 45, 70, 120, 170]);
+
+      expect(vi.mocked(adminService.updateStageItemInput).mock.calls).toEqual([
+        [501, { stage_item_id: 200, slot: 3 }]
+      ]);
+      expect(groups()).toEqual([["#1 Team 8"], ["#1 Team 9", "#2 Team 10", "#3 Wrong Team"]]);
     });
   });
 });

@@ -107,6 +107,11 @@ class StageItemInputUpdate(BaseModel):
     team_id: int | None = None
     source_stage_item_id: int | None = None
     source_position: int | None = Field(default=None, ge=1)
+    #: Moves the input into this item of the same stage; None = stays in its own.
+    stage_item_id: int | None = None
+    #: Seed to re-seat the input at. The inputs it passes shift by one, so every
+    #: item keeps slots 1..N; past the end (or omitted with ``stage_item_id``) appends.
+    slot: int | None = Field(default=None, ge=1)
 
 
 class MergeGroupStagesRequest(BaseModel):
