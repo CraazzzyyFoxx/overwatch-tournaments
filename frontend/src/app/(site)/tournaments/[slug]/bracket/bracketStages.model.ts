@@ -163,7 +163,8 @@ export function buildBracketTabs({
   // looking at its empty state. A group stage has its table to show as soon as
   // teams are seeded, before any match is played, and an FFA stage never appears
   // in the encounter list this counts — that list answers duels — so neither is
-  // judged on matches alone. A bracket is nothing but its matches.
+  // judged on matches alone. An unfinished bracket with no matches draws the one
+  // the generator would build; only a finished one with none has nothing.
   const groupHasContent = (stage: Stage) =>
     stageIdsWithMatches.has(stage.id) ||
     ffaStageIds.has(stage.id) ||
@@ -202,7 +203,7 @@ export function buildBracketTabs({
       label:
         eliminationStages.length === 1 && groupStages.length > 0 ? labels.playoff : stage.name,
       isActive,
-      disabled: isDead(isActive, stageIdsWithMatches.has(stage.id))
+      disabled: isDead(isActive, stageIdsWithMatches.has(stage.id) || !stage.is_completed)
     });
   }
 

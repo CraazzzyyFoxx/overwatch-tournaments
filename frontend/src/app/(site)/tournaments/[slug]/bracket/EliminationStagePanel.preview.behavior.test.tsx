@@ -36,8 +36,15 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/services/encounter.service", () => ({ default: { getEncounter: vi.fn() } }));
+const getStageBracketPreview = vi.fn();
 vi.mock("@/services/tournament.service", () => ({
-  default: { getStages: vi.fn().mockResolvedValue([]) }
+  default: {
+    getStages: vi.fn().mockResolvedValue([]),
+    getStageBracketPreview: (...args: unknown[]) => getStageBracketPreview(...args)
+  }
+}));
+vi.mock("@/services/team.service", () => ({
+  default: { getAll: vi.fn().mockResolvedValue({ results: [], total: 0 }) }
 }));
 
 function stage(isPublished: boolean): Stage {
@@ -133,7 +140,7 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 
 /** The panel as an organizer gets it: every action handler wired. */
-function renderPanel(isPublished: boolean) {
+function renderPanel(isPublished: boolean, encounters: Encounter[] = [encounter]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const target = stage(isPublished);
   root = createRoot(container);
@@ -143,7 +150,8 @@ function renderPanel(isPublished: boolean) {
         <NextIntlClientProvider locale="en" messages={en}>
           <EliminationStagePanel
             stage={target}
-            encounters={[encounter]}
+            encounters={encounters}
+            workspaceId={6}
             standings={[standing]}
             stages={[target]}
             bracketTabs={[]}
@@ -222,5 +230,35 @@ describe("EliminationStagePanel preview", () => {
 
     expect(standingsTab.getAttribute("data-state")).toBe("active");
     expect(container.querySelector("table")).not.toBeNull();
+  });
+
+  it("draws the bracket the generator would build while it has no matches yet", async () => {
+    // A four-team single elimination, every slot still TBD (placeholder seeds).
+    getStageBracketPreview.mockResolvedValue([
+      { local_id: 1, round: 1, name: "TBD vs TBD", best_of: 3, home_team_id: -1, away_team_id: -4, sources: [] },
+      { local_id: 2, round: 1, name: "TBD vs TBD", best_of: 3, home_team_id: -2, away_team_id: -3, sources: [] },
+      {
+        local_id: 3,
+        round: 2,
+        name: "TBD vs TBD",
+        best_of: 3,
+        home_team_id: null,
+        away_team_id: null,
+        sources: [
+          { local_id: 1, role: "winner", slot: "home" },
+          { local_id: 2, role: "winner", slot: "away" }
+        ]
+      }
+    ]);
+    renderPanel(false, []);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(getStageBracketPreview).toHaveBeenCalledWith(1, 3);
+    expect(container.textContent).not.toContain(en.common.noMatches.replace("{stage}", "Playoffs"));
+    expect(container.textContent).toContain("M3");
+    expect(container.textContent).not.toContain("M4");
+    expect(container.querySelector("a")).toBeNull();
   });
 });

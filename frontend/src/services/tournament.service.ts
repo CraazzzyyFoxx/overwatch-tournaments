@@ -1,3 +1,4 @@
+import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import {
   Stage,
@@ -208,5 +209,14 @@ export default class tournamentService {
     return apiFetch(`/api/v1/tournaments/${id}/stages`, {
       skipWorkspace: true,
     }).then((response) => response.json());
+  }
+
+  /** The bracket `stageId` would generate, for drawing it before its matches exist. */
+  static async getStageBracketPreview(id: number, stageId: number): Promise<StageBracketPreviewMatch[]> {
+    const response = await apiFetch(`/api/v1/tournaments/${id}/stages/${stageId}/bracket-preview`, {
+      skipWorkspace: true
+    });
+    const data: { matches: StageBracketPreviewMatch[] } = await response.json();
+    return data.matches;
   }
 }

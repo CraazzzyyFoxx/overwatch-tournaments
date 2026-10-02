@@ -221,16 +221,6 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
                 )
               : activeStages.map((stage) => {
                   const encounters = encountersByStage.get(stage.id) ?? [];
-                  if (encounters.length === 0 && bracketTabs.length <= 1) {
-                    return (
-                      <div
-                        key={stage.id}
-                        className="rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-4 py-8 text-center text-[color:var(--aqt-fg-muted)]"
-                      >
-                        {t("common.noMatches", { stage: stage.name })}
-                      </div>
-                    );
-                  }
 
                   const stagePlayoffStandings = playoffStandings.filter(
                     (standing) => standing.stage_id === stage.id
@@ -241,6 +231,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
                       key={stage.id}
                       stage={stage}
                       encounters={encounters}
+                      workspaceId={tournament.workspace_id}
                       standings={stagePlayoffStandings}
                       stages={stages}
                       bracketTabs={bracketTabs}
