@@ -28,6 +28,7 @@ const KIND_LABELS: Record<string, string> = {
   "registration.rejected": "Registration rejected",
   "encounter.scheduled": "Match scheduled",
   "encounter.report_disputed": "Report disputed",
+  "encounter.dispute_review": "Dispute needs a decision",
   "team_invite.received": "Team invite",
   "team_invite.answered": "Invite answered",
   "team.kicked": "Removed from team",

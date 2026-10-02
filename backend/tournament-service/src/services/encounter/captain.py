@@ -55,6 +55,7 @@ from shared.services.scrim_scope import is_scrim_container
 from src import models, schemas
 from src.services.challonge.sync import sync_service
 from src.services.encounter import report_form
+from src.services.encounter.dispute_review import notify_dispute_review
 from src.services.encounter.finalize import FinalizeService, finalize_service
 from src.services.encounter.report_form import ReportFormService, report_form_service
 from src.services.tournament.events import enqueue_tournament_recalculation
@@ -386,11 +387,17 @@ class CaptainService:
         encounter: models.Encounter,
         *,
         actor_user_id: int,
+        actor_auth_user_id: int | None = None,
     ) -> bool:
         """Recompute the derived encounter result from its captain reports.
 
         Returns ``True`` when the encounter was auto-confirmed (so the caller can run
         post-commit side effects like Challonge push).
+
+        ``actor_auth_user_id`` is the same person as ``actor_user_id`` seen from
+        the identity side (``players.user.id`` vs ``auth.user.id``); only the
+        dispute branch needs it, to stamp the organizers' notification with who
+        caused it.
         """
         reports = list(encounter.captain_reports)
         now = datetime.now(UTC)
@@ -439,6 +446,20 @@ class CaptainService:
                 from_result_status=from_result_status,
                 home_score_before=home_score_before,
                 away_score_before=away_score_before,
+            )
+            # The captains learn the outcome from the response they are holding;
+            # the organizers who can actually adopt a side learn it from here.
+            # ``Encounter`` carries the tournament, not the tenant that owns it.
+            workspace_id = await session.scalar(
+                select(models.Tournament.workspace_id).where(models.Tournament.id == encounter.tournament_id)
+            )
+            await notify_dispute_review(
+                session,
+                encounter,
+                workspace_id=None if workspace_id is None else int(workspace_id),
+                home_team_name=getattr(encounter.home_team, "name", ""),
+                away_team_name=getattr(encounter.away_team, "name", ""),
+                actor_auth_user_id=actor_auth_user_id,
             )
             await self._enqueue_tournament_recalculation(session, encounter.tournament_id)
             return False
@@ -599,7 +620,9 @@ class CaptainService:
                 )
             )
 
-        confirmed = await self._recompute_encounter_result(session, encounter, actor_user_id=captain_user_id)
+        confirmed = await self._recompute_encounter_result(
+            session, encounter, actor_user_id=captain_user_id, actor_auth_user_id=auth_user.id
+        )
         await session.commit()
 
         if confirmed:

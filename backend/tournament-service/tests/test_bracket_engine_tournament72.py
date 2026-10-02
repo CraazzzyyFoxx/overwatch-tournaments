@@ -639,6 +639,10 @@ class _EditorSession(SimpleNamespace):
         super().__init__(
             execute=AsyncMock(side_effect=fake_execute),
             get=AsyncMock(return_value=SimpleNamespace(is_published=True)),
+            # The dispute branch asks for the tournament's workspace before it
+            # pages the organizers; "no tenant" skips that notification, which
+            # this suite does not assert on.
+            scalar=AsyncMock(return_value=None),
             commit=AsyncMock(),
             refresh=AsyncMock(),
             flush=AsyncMock(),

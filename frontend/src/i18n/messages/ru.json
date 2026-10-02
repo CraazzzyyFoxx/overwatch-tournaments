@@ -6350,6 +6350,7 @@
       "announcement": {
         "published": "Новое объявление"
       },
+        "dispute_review": "{position, plural, =0 {Капитаны {home_team_name} и {away_team_name} разошлись в итоговом счёте серии — нужно решение организатора} other {Капитаны {home_team_name} и {away_team_name} разошлись в счёте карты # — нужно решение организатора}}",
       "team": {
         "kicked": "Вас исключили из команды {team_name} ({tournament_name})",
         "rejected": "Команда {team_name} отклонена на {tournament_name}. {reason}",
@@ -6456,6 +6457,7 @@
         "team": {
           "kicked": "Исключение из команды",
           "rejected": "Команда отклонена",
+          "dispute_review": "Нужно решение организатора",
           "disbanded": "Команда распущена"
         }
       },

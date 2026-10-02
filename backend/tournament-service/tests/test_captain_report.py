@@ -161,6 +161,10 @@ def _mk_session(
     return SimpleNamespace(
         execute=AsyncMock(side_effect=fake_execute),
         get=AsyncMock(side_effect=fake_get),
+        # The dispute branch asks for the tournament's workspace before paging
+        # its organizers; ``None`` is "no tenant", which skips that notification
+        # without touching anything these tests assert on.
+        scalar=AsyncMock(return_value=None),
         commit=AsyncMock(),
         refresh=AsyncMock(),
         flush=AsyncMock(side_effect=fake_flush),

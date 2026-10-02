@@ -1,12 +1,16 @@
 """Who a tournament lifecycle notification is addressed to.
 
-Both reads answer the same question -- "which site accounts are behind these
-domain rows" -- and both walk the same chain:
+The two competitor reads answer the same question -- "which site accounts are
+behind these domain rows" -- and both walk the same chain:
 ``workspace_member -> players.user -> auth_user_id``. That chain is why they are
 joins rather than ``BaseRepository`` CRUD, and why they live together: a shadow
 player (a real competitor with no site account behind their ``players.user``
 row) has no inbox, so ``auth_user_id IS NULL`` drops them here instead of every
 caller remembering to skip them.
+
+``workspace_staff_auth_user_ids`` is the other side of the same page -- the
+organizers rather than the players -- and starts from ``auth.user`` directly,
+because staff hold RBAC roles, not rosters.
 
 Ids only, never rows: the notifier needs recipients, and selecting the
 registration/player rows would drag their whole identity graph into a write
@@ -21,6 +25,10 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+
+# Association tables, not mapped classes: the membership edges carry no
+# behaviour, and ``models`` exports only the entities.
+from shared.models.identity.rbac import role_permissions, user_roles
 
 __all__ = ("NotificationRecipientRepository",)
 
@@ -72,6 +80,68 @@ class NotificationRecipientRepository:
             .where(
                 models.Player.team_id.in_(tuple(team_ids)),
                 models.User.auth_user_id.is_not(None),
+            )
+            .distinct()
+        )
+        result = await session.scalars(query)
+        return [int(value) for value in result.all()]
+
+    async def workspace_staff_auth_user_ids(
+        self,
+        session: AsyncSession,
+        workspace_id: int,
+        resource: str,
+        action: str,
+    ) -> list[int]:
+        """Accounts that may act on ``(resource, action)`` inside this workspace.
+
+        A set-based mirror of the WORKSPACE branch of
+        ``AuthUser.has_workspace_permission`` (``shared/models/identity/auth_user.py``):
+        a role scoped to this workspace that is ``owner``/``admin``, or that
+        carries a permission matching ``(resource|*, action|*)`` or the
+        ``admin:*`` wildcard; minus an explicit ``UserPermissionDeny`` on that
+        exact pair, global or for this workspace. Asking the Python predicate
+        instead would mean hydrating every account with its whole role graph.
+
+        Global admins and superusers are deliberately absent: they pass that
+        predicate for EVERY workspace, so including them here would page the
+        platform operators about every tournament on the site. The organizers of
+        the workspace that owns the rows are the ones who can act on them.
+        """
+        permission_grants = sa.or_(
+            sa.and_(
+                models.Permission.resource.in_((resource, "*")),
+                models.Permission.action.in_((action, "*")),
+            ),
+            # ``is_workspace_admin``'s wildcard: ``admin:*`` is admin-equivalent
+            # without naming a resource.
+            sa.and_(models.Permission.resource == "admin", models.Permission.action == "*"),
+        )
+        denied = (
+            sa.select(models.UserPermissionDeny.user_id)
+            .join(models.Permission, models.Permission.id == models.UserPermissionDeny.permission_id)
+            .where(
+                # No wildcard expansion on the deny side -- a deny row removes
+                # exactly the pair it names, which is what the model documents.
+                models.Permission.resource == resource,
+                models.Permission.action == action,
+                sa.or_(
+                    models.UserPermissionDeny.workspace_id.is_(None),
+                    models.UserPermissionDeny.workspace_id == workspace_id,
+                ),
+            )
+        )
+        query = (
+            sa.select(user_roles.c.user_id)
+            .join(models.Role, models.Role.id == user_roles.c.role_id)
+            # Outer: an ``owner``/``admin`` role grants without carrying a single
+            # permission row, and an inner join would drop exactly those people.
+            .outerjoin(role_permissions, role_permissions.c.role_id == models.Role.id)
+            .outerjoin(models.Permission, models.Permission.id == role_permissions.c.permission_id)
+            .where(
+                models.Role.workspace_id == workspace_id,
+                sa.or_(models.Role.name.in_(("owner", "admin")), permission_grants),
+                user_roles.c.user_id.not_in(denied),
             )
             .distinct()
         )

@@ -9,6 +9,7 @@ import {
   CheckCheck,
   CheckCircle2,
   ClipboardCheck,
+  Gavel,
   Megaphone,
   Settings2,
   Trash2,
@@ -37,6 +38,7 @@ type KindMessageKey = `notifications.kinds.${
   | "registration.opened"
   | "check_in.opened"
   | "encounter.report_disputed"
+  | "encounter.dispute_review"
   | "encounter.scheduled"
   | "announcement.published"
   | "team.kicked"
@@ -114,6 +116,13 @@ function getKindConfig(kind: string) {
       return {
         icon: AlertTriangle,
         className: "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      };
+    // An organizer decision is owed, not just a contradiction to look at: the
+    // gavel separates it from the captains' own alert at a glance.
+    case "encounter.dispute_review":
+      return {
+        icon: Gavel,
+        className: "bg-rose-500/10 text-rose-400 border-rose-500/20"
       };
     case "registration.opened":
       return {

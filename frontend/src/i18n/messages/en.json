@@ -6350,6 +6350,7 @@
       "announcement": {
         "published": "New announcement"
       },
+        "dispute_review": "{position, plural, =0 {{home_team_name} and {away_team_name} disagree on the final series score — an organizer has to decide} other {{home_team_name} and {away_team_name} disagree on the score of map # — an organizer has to decide}}",
       "team": {
         "kicked": "You were removed from {team_name} ({tournament_name})",
         "rejected": "Team {team_name} was rejected from {tournament_name}. {reason}",
@@ -6456,6 +6457,7 @@
         "team": {
           "kicked": "Removed from team",
           "rejected": "Team rejected",
+          "dispute_review": "Organizer decision needed",
           "disbanded": "Team disbanded"
         }
       },

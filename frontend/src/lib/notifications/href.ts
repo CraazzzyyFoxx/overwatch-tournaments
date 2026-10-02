@@ -23,6 +23,7 @@ export function notificationHref(item: NotificationItem): string | null {
         ? tournamentHref(payload.tournament_id, "/participants")
         : null;
     case "encounter.report_disputed":
+    case "encounter.dispute_review":
     case "encounter.scheduled":
       return isId(payload.tournament_id) && isId(payload.encounter_id)
         ? tournamentHref(payload.tournament_id, `/pregame/${payload.encounter_id}`)
