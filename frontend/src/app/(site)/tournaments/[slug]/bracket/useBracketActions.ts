@@ -35,9 +35,8 @@ export type BracketViewer = {
 };
 
 /**
- * Who is looking at the bracket. Separate from the actions below because the
- * stage list itself is filtered by `isAdmin` (an unpublished stage is a preview
- * only an organizer sees), and the actions need that already-filtered list.
+ * Who is looking at the bracket. Separate from the actions below so the page
+ * resolves it once and hands it to them.
  */
 export function useBracketViewer(workspaceId: number): BracketViewer {
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();

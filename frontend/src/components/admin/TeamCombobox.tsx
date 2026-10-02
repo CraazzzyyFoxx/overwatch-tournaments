@@ -16,6 +16,11 @@ interface TeamComboboxProps {
   searchPlaceholder?: string;
   disabled?: boolean;
   allowClear?: boolean;
+  /** Teams listed but not pickable, e.g. ones already seeded elsewhere. */
+  isTeamDisabled?: (team: Team) => boolean;
+  /** Accessible name when no visible `<Label htmlFor>` points at the trigger. */
+  triggerAriaLabel?: string;
+  triggerClassName?: string;
 }
 
 export function TeamCombobox({
@@ -26,7 +31,10 @@ export function TeamCombobox({
   placeholder = "Select team",
   searchPlaceholder = "Search team…",
   disabled = false,
-  allowClear = true
+  allowClear = true,
+  isTeamDisabled,
+  triggerAriaLabel,
+  triggerClassName
 }: Readonly<TeamComboboxProps>) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -49,6 +57,8 @@ export function TeamCombobox({
       open={open}
       onOpenChange={setOpen}
       label={selectedLabel}
+      triggerAriaLabel={triggerAriaLabel}
+      triggerClassName={triggerClassName}
       disabled={disabled}
       searchValue={searchValue}
       onSearchValueChange={setSearchValue}
@@ -70,6 +80,7 @@ export function TeamCombobox({
             key={team.id}
             value={`${team.name} ${team.id}`}
             onSelect={() => handleSelect(team)}
+            disabled={isTeamDisabled?.(team)}
           >
             <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
               <TeamName team={team} size="xs" />

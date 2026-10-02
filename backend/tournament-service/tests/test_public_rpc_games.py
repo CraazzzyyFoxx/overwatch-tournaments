@@ -80,7 +80,8 @@ UNGRANTED = make_identity(
 
 
 def _encounter(encounter_id: int = ENCOUNTER_ID):
-    return SimpleNamespace(id=encounter_id, home_team_id=1, away_team_id=2)
+    # No stage: never a preview, so the bracket-preview gate lets it through.
+    return SimpleNamespace(id=encounter_id, home_team_id=1, away_team_id=2, stage_id=None)
 
 
 def _handler(module, subject: str):

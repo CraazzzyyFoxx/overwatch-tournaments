@@ -14,6 +14,8 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import ffaService from "@/services/ffa.service";
 import type { Stage } from "@/types/tournament.types";
 
+import { isStagePreview } from "./bracketData";
+
 /**
  * An `ffa_league` stage on the public bracket.
  *
@@ -37,7 +39,7 @@ export function FfaStagePanel({
     queryKey: tournamentQueryKeys.ffaStage(tournamentId, stage.id),
     queryFn: () => ffaService.getStage(tournamentId, stage.id)
   });
-  const isPreview = !stage.is_published && !stage.is_completed;
+  const isPreview = isStagePreview(stage);
   const lobbies = lobbiesQuery.data ?? [];
 
   return (
@@ -93,13 +95,17 @@ export function FfaStagePanel({
             <section key={lobby.encounter_id} className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h4 className="text-sm font-semibold uppercase tracking-label">
-                  <Link
-                    href={`/encounters/${lobby.encounter_id}`}
-                    className="inline-flex items-center gap-1 text-[color:var(--aqt-fg)] underline-offset-4 hover:text-[color:var(--aqt-teal)] hover:underline"
-                  >
-                    {lobby.name}
-                    <ChevronRight aria-hidden className="size-3.5" />
-                  </Link>
+                  {isPreview ? (
+                    <span className="text-[color:var(--aqt-fg)]">{lobby.name}</span>
+                  ) : (
+                    <Link
+                      href={`/encounters/${lobby.encounter_id}`}
+                      className="inline-flex items-center gap-1 text-[color:var(--aqt-fg)] underline-offset-4 hover:text-[color:var(--aqt-teal)] hover:underline"
+                    >
+                      {lobby.name}
+                      <ChevronRight aria-hidden className="size-3.5" />
+                    </Link>
+                  )}
                 </h4>
                 <span className="text-xs uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
                   {t("ffa.gamesProgress", {

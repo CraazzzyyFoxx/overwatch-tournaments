@@ -13,8 +13,8 @@ export type MatchCardProps = {
   encounter: Encounter;
   /** Mono eyebrow, e.g. "PLAYOFF · LOWER R3 · BO3 · 18:40" — built by the caller. */
   eyebrow: string;
-  /** Where the card leads: the bracket node, or the encounter page. */
-  href: string;
+  /** Where the card leads: the bracket node, or the encounter page. Absent → a plain, non-clickable card. */
+  href?: string;
   /** Number of participant streams on air for this match, when known. */
   streamsCount?: number;
   /** `sm` — the overview's mini-bracket tile: no maps row, tighter rows. */
@@ -80,18 +80,17 @@ export function MatchCard({
     );
   };
 
-  return (
-    <HoverPrefetchLink
-      href={href}
-      className={cn(
-        "block overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)] transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
-        live
-          ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--aqt-rose)_30%,transparent)]"
-          : "border-[color:var(--aqt-border)]",
-        className
-      )}
-      data-live={live || undefined}
-    >
+  const cardClassName = cn(
+    "block overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)]",
+    href &&
+      "transition-colors hover:border-[color:var(--aqt-border-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+    live
+      ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--aqt-rose)_30%,transparent)]"
+      : "border-[color:var(--aqt-border)]",
+    className
+  );
+  const body = (
+    <>
       {/* The mini tile sits under a column heading that already names the
           round, so it carries no eyebrow of its own — only the live marker. */}
       {size === "md" || live ? (
@@ -128,6 +127,16 @@ export function MatchCard({
           })}
         </ul>
       ) : null}
+    </>
+  );
+
+  return href ? (
+    <HoverPrefetchLink href={href} className={cardClassName} data-live={live || undefined}>
+      {body}
     </HoverPrefetchLink>
+  ) : (
+    <div className={cardClassName} data-live={live || undefined}>
+      {body}
+    </div>
   );
 }

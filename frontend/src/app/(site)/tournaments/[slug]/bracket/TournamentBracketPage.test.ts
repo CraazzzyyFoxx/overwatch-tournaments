@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Stage, Tournament, TournamentStatus } from "@/types/tournament.types";
 
-import { createBracketQueryPlan, deriveBracketLoadState, isStageReportable, isStageVisibleToViewer } from "./bracketData";
+import { createBracketQueryPlan, deriveBracketLoadState, isStageReportable } from "./bracketData";
 
 const bracketModule =
   (await import("./TournamentBracketPage")) as typeof import("./TournamentBracketPage") & {
@@ -184,37 +184,6 @@ describe("TournamentBracketPage", () => {
     expect(source).toContain("<UpdatingBadge />");
   });
 });
-
-  describe("isStageVisibleToViewer", () => {
-    const base = {
-      id: 1,
-      tournament_id: 72,
-      name: "Playoffs",
-      stage_type: "single_elimination",
-      is_active: false,
-      order: 1
-    };
-
-    it("hides an organizer's un-activated preview from a spectator", () => {
-      const preview = { ...base, is_published: false, is_completed: false } as Stage;
-      expect(isStageVisibleToViewer(preview, false)).toBe(false);
-    });
-
-    it("shows the same preview to an admin", () => {
-      const preview = { ...base, is_published: false, is_completed: false } as Stage;
-      expect(isStageVisibleToViewer(preview, true)).toBe(true);
-    });
-
-    it("shows a published stage to everyone", () => {
-      const published = { ...base, is_published: true, is_completed: false } as Stage;
-      expect(isStageVisibleToViewer(published, false)).toBe(true);
-    });
-
-    it("shows a completed stage to everyone even if never explicitly published", () => {
-      const completed = { ...base, is_published: false, is_completed: true } as Stage;
-      expect(isStageVisibleToViewer(completed, false)).toBe(true);
-    });
-  });
 
   describe("isStageReportable", () => {
     it("blocks a report for an un-activated preview stage", () => {

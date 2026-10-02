@@ -32,6 +32,7 @@ from shared.repository import UserRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
 from shared.services.audit import record_admin_audit
+from shared.services.bracket.usability import assert_encounter_live
 from src import models, schemas
 from src.core import auth
 from src.rpc._helpers import (
@@ -84,6 +85,14 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
     encounter = await enc_service.encounter_service.encounter_repo.get(session, encounter_id)
     if encounter is not None:
         await admin_stage_service.assert_source_correction_allowed(session, encounter)
+
+
+async def _assert_bracket_live(session: Any, encounter_id: int) -> None:
+    """Refuse a result or a reseat on a preview bracket: it is look-only until
+    its stage is activated. A missing encounter is left to the service to 404 on."""
+    encounter = await enc_service.encounter_service.encounter_repo.get(session, encounter_id)
+    if encounter is not None:
+        await assert_encounter_live(session, encounter)
 
 
 def _slot_state(encounter: models.Encounter) -> dict:
@@ -162,6 +171,7 @@ def register(broker: Any, logger: Any) -> None:
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
             ensure_workspace_permission(user, ws_id, "match", "result")
+            await _assert_bracket_live(session, encounter_id)
             body = schemas.EncounterSetResultInput.model_validate(_payload(data))
             await record_admin_audit(
                 session,
@@ -195,6 +205,7 @@ def register(broker: Any, logger: Any) -> None:
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
             ensure_workspace_permission(user, ws_id, "match", "update")
+            await _assert_bracket_live(session, encounter_id)
             body = schemas.EncounterSwapSlotInput.model_validate(_payload(data))
             await record_admin_audit(
                 session,

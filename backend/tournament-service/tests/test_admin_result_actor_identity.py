@@ -70,9 +70,10 @@ class AdminResultActorIsThePlayerId(IsolatedAsyncioTestCase):
         self.enterContext(patch.object(admin_misc.auth, "get_encounter_workspace_id", AsyncMock(return_value=1)))
         self.enterContext(patch.object(admin_misc._user_repo, "get_id_by_auth_user_id", resolve))
         self.enterContext(patch.object(admin_misc.captain_service, method, write))
-        # The downstream-qualification guard queries a DB this fake has not; the
-        # actor attribution under test is independent of it.
+        # The downstream-qualification and preview-bracket guards query a DB this
+        # fake has not; the actor attribution under test is independent of them.
         self.enterContext(patch.object(admin_misc, "_assert_source_correction_allowed", AsyncMock()))
+        self.enterContext(patch.object(admin_misc, "_assert_bracket_live", AsyncMock()))
 
         envelope = await broker.handlers[subject](data, None)
         self.assertTrue(envelope.get("ok"), envelope)

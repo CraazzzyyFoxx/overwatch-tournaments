@@ -55,9 +55,9 @@ export const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swis
  * The stage the overview draws: the one being played now, and after the
  * tournament ends the one that decided it.
  *
- * Unpublished stages are skipped the way the bracket skips them
- * (`isStageVisibleToViewer`), unless nothing is published at all — an organizer
- * previewing their own tournament still sees which stage is meant.
+ * Unpublished stages (an organizer's preview) are skipped while anything is
+ * published, and only drawn when nothing is — the preview is still the stage
+ * that is meant.
  *
  * A phase running parallel divisions has no single answer, so the lowest id
  * wins and every card below is titled with that stage's name; the Format card
