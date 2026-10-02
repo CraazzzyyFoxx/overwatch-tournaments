@@ -442,6 +442,14 @@ async function render(props: { seriesReport?: boolean } = {}) {
   await settle();
 }
 
+async function showAdminUi() {
+  const toggle = Array.from(document.body.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === ROOM.admin.showUi
+  );
+  await act(async () => toggle!.click());
+  await settle();
+}
+
 /**
  * Routes `getPickBanState(kind, id)` mock calls to per-kind canned responses.
  *
@@ -2164,6 +2172,7 @@ describe("admin controls", () => {
       })
     );
     await render();
+    await showAdminUi();
 
     expect(document.body.textContent).toContain(ROOM.admin.title);
     const actionField = Array.from(document.body.querySelectorAll("div")).find(
@@ -2200,6 +2209,9 @@ describe("admin controls", () => {
 
     const tile = (name: string) =>
       document.body.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
+    expect(tile("Tank A")?.disabled).toBe(true);
+    await showAdminUi();
+    expect(tile("Tank A")?.disabled).toBe(false);
     await act(async () => tile("Tank A")!.click());
     await settle();
     await act(async () => tile("Support A")!.click());
@@ -2230,6 +2242,13 @@ describe("admin controls", () => {
     await act(async () => reopen!.click());
     await settle();
     expect(adminPickBanReopen).toHaveBeenCalledWith(4242, "hero");
+
+    const toggle = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === ROOM.admin.hideUi
+    );
+    await act(async () => toggle!.click());
+    await settle();
+    expect(tile("Tank A")?.disabled).toBe(true);
   });
 
   it("names the opponent player each of an absent captain's bans is for", async () => {
@@ -2271,6 +2290,7 @@ describe("admin controls", () => {
       })
     );
     await render();
+    await showAdminUi();
 
     const byLabel = (label: string) =>
       Array.from(document.body.querySelectorAll("button")).find(
@@ -2334,6 +2354,7 @@ describe("admin controls", () => {
       })
     );
     await render();
+    await showAdminUi();
 
     expect(document.body.textContent).toContain(ROOM.admin.electLabel);
     const panel = document.body.textContent ?? "";
@@ -2353,6 +2374,7 @@ describe("admin controls", () => {
     await render();
 
     expect(document.body.textContent).not.toContain(ROOM.admin.title);
+    expect(document.body.textContent).not.toContain(ROOM.admin.showUi);
   });
 
   it("lets an organizer mark an absent captain's side ready", async () => {
@@ -2368,6 +2390,14 @@ describe("admin controls", () => {
     mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
     await render();
 
+    expect(document.body.textContent).not.toContain(ROOM.admin.readinessTitle);
+    const toggle = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === ROOM.admin.showUi
+    );
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    await showAdminUi();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+
     const buttons = Array.from(document.body.querySelectorAll("button")).filter(
       (button) => button.textContent?.trim() === ROOM.admin.readinessSet
     );
@@ -2379,6 +2409,11 @@ describe("admin controls", () => {
     await settle();
 
     expect(setEncounterReadiness).toHaveBeenCalledWith(4242, { side: "away", ready: true });
+
+    await act(async () => toggle!.click());
+    await settle();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.textContent).not.toContain(ROOM.admin.readinessTitle);
   });
 
   it("keeps the readiness override off the waiting screen for a captain", async () => {
@@ -2415,6 +2450,7 @@ describe("admin controls", () => {
       })
     );
     await render();
+    await showAdminUi();
 
     const tab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find(
       (node) => node.textContent?.trim() === ROOM.phase.hero
@@ -2467,6 +2503,7 @@ describe("organizer session controls", () => {
   it("pauses the session on the kind the panel is acting on", async () => {
     openHeroStep();
     await render();
+    await showAdminUi();
 
     await act(async () => byLabel(ROOM.admin.pause)!.click());
     await settle();
@@ -2477,6 +2514,7 @@ describe("organizer session controls", () => {
   it("extends the open step's timer and cancels the session with a reason", async () => {
     openHeroStep();
     await render();
+    await showAdminUi();
 
     await act(async () => byLabel(ROOM.admin.extendBy.replace("{seconds}", "60"))!.click());
     await settle();
@@ -2515,6 +2553,7 @@ describe("organizer session controls", () => {
     // to be stopped by the pause itself and not by the absent `step_deadline`.
     openHeroStep({ paused_at: "2026-08-01T10:05:00Z" });
     await render();
+    await showAdminUi();
 
     expect(document.body.textContent).toContain(ROOM.pausedBanner);
     expect(document.body.textContent).not.toContain(ROOM.timer.label);
@@ -2527,6 +2566,7 @@ describe("organizer session controls", () => {
     openHeroStep();
     adminTechnicalLoss.mockResolvedValue({});
     await render();
+    await showAdminUi();
 
     await act(async () => byLabel(ROOM.admin.technicalLoss)!.click());
     await settle();
@@ -2625,6 +2665,7 @@ describe("room history", () => {
       unavailableState("not_configured")
     );
     await render();
+    await showAdminUi();
     const toggle = Array.from(document.body.querySelectorAll("button")).find((button) =>
       button.textContent?.includes(ROOM.history.toggle)
     );
@@ -2697,6 +2738,7 @@ describe("room history", () => {
     getPregameRoomHistory.mockResolvedValue({ encounter_id: 4242, entries: [] });
     mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
     await render();
+    await showAdminUi();
 
     const toggle = Array.from(document.body.querySelectorAll("button")).find((button) =>
       button.textContent?.includes(ROOM.history.toggle)

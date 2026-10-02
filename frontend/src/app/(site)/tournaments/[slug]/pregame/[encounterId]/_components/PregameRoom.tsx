@@ -1,12 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { ChevronDown, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
@@ -85,7 +87,7 @@ export function PregameRoom(props: Readonly<PregameRoomProps>) {
 
   return (
     <>
-      <PregameRoomBody {...props} />
+      <PregameRoomBody key={encounterId} {...props} />
       <RoomChat room={encounterChatRoom(encounterId)} />
     </>
   );
@@ -127,6 +129,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams?.get(RETURN_TO_PARAM), `/encounters/${encounterId}`);
   const room = usePregameRoomData(encounterId);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   if (room.isPending) {
     return <RoomSkeleton />;
@@ -211,21 +214,40 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   const activeKind: PickBanKind = loop.phase === "hero" ? "hero" : "map";
   const adminPanel = (grid: PickBanAdminSlot | null = null) =>
     isAdmin ? (
-      <PregameAdminPanel
-        encounterId={encounterId}
-        statesByKind={loop.statesByKind}
-        activeKind={activeKind}
-        sideNameOf={sideNameOf}
-        itemsByKind={room.itemsByKind}
-        bestOf={encounter.best_of ?? 0}
-        seriesWins={
-          seriesSummary != null
-            ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
-            : null
-        }
-        onMutated={room.invalidateRoom}
-        grid={grid}
-      />
+      <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-auto min-h-11 max-w-full whitespace-normal text-left"
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+            {t(adminOpen ? "admin.hideUi" : "admin.showUi")}
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 ${adminOpen ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-3">
+          <PregameAdminPanel
+            encounterId={encounterId}
+            statesByKind={loop.statesByKind}
+            activeKind={activeKind}
+            sideNameOf={sideNameOf}
+            itemsByKind={room.itemsByKind}
+            bestOf={encounter.best_of ?? 0}
+            seriesWins={
+              seriesSummary != null
+                ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
+                : null
+            }
+            onMutated={room.invalidateRoom}
+            grid={grid}
+          />
+        </CollapsibleContent>
+      </Collapsible>
     ) : null;
 
   if (loop.waitingOnReadiness) {
@@ -351,7 +373,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
         session={activeState.session}
         queryKey={activeKind === "map" ? room.mapKey : room.heroKey}
         itemsById={room.itemsByKind[activeKind]}
-        isAdmin={isAdmin}
+        isAdmin={isAdmin && adminOpen}
         adminPanel={adminPanel}
         header={header}
       />

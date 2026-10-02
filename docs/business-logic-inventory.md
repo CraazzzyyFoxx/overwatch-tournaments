@@ -338,6 +338,11 @@ First pick: `higher_seed`. First-ban rotation includes `result_loser_choice` (pr
 
 Undo requires both captains. Admins can override.
 
+The pre-game room's organizer controls and history are hidden on entry. Authorized organizers
+can show or hide them on the readiness, pick-ban, map-report and closing screens. While hidden,
+the pool does not accept organizer-only selections; captain actions are unchanged. Visibility is
+local to the open room, survives phase changes, and resets on reload or when opening another encounter.
+
 ---
 
 ## 9. Scrims

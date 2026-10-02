@@ -3273,6 +3273,8 @@
       },
       "admin": {
         "title": "Pick-ban controls (admin)",
+        "showUi": "Show admin UI",
+        "hideUi": "Hide admin UI",
         "sideLabel": "Side",
         "actionLabel": "Action",
         "confirm": "Perform action",
