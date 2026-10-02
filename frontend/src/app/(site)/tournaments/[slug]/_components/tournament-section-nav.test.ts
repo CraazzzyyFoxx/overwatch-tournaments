@@ -143,15 +143,14 @@ describe("buildTournamentSectionNav", () => {
     ).toBe(true);
   });
 
-  it("prefers the active stage, then elimination, then group stage for the bracket href", () => {
+  it("links the bracket to the current stage, not to an unstarted playoff", () => {
     const stages = [
-      stage({ id: 1, stage_type: "round_robin", is_active: false }),
-      stage({ id: 2, stage_type: "double_elimination", is_active: false }),
-      stage({ id: 3, stage_type: "swiss", is_active: true })
+      stage({ id: 1, stage_type: "swiss", order: 0, is_active: false, is_published: false }),
+      stage({ id: 2, stage_type: "double_elimination", order: 1, is_active: false, is_published: false })
     ];
 
     expect(model("live", undefined, stages).find((item) => item.id === "bracket")?.href).toBe(
-      `/tournaments/${tournamentId}/bracket?stage=3`
+      `/tournaments/${tournamentId}/bracket?stage=1`
     );
   });
 

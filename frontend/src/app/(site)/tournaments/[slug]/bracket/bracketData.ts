@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { pickCurrentStage } from "@/lib/tournament/stages";
 import encounterService from "@/services/encounter.service";
 import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
@@ -78,18 +79,14 @@ function requestedStageId(value: string | null): number | null {
 
 function selectBracketStageId(
   stages: readonly StageSummary[],
+  status: TournamentStatus,
   selectedStageParam: string | null
 ): number | null {
   const requestedId = requestedStageId(selectedStageParam);
   const requested =
     requestedId == null ? undefined : stages.find((stage) => stage.id === requestedId);
-  const active = stages.find((stage) => stage.is_active);
-  const elimination = stages.find(
-    (stage) =>
-      stage.stage_type === "single_elimination" || stage.stage_type === "double_elimination"
-  );
 
-  return requested?.id ?? active?.id ?? elimination?.id ?? stages[0]?.id ?? null;
+  return requested?.id ?? pickCurrentStage(stages, status)?.id ?? null;
 }
 
 export function createBracketQueryPlan(
@@ -98,7 +95,7 @@ export function createBracketQueryPlan(
   fullStages?: readonly Stage[]
 ) {
   const availableStages = fullStages ?? tournament.stages;
-  const initialStageId = selectBracketStageId(availableStages, selectedStageParam);
+  const initialStageId = selectBracketStageId(availableStages, tournament.status, selectedStageParam);
   const hasTournament = Number.isSafeInteger(tournament.id) && tournament.id > 0;
   const hasStage = initialStageId != null;
   const refetchInterval = getBracketRefetchInterval(tournament.status);

@@ -115,6 +115,22 @@ describe("TournamentBracketPage", () => {
     expect(plan.standings.enabled).toBe(false);
   });
 
+  it("lands on the group stage while the playoff has not started", () => {
+    const draft = { is_active: false, is_published: false, is_completed: false };
+    const tournament = {
+      id: 117,
+      workspace_id: 9,
+      status: "live",
+      stages: [
+        { id: 252, stage_type: "swiss", order: 0, ...draft },
+        { id: 253, stage_type: "double_elimination", order: 1, ...draft }
+      ]
+    } as Tournament;
+
+    expect(createBracketQueryPlan(tournament, null).initialStageId).toBe(252);
+    expect(createBracketQueryPlan(tournament, "253").initialStageId).toBe(253);
+  });
+
   it("reconciles a stale summary selection against the loaded stage structure", () => {
     const tournament = {
       id: 72,

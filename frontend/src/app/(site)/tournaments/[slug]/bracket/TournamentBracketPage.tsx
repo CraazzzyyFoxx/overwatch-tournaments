@@ -97,7 +97,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
         tournament,
         groupStages,
         eliminationStages,
-        activeStageId: queryPlan.initialStageId ?? selection.fallbackStage?.id,
+        activeStageId: queryPlan.initialStageId ?? undefined,
         viewParam,
         matchCountsKnown: encountersQuery.data !== undefined,
         stageIdsWithMatches,
@@ -106,7 +106,6 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
     [
       groupStages,
       eliminationStages,
-      selection.fallbackStage?.id,
       queryPlan.initialStageId,
       encountersQuery.data,
       stageIdsWithMatches,

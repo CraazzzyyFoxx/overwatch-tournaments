@@ -13,6 +13,7 @@ import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { pickCurrentStage } from "@/lib/tournament/stages";
 import encounterService from "@/services/encounter.service";
 import ffaService from "@/services/ffa.service";
 import heroService from "@/services/hero.service";
@@ -23,12 +24,7 @@ import tournamentService from "@/services/tournament.service";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { getBracketRefetchInterval } from "../bracket/bracketData";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
-import {
-  ELIMINATION_TYPES,
-  GROUP_TYPES,
-  overviewVariant,
-  pickOverviewStage
-} from "./tournamentOverview.model";
+import { ELIMINATION_TYPES, GROUP_TYPES, overviewVariant } from "./tournamentOverview.model";
 
 /**
  * Everything the overview reads, in one place: the six queries the three
@@ -49,8 +45,8 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
   // dependency arrays, and a value re-derived every render is one the compiler
   // has to treat as free to change underneath those memos.
   const stage = useMemo(
-    () => (tournament && variant ? pickOverviewStage(tournament.stages, variant) : null),
-    [tournament, variant]
+    () => (tournament ? pickCurrentStage(tournament.stages, tournament.status) : null),
+    [tournament]
   );
   const showsGroupTable =
     variant !== "registration" && stage !== null && GROUP_TYPES[stage.stage_type] === true;
@@ -117,7 +113,9 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
 
   const streamsQuery = useTournamentStreamsQuery(variant === "live" ? tournamentId : undefined);
 
-  const encounters = encountersQuery.data ? encountersQuery.data.results : [];
+  // Memoised so the empty fallback keeps one identity: a fresh `[]` per render
+  // would re-run every memo below that depends on it.
+  const encounters = useMemo(() => encountersQuery.data?.results ?? [], [encountersQuery.data]);
   const registrationList = registrationsQuery.data ?? null;
   // Empty whenever the organizer hid the list — the summary below still renders,
   // because its numbers ride the same envelope rather than these rows.

@@ -8,8 +8,6 @@ import type { Stage, StageItem, Standings, Tournament } from "@/types/tournament
 export type BracketStageSelection = {
   groupStages: Stage[];
   eliminationStages: Stage[];
-  /** What the screen falls back to when `?stage=` names nothing available. */
-  fallbackStage: Stage | undefined;
   /** `true` when the group-scope panels are on screen instead of a bracket. */
   shouldShowGroupStage: boolean;
   activeGroupStages: Stage[];
@@ -26,7 +24,8 @@ export type BracketStageSelection = {
 export function selectBracketStages(
   stages: readonly Stage[],
   viewParam: string | null,
-  requestedStageId: number | null
+  /** Already resolved by `createBracketQueryPlan`, default stage included. */
+  stageId: number | null
 ): BracketStageSelection {
   const groupStages = stages.filter(
     (stage) =>
@@ -37,10 +36,7 @@ export function selectBracketStages(
       stage.stage_type === "single_elimination" || stage.stage_type === "double_elimination"
   );
 
-  const activeStage = stages.find((stage) => stage.is_active);
-  const fallbackStage = activeStage ?? eliminationStages[0] ?? stages[0];
-  const requestedStage = stages.find((stage) => stage.id === requestedStageId);
-  const primaryStage = requestedStage ?? fallbackStage;
+  const primaryStage = stages.find((stage) => stage.id === stageId);
   const shouldShowGroupStage =
     viewParam === "groups" ||
     (primaryStage ? groupStages.some((stage) => stage.id === primaryStage.id) : false);
@@ -56,7 +52,6 @@ export function selectBracketStages(
   return {
     groupStages,
     eliminationStages,
-    fallbackStage,
     shouldShowGroupStage,
     activeGroupStages,
     activeStages: shouldShowGroupStage ? activeGroupStages : primaryStage ? [primaryStage] : []

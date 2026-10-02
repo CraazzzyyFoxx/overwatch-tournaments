@@ -1,4 +1,5 @@
 import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { pickCurrentStage } from "@/lib/tournament/stages";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
@@ -91,16 +92,12 @@ function normalizePathname(pathname: string): string {
   return path.length > 1 ? path.replace(/\/+$/, "") : path;
 }
 
-function resolveBracketHref(tournamentId: string, stages: StageSummary[]): string {
-  const active = stages.find((stage) => stage.is_active);
-  const elimination = stages.find(
-    (stage) =>
-      stage.stage_type === "single_elimination" || stage.stage_type === "double_elimination"
-  );
-  const group = stages.find(
-    (stage) => stage.stage_type === "round_robin" || stage.stage_type === "swiss"
-  );
-  const primary = active ?? elimination ?? group ?? stages[0];
+function resolveBracketHref(
+  tournamentId: string,
+  status: TournamentStatus,
+  stages: StageSummary[]
+): string {
+  const primary = pickCurrentStage(stages, status);
 
   return primary
     ? `/tournaments/${tournamentId}/bracket?stage=${primary.id}`
@@ -150,7 +147,7 @@ export function buildTournamentSectionNav({
       id === "overview"
         ? `/tournaments/${tournamentId}`
         : id === "bracket"
-          ? resolveBracketHref(tournamentId, stages)
+          ? resolveBracketHref(tournamentId, status, stages)
           : `/tournaments/${tournamentId}/${id}`;
     const canonicalPath = href.split("?", 1)[0];
     const phaseLocked = competitionOnlySections.has(id) && !competitionStarted;
