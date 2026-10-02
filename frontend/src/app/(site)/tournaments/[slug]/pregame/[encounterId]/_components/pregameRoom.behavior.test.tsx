@@ -1109,13 +1109,16 @@ describe("phase selection", () => {
     expect(sides[0].querySelector('[data-carried-from="1"]')).toBeTruthy();
     expect(sides[1].querySelector("[data-carried-from]")).toBeNull();
 
-    // The lobby needs one flat statement of what is off, and what is left.
+    // The lobby needs the final bans, carried ones included — and only them:
+    // what is still playable is not the list anyone transfers.
     const unavailable = document.body.querySelector<HTMLElement>("[data-hero-unavailable]");
     expect(unavailable?.textContent).toContain(ROOM.heroBans.unavailableOn.replace("{n}", "2"));
-    expect(unavailable?.textContent).toContain("Tank A, Tank B");
     expect(
-      document.body.querySelector<HTMLElement>("[data-hero-remaining]")?.textContent
-    ).toContain("Support A");
+      Array.from(unavailable!.querySelectorAll<HTMLElement>("[data-hero-banned]")).map(
+        (row) => row.dataset.heroBanned
+      )
+    ).toEqual(["201", "202"]);
+    expect(unavailable?.textContent).not.toContain("Support A");
 
     const copy = Array.from(document.body.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === ROOM.heroBans.copy

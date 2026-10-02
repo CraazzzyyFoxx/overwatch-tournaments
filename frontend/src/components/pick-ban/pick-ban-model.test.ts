@@ -28,7 +28,6 @@ import {
   pickBanReserveMap,
   pickedItemsInOrder,
   poolRoundGroups,
-  remainingEntries,
   roundState,
   seriesMatchesByPosition,
   statusLabelKey,
@@ -464,7 +463,7 @@ describe("tileStatus", () => {
   });
 });
 
-describe("carried, banned and remaining entries", () => {
+describe("carried and banned entries", () => {
   const pool = [
     entry({ id: 1, item_id: 101, round: 2, status: "banned", carried_from_round: 1, picked_by: "home" }),
     entry({ id: 2, item_id: 102, round: 2, status: "banned", picked_by: "away" }),
@@ -480,10 +479,6 @@ describe("carried, banned and remaining entries", () => {
 
   it("counts a carried ban as unavailable on this map, like any other", () => {
     expect(bannedEntries(pool, 2).map((e) => e.item_id)).toEqual([101, 102]);
-  });
-
-  it("leaves a PROTECTED entry in what the map still has — a protect keeps it playable", () => {
-    expect(remainingEntries(pool, 2).map((e) => e.item_id)).toEqual([103, 104]);
   });
 
   it("treats a flat pool's entries as belonging to every round", () => {

@@ -475,15 +475,6 @@ export function bannedEntries(pool: PickBanEntry[], round: number | null): PickB
   return pool.filter((entry) => entry.status === "banned" && inRound(entry, round));
 }
 
-/**
- * What `round` still has to play with: the round's pool minus its bans. A
- * protected entry counts — a protect keeps a hero IN the game, which is
- * exactly the distinction the lobby has to get right.
- */
-export function remainingEntries(pool: PickBanEntry[], round: number | null): PickBanEntry[] {
-  return pool.filter((entry) => entry.status !== "banned" && inRound(entry, round));
-}
-
 export type PickBanStatusLabelKey = `status.${PickBanEntryStatus | "remaining"}`;
 
 /**
@@ -571,10 +562,10 @@ export interface PickBanRoleItem {
   role: AqtRoleKey | null;
 }
 
-export interface PickBanRoleGroup {
+export interface PickBanRoleGroup<T extends PickBanRoleItem = PickBanRoleItem> {
   /** Null is the "role unknown" bucket — rendered last, never dropped. */
   role: AqtRoleKey | null;
-  items: PickBanRoleItem[];
+  items: T[];
 }
 
 /** Tank-damage-support, the order the game's own hero list uses. */
@@ -585,8 +576,8 @@ const ROLE_ORDER: AqtRoleKey[] = ["tank", "damage", "support"];
  * group. Empty roles are dropped; the unknown-role bucket comes last so a
  * catalog that has not loaded yet never hides an item.
  */
-export function groupItemsByRole(items: PickBanRoleItem[]): PickBanRoleGroup[] {
-  const byRole = new Map<AqtRoleKey | null, PickBanRoleItem[]>();
+export function groupItemsByRole<T extends PickBanRoleItem>(items: T[]): PickBanRoleGroup<T>[] {
+  const byRole = new Map<AqtRoleKey | null, T[]>();
   for (const item of items) {
     const bucket = byRole.get(item.role) ?? [];
     bucket.push(item);

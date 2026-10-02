@@ -7,8 +7,7 @@ import {
   gameAtPosition,
   groupItemsByRole,
   highestPoolRound,
-  pickedItemsInOrder,
-  remainingEntries
+  pickedItemsInOrder
 } from "@/components/pick-ban/pick-ban-model";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import type { Encounter } from "@/types/encounter.types";
@@ -184,8 +183,8 @@ export function buildSeriesMaps(
 }
 
 /**
- * The hero board of one map of the series: who banned or protected what, the
- * flat list of everything unavailable there, and what is left per role.
+ * The hero board of one map of the series: who banned or protected what, and
+ * the final list of everything banned there.
  *
  * Per-side lists come from the SUBMISSIONS, not from the pool: a blind step
  * where both captains ban the same hero projects ONE banned entry carrying one
@@ -222,7 +221,7 @@ export function heroBoardForRound(
   for (const entry of carriedBanEntries(state.pool, round)) {
     // A system-resolved (roulette) ban projects `picked_by: "decider"`: it
     // belongs to no captain, so it stays out of the side columns and is named
-    // only by the flat "unavailable here" list below.
+    // only by the final bans list below.
     if (entry.picked_by !== "home" && entry.picked_by !== "away") continue;
     actions.push(describe(entry.item_id, "ban", entry.picked_by, entry.carried_from_round));
   }
@@ -233,22 +232,19 @@ export function heroBoardForRound(
     }
   }
 
-  const toRoleItems = (entries: PickBanEntry[]) =>
-    entries.map((entry) => {
-      const item = heroesById[entry.item_id];
-      return {
-        itemId: entry.item_id,
-        name: item?.name ?? heroName(entry.item_id),
-        role: normalizeRole(item?.type ?? item?.role)
-      };
-    });
+  // Every ban in force on this map — carried and engine-rolled ones included,
+  // protects never: a protect keeps the hero IN the game.
+  const banned = bannedEntries(state.pool, round).map((entry) => {
+    const item = heroesById[entry.item_id];
+    return {
+      itemId: entry.item_id,
+      name: item?.name ?? heroName(entry.item_id),
+      item,
+      role: normalizeRole(item?.type ?? item?.role)
+    };
+  });
 
-  return {
-    round,
-    actions,
-    banned: groupItemsByRole(toRoleItems(bannedEntries(state.pool, round))),
-    remaining: groupItemsByRole(toRoleItems(remainingEntries(state.pool, round)))
-  };
+  return { round, actions, banned: groupItemsByRole(banned) };
 }
 
 /**
