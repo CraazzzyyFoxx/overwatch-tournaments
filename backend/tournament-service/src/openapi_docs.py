@@ -556,6 +556,10 @@ DOCS: dict[str, dict] = {
         "summary": "Preview stage bracket",
         "description": "Permission: workspace `stage.read` on the stage's workspace. Returns the bracket a stage would generate — the real generator's pairings, seed order, advancement edges and per-round best-of, with skeleton-local ids because nothing is written; wired teams appear by name, an unseeded playoff is projected from the preceding group stage.",
     },
+    "rpc.tournament.stage_bracket_preview_public": {
+        "summary": "Preview stage bracket (public)",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist, and a stage of another tournament is a 404. The same read-only skeleton as the admin bracket preview, for drawing an elimination stage whose matches are not generated yet.",
+    },
     "rpc.tournament.stage_bracket_template_get": {
         "summary": "Read a stage's bracket layout",
         "description": "Permission: workspace `stage.read`. The stage's custom bracket template, or the one its format would generate for the current seed counts, plus those counts.",

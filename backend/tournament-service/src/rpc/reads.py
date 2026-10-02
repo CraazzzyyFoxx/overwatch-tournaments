@@ -24,8 +24,9 @@ from shared.services.division_grid.normalization import DivisionGridNormalizatio
 from shared.services.tournament.visibility import assert_tournament_viewable
 from src import schemas
 from src.core.workspace import get_division_grid
-from src.rpc._helpers import _bool, _q, _q1, _read, _require_id
+from src.rpc._helpers import _bool, _path_int, _q, _q1, _read, _require_id
 from src.services import visibility_resolvers
+from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_config
 from src.services.standings import flows as standings_flows
@@ -91,6 +92,19 @@ def register(broker: Any, logger: Any) -> None:
             return await tournament_flows.flows_service.get_stages_read(session, _require_id(data))
 
         return await _read(logger, op, exclude_none=True)
+
+    @broker.subscriber("rpc.tournament.stage_bracket_preview_public")
+    async def _stage_bracket_preview_public(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            tournament_id = _require_id(data)
+            await assert_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
+            stage_id = _path_int(data, "stage_id")
+            # The gate cleared the tournament in the path, not whichever one owns this stage.
+            if await admin_stage_service.get_tournament_id(session, stage_id) != tournament_id:
+                raise HTTPException(status_code=404, detail="Stage not found")
+            return await admin_stage_service.get_bracket_preview(session, stage_id)
+
+        return await _read(logger, op)
 
     @broker.subscriber("rpc.tournament.get_standings")
     async def _get_standings(data: dict, msg: RabbitMessage) -> dict:

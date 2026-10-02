@@ -9831,6 +9831,10 @@
       "description": "Permission: workspace `stage.read` on the stage's workspace. Returns the bracket a stage would generate \u2014 the real generator's pairings, seed order, advancement edges and per-round best-of, with skeleton-local ids because nothing is written; wired teams appear by name, an unseeded playoff is projected from the preceding group stage.",
       "summary": "Preview stage bracket"
     },
+    "rpc.tournament.stage_bracket_preview_public": {
+      "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist, and a stage of another tournament is a 404. The same read-only skeleton as the admin bracket preview, for drawing an elimination stage whose matches are not generated yet.",
+      "summary": "Preview stage bracket (public)"
+    },
     "rpc.tournament.stage_bracket_template_clear": {
       "description": "Permission: workspace `stage.update`. Drops the custom template; refused with 409 while the stage has matches.",
       "response": {
