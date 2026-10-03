@@ -1,6 +1,7 @@
 import { useId } from "react";
 
 import type { AuthMergePolicy, AuthMergePreview } from "@/types/admin.types";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
