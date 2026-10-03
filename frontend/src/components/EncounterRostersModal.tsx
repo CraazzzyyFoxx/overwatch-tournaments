@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
@@ -23,6 +23,8 @@ interface EncounterRostersModalProps {
   encounterId: number;
   homeTeamName: string;
   awayTeamName: string;
+  /** Replaces the bracket card's icon button; must accept a ref (`asChild`). */
+  trigger?: ReactElement;
 }
 
 /**
@@ -37,7 +39,8 @@ interface EncounterRostersModalProps {
 export function EncounterRostersModal({
   encounterId,
   homeTeamName,
-  awayTeamName
+  awayTeamName,
+  trigger
 }: Readonly<EncounterRostersModalProps>) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -52,16 +55,20 @@ export function EncounterRostersModal({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        className="flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
-        aria-label={t("bracket.viewRosters")}
-        onClick={(e) => {
-          // Keep any future card-level click handler from also firing.
-          e.stopPropagation();
-        }}
-      >
-        <Users className="size-3.5" aria-hidden />
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      ) : (
+        <DialogTrigger
+          className="flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
+          aria-label={t("bracket.viewRosters")}
+          onClick={(e) => {
+            // Keep any future card-level click handler from also firing.
+            e.stopPropagation();
+          }}
+        >
+          <Users className="size-3.5" aria-hidden />
+        </DialogTrigger>
+      )}
       <DialogContent className="flex max-h-[85vh] w-[95vw] max-w-[900px] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 space-y-1 border-b border-[color:var(--aqt-border)] p-4 pr-14 text-left">
           <DialogTitle>{t("bracket.rosters.title")}</DialogTitle>

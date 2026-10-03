@@ -3198,6 +3198,7 @@
       "slotUnderfilledHint": "One of this match's slots has fewer than two candidates, so there is nothing to ban there. The organizer has to fill it before this room can open.",
       "notReadyTitle": "Waiting for both captains",
       "notReadyHint": "This room opens once both captains confirm they are ready.",
+      "rosters": "Rosters",
       "bracketPreviewTitle": "Bracket preview",
       "bracketPreviewHint": "The organizer generated this bracket ahead of time. It opens once they activate the stage.",
       "ready": {
