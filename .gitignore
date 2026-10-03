@@ -62,10 +62,10 @@ backend/.cache/
 
 # Logs
 logs/
-# `logs/` above is for runtime logs. Any `logs` segment under the Next app tree
-# is a route, not output — this used to name one exact hub path and silently
-# dropped the file the moment that route moved.
-!frontend/src/app/**/logs/
+# `logs/` above is for runtime logs. Any `logs` segment under the frontend
+# source tree is code (a route, `components/logs`, `lib/logs`), not output —
+# this used to name one exact path and silently dropped new files beside it.
+!frontend/src/**/logs/
 
 # AI agent tooling
 .claude/

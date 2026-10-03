@@ -102,7 +102,7 @@ The routes are `POST /api/v1/scrims`, `GET /api/v1/scrims`, `GET /api/v1/scrims/
 
 ## Match logs
 
-**Ingestion.** Three paths: an organizer's multipart upload (`POST /api/v1/admin/logs/upload` with `tournament_id`, an optional `encounter_id` and one or more `files[]`), the Discord bot's queue-borne ingest, and a manual processing request (`POST /api/v1/logs/{id}`). The source is recorded on the record as `upload`, `discord` or `manual`. The filename is checked for path traversal, the content must be valid UTF-8, and the file lands in object storage before the database row is written.
+**Ingestion.** Three paths: an organizer's multipart upload (`POST /api/v1/admin/logs/upload` with `tournament_id`, an optional `encounter_id` and one or more `files[]`), the Discord bot's queue-borne ingest, and a manual processing request (`POST /api/v1/logs/{id}`). The source is recorded on the record as `upload`, `discord` or `manual`. The filename is checked for path traversal, the content must be valid UTF-8, and the file lands in object storage before the database row is written. An upload whose log has no `match_end` row is refused per file before it is stored — the match is unfinished or the game is still writing it — which is what lets the browser's automatic upload retry it later.
 
 **Deduplication.** A SHA-256 is taken over the file's bytes. If a record in state `done` with the same hash already exists for the same tournament and filename, the file is not reprocessed. An existing `pending` or `failed` record for the same filename is reused, with the attempt counter reset to zero: the content may have changed, so the retry budget starts over.
 
