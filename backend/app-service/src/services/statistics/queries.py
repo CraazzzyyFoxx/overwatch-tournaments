@@ -105,6 +105,29 @@ class StatisticsQueries:
         rows = (await session.execute(paged)).all()
         return [(row[0], row[1]) for row in rows], (rows[0][2] if rows else 0)
 
+    def _tournament_match_ids_cte(self, tournament_id: int, *, cte_name: str) -> sa.CTE:
+        """The tournament's match ids, materialized so they DRIVE the stats scan.
+
+        ``matches.statistics`` is ~27M rows and has no index on ``name``, so
+        reaching the tournament the other way round (``statistics -> match ->
+        encounter`` with the only selective predicate on ``encounter``) lets the
+        planner make the stats table the outer relation: a full scan of the
+        partial ``round = 0 AND hero_id IS NULL`` index, per request, which is
+        what blew past ``statement_timeout`` (OWT-TOURNAMENTS-2AP). A tournament
+        has a few hundred matches, so materializing them first — PostgreSQL
+        inlines a single-reference CTE otherwise, reproducing the same plan —
+        turns the stats read into an ``ix_match_statistics_match_name_round``
+        probe per match. Same rows either way; only the shape differs.
+        """
+        return (
+            sa.select(models.Match.id.label("match_id"))
+            .select_from(models.Match)
+            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .where(models.Encounter.tournament_id == tournament_id)
+            .cte(cte_name)
+            .prefix_with("MATERIALIZED")
+        )
+
     def _mvp_placement_stats_cte(self, tournament_id: int, *, cte_prefix: str) -> sa.CTE:
         """Per-user average MVP placement, dense-ranked ascending (1 = best).
 
@@ -114,6 +137,7 @@ class StatisticsQueries:
         ``COALESCE(ImpactRank, Performance)`` per-match average as
         ``services.user._repositories.get_roster_avg_mvp_bulk``.
         """
+        tournament_matches = self._tournament_match_ids_cte(tournament_id, cte_name=f"{cte_prefix}matches")
         per_match = (
             sa.select(
                 models.MatchStatistics.user_id.label("user_id"),
@@ -130,14 +154,12 @@ class StatisticsQueries:
                 ).label("performance"),
             )
             .select_from(models.MatchStatistics)
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(tournament_matches, tournament_matches.c.match_id == models.MatchStatistics.match_id)
             .where(
                 sa.and_(
                     models.MatchStatistics.name.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
                     models.MatchStatistics.hero_id.is_(None),
                     models.MatchStatistics.round == 0,
-                    models.Encounter.tournament_id == tournament_id,
                 )
             )
             .group_by(models.MatchStatistics.user_id, models.MatchStatistics.match_id)
@@ -242,51 +264,6 @@ class StatisticsQueries:
 
     # ---- per-tournament stats -------------------------------------------------
 
-    async def get_tournament_avg_match_stat_for_user(
-        self,
-        session: AsyncSession,
-        tournament: models.Tournament,
-        user_id: int,
-        stat_name: enums.LogStatsName,
-        order: bool = False,
-    ) -> tuple[tuple[int, float, int], int]:
-        """A user's average ``stat_name`` in a tournament as ``(user id, average, rank)``, plus
-        the total number of ranked users.
-
-        ``order=True`` ranks ascending (lowest average is rank 1) instead of descending.
-        """
-        if not order:
-            order_by = sa.desc(sa.func.avg(models.MatchStatistics.value))
-        else:
-            order_by = sa.asc(sa.func.avg(models.MatchStatistics.value))
-
-        stats_query = (
-            sa.select(
-                models.MatchStatistics.user_id,
-                sa.func.avg(models.MatchStatistics.value).cast(sa.Numeric(10, 2)).label("value"),
-                sa.func.dense_rank().over(order_by=order_by).label("rank"),
-            )
-            .select_from(models.MatchStatistics)
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
-            .where(
-                sa.and_(
-                    models.MatchStatistics.name == stat_name,
-                    models.Encounter.tournament_id == tournament.id,
-                    models.MatchStatistics.round == 0,
-                )
-            )
-            .group_by(models.MatchStatistics.user_id)
-        ).cte("stats_query")
-
-        query = sa.select(stats_query, sa.select(sa.func.count(stats_query.c.user_id)).scalar_subquery()).where(
-            stats_query.c.user_id == user_id
-        )
-
-        result = await session.execute(query)
-
-        return result.first()  # type: ignore
-
     async def get_tournament_avg_match_stat_for_user_bulk(
         self,
         session: AsyncSession,
@@ -297,6 +274,7 @@ class StatisticsQueries:
         """Per-stat averages for a user in a tournament as ``(stat name, user id, average,
         descending rank, ascending rank, ranked user count)`` rows, one per requested stat.
         """
+        tournament_matches = self._tournament_match_ids_cte(tournament.id, cte_name="tournament_stat_matches")
         stats_query = (
             sa.select(
                 models.MatchStatistics.name,
@@ -316,12 +294,10 @@ class StatisticsQueries:
                 .label("rank_asc"),
             )
             .select_from(models.MatchStatistics)
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(tournament_matches, tournament_matches.c.match_id == models.MatchStatistics.match_id)
             .where(
                 sa.and_(
                     models.MatchStatistics.name.in_(stats_names),
-                    models.Encounter.tournament_id == tournament.id,
                     models.MatchStatistics.round == 0,
                     models.MatchStatistics.hero_id.is_(None),
                 )
@@ -410,6 +386,7 @@ class StatisticsQueries:
         avg_value = sa.func.avg(models.MatchStatistics.value)
         order_by = sa.asc(avg_value) if enums.is_ascending_stat(stat_name) else sa.desc(avg_value)
 
+        tournament_matches = self._tournament_match_ids_cte(tournament_id, cte_name="leaderboard_matches")
         stats_query = (
             sa.select(
                 models.MatchStatistics.user_id.label("user_id"),
@@ -417,12 +394,10 @@ class StatisticsQueries:
                 sa.func.dense_rank().over(order_by=order_by).label("rank"),
             )
             .select_from(models.MatchStatistics)
-            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
-            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .join(tournament_matches, tournament_matches.c.match_id == models.MatchStatistics.match_id)
             .where(
                 sa.and_(
                     models.MatchStatistics.name == stat_name,
-                    models.Encounter.tournament_id == tournament_id,
                     models.MatchStatistics.round == 0,
                     models.MatchStatistics.hero_id.is_(None),
                 )
