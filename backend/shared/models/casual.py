@@ -31,13 +31,23 @@ class CasualMatch(db.TimeStampIntegerMixin):
     # match recorded with points off.
     points_per_win_applied: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
+    # ``cascade`` *and* ``passive_deletes``: the children's FKs are NOT NULL with
+    # ``ON DELETE CASCADE``, so the database is what should clean them up, and
+    # ``passive_deletes`` keeps an unloaded collection from being read just to be
+    # rewritten. But ``passive_deletes`` alone only covers the *unloaded* case --
+    # undo loads both sides (``CasualMatchRepository.get_for_game`` eager-loads
+    # them to roll the ranks back), and the default cascade de-associates the
+    # loaded ones: ``UPDATE casual.team SET match_id = NULL`` against NOT NULL.
+    # ``delete-orphan`` says the sides are owned by the match and go with it.
     teams: Mapped[list[CasualTeam]] = relationship(
         back_populates="match",
+        cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="CasualTeam.id",
     )
     busy_players: Mapped[list[CasualMatchBusyPlayer]] = relationship(
         back_populates="match",
+        cascade="all, delete-orphan",
         passive_deletes=True,
     )
 
@@ -59,7 +69,11 @@ class CasualTeam(db.TimeStampIntegerMixin):
     score: Mapped[int] = mapped_column(Integer(), nullable=False)
 
     match: Mapped[CasualMatch] = relationship(back_populates="teams")
-    players: Mapped[list[CasualPlayer]] = relationship(back_populates="team", passive_deletes=True)
+    players: Mapped[list[CasualPlayer]] = relationship(
+        back_populates="team",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class CasualPlayer(db.TimeStampIntegerMixin):
