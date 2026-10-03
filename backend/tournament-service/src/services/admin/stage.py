@@ -335,6 +335,16 @@ class AdminStageService:
     def _bracket_skeleton(self, stage: models.Stage, upper_ids: list[int], lower_ids: list[int]) -> BracketSkeleton:
         """What ``generate_bracket`` returns for these seeds (real ids or ``placeholder_seeds``),
         drawn from the stage's custom template when it has one."""
+        seeds = upper_ids + lower_ids
+        duplicates = sorted({seed for seed in seeds if seeds.count(seed) > 1})
+        if duplicates:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Teams {', '.join(map(str, duplicates))} are seeded more than once in this stage. "
+                    "Fix the bracket inputs."
+                ),
+            )
         if stage.bracket_template is None:
             return generate_bracket(stage.stage_type, upper_ids, lower_bracket_team_ids=lower_ids)
         template = BracketTemplate.model_validate(stage.bracket_template)
@@ -346,9 +356,6 @@ class AdminStageService:
                     f"{len(upper_ids)}+{len(lower_ids)}. Edit or reset the custom bracket."
                 ),
             )
-        seeds = upper_ids + lower_ids
-        if len(set(seeds)) != len(seeds):
-            raise ValueError("team_ids must be unique within a stage item")
         return _resolve_seeds(
             template_to_skeleton(template),
             dict(zip(placeholder_seeds(len(seeds)), seeds, strict=True)),
@@ -2062,17 +2069,23 @@ class AdminStageService:
         for standing in standings_result.scalars():
             standings_by_item.setdefault(standing.stage_item_id, []).append(standing)
 
+        # All-or-nothing per source group: positions in one group are a single
+        # ranking, so re-seeding only the tie-free ones moves a team into its new
+        # place while its old place still holds it -- the same team seeded twice.
         moved: list[tuple[models.StageItemInput, int, int]] = []
+        blocked: set[int] = set()
         for inp in candidates:
             standings = standings_by_item.get(inp.source_stage_item_id, [])
             if inp.source_position > len(standings):
                 continue
             if _boundary_tie_unresolved(standings, inp.source_position):
+                blocked.add(inp.source_stage_item_id)
                 continue
             expected = standings[inp.source_position - 1].team_id
             if expected is None or expected == inp.team_id:
                 continue
             moved.append((inp, inp.team_id, expected))
+        moved = [entry for entry in moved if entry[0].source_stage_item_id not in blocked]
 
         if not moved:
             return 0

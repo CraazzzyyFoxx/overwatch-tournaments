@@ -269,6 +269,28 @@ class DownstreamRequalificationTests(IsolatedAsyncioTestCase):
         self.assertEqual(0, applied)
         self.assertEqual(1, inp.team_id)
 
+    async def test_a_tie_anywhere_in_the_source_freezes_all_its_seeds(self) -> None:
+        """Position 2 is tie-free and now names team 1, but team 1 still holds
+        tie-blocked position 1: moving only position 2 would seed team 1 twice."""
+        first = _final(team_id=1, source_position=1)
+        second = _final(team_id=2, source_position=2)
+        second.slot = 2
+        stage = _playoff([first, second])
+        session = _session(
+            [
+                [
+                    _standing(stage_item_id=100, position=1, team_id=3, tie_group=1),
+                    _standing(stage_item_id=100, position=2, team_id=1, tie_group=1),
+                    _standing(stage_item_id=100, position=3, team_id=2, tie_group=3),
+                ],
+            ]
+        )
+        with patch.object(service, "get_stages_by_tournament", AsyncMock(return_value=[stage])):
+            applied = await service.requalify_downstream_inputs(session, 99)
+
+        self.assertEqual(0, applied)
+        self.assertEqual((1, 2), (first.team_id, second.team_id))
+
 
 class SourceCorrectionGuardTests(IsolatedAsyncioTestCase):
     """Item 10, other half: refuse what re-qualification can no longer repair."""

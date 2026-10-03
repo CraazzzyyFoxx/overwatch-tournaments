@@ -90,6 +90,20 @@ class GetBracketPreviewTests(IsolatedAsyncioTestCase):
         for source in final["sources"]:
             self.assertIn(source["local_id"], local_ids)
 
+    async def test_a_team_seeded_twice_is_a_conflict_naming_it(self) -> None:
+        stage = SimpleNamespace(
+            **stage_regulation(),
+            id=5,
+            stage_type=enums.StageType.SINGLE_ELIMINATION,
+            items=[_item(1, [_input(7, 1), _input(8, 2), _input(9, 3), _input(7, 4)])],
+        )
+
+        with patch.object(service, "get_stage", AsyncMock(return_value=stage)), self.assertRaises(Exception) as ctx:
+            await service.get_bracket_preview(SimpleNamespace(), 5)
+
+        self.assertEqual(409, ctx.exception.status_code)
+        self.assertIn("Teams 7 ", str(ctx.exception.detail))
+
     async def test_projects_an_unseeded_playoff_with_every_slot_tbd(self) -> None:
         # No teams wired: same fallback generation takes -- advance_count (4)
         # from each of 2 groups, of which 2 start upper -- so the drawn tree is
