@@ -5,6 +5,14 @@ checks gate it, and how documentation is expected to age. Setup instructions liv
 [`README.md`](./README.md); the system-level picture lives in
 [`docs/architecture.md`](./docs/architecture.md).
 
+## MCP tooling
+
+Project MCP servers are configured in [`.mcp.json`](./.mcp.json) and
+[`opencode.jsonc`](./opencode.jsonc). SonarQube MCP is intentionally not configured:
+starting an AI client must not launch `sonarsource/sonarqube-mcp` in Docker.
+After changing MCP configuration, run `/mcp reload` in already-open OMP sessions;
+otherwise their existing server connections can relaunch removed containers.
+
 ## Branches and releases
 
 - `develop` is the working branch. Feature work branches off it.

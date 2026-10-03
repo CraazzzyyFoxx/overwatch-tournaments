@@ -14,27 +14,6 @@
       "type": "remote",
       "url": "https://mcp.sentry.dev/mcp",
       "enabled": true
-    },
-    "sonarqube": {
-      "type": "local",
-      "command": [
-        "docker",
-        "run",
-        "--init",
-        "--pull=always",
-        "-i",
-        "--rm",
-        "-e",
-        "SONARQUBE_TOKEN",
-        "-e",
-        "SONARQUBE_ORG",
-        "sonarsource/sonarqube-mcp"
-      ],
-      "environment": {
-        "SONARQUBE_TOKEN": "$SONARQUBE_TOKEN",
-        "SONARQUBE_ORG": "$SONARQUBE_ORG"
-      },
-      "enabled": true
     }
   }
 }
