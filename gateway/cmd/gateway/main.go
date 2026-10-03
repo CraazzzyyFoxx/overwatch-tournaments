@@ -400,17 +400,20 @@ func run() error {
 	// the response cache's invalidator: the worker's tournament_changed
 	// consumer publishes realtime:tournament:{id}:bracket after every
 	// committed tournament write (via the transactional outbox), so cached
-	// public reads drop the moment the backend's own cache does. The third
-	// leg is the chat revoker: a chat.visibility_changed frame re-runs the
+	// public reads drop the moment the backend's own cache does. The chat
+	// leg is the revoker: a chat.visibility_changed frame re-runs the
 	// topic ACL for that room's live subscribers, because the ACL is otherwise
 	// only evaluated at subscribe time and an organizer hiding a chat must cut
 	// off the spectators already in it. safego recovers a panic here
 	// (unexpected Redis message format, etc.) instead of crashing the whole
 	// process.
-	legs := []events.Broadcaster{hub, ws.NewTopicRevoker(hub, authz, wsStore, logger)}
+	// Invalidate before enqueueing notifications: clients may refetch as soon
+	// as their writer pump delivers the event.
+	legs := make([]events.Broadcaster, 0, 3)
 	if respCache != nil {
 		legs = append(legs, respCache)
 	}
+	legs = append(legs, ws.NewTopicRevoker(hub, authz, wsStore, logger), hub)
 	bus := events.Fanout(legs...)
 	subscriber := events.New(rdb, bus, logger)
 	safego.Go(func() {

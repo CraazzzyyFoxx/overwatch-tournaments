@@ -313,6 +313,9 @@ consuming; liveness is judged from metrics and queue depth instead.
 
 ## Operational notes
 
+- **Shutdown order.** Stop schedulers in `on_shutdown`, but close HTTP, S3 and Redis clients in
+  `after_shutdown`. FastStream drains consumers between those hooks; closing clients before
+  that drain makes active rank-fetch jobs fail with `Client not started` and sends them to the DLQ.
 - **Channel isolation is load-bearing.** RPC, background jobs, match-log parsing and rank fetching
   each get their own channel/prefetch. Collapsing them means one long parse can close the channel
   every other consumer shares.

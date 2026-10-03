@@ -30,7 +30,12 @@ world.
   `correlation_id`, an `x-deadline-ms` deadline, and a per-queue in-flight bulkhead
   (`GATEWAY_RPC_MAX_INFLIGHT`) that sheds with a 503 when a queue is saturated.
 - **Realtime hub** — a Redis→WebSocket hub at `/ws` and `/api/v1/realtime/ws`, replaying
-  `realtime.workspace_event` rows from Postgres so reconnecting clients catch up.
+  `realtime.workspace_event` rows from Postgres so reconnecting clients catch up. Each connection
+  has one ordered writer with at most 64 queued jobs and 4 MiB of serialized backlog, including
+  the in-flight job. Replay and its subscription acknowledgement occupy one atomic job before
+  live events. Queue overflow or the 2-second frame write deadline disconnects a slow peer without
+  blocking Redis event processing; revoked topic frames still queued are discarded before writing.
+  Response-cache invalidation runs before WebSocket notification.
 - **Response cache** — an in-process, in-memory cache of anonymous public reads
   (`respcache`, default 30s TTL), invalidated by workers' Redis pub/sub.
 - **Rate limiting** — per-IP token buckets (auth endpoints, anonymous API traffic, and the

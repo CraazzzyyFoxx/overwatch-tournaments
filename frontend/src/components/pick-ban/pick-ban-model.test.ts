@@ -20,6 +20,7 @@ import {
   carriedBanEntries,
   duplicateItemIds,
   eligibleItemIds,
+  expiredBanIds,
   gameAtPosition,
   groupItemsByRole,
   isSessionActive,
@@ -28,7 +29,6 @@ import {
   pickBanReserveMap,
   pickedItemsInOrder,
   poolRoundGroups,
-  remainingEntries,
   roundState,
   seriesMatchesByPosition,
   statusLabelKey,
@@ -117,6 +117,7 @@ function session(overrides: Partial<PickBanSession> = {}): PickBanSession {
     slot_reserves: null,
     started_at: "2026-07-18T10:00:00Z",
     current_step_started_at: "2026-07-18T10:00:00Z",
+    paused_at: null,
     ...overrides
   };
 }
@@ -464,7 +465,7 @@ describe("tileStatus", () => {
   });
 });
 
-describe("carried, banned and remaining entries", () => {
+describe("carried and banned entries", () => {
   const pool = [
     entry({ id: 1, item_id: 101, round: 2, status: "banned", carried_from_round: 1, picked_by: "home" }),
     entry({ id: 2, item_id: 102, round: 2, status: "banned", picked_by: "away" }),
@@ -482,14 +483,34 @@ describe("carried, banned and remaining entries", () => {
     expect(bannedEntries(pool, 2).map((e) => e.item_id)).toEqual([101, 102]);
   });
 
-  it("leaves a PROTECTED entry in what the map still has — a protect keeps it playable", () => {
-    expect(remainingEntries(pool, 2).map((e) => e.item_id)).toEqual([103, 104]);
-  });
-
   it("treats a flat pool's entries as belonging to every round", () => {
     const flat = [entry({ item_id: 7, round: null, status: "banned" })];
     expect(bannedEntries(flat, 3).map((e) => e.item_id)).toEqual([7]);
     expect(bannedEntries(flat, null).map((e) => e.item_id)).toEqual([7]);
+  });
+});
+
+describe("expiredBanIds", () => {
+  // Round 1 bans 101 (lifetime 2) and 102 (lifetime 1); round 2 carries 101 and
+  // bans 102 afresh; round 3 is in force and still carries only round 2's 102.
+  const groups =
+    poolRoundGroups([
+      entry({ id: 1, item_id: 101, round: 1, status: "banned" }),
+      entry({ id: 2, item_id: 102, round: 1, status: "banned" }),
+      entry({ id: 3, item_id: 101, round: 2, status: "banned", carried_from_round: 1 }),
+      entry({ id: 4, item_id: 102, round: 2, status: "banned" }),
+      entry({ id: 5, item_id: 102, round: 3, status: "banned", carried_from_round: 2 }),
+      entry({ id: 6, item_id: 103, round: 3, status: "banned" }),
+      entry({ id: 7, item_id: 104, round: 3, status: "available" })
+    ]) ?? [];
+
+  it("expires an earlier ban the round in force no longer carries, wherever it is shown", () => {
+    expect([...expiredBanIds(groups, 3)].sort()).toEqual([1, 2, 3]);
+  });
+
+  it("keys by origin round, so a re-ban of the same hero does not revive the old one", () => {
+    expect(expiredBanIds(groups, 3).has(4)).toBe(false);
+    expect(expiredBanIds(groups, 2)).toEqual(new Set([2]));
   });
 });
 

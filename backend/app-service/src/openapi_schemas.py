@@ -157,6 +157,12 @@ OPERATIONS: dict[str, Op] = {
             QueryParam("per_page", "integer"),
             QueryParam("search"),
             QueryParam("role_id", "integer"),
+            QueryParam(
+                "exclude_role_id",
+                "integer",
+                array=True,
+                description="Drop members who hold any of these roles. Repeat the param or comma-separate ids.",
+            ),
             QueryParam("sort"),
             QueryParam("order"),
         ),

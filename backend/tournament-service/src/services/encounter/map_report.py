@@ -37,9 +37,11 @@ from shared.repository import EncounterMapReportRepository
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
+from src.services.encounter.dispute_review import notify_dispute_review
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
+from src.services.encounter.room_journal import record_room_event
 
 
 class MapReportService:
@@ -62,7 +64,7 @@ class MapReportService:
         game: EncounterGame,
         reporter_auth_user_id: int | None,
     ) -> None:
-        """Both captains, not just the opponent.
+        """Both captains, not just the opponent -- and the organizers behind them.
 
         A contradiction needs one of the two to correct their claim, and from
         inside the reconciliation neither side is known to be the wrong one -- the
@@ -70,31 +72,38 @@ class MapReportService:
         reported first. Telling only the opponent would leave the report standing
         unexamined on the half that may be mistaken.
 
+        Nobody watches the admin screens for a dispute to appear, so the workspace
+        staff who can actually retire the claims are told too -- the captains can
+        only re-report, and two captains who disagree twice are still disputed.
+
         One query for the pair, not one per side; a team with no captain, or one
         captained by a shadow player (``players.user.auth_user_id IS NULL``),
-        simply drops out of the result.
+        still yields its NAME (outer join) because the staff sentence renders it.
         """
         result = await session.execute(
-            sa.select(User.auth_user_id)
-            .join(Team, Team.captain_id == User.id)
-            .where(
-                Team.id.in_([encounter.home_team_id, encounter.away_team_id]),
-                User.auth_user_id.is_not(None),
-            )
+            sa.select(Team.id, Team.name, User.auth_user_id)
+            .outerjoin(User, Team.captain_id == User.id)
+            .where(Team.id.in_([encounter.home_team_id, encounter.away_team_id]))
         )
-        recipients = [int(value) for value in result.scalars().all()]
+        names: dict[int, str] = {}
+        recipients: list[int] = []
+        for team_id, team_name, auth_user_id in result.all():
+            names[int(team_id)] = team_name
+            if auth_user_id is not None:
+                recipients.append(int(auth_user_id))
         # The organizer whose bracket this encounter belongs to: it owns the
         # rows, so its operators can retire them. One scalar, and only on the
         # dispute branch -- ``Encounter`` carries the tournament, not the tenant.
         workspace_id = await session.scalar(
             sa.select(Tournament.workspace_id).where(Tournament.id == encounter.tournament_id)
         )
+        source_workspace_id = int(workspace_id) if workspace_id is not None else None
         for recipient in recipients:
             await notify(
                 session,
                 kind="encounter.report_disputed",
                 recipient_auth_user_id=recipient,
-                source_workspace_id=int(workspace_id) if workspace_id is not None else None,
+                source_workspace_id=source_workspace_id,
                 actor_auth_user_id=reporter_auth_user_id,
                 payload={
                     "encounter_id": encounter.id,
@@ -104,6 +113,16 @@ class MapReportService:
                     "map_id": game.map_id,
                 },
             )
+        await notify_dispute_review(
+            session,
+            encounter,
+            workspace_id=source_workspace_id,
+            home_team_name=names.get(encounter.home_team_id, ""),
+            away_team_name=names.get(encounter.away_team_id, ""),
+            game=game,
+            actor_auth_user_id=reporter_auth_user_id,
+            skip_auth_user_ids=recipients,
+        )
 
     async def submit_map_report(
         self,
@@ -115,6 +134,7 @@ class MapReportService:
         reporter_user_id: int | None,
         home_score: int,
         away_score: int,
+        actor_auth_user_id: int | None = None,
     ) -> dict:
         """Upsert ``side``'s claim for one game; reconcile if both sides have now
         claimed. Returns ``{"disputed": bool, "resolved": bool, "game": dict}``.
@@ -169,10 +189,29 @@ class MapReportService:
                 ),
             )
             reports.append(row)
+            changed = True
         else:
+            # A captain re-sending the claim they already filed changes nothing;
+            # the journal records the claim, not the click.
+            changed = (row.home_score, row.away_score) != (home_score, away_score)
             row.reporter_user_id = reporter_user_id
             row.home_score = home_score
             row.away_score = away_score
+        if changed:
+            await record_room_event(
+                session,
+                encounter.id,
+                action="map_reported",
+                source="captain",
+                side=side,
+                actor_auth_user_id=actor_auth_user_id,
+                data={
+                    "position": game.position,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "game_id": game.id,
+                },
+            )
         # Unconditional, on both branches below: the opponent's tile only flips
         # from "not reported" to "sealed" on this signal, and the FIRST
         # captain's claim -- the one that resolves nothing -- is exactly the
@@ -192,6 +231,16 @@ class MapReportService:
 
         if reconciliation.resolved is None:
             if reconciliation.disputed:
+                # Only on the transition: a position that is already disputed and
+                # gets contradicted again did not newly become disputed.
+                if game.state != EncounterGameState.DISPUTED:
+                    await record_room_event(
+                        session,
+                        encounter.id,
+                        action="map_disputed",
+                        source="system",
+                        data={"position": game.position, "game_id": game.id},
+                    )
                 game.state = EncounterGameState.DISPUTED
                 await self._notify_dispute(session, encounter, game=game, reporter_auth_user_id=reporter_user_id)
             await session.commit()

@@ -58,6 +58,10 @@ class ScrimRoomRead(BaseModel):
     #: authority lives in ``Team.captain_id``.
     viewer_side: Literal["home", "away"] | None
     can_claim: bool
+    #: Whether the viewer may retire this room: its creator, a captain of either
+    #: side, or workspace staff holding ``match.result``. False once closed, so the
+    #: UI needs no second rule of its own.
+    can_close: bool
     created_at: datetime
     #: Set when the room is closed, which frees its creator's open-room slot.
     #: Closing is not deleting — the room stays readable by its participants.

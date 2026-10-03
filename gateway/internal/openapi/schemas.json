@@ -2930,7 +2930,7 @@
       "summary": "Set my social account visibility"
     },
     "rpc.app.users.merge_execute": {
-      "description": "Permission: superuser only. Merges one player profile into another, stamping the operator's auth-user id.",
+      "description": "Permission: superuser only. Atomically merges player references, selected social identities, auth ownership, preserved resources and audit after rechecking the locked preview fingerprint. Requires independent confirmations for auth changes, auth deletion and permission/access changes. Both accounts' refresh tokens/API keys are revoked; identity-service session blacklisting and RBAC invalidation must succeed before commit. Password, email, active and superuser flags are never combined.",
       "request": {
         "array": false,
         "ref": "app.UserMergeExecuteRequest"
@@ -2942,7 +2942,7 @@
       "summary": "Execute user merge"
     },
     "rpc.app.users.merge_preview": {
-      "description": "Permission: superuser only. Previews merging one player profile into another without applying changes.",
+      "description": "Permission: superuser only. Previews merging player profiles, including two auth-linked profiles. auth_policy chooses the surviving auth account, keeping/deleting the other, each OAuth connection destination, and explicit resource-conflict choices. Returns account roles/denies, preservation counts, blockers and a state fingerprint without exposing credentials.",
       "request": {
         "array": false,
         "ref": "app.UserMergePreviewRequest"
@@ -3635,7 +3635,7 @@
       "summary": "Autofill member roles"
     },
     "rpc.app.workspaces.members_list": {
-      "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles; 404 if workspace missing.",
+      "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles. `role_id` keeps holders of that role; `exclude_role_id` drops holders of any listed role. 404 if workspace missing.",
       "query_params": [
         {
           "name": "page",
@@ -3663,6 +3663,17 @@
           "required": false,
           "schema": {
             "type": "integer"
+          }
+        },
+        {
+          "name": "exclude_role_id",
+          "required": false,
+          "schema": {
+            "description": "Drop members who hold any of these roles. Repeat the param or comma-separate ids.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         {
@@ -4911,7 +4922,7 @@
       "summary": "Get user roles"
     },
     "rpc.identity.rbac.list_auth_users": {
-      "description": "Permission: `auth_user.read` \u2014 checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/is_active/is_superuser/workspace_id.",
+      "description": "Permission: `auth_user.read` \u2014 checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.",
       "query_params": [
         {
           "name": "page",
@@ -5007,6 +5018,18 @@
             ],
             "default": null,
             "title": "Role Id"
+          }
+        },
+        {
+          "name": "exclude_role_id",
+          "required": false,
+          "schema": {
+            "description": "Drop users who hold any of these roles. Repeat the param or comma-separate ids.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Exclude Role Id",
+            "type": "array"
           }
         },
         {
@@ -6738,6 +6761,14 @@
       },
       "summary": "Update tournament link"
     },
+    "rpc.tournament.admin_encounter_readiness_set": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Sets one side's captain readiness (body `{side, ready}`) for an organizer starting a match whose captain is unreachable, and answers `{readiness: {home, away}}`. Signals the room (`encounter:{id}:map-veto`) exactly as the captain's own ready does, so the opposite captain's screen moves without a reload. 404 for an unknown encounter, 409 for a preview bracket's encounter, and 409 on `ready: false` once a pick-ban session of either kind exists \u2014 readiness gates session CREATION only, so clearing it afterwards would change nothing; reset the session instead. The readiness row stays unattributed (it names a player identity, which an organizer may not have); the admin audit entry is what names who forced it.",
+      "request": {
+        "array": false,
+        "ref": "tournament.AdminReadinessSet"
+      },
+      "summary": "Force a side's captain readiness"
+    },
     "rpc.tournament.admin_encounter_reports_list": {
       "description": "Permission: workspace `match.read` on the workspace named by `workspace_id`. Every encounter in the workspace with the pair of captain reports filed against it. The row is the encounter, not the report, because a dispute spans two reports and the action that settles it is per-encounter. `scores_match` is null until both sides have reported \u2014 that is a different state from disagreeing. `series_score_valid` is advisory: reports predate per-round best-of, so a mismatch is information, not an error. Filter with `tournament_id`, `stage_id`, `result_status`, `mismatch_only`, `reported_count` and a free-text `query` over team and encounter names.",
       "query_params": [
@@ -7052,6 +7083,18 @@
       },
       "summary": "Captain report counters"
     },
+    "rpc.tournament.admin_encounter_technical_loss": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Ends the encounter against `loser_side` without playing it out, in one transaction: every live pick-ban session is cancelled, every position that is not already CONFIRMED is cancelled, and the result is confirmed (same shape `encounter_set_result` returns). Omit the score and it is derived \u2014 the winner takes `best_of // 2 + 1` wins or more if it already had them, the forfeiting side keeps the maps it really won, capped one short of winning (a Bo5 standing 2:0 for the side that forfeits is recorded 2:3). An explicit score must put the forfeiting side below its opponent (422). Same guards as the result route: 409 on a preview bracket's encounter, on a result a later stage was already seeded from, and on an already confirmed result (reopen it first). The reason is required and lands in both the admin audit and the room journal.",
+      "request": {
+        "array": false,
+        "ref": "tournament.AdminTechnicalLossInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.EncounterResultRead"
+      },
+      "summary": "Record a technical loss"
+    },
     "rpc.tournament.admin_game_result": {
       "description": "Permission: workspace `match.result` on the encounter's workspace. Writes one series position's score as an `admin` result and journals the mandatory `reason`; this is the only way a `confirmed` game (locked against captains with 409 `result_locked`) ever changes. Flipping which side won a position scraps and re-opens the round that outcome had opened, so the response is `{game, rebuilt_rounds}`; 409 `downstream_started` when a later round was already acted in or a later position already has a claim, 409 `map_not_selected` while the position still has no map (an organizer names it through the pick-ban or the captain map choice first), and 404 when the game belongs to another encounter or is cancelled.",
       "request": {
@@ -7233,6 +7276,14 @@
       },
       "summary": "Act for a side"
     },
+    "rpc.tournament.admin_pick_ban_cancel": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Retires one kind's session (body `{kind, reason}`) as CANCELLED and clears any pause, for a room whose veto cannot be played out. A cancelled HERO session simply stops opening rounds; a cancelled MAP session hands the series back to FREEPLAY \u2014 the maps it already settled keep their positions and every later one is named by the captains through `captain_select_game_map`. The way back is the session reset. 409 when no session of that kind exists or it is already cancelled.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminCancel"
+      },
+      "summary": "Cancel a pick-ban session"
+    },
     "rpc.tournament.admin_pick_ban_config_delete": {
       "description": "Permission: workspace `match.update` on the workspace of the config's tournament. Deletes a pick-ban config by id (running sessions keep their snapshot).",
       "summary": "Delete pick-ban config"
@@ -7252,6 +7303,22 @@
     "rpc.tournament.admin_pick_ban_elect_opener": {
       "description": "Permission: workspace `match.result` on the encounter's workspace. Names who opens the round a `result_loser_choice` rotation is holding and appends it, on behalf of a losing captain who is unreachable; returns the new room state.",
       "summary": "Elect a round's opener for a side"
+    },
+    "rpc.tournament.admin_pick_ban_extend": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Adds `seconds` (10..3600) to the open step's clock by moving its start forward, and returns the room state. Allowed while paused. 409 when no session of that kind is active or the open step has no timer (an untimed or already settled step has nothing to extend).",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminExtend"
+      },
+      "summary": "Extend the open step's timer"
+    },
+    "rpc.tournament.admin_pick_ban_pause": {
+      "description": "Permission: workspace `match.result` on the encounter's workspace. Freezes (`{kind, paused: true}`) or releases one kind's room and returns its state. A paused session has no deadline at all: the open step's timer stops, nothing auto-resolves, reveals or times out, and every CAPTAIN write (act, submit, dispute, undo, elect-opener) answers 409 `Pick-ban session is paused` while the admin overrides keep working. Resuming gives the step back exactly the time it had left; a step that opened during the pause gets its full timer. Idempotent, and 409 when no session of that kind exists or it is not active.",
+      "request": {
+        "array": false,
+        "ref": "tournament.PickBanAdminPause"
+      },
+      "summary": "Pause or resume a pick-ban session"
     },
     "rpc.tournament.admin_pick_ban_reopen": {
       "description": "Permission: workspace `match.result` on the encounter's workspace. Voids the last fully revealed step's submissions and re-opens it for a fresh attempt \u2014 the organizer's version of a captain dispute, with no attempt budget and no `dispute.enabled` requirement. Returns the new room state. 400 when there is no revealed step to reopen or a later step has already been acted in.",
@@ -7284,6 +7351,32 @@
         "ref": "tournament.PickBanAdminSubmit"
       },
       "summary": "Submit a blind draft for a side"
+    },
+    "rpc.tournament.admin_pregame_room_history": {
+      "description": "Permission: workspace `match.read` on the encounter's workspace. One room's whole story, newest first: the pre-game journal (readiness, session opened/reset/completed, rounds, every captain and organizer action, step reveals, timeouts, disputes, undo, map and series reports, pause/extend/cancel/technical loss) merged with the encounter's result audit (confirm, reopen, auto_confirm, auto_dispute, import, cascade_reset, game_confirm, game_correct, game_cancel). Each entry carries `id` (`room:<id>`/`result:<id>`), `at`, `origin`, `action`, `kind`, `source` (`captain`/`admin`/`system`), `side`, `actor_auth_user_id`, `actor_name` (null for machine actors), `reason` and an action-specific `data` object. Query `limit` is clamped to 1..500, default 200. The journal is keyed by ENCOUNTER, so resetting a session never erases what it did.",
+      "query_params": [
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..500, default 200.",
+            "type": "integer"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "tournament.PregameRoomHistoryRead"
+      },
+      "summary": "Read a pre-game room's journal"
+    },
+    "rpc.tournament.admin_pregame_rooms": {
+      "description": "Permission: workspace `match.read` on the tournament's workspace. The organizer's board of every pre-game room of a tournament: one row per non-FFA encounter that resolves to a pooled pick-ban config or already has a session, carrying readiness, the map and hero session summaries (open step, acting sides, deadline), the series' game counts, a single `phase` (`teams_unknown`/`readiness`/`map`/`hero`/`report`/`done`/`idle`) and the `attention` flags staff act on (`game_disputed`, `result_disputed`, `awaiting_choice`, `overdue`, `late_not_ready`). Strictly read-only, unlike the room's own state read: it never creates a session, opens a position or settles an expired step, and it answers the whole tournament in a constant number of queries. Rows are ordered stage, round, encounter id; preview-bracket encounters with no session are omitted.",
+      "response": {
+        "array": false,
+        "ref": "tournament.PregameRoomsRead"
+      },
+      "summary": "List pre-game rooms"
     },
     "rpc.tournament.captain_my_role": {
       "description": "Permission: authenticated user; self-service \u2014 the answer is only about the caller's own captaincy. Returns the calling user's captain side (home/away) for an encounter, or null if they are not a captain.",
@@ -9669,7 +9762,7 @@
       "summary": "Claim a scrim side"
     },
     "rpc.tournament.scrim_close": {
-      "description": "Permission: self-service \u2014 the room's creator, a captain of either side, or a superuser (workspace membership alone is not enough). Closes a scrim room so it stops counting against its creator's active-room cap, leaving the encounter and its pick-ban history readable by the participants forever.",
+      "description": "Permission: self-service \u2014 the room's creator, a captain of either side, a superuser, or workspace staff holding `match.result` (plain workspace membership is not enough). Closes a scrim room so it stops counting against its creator's active-room cap, leaving the encounter and its pick-ban history readable by the participants forever. The same rule is surfaced per room as `can_close`.",
       "response": {
         "array": false,
         "ref": "tournament.ScrimRoomRead"
@@ -9697,7 +9790,7 @@
       "summary": "Get scrim room"
     },
     "rpc.tournament.scrim_list_mine": {
-      "description": "Permission: authenticated user who is a member of the queried workspace (membership only \u2014 no resource grant is checked). Returns the calling user's scrim rooms in a workspace, open and closed alike (scrim history is kept forever).",
+      "description": "Permission: authenticated user who is a member of the queried workspace (membership only \u2014 no resource grant is checked), plus workspace `match.result` when `scope=workspace`. Returns the calling user's scrim rooms in a workspace, open and closed alike (scrim history is kept forever); `scope=workspace` instead returns every room of the workspace so staff can find one they neither created nor play, same open-first ordering.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -9711,7 +9804,7 @@
         "array": false,
         "ref": "tournament.ScrimRoomListRead"
       },
-      "summary": "List my scrim rooms"
+      "summary": "List scrim rooms"
     },
     "rpc.tournament.sheet_get": {
       "description": "Permission: workspace `team.read` on the tournament's workspace. Returns a tournament's registration Google Sheets feed config, or null if none.",
@@ -12651,6 +12744,419 @@
         "action"
       ],
       "title": "AuditLogRead",
+      "type": "object"
+    },
+    "app.AuthMergeAccount": {
+      "properties": {
+        "denies": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeDeny"
+          },
+          "title": "Denies",
+          "type": "array"
+        },
+        "email": {
+          "title": "Email",
+          "type": "string"
+        },
+        "has_password": {
+          "title": "Has Password",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "is_superuser": {
+          "title": "Is Superuser",
+          "type": "boolean"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeRole"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email",
+        "has_password",
+        "is_active",
+        "is_superuser"
+      ],
+      "title": "AuthMergeAccount",
+      "type": "object"
+    },
+    "app.AuthMergeDataConflict": {
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "resource": {
+          "title": "Resource",
+          "type": "string"
+        },
+        "source_value": {
+          "title": "Source Value"
+        },
+        "target_value": {
+          "title": "Target Value"
+        }
+      },
+      "required": [
+        "key",
+        "resource",
+        "label",
+        "source_value",
+        "target_value"
+      ],
+      "title": "AuthMergeDataConflict",
+      "type": "object"
+    },
+    "app.AuthMergeDeny": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "permission_id": {
+          "title": "Permission Id",
+          "type": "integer"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "resource": {
+          "title": "Resource",
+          "type": "string"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "permission_id",
+        "resource",
+        "action"
+      ],
+      "title": "AuthMergeDeny",
+      "type": "object"
+    },
+    "app.AuthMergeMembership": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "can_merge": {
+          "title": "Can Merge",
+          "type": "boolean"
+        },
+        "role_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Role Names",
+          "type": "array"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "auth_user_id",
+        "role_names",
+        "can_merge"
+      ],
+      "title": "AuthMergeMembership",
+      "type": "object"
+    },
+    "app.AuthMergeMembershipAction": {
+      "properties": {
+        "action": {
+          "enum": [
+            "transfer",
+            "merge"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "workspace_id": {
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "action"
+      ],
+      "title": "AuthMergeMembershipAction",
+      "type": "object"
+    },
+    "app.AuthMergeOAuthConnection": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_user_id": {
+          "title": "Provider User Id",
+          "type": "string"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "provider_user_id",
+        "username",
+        "auth_user_id"
+      ],
+      "title": "AuthMergeOAuthConnection",
+      "type": "object"
+    },
+    "app.AuthMergeOAuthDestination": {
+      "properties": {
+        "auth_user_id": {
+          "minimum": 1,
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "connection_id": {
+          "minimum": 1,
+          "title": "Connection Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connection_id",
+        "auth_user_id"
+      ],
+      "title": "AuthMergeOAuthDestination",
+      "type": "object"
+    },
+    "app.AuthMergePolicy": {
+      "properties": {
+        "conflict_choices": {
+          "additionalProperties": {
+            "enum": [
+              "source",
+              "target"
+            ],
+            "type": "string"
+          },
+          "title": "Conflict Choices",
+          "type": "object"
+        },
+        "membership_actions": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeMembershipAction"
+          },
+          "title": "Membership Actions",
+          "type": "array"
+        },
+        "oauth_destinations": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeOAuthDestination"
+          },
+          "title": "Oauth Destinations",
+          "type": "array"
+        },
+        "other_account_action": {
+          "default": "keep",
+          "enum": [
+            "keep",
+            "delete"
+          ],
+          "title": "Other Account Action",
+          "type": "string"
+        },
+        "surviving_auth_user_id": {
+          "minimum": 1,
+          "title": "Surviving Auth User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "surviving_auth_user_id"
+      ],
+      "title": "AuthMergePolicy",
+      "type": "object"
+    },
+    "app.AuthMergePreview": {
+      "properties": {
+        "accounts": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeAccount"
+          },
+          "title": "Accounts",
+          "type": "array"
+        },
+        "data_conflicts": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeDataConflict"
+          },
+          "title": "Data Conflicts",
+          "type": "array"
+        },
+        "memberships": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeMembership"
+          },
+          "title": "Memberships",
+          "type": "array"
+        },
+        "oauth_connections": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeOAuthConnection"
+          },
+          "title": "Oauth Connections",
+          "type": "array"
+        },
+        "permission_changes": {
+          "default": false,
+          "title": "Permission Changes",
+          "type": "boolean"
+        },
+        "policy": {
+          "$ref": "#/components/schemas/app.AuthMergePolicy"
+        },
+        "resource_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Resource Counts",
+          "type": "object"
+        },
+        "state_fingerprint": {
+          "title": "State Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "accounts",
+        "oauth_connections",
+        "policy",
+        "state_fingerprint"
+      ],
+      "title": "AuthMergePreview",
+      "type": "object"
+    },
+    "app.AuthMergeResult": {
+      "properties": {
+        "deleted_auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deleted Auth User Id"
+        },
+        "moved_oauth_connection_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Moved Oauth Connection Ids",
+          "type": "array"
+        },
+        "surviving_auth_user_id": {
+          "title": "Surviving Auth User Id",
+          "type": "integer"
+        },
+        "transferred_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Transferred Counts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "surviving_auth_user_id"
+      ],
+      "title": "AuthMergeResult",
+      "type": "object"
+    },
+    "app.AuthMergeRole": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "AuthMergeRole",
       "type": "object"
     },
     "app.CatalogAliasAttach": {
@@ -18643,6 +19149,32 @@
     },
     "app.UserMergeExecuteRequest": {
       "properties": {
+        "auth_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergePolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "confirm_auth_changes": {
+          "default": false,
+          "title": "Confirm Auth Changes",
+          "type": "boolean"
+        },
+        "confirm_auth_deletion": {
+          "default": false,
+          "title": "Confirm Auth Deletion",
+          "type": "boolean"
+        },
+        "confirm_permission_changes": {
+          "default": false,
+          "title": "Confirm Permission Changes",
+          "type": "boolean"
+        },
         "field_policy": {
           "$ref": "#/components/schemas/app.UserMergeFieldPolicy"
         },
@@ -18687,6 +19219,17 @@
         "audit_id": {
           "title": "Audit Id",
           "type": "integer"
+        },
+        "auth_merge": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergeResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "deleted_source_user_id": {
           "title": "Deleted Source User Id",
@@ -18851,6 +19394,17 @@
     },
     "app.UserMergePreviewRequest": {
       "properties": {
+        "auth_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergePolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "source_user_id": {
           "minimum": 1,
           "title": "Source User Id",
@@ -18877,6 +19431,17 @@
           },
           "title": "Affected Counts",
           "type": "object"
+        },
+        "auth_merge": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.AuthMergePreview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "conflicts": {
           "$ref": "#/components/schemas/app.UserMergeConflictSummary"
@@ -18912,6 +19477,18 @@
           "default": 0,
           "title": "Auth Links",
           "type": "integer"
+        },
+        "auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Id"
         },
         "avatar_url": {
           "anyOf": [
@@ -26376,6 +26953,14 @@
           "title": "Entities",
           "type": "array"
         },
+        "exclude_role_id": {
+          "description": "Drop users who hold any of these roles. Repeat the param or comma-separate ids.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Exclude Role Id",
+          "type": "array"
+        },
         "is_active": {
           "anyOf": [
             {
@@ -31934,6 +32519,80 @@
         }
       },
       "title": "AdminMatchesQueryParams",
+      "type": "object"
+    },
+    "tournament.AdminReadinessSet": {
+      "description": "Body for the admin readiness override: force one side's captain\nreadiness on or off.\n\n``ready: false`` is only meaningful before a session exists -- readiness\ngates session CREATION and nothing else -- so the service 409s once one\ndoes (reset the session instead).",
+      "properties": {
+        "ready": {
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Side",
+          "type": "string"
+        }
+      },
+      "required": [
+        "side",
+        "ready"
+      ],
+      "title": "AdminReadinessSet",
+      "type": "object"
+    },
+    "tournament.AdminTechnicalLossInput": {
+      "description": "Body for the technical-loss route: which side forfeits, optionally the\nexact score to record it as (omitted = the default forfeit score), and the\nreason -- a walkover is never anonymous.",
+      "properties": {
+        "away_score": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Away Score"
+        },
+        "home_score": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Home Score"
+        },
+        "loser_side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Loser Side",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "loser_side",
+        "reason"
+      ],
+      "title": "AdminTechnicalLossInput",
       "type": "object"
     },
     "tournament.AdmissionRead": {
@@ -41531,6 +42190,64 @@
       "title": "PickBanAdminAct",
       "type": "object"
     },
+    "tournament.PickBanAdminCancel": {
+      "description": "Body for the session-cancel route: retire a session the series cannot play\nout, with the reason that goes into the room journal.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "title": "PickBanAdminCancel",
+      "type": "object"
+    },
+    "tournament.PickBanAdminExtend": {
+      "description": "Body for the extend route: more time on the open step's timer. Bounded at\nan hour -- an organizer who needs longer than that wants the pause.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "seconds": {
+          "maximum": 3600,
+          "minimum": 10,
+          "title": "Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "seconds"
+      ],
+      "title": "PickBanAdminExtend",
+      "type": "object"
+    },
+    "tournament.PickBanAdminPause": {
+      "description": "Body for the pause route: freeze (or unfreeze) one kind's clock while the\norganizer sorts out whatever stopped the room.",
+      "properties": {
+        "kind": {
+          "$ref": "#/components/schemas/tournament.PickBanKind"
+        },
+        "paused": {
+          "title": "Paused",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "paused"
+      ],
+      "title": "PickBanAdminPause",
+      "type": "object"
+    },
     "tournament.PickBanAdminSubmit": {
       "description": "Body for the admin submit-for-a-side route: replace a BLIND step's draft\non behalf of a captain who is not there to author it. Items reuse the\ncaptain schema so the two surfaces cannot drift.",
       "properties": {
@@ -42451,6 +43168,532 @@
         "heroes"
       ],
       "title": "PlayerWithMatchStats",
+      "type": "object"
+    },
+    "tournament.PregameGamesSummary": {
+      "description": "The series' positions by state. Cancelled positions are history and are\ncounted nowhere -- a replayed map would otherwise read as two.",
+      "properties": {
+        "awaiting_result": {
+          "default": 0,
+          "title": "Awaiting Result",
+          "type": "integer"
+        },
+        "confirmed": {
+          "default": 0,
+          "title": "Confirmed",
+          "type": "integer"
+        },
+        "disputed": {
+          "default": 0,
+          "title": "Disputed",
+          "type": "integer"
+        },
+        "total": {
+          "default": 0,
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "title": "PregameGamesSummary",
+      "type": "object"
+    },
+    "tournament.PregameKindSummary": {
+      "description": "One kind's (map|hero) room, as the overview needs it.",
+      "properties": {
+        "acting_sides": {
+          "default": [],
+          "items": {
+            "enum": [
+              "home",
+              "away"
+            ],
+            "type": "string"
+          },
+          "title": "Acting Sides",
+          "type": "array"
+        },
+        "awaiting_choice": {
+          "default": false,
+          "title": "Awaiting Choice",
+          "type": "boolean"
+        },
+        "current_round": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Round"
+        },
+        "deadline_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deadline At"
+        },
+        "paused_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paused At"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "active",
+                "completed",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "step_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Action"
+        },
+        "step_blind": {
+          "default": false,
+          "title": "Step Blind",
+          "type": "boolean"
+        },
+        "step_count": {
+          "default": 0,
+          "title": "Step Count",
+          "type": "integer"
+        },
+        "step_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Index"
+        },
+        "step_started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Started At"
+        }
+      },
+      "title": "PregameKindSummary",
+      "type": "object"
+    },
+    "tournament.PregameRoomHistoryEntry": {
+      "description": "One line of the room's journal, from either of the two tables it merges.",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "actor_auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Auth User Id"
+        },
+        "actor_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Name"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "data": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Data",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "map",
+                "hero"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "origin": {
+          "enum": [
+            "room",
+            "result"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "enum": [
+                "home",
+                "away"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Side"
+        },
+        "source": {
+          "enum": [
+            "captain",
+            "admin",
+            "system"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "at",
+        "origin",
+        "action",
+        "source"
+      ],
+      "title": "PregameRoomHistoryEntry",
+      "type": "object"
+    },
+    "tournament.PregameRoomHistoryRead": {
+      "properties": {
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PregameRoomHistoryEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "entries"
+      ],
+      "title": "PregameRoomHistoryRead",
+      "type": "object"
+    },
+    "tournament.PregameRoomRow": {
+      "properties": {
+        "attention": {
+          "default": [],
+          "items": {
+            "enum": [
+              "game_disputed",
+              "result_disputed",
+              "awaiting_choice",
+              "overdue",
+              "late_not_ready"
+            ],
+            "type": "string"
+          },
+          "title": "Attention",
+          "type": "array"
+        },
+        "away_score": {
+          "default": 0,
+          "title": "Away Score",
+          "type": "integer"
+        },
+        "away_team": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.PregameRoomTeam"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "best_of": {
+          "title": "Best Of",
+          "type": "integer"
+        },
+        "encounter_id": {
+          "title": "Encounter Id",
+          "type": "integer"
+        },
+        "games": {
+          "$ref": "#/components/schemas/tournament.PregameGamesSummary"
+        },
+        "hero": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.PregameKindSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "home_score": {
+          "default": 0,
+          "title": "Home Score",
+          "type": "integer"
+        },
+        "home_team": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.PregameRoomTeam"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "map": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.PregameKindSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "teams_unknown",
+            "readiness",
+            "map",
+            "hero",
+            "report",
+            "done",
+            "idle"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "readiness": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "title": "Readiness",
+          "type": "object"
+        },
+        "result_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Status"
+        },
+        "round": {
+          "title": "Round",
+          "type": "integer"
+        },
+        "scheduled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheduled At"
+        },
+        "stage_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Id"
+        },
+        "stage_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stage Name"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "encounter_id",
+        "name",
+        "round",
+        "best_of",
+        "status",
+        "readiness",
+        "phase",
+        "games"
+      ],
+      "title": "PregameRoomRow",
+      "type": "object"
+    },
+    "tournament.PregameRoomTeam": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "PregameRoomTeam",
+      "type": "object"
+    },
+    "tournament.PregameRoomsRead": {
+      "properties": {
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "rooms": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.PregameRoomRow"
+          },
+          "title": "Rooms",
+          "type": "array"
+        },
+        "tournament_id": {
+          "title": "Tournament Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tournament_id",
+        "generated_at",
+        "rooms"
+      ],
+      "title": "PregameRoomsRead",
       "type": "object"
     },
     "tournament.RegistrationFormRead": {
@@ -44746,6 +45989,10 @@
           "title": "Can Claim",
           "type": "boolean"
         },
+        "can_close": {
+          "title": "Can Close",
+          "type": "boolean"
+        },
         "closed_at": {
           "anyOf": [
             {
@@ -44823,6 +46070,7 @@
         "away_team",
         "viewer_side",
         "can_claim",
+        "can_close",
         "created_at",
         "closed_at"
       ],

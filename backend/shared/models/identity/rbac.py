@@ -2,6 +2,7 @@
 RBAC (Role-Based Access Control) models
 """
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from shared.models.identity.auth_user import AuthUser
     from shared.models.tenancy.workspace import Workspace
 
-__all__ = ("Role", "Permission", "UserPermissionDeny", "user_roles", "role_permissions")
+__all__ = ("Role", "Permission", "UserPermissionDeny", "user_roles", "role_permissions", "user_lacks_roles")
 
 
 # Association table for many-to-many relationship between users and roles
@@ -31,6 +32,18 @@ user_roles = Table(
     Index("ix_user_roles_role_id", "role_id"),
     schema="auth",
 )
+
+
+def user_lacks_roles(user_id: object, role_ids: Sequence[int]) -> sa.ColumnElement[bool]:
+    """SQL: ``user_id`` holds none of ``role_ids``.
+
+    Callers skip an empty list — ``IN ()`` is invalid SQL. Holding any listed
+    role drops the user even if they also hold others.
+    """
+    return ~sa.exists().where(
+        user_roles.c.user_id == user_id,
+        user_roles.c.role_id.in_(list(role_ids)),
+    )
 
 
 class Role(db.TimeStampIntegerMixin):

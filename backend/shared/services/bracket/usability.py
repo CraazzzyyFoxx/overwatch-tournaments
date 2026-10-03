@@ -44,7 +44,7 @@ async def is_encounter_live(session: AsyncSession, encounter: Encounter) -> bool
 
 
 async def assert_encounter_live(session: AsyncSession, encounter: Encounter) -> None:
-    """409 for an encounter of a preview bracket: look-only until its stage is activated."""
+    """409 for gameplay in a preview bracket until its stage is activated."""
     if not await is_encounter_live(session, encounter):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -1,9 +1,8 @@
-"""A preview bracket is look-only: its matches take no captain or admin writes.
+"""Preview matches refuse gameplay writes; organizers may still swap seed slots.
 
 ``generate_encounters`` can lay a playoff out before its stage is activated
-(``Stage.is_published=False``). Captain reports, map reports and the pick-ban
-room already refuse such a match (``is_encounter_live``); captain readiness, the
-captain's map choice, the admin result and the admin slot swap did not.
+(``Stage.is_published=False``). Captain reports, map reports, the pick-ban room,
+readiness, map choices and admin results must wait for publication.
 """
 
 from __future__ import annotations
@@ -63,7 +62,7 @@ class PreviewBracketWrites(IsolatedAsyncioTestCase):
         )
         self.enterContext(patch.object(admin_misc.auth, "get_encounter_workspace_id", AsyncMock(return_value=1)))
 
-    async def test_every_write_is_refused_while_the_stage_is_a_preview(self) -> None:
+    async def test_gameplay_writes_are_refused_while_the_stage_is_a_preview(self) -> None:
         cases = [
             (public_rpc, "rpc.tournament.captain_ready", {}, public_rpc.pick_ban_session_service, "mark_ready"),
             (
@@ -79,13 +78,6 @@ class PreviewBracketWrites(IsolatedAsyncioTestCase):
                 {"payload": {"home_score": 3, "away_score": 1}},
                 admin_misc.captain_service,
                 "set_encounter_result",
-            ),
-            (
-                admin_misc,
-                "rpc.tournament.encounter_swap_slot",
-                {"payload": {"slot": "home", "target_encounter_id": 32, "target_slot": "home"}},
-                admin_misc.enc_service.encounter_service,
-                "swap_slots",
             ),
         ]
         self._stage(published=False)

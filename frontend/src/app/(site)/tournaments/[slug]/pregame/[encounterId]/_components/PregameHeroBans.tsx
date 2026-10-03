@@ -7,7 +7,11 @@ import { useTranslations } from "next-intl";
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import type { AqtRoleKey } from "@/lib/roster/player-role";
-import { lobbyCopyText, type PickBanRoleGroup } from "@/components/pick-ban/pick-ban-model";
+import {
+  lobbyCopyText,
+  type PickBanRoleGroup,
+  type PickBanRoleItem
+} from "@/components/pick-ban/pick-ban-model";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import { cn } from "@/lib/utils";
@@ -32,15 +36,19 @@ export interface PregameHeroAction {
   carriedFromRound: number | null;
 }
 
-/** One map's hero board: who banned what, what is gone, and what is left. */
+/** One hero off on a map, as the final bans list shows it. */
+export interface PregameBannedHero extends PickBanRoleItem {
+  /** Undefined until the hero catalog resolves — the thumb falls back to initials. */
+  item: PickBanItemLike | undefined;
+}
+
+/** One map's hero board: who banned what, and the final bans. */
 export interface PregameHeroBoard {
   /** Null for a flat (round-less) pool: one set of bans covered every map. */
   round: number | null;
   actions: PregameHeroAction[];
-  /** Everything unavailable on this map, role-grouped — the lobby list. */
-  banned: PickBanRoleGroup[];
-  /** What each role still has, after every ban that applies to this map. */
-  remaining: PickBanRoleGroup[];
+  /** Every ban in force on this map, role-grouped — what the lobby disables. */
+  banned: PickBanRoleGroup<PregameBannedHero>[];
 }
 
 /** One map's worth of hero actions, for replaying a finished series. */
@@ -72,8 +80,8 @@ const SIDE_ACCENT = {
  * the board, so reading the board alone would show one side a ban short. A ban
  * carried from an earlier map wears its origin instead of a side's colour —
  * nobody spent it here. Under the two columns sits what the lobby actually
- * needs: the flat "unavailable on this map" list, what is left per role, and a
- * button that puts the first on the clipboard.
+ * needs: the final bans, merged and in the game's role order, and a button
+ * that puts them on the clipboard.
  */
 export function PregameHeroBans({
   board,
@@ -119,7 +127,7 @@ export function PregameHeroBans({
 
   const roleLabel = (role: AqtRoleKey | null) =>
     role == null ? t("heroBans.roleUnknown") : tCommon(`roles.${role}`);
-  const bannedNames = board.banned.flatMap((group) => group.items.map((item) => item.name));
+  const bannedHeroes = board.banned.flatMap((group) => group.items);
 
   // Width is the caller's call: the result screen aligns this with its claim
   // row, the closing screen gives each map a row of its own.
@@ -150,34 +158,28 @@ export function PregameHeroBans({
         />
       </div>
 
-      {bannedNames.length > 0 ? (
+      {bannedHeroes.length > 0 ? (
         <div
           data-hero-unavailable
-          className="flex flex-col gap-1.5 rounded-xl border border-dashed border-[color:var(--aqt-rose)]/40 bg-[color:var(--aqt-card-2)]/30 p-2.5"
+          className="flex flex-col gap-2 rounded-xl border border-dashed border-[color:var(--aqt-rose)]/40 bg-[color:var(--aqt-card-2)]/30 p-2.5"
         >
-          <p className="text-xs leading-relaxed">
-            <span className="font-semibold text-[color:var(--aqt-rose)]">
-              {board.round != null
-                ? t("heroBans.unavailableOn", { n: board.round })
-                : t("heroBans.unavailable")}
-            </span>{" "}
-            <span className="text-[color:var(--aqt-fg-muted)]">{bannedNames.join(", ")}</span>
-          </p>
-          {board.remaining.length > 0 ? (
-            <ul data-hero-remaining className="flex flex-col gap-0.5">
-              {board.remaining.map((group) => (
-                <li key={group.role ?? "unknown"} className="text-xs text-[color:var(--aqt-fg-muted)]">
-                  <span className="font-medium text-[color:var(--aqt-fg)]">
-                    {t("heroBans.remainingRole", {
-                      role: roleLabel(group.role),
-                      count: group.items.length
-                    })}
-                  </span>{" "}
-                  {group.items.map((item) => item.name).join(", ")}
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          <span className="text-xs font-semibold text-[color:var(--aqt-rose)]">
+            {board.round != null
+              ? t("heroBans.unavailableOn", { n: board.round })
+              : t("heroBans.unavailable")}
+          </span>
+          <ul className="flex flex-wrap gap-1.5">
+            {bannedHeroes.map((hero) => (
+              <li
+                key={hero.itemId}
+                data-hero-banned={hero.itemId}
+                className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] py-1 pl-1 pr-2"
+              >
+                <PickBanItemThumb kind="hero" item={hero.item} name={hero.name} size={22} muted />
+                <span className="min-w-0 truncate text-xs font-medium">{hero.name}</span>
+              </li>
+            ))}
+          </ul>
           <Button
             size="sm"
             variant="outline"

@@ -154,6 +154,10 @@ function lastRoleId(): unknown {
   return (getMembers.mock.calls.at(-1)?.[1] as { role_id?: unknown } | undefined)?.role_id;
 }
 
+function lastExcludeRoleIds(): unknown {
+  return (getMembers.mock.calls.at(-1)?.[1] as { exclude_role_id?: unknown } | undefined)?.exclude_role_id;
+}
+
 beforeEach(() => {
   permitted = true;
   replace.mockClear();
@@ -216,6 +220,23 @@ describe("admin Members", () => {
 
     expect(window.location.search).toContain("role=9");
     expect(lastRoleId()).toBe(9);
+  });
+
+  it("reads ?exclude_role= on mount and refetches without those holders", async () => {
+    await mount("?exclude_role=9,3");
+
+    expect(lastExcludeRoleIds()).toEqual([9, 3]);
+  });
+
+  it("writes ?exclude_role= when the exclude chip is picked", async () => {
+    const container = await mount();
+
+    await click(container.querySelector('[aria-label="Add filter"]'));
+    await click(commandItem("Exclude role"));
+    await click(commandItem("caster"));
+
+    expect(window.location.search).toContain("exclude_role=9");
+    expect(lastExcludeRoleIds()).toEqual([9]);
   });
 
   it("changes a member's system role from the cell, keeping their custom roles", async () => {

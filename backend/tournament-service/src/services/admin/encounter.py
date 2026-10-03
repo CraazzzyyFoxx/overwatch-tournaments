@@ -58,15 +58,18 @@ def _reject_settled_result_edits(encounter: models.Encounter, update_data: dict)
     """Completion is not a field edit -- in either direction.
 
     Into ``COMPLETED``: the result endpoint owns it (``_reject_completed_status``).
-    Out of it -- or rewiring a settled encounter's team slots -- the reopen
-    endpoint owns it: that one clears ``result_status``/``confirmed_at``/score and
-    unwinds whatever the old result advanced downstream. The bare status write
+    Out of it -- or rewiring a settled encounter's team slots or score -- the
+    reopen endpoint owns it: that one clears ``result_status``/``confirmed_at``/score
+    and unwinds whatever the old result advanced downstream. The bare status write
     this used to allow left ``result_status='confirmed'`` beside a non-COMPLETED
     status, which the database refuses outright
     (``ck_encounter_result_status_matches_status``), so the edit died on an
-    IntegrityError instead of on a message naming the endpoint that can do it.
+    IntegrityError instead of on a message naming the endpoint that can do it. A
+    bare score write was worse: it went through, flipped the winner, and left the
+    bracket advanced on the old one with no audit row -- advancement only runs on
+    finalize.
 
-    Repeating the encounter's current status is not a transition: the admin form
+    Repeating the encounter's current values is not a transition: the admin form
     posts every field, so renaming a completed encounter must not trip the
     completion guard and push admins into flipping the status by hand.
     """
@@ -75,18 +78,18 @@ def _reject_settled_result_edits(encounter: models.Encounter, update_data: dict)
         _reject_completed_status(new_status.value)
     if encounter.status != enums.EncounterStatus.COMPLETED:
         return
-    teams_changed = any(
+    rewired = any(
         field in update_data and update_data[field] != getattr(encounter, field)
-        for field in ("home_team_id", "away_team_id")
+        for field in ("home_team_id", "away_team_id", "home_score", "away_score")
     )
-    if new_status == encounter.status and not teams_changed:
+    if new_status == encounter.status and not rewired:
         return
     raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "use_reopen_endpoint: reopen the result via POST "
             "/api/v1/admin/encounters/{encounter_id}/result/reopen before changing a completed "
-            "encounter's status or teams"
+            "encounter's status, teams or score"
         ),
     )
 

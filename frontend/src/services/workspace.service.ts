@@ -143,6 +143,7 @@ export default class workspaceService {
       per_page?: number;
       search?: string;
       role_id?: number | null;
+      exclude_role_id?: number[] | null;
       sort?: "username" | "role";
       order?: "asc" | "desc";
     }
@@ -153,6 +154,7 @@ export default class workspaceService {
         per_page: params?.per_page,
         search: params?.search?.trim() || undefined,
         role_id: params?.role_id ?? undefined,
+        exclude_role_id: params?.exclude_role_id?.length ? params.exclude_role_id : undefined,
         sort: params?.sort,
         order: params?.order
       }

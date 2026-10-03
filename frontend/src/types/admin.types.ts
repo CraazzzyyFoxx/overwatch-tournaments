@@ -701,6 +701,33 @@ export interface EncounterResultAuditRead {
 }
 
 /**
+ * One line of the pre-game room's journal: the room's own events merged with
+ * the encounter's result audit, newest first. `action` is open-ended on the
+ * wire — an unknown one is rendered generically rather than dropped.
+ */
+export interface PregameRoomHistoryEntry {
+  /** `"room:<id>"` / `"result:<id>"` — the two origins share no id space. */
+  id: string;
+  at: string;
+  origin: "room" | "result";
+  action: string;
+  kind: "map" | "hero" | null;
+  source: "captain" | "admin" | "system";
+  /** The side acted BY or FOR; null for room-level events. */
+  side: "home" | "away" | null;
+  actor_auth_user_id: number | null;
+  /** null = the clock or a machine actor, rendered as "System". */
+  actor_name: string | null;
+  reason: string | null;
+  data: Record<string, unknown>;
+}
+
+export interface PregameRoomHistoryRead {
+  encounter_id: number;
+  entries: PregameRoomHistoryEntry[];
+}
+
+/**
  * One captain's report inside an admin reports row. Mirrors the backend
  * `CaptainReportRead` — the same shape the public encounter read returns, plus
  * `reporter_name`.
@@ -780,6 +807,84 @@ export interface EncounterReportsQuery {
   result_status?: string[];
   mismatch_only?: boolean;
   reported_count?: number | null;
+}
+
+// ─── Pre-game rooms overview ─────────────────────────────────────────────────
+
+/**
+ * Where an encounter stands in the pre-game sequence, as the server decides it
+ * (readiness → map veto → hero bans → per-map reports). `teams_unknown` is a
+ * bracket slot nobody has filled yet; `idle` is "nothing is waiting on anyone".
+ */
+export type PregameRoomPhase =
+  | "teams_unknown"
+  | "readiness"
+  | "map"
+  | "hero"
+  | "report"
+  | "done"
+  | "idle";
+
+/** Why a row is listed as needing someone. Rendered as chips, never as prose. */
+export type PregameRoomAttention =
+  | "game_disputed"
+  | "result_disputed"
+  | "awaiting_choice"
+  | "overdue"
+  | "late_not_ready";
+
+/**
+ * One pick-ban kind of one encounter, flattened for the overview: enough to
+ * say whose turn it is and how long they have had it, without the room's full
+ * state. `status: null` means the kind is configured but no session exists —
+ * `reason` then carries the server's `REASON_*` string for why not.
+ */
+export interface PregameKindSummary {
+  status: "active" | "completed" | "cancelled" | null;
+  reason: string | null;
+  current_round: number | null;
+  /** `null` when no step is open — a finished or blocked session. */
+  step_index: number | null;
+  step_count: number;
+  step_action: string | null;
+  step_blind: boolean;
+  acting_sides: ("home" | "away")[];
+  step_started_at: string | null;
+  /** `step_started_at` + the open step's timer, when that step has one. */
+  deadline_at: string | null;
+  awaiting_choice: boolean;
+  /** Set while an organizer holds the session: no deadline, nobody may act. */
+  paused_at: string | null;
+}
+
+export interface PregameRoomRow {
+  encounter_id: number;
+  name: string;
+  stage_id: number | null;
+  stage_name: string | null;
+  round: number;
+  best_of: number;
+  scheduled_at: string | null;
+  status: string;
+  result_status: string | null;
+  home_team: { id: number; name: string } | null;
+  away_team: { id: number; name: string } | null;
+  home_score: number;
+  away_score: number;
+  readiness: { home: boolean; away: boolean };
+  phase: PregameRoomPhase;
+  /** `null` = the kind is not configured here and has no session either. */
+  map: PregameKindSummary | null;
+  hero: PregameKindSummary | null;
+  /** Cancelled games are excluded from every count. */
+  games: { total: number; confirmed: number; disputed: number; awaiting_result: number };
+  attention: PregameRoomAttention[];
+}
+
+export interface PregameRoomsRead {
+  tournament_id: number;
+  generated_at: string;
+  rooms: PregameRoomRow[];
 }
 
 /**
@@ -912,9 +1017,95 @@ export interface UserUpdateInput {
 
 export type UserMergeFieldChoice = "source" | "target";
 
+export interface AuthMergeOAuthDestination {
+  connection_id: number;
+  auth_user_id: number;
+}
+
+export interface AuthMergeMembershipAction {
+  workspace_id: number;
+  action: "transfer" | "merge";
+}
+
+export interface AuthMergePolicy {
+  surviving_auth_user_id: number;
+  other_account_action: "keep" | "delete";
+  oauth_destinations: AuthMergeOAuthDestination[];
+  conflict_choices: Record<string, UserMergeFieldChoice>;
+  membership_actions?: AuthMergeMembershipAction[];
+}
+
+export interface AuthMergeMembership {
+  workspace_id: number;
+  auth_user_id: number;
+  role_names: string[];
+  can_merge: boolean;
+}
+
+export interface AuthMergeRole {
+  id: number;
+  name: string;
+  workspace_id: number | null;
+}
+
+export interface AuthMergeDeny {
+  permission_id: number;
+  workspace_id: number | null;
+  resource: string;
+  action: string;
+  reason: string | null;
+}
+
+export interface AuthMergeAccount {
+  id: number;
+  username: string;
+  email: string;
+  has_password: boolean;
+  is_active: boolean;
+  is_superuser: boolean;
+  roles: AuthMergeRole[];
+  denies: AuthMergeDeny[];
+}
+
+export interface AuthMergeOAuthConnection {
+  id: number;
+  provider: string;
+  provider_user_id: string;
+  username: string;
+  auth_user_id: number;
+}
+
+export interface AuthMergeDataConflict {
+  key: string;
+  resource: string;
+  label: string;
+  source_value: unknown;
+  target_value: unknown;
+}
+
+export interface AuthMergePreview {
+  accounts: AuthMergeAccount[];
+  oauth_connections: AuthMergeOAuthConnection[];
+  policy: AuthMergePolicy;
+  resource_counts: Record<string, number>;
+  data_conflicts: AuthMergeDataConflict[];
+  permission_changes: boolean;
+  memberships?: AuthMergeMembership[];
+  issues: string[];
+  state_fingerprint: string;
+}
+
+export interface AuthMergeResult {
+  surviving_auth_user_id: number;
+  deleted_auth_user_id: number | null;
+  moved_oauth_connection_ids: number[];
+  transferred_counts: Record<string, number>;
+}
+
 export interface UserMergePreviewRequest {
   source_user_id: number;
   target_user_id: number;
+  auth_policy?: AuthMergePolicy | null;
 }
 
 export interface UserMergeFieldPolicy {
@@ -931,6 +1122,9 @@ export interface UserMergeExecuteRequest extends UserMergePreviewRequest {
   preview_fingerprint: string;
   field_policy: UserMergeFieldPolicy;
   identity_selection: UserMergeIdentitySelection;
+  confirm_auth_changes: boolean;
+  confirm_auth_deletion: boolean;
+  confirm_permission_changes: boolean;
 }
 
 export interface UserMergeIdentityOption {
@@ -946,6 +1140,7 @@ interface UserMergeUserSummary {
   avatar_url: string | null;
   social_accounts: UserMergeIdentityOption[];
   auth_links: number;
+  auth_user_id: number | null;
 }
 
 interface UserMergeConflictSummary {
@@ -965,6 +1160,7 @@ export interface UserMergePreviewResponse {
   affected_counts: Record<string, number>;
   field_options: UserMergeFieldOptions;
   preview_fingerprint: string;
+  auth_merge: AuthMergePreview | null;
 }
 
 interface UserMergeIdentityResult {
@@ -978,6 +1174,7 @@ export interface UserMergeExecuteResponse {
   affected_counts: Record<string, number>;
   identity_results: UserMergeIdentityResult;
   audit_id: number;
+  auth_merge: AuthMergeResult | null;
 }
 
 // Unified social-account admin inputs

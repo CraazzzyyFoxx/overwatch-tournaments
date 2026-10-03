@@ -53,13 +53,25 @@ MAP_RULESET = _ruleset(["ban_first", "ban_second", "decider"])
 WORKSPACE_ID = 5
 
 
-def _user(*, id: int = 1, workspaces: list[int] | None = None, superuser: bool = False) -> Any:
+def _user(
+    *,
+    id: int = 1,
+    workspaces: list[int] | None = None,
+    superuser: bool = False,
+    staff_of: list[int] | None = None,
+) -> Any:
+    """``staff_of`` names the workspaces where this user holds ``match.result``
+    — the grant that makes someone a scrim room's referee."""
+    staff = list(staff_of or [])
     return SimpleNamespace(
         id=id,
         username=f"user{id}",
         email=f"user{id}@example.com",
         is_superuser=superuser,
         get_workspace_ids=lambda: list(workspaces if workspaces is not None else [WORKSPACE_ID]),
+        # Mirrors the real method, which answers True for a superuser before it
+        # looks at any grant.
+        has_workspace_permission=lambda workspace_id, resource, action: superuser or workspace_id in staff,
     )
 
 
@@ -107,6 +119,7 @@ class _ScalarSession:
         self._scalars = list(scalars)
         self.added: list[Any] = []
         self.flushes = 0
+        self.commits = 0
 
     async def scalar(self, _statement: Any) -> Any:
         return self._scalars.pop(0) if self._scalars else None
@@ -122,6 +135,9 @@ class _ScalarSession:
 
     async def flush(self) -> None:
         self.flushes += 1
+
+    async def commit(self) -> None:
+        self.commits += 1
 
     def add(self, obj: Any) -> None:
         self.added.append(obj)
@@ -403,6 +419,85 @@ class RoomSerialization(IsolatedAsyncioTestCase):
     async def test_a_full_room_may_not_be_claimed(self) -> None:
         payload = await self._serialize(_room(away_captain=200), _user(), 999)
         self.assertFalse(payload["can_claim"])
+
+    async def test_the_creator_may_close_a_room_they_play_no_side_of(self) -> None:
+        """The bug ``can_close`` fixes: the page keyed Close off ``viewer_side``,
+        so a creator who handed both sides away lost the button the endpoint has
+        always honoured."""
+        payload = await self._serialize(_room(), _user(), 999)
+        self.assertIsNone(payload["viewer_side"])
+        self.assertTrue(payload["can_close"])
+
+    async def test_workspace_staff_may_close_a_room_they_are_no_part_of(self) -> None:
+        payload = await self._serialize(_room(), _user(id=42, staff_of=[WORKSPACE_ID]), 999)
+        self.assertTrue(payload["can_close"])
+
+    async def test_a_plain_member_may_not_close_someone_elses_room(self) -> None:
+        payload = await self._serialize(_room(), _user(id=42), 999)
+        self.assertFalse(payload["can_close"])
+
+    async def test_staff_of_another_workspace_may_not_close(self) -> None:
+        payload = await self._serialize(_room(), _user(id=42, staff_of=[WORKSPACE_ID + 1]), 999)
+        self.assertFalse(payload["can_close"])
+
+    async def test_a_closed_room_offers_nobody_a_close(self) -> None:
+        payload = await self._serialize(_room(closed_at="2026-08-12T01:00:00Z"), _user(), 100)
+        self.assertFalse(payload["can_close"])
+
+    async def test_an_anonymous_viewer_may_not_close(self) -> None:
+        payload = await self._serialize(_room(), None, None)
+        self.assertFalse(payload["can_close"])
+
+
+class ClosingARoom(IsolatedAsyncioTestCase):
+    """``close_room`` end to end over a fake session.
+
+    The room itself comes back from ``execute`` (the repository's
+    ``unique().scalars().first()``); the scalar queue is the rest of the call's
+    read order: the caller's player id, then — after the write — what the re-read
+    ``get_room_by_token`` needs (the container, the scrim-container probe, the
+    player id again).
+    """
+
+    def _session(self, room: Any, *, player_id: int | None) -> Any:
+        container = SimpleNamespace(
+            id=room.tournament_id,
+            workspace_id=room.workspace_id,
+            is_hidden=True,
+            workspace=SimpleNamespace(is_hidden=False),
+        )
+
+        class _RoomSession(_ScalarSession):
+            async def execute(self, _statement: Any) -> Any:
+                scalars = SimpleNamespace(first=lambda: room)
+                return SimpleNamespace(unique=lambda: SimpleNamespace(scalars=lambda: scalars))
+
+        return _RoomSession(player_id, container, room.id, player_id)
+
+    async def test_staff_close_a_room_they_neither_created_nor_play(self) -> None:
+        room = _room(away_captain=200)
+        session = self._session(room, player_id=999)
+        payload = await scrim.scrim_service.close_room(session, _user(id=42, staff_of=[WORKSPACE_ID]), "tok")
+        self.assertIsNotNone(room.closed_at)
+        self.assertEqual(1, session.commits)
+        self.assertIsNotNone(payload["closed_at"])
+        # The room they just retired cannot be retired again.
+        self.assertFalse(payload["can_close"])
+
+    async def test_an_uninvolved_member_is_refused(self) -> None:
+        room = _room(away_captain=200)
+        session = self._session(room, player_id=999)
+        with self.assertRaises(HTTPException) as ctx:
+            await scrim.scrim_service.close_room(session, _user(id=42), "tok")
+        self.assertEqual(403, ctx.exception.status_code)
+        self.assertIsNone(room.closed_at)
+        self.assertEqual(0, session.commits)
+
+    async def test_a_captain_who_did_not_create_it_may_close(self) -> None:
+        room = _room(away_captain=200)
+        session = self._session(room, player_id=200)
+        await scrim.scrim_service.close_room(session, _user(id=42), "tok")
+        self.assertIsNotNone(room.closed_at)
 
 
 class TheSerializerMatchesTheWireSchema(IsolatedAsyncioTestCase):

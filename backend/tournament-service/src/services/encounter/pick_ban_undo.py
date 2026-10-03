@@ -38,10 +38,12 @@ from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession
 from shared.repository import EncounterRepository, PickBanEntryRepository, PickBanSubmissionRepository
 from src.services.encounter.pick_ban_session import (
     PickBanSessionService,
+    assert_not_paused,
     pick_ban_session_service,
     resolved_steps,
 )
 from src.services.encounter.realtime_commit import emit_pick_ban_update
+from src.services.encounter.room_journal import record_room_event
 
 
 def clear_undo_request(pick_ban: PickBanSession) -> None:
@@ -135,6 +137,7 @@ class PickBanUndoService:
         captain_side: str,
         *,
         consent: bool = True,
+        actor_auth_user_id: int | None = None,
     ) -> dict[str, Any]:
         """Record ``captain_side``'s consent to undo the last step, applying it
         the moment both sides have given it. ``consent=False`` withdraws an open
@@ -152,6 +155,8 @@ class PickBanUndoService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is not initialized")
         if str(pick_ban.status) == MapVetoSessionStatus.CANCELLED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is cancelled")
+        # Undo is a captains-only agreement, so a paused room refuses it outright.
+        assert_not_paused(pick_ban)
 
         steps = resolved_steps(pick_ban)
         entries = list(
@@ -166,16 +171,24 @@ class PickBanUndoService:
             await self._assert_hero_round_unstarted(session, encounter_id, step.round)
             await self._assert_positions_unclaimed(session, encounter_id, entries, steps, submissions, target)
 
+        # One row per real change: a captain re-sending the request they already
+        # have, or withdrawing one nobody opened, moves nothing worth recording.
+        journaled: str | None = None
         if not consent:
+            if pick_ban.undo_requested_by is not None:
+                journaled = "undo_withdrawn"
             clear_undo_request(pick_ban)
         else:
             # A request standing against a DIFFERENT step is stale, not an
             # agreement -- this call then opens a fresh one instead of applying it.
             pending_side = pick_ban.undo_requested_by if pick_ban.undo_target_index == target else None
             if pending_side is None or pending_side == captain_side:
+                if pending_side != captain_side:
+                    journaled = "undo_requested"
                 pick_ban.undo_requested_by = captain_side
                 pick_ban.undo_target_index = target
             else:
+                journaled = "undo_applied"
                 apply_undo(pick_ban, steps, submissions, entries, target=target, now=datetime.now(UTC))
                 if kind == PickBanKind.MAP:
                     # The pick is gone, so the position it opened must go with it.
@@ -184,6 +197,17 @@ class PickBanUndoService:
                         await session.flush()
                         await self.sessions.games.sync_games_with_picks(session, encounter, pick_ban)
 
+        if journaled is not None:
+            await record_room_event(
+                session,
+                encounter_id,
+                action=journaled,
+                source="captain",
+                kind=kind.value,
+                side=captain_side,
+                actor_auth_user_id=actor_auth_user_id,
+                data={"step_index": target},
+            )
         await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
         return undo_state(pick_ban, steps, submissions)

@@ -30,6 +30,7 @@ from shared.core.enums import (
     EncounterStatus,
     MapPoolEntryStatus,
     PickBanKind,
+    StageType,
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
@@ -48,6 +49,7 @@ from shared.repository import (
 )
 from shared.schemas.events import EncounterCompletedEvent
 from shared.services.bracket import advancement
+from shared.services.bracket.swiss_state import remove_swiss_bye_round
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.challonge_refs import resolve_encounter_challonge
 from shared.services.encounter.result_audit import record_result_transition
@@ -55,8 +57,10 @@ from shared.services.scrim_scope import is_scrim_container
 from src import models, schemas
 from src.services.challonge.sync import sync_service
 from src.services.encounter import report_form
+from src.services.encounter.dispute_review import notify_dispute_review
 from src.services.encounter.finalize import FinalizeService, finalize_service
 from src.services.encounter.report_form import ReportFormService, report_form_service
+from src.services.encounter.room_journal import record_room_event
 from src.services.tournament.events import enqueue_tournament_recalculation
 
 # One per-map code: (map_index 1-based, replay/match code string). Defined by the
@@ -241,14 +245,24 @@ class CaptainService:
             )
         return encounter
 
-    async def _load_encounter(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
+    async def _load_encounter(
+        self, session: AsyncSession, encounter_id: int, *, for_update: bool = True
+    ) -> models.Encounter:
         """:meth:`load_encounter_any_format`, refused for a lobby.
 
         Every caller of THIS one is a series feature -- captain reports, the
         admin result writes, the captain's own side, the pick-ban room -- so the
         format is checked once here instead of at each command.
+        Only state polling opts out of the encounter lock; its lazy mutations
+        acquire their locks at the write boundary. Eager team/stage loading and
+        the DUEL guard are identical for either path.
         """
-        encounter = await self.load_encounter_any_format(session, encounter_id)
+        if for_update:
+            encounter = await self.load_encounter_any_format(session, encounter_id)
+        else:
+            encounter = await self.encounter_repo.get(session, encounter_id, options=list(_ENCOUNTER_LOCK_OPTIONS))
+            if encounter is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
         ensure_format(encounter, EncounterFormat.DUEL)
         return encounter
 
@@ -386,11 +400,17 @@ class CaptainService:
         encounter: models.Encounter,
         *,
         actor_user_id: int,
+        actor_auth_user_id: int | None = None,
     ) -> bool:
         """Recompute the derived encounter result from its captain reports.
 
         Returns ``True`` when the encounter was auto-confirmed (so the caller can run
         post-commit side effects like Challonge push).
+
+        ``actor_auth_user_id`` is the same person as ``actor_user_id`` seen from
+        the identity side (``players.user.id`` vs ``auth.user.id``); only the
+        dispute branch needs it, to stamp the organizers' notification with who
+        caused it.
         """
         reports = list(encounter.captain_reports)
         now = datetime.now(UTC)
@@ -439,6 +459,20 @@ class CaptainService:
                 from_result_status=from_result_status,
                 home_score_before=home_score_before,
                 away_score_before=away_score_before,
+            )
+            # The captains learn the outcome from the response they are holding;
+            # the organizers who can actually adopt a side learn it from here.
+            # ``Encounter`` carries the tournament, not the tenant that owns it.
+            workspace_id = await session.scalar(
+                select(models.Tournament.workspace_id).where(models.Tournament.id == encounter.tournament_id)
+            )
+            await notify_dispute_review(
+                session,
+                encounter,
+                workspace_id=None if workspace_id is None else int(workspace_id),
+                home_team_name=getattr(encounter.home_team, "name", ""),
+                away_team_name=getattr(encounter.away_team, "name", ""),
+                actor_auth_user_id=actor_auth_user_id,
             )
             await self._enqueue_tournament_recalculation(session, encounter.tournament_id)
             return False
@@ -526,14 +560,13 @@ class CaptainService:
                 detail="Encounter result is confirmed; only an admin can change it",
             )
 
-        _side, captain_user_id, team_id = await self._resolve_captain_identity(session, auth_user, encounter)
+        side, captain_user_id, team_id = await self._resolve_captain_identity(session, auth_user, encounter)
 
-        # A captain report is the FINAL series score, so it must actually end the
-        # series: a Bo3 cannot finish 1:0, and no side can win more maps than the
-        # format has to give (review §6, "Завершение BoN"). Checked after the
-        # captain is identified so a stranger still gets 403, not a hint about the
-        # format. Admin paths stay advisory — a historical or technical result is
-        # the organizer's call.
+        # A report is the FINAL series score, so it must actually end the
+        # series: a Bo2 cannot finish 1:0, and no side can win more maps than
+        # the format has to give. Admin confirm uses the same rule
+        # (``_reject_unfinished_series``); a forfeit goes through technical loss,
+        # which already writes a legal winning score.
         if (
             not engine.series_complete(
                 engine.SeriesScore(home_score, away_score, home_score + away_score), encounter.best_of
@@ -580,6 +613,9 @@ class CaptainService:
             await self.map_code_repo.delete_for_report(session, report.id)
             report.map_codes.clear()
 
+        # Captured before the write: a captain re-sending the score they already
+        # filed (to fix a comment or a map code) did not re-report the series.
+        score_changed = (report.home_score, report.away_score) != (home_score, away_score)
         report.reporter_user_id = captain_user_id
         report.home_score = home_score
         report.away_score = away_score
@@ -599,7 +635,20 @@ class CaptainService:
                 )
             )
 
-        confirmed = await self._recompute_encounter_result(session, encounter, actor_user_id=captain_user_id)
+        if score_changed:
+            await record_room_event(
+                session,
+                encounter.id,
+                action="series_reported",
+                source="captain",
+                side=side,
+                actor_auth_user_id=auth_user.id,
+                data={"home_score": home_score, "away_score": away_score},
+            )
+
+        confirmed = await self._recompute_encounter_result(
+            session, encounter, actor_user_id=captain_user_id, actor_auth_user_id=auth_user.id
+        )
         await session.commit()
 
         if confirmed:
@@ -677,6 +726,9 @@ class CaptainService:
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="result_score_unresolved: pass a score or adopt one of the reports",
                 )
+        self._reject_unfinished_series(encounter, resolved_home, resolved_away)
+        await self._drop_unplayed_later_swiss_rounds(session, encounter)
+
 
         if closeness is not None:
             encounter.closeness = closeness / 10.0
@@ -737,6 +789,7 @@ class CaptainService:
         dispute an admin does not want to force-confirm. Captain reports are kept —
         reopening is a correction, not a purge, and the submissions remain the
         evidence. Anything the old result advanced downstream is cleared with it.
+        An unplayed later Swiss round was paired off this result, so it goes too.
         """
         encounter = await self._load_encounter_with_reports(session, encounter_id)
 
@@ -746,6 +799,7 @@ class CaptainService:
                 detail="Encounter has no recorded result to reopen",
             )
 
+        await self._drop_unplayed_later_swiss_rounds(session, encounter)
         tournament_id = encounter.tournament_id
         await advancement.reset_encounter_result(
             session,
@@ -758,6 +812,59 @@ class CaptainService:
         await session.commit()
         await session.refresh(encounter)
         return encounter
+
+    @staticmethod
+    def _reject_unfinished_series(encounter: models.Encounter, home_score: int, away_score: int) -> None:
+        if engine.legal_series_result(home_score, away_score, encounter.best_of):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{home_score}:{away_score} is not a valid final score for a "
+                f"best-of-{encounter.best_of} series"
+            ),
+        )
+
+    @staticmethod
+    def _later_swiss_round_started(row: models.Encounter) -> bool:
+        return (
+            row.status != EncounterStatus.OPEN
+            or (row.home_score or 0) != 0
+            or (row.away_score or 0) != 0
+            or row.result_status not in (None, EncounterResultStatus.NONE)
+        )
+
+    async def _drop_unplayed_later_swiss_rounds(self, session: AsyncSession, encounter: models.Encounter) -> None:
+        """Throw away a Swiss round paired off a result we are changing.
+
+        The standings job only creates the next round when it does not already
+        exist, so a corrected score would otherwise leave 1.0 playing 0.0. A
+        later round that has already been played is not ours to invent: the
+        organizer reopens those matches first.
+        """
+        stage = encounter.stage
+        if stage is None or stage.stage_type != StageType.SWISS or encounter.round is None:
+            return
+        result = await session.execute(
+            select(models.Encounter).where(
+                models.Encounter.stage_id == encounter.stage_id,
+                models.Encounter.stage_item_id.is_not_distinct_from(encounter.stage_item_id),
+                models.Encounter.round > encounter.round,
+            )
+        )
+        later = list(result.scalars().all())
+        if not later:
+            return
+        if any(self._later_swiss_round_started(row) for row in later):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A later Swiss round already has a result — reopen it before changing this one",
+            )
+        for round_number in {row.round for row in later}:
+            await remove_swiss_bye_round(session, encounter.stage_id, encounter.stage_item_id, round_number)
+        for row in later:
+            await session.delete(row)
+
 
 
 captain_service = CaptainService()

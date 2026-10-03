@@ -36,7 +36,7 @@ from shared.domain.encounter_format import ensure_format
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.encounter_report import EncounterMapReport
-from shared.models.tournament.pick_ban import PickBanSession
+from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession
 from shared.repository import (
     EncounterGameRepository,
     EncounterMapReportRepository,
@@ -95,15 +95,52 @@ class EncounterGameService:
         upstream, so reaching here means the tail is still unplayed.
         """
         entries = list(await self.entry_repo.list_by_session(session, map_pick_ban.id))
-        settled = engine.settled_in_order(entries)
         games = await self.list_games(session, encounter.id)
         reports = await self.reports_by_game(session, games)
+        return await self._sync_games_with_snapshot(session, encounter, entries, games, reports)
+
+    @staticmethod
+    def _pick_game_changes(
+        entries: Sequence[PickBanEntry],
+        games: Sequence[EncounterGame],
+        reports: dict[int, list[EncounterMapReport]],
+    ) -> tuple[list[tuple[int, PickBanEntry, EncounterGame | None]], list[EncounterGame]]:
+        """The exact write plan, also used for the room's unlocked drift check."""
+        settled = engine.settled_in_order(entries)
         by_position = {game.position: game for game in games}
 
+        changes = []
         for position, entry in enumerate(settled, 1):
             game = by_position.get(position)
+            if game is None or (
+                game.map_id != entry.item_id
+                and game.state in (EncounterGameState.PLANNED, EncounterGameState.AWAITING_RESULT)
+                and not reports.get(game.id)
+            ):
+                changes.append((position, entry, game))
+
+        stale = [
+            game
+            for game in games
+            if game.position > len(settled) and game.state != EncounterGameState.CONFIRMED and not reports.get(game.id)
+        ]
+        return changes, stale
+
+    async def _sync_games_with_snapshot(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        entries: Sequence[PickBanEntry],
+        games: list[EncounterGame],
+        reports: dict[int, list[EncounterMapReport]],
+    ) -> list[EncounterGame]:
+        """Caller-owned snapshot, taken under the write lock when mutating."""
+        changes, stale = self._pick_game_changes(entries, games, reports)
+        if not changes and not stale:
+            return games
+        for position, entry, game in changes:
             if game is None:
-                await self.game_repo.create(
+                game = await self.game_repo.create(
                     session,
                     EncounterGame(
                         encounter_id=encounter.id,
@@ -112,26 +149,18 @@ class EncounterGameService:
                         state=EncounterGameState.AWAITING_RESULT,
                     ),
                 )
-                continue
-            if (
-                game.map_id != entry.item_id
-                and game.state in (EncounterGameState.PLANNED, EncounterGameState.AWAITING_RESULT)
-                and not reports.get(game.id)
-            ):
+                games.append(game)
+            else:
                 game.map_id = entry.item_id
                 if game.state == EncounterGameState.PLANNED:
-                    # A pick names the map a freeplay position was still missing.
                     game.state = EncounterGameState.AWAITING_RESULT
-
-        stale = [
-            game
-            for game in games
-            if game.position > len(settled) and game.state != EncounterGameState.CONFIRMED and not reports.get(game.id)
-        ]
         if stale:
             await self.cancel_games(session, encounter, stale, actor_user_id=None, reason="pick_undone")
         await session.flush()
-        return await self.list_games(session, encounter.id)
+        return sorted(
+            (game for game in games if game.state != EncounterGameState.CANCELLED),
+            key=lambda game: (game.position, game.id or 0),
+        )
 
     async def ensure_freeplay_game(self, session: AsyncSession, encounter: Encounter) -> EncounterGame | None:
         """The position captains should be reporting right now, opening a new one

@@ -2,7 +2,7 @@ import type { RoundGroup } from "@/lib/bracket/view";
 import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
 import type { Encounter } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
-import type { StageSummary, Standings, TournamentStatus } from "@/types/tournament.types";
+import type { Standings, TournamentStatus } from "@/types/tournament.types";
 
 // ---------------------------------------------------------------------------
 // Which of the three compositions a tournament gets
@@ -50,42 +50,6 @@ export const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swis
   single_elimination: "bracket.singleElimination",
   double_elimination: "bracket.doubleElimination"
 };
-
-/**
- * The stage the overview draws: the one being played now, and after the
- * tournament ends the one that decided it.
- *
- * Unpublished stages (an organizer's preview) are skipped while anything is
- * published, and only drawn when nothing is — the preview is still the stage
- * that is meant.
- *
- * A phase running parallel divisions has no single answer, so the lowest id
- * wins and every card below is titled with that stage's name; the Format card
- * above lists the whole wave.
- */
-export function pickOverviewStage(
-  stages: readonly StageSummary[],
-  variant: OverviewVariant
-): StageSummary | null {
-  const ordered = [...stages].sort((left, right) => left.order - right.order || left.id - right.id);
-  const visible = ordered.filter((stage) => stage.is_published || stage.is_completed);
-  const pool = visible.length > 0 ? visible : ordered;
-  if (pool.length === 0) return null;
-
-  if (variant === "completed") {
-    return (
-      pool.filter((stage) => ELIMINATION_TYPES[stage.stage_type] === true).at(-1) ??
-      pool.at(-1) ??
-      null
-    );
-  }
-  return (
-    pool.find((stage) => stage.is_active) ??
-    pool.find((stage) => !stage.is_completed) ??
-    pool.at(-1) ??
-    null
-  );
-}
 
 /** The round the stage is on: the first with anything unfinished, else its last. */
 export function currentRoundOf(groups: readonly RoundGroup[]): number | null {

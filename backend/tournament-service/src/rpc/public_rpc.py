@@ -319,7 +319,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, encounter_id
             )
             await assert_tournament_viewable(session, user, tournament_id)
-            encounter = await captain_service._load_encounter(session, encounter_id)
+            encounter = await captain_service._load_encounter(session, encounter_id, for_update=False)
             viewer_side = await resolve_optional_viewer_side(session, user, encounter)
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
                 session, encounter_id, kind, viewer_side=viewer_side
@@ -346,6 +346,7 @@ def register(broker: Any, logger: Any) -> None:
                 item_id=body.item_id,
                 action=body.action,
                 target_player_id=body.target_player_id,
+                actor_auth_user_id=user.id,
             )
 
         return await _run(logger, op)
@@ -366,6 +367,7 @@ def register(broker: Any, logger: Any) -> None:
                 captain_side,
                 items=[item.model_dump() for item in body.items],
                 lock=body.lock,
+                actor_auth_user_id=user.id,
             )
 
         return await _run(logger, op)
@@ -378,7 +380,9 @@ def register(broker: Any, logger: Any) -> None:
             encounter_id = _require_id(data)
             encounter = await captain_service._load_encounter(session, encounter_id)
             captain_side = await captain_service.resolve_captain_side(session, user, encounter)
-            return await pick_ban_action.pick_ban_action_service.dispute_step(session, encounter_id, kind, captain_side)
+            return await pick_ban_action.pick_ban_action_service.dispute_step(
+                session, encounter_id, kind, captain_side, actor_auth_user_id=user.id
+            )
 
         return await _run(logger, op)
 
@@ -395,7 +399,11 @@ def register(broker: Any, logger: Any) -> None:
             if pick_ban is None:
                 raise HTTPException(status_code=400, detail="No round is awaiting an opener choice")
             await pick_ban_session_service.elect_round_opener(
-                session, pick_ban, first_side=body.first_side, acting_side=captain_side
+                session,
+                pick_ban,
+                first_side=body.first_side,
+                acting_side=captain_side,
+                actor_auth_user_id=user.id,
             )
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
                 session, encounter_id, kind, viewer_side=captain_side
@@ -416,7 +424,7 @@ def register(broker: Any, logger: Any) -> None:
             # `item_ids` once the undo landed and the step it restored is open
             # again).
             return await pick_ban_undo_service.perform_undo(
-                session, encounter_id, kind, captain_side, consent=body.consent
+                session, encounter_id, kind, captain_side, consent=body.consent, actor_auth_user_id=user.id
             )
 
         return await _run(logger, op)
@@ -441,6 +449,7 @@ def register(broker: Any, logger: Any) -> None:
                 reporter_user_id=user.id,
                 home_score=body.home_score,
                 away_score=body.away_score,
+                actor_auth_user_id=user.id,
             )
 
         return await _run(logger, op)
@@ -477,8 +486,11 @@ def register(broker: Any, logger: Any) -> None:
             captain_side, captain_user_id, _team_id = await captain_service.resolve_captain_identity(
                 session, user, encounter
             )
-            # mark_ready commits internally.
-            readiness = await pick_ban_session_service.mark_ready(session, encounter, captain_side, captain_user_id)
+            # mark_ready commits internally and signals the opposite captain's
+            # room -- nothing polls it while no session exists.
+            readiness = await pick_ban_session_service.mark_ready(
+                session, encounter, captain_side, captain_user_id, actor_auth_user_id=user.id
+            )
             return {"readiness": readiness}
 
         return await _run(logger, op)

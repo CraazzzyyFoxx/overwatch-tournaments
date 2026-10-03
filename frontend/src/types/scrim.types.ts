@@ -39,6 +39,12 @@ export interface ScrimCreateInput {
 /** Which side of a room the viewer captains. */
 type ScrimSide = "home" | "away";
 
+/**
+ * Which rooms a list call asks for: the viewer's own, or every room of the
+ * workspace (staff only — the server 403s a member without `match.result`).
+ */
+export type ScrimListScope = "mine" | "workspace";
+
 interface ScrimTeam {
   id: number;
   name: string;
@@ -62,6 +68,12 @@ export interface ScrimRoom {
   viewer_side: ScrimSide | null;
   /** True only for a workspace member who captains neither side while one is open. */
   can_claim: boolean;
+  /**
+   * Whether the viewer may retire this room: its creator, a captain of either
+   * side, or workspace staff holding `match.result`. False once closed — the UI
+   * shows Close from this alone and never re-derives the rule.
+   */
+  can_close: boolean;
   created_at: string;
   closed_at: string | null;
 }

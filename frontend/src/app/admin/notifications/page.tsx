@@ -50,6 +50,7 @@ const KINDS = [
   "registration.opened",
   "check_in.opened",
   "encounter.report_disputed",
+  "encounter.dispute_review",
   "encounter.scheduled",
   "team.kicked",
   "team.rejected",

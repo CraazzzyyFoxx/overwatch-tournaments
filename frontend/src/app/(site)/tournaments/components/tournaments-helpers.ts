@@ -1,6 +1,7 @@
 import type { useTranslations } from "next-intl";
 
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { pickCurrentStage } from "@/lib/tournament/stages";
 import type { Encounter } from "@/types/encounter.types";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
@@ -46,7 +47,7 @@ export interface StageProgress {
 
 // Coarse stage-progress proxy from stage completion flags. Real "X/Y matches"
 // requires a precomputed backend field (see plan C2); until then we render a
-// graceful label + bar derived from stages.is_completed / is_active.
+// graceful label + bar derived from stages.is_completed and the current stage.
 //
 // Bucketed by the status's presentation variant rather than by listing statuses
 // again: which statuses read as "signing up" is already decided once, in
@@ -68,9 +69,9 @@ export function stageProgress(
   const stages = tournament.stages ?? [];
   const total = stages.length;
   const completed = stages.filter((stage) => stage.is_completed).length;
-  const active = stages.find((stage) => stage.is_active);
+  const current = pickCurrentStage(stages, status);
   const pct = total > 0 ? Math.min(95, Math.max(10, Math.round((completed / total) * 100))) : 50;
-  return { label: active?.name ?? t("common.live"), pct, fill: "teal" };
+  return { label: current?.name ?? t("common.live"), pct, fill: "teal" };
 }
 
 // Current-map name from the live encounter, if a map is in progress.

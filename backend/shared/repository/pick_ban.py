@@ -7,10 +7,17 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
 from shared.repository.base import BaseRepository
+
+# Both pool shapes must be loaded before an async caller reads candidates.
+CONFIG_POOL_LOAD = (
+    selectinload(models.PickBanConfig.items),
+    selectinload(models.PickBanConfig.slots).selectinload(models.PickBanConfigSlot.items),
+)
 
 
 class PickBanConfigRepository(BaseRepository[models.PickBanConfig]):
@@ -328,6 +335,17 @@ class EncounterReadinessRepository(BaseRepository[models.EncounterReadiness]):
     async def delete_for_encounter(self, session: AsyncSession, encounter_id: int) -> None:
         await session.execute(
             sa.delete(models.EncounterReadiness).where(models.EncounterReadiness.encounter_id == encounter_id)
+        )
+
+    async def delete_for_side(self, session: AsyncSession, *, encounter_id: int, side: str) -> None:
+        """Drop ONE side's confirmation, leaving the opponent's standing -- the
+        organizer's readiness override, where ``delete_for_encounter`` is the
+        team-change reset that must clear both."""
+        await session.execute(
+            sa.delete(models.EncounterReadiness).where(
+                models.EncounterReadiness.encounter_id == encounter_id,
+                models.EncounterReadiness.side == side,
+            )
         )
 
 

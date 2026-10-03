@@ -36,7 +36,8 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// pick-ban live-session admin overrides (docs/plans/2026-08-09-generic-pickban-engine.md).
 	// Config CRUD moved to the generic pick-ban-configs routes below. `kind`
 	// (map|hero) travels in the body, one route pair for both. Worker enforces
-	// workspace "match"/"update".
+	// workspace "match"/"result" — these run ONE match in progress, the same
+	// staff that records its result.
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-session/reset", Queue: "rpc.tournament.admin_pick_ban_session_reset", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-act", Queue: "rpc.tournament.admin_pick_ban_act", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-elect-opener", Queue: "rpc.tournament.admin_pick_ban_elect_opener", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
@@ -45,8 +46,22 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	// step (the organizer's dispute, without the attempt budget).
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-submit", Queue: "rpc.tournament.admin_pick_ban_submit", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-reopen", Queue: "rpc.tournament.admin_pick_ban_reopen", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// The room's emergency controls: freeze its clock, hand the open step more
+	// time, drop a session the series cannot play out, and record a walkover.
+	// A paused session refuses every CAPTAIN write (409) while these same admin
+	// routes keep working — that is the point of the pause.
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-pause", Queue: "rpc.tournament.admin_pick_ban_pause", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-extend", Queue: "rpc.tournament.admin_pick_ban_extend", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/pick-ban-cancel", Queue: "rpc.tournament.admin_pick_ban_cancel", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// A technical loss IS a result write (same `match.result` gate, same bracket
+	// and source-correction guards as /result), so it answers the result shape.
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/technical-loss", Queue: "rpc.tournament.admin_encounter_technical_loss", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// Captain readiness, forced by an organizer: `{side, ready}`. Worker enforces
+	// the same "match"/"result" gate; `ready: false` is a 409 once a pick-ban
+	// session exists (readiness gates session creation only — reset instead).
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/readiness", Queue: "rpc.tournament.admin_encounter_readiness_set", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	// encounter_game correction — one series position's result, admin-decided and
-	// always reasoned (spec §6.5). Same worker-side "match"/"update" gate.
+	// always reasoned (spec §6.5). Same worker-side "match"/"result" gate.
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/games/{game_id}/result", Queue: "rpc.tournament.admin_game_result", IDParam: "encounter_id", Path: []string{"game_id"}, Body: true, Auth: edge.AuthRequired},
 	// FFA lobby results (src/rpc/ffa.py) — one game of a lobby is identified by
 	// its POSITION, like the duel game correction above: a lobby may replay a
@@ -67,6 +82,15 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pick-ban-configs", Queue: "rpc.tournament.admin_pick_ban_config_list", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pick-ban-configs", Queue: "rpc.tournament.admin_pick_ban_config_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/admin/pick-ban-configs/{config_id}", Queue: "rpc.tournament.admin_pick_ban_config_delete", IDParam: "config_id", Auth: edge.AuthRequired},
+	// The tournament-wide pre-game rooms board: one row per encounter whose room
+	// can exist, with its phase and attention flags. Read-only (the worker never
+	// creates a session for it) and gated on workspace "match"/"read". NOT in
+	// cacheable.go: it is a live operations view, stale by the second.
+	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/pregame-rooms", Queue: "rpc.tournament.admin_pregame_rooms", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	// One room's journal: the pre-game events merged with the encounter's result
+	// audit, newest first. Same "match"/"read" gate as the board above, and the
+	// same reason to stay out of cacheable.go — it is read while the room runs.
+	{Method: "GET", Pattern: "/api/v1/admin/encounters/{encounter_id}/room-history", Queue: "rpc.tournament.admin_pregame_room_history", IDParam: "encounter_id", Query: []string{"limit"}, Auth: edge.AuthRequired},
 	// The constructor's two read-only engine probes: "would this ruleset save?"
 	// and "what would a Bo5 of it look like?". Keyed by tournament_id because
 	// they gate on the same workspace "match"/"update" as the upsert they

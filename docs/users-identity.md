@@ -644,6 +644,19 @@ Two registrations or two tags for the same `player_id` in the same workspace con
 - Direct FKs to `players.user` (statistics, kill feed, captain, …) go through `REFERENCE_CONFIG`.
 - Audited in `user_merge_audit`.
 
+Both profiles may have an auth account. The superuser previews an explicit `auth_policy`:
+
+- `surviving_auth_user_id` chooses the account linked to the target player; the other account is kept unlinked or deleted.
+- `oauth_destinations` selects an owner for each real OAuth connection independently of the player’s selected social accounts. A connection cannot remain on an account being deleted.
+- Keeping an account requires a usable login and cannot strand an operational workspace role.
+- Deletion transfers subscriptions, authored/subject ranks, favorites, saved encounter views, balancer settings, notification preferences, resource access and ownership, roles and explicit denies. Colliding values require `conflict_choices`; `source` means incoming from the transferring account, `target` means existing on the surviving account. Subscription verdicts and roster shapes are selected as whole records, not synthesized.
+- Passwords, email, active status and the superuser flag remain those of the selected account. Roles do not remove denies; a merge cannot delete the current operator or last active platform superuser, or leave workspace ownership incapable of administration. Unsupported mapped cascade-owned data blocks account deletion.
+- Sign-in/account changes, auth deletion and permission/access changes require independent acknowledgements, in addition to confirmation of deleting the source player. Moving OAuth sign-in access also requires permission review. Editing the dialog plan clears all acknowledgements.
+
+Execute rechecks a fingerprint of the auth/resource state under ordered locks. Player references, auth ownership, resource transfers and `UserMergeAudit` commit in one PostgreSQL transaction. The audit records the reviewed policy, acknowledgements, affected auth IDs and revoked session IDs; secret credentials and session IDs are not returned by the public merge DTO.
+
+Before commit, app-service requires identity-service to blacklist both accounts’ existing session IDs for the access-token lifetime and invalidate their RBAC caches using a strict Redis transaction. An unavailable identity/Redis finalizer rolls back the database merge. A later database commit failure may still leave old sessions revoked; the accounts must sign in again. Refresh tokens and API keys for both accounts are deleted, never transferred. App-service clears RBAC/profile caches again after commit. Authorization propagation remains bounded by the gateway’s existing short credential cache; subsequent Redis outages retain the platform’s existing fail-soft token-validation policy.
+
 This is the only legitimate way to say "these two people turned out to be one". Auto-link and identity collapse on registration **deliberately** do not do this.
 
 ---

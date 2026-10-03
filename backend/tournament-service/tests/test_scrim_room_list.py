@@ -119,11 +119,14 @@ class _AsyncSessionShim:
         return getattr(self.sync_session, name)
 
 
-def _user(auth_id: int, *, workspaces: list[int] | None = None) -> Any:
+def _user(auth_id: int, *, workspaces: list[int] | None = None, staff_of: list[int] | None = None) -> Any:
+    """``staff_of`` names the workspaces where this user holds ``match.result``."""
+    staff = list(staff_of or [])
     return SimpleNamespace(
         id=auth_id,
         is_superuser=False,
         get_workspace_ids=lambda: list(workspaces if workspaces is not None else [WORKSPACE_ID]),
+        has_workspace_permission=lambda workspace_id, resource, action: workspace_id in staff,
     )
 
 
@@ -235,9 +238,9 @@ class _ListCase(IsolatedAsyncioTestCase):
         self.db = _Fixture()
         self.addCleanup(self.db.close)
 
-    async def rooms_for(self, user: Any) -> list[dict]:
+    async def rooms_for(self, user: Any, *, scope: str = "mine") -> list[dict]:
         self.db.session.commit()
-        return await scrim.scrim_service.list_rooms_for_viewer(self.db.shim, user, WORKSPACE_ID)
+        return await scrim.scrim_service.list_rooms_for_viewer(self.db.shim, user, WORKSPACE_ID, scope=scope)
 
 
 class TheListRuns(_ListCase):
@@ -302,3 +305,47 @@ class TheListIsOrderedAndNotDeduplicated(_ListCase):
             # so this test cannot pass by the ordering having quietly been dropped.
             self.assertIn("ORDER BY", sql.upper())
             self.assertIn("IS NULL DESC", sql.upper())
+
+
+class TheWorkspaceScopeIsForStaff(_ListCase):
+    """``scope="workspace"`` is how a referee finds a room nobody is left to
+    close — so it must list rooms the caller is no part of, and only for staff."""
+
+    async def test_staff_see_a_room_they_neither_created_nor_captain(self) -> None:
+        self.db.room(1, created_by=ME, home_captain=MY_PLAYER, away_captain=OPPONENT_PLAYER)
+        staff = _user(STRANGER, staff_of=[WORKSPACE_ID])
+        self.assertEqual([], await self.rooms_for(staff))
+        rooms = await self.rooms_for(staff, scope="workspace")
+        self.assertEqual([1], [room["id"] for room in rooms])
+        self.assertIsNone(rooms[0]["viewer_side"])
+        self.assertTrue(rooms[0]["can_close"])
+
+    async def test_a_plain_member_is_refused_the_workspace_scope(self) -> None:
+        from shared.core.errors import BaseAPIException as HTTPException
+
+        self.db.room(1, created_by=ME, home_captain=MY_PLAYER, away_captain=None)
+        with self.assertRaises(HTTPException) as ctx:
+            await self.rooms_for(_user(STRANGER), scope="workspace")
+        self.assertEqual(403, ctx.exception.status_code)
+
+    async def test_staff_of_another_workspace_are_refused(self) -> None:
+        from shared.core.errors import BaseAPIException as HTTPException
+
+        self.db.room(1, created_by=ME, home_captain=MY_PLAYER, away_captain=None)
+        with self.assertRaises(HTTPException) as ctx:
+            await self.rooms_for(_user(STRANGER, staff_of=[WORKSPACE_ID + 1]), scope="workspace")
+        self.assertEqual(403, ctx.exception.status_code)
+
+    async def test_the_workspace_scope_keeps_the_open_first_ordering(self) -> None:
+        self.db.room(1, created_by=ME, home_captain=MY_PLAYER, away_captain=None, closed=True)
+        self.db.room(2, created_by=OPPONENT, home_captain=OPPONENT_PLAYER, away_captain=None, closed=True)
+        self.db.room(3, created_by=OPPONENT, home_captain=OPPONENT_PLAYER, away_captain=None)
+        rooms = await self.rooms_for(_user(STRANGER, staff_of=[WORKSPACE_ID]), scope="workspace")
+        self.assertEqual([3, 2, 1], [room["id"] for room in rooms])
+
+    async def test_an_unknown_scope_is_refused(self) -> None:
+        from shared.core.errors import BaseAPIException as HTTPException
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.rooms_for(_user(ME), scope="everything")
+        self.assertEqual(422, ctx.exception.status_code)

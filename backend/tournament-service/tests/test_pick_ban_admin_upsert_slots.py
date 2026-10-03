@@ -657,7 +657,7 @@ class SlotValidationGuards(_UpsertCase):
     async def test_an_empty_slot_list_is_kept_as_a_rules_template(self) -> None:
         """No groups is no pool, which is a rules TEMPLATE: rotation, timer and
         the rest, saved at a wide scope for narrower ones to inherit. It opens no
-        room (`PickBanSessionService.has_pool`), so the group-shaped rules have
+        room (`pick_ban_config.has_pool`), so the group-shaped rules have
         nothing to hold and are not applied."""
         envelope, session = await self.invoke(slot_body(slots=[]))
 

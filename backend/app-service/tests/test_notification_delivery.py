@@ -192,6 +192,7 @@ class RenderTests(IsolatedAsyncioTestCase):
             "team.rejected": "/tournaments/3/participants",
             "team.disbanded": "/tournaments/3/participants",
             "encounter.report_disputed": "/tournaments/3/pregame/5",
+            "encounter.dispute_review": "/tournaments/3/pregame/5",
             "encounter.scheduled": "/tournaments/3/pregame/5",
             "registration.opened": "/tournaments/3",
             "check_in.opened": "/tournaments/3",

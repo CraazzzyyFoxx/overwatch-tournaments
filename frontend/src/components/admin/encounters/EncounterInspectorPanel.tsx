@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Gavel, Pencil, Upload } from "lucide-react";
+import { Gavel, ListChecks, Pencil, Upload } from "lucide-react";
 
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
-import { TournamentLogUploadDialog } from "@/app/admin/tournaments/[id]/components/TournamentLogUploadDialog";
+import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { pregameRoomHref } from "@/lib/encounter/pregame-room";
 import adminService from "@/services/admin.service";
 import type { AdminMatchRow } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
@@ -142,6 +143,7 @@ export function EncounterInspectorActions({
   workspaceId,
   canUpdate,
   reportsHref,
+  returnTo,
   onEdit,
   onUploaded
 }: Readonly<{
@@ -150,11 +152,24 @@ export function EncounterInspectorActions({
   canUpdate: boolean;
   /** Where the captain reports view lives for this scope. */
   reportsHref: string;
+  /** Where the pre-game room hands the organizer back — this list, as filtered. */
+  returnTo: string;
   onEdit: (encounter: Encounter) => void;
   onUploaded: () => void;
 }>) {
   return (
     <>
+      {encounter.format === "ffa" ? null : (
+        <Button asChild variant="outline" size="sm">
+          {/* Readiness, the veto and the per-map reports all live in the room,
+              and the organizer controls there are the same ones a captain
+              cannot reach. */}
+          <Link href={pregameRoomHref(encounter.tournament_id, encounter.id, returnTo)}>
+            <ListChecks aria-hidden className="size-3.5" />
+            Open pre-game room
+          </Link>
+        </Button>
+      )}
       {canUpdate ? (
         <Button variant="outline" size="sm" onClick={() => onEdit(encounter)}>
           <Pencil aria-hidden className="size-3.5" />

@@ -227,7 +227,7 @@ DOCS: dict[str, dict] = {
     # ── RBAC: auth users ───────────────────────────────────────────────────
     "rpc.identity.rbac.list_auth_users": {
         "summary": "List auth users",
-        "description": "Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/is_active/is_superuser/workspace_id.",
+        "description": "Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.",
     },
     "rpc.identity.rbac.get_auth_user": {
         "summary": "Get auth user",

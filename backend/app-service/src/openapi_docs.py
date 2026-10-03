@@ -219,7 +219,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.app.workspaces.members_list": {
         "summary": "List workspace members",
-        "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles; 404 if workspace missing.",
+        "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles. `role_id` keeps holders of that role; `exclude_role_id` drops holders of any listed role. 404 if workspace missing.",
     },
     "rpc.app.workspaces.members_autofill_roles": {
         "summary": "Autofill member roles",
@@ -442,11 +442,11 @@ DOCS: dict[str, dict] = {
     # ── user profile merge (superuser) ─────────────────────────────────────────────────────
     "rpc.app.users.merge_preview": {
         "summary": "Preview user merge",
-        "description": "Permission: superuser only. Previews merging one player profile into another without applying changes.",
+        "description": "Permission: superuser only. Previews merging player profiles, including two auth-linked profiles. auth_policy chooses the surviving auth account, keeping/deleting the other, each OAuth connection destination, and explicit resource-conflict choices. Returns account roles/denies, preservation counts, blockers and a state fingerprint without exposing credentials.",
     },
     "rpc.app.users.merge_execute": {
         "summary": "Execute user merge",
-        "description": "Permission: superuser only. Merges one player profile into another, stamping the operator's auth-user id.",
+        "description": "Permission: superuser only. Atomically merges player references, selected social identities, auth ownership, preserved resources and audit after rechecking the locked preview fingerprint. Requires independent confirmations for auth changes, auth deletion and permission/access changes. Both accounts' refresh tokens/API keys are revoked; identity-service session blacklisting and RBAC invalidation must succeed before commit. Password, email, active and superuser flags are never combined.",
     },
     # ── social identities (admin) ──────────────────────────────────────────────────────────
     "rpc.app.users.social_add": {

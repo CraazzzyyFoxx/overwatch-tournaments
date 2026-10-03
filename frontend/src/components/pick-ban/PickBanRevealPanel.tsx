@@ -5,7 +5,6 @@ import { Eye, Repeat2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
@@ -78,9 +77,9 @@ export function PickBanRevealPanel({
         <Eye className="h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]" aria-hidden />
         <span className="text-sm font-semibold">{t("reveal.title")}</span>
         {duplicates.size > 0 ? (
-          <Badge variant="outline" className="px-1.5 py-0 text-label font-normal">
+          <span className="text-xs text-[color:var(--aqt-amber)]">
             {t("reveal.matchedCount", { count: duplicates.size })}
-          </Badge>
+          </span>
         ) : null}
         {canDispute ? (
           <Button
@@ -146,12 +145,9 @@ export function PickBanRevealPanel({
                           </span>
                         ) : null}
                         {matched ? (
-                          <Badge
-                            variant="outline"
-                            className="ml-auto shrink-0 px-1.5 py-0 text-label font-normal text-[color:var(--aqt-amber)]"
-                          >
+                          <span className="ml-auto shrink-0 text-xs text-[color:var(--aqt-amber)]">
                             {t("reveal.matched")}
-                          </Badge>
+                          </span>
                         ) : null}
                       </li>
                     );

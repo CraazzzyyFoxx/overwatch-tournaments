@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -13,7 +13,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HeroCoord, PageHero } from "@/components/site/PageHero";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { usePermissions } from "@/hooks/usePermissions";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
@@ -21,7 +23,7 @@ import { withReturnTo } from "@/lib/auth/return-to";
 import scrimService from "@/services/scrim.service";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import type { ScrimRoom } from "@/types/scrim.types";
+import type { ScrimListScope, ScrimRoom } from "@/types/scrim.types";
 
 import { ScrimCreateDialog } from "./_components/ScrimCreateDialog";
 import { scrimQueryKeys } from "@/lib/scrims/query-keys";
@@ -83,7 +85,9 @@ function RoomCard({
             <Copy aria-hidden className="size-4" />
             {t("copyLink")}
           </Button>
-          {room.viewer_side != null && room.closed_at == null ? (
+          {/* The server's own rule, not a client re-derivation: a creator who
+              plays no side, and workspace staff, may close too. */}
+          {room.can_close ? (
             <Button variant="ghost" size="sm" onClick={onClose} disabled={isClosing}>
               {t("close")}
             </Button>
@@ -112,13 +116,24 @@ export default function ScrimsPage() {
   const { user, status } = useAuthProfile();
   const openAuthModal = useAuthModalStore((state) => state.open);
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  const { hasWorkspacePermission } = usePermissions();
   const queryClient = useQueryClient();
 
-  const listQueryKey = useMemo(() => scrimQueryKeys.mine(workspaceId), [workspaceId]);
+  // `match.result` is the referee grant, the same one the pre-game organizer
+  // controls run on: it is what lets staff find and retire a room they are no
+  // part of. Everyone else only ever sees their own.
+  const isStaff = workspaceId != null && hasWorkspacePermission(workspaceId, "match.result");
+  const [scope, setScope] = useState<ScrimListScope>("mine");
+  const effectiveScope: ScrimListScope = isStaff ? scope : "mine";
+
+  const listQueryKey = useMemo(
+    () => scrimQueryKeys.list(workspaceId, effectiveScope),
+    [workspaceId, effectiveScope]
+  );
 
   const roomsQuery = useQuery({
     queryKey: listQueryKey,
-    queryFn: () => scrimService.listMyRooms(workspaceId),
+    queryFn: () => scrimService.listRooms(workspaceId, effectiveScope),
     enabled: Boolean(user) && workspaceId != null
   });
 
@@ -181,8 +196,14 @@ export default function ScrimsPage() {
       return (
         <PageStateCard
           state="empty"
-          title={t("list.emptyTitle")}
-          description={t("list.emptyDescription")}
+          title={
+            effectiveScope === "workspace" ? t("list.emptyWorkspaceTitle") : t("list.emptyTitle")
+          }
+          description={
+            effectiveScope === "workspace"
+              ? t("list.emptyWorkspaceDescription")
+              : t("list.emptyDescription")
+          }
         />
       );
     }
@@ -212,6 +233,19 @@ export default function ScrimsPage() {
           ) : null
         }
       />
+
+      {isStaff ? (
+        <ToggleGroup
+          type="single"
+          variant="pill"
+          value={scope}
+          onValueChange={(next) => setScope(next as ScrimListScope)}
+          aria-label={t("list.scopeLabel")}
+        >
+          <ToggleGroupItem value="mine">{t("list.scopeMine")}</ToggleGroupItem>
+          <ToggleGroupItem value="workspace">{t("list.scopeWorkspace")}</ToggleGroupItem>
+        </ToggleGroup>
+      ) : null}
 
       {renderRooms()}
 

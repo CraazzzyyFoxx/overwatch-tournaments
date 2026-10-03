@@ -136,14 +136,18 @@ export function isSessionActive(session: PickBanSession | null): boolean {
 
 /**
  * Epoch-ms deadline of the step on the clock, or null when no countdown should
- * be shown (no timer on the step, session inactive, sequence complete).
+ * be shown (no timer on the step, session inactive, sequence complete, or an
+ * organizer paused the session).
  *
  * The server computes it — `step_deadline` already accounts for the step's own
  * `timer_seconds` and for every reopen that reset the clock, so the room never
- * adds a start time to a duration itself.
+ * adds a start time to a duration itself. A paused session has no deadline at
+ * all server-side; the guard here keeps a cached state from ticking down to a
+ * timeout that cannot happen.
  */
 export function stepDeadlineMs(state: PickBanState): number | null {
   if (!isSessionActive(state.session) || state.is_complete) return null;
+  if (state.session?.paused_at != null) return null;
   if (!state.step_deadline) return null;
   const deadline = Date.parse(state.step_deadline);
   return Number.isNaN(deadline) ? null : deadline;
@@ -476,12 +480,29 @@ export function bannedEntries(pool: PickBanEntry[], round: number | null): PickB
 }
 
 /**
- * What `round` still has to play with: the round's pool minus its bans. A
- * protected entry counts — a protect keeps a hero IN the game, which is
- * exactly the distinction the lobby has to get right.
+ * Ids of the bans in `groups` that no longer bind `round`, the round in force.
+ *
+ * A round's board carries exactly the earlier bans whose `lifetime` still
+ * covers it, each naming its origin round, so an earlier ban is active iff
+ * `round` holds a ban of the same item from the same origin. The origin
+ * matters: a hero can be banned again once an earlier ban on it ran out.
  */
-export function remainingEntries(pool: PickBanEntry[], round: number | null): PickBanEntry[] {
-  return pool.filter((entry) => entry.status !== "banned" && inRound(entry, round));
+export function expiredBanIds(groups: PickBanRoundGroup[], round: number): Set<number> {
+  const origin = (entry: PickBanEntry) => `${entry.carried_from_round ?? entry.round}:${entry.item_id}`;
+  const active = new Set(
+    groups
+      .find((group) => group.round === round)
+      ?.entries.filter((entry) => entry.status === "banned")
+      .map(origin)
+  );
+  const expired = new Set<number>();
+  for (const group of groups) {
+    if (group.round >= round) continue;
+    for (const entry of group.entries) {
+      if (entry.status === "banned" && !active.has(origin(entry))) expired.add(entry.id);
+    }
+  }
+  return expired;
 }
 
 export type PickBanStatusLabelKey = `status.${PickBanEntryStatus | "remaining"}`;
@@ -571,10 +592,10 @@ export interface PickBanRoleItem {
   role: AqtRoleKey | null;
 }
 
-export interface PickBanRoleGroup {
+export interface PickBanRoleGroup<T extends PickBanRoleItem = PickBanRoleItem> {
   /** Null is the "role unknown" bucket — rendered last, never dropped. */
   role: AqtRoleKey | null;
-  items: PickBanRoleItem[];
+  items: T[];
 }
 
 /** Tank-damage-support, the order the game's own hero list uses. */
@@ -585,8 +606,8 @@ const ROLE_ORDER: AqtRoleKey[] = ["tank", "damage", "support"];
  * group. Empty roles are dropped; the unknown-role bucket comes last so a
  * catalog that has not loaded yet never hides an item.
  */
-export function groupItemsByRole(items: PickBanRoleItem[]): PickBanRoleGroup[] {
-  const byRole = new Map<AqtRoleKey | null, PickBanRoleItem[]>();
+export function groupItemsByRole<T extends PickBanRoleItem>(items: T[]): PickBanRoleGroup<T>[] {
+  const byRole = new Map<AqtRoleKey | null, T[]>();
   for (const item of items) {
     const bucket = byRole.get(item.role) ?? [];
     bucket.push(item);

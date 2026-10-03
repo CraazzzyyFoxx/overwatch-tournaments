@@ -39,6 +39,9 @@ export interface ConfirmDialogProps {
   intent: ConfirmIntent;
   onConfirm: () => Promise<void> | void;
   pending?: boolean;
+  /** The description carries a form (a required reason, a score) that is not
+   * filled in yet — confirm stays disabled without reading as "in flight". */
+  confirmDisabled?: boolean;
 }
 
 const TONE_ICON: Record<ConfirmTone, string> = {
@@ -60,7 +63,8 @@ export function ConfirmDialog({
   onOpenChange,
   intent,
   onConfirm,
-  pending = false
+  pending = false,
+  confirmDisabled = false
 }: Readonly<ConfirmDialogProps>) {
   const typedFieldId = useId();
   const t = useTranslations("common");
@@ -125,7 +129,7 @@ export function ConfirmDialog({
               event.preventDefault();
               void onConfirm();
             }}
-            disabled={pending || !typedOk}
+            disabled={pending || confirmDisabled || !typedOk}
             // `destructive` is the solid-button role; `danger` is its text tone
             // (see the comment on the tone scales in `globals.css`).
             className={cn(

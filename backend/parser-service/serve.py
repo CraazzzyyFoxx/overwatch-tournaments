@@ -209,6 +209,11 @@ async def stop_worker() -> None:
     rank_scheduler.shutdown_scheduler()
     logs_reaper.shutdown_scheduler()
     subscription_scheduler.shutdown_scheduler()
+
+
+@app.after_shutdown
+async def close_worker_resources() -> None:
+    # Consumers must finish before their HTTP, S3 and Redis clients are closed.
     await s3_client.close()
     await overfast_catalog_client.close()
     await rank_tasks.rank_client.close()

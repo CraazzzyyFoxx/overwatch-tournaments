@@ -44,6 +44,11 @@ export function isGroupStageScoreContext(stage?: ScoreStageLike, stageItem?: Sco
   );
 }
 
+/** Stages that cannot end level: the finalizer rejects a draw on these with a 400. */
+export function stageNeedsWinner(stageType: StageType | string | null | undefined): boolean {
+  return stageType === "single_elimination" || stageType === "double_elimination";
+}
+
 /** Human-readable description key (reused i18n keys under matchEdit.presetDescriptions). */
 function describeScore(homeScore: number, awayScore: number): string {
   if (homeScore === awayScore) return "Draw";

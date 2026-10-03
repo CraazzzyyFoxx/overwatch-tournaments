@@ -155,6 +155,35 @@ class UpdateEncounterGuards(IsolatedAsyncioTestCase):
                 schemas.EncounterUpdate(away_team_id=99),
             )
 
+    async def test_rejects_rewriting_a_completed_encounters_score(self) -> None:
+        """Advancement only runs on finalize, so a bare score write flipped the
+        winner while the next match kept the old one -- with no audit row."""
+        encounter = _encounter()
+        with assert_http_status(self, 409):
+            await enc_service.encounter_service.update_encounter(
+                _session(encounter),
+                10,
+                schemas.EncounterUpdate(home_score=0, away_score=2),
+            )
+        self.assertEqual((2, 0), (encounter.home_score, encounter.away_score))
+
+    async def test_repeating_the_current_score_is_not_a_correction(self) -> None:
+        """The admin form posts every field, the unchanged score included."""
+        encounter = _encounter()
+
+        with (
+            patch.object(enc_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(enc_service.encounter_service, "_resolve_stage_refs", AsyncMock(return_value=(5, 6))),
+            patch.object(enc_service.AdminEncounterService, "_assert_source_correction_allowed", AsyncMock()),
+        ):
+            await enc_service.encounter_service.update_encounter(
+                _session(encounter),
+                10,
+                schemas.EncounterUpdate(name="renamed", home_score=2, away_score=0),
+            )
+
+        self.assertEqual("renamed", encounter.name)
+
     async def test_repeating_the_current_status_is_not_a_transition(self) -> None:
         """The admin form posts every field, so renaming a completed encounter
         arrives carrying ``status=completed``. Refusing that edit is what pushed

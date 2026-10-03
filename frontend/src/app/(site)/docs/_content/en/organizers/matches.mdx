@@ -2,15 +2,70 @@ An encounter is a pair of teams inside a stage: one series of several maps. This
 
 ## The encounters list
 
-In the admin, open **Tournaments**, pick the tournament and go to the **Matches** tab. It holds four views: **Encounters**, **Reports**, **Parsed maps** and **Logs**. Standings, and the lobbies of an FFA stage, sit on the **Bracket** tab beside the stages they come from.
+In the admin, open **Tournaments**, pick the tournament and go to the **Matches** tab. It holds five views: **Encounters**, **Pre-game rooms**, **Reports**, **Parsed maps** and **Logs**. Standings, and the lobbies of an FFA stage, sit on the **Bracket** tab beside the stages they come from.
 
 **Encounters** is the list itself. Narrow it with the **Stage**, **Group**, **Status** (**Open**, **Pending**, **Completed**) and **Logs** (**Logs available** / **No logs**) filters. **Create encounter** adds one by hand; **Sync from Challonge** pulls them from a linked Challonge bracket.
 
-Click a row and a panel opens on the right with the teams, score, status, series length, both captain reports and the parsed maps. **Edit encounter**, **Upload log** and **Resolve result** are there too.
+Click a row and a panel opens on the right with the teams, score, status, series length, both captain reports and the parsed maps. **Edit encounter**, **Upload log**, **Resolve result** and **Open pre-game room** are there too; the row's **⋯** menu carries the same room link.
 
 <Callout type="warning">
 **Delete encounter** removes the encounter together with every match, statistic and log recorded under it. This cannot be undone.
 </Callout>
+
+## The Pre-game rooms tab
+
+**Matches → Pre-game rooms** is every room of the tournament on one screen: which encounter is stuck, on whom, and for how long. The badge on the sub-tab counts the rooms that need someone.
+
+Nothing pushes this list, so it re-reads itself **every 10 seconds** while the tab is open (and stops while the browser tab is in the background). A captain pressing ready shows up within one refresh.
+
+The **Phase** column says where an encounter is in the sequence:
+
+| Phase | What it means |
+| --- | --- |
+| **Teams unknown** | A bracket slot nobody has reached yet. |
+| **Readiness** | No room has opened: at least one captain has not confirmed. |
+| **Map veto** | The map room is waiting on a side. |
+| **Hero bans** | The hero room is waiting on a side. |
+| **Reporting** | A played map has no agreed result yet. |
+| **Done** | The encounter is finished and its result is final. |
+| **Idle** | Nothing is waiting on anyone right now. |
+
+The **Attention** column is why a row is near the top:
+
+| Flag | What happened |
+| --- | --- |
+| **Map disputed** | The captains filed different results for one map. |
+| **Result disputed** | The series result itself is disputed. |
+| **Waiting on a choice** | The room is paused until the losing side names who opens the next round. |
+| **Turn overdue** | The current step's timer has run out. |
+| **Late, not ready** | Kick-off has passed and a captain still has not confirmed readiness. |
+
+Narrow the list with the **Needs attention** toggle and the **Phase** and **Stage** chips; the **Current step** and **Timer** columns name the step the room is on and count its timer down live. **Open room** takes you into the room and brings you back to this list when you leave it.
+
+## Organizer controls inside a room
+
+The organizer block is available on **every screen of a room** — the readiness gate, the map veto, the hero bans, the per-map result and the final report — with a **Map / Heroes** switch when both kinds are configured, so a stuck room can be unstuck without leaving the screen it is stuck on.
+
+From there you can act for a side, submit a blind draft on its behalf, reopen the last revealed step, name who opens a round, reset a session, and correct a recorded result.
+
+You can also **mark a side ready**, or clear readiness a captain set by mistake — readiness is the gate that holds both rooms shut, so an absent captain otherwise freezes the whole encounter.
+
+<Callout type="warning">
+Clearing readiness is refused once the veto or the bans have started: by then the gate is behind you and clearing it changes nothing. Reset the session instead.
+</Callout>
+
+### Stopping the clock, and stopping the room
+
+The **Session** row of the block holds the commands that act on the whole session rather than on one step.
+
+| Command | What it does | How to undo it |
+| --- | --- | --- |
+| **Pause** / **Resume** | Freezes the session: the countdown disappears for everyone, the step cannot time out, and no captain can act until you resume. The step keeps the time it had left. | **Resume**. |
+| **+30s / +60s / +120s** | Hands the side on the clock that much more time on the step that is open. Offered only while a timed step is open; works while paused too. | Nothing to undo — it only ever adds time. |
+| **Cancel session** | Ends this kind's pick-ban for good, with a required reason. Cancelling the **hero bans** means no later map of the series gets a ban phase. Cancelling the **map veto** leaves maps already picked where they are, and the captains name every later map themselves on the report screen. | **Reset session** — it drops the cancelled session and creates a new one from scratch. |
+| **Technical loss** | Ends the whole encounter against one side: both sessions are cancelled, every unplayed map is dropped, and the score shown is set and confirmed. It opens on the score the series would end on (the winner takes the maps it needs, the forfeiting side keeps the ones it actually won) — edit it if the ruling says otherwise. A reason is required. | Reopen the result on the **Encounters** tab, then reset the sessions. |
+
+A paused room tells everyone so — captains and spectators see **Paused by the organizer** on the board instead of a countdown — and the **Pre-game rooms** list marks the row **Paused** or **Cancelled**. Every one of these commands is recorded in the room's history with the organizer who ran it.
 
 ## Pre-game phase: map veto and hero bans
 
@@ -96,6 +151,15 @@ When the reports disagree, both captains are notified, not just the one who repo
 3. Press **Confirm result**.
 
 A draw cannot be recorded on an elimination stage; the button stays disabled. **Change history** in the same dialog lists every change to the result: the action, who made it and the score afterwards.
+
+## Result from the bracket
+
+The **Edit Match** dialog on the **Bracket** page has two independent blocks:
+
+- **Result.** The dialog opens on the best score it has: the reported score when both captains agree, the only report when one captain has filed (the note under the score says the other captain has not reported yet), otherwise the match's current score. **Take the score from a captain report** switches to one team's version; the steppers switch to manual entry. **Confirm 2:1** records the result: the match completes, the bracket advances and the change lands in the history. A draw cannot be confirmed on an elimination stage. A confirmed result is shown read-only; press **Reopen result** to change it.
+- **Match settings** — best-of, start time and status. **Save settings** changes only these and never touches the score.
+
+An automatic confirmation always takes two matching reports; a single report waits for an organizer even when every map was agreed in the pre-game room.
 
 ## Correcting a confirmed result
 

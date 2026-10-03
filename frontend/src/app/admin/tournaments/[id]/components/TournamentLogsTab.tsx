@@ -38,7 +38,7 @@ import type {
   LogProcessingStatus
 } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
-import { TournamentLogUploadDialog } from "./TournamentLogUploadDialog";
+import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
 import {
   getTournamentWorkspaceQueryKeys,
   invalidateTournamentWorkspace

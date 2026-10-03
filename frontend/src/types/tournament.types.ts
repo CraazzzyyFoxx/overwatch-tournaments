@@ -476,6 +476,8 @@ export interface PickBanTarget {
   role: "tank" | "damage" | "support" | "flex" | null;
   sub_role: string | null;
   is_substitution: boolean;
+  /** Resolved against the tournament's grid, like `Player.division`. */
+  division: number;
 }
 
 export interface PickBanStepProgress {
@@ -519,6 +521,12 @@ export interface PickBanSession {
   slot_reserves: Record<string, number> | null;
   started_at: string | null;
   current_step_started_at: string | null;
+  /**
+   * When an organizer put the session on hold. While set there is no
+   * `step_deadline`, no countdown and no captain write is accepted — the open
+   * step keeps whatever time it had left until it is resumed.
+   */
+  paused_at: string | null;
 }
 
 /**

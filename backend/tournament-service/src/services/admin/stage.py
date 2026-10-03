@@ -120,10 +120,14 @@ def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
         stage.draw_points = scoring.get("draw")
         stage.loss_points = scoring.get("loss")
     if "best_of" in fields:
-        best_of = fields.pop("best_of")
-        stage.best_of_default = best_of["default"]
-        stage.best_of_final = best_of["final"]
-        wanted: dict[int, int] = best_of["by_round"]
+        best_of = fields.pop("best_of") or {}
+        # ``model_dump(exclude_unset=True)`` drops a nested default, so a body
+        # of ``{default, by_round}`` has no ``final`` key. Reading it blindly
+        # 500'd. Omitted final is the schema default: no final override.
+        if best_of.get("default") is not None:
+            stage.best_of_default = best_of["default"]
+        stage.best_of_final = best_of.get("final")
+        wanted: dict[int, int] = best_of.get("by_round") or {}
         existing = {row.round: row for row in stage.round_best_of}
         for round_number, row in existing.items():
             if round_number not in wanted:

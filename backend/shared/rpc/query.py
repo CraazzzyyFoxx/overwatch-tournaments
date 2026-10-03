@@ -69,3 +69,31 @@ def build_query_model(model: type[T], query: dict[str, Any] | None) -> T:
             vals = [vals]
         data[name] = vals if is_list else (vals[0] if vals else None)
     return model.model_validate(data)
+
+
+def parse_id_list(values: Any) -> list[int]:
+    """Ints from a query value: repeated params, one comma-separated value, or both.
+
+    Empty / missing is ``[]``. A non-integer is ``ValueError`` so the caller can
+    turn it into 422.
+    """
+    if values is None or values == "":
+        return []
+    items = values if isinstance(values, (list, tuple)) else [values]
+    out: list[int] = []
+    seen: set[int] = set()
+    for item in items:
+        if item is None or item == "":
+            continue
+        for part in str(item).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                parsed = int(part)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"expected an integer id, got {part!r}") from exc
+            if parsed not in seen:
+                seen.add(parsed)
+                out.append(parsed)
+    return out

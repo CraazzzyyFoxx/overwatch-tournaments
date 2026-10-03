@@ -9,6 +9,7 @@ Never commit them — not to `docs/`, `docs/plans/`, `docs/superpowers/` or anyw
 ## Frontend
 
 - Don't run `next build` for testing; `next lint` is enough.
+- Never use native `<select>`/`<option>`. Always use the component-library select (`@/components/ui/select`: `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem`).
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph

@@ -14,6 +14,7 @@ store answers in insertion order, so services that need an order sort in Python.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.models.tournament.encounter_report import EncounterMapReport  # noqa: E402
 from shared.models.tournament.encounter_result_audit import EncounterResultAudit  # noqa: E402
+from shared.models.tournament.encounter_room_event import EncounterRoomEvent  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
     EncounterReadiness,
     PickBanConfig,
@@ -54,6 +56,7 @@ KNOWN_MODELS = (
     EncounterMapReport,
     EncounterGame,
     EncounterResultAudit,
+    EncounterRoomEvent,
     Match,
     Encounter,
     Player,
@@ -195,6 +198,10 @@ class _Store:
 
     async def rollback(self) -> None:  # pragma: no cover - nothing raises here
         return None
+
+    def begin_nested(self) -> contextlib.nullcontext:
+        # Nothing here ever raises mid-savepoint, so there is nothing to undo.
+        return contextlib.nullcontext()
 
     async def refresh(self, instance: Any) -> None:
         return None

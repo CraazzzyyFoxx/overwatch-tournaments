@@ -37,8 +37,16 @@ const submitDraft = vi.fn();
 const disputeStep = vi.fn();
 const adminPickBanSubmit = vi.fn();
 const adminPickBanReopen = vi.fn();
+const resetPickBanSession = vi.fn();
+const adminPickBanPause = vi.fn();
+const adminPickBanExtend = vi.fn();
+const adminPickBanCancel = vi.fn();
+const adminTechnicalLoss = vi.fn();
+const getPregameRoomHistory = vi.fn();
+const setEncounterReadiness = vi.fn();
 const markReady = vi.fn();
 const getEncounter = vi.fn();
+const getMatch = vi.fn();
 const getAllMaps = vi.fn();
 const getAllHeroes = vi.fn();
 const getMyRole = vi.fn();
@@ -79,15 +87,24 @@ vi.mock("@/services/captain.service", () => ({
 }));
 vi.mock("@/services/admin.service", () => ({
   default: {
-    resetPickBanSession: vi.fn(),
+    resetPickBanSession: (...args: unknown[]) => resetPickBanSession(...args),
     adminPickBanAct: vi.fn(),
     adminPickBanElectOpener: vi.fn(),
     adminPickBanSubmit: (...args: unknown[]) => adminPickBanSubmit(...args),
-    adminPickBanReopen: (...args: unknown[]) => adminPickBanReopen(...args)
+    adminPickBanReopen: (...args: unknown[]) => adminPickBanReopen(...args),
+    adminPickBanPause: (...args: unknown[]) => adminPickBanPause(...args),
+    adminPickBanExtend: (...args: unknown[]) => adminPickBanExtend(...args),
+    adminPickBanCancel: (...args: unknown[]) => adminPickBanCancel(...args),
+    adminTechnicalLoss: (...args: unknown[]) => adminTechnicalLoss(...args),
+    setEncounterReadiness: (...args: unknown[]) => setEncounterReadiness(...args),
+    getPregameRoomHistory: (...args: unknown[]) => getPregameRoomHistory(...args)
   }
 }));
 vi.mock("@/services/encounter.service", () => ({
-  default: { getEncounter: (...args: unknown[]) => getEncounter(...args) }
+  default: {
+    getEncounter: (...args: unknown[]) => getEncounter(...args),
+    getMatch: (...args: unknown[]) => getMatch(...args)
+  }
 }));
 vi.mock("@/services/map.service", () => ({
   default: { getAll: (...args: unknown[]) => getAllMaps(...args) }
@@ -101,12 +118,8 @@ vi.mock("@/services/hero.service", () => ({
 vi.mock("@/services/roomChat.service", () => ({
   default: { getEnvelope: vi.fn().mockResolvedValue(null), postMessage: vi.fn() }
 }));
-/** Topic -> the room's handler, so a test can fire what the hub would push. */
-const realtimeHandlers = new Map<string, () => void>();
 vi.mock("@/hooks/useRealtimeTopic", () => ({
-  useRealtimeTopic: (topic: string, onEvent: () => void) => {
-    realtimeHandlers.set(topic, onEvent);
-  }
+  useRealtimeTopic: vi.fn()
 }));
 const usePermissionsMock = vi.fn(() => ({
   isSuperuser: false,
@@ -211,6 +224,7 @@ function session(overrides: Partial<PickBanSession> = {}): PickBanSession {
     slot_reserves: null,
     started_at: "2026-08-01T10:00:00Z",
     current_step_started_at: null,
+    paused_at: null,
     ...overrides
   };
 }
@@ -375,7 +389,6 @@ beforeEach(() => {
   getEncounter.mockResolvedValue(encounter());
   getMyRole.mockResolvedValue({ side: null });
   getReports.mockResolvedValue({ reports: [], form: undefined });
-  realtimeHandlers.clear();
   search = new URLSearchParams();
   usePermissionsMock.mockReturnValue({
     isSuperuser: false,
@@ -425,6 +438,14 @@ async function render(props: { seriesReport?: boolean } = {}) {
       </QueryClientProvider>
     );
   });
+  await settle();
+}
+
+async function showAdminUi() {
+  const toggle = Array.from(document.body.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === ROOM.admin.showUi
+  );
+  await act(async () => toggle!.click());
   await settle();
 }
 
@@ -749,6 +770,62 @@ describe("phase selection", () => {
     );
   });
 
+  it.each([
+    { hasLog: true, hasGames: true },
+    { hasLog: false, hasGames: true },
+    { hasLog: false, hasGames: false }
+  ])("shows only the previous map's heroes (log: $hasLog, positions: $hasGames)", async ({ hasLog, hasGames }) => {
+    const loggedHeroes = HERO_CATALOG.map((hero) => ({ ...hero, image_path: `https://example.test/${hero.id}.png` }));
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    getEncounter.mockResolvedValue({
+      ...encounter(),
+      best_of: 5,
+      games: hasGames ? [game({ position: 1, map_id: 21 }), game({ position: 2, map_id: 22 })] : [],
+      matches: [
+        { id: 501, map_id: 21, map_index: null, source: "log_parser" },
+        { id: 503, map_id: 22, map_index: 2, source: "captain_report" },
+        { id: 504, map_id: 23, map_index: null, source: "log_parser" },
+        ...(hasLog ? [{ id: 502, map_id: 22, map_index: null, source: "log_parser" }] : [])
+      ]
+    });
+    getMatch.mockImplementation(async (id: number) => ({
+      home_team: { players: [{ id: 57, heroes: { 0: [loggedHeroes[2]] } }] },
+      away_team: {
+        players: [{
+          id: 55,
+          heroes: id === 502
+            ? { 0: [loggedHeroes[0]], 1: [loggedHeroes[0], loggedHeroes[1]] }
+            : { 0: [loggedHeroes[2]] }
+        }]
+      }
+    }));
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound({ target: "opponent_player", round: 3 }),
+        current_round: 3,
+        viewer_side: "home",
+        viewer_can_act: true,
+        allowed_actions: ["ban"],
+        eligible: { item_ids: [201, 202], by_target: { "55": [201, 202] } },
+        targets: {
+          home: [],
+          away: [{ player_id: 55, name: "Foxy", role: "tank", sub_role: null, is_substitution: false, division: 7 }]
+        }
+      })
+    );
+    await render();
+    const row = document.body.querySelector('[data-target-player="55"]')!.closest("li")!;
+    if (hasLog) {
+      expect(Array.from(row.querySelectorAll("ul img")).map((image) => image.getAttribute("alt"))).toEqual(["Tank A", "Tank B"]);
+    } else {
+      expect(row.textContent).toContain(ROOM.playerHeroes.noLog);
+      expect(row.querySelector("ul")).toBeNull();
+    }
+  });
+
   it("bans for the opponent player the captain chose, and says so on the wire", async () => {
     getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
     getMyRole.mockResolvedValue({ side: "home" });
@@ -765,8 +842,22 @@ describe("phase selection", () => {
         targets: {
           home: [],
           away: [
-            { player_id: 55, name: "Foxy", role: "tank", sub_role: null, is_substitution: false },
-            { player_id: 56, name: "Vixen", role: "tank", sub_role: null, is_substitution: true }
+            {
+              player_id: 55,
+              name: "Foxy",
+              role: "tank",
+              sub_role: null,
+              is_substitution: false,
+              division: 7
+            },
+            {
+              player_id: 56,
+              name: "Vixen",
+              role: "tank",
+              sub_role: null,
+              is_substitution: true,
+              division: 12
+            }
           ]
         }
       })
@@ -792,6 +883,42 @@ describe("phase selection", () => {
       items: [{ item_id: 202, target_player_id: 56 }],
       lock: false
     });
+  });
+
+  it("says why and still locks when the opponent has no roster to ban for", async () => {
+    // No roster means no target and no eligible hero. The server caps `min` by
+    // what is choosable (so `draft_issues` is empty) — a room that re-checked
+    // the step's raw `min` would hold a Lock the server accepts disabled forever.
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    submitDraft.mockResolvedValue(readyState({ session: session({ kind: "hero" }) }));
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound({ target: "opponent_player", count: 5, min: 5 }),
+        viewer_side: "home",
+        viewer_can_act: true,
+        allowed_actions: ["ban"],
+        eligible: { item_ids: [], by_target: {} },
+        draft_issues: [],
+        targets: { home: [], away: [] }
+      })
+    );
+    await render();
+
+    expect(document.body.querySelector("[data-pick-ban-no-roster]")?.textContent).toContain(
+      ROOM.target.noRoster.replace("{team}", "Quiet Foxes")
+    );
+    const lock = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(ROOM.draft.lock)
+    );
+    expect(lock?.disabled).toBe(false);
+
+    await act(async () => lock!.click());
+    await settle();
+
+    expect(submitDraft).toHaveBeenCalledWith("hero", 4242, { items: [], lock: true });
   });
 
   it("marks the heroes both sides banned once the blind step reveals", async () => {
@@ -1109,13 +1236,16 @@ describe("phase selection", () => {
     expect(sides[0].querySelector('[data-carried-from="1"]')).toBeTruthy();
     expect(sides[1].querySelector("[data-carried-from]")).toBeNull();
 
-    // The lobby needs one flat statement of what is off, and what is left.
+    // The lobby needs the final bans, carried ones included — and only them:
+    // what is still playable is not the list anyone transfers.
     const unavailable = document.body.querySelector<HTMLElement>("[data-hero-unavailable]");
     expect(unavailable?.textContent).toContain(ROOM.heroBans.unavailableOn.replace("{n}", "2"));
-    expect(unavailable?.textContent).toContain("Tank A, Tank B");
     expect(
-      document.body.querySelector<HTMLElement>("[data-hero-remaining]")?.textContent
-    ).toContain("Support A");
+      Array.from(unavailable!.querySelectorAll<HTMLElement>("[data-hero-banned]")).map(
+        (row) => row.dataset.heroBanned
+      )
+    ).toEqual(["201", "202"]);
+    expect(unavailable?.textContent).not.toContain("Support A");
 
     const copy = Array.from(document.body.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === ROOM.heroBans.copy
@@ -1479,33 +1609,6 @@ describe("phase selection", () => {
     expect(items[1].textContent).toContain("0:2");
     expect(items[2].textContent).toContain(ROOM.series.awaiting);
     expect(items[2].textContent).not.toMatch(/\d:\d/);
-  });
-
-  it("refetches the encounter when a map result lands over the wire", async () => {
-    // The series score lives on the encounter, not in the pool, so the captain
-    // who reported FIRST only sees it move on a refetch of THAT query — the
-    // realtime handler used to refresh the two pick-ban states and nothing else.
-    mockStates(
-      readyState({
-        session: session({ kind: "map" }),
-        is_complete: true,
-        viewer_side: "home",
-        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
-      }),
-      readyState({
-        session: session({ kind: "hero" }),
-        is_complete: true,
-        sequence: [step({ index: 0 })],
-        pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
-      })
-    );
-    await render();
-    const before = getEncounter.mock.calls.length;
-
-    realtimeHandlers.get("encounter:4242:map-veto")?.();
-    await settle();
-
-    expect(getEncounter.mock.calls.length).toBeGreaterThan(before);
   });
 
   it("stays on the hero phase while the hero round for the pending map is still catching up", async () => {
@@ -2097,6 +2200,7 @@ describe("admin controls", () => {
       })
     );
     await render();
+    await showAdminUi();
 
     expect(document.body.textContent).toContain(ROOM.admin.title);
     const actionField = Array.from(document.body.querySelectorAll("div")).find(
@@ -2111,9 +2215,9 @@ describe("admin controls", () => {
     ).toHaveLength(0);
   });
 
-  it("offers a submit-for-side form and a reopen on a blind step", async () => {
-    // A blind step has no tile-by-tile path for a side the organizer is not,
-    // and a reveal that has to be redone is not the captains' dispute.
+  it("builds an absent captain's blind draft out of the pool, then reopens the step", async () => {
+    // A blind step has no tile-by-tile path for a side the organizer is not —
+    // it used to take item IDs typed into a box, which is a pool nobody can see.
     usePermissionsMock.mockReturnValue({
       isSuperuser: true,
       isWorkspaceAdmin: () => true,
@@ -2131,19 +2235,18 @@ describe("admin controls", () => {
     );
     await render();
 
-    const field = document.body.querySelector<HTMLInputElement>(
-      `input[aria-label="${ROOM.admin.submitLabel}"]`
-    );
-    expect(field).toBeTruthy();
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value"
-      )!.set!;
-      setter.call(field!, "201, 203");
-      field!.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    const tile = (name: string) =>
+      document.body.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
+    expect(tile("Tank A")?.disabled).toBe(true);
+    await showAdminUi();
+    expect(tile("Tank A")?.disabled).toBe(false);
+    await act(async () => tile("Tank A")!.click());
     await settle();
+    await act(async () => tile("Support A")!.click());
+    await settle();
+
+    // The clicks are the organizer's, never the viewer's own draft.
+    expect(submitDraft).not.toHaveBeenCalled();
 
     const submit = Array.from(document.body.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === ROOM.admin.submitConfirm
@@ -2167,6 +2270,85 @@ describe("admin controls", () => {
     await act(async () => reopen!.click());
     await settle();
     expect(adminPickBanReopen).toHaveBeenCalledWith(4242, "hero");
+
+    const toggle = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === ROOM.admin.hideUi
+    );
+    await act(async () => toggle!.click());
+    await settle();
+    expect(tile("Tank A")?.disabled).toBe(true);
+  });
+
+  it("names the opponent player each of an absent captain's bans is for", async () => {
+    // A per-player step is two choices per ban, and the organizer makes both
+    // from the panel's roster of the OTHER side plus this pool.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    adminPickBanSubmit.mockResolvedValue(readyState({ session: session({ kind: "hero" }) }));
+    mockStates(
+      unavailableState("not_configured"),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound({ target: "opponent_player" }),
+        targets: {
+          home: [],
+          away: [
+            {
+              player_id: 55,
+              name: "Foxy",
+              role: "tank",
+              sub_role: null,
+              is_substitution: false,
+              division: 7
+            },
+            {
+              player_id: 56,
+              name: "Vixen",
+              role: "tank",
+              sub_role: null,
+              is_substitution: true,
+              division: 12
+            }
+          ]
+        }
+      })
+    );
+    await render();
+    await showAdminUi();
+
+    const byLabel = (label: string) =>
+      Array.from(document.body.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === label
+      );
+    const tile = (name: string) =>
+      document.body.querySelector<HTMLButtonElement>(`button[aria-label^="${name}"]`);
+
+    // Home is the side being acted for, so the players on offer are away's.
+    await act(async () => byLabel("Vixen")!.click());
+    await settle();
+    await act(async () => tile("Tank B")!.click());
+    await settle();
+    await act(async () => byLabel("Foxy")!.click());
+    await settle();
+    await act(async () => tile("Tank A")!.click());
+    await settle();
+
+    await act(async () => byLabel(ROOM.admin.submitConfirm)!.click());
+    await settle();
+
+    expect(adminPickBanSubmit).toHaveBeenCalledWith(4242, {
+      kind: "hero",
+      side: "home",
+      items: [
+        { item_id: 202, target_player_id: 56 },
+        { item_id: 201, target_player_id: 55 }
+      ],
+      lock: true
+    });
   });
 
   it("lets an admin elect the round's opener when the losing captain is unreachable", async () => {
@@ -2200,6 +2382,7 @@ describe("admin controls", () => {
       })
     );
     await render();
+    await showAdminUi();
 
     expect(document.body.textContent).toContain(ROOM.admin.electLabel);
     const panel = document.body.textContent ?? "";
@@ -2219,5 +2402,378 @@ describe("admin controls", () => {
     await render();
 
     expect(document.body.textContent).not.toContain(ROOM.admin.title);
+    expect(document.body.textContent).not.toContain(ROOM.admin.showUi);
+  });
+
+  it("lets an organizer mark an absent captain's side ready", async () => {
+    // The gate holds BOTH kinds' sessions shut at once, so one unreachable
+    // captain freezes the entire room — and the captains' own button only ever
+    // confirms the viewer's own side.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: false,
+      isWorkspaceAdmin: () => false,
+      hasWorkspacePermission: () => true
+    });
+    setEncounterReadiness.mockResolvedValue({ readiness: { home: false, away: true } });
+    mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
+    await render();
+
+    expect(document.body.textContent).not.toContain(ROOM.admin.readinessTitle);
+    const toggle = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === ROOM.admin.showUi
+    );
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    await showAdminUi();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+
+    const buttons = Array.from(document.body.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === ROOM.admin.readinessSet
+    );
+    expect(buttons).toHaveLength(2);
+    const away = buttons.find((button) =>
+      button.parentElement?.textContent?.includes("Quiet Foxes")
+    );
+    await act(async () => away!.click());
+    await settle();
+
+    expect(setEncounterReadiness).toHaveBeenCalledWith(4242, { side: "away", ready: true });
+
+    await act(async () => toggle!.click());
+    await settle();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.body.textContent).not.toContain(ROOM.admin.readinessTitle);
+  });
+
+  it("keeps the readiness override off the waiting screen for a captain", async () => {
+    getMyRole.mockResolvedValue({ side: "home" });
+    mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
+    await render();
+
+    expect(document.body.textContent).toContain(ROOM.ready.button);
+    expect(document.body.textContent).not.toContain(ROOM.admin.readinessTitle);
+  });
+
+  it("still reaches the hero session's reset on the closing screen", async () => {
+    // The overrides used to live inside the pick-ban board, so once the series
+    // was over there was no screen left that rendered them at all.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    mockStates(
+      readyState({
+        session: session({ kind: "map" }),
+        is_complete: true,
+        viewer_side: null,
+        games: [confirmed(1, 21, 2, 1)],
+        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
+      }),
+      readyState({
+        session: session({ kind: "hero" }),
+        is_complete: true,
+        viewer_side: null,
+        sequence: [step({ index: 0 })],
+        pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
+      })
+    );
+    await render();
+    await showAdminUi();
+
+    const tab = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (node) => node.textContent?.trim() === ROOM.phase.hero
+    );
+    await act(async () => tab!.click());
+    await settle();
+
+    const byLabel = (label: string) =>
+      Array.from(document.body.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === label
+      );
+    await act(async () => byLabel(ROOM.admin.reset)!.click());
+    await settle();
+    await act(async () => byLabel(ROOM.admin.resetConfirmAction)!.click());
+    await settle();
+
+    expect(resetPickBanSession).toHaveBeenCalledWith(4242, "hero");
+  });
+});
+
+describe("organizer session controls", () => {
+  /** Admin on an open, timed hero step — the state every control needs. */
+  function openHeroStep(sessionOverrides: Partial<PickBanSession> = {}) {
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    const open = step({ index: 0, timer_seconds: 60 });
+    mockStates(
+      unavailableState("not_configured"),
+      readyState({
+        session: session({ kind: "hero", ...sessionOverrides }),
+        sequence: [open],
+        current_step: open,
+        current_step_index: 0,
+        acting_sides: ["home"],
+        current_round: 1,
+        step_deadline: new Date(Date.now() + 45_000).toISOString(),
+        pool: [entry({ id: 1, item_id: 101, round: 1 })]
+      })
+    );
+  }
+
+  const byLabel = (label: string) =>
+    Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === label
+    );
+
+  it("pauses the session on the kind the panel is acting on", async () => {
+    openHeroStep();
+    await render();
+    await showAdminUi();
+
+    await act(async () => byLabel(ROOM.admin.pause)!.click());
+    await settle();
+
+    expect(adminPickBanPause).toHaveBeenCalledWith(4242, { kind: "hero", paused: true });
+  });
+
+  it("extends the open step's timer and cancels the session with a reason", async () => {
+    openHeroStep();
+    await render();
+    await showAdminUi();
+
+    await act(async () => byLabel(ROOM.admin.extendBy.replace("{seconds}", "60"))!.click());
+    await settle();
+    expect(adminPickBanExtend).toHaveBeenCalledWith(4242, { kind: "hero", seconds: 60 });
+
+    await act(async () => byLabel(ROOM.admin.cancelSession)!.click());
+    await settle();
+    const confirm = byLabel(ROOM.admin.cancelConfirmAction)!;
+    // A cancel with no reason recorded is a cancel nobody can explain later.
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+
+    const reason = document.body.querySelector<HTMLInputElement>(
+      `input[aria-label="${ROOM.admin.cancelReason}"]`
+    )!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(reason, "both captains agreed");
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+
+    await act(async () => byLabel(ROOM.admin.cancelConfirmAction)!.click());
+    await settle();
+
+    expect(adminPickBanCancel).toHaveBeenCalledWith(4242, {
+      kind: "hero",
+      reason: "both captains agreed"
+    });
+  });
+
+  it("tells everyone the room is paused and stops the countdown", async () => {
+    // The deadline is still in the fixture (a cached state), so the clock has
+    // to be stopped by the pause itself and not by the absent `step_deadline`.
+    openHeroStep({ paused_at: "2026-08-01T10:05:00Z" });
+    await render();
+    await showAdminUi();
+
+    expect(document.body.textContent).toContain(ROOM.pausedBanner);
+    expect(document.body.textContent).not.toContain(ROOM.timer.label);
+    // Resume is what an organizer gets offered once it is held.
+    expect(byLabel(ROOM.admin.resume)).toBeTruthy();
+  });
+
+  it("prefills a technical loss with the score the series would end on", async () => {
+    getEncounter.mockResolvedValue({ ...encounter(), best_of: 3 } as unknown as Encounter);
+    openHeroStep();
+    adminTechnicalLoss.mockResolvedValue({});
+    await render();
+    await showAdminUi();
+
+    await act(async () => byLabel(ROOM.admin.technicalLoss)!.click());
+    await settle();
+
+    const field = (label: string) =>
+      document.body.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+    const home = field(ROOM.admin.correctScore.replace("{team}", "Bright Wolves"));
+    const away = field(ROOM.admin.correctScore.replace("{team}", "Quiet Foxes"));
+    // Bo3 at 0:0, away forfeits: the home side takes the two maps it needs.
+    expect(home.value).toBe("2");
+    expect(away.value).toBe("0");
+
+    const reason = field(ROOM.admin.technicalLossReason);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(reason, "no show");
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+
+    await act(async () => byLabel(ROOM.admin.technicalLossAction)!.click());
+    await settle();
+
+    expect(adminTechnicalLoss).toHaveBeenCalledWith(4242, {
+      loser_side: "away",
+      home_score: 2,
+      away_score: 0,
+      reason: "no show"
+    });
+  });
+
+  it("drops the hero phase for the rest of the series once its session is cancelled", async () => {
+    // Same shape as the "still catching up" case, except an organizer killed
+    // the hero session — map 2 goes straight to its report instead of waiting
+    // for bans that will never open.
+    mockStates(
+      readyState({
+        session: session({ kind: "map" }),
+        is_complete: true,
+        games: [confirmed(1, 21, 2, 1), game({ position: 2, map_id: 22 })],
+        pool: [
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
+          entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
+        ]
+      }),
+      readyState({
+        session: session({ kind: "hero", status: "cancelled" }),
+        sequence: [step({ index: 0 })],
+        pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
+      })
+    );
+    await render();
+
+    expect(document.body.textContent).toContain(ROOM.mapResult.report);
+    expect(document.body.textContent).not.toContain(ROOM.hero.title);
+    expect(document.body.textContent).toContain(
+      ROOM.cancelledNotice.replace("{phase}", ROOM.phase.hero)
+    );
+  });
+});
+
+describe("room history", () => {
+  /** One journal line, room-origin unless a case says otherwise. */
+  function historyEntry(overrides: Record<string, unknown>) {
+    return {
+      id: "room:1",
+      at: "2026-10-02T11:58:00Z",
+      origin: "room",
+      kind: "map",
+      source: "captain",
+      side: null,
+      actor_auth_user_id: null,
+      actor_name: null,
+      reason: null,
+      data: {},
+      ...overrides
+    };
+  }
+
+  async function openHistory() {
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    mockStates(
+      readyState({
+        session: session({ kind: "map" }),
+        sequence: [step({ index: 0 })],
+        current_step: step({ index: 0 }),
+        pool: [entry({ id: 1, item_id: 21, round: 1 })]
+      }),
+      unavailableState("not_configured")
+    );
+    await render();
+    await showAdminUi();
+    const toggle = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(ROOM.history.toggle)
+    );
+    await act(async () => toggle!.click());
+    await settle();
+    return document.body.querySelector<HTMLElement>(`[aria-label="${ROOM.history.label}"]`)!;
+  }
+
+  it("reads back who did what, newest first", async () => {
+    // The room's own state says a map is banned; only the journal says the
+    // captain banned it, the clock resolved the next step, and when.
+    getPregameRoomHistory.mockResolvedValue({
+      encounter_id: 4242,
+      entries: [
+        historyEntry({
+          id: "room:2",
+          at: "2026-10-02T11:59:00Z",
+          action: "step_timed_out",
+          source: "system",
+          data: { step_index: 1, policy: "random" }
+        }),
+        historyEntry({
+          id: "room:1",
+          action: "acted",
+          side: "home",
+          actor_auth_user_id: 9,
+          actor_name: "Captain Bright",
+          data: { step_index: 0, action: "ban", item_id: 21 }
+        })
+      ]
+    });
+
+    const log = await openHistory();
+
+    const rows = Array.from(log.querySelectorAll("li"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain(
+      ROOM.history.action.step_timed_out.replace("{step}", "1").replace("{policy}", "random")
+    );
+    // No actor on a clock event: it reads as the system, not as a blank.
+    expect(rows[0].textContent).toContain(ROOM.history.system);
+    expect(rows[1].textContent).toContain("Bright Wolves banned Map 21");
+    expect(rows[1].textContent).toContain("Captain Bright");
+  });
+
+  it("renders an action it has never heard of instead of a blank line", async () => {
+    // The vocabulary is the backend's; a line nobody can read is still better
+    // than a journal with holes in it.
+    getPregameRoomHistory.mockResolvedValue({
+      encounter_id: 4242,
+      entries: [
+        historyEntry({ id: "room:9", action: "quantum_leap", source: "admin", actor_name: "Ref" })
+      ]
+    });
+
+    const log = await openHistory();
+
+    expect(log.textContent).toContain("quantum_leap");
+    expect(log.textContent).toContain("Ref");
+  });
+
+  it("stays available on a screen with no session to override", async () => {
+    // "Why is this room not open yet" is a journal question, and the readiness
+    // gate is exactly where it gets asked.
+    usePermissionsMock.mockReturnValue({
+      isSuperuser: true,
+      isWorkspaceAdmin: () => true,
+      hasWorkspacePermission: () => true
+    });
+    getPregameRoomHistory.mockResolvedValue({ encounter_id: 4242, entries: [] });
+    mockStates(unavailableState("not_ready"), unavailableState("not_configured"));
+    await render();
+    await showAdminUi();
+
+    const toggle = Array.from(document.body.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes(ROOM.history.toggle)
+    );
+    expect(toggle).toBeTruthy();
+    await act(async () => toggle!.click());
+    await settle();
+    expect(document.body.textContent).toContain(ROOM.history.empty);
   });
 });

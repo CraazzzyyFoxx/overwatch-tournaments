@@ -98,6 +98,52 @@ The browser uses **relative same-origin paths**; SSR and the proxy use `NEXT_INT
 `frontend/src/lib/api/routes.ts`. Multidomain / white-label tenancy is resolved in
 `frontend/src/proxy.ts`, which maps the request `Host` to a workspace.
 
+## Pre-game room refresh
+
+Map and hero state share one 250–749 ms realtime batch. Ordinary pick/ban changes refresh the
+two authoritative states without rereading full encounter/parsed-match details. Game, series,
+session-control and local upload changes refresh those details; tournament encounter invalidations
+also refresh the room when their `encounter_ids` include it, preserving remote parsed-log history.
+Reconnect acknowledgements trigger a full catch-up.
+
+Incomplete active sessions retain lazy-timeout polling at independently jittered 4000–6499 ms
+intervals. Paused sessions do not poll while realtime is connected and both room subscriptions
+have no errors; disconnected/error states use a 30000–32499 ms fallback to recover missed resumes.
+Polling-driven progression also refreshes the other phase. WebSocket reconnect uses exponential
+backoff with equal jitter, capped at 30 seconds; per-IP protective limits are unchanged.
+
+## Pre-game hero history and match log folders
+
+The **One ban per opponent player** board shows each opponent's logged heroes inside their
+roster row, below the name and role. Heroes come only from the immediately previous series
+position in this encounter, deduplicated across that map's rounds. Captain-report placeholders
+and other players' heroes are excluded. The first map, a missing previous log, or legacy rows
+without enough position information show no history rather than falling back to older maps
+or account-wide statistics. Long hero lists scroll within the row.
+The board reuses the match-detail cache; room refreshes invalidate parsed match details.
+Displaying history does not change ban eligibility.
+
+**Upload match logs** uses the File System Access API (`showDirectoryPicker`, read-only).
+The first click selects a folder; its native `FileSystemDirectoryHandle` is structured-cloned
+into IndexedDB, keyed by the signed-in account and isolated by browser origin. Later clicks
+reuse it and request read permission if needed. This requires Chrome or Edge on HTTPS or
+localhost; unsupported browsers show an explanation rather than a different import method.
+
+Profile settings show the folder name and offer change, view/refresh and forget actions.
+Browsers do not expose its absolute path. Forgetting removes only the saved handle, not files.
+Folder scans include immediate `.log`, `.txt` and `.csv` files, not subdirectories. The upload
+list is ordered by the local filesystem's `File.lastModified`, newest first; equal timestamps
+use filename order. Only the newest file starts selected. Selection remains editable and
+nothing uploads automatically. Partial failures keep failed files selected without resending
+successful files. Uploading still requires the existing `log.create` permission.
+
+The parser resolves map aliases to a catalog map, then validates the effective encounter map
+pool before roster, match or statistics writes. Scope precedence is stage + round, stage, then
+tournament; an empty rules template does not replace a parent's pool. Slot candidates and
+reserve maps are accepted. Maps outside the pool fail with `map_not_in_pool`, preserving
+existing data. Without a configured pool, any catalog-resolved map remains allowed.
+This checks the configured pool, not the current veto's chosen map or next series position.
+
 ## Notifications
 
 The header carries the inbox bell (`src/components/notifications/NotificationBell.tsx`, hidden

@@ -4,6 +4,8 @@ import typing
 
 from pydantic import BaseModel, Field
 
+from shared.schemas.user_merge_auth import AuthMergePolicy, AuthMergePreview, AuthMergeResult
+
 __all__ = (
     "UserMergePreviewRequest",
     "UserMergeFieldPolicy",
@@ -24,6 +26,7 @@ MergeFieldChoice = typing.Literal["source", "target"]
 class UserMergePreviewRequest(BaseModel):
     source_user_id: int = Field(ge=1)
     target_user_id: int = Field(ge=1)
+    auth_policy: AuthMergePolicy | None = None
 
 
 class UserMergeFieldPolicy(BaseModel):
@@ -41,6 +44,9 @@ class UserMergeExecuteRequest(UserMergePreviewRequest):
     preview_fingerprint: str = Field(min_length=1)
     field_policy: UserMergeFieldPolicy
     identity_selection: UserMergeIdentitySelection
+    confirm_auth_changes: bool = False
+    confirm_auth_deletion: bool = False
+    confirm_permission_changes: bool = False
 
 
 class UserMergeIdentityOption(BaseModel):
@@ -56,6 +62,7 @@ class UserMergeUserSummary(BaseModel):
     avatar_url: str | None = None
     social_accounts: list[UserMergeIdentityOption]
     auth_links: int = 0
+    auth_user_id: int | None = None
 
 
 class UserMergeConflictSummary(BaseModel):
@@ -75,6 +82,7 @@ class UserMergePreviewResponse(BaseModel):
     affected_counts: dict[str, int]
     field_options: UserMergeFieldOptions
     preview_fingerprint: str
+    auth_merge: AuthMergePreview | None = None
 
 
 class UserMergeIdentityResult(BaseModel):
@@ -88,3 +96,4 @@ class UserMergeExecuteResponse(BaseModel):
     affected_counts: dict[str, int]
     identity_results: UserMergeIdentityResult
     audit_id: int
+    auth_merge: AuthMergeResult | None = None

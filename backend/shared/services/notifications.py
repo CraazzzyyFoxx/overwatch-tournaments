@@ -58,6 +58,7 @@ __all__ = (
     "AnnouncementPayload",
     "AnnouncementText",
     "Audience",
+    "EncounterDisputeReviewPayload",
     "EncounterReportDisputedPayload",
     "EncounterScheduledPayload",
     "NotificationGroup",
@@ -138,6 +139,31 @@ class EncounterReportDisputedPayload(_Payload):
     game_id: int
     position: int
     map_id: int
+
+
+class EncounterDisputeReviewPayload(_Payload):
+    """Staff-facing twin of ``encounter.report_disputed``.
+
+    The captains get told their claims contradict; the organizers get told a
+    decision is owed. Same event, different sentence, different audience, so a
+    separate kind rather than a flag the renderer would have to branch on.
+
+    ``position`` is ``0`` for a series-level dispute (the two FINAL scores
+    disagree) and the 1-based map position for a per-map one -- the sentinel the
+    inbox's ``plural`` already selects on, because an absent key is not an ICU
+    argument. ``game_id`` is simply absent when there is no game.
+
+    The team names are snapshotted: the inbox renders the payload verbatim and
+    never resolves an id, and a staff member reading "a match is disputed" with
+    no teams in it has to open the room just to learn whether it is theirs.
+    """
+
+    encounter_id: int
+    tournament_id: int
+    game_id: int | None = None
+    position: int = 0
+    home_team_name: str
+    away_team_name: str
 
 
 class TeamRosterEventPayload(_Payload):
@@ -239,6 +265,7 @@ NOTIFICATION_KINDS: dict[str, type[BaseModel]] = {
     "registration.approved": RegistrationDecisionPayload,
     "registration.rejected": RegistrationDecisionPayload,
     "encounter.report_disputed": EncounterReportDisputedPayload,
+    "encounter.dispute_review": EncounterDisputeReviewPayload,
     "announcement.published": AnnouncementPayload,
     "team.kicked": TeamRosterEventPayload,
     "team.disbanded": TeamRosterEventPayload,
@@ -267,6 +294,7 @@ NOTIFICATION_KIND_GROUPS: dict[str, NotificationGroup] = {
     "registration.rejected": "tournament",
     "encounter.scheduled": "matches",
     "encounter.report_disputed": "matches",
+    "encounter.dispute_review": "matches",
     "team_invite.received": "team",
     "team_invite.answered": "team",
     "team.kicked": "team",

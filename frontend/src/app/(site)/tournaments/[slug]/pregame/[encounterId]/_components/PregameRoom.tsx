@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { ChevronDown, FileUp, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
 import encounterService from "@/services/encounter.service";
@@ -22,13 +25,13 @@ import {
 } from "@/components/pick-ban/pick-ban-model";
 import { PickBanUndoControl } from "@/components/pick-ban/PickBanUndoControl";
 import { FfaPregameRoom } from "./FfaPregameRoom";
-import { PregameAdminControls } from "./PregameAdminControls";
+import { PregameAdminPanel } from "./PregameAdminPanel";
 import { PregameHeader } from "./PregameHeader";
 import { PregameFinalReport } from "./PregameFinalReport";
 import { PregameMapResult } from "./PregameMapResult";
 import { PregameReadiness } from "./PregameReadiness";
 import { EmptyRoomCard, UNAVAILABLE_ICON } from "./EmptyRoomCard";
-import { PickBanPanel } from "./PickBanPanel";
+import { PickBanPanel, type PickBanAdminSlot } from "./PickBanPanel";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { usePregameRoomData } from "./usePregameRoomData";
 import {
@@ -85,7 +88,7 @@ export function PregameRoom(props: Readonly<PregameRoomProps>) {
 
   return (
     <>
-      <PregameRoomBody {...props} />
+      <PregameRoomBody key={encounterId} {...props} />
       <RoomChat room={encounterChatRoom(encounterId)} />
     </>
   );
@@ -123,10 +126,12 @@ function RoomSkeleton() {
  */
 function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameRoomProps>) {
   const t = useTranslations("pickBan.room");
+  const logT = useTranslations("accountSettings.logDirectory");
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams?.get(RETURN_TO_PARAM), `/encounters/${encounterId}`);
   const room = usePregameRoomData(encounterId);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   if (room.isPending) {
     return <RoomSkeleton />;
@@ -172,24 +177,94 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
       : (encounter.away_team?.name ?? t("side.away"));
   const seriesSummary = mapState.series ?? null;
   const header = (
-    <PregameHeader
-      encounter={encounter}
-      session={
-        loop.statesByKind[loop.phase === "hero" || !loop.mapApplies ? "hero" : "map"].session
-      }
-      activePhase={loop.phase}
-      phases={loop.phases}
-      round={loop.round}
-      series={series}
-      seriesScore={
-        seriesSummary != null
-          ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
-          : null
-      }
-      official={seriesSummary?.official ?? null}
-      returnTo={returnTo}
-    />
+    <>
+      <PregameHeader
+        encounter={encounter}
+        session={
+          loop.statesByKind[loop.phase === "hero" || !loop.mapApplies ? "hero" : "map"].session
+        }
+        activePhase={loop.phase}
+        phases={loop.phases}
+        round={loop.round}
+        series={series}
+        seriesScore={
+          seriesSummary != null
+            ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
+            : null
+        }
+        official={seriesSummary?.official ?? null}
+        returnTo={returnTo}
+      />
+      {workspaceId != null && hasWorkspacePermission(workspaceId, "log.create") ? (
+        <TournamentLogUploadDialog
+          tournamentId={encounter.tournament_id}
+          encounters={[encounter]}
+          initialEncounterId={encounterId}
+          onUploaded={room.invalidateRoom}
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="self-start">
+              <FileUp className="h-4 w-4" aria-hidden />
+              {logT("uploadTitle")}
+            </Button>
+          }
+        />
+      ) : null}
+      {/* A cancelled kind leaves no phase behind, so without this line the
+          room simply looks like one that never had a veto — and the captains
+          naming their own map have no idea why. */}
+      {loop.cancelledKinds.map((kind) => (
+        <p
+          key={kind}
+          className="rounded-lg border border-dashed border-[color:var(--aqt-amber)]/45 bg-[color:var(--aqt-card-2)]/40 px-3 py-2 text-xs text-[color:var(--aqt-fg-muted)]"
+        >
+          {t("cancelledNotice", { phase: t(`phase.${kind}`) })}
+        </p>
+      ))}
+    </>
   );
+
+  // One organizer surface per screen, on every phase — the readiness gate, the
+  // board, the map report and the closing screen all need overrides, and the
+  // panel picks what to offer from the sessions that exist. `grid` is only
+  // non-null where a pool is actually on screen to select from.
+  const activeKind: PickBanKind = loop.phase === "hero" ? "hero" : "map";
+  const adminPanel = (grid: PickBanAdminSlot | null = null) =>
+    isAdmin ? (
+      <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-auto min-h-11 max-w-full whitespace-normal text-left"
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+            {t(adminOpen ? "admin.hideUi" : "admin.showUi")}
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 ${adminOpen ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-3">
+          <PregameAdminPanel
+            encounterId={encounterId}
+            statesByKind={loop.statesByKind}
+            activeKind={activeKind}
+            sideNameOf={sideNameOf}
+            itemsByKind={room.itemsByKind}
+            bestOf={encounter.best_of ?? 0}
+            seriesWins={
+              seriesSummary != null
+                ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
+                : null
+            }
+            onMutated={room.invalidateRoom}
+            grid={grid}
+          />
+        </CollapsibleContent>
+      </Collapsible>
+    ) : null;
 
   if (loop.waitingOnReadiness) {
     // One real card, header and all — no skeleton column beside it. Neither
@@ -207,6 +282,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
             pending={room.readyPending}
             onReady={room.markReady}
           />
+          {adminPanel()}
         </CardContent>
       </Card>
     );
@@ -258,18 +334,9 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           }
         />
         {/* A dispute parks the room on this screen until an organizer rules on
-            it, and the pick-ban board — where these controls otherwise live —
-            is not on screen here. */}
-        {isAdmin ? (
-          <PregameAdminControls
-            kind="map"
-            encounterId={encounterId}
-            state={mapState}
-            selectedItemId={null}
-            selectedItemName={null}
-            onMutated={room.invalidateRoom}
-          />
-        ) : null}
+            it, and ruling means correcting the game's result — which is in
+            this panel, with no pool on screen to select from. */}
+        {adminPanel()}
       </div>
     );
   }
@@ -287,27 +354,32 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           header={header}
           returnTo={returnTo}
         />
+        {adminPanel()}
       </div>
     );
   }
 
-  const activeKind: PickBanKind = loop.phase === "hero" ? "hero" : "map";
   const activeState = loop.statesByKind[activeKind];
 
   if (activeState.session == null) {
     const copy = PICK_BAN_UNAVAILABLE_COPY[activeState.reason ?? "not_configured"];
     return (
-      <EmptyRoomCard
-        icon={UNAVAILABLE_ICON[copy.icon]}
-        title={t(copy.titleKey)}
-        hint={t(copy.hintKey)}
-        returnTo={returnTo}
-      />
+      <div className="flex flex-col gap-4">
+        <EmptyRoomCard
+          icon={UNAVAILABLE_ICON[copy.icon]}
+          title={t(copy.titleKey)}
+          hint={t(copy.hintKey)}
+          returnTo={returnTo}
+        />
+        {adminPanel()}
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-32 sm:pb-28">
+    // Bottom padding clears the fixed command bar. On mobile its tallest shape is
+    // a per-player blind draft (timer, slots, Lock, issue line): ~210px.
+    <div className="flex flex-col gap-4 pb-56 sm:pb-28">
       <PickBanPanel
         key={activeKind}
         kind={activeKind}
@@ -317,7 +389,8 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
         session={activeState.session}
         queryKey={activeKind === "map" ? room.mapKey : room.heroKey}
         itemsById={room.itemsByKind[activeKind]}
-        isAdmin={isAdmin}
+        isAdmin={isAdmin && adminOpen}
+        adminPanel={adminPanel}
         header={header}
       />
     </div>

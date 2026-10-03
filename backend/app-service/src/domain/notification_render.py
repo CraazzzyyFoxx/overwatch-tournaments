@@ -52,6 +52,7 @@ _COLORS: dict[str, int] = {
     "registration.approved": _GREEN,
     "registration.rejected": _RED,
     "encounter.report_disputed": _AMBER,
+    "encounter.dispute_review": _AMBER,
     "team.kicked": _RED,
     "team.rejected": _RED,
     "team.disbanded": _RED,
@@ -115,6 +116,12 @@ _SLOT_LABELS: dict[str, dict[str, str]] = {
 }
 _SUBSTITUTE = {"ru": " (замена)", "en": " (substitute)"}
 
+#: ``encounter.dispute_review`` carries ``position=0`` for a series-level
+#: dispute and the 1-based map position otherwise -- the same sentinel the
+#: inbox's ICU ``plural`` selects on.
+_SERIES_SCOPE = {"ru": "итоговый счёт серии", "en": "the final series score"}
+_MAP_SCOPE = {"ru": "карта {position}", "en": "map {position}"}
+
 #: ``kind -> (heading, sentence, detail lines)`` per locale. The heading is the
 #: kind's label from the workspace admin screen; every kind in
 #: ``NOTIFICATION_KINDS`` except ``announcement.published`` (operator text that
@@ -135,6 +142,11 @@ TEMPLATES: dict[str, dict[str, tuple[str, str, tuple[str, ...]]]] = {
         "registration.approved": ("Заявка принята", "Ваша заявка на **{tournament_name}** одобрена.", ()),
         "registration.rejected": ("Заявка отклонена", "Ваша заявка на **{tournament_name}** отклонена.", ()),
         "encounter.report_disputed": ("Отчёт оспорен", "Отчёт по карте {position} вашего матча оспорен.", ()),
+        "encounter.dispute_review": (
+            "Нужно решение организатора",
+            "Капитаны **{home_team_name}** и **{away_team_name}** разошлись в счёте.",
+            ("**Что оспорено:** {disputed_scope}",),
+        ),
         "team.kicked": (
             "Исключение из команды",
             "Вас исключили из команды **{team_name}** на **{tournament_name}**.",
@@ -187,6 +199,11 @@ TEMPLATES: dict[str, dict[str, tuple[str, str, tuple[str, ...]]]] = {
             "Report disputed",
             "The report for map {position} of your match is disputed.",
             (),
+        ),
+        "encounter.dispute_review": (
+            "Organizer decision needed",
+            "**{home_team_name}** and **{away_team_name}** reported different scores.",
+            ("**Disputed:** {disputed_scope}",),
         ),
         "team.kicked": ("Removed from team", "You were removed from **{team_name}** in **{tournament_name}**.", ()),
         "team.rejected": (
@@ -260,7 +277,7 @@ _PARTICIPANTS_KINDS = frozenset(
         "team.disbanded",
     }
 )
-_PREGAME_KINDS = frozenset({"encounter.report_disputed", "encounter.scheduled"})
+_PREGAME_KINDS = frozenset({"encounter.report_disputed", "encounter.dispute_review", "encounter.scheduled"})
 _TOURNAMENT_KINDS = frozenset({"registration.opened", "check_in.opened"})
 
 
@@ -310,6 +327,11 @@ def _fields(kind: str, payload: Mapping[str, Any], locale: str) -> dict[str, str
     if kind == "team_invite.received" and "slot_code" in fields:
         slot = _SLOT_LABELS[locale].get(str(payload["slot_code"]), fields["slot_code"])
         fields["slot"] = slot + (_SUBSTITUTE[locale] if payload.get("is_substitute") is True else "")
+    if kind == "encounter.dispute_review":
+        position = payload.get("position") or 0
+        fields["disputed_scope"] = (
+            _SERIES_SCOPE[locale] if position == 0 else _MAP_SCOPE[locale].format(position=position)
+        )
     return fields
 
 

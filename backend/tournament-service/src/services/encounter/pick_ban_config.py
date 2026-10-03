@@ -28,7 +28,6 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from shared.core import http_status as status
 from shared.core.enums import (
@@ -50,18 +49,8 @@ from shared.models.tournament.pick_ban import (
 )
 from shared.models.tournament.tournament import Tournament
 from shared.repository import PickBanConfigRepository, StageRepository
+from shared.repository.pick_ban import CONFIG_POOL_LOAD
 from src.services.encounter.veto_session import SLOT_CANDIDATE_FLOOR
-
-# A config is only ever useful with its pool in hand (`items` in flat mode,
-# `slots.items` in slot mode), and both are plain lazy relationships: touching
-# either on a config that was loaded without them raises `MissingGreenlet`
-# under async SQLAlchemy. Every load of a config that will be read goes
-# through here -- including `pick_ban_session`'s, which imports this tuple
-# rather than keeping a third hand-maintained copy of it.
-CONFIG_POOL_LOAD = (
-    selectinload(PickBanConfig.items),
-    selectinload(PickBanConfig.slots).selectinload(PickBanConfigSlot.items),
-)
 
 #: ``detail["code"]`` of the 422 a ruleset with validation errors raises. The
 #: constructor branches on it to paint the offending fields.
@@ -459,7 +448,6 @@ class PickBanConfigService:
 pick_ban_config_service = PickBanConfigService()
 
 __all__ = (
-    "CONFIG_POOL_LOAD",
     "RULESET_INVALID",
     "PickBanConfigService",
     "SlotSpec",

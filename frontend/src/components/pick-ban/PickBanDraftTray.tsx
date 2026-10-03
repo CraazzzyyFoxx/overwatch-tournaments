@@ -1,9 +1,8 @@
 "use client";
 
-import { EyeOff, Lock, X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
@@ -44,23 +43,28 @@ function isDraftIssueCode(issue: string): issue is (typeof DRAFT_ISSUE_CODES)[nu
 
 /**
  * The viewer's own draft on a BLIND step, and what the opponent's looks like
- * from outside.
+ * from outside — rendered INSIDE the command bar, where an open step's
+ * confirmation sits, so the commit control never scrolls away from the pool.
  *
  * A blind step is not a turn: both captains fill a private draft and lock it,
  * and only then does either see the other's. So the tray is the whole
  * affordance — it is where the chosen items live until Lock, where a removal
  * happens, and where the server's reasons for refusing the lock
  * (`draft_issues`) are shown instead of being discovered by pressing a button
- * that 400s. The opponent's column carries a COUNT and a locked mark, never an
+ * that 400s. The opponent's side carries a COUNT and a locked mark, never an
  * item: that privacy is enforced server-side and mirrored here.
+ *
+ * Bar-sized on purpose: items are thumbnails (the name lives in the art's
+ * title and the remove button's label) and the empty slots show what is left,
+ * so a five-item draft fits beside the timer instead of growing the bar.
  */
 export function PickBanDraftTray({
   kind,
   step,
   items,
   locked,
+  dirty,
   issues,
-  saving,
   locking,
   itemsById,
   targetName,
@@ -76,10 +80,16 @@ export function PickBanDraftTray({
   items: PickBanSubmissionItem[];
   /** True once the viewer locked: the tray freezes and waits. */
   locked: boolean;
-  /** Server-side reasons the draft cannot be locked yet; empty = lockable. */
+  /** Local edits the autosave has not stored yet — `issues` do not cover them. */
+  dirty: boolean;
+  /**
+   * The server's reasons the SAVED draft cannot be locked; empty = lockable.
+   * It already caps `min` by what is actually choosable (`effective_min`), so
+   * the room must not re-check `step.min`: an exhausted pool or an opponent
+   * with no roster would leave a Lock the server accepts permanently disabled.
+   */
   issues: string[];
-  /** A debounced auto-save is in flight. */
-  saving: boolean;
+  /** A save or the lock is in flight. */
   locking: boolean;
   itemsById: Record<number, PickBanItemLike | undefined>;
   /** Roster name behind a target id, for a per-player step. */
@@ -91,88 +101,19 @@ export function PickBanDraftTray({
   onLock: () => void;
 }>) {
   const t = useTranslations("pickBan.room");
-  const lockable = !locked && issues.length === 0 && items.length >= step.min;
+  const lockable = !locked && !dirty && issues.length === 0;
+  const emptySlots = Math.max(0, step.count - items.length);
+  // Same box the thumb draws: heroes are circles, maps 4:3 stills.
+  const slotShape = kind === "hero" ? "w-[30px] rounded-full" : "w-10 rounded-md";
 
   return (
-    <section
-      data-pick-ban-draft
-      className="flex flex-col gap-2.5 rounded-xl border border-[color:var(--aqt-teal)]/40 bg-[color:var(--aqt-card-2)]/50 p-3"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <EyeOff className="h-4 w-4 shrink-0 text-[color:var(--aqt-teal)]" aria-hidden />
-        <span className="text-sm font-semibold">{t("draft.title")}</span>
-        <Badge variant="outline" className="px-1.5 py-0 text-label font-normal tabular-nums">
-          {t("draft.filled", { filled: items.length, count: step.count })}
-        </Badge>
-        {saving ? (
-          <span className="text-xs text-[color:var(--aqt-fg-faint)]">{t("draft.saving")}</span>
-        ) : null}
-      </div>
-
-      {items.length === 0 ? (
-        <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("draft.empty")}</p>
-      ) : (
-        <ul className="flex flex-wrap gap-1.5">
-          {items.map((item, index) => {
-            const name = itemsById[item.item_id]?.name ?? t(`${kind}.itemNumber`, { id: item.item_id });
-            const forPlayer =
-              item.target_player_id != null ? targetName(item.target_player_id) : null;
-            return (
-              <li
-                key={`${item.item_id}-${index}`}
-                data-draft-item={item.item_id}
-                className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] py-1 pl-1 pr-1.5"
-              >
-                <PickBanItemThumb kind={kind} item={itemsById[item.item_id]} name={name} size={22} />
-                <span className="min-w-0 truncate text-xs font-medium">{name}</span>
-                {forPlayer != null ? (
-                  <span className="min-w-0 truncate text-xs text-[color:var(--aqt-fg-muted)]">
-                    {t("draft.forPlayer", { player: forPlayer })}
-                  </span>
-                ) : null}
-                {!locked ? (
-                  <button
-                    type="button"
-                    aria-label={t("draft.remove", { item: name })}
-                    onClick={() => onRemove(index)}
-                    className="rounded p-0.5 text-[color:var(--aqt-fg-faint)] outline-none hover:text-[color:var(--aqt-rose)] focus-visible:text-[color:var(--aqt-rose)]"
-                  >
-                    <X className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {issues.length > 0 && !locked ? (
-        <ul data-draft-issues className="flex flex-col gap-0.5">
-          {issues.map((issue) => (
-            <li key={issue} className="text-xs text-[color:var(--aqt-amber)]">
-              {isDraftIssueCode(issue) ? t(`draftIssue.${issue}`) : issue}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2">
-        {locked ? (
-          <span className="flex items-center gap-1.5 text-sm font-medium text-[color:var(--aqt-support)]">
-            <Lock className="h-3.5 w-3.5" aria-hidden />
-            {t("draft.lockedWaiting", { team: opponentName })}
-          </span>
-        ) : (
-          <Button size="sm" disabled={!lockable || locking} onClick={onLock}>
-            {locking ? <Spinner className="mr-2" /> : <Lock className="mr-2 h-4 w-4" aria-hidden />}
-            {t("draft.lock")}
-          </Button>
-        )}
+    <div data-pick-ban-draft className="flex min-w-0 flex-col gap-1.5 sm:items-end">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
         {opponentSide != null ? (
           <span
             data-opponent-progress={opponentProgress?.filled ?? 0}
             className={cn(
-              "ml-auto text-xs",
+              "whitespace-nowrap text-xs",
               opponentProgress?.locked
                 ? "text-[color:var(--aqt-support)]"
                 : "text-[color:var(--aqt-fg-muted)]"
@@ -187,7 +128,82 @@ export function PickBanDraftTray({
                 })}
           </span>
         ) : null}
+
+        <ul aria-label={t("draft.title")} className="flex flex-wrap items-center gap-1.5">
+          {items.map((item, index) => {
+            const name = itemsById[item.item_id]?.name ?? t(`${kind}.itemNumber`, { id: item.item_id });
+            const forPlayer =
+              item.target_player_id != null ? targetName(item.target_player_id) : null;
+            const label =
+              forPlayer != null ? `${name} ${t("draft.forPlayer", { player: forPlayer })}` : name;
+            const thumb = (
+              <PickBanItemThumb kind={kind} item={itemsById[item.item_id]} name={name} size={30} />
+            );
+            return (
+              <li key={`${item.item_id}-${index}`} data-draft-item={item.item_id} className="flex">
+                {locked ? (
+                  thumb
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={t("draft.remove", { item: label })}
+                    onClick={() => onRemove(index)}
+                    className={cn(
+                      "group relative flex outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+                      kind === "hero" ? "rounded-full" : "rounded-md"
+                    )}
+                  >
+                    {thumb}
+                    <span
+                      aria-hidden
+                      className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg-faint)] ring-1 ring-[color:var(--aqt-border-2)] group-hover:text-[color:var(--aqt-rose)] group-focus-visible:text-[color:var(--aqt-rose)]"
+                    >
+                      <X className="h-3 w-3" />
+                    </span>
+                  </button>
+                )}
+              </li>
+            );
+          })}
+          {Array.from({ length: emptySlots }, (_, index) => (
+            <li
+              key={`empty-${index}`}
+              aria-hidden
+              className={cn(
+                "h-[30px] shrink-0 border border-dashed border-[color:var(--aqt-border-2)]",
+                slotShape
+              )}
+            />
+          ))}
+        </ul>
+
+        {locked ? (
+          <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-[color:var(--aqt-support)]">
+            <Lock className="h-3.5 w-3.5" aria-hidden />
+            {t("draft.lockedWaiting", { team: opponentName })}
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            className="min-h-11 flex-1 sm:flex-initial"
+            disabled={!lockable || locking}
+            onClick={onLock}
+          >
+            {locking ? <Spinner className="mr-2" /> : <Lock className="mr-2 h-4 w-4" aria-hidden />}
+            {t("draft.lock")}
+          </Button>
+        )}
       </div>
-    </section>
+
+      {issues.length > 0 && !locked ? (
+        <ul data-draft-issues className="flex flex-col gap-0.5 sm:items-end">
+          {issues.map((issue) => (
+            <li key={issue} className="text-xs text-[color:var(--aqt-amber)]">
+              {isDraftIssueCode(issue) ? t(`draftIssue.${issue}`) : issue}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }

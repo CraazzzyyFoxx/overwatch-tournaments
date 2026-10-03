@@ -52,6 +52,15 @@ describe("notification destinations", () => {
         payload: { tournament_id: 42, encounter_id: "87/../../admin" }
       })
     ).toBeNull();
+    // The staff twin lands in the same room — that is where the organizer
+    // controls that end the dispute live.
+    expect(
+      notificationHref({
+        ...item,
+        kind: "encounter.dispute_review",
+        payload: { tournament_id: 42, encounter_id: 87, position: 0, home_team_name: "A", away_team_name: "B" }
+      })
+    ).toBe("/tournaments/42/pregame/87");
   });
 
   it("opens the pregame room for a scheduled match, and the tournament for an opened phase", () => {

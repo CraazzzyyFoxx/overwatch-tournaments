@@ -25,9 +25,13 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 os.environ["DEBUG"] = "true"
 
+from tests._rpc_fakes import CapturingBroker, FakeSessionMaker, make_identity
+
 enc_service = importlib.import_module("src.services.admin.encounter")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
+admin_misc = importlib.import_module("src.rpc.admin_misc")
+helpers = importlib.import_module("src.rpc._helpers")
 
 
 @contextmanager
@@ -96,6 +100,45 @@ def _body(slot: str, target_id: int, target_slot: str):
 
 
 class SwapSlots(IsolatedAsyncioTestCase):
+    async def test_rpc_swaps_teams_in_an_unpublished_stage(self) -> None:
+        source = _encounter(10, 1, 2)
+        target = _encounter(11, 3, 4)
+        session = _session()
+        stage = SimpleNamespace(is_active=False, is_published=False)
+        session.get = AsyncMock(return_value=stage)
+        broker = CapturingBroker()
+        admin_misc.register(broker, SimpleNamespace(exception=lambda *a, **k: None))
+        identity = make_identity(
+            workspaces=[
+                {
+                    "workspace_id": 1,
+                    "rbac_roles": [],
+                    "rbac_permissions": [{"resource": "match", "action": "update"}],
+                }
+            ]
+        )
+        with (
+            _repos(source, target),
+            patch.object(helpers.db, "async_session_maker", FakeSessionMaker(session)),
+            patch.object(admin_misc.auth, "get_encounter_workspace_id", AsyncMock(return_value=1)),
+            patch.object(enc_service.encounter_service.encounter_repo, "get", AsyncMock(return_value=source)),
+        ):
+            envelope = await broker.handlers["rpc.tournament.encounter_swap_slot"](
+                {"identity": identity, "id": 10, "payload": _body("home", 11, "home").model_dump()},
+                None,
+            )
+
+        self.assertTrue(envelope["ok"], envelope)
+        self.assertEqual(
+            {
+                "source": {"id": 10, "home_team_id": 3, "away_team_id": 2, "name": "t3 vs t2"},
+                "target": {"id": 11, "home_team_id": 1, "away_team_id": 4, "name": "t1 vs t4"},
+            },
+            envelope["data"],
+        )
+        self.assertEqual((3, 2, 1, 4), (source.home_team_id, source.away_team_id, target.home_team_id, target.away_team_id))
+        self.assertFalse(stage.is_published)
+
     async def test_swaps_between_two_open_encounters(self) -> None:
         source = _encounter(10, 1, 2)
         target = _encounter(11, 3, None)
