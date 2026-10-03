@@ -1,8 +1,14 @@
 """map_coverage / map_winrate — which maps and gamemodes a player actually played.
 
 Participation is telemetry, not a roster: a player counts for a map when they
-have ``MatchStatistics`` rows on it, so substitutes who never played are absent
-by construction and no ``is_substitution`` filter is needed.
+have a round-0 ``HeroTimePlayed`` row on it, so substitutes who never played are
+absent by construction and no ``is_substitution`` filter is needed.
+
+One row per (match, player, hero) rather than every stat row: ``statistics``
+carries ~3,700 rows per match, and grouping all of them to count distinct maps
+sorted 24M rows to disk on the production workspace (10.7 s). The playtime rows
+are ~30 per match and served by ``ix_match_statistics_playtime_r0`` (0.26 s,
+identical results on that workspace).
 
 Grains: ``map_coverage`` is user (user_tournament with ``scope="tournament"``),
 ``map_winrate`` is user.
@@ -15,6 +21,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import LogStatsName
 from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
@@ -41,6 +48,12 @@ _PLAYER_WON_MAP = sa.or_(
         models.MatchStatistics.team_id == models.Match.away_team_id,
         models.Match.away_score > models.Match.home_score,
     ),
+)
+
+#: The participation rows: one per hero a player was on the field with.
+_PLAYED_MAP = sa.and_(
+    models.MatchStatistics.round == 0,
+    models.MatchStatistics.name == LogStatsName.HeroTimePlayed,
 )
 
 
@@ -91,7 +104,7 @@ async def execute_map_coverage(
         .join(models.Map, models.Map.id == models.Match.map_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-        .where(models.Tournament.workspace_id == context.workspace_id)
+        .where(models.Tournament.workspace_id == context.workspace_id, _PLAYED_MAP)
         .group_by(*group_cols)
         .having(op_fn(count_expr, value))
     )
@@ -159,7 +172,7 @@ async def execute_map_winrate(
         .join(models.Map, models.Map.id == models.Match.map_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-        .where(models.Tournament.workspace_id == context.workspace_id)
+        .where(models.Tournament.workspace_id == context.workspace_id, _PLAYED_MAP)
         .group_by(models.MatchStatistics.user_id, models.Map.id, models.Map.name)
         .having(played_expr >= min_matches, op_fn(winrate_expr, value))
     )
