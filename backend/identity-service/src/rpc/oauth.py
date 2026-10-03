@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,19 @@ from src.services.token_validation import token_validation
 from . import _common as c
 
 __all__ = ("register",)
+
+
+# Isolated QoS: these three flows block on an external provider (Discord/Twitch/
+# Battle.net token + userinfo exchanges), which is why the gateway had to raise
+# its identity RPC timeout to 20s for them. On the DEFAULT channel a handful of
+# slow provider calls occupy the process-wide RPC_PREFETCH_COUNT slots that
+# ``rpc.identity.validate_token`` -- the hot path every authenticated request on
+# the platform goes through -- needs, and the gateway then sheds token
+# validations while identity-svc is merely waiting on someone else's HTTP
+# (Sentry OWT-TOURNAMENTS-20B / 2A9). Their own channel bounds that to 8 and
+# leaves the default channel's slots to the cheap, Redis-cached RPCs -- mirrors
+# balancer ``_JOBS_CHANNEL`` and tournament ``reg_pub_list``.
+_PROVIDER_CHANNEL = Channel(prefetch_count=8)
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -58,7 +72,7 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "oauth_url", run)
 
-    @broker.subscriber("rpc.identity.oauth_callback")
+    @broker.subscriber("rpc.identity.oauth_callback", channel=_PROVIDER_CHANNEL)
     async def _oauth_callback(data: dict, msg: RabbitMessage) -> dict:
         data = data or {}
         provider, code, state = data.get("provider"), data.get("code"), data.get("state")
@@ -101,7 +115,7 @@ def register(broker: Any, logger: Any) -> None:
             return rpc_error("bad_request", "invalid or expired ticket")
         return rpc_ok(result)
 
-    @broker.subscriber("rpc.identity.oauth_link")
+    @broker.subscriber("rpc.identity.oauth_link", channel=_PROVIDER_CHANNEL)
     async def _oauth_link(data: dict, msg: RabbitMessage) -> dict:
         """Custom-domain-aware account-link callback (Task 10R re-architecture).
 
@@ -182,7 +196,7 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.with_active_user(logger, data.get("access_token"), op)
 
-    @broker.subscriber("rpc.identity.oauth_discord_guilds")
+    @broker.subscriber("rpc.identity.oauth_discord_guilds", channel=_PROVIDER_CHANNEL)
     async def _oauth_discord_guilds(data: dict, msg: RabbitMessage) -> dict:
         """Guilds the given ``auth_user_id`` administers on Discord.
 

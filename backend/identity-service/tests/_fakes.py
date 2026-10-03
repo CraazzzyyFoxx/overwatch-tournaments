@@ -173,7 +173,10 @@ class CapturingBroker:
     def __init__(self) -> None:
         self.handlers: dict[str, object] = {}
 
-    def subscriber(self, subject: str):
+    def subscriber(self, subject: str, **_: object):
+        """``**_`` swallows the real broker's QoS kwargs (``channel=``), which
+        select a consumer channel and say nothing about handler behaviour."""
+
         def decorator(fn):
             self.handlers[subject] = fn
             return fn

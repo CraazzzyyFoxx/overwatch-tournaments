@@ -7,7 +7,19 @@
 // in cmd/gateway/main.go.
 package stream
 
-import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+import (
+	"time"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
+)
+
+// publicReadTimeout bounds the spectator read's RPC. It is a Redis hash read
+// plus two queries, so the 120s edge default (reserved for writes, imports and
+// exports) only means one thing here: during a burst each shed-adjacent call
+// pins one of the queue's 64 in-flight slots — and one x-deadline-ms worth of
+// stream-svc prefetch — for two minutes after the viewer's tab gave up. Same
+// value and same reason as balancer's fastReadTimeout.
+const publicReadTimeout = 15 * time.Second
 
 // PublicRoutes is the spectator read: which channels are live for a
 // tournament. Anonymous-friendly, but AuthOptional rather than AuthNone: the
@@ -17,7 +29,7 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 // including the workspace admin and the preview allowlist who can see the page
 // itself. Same mode as every other public tournament read (tournament.routes).
 var PublicRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/v1/streams/tournament/{tournament_id}", Queue: "rpc.stream.tournament_streams", Path: []string{"tournament_id"}, AllQuery: true, Auth: edge.AuthOptional},
+	{Method: "GET", Pattern: "/api/v1/streams/tournament/{tournament_id}", Queue: "rpc.stream.tournament_streams", Path: []string{"tournament_id"}, AllQuery: true, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 }
 
 // AdminRoutes carries the two operator surfaces:

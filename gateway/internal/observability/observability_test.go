@@ -105,7 +105,7 @@ func TestDropAccessLogsFiltersClientDisconnects(t *testing.T) {
 	}
 
 	// A real upstream failure keeps its Sentry issue.
-	logger.Error("rpc failed", "queue", "rpc.app.workspaces.get", "err", errors.New("queue overloaded"))
+	logger.Error("rpc failed", "queue", "rpc.app.workspaces.get", "err", errors.New("upstream exploded"))
 	if got := sink.count(); got != 1 {
 		t.Fatalf("genuine rpc failure dropped: got %d records, want 1", got)
 	}
@@ -119,29 +119,24 @@ func TestDropAccessLogsFiltersClientDisconnects(t *testing.T) {
 
 // A stack restart fails every in-flight RPC at once, and each queue name opened
 // its own Sentry group — 91 events across "rpc: not connected" and "rpc:
-// connection lost during call". Broker reachability is a Prometheus alert, not an
-// Issue. ErrOverloaded is the opposite: it fires while the broker is healthy and
-// is the avalanche signal the in-flight cap exists to raise, so it must survive.
-func TestDropAccessLogsFiltersBrokerChurn(t *testing.T) {
+// connection lost during call"; one shed burst of "rpc: queue overloaded" was
+// 990. All three are Prometheus alerts (RabbitMQ, GatewayRPCShedding), not Issues.
+func TestDropAccessLogsFiltersRPCUnavailable(t *testing.T) {
 	sink := &captureHandler{minLevel: slog.LevelDebug}
 	logger := slog.New(dropAccessLogs(sink))
 
 	logger.Error("rpc failed", "queue", "rpc.identity.validate_token", "err", rpc.ErrNotConnected)
 	logger.Error("rpc failed", "queue", "rpc.tournament.get_tournament", "err", rpc.ErrDisconnected)
+	logger.Error("rpc failed", "queue", "rpc.stream.tournament_streams", "err", rpc.ErrOverloaded)
 	if got := sink.count(); got != 0 {
-		t.Fatalf("broker churn reached sink: got %d records, want 0", got)
+		t.Fatalf("rpc unavailability reached sink: got %d records, want 0", got)
 	}
 
 	// Wrapped the way dispatch wraps it: fmt.Errorf("rpc to %q: %w").
 	logger.Error("rpc failed", "err", fmt.Errorf(`rpc to "rpc.balancer.draft.tournament_board": %w`, rpc.ErrDisconnected))
-	if got := sink.count(); got != 0 {
-		t.Fatalf("wrapped broker churn reached sink: got %d records, want 0", got)
-	}
-
-	// Backpressure is signal, not churn — including wrapped.
 	logger.Error("rpc failed", "err", fmt.Errorf(`rpc to "rpc.balancer.draft.tournament_board": %w`, rpc.ErrOverloaded))
-	if got := sink.count(); got != 1 {
-		t.Fatalf("queue overloaded dropped: got %d records, want 1", got)
+	if got := sink.count(); got != 0 {
+		t.Fatalf("wrapped rpc unavailability reached sink: got %d records, want 0", got)
 	}
 }
 
