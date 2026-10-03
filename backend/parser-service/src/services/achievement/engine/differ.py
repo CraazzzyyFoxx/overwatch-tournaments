@@ -5,6 +5,7 @@ Produces inserts and deletes to reconcile the stored state with the new evaluati
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -72,6 +73,79 @@ def persist_slice_for_grain(
     return None
 
 
+async def load_existing_results(
+    session: AsyncSession,
+    slices: Mapping[int, EvaluationSlice | None],
+) -> dict[int, dict[tuple[int, ...], int]]:
+    """Stored rows for every rule of a run: one query per distinct persist slice.
+
+    Returns ``rule_id -> {key: evaluation_result.id}``; a rule with no stored
+    rows is simply absent. The per-rule read this replaces ran inside each
+    rule's savepoint and was most of the evaluation N+1 (Sentry
+    OWT-TOURNAMENTS-2BW): stored rows are partitioned by
+    ``achievement_rule_id``, so one ``IN`` per slice returns exactly the union
+    of what those reads returned. Reading earlier in the transaction only
+    widens the window in which a *concurrent* run inserts a row this one will
+    also try to insert — already true per rule, and the reconcile insert is
+    ``ON CONFLICT DO NOTHING``.
+    """
+    by_slice: dict[EvaluationSlice | None, list[int]] = {}
+    for rule_id, evaluation_slice in slices.items():
+        by_slice.setdefault(evaluation_slice, []).append(rule_id)
+
+    existing: dict[int, dict[tuple[int, ...], int]] = {}
+    for evaluation_slice, rule_ids in by_slice.items():
+        query = (
+            sa.select(
+                AchievementEvaluationResult.achievement_rule_id,
+                AchievementEvaluationResult.id,
+                WorkspaceMember.player_id,
+                AchievementEvaluationResult.tournament_id,
+                AchievementEvaluationResult.encounter_id,
+                AchievementEvaluationResult.match_id,
+            )
+            .select_from(AchievementEvaluationResult)
+            .join(WorkspaceMember, WorkspaceMember.id == AchievementEvaluationResult.workspace_member_id)
+            .where(AchievementEvaluationResult.achievement_rule_id.in_(rule_ids))
+        )
+        if evaluation_slice is not None:
+            query = query.where(*evaluation_slice.query_filters())
+        for rule_id, row_id, user_id, tournament_id, encounter_id, match_id in await session.execute(query):
+            key = _make_key(user_id, tournament_id, encounter_id, match_id)
+            existing.setdefault(rule_id, {})[key] = row_id
+    return existing
+
+
+async def _resolve_member_ids(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    player_ids: set[int],
+) -> dict[int, int]:
+    """``player_id -> workspace_member.id``, one SELECT for the whole batch.
+
+    The per-player ``INSERT ... ON CONFLICT DO NOTHING RETURNING id`` this
+    replaces ran once per newly qualifying player (Sentry
+    OWT-TOURNAMENTS-2BW). Every player an evaluation sees is normally already
+    anchored in the workspace, so one query answers the batch; only a genuinely
+    new anchor falls back to ``get_or_create_workspace_member``, which also
+    seeds the member's baseline RBAC role.
+    """
+    if not player_ids:
+        return {}
+    rows = await session.execute(
+        sa.select(WorkspaceMember.player_id, WorkspaceMember.id).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.player_id.in_(sorted(player_ids)),
+        )
+    )
+    member_ids = dict(rows)
+    for player_id in sorted(player_ids - member_ids.keys()):
+        member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
+        member_ids[player_id] = member.id
+    return member_ids
+
+
 class AchievementResultDifferService:
     def __init__(
         self, *, results_repo: AchievementEvaluationResultRepository = AchievementEvaluationResultRepository()
@@ -86,6 +160,7 @@ class AchievementResultDifferService:
         run_id: str,
         evaluation_slice: EvaluationSlice | None = None,
         evidence: dict[tuple[int, ...], dict] | None = None,
+        existing: dict[tuple[int, ...], int] | None = None,
     ) -> DiffResult:
         """Compare new results with stored results and apply changes.
 
@@ -97,34 +172,16 @@ class AchievementResultDifferService:
         resolves/creates the target ``workspace_member`` row — scoped to the
         rule's own workspace — only when a row actually needs to be inserted.
 
+        ``existing`` is the rule's stored rows (key → row id) when the caller
+        already loaded them for the whole run (``load_existing_results``);
+        without it the read happens here, one rule at a time.
+
         Returns a DiffResult with counts for audit.
         """
-        # Load existing results for this rule, resolving each row's player
-        # identity through its workspace_member so the diff key is unchanged.
-        existing_query = (
-            sa.select(
-                AchievementEvaluationResult.id,
-                WorkspaceMember.player_id,
-                AchievementEvaluationResult.tournament_id,
-                AchievementEvaluationResult.encounter_id,
-                AchievementEvaluationResult.match_id,
-            )
-            .select_from(AchievementEvaluationResult)
-            .join(WorkspaceMember, WorkspaceMember.id == AchievementEvaluationResult.workspace_member_id)
-            .where(AchievementEvaluationResult.achievement_rule_id == rule.id)
-        )
-        if evaluation_slice is not None:
-            existing_query = existing_query.where(*evaluation_slice.query_filters())
+        if existing is None:
+            existing = (await load_existing_results(session, {rule.id: evaluation_slice})).get(rule.id, {})
 
-        existing_rows = await session.execute(existing_query)
-
-        # Build lookup: tuple → row_id
-        existing_map: dict[tuple[int, ...], int] = {}
-        for row_id, user_id, tournament_id, encounter_id, match_id in existing_rows:
-            key = _make_key(user_id, tournament_id, encounter_id, match_id)
-            existing_map[key] = row_id
-
-        existing_keys = set(existing_map.keys())
+        existing_keys = set(existing)
 
         # Normalize new results to consistent key format
         grain = AchievementGrain(rule.grain)
@@ -142,7 +199,7 @@ class AchievementResultDifferService:
         to_remove = existing_keys - new_key_set
 
         # Apply deletions
-        ids_to_delete = [existing_map[key] for key in to_remove]
+        ids_to_delete = [existing[key] for key in to_remove]
         if ids_to_delete:
             await self.results_repo.bulk_delete_by_ids(session, ids_to_delete)
 
@@ -160,14 +217,13 @@ class AchievementResultDifferService:
         now = datetime.now(UTC)
         inserts = []
         values: list[dict] = []
-        member_id_by_player: dict[int, int] = {}
+        member_id_by_player = await _resolve_member_ids(
+            session,
+            workspace_id=rule.workspace_id,
+            player_ids={_unpack_key(key)[0] for key in to_add},
+        )
         for key in to_add:
             user_id, tournament_id, encounter_id, match_id = _unpack_key(key)
-            if user_id not in member_id_by_player:
-                member = await get_or_create_workspace_member(
-                    session, workspace_id=rule.workspace_id, player_id=user_id
-                )
-                member_id_by_player[user_id] = member.id
             # "Why this player": whatever the leaf that matched them recorded —
             # the measured value and the threshold it cleared, not just the slug.
             matched = (evidence or {}).get(new_keys[key]) or {}
@@ -194,7 +250,7 @@ class AchievementResultDifferService:
             )
 
         if values:
-            # get_or_create_workspace_member may have created member rows in this
+            # ``_resolve_member_ids`` may have created member rows in this
             # session; flush them so the FK below resolves.
             await session.flush()
             await self.results_repo.bulk_upsert_ignore_conflicts(session, values)

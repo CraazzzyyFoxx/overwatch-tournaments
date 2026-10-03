@@ -37,7 +37,7 @@ from src.core.broker import require_broker
 from src.domain.achievement_eval_context import EvalContext
 from src.domain.achievement_validation import GRAIN_ARITY
 
-from .differ import diff_and_apply, persist_slice_for_grain
+from .differ import diff_and_apply, load_existing_results, persist_slice_for_grain
 from .evaluator import GrainMismatchError, evaluate
 
 # A full recompute an operator asked for, on a workspace nobody has vouched for.
@@ -222,12 +222,17 @@ class AchievementEvaluationRunnerService:
             # workspace grid, not the triggering tournament's.
             workspace_grid = grid if tournament is None else await _resolve_grid(session, workspace_id, None)
 
+            # One read per distinct persist slice for the whole run, instead of
+            # one per rule inside its savepoint (Sentry OWT-TOURNAMENTS-2BW).
+            persist_slices = {
+                rule.id: persist_slice_for_grain(rule.grain, tournament_id=tournament_id, match_id=match_id)
+                for rule in rules
+            }
+            existing_results = await load_existing_results(session, persist_slices)
+
             for rule in rules:
-                persist_slice = persist_slice_for_grain(
-                    rule.grain,
-                    tournament_id=tournament_id,
-                    match_id=match_id,
-                )
+                persist_slice = persist_slices[rule.id]
+                rule_existing = existing_results.get(rule.id, {})
                 # The trigger tournament narrows tournament/match-grain rules only.
                 # A ``user``-grain rule is evaluated workspace-wide: no tournament
                 # in its context, no ``min_tournament_id`` short-circuit, and the
@@ -242,6 +247,7 @@ class AchievementEvaluationRunnerService:
                         set(),
                         run_id,
                         evaluation_slice=persist_slice,
+                        existing=rule_existing,
                     )
                     total_removed += len(diff.to_delete)
                     if diff.to_delete:
@@ -256,6 +262,7 @@ class AchievementEvaluationRunnerService:
                         set(),
                         run_id,
                         evaluation_slice=persist_slice,
+                        existing=rule_existing,
                     )
                     total_removed += len(diff.to_delete)
                     rules_ok += 1
@@ -302,6 +309,7 @@ class AchievementEvaluationRunnerService:
                             run_id,
                             evaluation_slice=persist_slice,
                             evidence=context.evidence,
+                            existing=rule_existing,
                         )
                         total_created += len(diff.to_insert)
                         total_removed += len(diff.to_delete)

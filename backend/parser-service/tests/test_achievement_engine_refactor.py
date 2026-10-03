@@ -56,14 +56,14 @@ class DiffScopeTests(IsolatedAsyncioTestCase):
 
         async def execute_side_effect(query):
             sql = str(query)
-            if "SELECT achievements.evaluation_result.id" in sql:
-                if "tournament_id" in sql and "=" in sql:
+            if "FROM achievements.evaluation_result" in sql:
+                if "achievements.evaluation_result.tournament_id = " in sql:
                     return [
-                        (101, 55, 10, None, None),
+                        (7, 101, 55, 10, None, None),
                     ]
                 return [
-                    (101, 55, 10, None, None),
-                    (202, 55, 20, None, None),
+                    (7, 101, 55, 10, None, None),
+                    (7, 202, 55, 20, None, None),
                 ]
             return None
 
@@ -115,15 +115,20 @@ class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
     def _fake_session(existing_rows: list[tuple[object, ...]]) -> tuple[SimpleNamespace, list[object]]:
         """Session double returning ``existing_rows`` for the diff read.
 
-        Returns the session and the list that collects every non-read statement
-        passed to ``execute`` (the reconcile insert, and any delete).
+        Rows are ``(rule_id, row_id, player_id, tournament_id, encounter_id,
+        match_id)`` — the shape ``load_existing_results`` reads. Returns the
+        session and the list that collects every non-read statement passed to
+        ``execute`` (the reconcile insert, and any delete).
         """
         statements: list[object] = []
 
         async def execute_side_effect(query):
             sql = str(query)
-            if "SELECT achievements.evaluation_result.id" in sql:
+            if "FROM achievements.evaluation_result" in sql:
                 return existing_rows
+            if sql.startswith("SELECT") and "workspace_member" in sql:
+                # No anchor rows yet: every player falls back to get_or_create.
+                return []
             statements.append(query)
             return None
 
@@ -212,9 +217,9 @@ class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
         rule = AchievementRule(
             id=9, slug="newcomer", rule_version=1, workspace_id=3, grain=AchievementGrain.user_tournament
         )
-        # (row_id, player_id, tournament_id, encounter_id, match_id) — player_id
-        # recovered via the workspace_member join, not a raw column.
-        session, statements = self._fake_session([(101, 55, 10, None, None)])
+        # (rule_id, row_id, player_id, tournament_id, encounter_id, match_id) —
+        # player_id recovered via the workspace_member join, not a raw column.
+        session, statements = self._fake_session([(9, 101, 55, 10, None, None)])
 
         get_or_create = AsyncMock()
 
