@@ -6398,6 +6398,14 @@
       },
       "summary": "Re-poll tournament streams"
     },
+    "rpc.stream.ticks": {
+      "description": "Permission: global `stream.read`. The recorded outcome of each of the last 200 Twitch live-status poll ticks, newest first: status, when it ran, tournaments and channels covered, live channels and Twitch's remaining rate-limit budget. Shows when polling started failing and whether it recovered, where the health read only names the latest tick. A disabled poller records no ticks.",
+      "response": {
+        "array": true,
+        "ref": "stream.StreamPollTickRead"
+      },
+      "summary": "Stream poller tick history"
+    },
     "rpc.stream.tournament_streams": {
       "description": "Permission: public; no authentication required (identity is optional and only used for visibility). Returns the tournament's stream block: official broadcast links from its typed links (included whether or not they are on air) and the participant channels that are live right now. A hidden tournament answers 404 for an ineligible viewer. Twitch channels report live true/false; YouTube and other hosts report live null, meaning there is no live detection for them rather than offline. A participant entry carries the player behind the channel together with the team they play for in this tournament; that team is null until rosters are drafted, and the player itself is null on an official broadcast, which belongs to the organizer rather than to any participant.",
       "response": {
@@ -13045,6 +13053,13 @@
             "$ref": "#/components/schemas/app.AuthMergeDataConflict"
           },
           "title": "Data Conflicts",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
           "type": "array"
         },
         "memberships": {
@@ -32109,6 +32124,68 @@
         "batch_size"
       ],
       "title": "StreamPollHealthRead",
+      "type": "object"
+    },
+    "stream.StreamPollTickRead": {
+      "description": "One recorded poll tick, for the admin task history.\n\nThe same outcome ``StreamPollHealthRead`` reports for the last tick, kept for\nthe last few hundred so an operator can see when polling started failing and\nwhether it recovered, not only what the latest tick said.",
+      "properties": {
+        "channels_polled": {
+          "default": 0,
+          "title": "Channels Polled",
+          "type": "integer"
+        },
+        "live_channels": {
+          "default": 0,
+          "title": "Live Channels",
+          "type": "integer"
+        },
+        "ran_at": {
+          "format": "date-time",
+          "title": "Ran At",
+          "type": "string"
+        },
+        "ratelimit_remaining": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratelimit Remaining"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "empty",
+            "truncated",
+            "not_configured",
+            "rate_limited",
+            "unauthorized",
+            "unavailable",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tournaments_active": {
+          "default": 0,
+          "title": "Tournaments Active",
+          "type": "integer"
+        },
+        "tournaments_updated": {
+          "default": 0,
+          "title": "Tournaments Updated",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ran_at",
+        "status"
+      ],
+      "title": "StreamPollTickRead",
       "type": "object"
     },
     "stream.StreamRepollRead": {

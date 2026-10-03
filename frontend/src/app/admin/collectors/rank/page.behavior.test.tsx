@@ -263,6 +263,7 @@ describe("RankCollectorPage", () => {
     expect(getRankCollectionStats).toHaveBeenCalled();
     expect(getRankFetchLog).toHaveBeenCalled();
     expect(container.textContent).toContain("Task history");
+    expect(container.querySelector('a[href="/admin/people/42"]')?.textContent).toBe("Anak#2107");
     // Status is the only slot a non-superuser has, so there is no tab bar to
     // pick it from — a one-tab bar would be a heading with a hover state.
     expect(container.querySelectorAll("a[data-link-tab]")).toHaveLength(0);

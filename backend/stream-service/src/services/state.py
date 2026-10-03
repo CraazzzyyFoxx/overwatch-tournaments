@@ -9,6 +9,8 @@ Everything the poll tick and the RPC reads need that is NOT a Postgres row:
 - ``stream:poll:last_run`` — the tick's due-date cursor.
 - ``stream:poll:last_status`` — the last tick's outcome, for the admin health
   panel (``rpc.stream.health``).
+- ``stream:poll:history`` — the last ``POLL_HISTORY_LIMIT`` tick outcomes,
+  newest first, for the admin task history (``rpc.stream.ticks``).
 
 Wrapped in a class rather than left as free functions taking ``redis`` on every
 call: every method here operates on the SAME Redis connection, so binding it
@@ -27,6 +29,8 @@ from redis.asyncio import Redis
 __all__ = (
     "LAST_RUN_KEY",
     "LAST_RUN_TTL_SECONDS",
+    "POLL_HISTORY_KEY",
+    "POLL_HISTORY_LIMIT",
     "POLL_STATUS_KEY",
     "POLL_STATUS_TTL_SECONDS",
     "TOKEN_KEY",
@@ -47,6 +51,12 @@ POLL_STATUS_KEY = "stream:poll:last_status"
 #: Longer than the cursor: a stale "unauthorized 3 days ago" is still the answer to
 #: "why is nothing live", whereas an absent key would read as "never ran".
 POLL_STATUS_TTL_SECONDS = 7 * 24 * 60 * 60
+
+#: Every tick's outcome, newest first, capped. A Redis list rather than a table:
+#: the poller writes no Postgres, and the history only has to answer "when did it
+#: start failing" — 200 ticks is over three hours at the default 60s interval.
+POLL_HISTORY_KEY = "stream:poll:history"
+POLL_HISTORY_LIMIT = 200
 
 
 class StreamStateStore:
@@ -139,4 +149,24 @@ class StreamStateStore:
         return decoded if isinstance(decoded, dict) else None
 
     async def write_poll_status(self, status: dict[str, Any]) -> None:
-        await self._redis.set(POLL_STATUS_KEY, json.dumps(status), ex=POLL_STATUS_TTL_SECONDS)
+        """Record the tick's outcome as the latest status and prepend it to the
+        capped history, in one transaction so the two never disagree."""
+        body = json.dumps(status)
+        async with self._redis.pipeline(transaction=True) as pipe:
+            pipe.set(POLL_STATUS_KEY, body, ex=POLL_STATUS_TTL_SECONDS)
+            pipe.lpush(POLL_HISTORY_KEY, body)
+            pipe.ltrim(POLL_HISTORY_KEY, 0, POLL_HISTORY_LIMIT - 1)
+            pipe.expire(POLL_HISTORY_KEY, POLL_STATUS_TTL_SECONDS)
+            await pipe.execute()
+
+    async def read_poll_history(self) -> list[dict[str, Any]]:
+        """Recorded tick outcomes, newest first; malformed entries are skipped."""
+        history: list[dict[str, Any]] = []
+        for raw in await self._redis.lrange(POLL_HISTORY_KEY, 0, POLL_HISTORY_LIMIT - 1):
+            try:
+                decoded = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(decoded, dict):
+                history.append(decoded)
+        return history

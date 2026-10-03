@@ -5,8 +5,8 @@ Kept import-light (no broker/DB) so ``backend/scripts/export_openapi_schemas.sh`
 can import it with dummy connection env.
 
 Only ``repoll`` takes query params and none of the subjects take a request body:
-the public read carries a path id, health carries nothing, and the re-poll carries
-a path id plus ``workspace_id``.
+the public read carries a path id, health and ticks carry nothing, and the
+re-poll carries a path id plus ``workspace_id``.
 """
 
 from __future__ import annotations
@@ -31,4 +31,5 @@ OPERATIONS: dict[str, Op] = {
     ),
     # ── admin: poller health ───────────────────────────────────────────────
     "rpc.stream.health": Op(response=stream_schemas.StreamPollHealthRead),
+    "rpc.stream.ticks": Op(response=stream_schemas.StreamPollTickRead, response_array=True),
 }

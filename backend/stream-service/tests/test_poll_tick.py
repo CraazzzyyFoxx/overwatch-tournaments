@@ -41,9 +41,8 @@ class _Tournament:
 
 
 class _FakePipeline:
-    def __init__(self, store: dict[str, Any], ttls: dict[str, int]) -> None:
-        self._store = store
-        self._ttls = ttls
+    def __init__(self, redis: _FakeRedis) -> None:
+        self._redis = redis
         self._ops: list[tuple[str, Any, Any]] = []
 
     async def __aenter__(self) -> _FakePipeline:
@@ -61,14 +60,31 @@ class _FakePipeline:
     def expire(self, key: str, ttl: int) -> None:
         self._ops.append(("expire", key, ttl))
 
+    def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self._ops.append(("set", key, value))
+
+    def lpush(self, key: str, value: str) -> None:
+        self._ops.append(("lpush", key, value))
+
+    def ltrim(self, key: str, start: int, end: int) -> None:
+        self._ops.append(("ltrim", key, (start, end)))
+
     async def execute(self) -> None:
+        redis = self._redis
         for op, key, value in self._ops:
             if op == "delete":
-                self._store.pop(key, None)
+                redis.hashes.pop(key, None)
             elif op == "hset":
-                self._store.setdefault(key, {}).update(value or {})
+                redis.hashes.setdefault(key, {}).update(value or {})
             elif op == "expire":
-                self._ttls[key] = value
+                redis.ttls[key] = value
+            elif op == "set":
+                redis.strings[key] = value
+            elif op == "lpush":
+                redis.lists.setdefault(key, []).insert(0, value)
+            elif op == "ltrim":
+                start, end = value
+                redis.lists[key] = redis.lists.get(key, [])[start : end + 1]
         self._ops.clear()
 
 
@@ -77,12 +93,16 @@ class _FakeRedis:
         self.hashes: dict[str, dict[str, str]] = {}
         self.ttls: dict[str, int] = {}
         self.strings: dict[str, str] = {}
+        self.lists: dict[str, list[str]] = {}
 
     def pipeline(self, transaction: bool = False) -> _FakePipeline:
-        return _FakePipeline(self.hashes, self.ttls)
+        return _FakePipeline(self)
 
     async def hgetall(self, key: str) -> dict[str, str]:
         return dict(self.hashes.get(key, {}))
+
+    async def lrange(self, key: str, start: int, end: int) -> list[str]:
+        return self.lists.get(key, [])[start : end + 1]
 
     async def get(self, key: str) -> str | None:
         return self.strings.get(key)
@@ -452,6 +472,19 @@ class PollStatusTests(_TickCase):
         await self._run(_Fetcher(_batch([])), cfg=StreamCollectionConfig(enabled=False))
 
         self.assertIsNone(await StreamStateStore(self.redis).read_poll_status())
+        self.assertEqual(await StreamStateStore(self.redis).read_poll_history(), [])
+
+    async def test_history_keeps_every_tick_newest_first(self) -> None:
+        """The task history must show the failure AND the recovery after it, not
+        only whatever the latest tick overwrote the status with."""
+        self._tournament(7)
+        self._participant(7, "caster")
+
+        await self._run(_Fetcher(error=helix.HelixUnauthorized("nope")))
+        await self._run(_Fetcher(_batch(["caster"], logins=["caster"])))
+
+        history = await StreamStateStore(self.redis).read_poll_history()
+        self.assertEqual([entry["status"] for entry in history], ["ok", "unauthorized"])
 
 
 def _batch(

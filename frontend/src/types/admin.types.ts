@@ -264,6 +264,18 @@ export interface StreamPollHealth {
   credentials_configured: boolean;
 }
 
+/** One recorded poll tick, newest first from `GET /api/v1/streams/health/ticks`.
+ *  Same outcome `StreamPollHealth` reports for the latest tick. */
+export interface StreamPollTick {
+  ran_at: string;
+  status: StreamPollStatus;
+  tournaments_active: number;
+  tournaments_updated: number;
+  channels_polled: number;
+  live_channels: number;
+  ratelimit_remaining: number | null;
+}
+
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
 import type { RosterSlotMap } from "@/lib/roster/shape";

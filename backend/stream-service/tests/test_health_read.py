@@ -1,4 +1,4 @@
-"""``rpc.stream.health`` — the read the admin panel is built on.
+"""``rpc.stream.health`` / ``rpc.stream.ticks`` — the reads the admin panel is built on.
 
 Two properties, both easy to lose quietly:
 
@@ -91,11 +91,16 @@ def _request(identity: dict[str, Any] | None) -> dict[str, Any]:
 class _FakeRedis:
     def __init__(self, status: dict[str, Any] | None = None) -> None:
         self.strings: dict[str, str] = {}
+        self.lists: dict[str, list[str]] = {}
         if status is not None:
             self.strings[state.POLL_STATUS_KEY] = json.dumps(status)
+            self.lists[state.POLL_HISTORY_KEY] = [json.dumps(status)]
 
     async def get(self, key: str) -> str | None:
         return self.strings.get(key)
+
+    async def lrange(self, key: str, start: int, end: int) -> list[str]:
+        return self.lists.get(key, [])[start : end + 1]
 
 
 class _HealthCase(IsolatedAsyncioTestCase):
@@ -154,6 +159,15 @@ class PermissionTests(_HealthCase):
 
         with self.assertRaises(MissingIdentityError):
             await admin.health(object(), _request(None))
+
+    async def test_tick_history_takes_the_same_global_gate(self) -> None:
+        self._wire(status={"ran_at": 1.0, "status": "ok"})
+
+        with self.assertRaises(HTTPException) as caught:
+            await admin.ticks(object(), _request(WORKSPACE_READER))
+
+        self.assertEqual(caught.exception.status_code, 403)
+        self.assertEqual([tick.status for tick in await admin.ticks(object(), _request(GLOBAL_READER))], ["ok"])
 
 
 class PayloadTests(_HealthCase):

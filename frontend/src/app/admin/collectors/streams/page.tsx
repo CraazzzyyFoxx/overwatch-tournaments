@@ -1,6 +1,7 @@
 "use client";
 
 import { StreamHealthDashboard } from "@/components/admin/collectors/stream-health";
+import { StreamTaskHistory } from "@/components/admin/collectors/stream-history";
 import { StreamSettingsPanel } from "@/components/admin/collectors/stream-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
 import { LinkTabs } from "@/components/kit/LinkTabs";
@@ -8,10 +9,11 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 
 /**
- * The Twitch live-status poller: health and its runtime configuration.
+ * The Twitch live-status poller: health, its tick history, and its runtime
+ * configuration.
  *
- * Two slots, not three with one greyed out — there is no per-channel check log
- * to show, so the collector does not pretend to have a History (F14 ·2).
+ * Health and the tick log share the Status slot, as on the rank collector:
+ * both answer "is it working?". Settings stays its own superuser-only slot.
  *
  * Status is gated on `stream.read` and on the GLOBAL grant, not a
  * workspace-scoped one, because there is one poller and one Redis key behind
@@ -55,7 +57,14 @@ export default function StreamCollectorPage() {
           ariaLabel="Stream collector views"
         />
       )}
-      {activeKey === "settings" ? <StreamSettingsPanel /> : <StreamHealthDashboard />}
+      {activeKey === "settings" ? (
+        <StreamSettingsPanel />
+      ) : (
+        <>
+          <StreamHealthDashboard />
+          <StreamTaskHistory />
+        </>
+      )}
     </div>
   );
 }

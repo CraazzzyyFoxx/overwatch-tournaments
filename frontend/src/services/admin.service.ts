@@ -113,6 +113,7 @@ import {
   SubscriptionCollectTriggerInput,
   SubscriptionCollectTriggerResult,
   StreamPollHealth,
+  StreamPollTick,
   EncounterResultAuditRead,
   EncounterResultRead,
   EncounterSetResultInput,
@@ -2078,6 +2079,12 @@ class AdminService {
    */
   async getStreamPollHealth(): Promise<StreamPollHealth> {
     const response = await apiFetch("/api/v1/streams/health", { skipWorkspace: true });
+    return response.json();
+  }
+
+  /** The last 200 recorded poll ticks, newest first. Same global gate as health. */
+  async getStreamPollTicks(): Promise<StreamPollTick[]> {
+    const response = await apiFetch("/api/v1/streams/health/ticks", { skipWorkspace: true });
     return response.json();
   }
 

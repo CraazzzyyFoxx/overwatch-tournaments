@@ -1,4 +1,4 @@
-"""Admin subscribers (``rpc.stream.repoll``, ``rpc.stream.health``).
+"""Admin subscribers (``rpc.stream.repoll``, ``rpc.stream.health``, ``rpc.stream.ticks``).
 
 ``repoll`` serves ``POST /api/streams/tournament/{tournament_id}/repoll`` — the
 operator escape hatch when a live badge looks wrong and waiting out the interval
@@ -18,6 +18,11 @@ scheduler, which means a misconfigured poller is indistinguishable from a workin
 one from the outside. It reads Redis only — no Postgres — and requires a GLOBAL
 ``stream.read``, because there is one poller for the whole platform and a
 workspace-scoped grant must not be able to read platform-wide state.
+
+``ticks`` serves ``GET /api/streams/health/ticks``: the same recorded outcome,
+for the last few hundred ticks, so the panel can show when polling started
+failing rather than only what the latest tick said. Same Redis-only read, same
+global ``stream.read`` gate.
 """
 
 from __future__ import annotations
@@ -37,19 +42,18 @@ from shared.services.audit import record_audit
 from shared.services.settings_provider import settings_provider
 from src.core import db
 from src.core.config import settings
-from src.schemas.stream import StreamPollHealthRead, StreamRepollRead
+from src.schemas.stream import StreamPollHealthRead, StreamPollTickRead, StreamRepollRead
 from src.services.state import StreamStateStore
 
 from . import _common as c
 from ._clients import realtime_redis
 
-__all__ = ("health", "register", "repoll")
+__all__ = ("health", "register", "repoll", "ticks")
 
 _tournaments = TournamentRepository()
 
 
-async def health(session: AsyncSession, data: dict[str, Any]) -> StreamPollHealthRead:
-    """Report the last tick's outcome next to the config that produced it."""
+def _require_global_read(data: dict[str, Any]) -> None:
     user = c.actor(data)
     c.require_active(user)
     # Deliberately NOT ensure_workspace_permission: the poller is platform-wide,
@@ -57,6 +61,11 @@ async def health(session: AsyncSession, data: dict[str, Any]) -> StreamPollHealt
     # workspace. Only a global holder (or a superuser) sees this.
     if not user.has_permission("stream", "read"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied: stream.read required")
+
+
+async def health(session: AsyncSession, data: dict[str, Any]) -> StreamPollHealthRead:
+    """Report the last tick's outcome next to the config that produced it."""
+    _require_global_read(data)
 
     cfg = await settings_provider.get_stream_collection_config(session)
 
@@ -75,6 +84,25 @@ async def health(session: AsyncSession, data: dict[str, Any]) -> StreamPollHealt
         ratelimit_remaining=recorded.get("ratelimit_remaining"),
         credentials_configured=bool(settings.twitch_client_id and settings.twitch_client_secret),
     )
+
+
+async def ticks(session: AsyncSession, data: dict[str, Any]) -> list[StreamPollTickRead]:
+    """Recorded poll ticks, newest first."""
+    _require_global_read(data)
+    history = await StreamStateStore(realtime_redis).read_poll_history()
+    return [
+        StreamPollTickRead(
+            ran_at=datetime.fromtimestamp(float(entry["ran_at"]), tz=UTC),
+            status=entry["status"],
+            tournaments_active=entry.get("tournaments_active") or 0,
+            tournaments_updated=entry.get("tournaments_updated") or 0,
+            channels_polled=entry.get("channels_polled") or 0,
+            live_channels=entry.get("live_channels") or 0,
+            ratelimit_remaining=entry.get("ratelimit_remaining"),
+        )
+        for entry in history
+        if entry.get("ran_at") is not None and entry.get("status") is not None
+    ]
 
 
 async def repoll(session: AsyncSession, data: dict[str, Any]) -> StreamRepollRead:
@@ -161,3 +189,10 @@ def register(broker: Any, logger: Any) -> None:
             return await health(session, data)
 
         return await c.envelope(logger, "health", op, session_factory=sf)
+
+    @broker.subscriber("rpc.stream.ticks")
+    async def _ticks(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            return await ticks(session, data)
+
+        return await c.envelope(logger, "ticks", op, session_factory=sf)

@@ -1,29 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter } from "@/lib/datetime/client";
+import type { ColumnDef } from "@tanstack/react-table";
 
-import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, columnMeta } from "@/components/data-table";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { useFormatter } from "@/lib/datetime/client";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import type { RankFetchLogRow } from "@/types/admin.types";
 
 import { StatusBadge, formatDate } from "./rank-shared";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { adminQueryKeys } from "@/lib/admin/query-keys";
 
-const STATUS_FILTERS = ["all", "ok", "private", "not_found", "error", "rate_limited"];
-const SOURCE_FILTERS = ["all", "scheduled", "registration", "manual"];
+const FILTER_DEFS: FilterDef[] = [
+  {
+    key: "status",
+    label: "Status",
+    kind: "single",
+    options: ["ok", "private", "not_found", "error", "rate_limited"].map((value) => ({ value, label: value }))
+  },
+  {
+    key: "source",
+    label: "Source",
+    kind: "single",
+    options: ["scheduled", "registration", "manual"].map((value) => ({ value, label: value }))
+  }
+];
+
+/** The endpoint's own ceiling; the table pages through it client-side. */
+const FETCH_LIMIT = 200;
 
 /**
  * Live OverFast worker fetch log.
@@ -32,114 +43,120 @@ const SOURCE_FILTERS = ["all", "scheduled", "registration", "manual"];
  * per-player inspection is People's job now (F14 ·3), so this screen stays
  * about the worker and hands the drill-down off instead of growing a second
  * detail surface below the fold.
+ *
+ * Status/source filter on the server (the URL holds them), so a rare `error`
+ * row is found past the newest 200 rather than only inside them; search and
+ * paging run over the fetched rows.
  */
 export function RankTaskHistory() {
   const format = useFormatter();
-  const [status, setStatus] = useState("all");
-  const [source, setSource] = useState("all");
+  const router = useRouter();
+  const filters = useFilters(FILTER_DEFS);
+  const status = String(filters.values.status ?? "");
+  const source = String(filters.values.source ?? "");
   // Rows come back scoped to the workspace `apiFetch` injects — key on it so a
   // workspace switch refetches instead of showing the previous tenant's history.
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const query = useQuery({
-    queryKey: adminQueryKeys.rankFetchLog(workspaceId, status, source),
+    queryKey: adminQueryKeys.rankFetchLog(workspaceId, status || "all", source || "all"),
     queryFn: () =>
       adminService.getRankFetchLog({
-        status: status === "all" ? undefined : status,
-        source: source === "all" ? undefined : source,
-        limit: 50
+        status: status || undefined,
+        source: source || undefined,
+        limit: FETCH_LIMIT
       }),
     refetchInterval: 3000
   });
-  const rows = query.data ?? [];
+
+  const columns = useMemo<ColumnDef<RankFetchLogRow>[]>(
+    () => [
+      {
+        accessorKey: "created_at",
+        header: "Time",
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+            {formatDate(format, row.original.created_at)}
+          </span>
+        )
+      },
+      {
+        accessorKey: "battle_tag",
+        header: "Battle tag",
+        meta: columnMeta<RankFetchLogRow>({ searchValue: (row) => row.battle_tag }),
+        cell: ({ row }) =>
+          row.original.user_id != null ? (
+            <Link
+              href={`/admin/people/${row.original.user_id}`}
+              className="font-medium text-primary underline-offset-2 hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {row.original.battle_tag}
+            </Link>
+          ) : (
+            <span className="font-medium">{row.original.battle_tag}</span>
+          )
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <StatusBadge status={row.original.status} />
+      },
+      {
+        accessorKey: "source",
+        header: "Source",
+        cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.source}</span>
+      },
+      {
+        accessorKey: "snapshots_written",
+        header: "Snapshots",
+        meta: columnMeta<RankFetchLogRow>({ align: "right", numeric: true }),
+        cell: ({ row }) => row.original.snapshots_written || "—"
+      },
+      {
+        accessorKey: "error",
+        header: "Error",
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.error ? (
+            <span className="block max-w-64 truncate text-xs text-danger" title={row.original.error}>
+              {row.original.error}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )
+      }
+    ],
+    [format]
+  );
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-        <div className="flex items-center gap-2">
-          <CardTitle asChild>
-            <h2>Task history</h2>
-          </CardTitle>
-          <LiveIndicator />
-        </div>
-        <div className="flex items-center gap-2">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="h-8 w-36 text-xs" aria-label="Filter by status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_FILTERS.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {value === "all" ? "All statuses" : value}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={source} onValueChange={setSource}>
-            <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filter by source">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SOURCE_FILTERS.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {value === "all" ? "All sources" : value}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {query.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : rows.length === 0 ? (
-          <EmptyNote>
-            No fetch tasks recorded yet. The worker logs a row here each time it queries OverFast —
-            resume collection or collect a single player to see activity.
-          </EmptyNote>
-        ) : (
-          <div className="max-h-96 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Battle tag</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead className="text-right">Snapshots</TableHead>
-                  <TableHead>Error</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const href = row.user_id == null ? null : `/admin/people/${row.user_id}`;
-                  return (
-                    <ClickableLogRow key={row.id} href={href}>
-                      <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {formatDate(format, row.created_at)}
-                      </TableCell>
-                      <ClickableLogCell href={href} label={row.battle_tag} />
-                      <TableCell>
-                        <StatusBadge status={row.status} />
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{row.source}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">
-                        {row.snapshots_written || "—"}
-                      </TableCell>
-                      <TableCell
-                        className="max-w-64 truncate text-xs text-danger"
-                        title={row.error ?? undefined}
-                      >
-                        {row.error ?? "—"}
-                      </TableCell>
-                    </ClickableLogRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <section aria-labelledby="rank-task-history" className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 id="rank-task-history" className="font-semibold leading-none tracking-tight">
+          Task history
+        </h2>
+        <LiveIndicator />
+      </div>
+      <DataTable<RankFetchLogRow>
+        rows={query.data ?? []}
+        isLoading={query.isLoading}
+        columns={columns}
+        initialPageSize={20}
+        pageSizeOptions={[20, 50, 100, 200]}
+        searchPlaceholder="Search battle tags…"
+        filterKey={filters.filterKey}
+        toolbar={<FilterBar defs={FILTER_DEFS} filters={filters} />}
+        getRowId={(row) => String(row.id)}
+        emptyMessage={
+          filters.filterKey
+            ? "No fetch task matches these filters."
+            : "No fetch tasks recorded yet. The worker logs a row here each time it queries OverFast — resume collection or collect a single player to see activity."
+        }
+        onRowClick={(row) => {
+          if (row.original.user_id != null) router.push(`/admin/people/${row.original.user_id}`);
+        }}
+      />
+    </section>
   );
 }
