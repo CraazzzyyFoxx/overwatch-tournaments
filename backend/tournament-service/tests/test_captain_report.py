@@ -6,6 +6,7 @@ import importlib
 import os
 import sys
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
@@ -213,13 +214,6 @@ class CaptainReportValidation(IsolatedAsyncioTestCase):
                 session, _mk_user(), 10, home_score=2, away_score=1, closeness=5
             )
 
-    async def test_confirmed_encounter_rejects_report(self) -> None:
-        encounter = _mk_encounter(result_status=enums.EncounterResultStatus.CONFIRMED)
-        session = _mk_session(encounter, [100])
-        with assert_http_status(self, 400):
-            await captain_service.captain_service.submit_captain_report(
-                session, _mk_user(), 10, home_score=2, away_score=1, closeness=5
-            )
 
     async def test_stage_not_published_rejects_report(self) -> None:
         """A bracket generated ahead of the stage's activation (organizer
@@ -232,6 +226,65 @@ class CaptainReportValidation(IsolatedAsyncioTestCase):
 
 
 class CaptainReportFlow(IsolatedAsyncioTestCase):
+    async def test_late_reports_preserve_the_confirmed_result(self) -> None:
+        cases = [
+            [],
+            [_mk_report(team_id=2, home=1, away=2, closeness=8)],
+            [
+                _mk_report(team_id=1, home=2, away=0, closeness=3),
+                _mk_report(team_id=2, home=2, away=0, closeness=8, report_id=2),
+            ],
+        ]
+        for reports in cases:
+            with self.subTest(existing_teams=[report.team_id for report in reports]):
+                encounter = _mk_encounter(
+                    result_status=enums.EncounterResultStatus.CONFIRMED, captain_reports=reports
+                )
+                encounter.status = enums.EncounterStatus.COMPLETED
+                encounter.home_score, encounter.away_score = 2, 1
+                encounter.closeness = 0.7
+                encounter.confirmed_at = datetime(2026, 10, 3, tzinfo=UTC)
+                session = _mk_session(encounter, [100])
+
+                with (
+                    patch.object(
+                        captain_service.captain_service.finalize, "finalize_encounter_score", AsyncMock()
+                    ) as finalize,
+                    patch.object(
+                        captain_service.captain_service, "_enqueue_tournament_recalculation", AsyncMock()
+                    ) as recalc,
+                    patch.object(
+                        captain_service.captain_service, "_enqueue_encounter_completed", AsyncMock()
+                    ) as completed,
+                    patch.object(captain_service.sync_service, "auto_push_on_confirm", AsyncMock()) as push,
+                ):
+                    await captain_service.captain_service.submit_captain_report(
+                        session,
+                        _mk_user(),
+                        10,
+                        home_score=1,
+                        away_score=2,
+                        closeness=9,
+                        map_codes=[(1, "LATE")],
+                        comment="Late captain report",
+                    )
+
+                own = [report for report in encounter.captain_reports if report.team_id == 1]
+                self.assertEqual(1, len(own))
+                self.assertEqual((1, 2, 9), (own[0].home_score, own[0].away_score, own[0].closeness))
+                self.assertEqual("Late captain report", own[0].comment)
+                self.assertEqual(["LATE"], [code.code for code in own[0].map_codes])
+                self.assertEqual((2, 1), (encounter.home_score, encounter.away_score))
+                self.assertEqual(enums.EncounterResultStatus.CONFIRMED, encounter.result_status)
+                self.assertEqual(enums.EncounterStatus.COMPLETED, encounter.status)
+                self.assertEqual(0.7, encounter.closeness)
+                self.assertEqual(datetime(2026, 10, 3, tzinfo=UTC), encounter.confirmed_at)
+                self.assertEqual([], _audit_rows(session))
+                finalize.assert_not_awaited()
+                recalc.assert_not_awaited()
+                completed.assert_not_awaited()
+                push.assert_not_awaited()
+
     async def test_first_report_sets_pending_no_closeness(self) -> None:
         encounter = _mk_encounter()
         session = _mk_session(encounter, [100])  # home captain

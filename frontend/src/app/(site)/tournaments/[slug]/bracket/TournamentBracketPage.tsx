@@ -78,8 +78,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
     tournament,
     viewer,
     stageById,
-    encountersQueryKey: queryPlan.encounters.queryKey,
-    refetchEncounters: () => void encountersQuery.refetch()
+    encountersQueryKey: queryPlan.encounters.queryKey
   });
 
   const selection = selectBracketStages(stages, viewParam, queryPlan.initialStageId);

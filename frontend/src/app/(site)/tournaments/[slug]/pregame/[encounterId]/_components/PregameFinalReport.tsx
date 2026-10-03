@@ -47,10 +47,7 @@ interface PregameFinalReportProps {
  * and whatever custom fields the organizer configured.
  *
  * Anyone with nothing to file — a spectator, an admin who captains neither
- * side, a scrim captain, or a captain whose result the organizers already
- * confirmed — gets no notice card at all: the header above already carries the
- * score, the completed mark and the back arrow, so a "nothing left to decide"
- * panel only repeated it and pushed the ban record down.
+ * side, or a scrim captain — gets only the header and the series' ban record.
  *
  * Filing it returns the viewer to `returnTo` rather than the encounter page —
  * mid-tournament the room is opened from the bracket, and that is where the
@@ -69,11 +66,8 @@ export function PregameFinalReport({
   const t = useTranslations("pickBan.room");
   const router = useRouter();
 
-  const confirmed = encounter.result_status === "confirmed";
-  // Nothing for a spectator (or an admin who captains neither side) to file, and
-  // nothing to file once the organizers have confirmed the result or when the
-  // room belongs to a scrim: those viewers get the header and the ban record.
-  const settled = confirmed || viewerSide == null || !reportable;
+  // Captains may still file reports after the official result is confirmed.
+  const settled = viewerSide == null || !reportable;
 
   const back = (
     <Button variant="outline" asChild className="h-10 px-5 font-semibold">

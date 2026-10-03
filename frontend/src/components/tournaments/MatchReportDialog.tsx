@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
@@ -38,29 +37,6 @@ function MatchReportDialogBody({
   onOpenChange
 }: Readonly<Omit<MatchReportDialogProps, "open">>) {
   const t = useTranslations();
-
-  // Reachable only from stale data — the callers hide the report action on a
-  // confirmed result — so this states the reason instead of offering a form the
-  // server would refuse.
-  if (encounter.result_status === "confirmed") {
-    return (
-      <DialogContent className="max-w-md">
-        <DialogHeader className="space-y-1">
-          <DialogTitle className="text-[color:var(--aqt-fg)] text-lg font-bold tracking-tight">
-            {t("matchReport.confirmedLockedTitle")}
-          </DialogTitle>
-          <DialogDescription className="text-[color:var(--aqt-fg-muted)] text-sm font-semibold mt-1">
-            {t("matchReport.confirmedLockedBody")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="mt-6 flex flex-row items-center justify-end gap-2">
-          <Button onClick={() => onOpenChange(false)} className="h-10 px-5 font-bold">
-            {t("matchEdit.cancel")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    );
-  }
 
   return (
     <DialogContent className="max-w-lg">

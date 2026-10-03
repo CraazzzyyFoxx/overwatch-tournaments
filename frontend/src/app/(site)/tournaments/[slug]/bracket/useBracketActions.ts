@@ -63,7 +63,6 @@ type BracketActionsInput = {
   stageById: ReadonlyMap<number, StageSummary>;
   /** The encounters entry the optimistic slot swap writes through. */
   encountersQueryKey: QueryKey;
-  refetchEncounters: () => void;
 };
 
 /**
@@ -74,8 +73,7 @@ export function useBracketActions({
   tournament,
   viewer,
   stageById,
-  encountersQueryKey,
-  refetchEncounters
+  encountersQueryKey
 }: BracketActionsInput) {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -95,7 +93,6 @@ export function useBracketActions({
   const canEdit = isAdmin ? () => true : undefined;
   const canReport = isAuthenticated
     ? (encounter: Encounter) =>
-        encounter.result_status !== "confirmed" &&
         isEncounterCaptain(encounter) &&
         isStageReportable(
           encounter.stage_id == null ? undefined : stageById.get(encounter.stage_id)
@@ -111,16 +108,6 @@ export function useBracketActions({
             encounterService.getEncounter(encounter.id),
             captainService.getMyRole(encounter.id)
           ]);
-          if (fresh.result_status === "confirmed") {
-            // The result was confirmed after this bracket data was cached; the
-            // report action is no longer valid. Tell the captain why, then
-            // refresh so the stale report action disappears.
-            notify.error(t("matchReport.confirmedLockedTitle"), {
-              description: t("matchReport.confirmedLockedBody")
-            });
-            refetchEncounters();
-            return;
-          }
           if (role.side === null) {
             notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
             return;

@@ -1716,13 +1716,14 @@ describe("phase selection", () => {
     );
   }
 
-  it("asks a captain for the series report once nothing is left to pick or ban", async () => {
+  it.each(["none", "confirmed"] as const)("offers the final report for %s results", async (resultStatus) => {
     // The room used to end on a "nothing left to decide" notice and send
     // captains off to hunt for the report dialog elsewhere. The form belongs
     // here, prefilled with the score the room itself just collected map by map.
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 1,
+      result_status: resultStatus,
       score: { home: 1, away: 0 }
     } as unknown as Encounter);
     settledSeries("home");
