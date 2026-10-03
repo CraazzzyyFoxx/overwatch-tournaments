@@ -88,8 +88,8 @@ async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> 
 
 
 async def _assert_bracket_live(session: Any, encounter_id: int) -> None:
-    """Refuse a result or a reseat on a preview bracket: it is look-only until
-    its stage is activated. A missing encounter is left to the service to 404 on."""
+    """Refuse a result on a preview bracket until its stage is activated.
+    A missing encounter is left to the service to 404 on."""
     encounter = await enc_service.encounter_service.encounter_repo.get(session, encounter_id)
     if encounter is not None:
         await assert_encounter_live(session, encounter)
@@ -205,7 +205,6 @@ def register(broker: Any, logger: Any) -> None:
             encounter_id = _require_id(data)
             ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
             ensure_workspace_permission(user, ws_id, "match", "update")
-            await _assert_bracket_live(session, encounter_id)
             body = schemas.EncounterSwapSlotInput.model_validate(_payload(data))
             await record_admin_audit(
                 session,

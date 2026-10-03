@@ -316,7 +316,7 @@ Two report layers:
 1. **Per-game** (`EncounterMapReport`) — one side's claim about one game, at most one row per `(game, side)`. Two matching claims confirm the game with `result_source=captain_agreement` and drive the next ban opener; conflicting claims → `disputed` + organizer notification. A claim against a confirmed game is rejected (`result_locked`); changing it is the admin correction command, which requires a reason.
 2. **Series** (`EncounterCaptainReport`) — after the series. Once `confirmed`, only an admin can change it. Disabled form fields are dropped, not 422.
 
-A preview bracket rejects writes (409).
+A preview bracket rejects gameplay writes (409), including readiness, map choices and results. Organizers with `match.update` may swap team slots before publication; swaps still require open, unsettled encounters in the same stage.
 
 A **scrim** uses per-map reports to run the series engine but **does not write** `matches.match`; standings are not recalculated.
 
