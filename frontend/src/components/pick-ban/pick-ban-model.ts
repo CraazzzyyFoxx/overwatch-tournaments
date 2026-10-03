@@ -479,6 +479,32 @@ export function bannedEntries(pool: PickBanEntry[], round: number | null): PickB
   return pool.filter((entry) => entry.status === "banned" && inRound(entry, round));
 }
 
+/**
+ * Ids of the bans in `groups` that no longer bind `round`, the round in force.
+ *
+ * A round's board carries exactly the earlier bans whose `lifetime` still
+ * covers it, each naming its origin round, so an earlier ban is active iff
+ * `round` holds a ban of the same item from the same origin. The origin
+ * matters: a hero can be banned again once an earlier ban on it ran out.
+ */
+export function expiredBanIds(groups: PickBanRoundGroup[], round: number): Set<number> {
+  const origin = (entry: PickBanEntry) => `${entry.carried_from_round ?? entry.round}:${entry.item_id}`;
+  const active = new Set(
+    groups
+      .find((group) => group.round === round)
+      ?.entries.filter((entry) => entry.status === "banned")
+      .map(origin)
+  );
+  const expired = new Set<number>();
+  for (const group of groups) {
+    if (group.round >= round) continue;
+    for (const entry of group.entries) {
+      if (entry.status === "banned" && !active.has(origin(entry))) expired.add(entry.id);
+    }
+  }
+  return expired;
+}
+
 export type PickBanStatusLabelKey = `status.${PickBanEntryStatus | "remaining"}`;
 
 /**

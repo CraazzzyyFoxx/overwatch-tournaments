@@ -14,6 +14,7 @@ import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import type { PickBanEntry, PickBanEntryStatus, PickBanKind } from "@/types/tournament.types";
 
 import {
+  expiredBanIds,
   poolRoundGroups,
   roundState,
   statusLabelKey,
@@ -93,6 +94,12 @@ export function PickBanGrid({
   const tCommon = useTranslations("common");
   const [roleFilter, setRoleFilter] = useState<AqtRoleKey | "all">("all");
   const roundGroups = poolRoundGroups(pool);
+  // The round whose bans bind the lobby: the one in play, or the last once
+  // nothing is. Hero only — a map ban stops mattering once its slot is decided.
+  const inForceRound =
+    kind === "hero" && roundGroups ? (currentRound ?? roundGroups.at(-1)?.round ?? null) : null;
+  const expiredBans =
+    roundGroups && inForceRound != null ? expiredBanIds(roundGroups, inForceRound) : new Set<number>();
   const itemName = (itemId: number) =>
     itemsById[itemId]?.name ?? t(`${kind}.itemNumber`, { id: itemId });
   const roleOf = (itemId: number): AqtRoleKey | null =>
@@ -257,15 +264,19 @@ export function PickBanGrid({
     // Out of play for the rest of the round, whoever took it and however.
     const taken = entry.status !== "available" && !shielded;
     const carried = entry.carried_from_round;
+    // Banned on an earlier map, and its `lifetime` no longer reaches the round in force.
+    const expired = expiredBans.has(entry.id);
     const name = itemName(entry.item_id);
-    // Only a RULE or an origin gets to replace the name in the tooltip: a
-    // not-yet-open round already explains itself through `aria-describedby`,
-    // and the name is this tile's only label.
+    // Only a RULE, an expiry or an origin gets to replace the name in the
+    // tooltip: a not-yet-open round already explains itself through
+    // `aria-describedby`, and the name is this tile's only label.
     const note = status.ineligible
       ? t("rule.ineligible")
-      : carried != null
-        ? t("carried.tooltip", { n: carried })
-        : null;
+      : expired
+        ? t("round.banExpired")
+        : carried != null
+          ? t("carried.tooltip", { n: carried })
+          : null;
 
     return (
       <button
@@ -288,7 +299,8 @@ export function PickBanGrid({
             ? "cursor-pointer hover:border-[color:var(--aqt-teal)]/60 focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
             : "cursor-default",
           lockedRound != null ? "border-dashed opacity-55" : null,
-          status.ineligible ? "opacity-55 grayscale" : null
+          status.ineligible ? "opacity-55 grayscale" : null,
+          expired ? "opacity-45" : null
         )}
       >
         <HeroImage
@@ -302,7 +314,13 @@ export function PickBanGrid({
         />
         {taken ? (
           <span className="absolute inset-0 grid place-items-center" aria-hidden>
-            <Ban className="h-[70%] w-[70%] text-[color:var(--aqt-rose)]" strokeWidth={1.25} />
+            <Ban
+              className={cn(
+                "h-[70%] w-[70%]",
+                expired ? "text-[color:var(--aqt-fg-faint)]" : "text-[color:var(--aqt-rose)]"
+              )}
+              strokeWidth={1.25}
+            />
           </span>
         ) : null}
         {shielded ? (
@@ -382,6 +400,12 @@ export function PickBanGrid({
             // undefined for most rounds and the caption is skipped entirely
             // rather than rendered with nothing after it.
             const reserveItemId = slotReserves.get(group.round);
+            // How many of an earlier round's bans still bind the round in force.
+            const bans =
+              inForceRound != null && group.round < inForceRound
+                ? visibleEntries(group.entries).filter((entry) => entry.status === "banned")
+                : [];
+            const activeBans = bans.filter((entry) => !expiredBans.has(entry.id)).length;
             return (
               <div
                 key={group.round}
@@ -390,7 +414,22 @@ export function PickBanGrid({
                 aria-current={state === "current" ? "step" : undefined}
                 className="flex flex-col gap-2"
               >
-                <PickBanRoundLabel round={group.round} state={state} />
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                  <PickBanRoundLabel round={group.round} state={state} />
+                  {bans.length > 0 ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 text-xs",
+                        activeBans > 0
+                          ? "text-[color:var(--aqt-rose)]"
+                          : "text-[color:var(--aqt-fg-faint)]"
+                      )}
+                    >
+                      <Ban className="h-3 w-3" aria-hidden />
+                      {t("round.activeBans", { active: activeBans, total: bans.length })}
+                    </span>
+                  ) : null}
+                </div>
                 {locked ? (
                   <p
                     id={lockedHintId(group.round)}

@@ -20,6 +20,7 @@ import {
   carriedBanEntries,
   duplicateItemIds,
   eligibleItemIds,
+  expiredBanIds,
   gameAtPosition,
   groupItemsByRole,
   isSessionActive,
@@ -486,6 +487,30 @@ describe("carried and banned entries", () => {
     const flat = [entry({ item_id: 7, round: null, status: "banned" })];
     expect(bannedEntries(flat, 3).map((e) => e.item_id)).toEqual([7]);
     expect(bannedEntries(flat, null).map((e) => e.item_id)).toEqual([7]);
+  });
+});
+
+describe("expiredBanIds", () => {
+  // Round 1 bans 101 (lifetime 2) and 102 (lifetime 1); round 2 carries 101 and
+  // bans 102 afresh; round 3 is in force and still carries only round 2's 102.
+  const groups =
+    poolRoundGroups([
+      entry({ id: 1, item_id: 101, round: 1, status: "banned" }),
+      entry({ id: 2, item_id: 102, round: 1, status: "banned" }),
+      entry({ id: 3, item_id: 101, round: 2, status: "banned", carried_from_round: 1 }),
+      entry({ id: 4, item_id: 102, round: 2, status: "banned" }),
+      entry({ id: 5, item_id: 102, round: 3, status: "banned", carried_from_round: 2 }),
+      entry({ id: 6, item_id: 103, round: 3, status: "banned" }),
+      entry({ id: 7, item_id: 104, round: 3, status: "available" })
+    ]) ?? [];
+
+  it("expires an earlier ban the round in force no longer carries, wherever it is shown", () => {
+    expect([...expiredBanIds(groups, 3)].sort()).toEqual([1, 2, 3]);
+  });
+
+  it("keys by origin round, so a re-ban of the same hero does not revive the old one", () => {
+    expect(expiredBanIds(groups, 3).has(4)).toBe(false);
+    expect(expiredBanIds(groups, 2)).toEqual(new Set([2]));
   });
 });
 

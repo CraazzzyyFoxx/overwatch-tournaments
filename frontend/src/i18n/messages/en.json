@@ -3254,7 +3254,9 @@
         "upcoming": "opens later",
         "locked": "Round {n} opens once the earlier rounds are decided.",
         "inPlayCount": "{count, plural, one {# round in play} other {# rounds in play}}",
-        "reserve": "Regulation reserve on a draw: {item}"
+        "reserve": "Regulation reserve on a draw: {item}",
+        "activeBans": "{active, plural, =0 {bans no longer in force} other {# of {total} bans active}}",
+        "banExpired": "Ban expired, no longer in force"
       },
       "electOpener": {
         "title": "Choose who opens the next round",
