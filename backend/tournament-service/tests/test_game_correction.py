@@ -35,7 +35,7 @@ from src.services.encounter.game_correction import game_correction_service  # no
 from src.services.encounter.map_report import map_report_service  # noqa: E402
 from src.services.encounter.pick_ban_action import pick_ban_action_service  # noqa: E402
 from tests._pregame_store import _Store  # noqa: E402
-from tests.test_pregame_loop import _encounter, _hero_config, _map_config, _turn  # noqa: E402
+from tests.test_pregame_loop import _encounter, _hero_config, _map_config, _room_state, _turn  # noqa: E402
 
 ADMIN_ID = 909
 
@@ -61,14 +61,10 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
 
     # -- driving the room --------------------------------------------------
     async def map_state(self) -> dict:
-        return await pick_ban_action_service.get_pick_ban_state(
-            self.store, self.encounter_id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
-        )
+        return await _room_state(self.store, self.encounter_id, PickBanKind.MAP)
 
     async def hero_state(self) -> dict:
-        return await pick_ban_action_service.get_pick_ban_state(
-            self.store, self.encounter_id, PickBanKind.HERO, viewer_side=MapPickSide.HOME.value
-        )
+        return await _room_state(self.store, self.encounter_id, PickBanKind.HERO)
 
     async def ban_out_the_map_round(self) -> None:
         for _ in range(2):
@@ -242,7 +238,8 @@ class MaplessGameTests(IsolatedAsyncioTestCase):
         )
 
     async def test_a_planned_freeplay_position_cannot_be_admin_confirmed(self) -> None:
-        # No map config at all: reading the room opens position 1 with no map on it.
+        # No map config at all: the healer opens position 1 with no map on it.
+        await pick_ban_action_service.reconcile_room(self.store, self.encounter.id, skip_locked=False)
         state = await pick_ban_action_service.get_pick_ban_state(
             self.store, self.encounter.id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
         )

@@ -553,13 +553,15 @@ class UnavailableReasonTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(REASON_SLOT_UNDERFILLED, reason)
 
-    async def test_a_playable_flat_config_reports_not_configured(self) -> None:
+    async def test_a_playable_room_not_yet_opened_stays_on_the_readiness_screen(self) -> None:
+        """Every gate open, row not written yet: the healer is about to open it,
+        so the room must not flash the "no pick-ban here" card in between."""
         config = _config(mode=MapVetoMode.POOL, items=[11, 12, 13])
         session = _FakeSession(config=config)
 
         reason = await pick_ban_session_service.unavailable_reason(session, _encounter(best_of=9), PickBanKind.MAP)
 
-        self.assertEqual(REASON_NOT_CONFIGURED, reason)
+        self.assertEqual(REASON_NOT_READY, reason)
 
     async def test_the_two_slot_reasons_are_distinct_strings(self) -> None:
         self.assertNotEqual(REASON_SLOT_COUNT_MISMATCH, REASON_SLOT_UNDERFILLED)

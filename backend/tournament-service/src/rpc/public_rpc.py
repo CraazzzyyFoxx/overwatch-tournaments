@@ -19,8 +19,8 @@ Commit semantics: every write service called here commits internally
 (captain.submit_captain_report,
 pick_ban_action.perform_pick_ban_action, reg_service.create/update/withdraw/check_in,
 encounter service.upsert_saved_view/delete_saved_view), so the handlers add no
-extra commit. The pick-ban state read also commits when it lazily creates the
-encounter's session (pick_ban_session.ensure_pick_ban_session).
+extra commit. The pick-ban state read commits nothing at all: it is a pure
+read, and the room's healing belongs to ``encounter.room_reconcile``.
 
 
 The gateway passes path params as ``data["<name>"]`` (and the primary id as

@@ -59,6 +59,7 @@ from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
 from src.services.division_grid.import_jobs import process_import_job, recover_stale_import_jobs
+from src.services.encounter import room_reconcile
 from src.services.registration import sheet_sync
 from src.services.tournament import auto_transitions, recalculation_events
 from src.services.tournament.cache_invalidation import invalidate_tournament_resources
@@ -149,6 +150,16 @@ async def drain_outbox() -> None:
         published = await publish_pending_outbox_events(session, broker, limit=100, commit=True)
         if published:
             logger.info("Published {} outbox events", published)
+
+
+async def settle_due_pick_ban_rooms() -> None:
+    async with observe_scheduled_job("pick_ban_room_due"):
+        await room_reconcile.reconcile_due_rooms()
+
+
+async def sweep_stalled_pick_ban_rooms() -> None:
+    async with observe_scheduled_job("pick_ban_room_sweep"):
+        await room_reconcile.reconcile_stalled_rooms()
 
 
 async def sync_registration_google_sheet_feeds() -> None:
@@ -256,6 +267,12 @@ async def start_worker() -> None:
         id="division_grid_import_recovery",
     )
     scheduler.add_job(drain_outbox, "interval", seconds=1, id="event_outbox_drain")
+    # A step's timer running out is the only thing that moves a room with nobody
+    # writing anything, so it needs its own tick; the sweep catches rooms whose
+    # last mover committed in another service. Both take the encounter lock with
+    # SKIP LOCKED, which is what makes running them on every replica safe.
+    scheduler.add_job(settle_due_pick_ban_rooms, "interval", seconds=1, id="pick_ban_room_due")
+    scheduler.add_job(sweep_stalled_pick_ban_rooms, "interval", seconds=60, id="pick_ban_room_sweep")
     scheduler.add_job(
         sync_registration_google_sheet_feeds,
         "interval",

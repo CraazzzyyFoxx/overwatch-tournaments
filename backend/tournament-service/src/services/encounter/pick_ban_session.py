@@ -3,19 +3,25 @@ and grows it round by round.
 
 Round 1 resolves the config's ruleset (``shared.domain.pick_ban_rules``) for
 the first map of the series and creates that round's candidate entries. Round
-N+1 is appended lazily by
-:meth:`PickBanSessionService.advance_to_next_round` once map N's result is
-known -- compiled from the session's ruleset SNAPSHOT (design D6: an organizer
-editing the config mid-series must not change a running room's rules), with
-the still-active bans of earlier rounds re-created as fixed ``carried``
-entries (``lifetime``) and the rest of the pool filtered through the matched
-phase's ``pool_filter``.
+N+1 is appended by :meth:`PickBanSessionService.advance_to_next_round` once map
+N's result is known -- compiled from the session's ruleset SNAPSHOT (design D6:
+an organizer editing the config mid-series must not change a running room's
+rules), with the still-active bans of earlier rounds re-created as fixed
+``carried`` entries (``lifetime``) and the rest of the pool filtered through the
+matched phase's ``pool_filter``.
+
+Creating the session and growing it are both WRITES, reached from the room's own
+writes and from ``room_reconcile``'s healer -- never from the state read, which
+is pure. :meth:`PickBanSessionService.creation_plan` and
+:meth:`PickBanSessionService.hero_round_owed` are the healer's unlocked
+prechecks, and they are deliberately the same gates the writes themselves apply.
 
 Design: docs/plans/2026-09-28-pick-ban-constructor.md §5
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
@@ -61,6 +67,7 @@ from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.room_journal import record_room_event
+from src.services.encounter.room_reconcile import request_room_reconcile
 from src.services.encounter.veto_session import (
     REASON_BRACKET_PREVIEW,
     REASON_NOT_CONFIGURED,
@@ -123,7 +130,11 @@ def unavailable_reason_for(
         return REASON_NOT_READY
     if kind == PickBanKind.HERO and not map_round_one_settled:
         return REASON_WAITING_MAP
-    return REASON_NOT_CONFIGURED
+    # Every gate is open and the row is simply not written yet: the healer opens
+    # it right after the commit that lifted the last gate. Answer with the screen
+    # the captains are already on rather than ``not_configured``, which the room
+    # renders as "no pick-ban here" and would flash between "ready" and the board.
+    return REASON_NOT_READY
 
 
 def rounds_are_progressive(config: PickBanConfig, kind: PickBanKind) -> bool:
@@ -207,6 +218,21 @@ async def load_item_groups(session: AsyncSession, kind: PickBanKind, item_ids: l
         rows = await session.execute(select(Gamemode.id, Gamemode.slug).where(Gamemode.id.in_(gamemode_ids)))
         slugs = {row[0]: row[1] for row in rows.all()}
     return {row[0]: slugs.get(row[1]) for row in maps}
+
+
+@dataclass(frozen=True, slots=True)
+class CreationPlan:
+    """What round 1 of a room needs, once every gate on opening it said yes.
+
+    Returned rather than a bare ``bool`` so the unlocked precheck and the
+    creation itself run the exact same gates: the precheck throws the plan away,
+    the creation builds round 1 out of it."""
+
+    config: PickBanConfig
+    #: Slot mode's per-round candidate ids, trimmed to ``best_of``; ``None`` in
+    #: flat mode.
+    slots: list[list[int]] | None
+    slot_reserves: dict[str, int] | None
 
 
 class PickBanSessionService:
@@ -536,32 +562,46 @@ class PickBanSessionService:
         """
         return await self._ensure_pick_ban_session(session, encounter, kind, commit=commit)
 
-    async def _lock_encounter(self, session: AsyncSession, encounter_id: int) -> Encounter:
-        """Room mutation lock; discard the pre-lock encounter snapshot."""
+    async def _select_encounter_locked(
+        self, session: AsyncSession, encounter_id: int, *, skip_locked: bool
+    ) -> Encounter | None:
         result = await session.execute(
             select(Encounter)
             .where(Encounter.id == encounter_id)
             .options(selectinload(Encounter.stage))
-            .with_for_update()
+            .with_for_update(skip_locked=skip_locked)
             .execution_options(populate_existing=True)
         )
-        encounter = result.unique().scalars().first()
+        return result.unique().scalars().first()
+
+    async def _lock_encounter(self, session: AsyncSession, encounter_id: int) -> Encounter:
+        """Room mutation lock; discard the pre-lock encounter snapshot."""
+        encounter = await self._select_encounter_locked(session, encounter_id, skip_locked=False)
         if encounter is None:
             raise HTTPException(status_code=404, detail="Encounter not found")
         return encounter
 
-    async def _ensure_pick_ban_session(
-        self,
-        session: AsyncSession,
-        encounter: Encounter,
-        kind: PickBanKind,
-        *,
-        commit: bool,
-        encounter_locked: bool = False,
-    ) -> PickBanSession | None:
-        existing = await self.get_pick_ban_session(session, encounter.id, kind)
-        if existing is not None:
-            return existing
+    async def try_lock_encounter(self, session: AsyncSession, encounter_id: int) -> Encounter | None:
+        """:meth:`_lock_encounter` with SKIP LOCKED: ``None`` when another writer
+        already holds the row.
+
+        For the scheduled healers, which run on every replica at once and must
+        never queue: whoever holds the lock is mid-write on this very room, so
+        there is nothing a second healer could add by waiting for them.
+        """
+        return await self._select_encounter_locked(session, encounter_id, skip_locked=True)
+
+    async def creation_plan(
+        self, session: AsyncSession, encounter: Encounter, kind: PickBanKind
+    ) -> CreationPlan | None:
+        """Whether every gate on opening this room is open, and what round 1 needs.
+
+        One copy of the gates, because two callers ask them: creation itself and
+        the write-side healer's UNLOCKED precheck
+        (``PickBanActionService.room_owes_write``). A second copy would drift and
+        make the healer lock the encounter on every pass for a room creation then
+        refuses to open.
+        """
         # Not an error: this is the "is there a veto here" query the room polls,
         # and a lobby has no two sides to veto between.
         if encounter.format == EncounterFormat.FFA:
@@ -600,6 +640,29 @@ class PickBanSessionService:
         # hero round behind the same gate.
         if kind == PickBanKind.HERO and not await self.map_round_settled(session, encounter, 1):
             return None
+        return CreationPlan(config=config, slots=slots, slot_reserves=slot_reserves)
+
+    async def session_creation_owed(self, session: AsyncSession, encounter: Encounter, kind: PickBanKind) -> bool:
+        """Unlocked "does this room owe a session": no row yet, every gate open."""
+        if await self.get_pick_ban_session(session, encounter.id, kind) is not None:
+            return False
+        return await self.creation_plan(session, encounter, kind) is not None
+
+    async def _ensure_pick_ban_session(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        kind: PickBanKind,
+        *,
+        commit: bool,
+        encounter_locked: bool = False,
+    ) -> PickBanSession | None:
+        existing = await self.get_pick_ban_session(session, encounter.id, kind)
+        if existing is not None:
+            return existing
+        plan = await self.creation_plan(session, encounter, kind)
+        if plan is None:
+            return None
         if not encounter_locked:
             # A missing session has no row to lock. Lock its encounter only once
             # creation is actually owed, then repeat ALL gates and the existence
@@ -607,6 +670,7 @@ class PickBanSessionService:
             # unlocked; initialization and readiness/team resets serialize.
             encounter = await self._lock_encounter(session, encounter.id)
             return await self._ensure_pick_ban_session(session, encounter, kind, commit=commit, encounter_locked=True)
+        config, slots, slot_reserves = plan.config, plan.slots, plan.slot_reserves
 
         pool_size = sum(len(s) for s in slots) if slots is not None else len(config.items)
         seeds = await resolve_seeds(session, encounter)
@@ -799,6 +863,10 @@ class PickBanSessionService:
         await self.reset_readiness(session, encounter.id)
         for kind in (PickBanKind.MAP, PickBanKind.HERO):
             await self.sync_pick_ban_session_after_team_change(session, encounter, kind)
+        # A pairing that only just became complete emits nothing above (there was
+        # no session to reset), yet now owes one; the state read no longer opens
+        # it on the way past.
+        request_room_reconcile(session, encounter.id)
 
     async def advance_to_next_round(
         self,
@@ -1126,49 +1194,25 @@ class PickBanSessionService:
             return None
         return engine.map_outcome(game.accepted_home_score, game.accepted_away_score)
 
-    async def sync_hero_rounds(self, session: AsyncSession, encounter: Encounter, *, commit: bool = True) -> None:
-        """Keep the hero session's rounds in lockstep with the series: hero round
-        N opens once map N is picked AND position N-1 is confirmed, because
-        heroes are banned for a KNOWN map that is actually next (design §4, spec
-        V03).
+    async def hero_round_target(
+        self, session: AsyncSession, encounter: Encounter, *, encounter_locked: bool = False
+    ) -> int:
+        """How many hero rounds the series currently ALLOWS.
 
         With a map pool the ceiling is the lower of "maps the veto has picked"
         and "confirmed positions + 1": picking map N+1 early (a decider can
         settle it the moment round N's bans end) must not hand out its hero bans
         before map N has a result. In freeplay there is no veto to bound it, so
-        the confirmed count alone does; a complete series opens nothing.
+        the confirmed count alone does; a complete series allows none.
 
-        Lazy and read-triggered, like the room's other self-healing steps
-        (``auto_complete_decider``/``auto_resolve_timeout``): there is no event for
-        "a map just got picked", so the hero session catches up the next time
-        anyone reads or acts on it. One round per call in practice —
-        ``advance_to_next_round`` refuses to open round N+1 while round N is
-        unfinished, which is exactly the loop's own barrier.
-
-        Double-checked like the room's other self-healing steps: the unlocked read
-        below only answers "is a round owed at all", and the append itself runs
-        under the session lock. Unlocked, two simultaneous readers both saw the
-        round missing and both inserted its candidates — the round then offered
-        every hero twice.
+        Its own method because the healer's unlocked precheck and the append
+        itself must agree on the ceiling to the round -- a precheck that said
+        "owed" where the append says "no" would lock the encounter forever.
         """
-        await self._sync_hero_rounds(session, encounter, commit=commit)
-
-    async def _sync_hero_rounds(
-        self,
-        session: AsyncSession,
-        encounter: Encounter,
-        *,
-        commit: bool,
-        encounter_locked: bool = False,
-    ) -> None:
-        hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO)
-        if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:
-            return
         games = await self.games.list_games(session, encounter.id)
         score = self.games.live_score(games)
         if engine.series_complete(score, encounter.best_of):
-            return
-        confirmed = score.played
+            return 0
         map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
         map_session = await self.get_pick_ban_session(
             session, encounter.id, PickBanKind.MAP, for_update=encounter_locked
@@ -1181,11 +1225,87 @@ class PickBanSessionService:
             # now pick maps for themselves.
             and (map_session is None or map_session.status != MapVetoSessionStatus.CANCELLED)
         ):
-            target = min(await self.settled_map_rounds(session, encounter.id), confirmed + 1, int(encounter.best_of))
-        else:
-            target = min(confirmed + 1, int(encounter.best_of))
+            return min(await self.settled_map_rounds(session, encounter.id), score.played + 1, int(encounter.best_of))
+        return min(score.played + 1, int(encounter.best_of))
+
+    async def hero_round_owed(self, session: AsyncSession, encounter: Encounter) -> bool:
+        """Whether a hero round is owed AND ``advance_to_next_round`` would open it.
+
+        Deliberately as strict as the append itself: this is the healer's
+        UNLOCKED precheck, and a room that owes a round the append then declines
+        (its current round unfinished, the config gone, the rotation still
+        waiting on a result) would otherwise take the encounter lock on every
+        single pass, forever, and change nothing.
+        """
+        hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO)
+        if hero is None or hero.status == MapVetoSessionStatus.CANCELLED or hero.awaiting_choice:
+            return False
+        highest = await self.highest_round_of(session, hero) or 0
+        if highest >= await self.hero_round_target(session, encounter):
+            return False
+        # `config_id` is ``ondelete=SET NULL``: a deleted config can open nothing,
+        # and the append says so with a 422 the organizer sees when they act.
+        config = await self.load_config(session, hero.config_id) if hero.config_id else None
+        if config is None or not rounds_are_progressive(config, hero.kind):
+            return False
+        submissions = list(await self.submission_repo.list_by_session(session, hero.id))
+        if pbr.current_step(resolved_steps(hero), submissions) is not None:
+            return False  # the round in play still has steps left to take
+        next_round = highest + 1
+        if config.mode == MapVetoMode.SLOTS:
+            if next_round > len(sorted(config.slots, key=lambda s: s.position)[: encounter.best_of]):
+                return False
+        elif next_round > encounter.best_of:
+            return False
+        if (
+            next_round > 1
+            and config.first_ban_rotation
+            in (
+                FirstBanRotation.RESULT_WINNER_FIRST,
+                FirstBanRotation.RESULT_LOSER_FIRST,
+                FirstBanRotation.RESULT_LOSER_CHOICE,
+            )
+            and await self.map_round_outcome(session, encounter, highest) is None
+        ):
+            return False  # owed until the previous position is confirmed
+        return True
+
+    async def sync_hero_rounds(self, session: AsyncSession, encounter: Encounter, *, commit: bool = True) -> bool:
+        """Keep the hero session's rounds in lockstep with the series: hero round
+        N opens once map N is picked AND position N-1 is confirmed, because
+        heroes are banned for a KNOWN map that is actually next (design §4, spec
+        V03). Returns whether anything was appended.
+
+        The ceiling is :meth:`hero_round_target`. One round per call in practice
+        — ``advance_to_next_round`` refuses to open round N+1 while round N is
+        unfinished, which is exactly the loop's own barrier.
+
+        WRITE-side only: there is no event for "a map just got picked", so this
+        runs from the room's own writes and from the reconciler that follows
+        every room commit (``room_reconcile``). The room's state READ never calls
+        it -- a viewer's poll must not take the encounter lock.
+
+        Double-checked: the unlocked read below only answers "is a round owed at
+        all", and the append itself runs under the session lock. Unlocked, two
+        simultaneous callers both saw the round missing and both inserted its
+        candidates — the round then offered every hero twice.
+        """
+        return await self._sync_hero_rounds(session, encounter, commit=commit)
+
+    async def _sync_hero_rounds(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        *,
+        commit: bool,
+        encounter_locked: bool = False,
+    ) -> bool:
+        hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO)
+        if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:
+            return False
+        target = await self.hero_round_target(session, encounter, encounter_locked=encounter_locked)
         if (await self.highest_round_of(session, hero) or 0) >= target:
-            return
+            return False
         if not encounter_locked:
             # Append/journal writes must use encounter -> session, just like
             # the action paths. Repeat the series/map ceiling after waiting:
@@ -1200,7 +1320,8 @@ class PickBanSessionService:
 
         hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO, for_update=True)
         if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:
-            return
+            return False
+        changed = False
         highest = await self.highest_round_of(session, hero) or 0
         while highest < target:
             outcome = await self.map_round_outcome(session, encounter, highest)
@@ -1214,13 +1335,16 @@ class PickBanSessionService:
                     MapPickSide.AWAY.value if outcome == MapPickSide.HOME.value else MapPickSide.HOME.value
                 )
                 await session.flush()
+                changed = True
                 break
             appended = await self.highest_round_of(session, hero) or 0
             if appended <= highest:
                 break  # the append declined (round unfinished, or the config/series ran out)
             highest = appended
+            changed = True
         if commit:
             await session.commit()
+        return changed
 
 
 pick_ban_session_service = PickBanSessionService()

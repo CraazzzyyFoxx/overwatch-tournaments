@@ -1,6 +1,7 @@
 """The live pick-ban runtime: the cursor, the two ways a side answers a step
-(``act`` for an open step, ``submit`` for a blind one), the self-healing the
-room's reads perform, and the state payload the room renders.
+(``act`` for an open step, ``submit`` for a blind one), the write-side healing
+that keeps the room in step with its own rules, and the state payload the room
+renders.
 
 Submissions are the source of truth (design D2/D3): every mutation writes a
 ``PickBanSubmission`` and then RE-PROJECTS ``PickBanEntry`` from the whole log,
@@ -8,12 +9,17 @@ so the board can never drift from the actions behind it and a reopened step
 (dispute / admin) simply replaces its rows. The cursor is derived the same way
 -- there is no step counter column to get out of step with the entries.
 
-``_settle`` is the one place the room heals itself: it resolves ``system``
-steps, expires a step whose timer ran out under its ``on_timeout`` policy,
-reveals a blind step once every side has locked, and restarts the clock
-whenever the current step changes. It runs before every mutation and on every
-read, under the session lock, exactly as v1's ``auto_resolve_timeout`` /
-``auto_complete_decider`` pair did.
+``_settle`` resolves ``system`` steps, expires a step whose timer ran out under
+its ``on_timeout`` policy, reveals a blind step once every side has locked, and
+restarts the clock whenever the current step changes. It runs before every
+mutation and inside ``reconcile_room``, under the session lock.
+
+``get_pick_ban_state`` is a PURE READ -- no row lock, no write, no commit, no
+signal. Healing it would otherwise do lives in :meth:`PickBanActionService.
+reconcile_room`, driven by ``room_reconcile``: a post-commit trigger after
+every room write plus two scheduled sweeps. A viewer's poll taking the
+encounter's row lock put every spectator behind the captains and behind each
+other, which is what this split exists to prevent.
 
 Design: docs/plans/2026-09-28-pick-ban-constructor.md §5, §7, §9.
 """
@@ -29,7 +35,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
-from shared.core.enums import EncounterGameState, MapVetoSessionStatus, PickBanKind
+from shared.core.enums import EncounterGameState, EncounterStatus, MapVetoSessionStatus, PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid
 from shared.domain import pick_ban_engine as engine
@@ -317,18 +323,31 @@ class PickBanActionService:
         deadline = self.step_deadline(pick_ban, step)
         return deadline is not None and datetime.now(UTC) >= deadline
 
-    def _pending(self, rt: _Runtime) -> bool:
-        """Whether a plain READ owes this room a mutation. Cheap and unlocked:
-        the decision itself is re-made under the lock, and the overwhelmingly
-        common answer on a poll is "nothing to do"."""
-        if str(rt.pick_ban.status) == MapVetoSessionStatus.CANCELLED:
+    def session_pending(
+        self,
+        pick_ban: PickBanSession,
+        steps: list[pbr.ResolvedStep],
+        submissions: list[PickBanSubmission],
+    ) -> bool:
+        """Whether ``_settle`` would move this session. Cheap and unlocked: the
+        decision itself is re-made under the lock, and the overwhelmingly common
+        answer is "nothing to do".
+
+        Takes the three rows it actually reads rather than a ``_Runtime`` so the
+        due-room scheduler can ask it of hundreds of sessions off two batched
+        queries, instead of loading each room's entries, groups and rosters.
+        """
+        if str(pick_ban.status) == MapVetoSessionStatus.CANCELLED:
             return False
-        step = pbr.current_step(rt.steps, rt.submissions)
+        step = pbr.current_step(steps, submissions)
         if step is None:
-            return str(rt.pick_ban.status) != MapVetoSessionStatus.COMPLETED
-        if str(rt.pick_ban.status) == MapVetoSessionStatus.COMPLETED:
+            return str(pick_ban.status) != MapVetoSessionStatus.COMPLETED
+        if str(pick_ban.status) == MapVetoSessionStatus.COMPLETED:
             return True
-        return step.is_system or pbr.ready_to_reveal(step, rt.submissions) or self._expired(rt.pick_ban, step)
+        # A ``wait`` step outlives its timer by design: ``_settle`` never expires
+        # it, so counting it as due would lock the room on every tick for nothing.
+        expired = step.on_timeout != "wait" and self._expired(pick_ban, step)
+        return step.is_system or pbr.ready_to_reveal(step, submissions) or expired
 
     @staticmethod
     def _writable_attempt(rt: _Runtime, step_index: int) -> int:
@@ -826,11 +845,17 @@ class PickBanActionService:
             games = await self.games.list_games(session, encounter.id)
         return games, await self.games.reports_by_game(session, games)
 
-    async def _series_state(self, session: AsyncSession, encounter: Encounter) -> GameSnapshot:
-        """Freeplay offers one position at a time, only for a playable room."""
-        snapshot = await self._game_snapshot(session, encounter)
-        games, _ = snapshot
-        if (
+    async def freeplay_owed(self, session: AsyncSession, encounter: Encounter) -> bool:
+        """Whether the series owes freeplay its next position.
+
+        Freeplay offers ONE position at a time, only for a playable room, and
+        only while no map session owns the positions instead.
+        """
+        map_session = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
+        if map_session is not None and str(map_session.status) != MapVetoSessionStatus.CANCELLED:
+            return False
+        games = await self.games.list_games(session, encounter.id)
+        return (
             encounter.home_team_id is not None
             and encounter.away_team_id is not None
             and len(games) < encounter.best_of
@@ -845,31 +870,146 @@ class PickBanActionService:
                 for game in games
             )
             and await is_encounter_live(session, encounter)
-        ):
-            # No row exists to lock for a new position. Refresh the encounter,
-            # then let ensure_freeplay_game recheck the games under that lock.
-            encounter = await self.sessions._lock_encounter(session, encounter.id)
-            snapshot = await self._game_snapshot(session, encounter, refresh=True)
-            map_session = await self.sessions.get_pick_ban_session(
-                session, encounter.id, PickBanKind.MAP, for_update=True
-            )
-            if map_session is not None and str(map_session.status) != MapVetoSessionStatus.CANCELLED:
-                # A concurrent bootstrap/reset opened the map room while this
-                # reader waited; it, not freeplay, now owns the positions.
-                return snapshot
-            if (
-                encounter.home_team_id is not None
-                and encounter.away_team_id is not None
-                and await is_encounter_live(session, encounter)
-            ):
+        )
+
+    # -- the write-side healer ---------------------------------------------
+    async def room_owes_write(self, session: AsyncSession, encounter: Encounter) -> bool:
+        """Whether anything about this room is out of step with its own rules.
+
+        Entirely UNLOCKED, and ordered cheapest-first so a steady room -- the
+        overwhelmingly common case on both scheduled sweeps -- answers ``False``
+        without ever reaching for a row lock. Every branch mirrors exactly what
+        :meth:`reconcile_room` would then do; one that did not would make the
+        healer take the encounter lock on every tick and change nothing.
+        """
+        for kind in (PickBanKind.MAP, PickBanKind.HERO):
+            pick_ban = await self.sessions.get_pick_ban_session(session, encounter.id, kind)
+            if pick_ban is None:
+                if await self.sessions.creation_plan(session, encounter, kind) is not None:
+                    return True
+                continue
+            if str(pick_ban.status) == MapVetoSessionStatus.CANCELLED:
+                continue
+            rt_steps = resolved_steps(pick_ban)
+            submissions = list(await self.submission_repo.list_by_session(session, pick_ban.id))
+            if self.session_pending(pick_ban, rt_steps, submissions):
+                return True
+            if kind == PickBanKind.MAP:
+                entries = list(await self.entry_repo.list_by_session(session, pick_ban.id, ordered=True))
+                games, reports = await self._game_snapshot(session, encounter)
+                changes, stale = self.games._pick_game_changes(entries, games, reports)
+                if changes or stale:
+                    return True
+        if await self.sessions.hero_round_owed(session, encounter):
+            return True
+        return await self.freeplay_owed(session, encounter)
+
+    async def reconcile_room(self, session: AsyncSession, encounter_id: int, *, skip_locked: bool) -> bool:
+        """Apply every heal this room owes, under the encounter lock, and publish
+        what changed. Returns whether anything did.
+
+        This is the ONLY place the room heals itself. The state read is pure
+        (design: a viewer's poll must never queue behind a captain's write), so
+        every "a map just got picked", "the clock ran out", "the series owes a
+        position" catches up here -- after every room write (``room_reconcile``'s
+        post-commit trigger) and on its two scheduled sweeps.
+
+        ``skip_locked`` is for those sweeps: both tournament-service replicas run
+        them, and a room another writer already holds needs no second healer.
+
+        Lock order is the room's everywhere: encounter, then session.
+        """
+        encounter = await self.encounter_repo.get(session, encounter_id)
+        # A finished match's room is history: a session abandoned mid-veto must
+        # not be random-filled to completion (and grow games) months later.
+        if encounter is None or encounter.status == EncounterStatus.COMPLETED:
+            return False
+        if not await self.room_owes_write(session, encounter):
+            return False
+        locked_encounter = (
+            await self.sessions.try_lock_encounter(session, encounter_id)
+            if skip_locked
+            else await self.sessions._lock_encounter(session, encounter_id)
+        )
+        if locked_encounter is None:
+            return False
+        encounter = locked_encounter
+
+        changed: set[str] = set()
+        map_session = await self._reconcile_map(session, encounter, changed)
+        if map_session is None or str(map_session.status) == MapVetoSessionStatus.CANCELLED:
+            # Only once the map room is known not to own the positions: a
+            # concurrent bootstrap may have opened it while this healer waited.
+            if await self.freeplay_owed(session, encounter):
                 try:
                     async with session.begin_nested():
                         await self.games.ensure_freeplay_game(session, encounter)
-                    await session.commit()
+                    changed.add(PickBanKind.MAP.value)
                 except IntegrityError:
+                    # Another writer opened the same position first; its row is
+                    # the one the room reports against.
                     pass
-                snapshot = await self._game_snapshot(session, encounter)
-        return snapshot
+        await self._reconcile_hero(session, encounter, changed)
+        if not changed:
+            # Nothing to keep -- and nothing to go on holding the encounter for.
+            # A sweep walks hundreds of rooms on one session; a lock left open
+            # here would be held for the rest of it.
+            await session.rollback()
+            return False
+        await session.flush()
+        for kind_value in sorted(changed):
+            await emit_pick_ban_update(session, encounter.id, kind=kind_value)
+        await session.commit()
+        return True
+
+    async def _reconcile_map(
+        self, session: AsyncSession, encounter: Encounter, changed: set[str]
+    ) -> PickBanSession | None:
+        """Open the map room if it is owed, settle it, and keep the series' games
+        in step with its picks. Returns the map session, if any."""
+        existed = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.MAP) is not None
+        map_session = await self.sessions._ensure_pick_ban_session(
+            session, encounter, PickBanKind.MAP, commit=False, encounter_locked=True
+        )
+        if map_session is None:
+            return None
+        if not existed:
+            changed.add(PickBanKind.MAP.value)
+        if str(map_session.status) == MapVetoSessionStatus.CANCELLED:
+            return map_session
+        locked = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.MAP, for_update=True)
+        if locked is None:
+            return None  # a concurrent reset dropped it
+        rt = await self._load(session, locked, encounter, refresh=True)
+        if await self._settle(session, rt):
+            changed.add(PickBanKind.MAP.value)
+        await session.flush()
+        games, reports = await self._game_snapshot(session, encounter, refresh=True)
+        plan, stale = self.games._pick_game_changes(rt.entries, games, reports)
+        if plan or stale:
+            await self.games._sync_games_with_snapshot(session, encounter, rt.entries, games, reports)
+            changed.add(PickBanKind.MAP.value)
+        return locked
+
+    async def _reconcile_hero(self, session: AsyncSession, encounter: Encounter, changed: set[str]) -> None:
+        """Open the hero room if it is owed, grow its rounds with the series, and
+        settle it."""
+        existed = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.HERO) is not None
+        hero = await self.sessions._ensure_pick_ban_session(
+            session, encounter, PickBanKind.HERO, commit=False, encounter_locked=True
+        )
+        if hero is None:
+            return
+        if not existed:
+            changed.add(PickBanKind.HERO.value)
+        if await self.sessions._sync_hero_rounds(session, encounter, commit=False, encounter_locked=True):
+            changed.add(PickBanKind.HERO.value)
+        locked = await self.sessions.get_pick_ban_session(session, encounter.id, PickBanKind.HERO, for_update=True)
+        if locked is None or str(locked.status) == MapVetoSessionStatus.CANCELLED:
+            return
+        rt = await self._load(session, locked, encounter, refresh=True)
+        if await self._settle(session, rt):
+            changed.add(PickBanKind.HERO.value)
 
     async def get_pick_ban_state(
         self,
@@ -879,54 +1019,36 @@ class PickBanActionService:
         *,
         viewer_side: str | None = None,
     ) -> dict[str, Any]:
+        """The room as it stands RIGHT NOW. A pure read: no lock, no write, no
+        commit, no signal.
+
+        It used to heal the room it was about to render, which put every viewer's
+        poll behind the encounter's row lock -- and so behind the captains and
+        behind each other. Whatever this read finds un-healed is owed to
+        :meth:`reconcile_room`, which runs after every room write and on a one-
+        second sweep, and which signals the room when it lands.
+        """
         encounter = await self.encounter_repo.get(session, encounter_id)
         if encounter is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
 
         readiness = await self.sessions.get_readiness(session, encounter_id)
-        pick_ban = await self.sessions.ensure_pick_ban_session(session, encounter, kind)
-        if kind == PickBanKind.HERO and pick_ban is not None:
-            # Heroes are banned per map, one round at a time, and nothing pushes
-            # "a map just got picked" -- so the hero session catches up with the
-            # map phase here, on the read that is about to render it.
-            await self.sessions.sync_hero_rounds(session, encounter)
+        pick_ban = await self.sessions.get_pick_ban_session(session, encounter_id, kind)
         if pick_ban is None:
             # Names WHY rather than 400-ing the room: see
-            # pick_ban_session.unavailable_reason.
+            # pick_ban_session.unavailable_reason. A room whose gates have all
+            # opened but whose session the reconciler has not created yet reads
+            # as `not_ready` for that moment -- the screen the captains are on.
             reason = await self.sessions.unavailable_reason(session, encounter, kind)
             state = build_unavailable_state(reason, readiness=readiness)
             if kind == PickBanKind.MAP:
-                games, reports = await self._series_state(session, encounter)
+                games, reports = await self._game_snapshot(session, encounter)
                 state["games"] = [self.games.serialize(game, reports.get(game.id, [])) for game in games]
                 state["series"] = self.games.serialize_series(encounter, games)
             return state
 
         rt = await self._load(session, pick_ban, encounter)
-        snapshot: GameSnapshot | None = None
-        if self._pending(rt):
-            # Double-checked: the unlocked read above only answers "is something
-            # owed at all"; the decision is re-made under the lock, where another
-            # reader may already have settled it.
-            # Steady reads never enter here. Mutations follow the same
-            # encounter -> session order as captain/admin writes and hero sync.
-            encounter = await self.sessions._lock_encounter(session, encounter_id)
-            locked = await self.sessions.get_pick_ban_session(session, encounter_id, kind, for_update=True)
-            if locked is None:
-                # A reset deleted the snapshot while this reader waited.
-                return await self.get_pick_ban_state(session, encounter_id, kind, viewer_side=viewer_side)
-            rt = await self._load(session, locked, encounter, refresh=True)
-            if await self._settle(session, rt):
-                await session.flush()
-                if kind == PickBanKind.MAP:
-                    snapshot = await self._game_snapshot(session, encounter, refresh=True)
-                    games, reports = snapshot
-                    games = await self.games._sync_games_with_snapshot(session, encounter, rt.entries, games, reports)
-                    snapshot = games, reports
-                await emit_pick_ban_update(session, encounter_id, kind=kind.value)
-                await session.commit()
-        return await self._build_state(
-            session, rt, kind, readiness=readiness, viewer_side=viewer_side, snapshot=snapshot
-        )
+        return await self._build_state(session, rt, kind, readiness=readiness, viewer_side=viewer_side)
 
     async def _build_state(
         self,
@@ -936,32 +1058,10 @@ class PickBanActionService:
         *,
         readiness: dict[str, bool],
         viewer_side: str | None,
-        snapshot: GameSnapshot | None = None,
     ) -> dict[str, Any]:
-        if snapshot is None:
-            if kind == PickBanKind.MAP and str(rt.pick_ban.status) == MapVetoSessionStatus.CANCELLED:
-                snapshot = await self._series_state(session, rt.encounter)
-            else:
-                snapshot = await self._game_snapshot(session, rt.encounter)
-        games, reports = snapshot
-        if kind == PickBanKind.MAP and str(rt.pick_ban.status) != MapVetoSessionStatus.CANCELLED:
-            changes, stale = self.games._pick_game_changes(rt.entries, games, reports)
-            if changes or stale:
-                encounter = await self.sessions._lock_encounter(session, rt.encounter.id)
-                locked = await self.sessions.get_pick_ban_session(session, encounter.id, kind, for_update=True)
-                if locked is None:
-                    return await self.get_pick_ban_state(session, encounter.id, kind, viewer_side=viewer_side)
-                rt = await self._load(session, locked, encounter, refresh=True)
-                if str(locked.status) == MapVetoSessionStatus.CANCELLED:
-                    games, reports = await self._series_state(session, encounter)
-                else:
-                    games, reports = await self._game_snapshot(session, encounter, refresh=True)
-                    changes, stale = self.games._pick_game_changes(rt.entries, games, reports)
-                    if changes or stale:
-                        games = await self.games._sync_games_with_snapshot(
-                            session, encounter, rt.entries, games, reports
-                        )
-                        await session.commit()
+        """Render ``rt``. Pure: the room is rendered as it is, never as it ought
+        to be -- drift is :meth:`reconcile_room`'s to fix."""
+        games, reports = await self._game_snapshot(session, rt.encounter)
         blocked_rounds = frozenset(
             game.position for game in games if game.state == EncounterGameState.CONFIRMED or reports.get(game.id)
         )

@@ -82,6 +82,7 @@ from src.services.admin.stage_common import (
 )
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
+from src.services.encounter.room_reconcile import request_stage_reconcile
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
@@ -1247,6 +1248,11 @@ class AdminStageService:
         # stays -- reportable/veto-able from here on (see ``shared.services.
         # bracket.usability.is_encounter_live``).
         stage.is_published = True
+        # That flag IS the room's "is this bracket live" gate, so activation is
+        # what makes a preview stage's encounters owe their pick-ban sessions.
+        # Nothing else about them is written here, and the room's state read no
+        # longer opens a session on the way past.
+        request_stage_reconcile(session, stage.id)
 
         source_item_ids = {
             inp.source_stage_item_id

@@ -46,6 +46,7 @@ from src.services.encounter import pick_ban_config, room_control, room_journal
 from src.services.encounter import pick_ban_session as pick_ban_session
 from src.services.encounter.game_correction import game_correction_service
 from src.services.encounter.pregame_rooms import pregame_rooms_service
+from src.services.encounter.room_reconcile import request_tournament_reconcile
 
 _serialize_config = pick_ban_config.serialize_pick_ban_config
 
@@ -306,6 +307,10 @@ def register(broker: Any, logger: Any) -> None:
                 },
             )
             payload = _serialize_config(config)
+            # The cascade this config sits in decides which encounters owe a
+            # room; nothing about those encounters is written here for the
+            # ordinary per-room trigger to ride on.
+            request_tournament_reconcile(session, tournament_id)
             await session.commit()
             return payload
 
@@ -337,7 +342,11 @@ def register(broker: Any, logger: Any) -> None:
                     "mode": config.mode,
                 },
             )
+            tournament_id = config.tournament_id
             await pick_ban_config.pick_ban_config_service.delete_config(session, config_id)
+            # A deleted config can close rooms the cascade now resolves
+            # elsewhere -- same reason as the upsert above.
+            request_tournament_reconcile(session, tournament_id)
             await session.commit()
             return {"deleted": True}
 
