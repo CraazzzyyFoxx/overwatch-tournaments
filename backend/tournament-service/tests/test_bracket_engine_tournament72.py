@@ -750,15 +750,16 @@ class ConcurrentResultEditingTournament72Tests(IsolatedAsyncioTestCase):
         self.completed.assert_not_awaited()
         self.assertEqual([enums.EncounterResultAuditAction.AUTO_DISPUTE], _audit_actions(self.added))
 
-    async def test_confirmed_result_is_immutable_for_captains(self) -> None:
+    async def test_late_captain_report_does_not_change_confirmed_result(self) -> None:
         await self._report(LITNIK_CAPTAIN, 0, 3)
         await self._report(AVERET_CAPTAIN, 0, 3)
         self.assertEqual(enums.EncounterResultStatus.CONFIRMED, self.encounter.result_status)
 
+        # Late reports are accepted as evidence but never recompute a confirmed result.
         for player in (LITNIK_CAPTAIN, AVERET_CAPTAIN):
-            with _assert_http_status(self, 400):
-                await self._report(player, 3, 0)
+            await self._report(player, 3, 0)
         self.assertEqual((0, 3), (self.encounter.home_score, self.encounter.away_score))
+        self.assertEqual(1, self.completed.await_count)
         self.assertEqual(enums.EncounterResultStatus.CONFIRMED, self.encounter.result_status)
 
     async def test_admin_confirm_resolves_dispute(self) -> None:
