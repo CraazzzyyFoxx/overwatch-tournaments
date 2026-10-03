@@ -259,6 +259,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
             }}
             encounter={actions.editEncounter}
             canEditStructure={viewer.canEditStructure}
+            stageType={stageById.get(actions.editEncounter.stage_id ?? -1)?.stage_type ?? null}
           />
         )}
 

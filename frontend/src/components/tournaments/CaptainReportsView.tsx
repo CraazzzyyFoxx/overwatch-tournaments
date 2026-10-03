@@ -22,7 +22,8 @@ interface CaptainReportsViewProps {
   className?: string;
 }
 
-function pickReport(
+/** One side's report: by `side`, falling back to the team for a report filed before sides were stored. */
+export function pickReport(
   reports: CaptainReport[],
   side: "home" | "away",
   teamId: number

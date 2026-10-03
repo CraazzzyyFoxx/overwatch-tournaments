@@ -26,18 +26,13 @@ import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import { stageNeedsWinner } from "@/lib/encounter/score";
 
 /**
  * How the score is decided. Mirrors the server's resolution order so what the
  * dialog previews is what the server stores — the two must not drift.
  */
 type Mode = "adopt_home" | "adopt_away" | "manual";
-
-/** Stages that cannot end level — the finalizer rejects a draw on these. */
-const NEEDS_A_WINNER: Record<string, true> = {
-  single_elimination: true,
-  double_elimination: true
-};
 
 export interface ResolveResultDialogProps {
   row: EncounterReportsRow | null;
@@ -281,10 +276,7 @@ function ResolveForm({
   // a 400. Blocking here means the admin learns it while the score is still in
   // front of them, rather than after a round trip.
   const drawBlocked =
-    preview != null &&
-    preview.home === preview.away &&
-    row.stage_type != null &&
-    NEEDS_A_WINNER[row.stage_type] === true;
+    preview != null && preview.home === preview.away && stageNeedsWinner(row.stage_type);
 
   const closenessNumber = closeness === "" ? null : Number(closeness);
   const closenessInvalid =

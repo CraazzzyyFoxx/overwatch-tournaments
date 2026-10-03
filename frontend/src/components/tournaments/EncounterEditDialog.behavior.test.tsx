@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "@/i18n/messages/en.json";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
-import type { Encounter } from "@/types/encounter.types";
+import type { CaptainReport, Encounter } from "@/types/encounter.types";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -19,12 +19,13 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const updateEncounter = vi.fn();
+const setEncounterResult = vi.fn();
 const getReports = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
     updateEncounter: (...args: unknown[]) => updateEncounter(...args),
-    setEncounterResult: vi.fn(),
+    setEncounterResult: (...args: unknown[]) => setEncounterResult(...args),
     reopenEncounterResult: vi.fn()
   }
 }));
@@ -116,8 +117,127 @@ beforeEach(() => {
   document.body.innerHTML = "";
   updateEncounter.mockReset();
   updateEncounter.mockResolvedValue(encounter());
+  setEncounterResult.mockReset();
+  setEncounterResult.mockResolvedValue(encounter());
   getReports.mockReset();
   getReports.mockResolvedValue({ reports: [], form: undefined });
+});
+
+function report(overrides: Partial<CaptainReport> = {}): CaptainReport {
+  return {
+    id: 1,
+    encounter_id: 42,
+    team_id: 1,
+    side: "home",
+    reporter_user_id: 5,
+    home_score: 2,
+    away_score: 0,
+    closeness: null,
+    map_codes: [],
+    comment: null,
+    custom_fields: {},
+    created_at: null,
+    updated_at: null,
+    ...overrides
+  };
+}
+
+function findButton(label: string): HTMLButtonElement | undefined {
+  return Array.from(document.body.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === label
+  );
+}
+
+function confirmLabel(home: number, away: number): string {
+  return messages.matchEdit.confirmScore.replace("{home}", String(home)).replace("{away}", String(away));
+}
+
+async function click(button: HTMLButtonElement | undefined) {
+  if (!button) throw new Error("button not rendered");
+  await act(async () => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await flush();
+}
+
+describe("EncounterEditDialog result", () => {
+  it("saves the settings without touching the score", async () => {
+    // Save used to carry the score: on a pending match it wrote a number that
+    // never completed anything, on a completed one it flipped the winner
+    // behind the bracket's back.
+    await mount(<EncounterEditDialog open onOpenChange={() => {}} encounter={encounter()} />);
+    await clickSave();
+
+    const payload = updateEncounter.mock.calls[0]?.[1];
+    expect(payload).not.toHaveProperty("home_score");
+    expect(payload).not.toHaveProperty("away_score");
+    expect(payload).not.toHaveProperty("closeness");
+  });
+
+  it("opens on the only captain report and confirms by adopting it", async () => {
+    // The encounter stays 0:0 until a result is confirmed, so a dialog that
+    // opened on its own score confirmed a 0:0 draw nobody played.
+    getReports.mockResolvedValue({ reports: [report()], form: undefined });
+    await mount(
+      <EncounterEditDialog
+        open
+        onOpenChange={() => {}}
+        encounter={encounter({ score: { home: 0, away: 0 }, result_status: "pending_confirmation" })}
+      />
+    );
+
+    expect(document.body.textContent).toContain(
+      messages.matchEdit.sourceSingleReport.replace("{team}", "Alpha")
+    );
+    await click(findButton(confirmLabel(2, 0)));
+    expect(setEncounterResult).toHaveBeenCalledWith(42, { adopt_report_team_id: 1 });
+  });
+
+  it("sends a manually entered score instead of the report", async () => {
+    getReports.mockResolvedValue({ reports: [report()], form: undefined });
+    await mount(<EncounterEditDialog open onOpenChange={() => {}} encounter={encounter()} />);
+
+    await click(document.body.querySelector<HTMLButtonElement>('button[aria-label^="Raise the score for Bravo"]') ?? undefined);
+    await click(findButton(confirmLabel(2, 1)));
+    expect(setEncounterResult).toHaveBeenCalledWith(42, { home_score: 2, away_score: 1 });
+  });
+
+  it("has no score to confirm when nobody reported and the match is still 0:0", async () => {
+    await mount(
+      <EncounterEditDialog open onOpenChange={() => {}} encounter={encounter({ score: { home: 0, away: 0 } })} />
+    );
+
+    expect(document.body.textContent).toContain(messages.matchEdit.noScoreSelected);
+    expect(findButton(messages.matchEdit.confirmResult)?.disabled).toBe(true);
+  });
+
+  it("refuses a draw on an elimination stage", async () => {
+    await mount(
+      <EncounterEditDialog
+        open
+        onOpenChange={() => {}}
+        encounter={encounter({ score: { home: 1, away: 1 } })}
+        stageType="single_elimination"
+      />
+    );
+
+    expect(document.body.textContent).toContain(messages.matchEdit.drawBlocked);
+    expect(findButton(confirmLabel(1, 1))?.disabled).toBe(true);
+  });
+
+  it("shows a confirmed result read-only, with Reopen as the way to change it", async () => {
+    await mount(
+      <EncounterEditDialog
+        open
+        onOpenChange={() => {}}
+        encounter={encounter({ status: "completed", result_status: "confirmed", score: { home: 2, away: 0 } })}
+      />
+    );
+
+    expect(document.body.querySelector('input[aria-label^="Score for"]')).toBeNull();
+    expect(findButton(messages.matchEdit.reopenResult)).toBeDefined();
+    expect(document.body.textContent).toContain(messages.matchEdit.confirmedHint);
+  });
 });
 
 describe("EncounterEditDialog status field", () => {
