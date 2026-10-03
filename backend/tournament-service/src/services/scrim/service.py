@@ -39,6 +39,7 @@ from shared.core.enums import (
     TournamentStatus,
 )
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.pick_ban_config import has_pool
 
 # Direct imports rather than through ``src.models``: that package re-exports only
 # part of the tournament domain, and these four modules are not in it. Same as
@@ -597,7 +598,7 @@ class ScrimService:
                 round=None,
             )
             slots = len(config.slots) if config is not None else 0
-            if config is not None and not pick_ban_session_service.has_pool(config):
+            if config is not None and not has_pool(config):
                 # A rules template: rotation and timer authored for narrower
                 # scopes to inherit, with no candidates of its own to play.
                 detail = (

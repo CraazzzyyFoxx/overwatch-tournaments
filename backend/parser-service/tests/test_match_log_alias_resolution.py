@@ -167,6 +167,8 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
         processor.hero_misses = {"Кхтон", "Ана"}
         processor.validate = AsyncMock(return_value=True)
         processor._preload_data = AsyncMock()
+        processor.find_teams_by_players = AsyncMock(return_value=((team, []), (team, [])))
+        processor._validate_map_pool = AsyncMock()
         processor.process_teams = AsyncMock(return_value=((team, {}), (team, {})))
         processor.get_map = AsyncMock(return_value=SimpleNamespace(id=3, name="Ilios"))
         processor.get_match_score_and_time = Mock(return_value=(1.0, 2, 1))
@@ -212,6 +214,8 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
         processor.df = pd.DataFrame({"event_type": ["match_end"]})
         processor.validate = AsyncMock(return_value=True)
         processor._preload_data = AsyncMock()
+        processor.find_teams_by_players = AsyncMock(return_value=((team, []), (team, [])))
+        processor._validate_map_pool = AsyncMock()
         processor.process_teams = AsyncMock(return_value=((team, {}), (team, {})))
         processor.get_map = AsyncMock(return_value=SimpleNamespace(id=3, name="Ilios"))
         processor.get_match_score_and_time = Mock(return_value=(1.0, 2, 1))

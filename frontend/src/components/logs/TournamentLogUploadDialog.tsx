@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { FileUp } from "lucide-react";
@@ -41,6 +41,7 @@ function DirectoryUploadDialog({
   const t = useTranslations("accountSettings.logDirectory");
   const directory = useLogDirectory();
   const encounterInputId = useId();
+  const scanId = useRef(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,22 +99,27 @@ function DirectoryUploadDialog({
   });
 
   async function loadFiles(replace = false, closeOnCancel = false) {
+    const currentScanId = ++scanId.current;
     setBusy(true);
     setError(null);
+    setListing(null);
+    setSelectedNames(new Set());
     try {
       const handle = await (replace ? directory.select() : directory.access());
+      if (currentScanId !== scanId.current) return;
       if (!handle) {
         if (closeOnCancel) setOpen(false);
         return;
       }
-      const files = await listLogFiles(handle);
+      const files = await listLogFiles(handle, "newest");
+      if (currentScanId !== scanId.current) return;
       setListing({ handle, files });
-      setSelectedNames(new Set());
+      setSelectedNames(new Set(files.slice(0, 1).map((file) => file.name)));
       uploadMutation.reset();
     } catch (cause) {
-      setError(t(`errors.${directoryErrorCode(cause)}`));
+      if (currentScanId === scanId.current) setError(t(`errors.${directoryErrorCode(cause)}`));
     } finally {
-      setBusy(false);
+      if (currentScanId === scanId.current) setBusy(false);
     }
   }
 

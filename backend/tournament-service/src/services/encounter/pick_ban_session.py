@@ -16,7 +16,6 @@ Design: docs/plans/2026-09-28-pick-ban-constructor.md §5
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
@@ -37,6 +36,7 @@ from shared.core.enums import (
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.models.catalog.gamemode import Gamemode
 from shared.models.catalog.hero import Hero
 from shared.models.catalog.map import Map
@@ -54,12 +54,9 @@ from shared.repository import (
     PickBanSessionRepository,
     PickBanSubmissionRepository,
 )
+from shared.repository.pick_ban import CONFIG_POOL_LOAD
 from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter.games import EncounterGameService, encounter_game_service
-
-# The pool-load options every config read needs live next to the CRUD that owns
-# the rows; a second copy here had already drifted into a private alias.
-from src.services.encounter.pick_ban_config import CONFIG_POOL_LOAD
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.room_journal import record_room_event
 from src.services.encounter.veto_session import (
@@ -111,7 +108,7 @@ def unavailable_reason_for(
         return REASON_NOT_CONFIGURED
     # A rules template is not a configured room: report it as such rather than
     # as a slot-count problem the organizer cannot fix at that scope.
-    if not PickBanSessionService.has_pool(config):
+    if not has_pool(config):
         return REASON_NOT_CONFIGURED
     if config.mode == MapVetoMode.SLOTS:
         if not config.slots or encounter.best_of > len(config.slots):
@@ -339,39 +336,7 @@ class PickBanSessionService:
             )
             .options(*CONFIG_POOL_LOAD)
         )
-        return self.pick_config(result.scalars().all(), stage_id=stage_id, round=round)
-
-    @staticmethod
-    def pick_config(
-        candidates: Iterable[PickBanConfig], *, stage_id: int | None, round: int | None
-    ) -> PickBanConfig | None:
-        """The cascade's ranking, as a pure function of already-loaded rows.
-
-        Split out of the query above so a caller holding EVERY config of a
-        tournament -- the pre-game rooms overview, which resolves dozens of
-        encounters without dozens of round-trips -- answers the same question
-        the engine answers instead of re-deriving the rule and drifting from it.
-        ``candidates`` may contain rows of other stages/kinds; they rank into
-        nothing and are skipped.
-        """
-        matched: list[tuple[int, PickBanConfig]] = []
-        for config in candidates:
-            if config.round is not None and config.round == round and config.stage_id == stage_id:
-                rank = 2
-            elif config.stage_id == stage_id and config.round is None:
-                rank = 1
-            elif config.stage_id is None and config.round is None:
-                rank = 0
-            else:
-                continue
-            matched.append((rank, config))
-        if not matched:
-            return None
-        ranked = sorted(matched, key=lambda pair: -pair[0])
-        pooled = [config for _, config in ranked if PickBanSessionService.has_pool(config)]
-        if pooled:
-            return pooled[0]
-        return max(matched, key=lambda pair: pair[0])[1]
+        return pick_config(result.scalars().all(), stage_id=stage_id, round=round)
 
     async def _resolve_config(
         self, session: AsyncSession, encounter: Encounter, kind: PickBanKind
@@ -384,19 +349,6 @@ class PickBanSessionService:
             stage_id=encounter.stage_id,
             round=encounter.round,
         )
-
-    @staticmethod
-    def has_pool(config: PickBanConfig) -> bool:
-        """Whether this config carries candidates of its own, i.e. whether a room
-        can be opened on it at all.
-
-        A config with no pool is a rules TEMPLATE (`validate_pick_ban_config`'s
-        ``pool_optional``): organizers author one at a wide scope so narrower ones
-        inherit its rotation, timer and steps. It plays nothing -- a scope that
-        resolves to it is "not configured", exactly as if no row existed, rather
-        than opening a room with an empty pool that no captain can act in.
-        """
-        return bool(config.slots) if config.mode == MapVetoMode.SLOTS else bool(config.items)
 
     async def settled_map_rounds(self, session: AsyncSession, encounter_id: int) -> int:
         """How many maps of the series the map pick-ban has settled.
@@ -427,7 +379,7 @@ class PickBanSessionService:
         no map pick-ban configured -- or one that resolves to a pool-less rules
         template, which opens no room either -- has no map phase to wait on."""
         map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
-        if map_config is None or not self.has_pool(map_config):
+        if map_config is None or not has_pool(map_config):
             return True
         return await self.settled_map_rounds(session, encounter.id) >= round_number
 
@@ -592,7 +544,7 @@ class PickBanSessionService:
         if not await is_encounter_live(session, encounter):
             return None
         config = await self._resolve_config(session, encounter, kind)
-        if config is None or not self.has_pool(config):
+        if config is None or not has_pool(config):
             return None
 
         slots: list[list[int]] | None = None
@@ -1167,7 +1119,7 @@ class PickBanSessionService:
         map_session = await self.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
         if (
             map_config is not None
-            and self.has_pool(map_config)
+            and has_pool(map_config)
             # A cancelled map session names no further maps, so its settled count
             # would freeze the hero rounds for the rest of a series the captains
             # now pick maps for themselves.

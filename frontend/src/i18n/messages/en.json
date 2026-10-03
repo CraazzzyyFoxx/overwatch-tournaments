@@ -808,7 +808,7 @@
       "selection": "{count} selected",
       "duplicate": "Duplicate file names: {names}",
       "uploadTitle": "Upload match logs",
-      "uploadHint": "Select files from your saved folder and optionally attach them to an encounter. Nothing is uploaded automatically.",
+      "uploadHint": "The newest log by local file modification time is selected. You can select other files and optionally attach them to an encounter. Nothing is uploaded automatically.",
       "encounter": "Attached encounter",
       "noEncounter": "No encounter",
       "cancel": "Cancel",
@@ -3081,14 +3081,12 @@
   "pickBan": {
     "room": {
       "playerHeroes": {
-        "title": "Heroes from logs",
+        "title": "Heroes from the previous map",
         "loading": "Loading heroes…",
-        "error": "Could not load hero history.",
+        "error": "Could not load the previous map's heroes.",
         "retry": "Try again",
-        "empty": "No heroes played in available logs.",
-        "noUser": "This player is not linked to a user profile.",
-        "noWorkspace": "Select a workspace to view log history.",
-        "playtime": "{minutes, number} min"
+        "empty": "No heroes recorded for this player on the previous map.",
+        "noLog": "No parsed log for the previous map."
       },
       "map": {
         "title": "Map Pool",

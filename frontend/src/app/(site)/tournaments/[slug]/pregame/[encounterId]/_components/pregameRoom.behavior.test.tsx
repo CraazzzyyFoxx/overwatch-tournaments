@@ -46,6 +46,7 @@ const getPregameRoomHistory = vi.fn();
 const setEncounterReadiness = vi.fn();
 const markReady = vi.fn();
 const getEncounter = vi.fn();
+const getMatch = vi.fn();
 const getAllMaps = vi.fn();
 const getAllHeroes = vi.fn();
 const getMyRole = vi.fn();
@@ -100,7 +101,10 @@ vi.mock("@/services/admin.service", () => ({
   }
 }));
 vi.mock("@/services/encounter.service", () => ({
-  default: { getEncounter: (...args: unknown[]) => getEncounter(...args) }
+  default: {
+    getEncounter: (...args: unknown[]) => getEncounter(...args),
+    getMatch: (...args: unknown[]) => getMatch(...args)
+  }
 }));
 vi.mock("@/services/map.service", () => ({
   default: { getAll: (...args: unknown[]) => getAllMaps(...args) }
@@ -769,6 +773,62 @@ describe("phase selection", () => {
     expect(document.body.querySelector("[data-draft-issues]")?.textContent).toContain(
       "one hero per opponent player"
     );
+  });
+
+  it.each([
+    { hasLog: true, hasGames: true },
+    { hasLog: false, hasGames: true },
+    { hasLog: false, hasGames: false }
+  ])("shows only the previous map's heroes (log: $hasLog, positions: $hasGames)", async ({ hasLog, hasGames }) => {
+    const loggedHeroes = HERO_CATALOG.map((hero) => ({ ...hero, image_path: `https://example.test/${hero.id}.png` }));
+    getAllHeroes.mockResolvedValue({ results: HERO_CATALOG });
+    getMyRole.mockResolvedValue({ side: "home" });
+    getEncounter.mockResolvedValue({
+      ...encounter(),
+      best_of: 5,
+      games: hasGames ? [game({ position: 1, map_id: 21 }), game({ position: 2, map_id: 22 })] : [],
+      matches: [
+        { id: 501, map_id: 21, map_index: null, source: "log_parser" },
+        { id: 503, map_id: 22, map_index: 2, source: "captain_report" },
+        { id: 504, map_id: 23, map_index: null, source: "log_parser" },
+        ...(hasLog ? [{ id: 502, map_id: 22, map_index: null, source: "log_parser" }] : [])
+      ]
+    });
+    getMatch.mockImplementation(async (id: number) => ({
+      home_team: { players: [{ id: 57, heroes: { 0: [loggedHeroes[2]] } }] },
+      away_team: {
+        players: [{
+          id: 55,
+          heroes: id === 502
+            ? { 0: [loggedHeroes[0]], 1: [loggedHeroes[0], loggedHeroes[1]] }
+            : { 0: [loggedHeroes[2]] }
+        }]
+      }
+    }));
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero" }),
+        ...blindRound({ target: "opponent_player", round: 3 }),
+        current_round: 3,
+        viewer_side: "home",
+        viewer_can_act: true,
+        allowed_actions: ["ban"],
+        eligible: { item_ids: [201, 202], by_target: { "55": [201, 202] } },
+        targets: {
+          home: [],
+          away: [{ player_id: 55, name: "Foxy", role: "tank", sub_role: null, is_substitution: false, division: 7 }]
+        }
+      })
+    );
+    await render();
+    const row = document.body.querySelector('[data-target-player="55"]')!.closest("li")!;
+    if (hasLog) {
+      expect(Array.from(row.querySelectorAll("ul img")).map((image) => image.getAttribute("alt"))).toEqual(["Tank A", "Tank B"]);
+    } else {
+      expect(row.textContent).toContain(ROOM.playerHeroes.noLog);
+      expect(row.querySelector("ul")).toBeNull();
+    }
   });
 
   it("bans for the opponent player the captain chose, and says so on the wire", async () => {

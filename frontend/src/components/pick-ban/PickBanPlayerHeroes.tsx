@@ -6,44 +6,31 @@ import { useTranslations } from "next-intl";
 
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import { Button } from "@/components/ui/button";
-import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
-import { userQueryKeys } from "@/lib/users/query-keys";
-import userService from "@/services/user.service";
-import { LogStatsName } from "@/types/stats.types";
-import type { Player } from "@/types/team.types";
+import { encounterQueryKeys } from "@/lib/encounters/query-keys";
+import encounterService from "@/services/encounter.service";
 
-const HERO_STATS = [LogStatsName.HeroTimePlayed];
-
-export function PickBanPlayerHeroes({ player }: Readonly<{ player: Player | undefined }>) {
+export function PickBanPlayerHeroes({
+  playerId,
+  matchId
+}: Readonly<{ playerId: number; matchId: number | null }>) {
   const t = useTranslations("pickBan.room.playerHeroes");
-  const workspaceId = useCurrentWorkspaceId();
-  const userId = player?.user_id ?? 0;
-  const hasUser = Number.isFinite(userId) && userId > 0;
   const history = useQuery({
-    // A playtime-only response must not replace the profile's full-stat cache.
-    queryKey: [...userQueryKeys.heroes(userId, undefined), HERO_STATS, workspaceId],
-    queryFn: () => userService.getUserHeroes(userId, HERO_STATS),
-    enabled: hasUser && workspaceId != null,
-    staleTime: 5 * 60 * 1000
+    queryKey: encounterQueryKeys.matchDetail(matchId),
+    queryFn: () => encounterService.getMatch(matchId!),
+    enabled: matchId != null
   });
-  const heroes = useMemo(
-    () =>
-      (history.data?.results ?? [])
-        .map(({ hero, stats }) => ({
-          hero,
-          playtime: stats.find((stat) => stat.name === LogStatsName.HeroTimePlayed)?.overall ?? 0
-        }))
-        .filter(({ playtime }) => Number.isFinite(playtime) && playtime > 0)
-        .sort((a, b) => b.playtime - a.playtime || a.hero.id - b.hero.id),
-    [history.data]
-  );
+  const heroes = useMemo(() => {
+    const match = history.data;
+    const player = [match?.home_team, match?.away_team]
+      .flatMap((team) => team?.players ?? [])
+      .find((candidate) => candidate.id === playerId);
+    return [...new Map(Object.values(player?.heroes ?? {}).flat().map((hero) => [hero.id, hero])).values()];
+  }, [history.data, playerId]);
 
   return (
     <div className="min-w-0 px-3 pb-2.5">
-      {!hasUser ? (
-        <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("noUser")}</p>
-      ) : workspaceId == null ? (
-        <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("noWorkspace")}</p>
+      {matchId == null ? (
+        <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("noLog")}</p>
       ) : history.isPending ? (
         <p role="status" className="text-xs text-[color:var(--aqt-fg-muted)]">
           {t("loading")}
@@ -71,19 +58,14 @@ export function PickBanPlayerHeroes({ player }: Readonly<{ player: Player | unde
           tabIndex={0}
           className="flex max-h-32 flex-wrap gap-2 overflow-y-auto"
         >
-          {heroes.map(({ hero, playtime }) => (
+          {heroes.map((hero) => (
             <li
               key={hero.id}
               className="flex max-w-full items-center gap-2 rounded-lg bg-[color:var(--aqt-card-2)] px-2 py-1.5"
             >
               <PickBanItemThumb kind="hero" item={hero} name={hero.name} size={24} />
-              <span className="min-w-0 text-xs">
-                <span className="block break-words font-medium text-[color:var(--aqt-fg)]">
-                  {hero.name}
-                </span>
-                <span className="block tabular-nums text-[color:var(--aqt-fg-muted)]">
-                  {t("playtime", { minutes: Math.round(playtime / 6) / 10 })}
-                </span>
+              <span className="min-w-0 break-words text-xs font-medium text-[color:var(--aqt-fg)]">
+                {hero.name}
               </span>
             </li>
           ))}

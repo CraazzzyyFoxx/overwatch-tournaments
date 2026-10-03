@@ -12,10 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.clients.s3 import S3Client
 from shared.core import impact as impact_consts
 from shared.core.social import SocialProvider
+from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository.identity import UserRepository
 from shared.repository.match_logs import MatchEventRepository, MatchKillFeedRepository, MatchStatisticsRepository
+from shared.repository.pick_ban import CONFIG_POOL_LOAD, PickBanConfigRepository
 from shared.repository.tournament import MatchRepository
 from shared.schemas.events import (
     EncounterCompletedEvent,
@@ -171,6 +173,7 @@ _stats_repo = MatchStatisticsRepository()
 _events_repo = MatchEventRepository()
 _kill_feed_repo = MatchKillFeedRepository()
 _user_repo = UserRepository()
+_pick_ban_config_repo = PickBanConfigRepository()
 
 
 class MatchLogProcessor:
@@ -344,6 +347,33 @@ class MatchLogProcessor:
         return await map_flows.get_by_name_or_alias_and_gamemode(
             session, map_name_raw, gamemode_raw, log_record_id=self.log_record_id
         )
+
+    async def _validate_map_pool(
+        self, session: AsyncSession, encounter: models.Encounter, match_map: models.Map
+    ) -> None:
+        configs = await _pick_ban_config_repo.list_by_tournament(
+            session, encounter.tournament_id, kind=enums.PickBanKind.MAP, options=CONFIG_POOL_LOAD
+        )
+        config = pick_config(configs, stage_id=encounter.stage_id, round=encounter.round)
+        # No pool (including a rules-only template) means captains choose freely.
+        if config is None or not has_pool(config):
+            return
+        if config.mode == enums.MapVetoMode.SLOTS:
+            in_pool = any(
+                match_map.id == slot.reserve_item_id or any(match_map.id == item.item_id for item in slot.items)
+                for slot in config.slots
+            )
+        else:
+            in_pool = any(match_map.id == item.item_id for item in config.items)
+        if not in_pool:
+            msg = (
+                f"Map '{match_map.name}' (id={match_map.id}) in log {self.filename} "
+                f"is outside the configured map pool for encounter {encounter.id}"
+            )
+            logger.warning(msg)
+            raise errors.ApiHTTPException(
+                status_code=400, detail=[errors.ApiExc(code="map_not_in_pool", msg=msg)]
+            )
 
     async def _preload_data(self, session: AsyncSession):
         heroes_db, _ = await hero_service.get_all(session, pagination.PaginationSortParams(per_page=-1))
@@ -1057,20 +1087,8 @@ class MatchLogProcessor:
 
         if not await self.validate(is_raise=is_raise):
             return None
-        await self._preload_data(session)
-        (home_team_tuple, away_team_tuple) = await self.process_teams(session)
-        home_team_db, home_players_map = home_team_tuple
-        away_team_db, away_players_map = away_team_tuple
-
-        players_map = {**home_players_map, **away_players_map}
-
-        match_map_model = await self.get_map(session)
-        logger.info(
-            f"Match map: {match_map_model.name} in match log {self.filename} in tournament {self.tournament.name}"
-        )
-        match_time, home_score, away_score = self.get_match_score_and_time()
-        logger.info(f"Match time: {match_time}, home score: {home_score}, away score: {away_score}")
-
+        resolved_teams = await self.find_teams_by_players(session)
+        (home_team_db, _), (away_team_db, _) = resolved_teams
         encounter = await encounter_flows.resolve_for_log(
             session,
             home_team_db.id,
@@ -1078,6 +1096,20 @@ class MatchLogProcessor:
             log_name=self.filename,
             attached_encounter_id=self.attached_encounter_id,
         )
+        match_map_model = await self.get_map(session)
+        # Roster repair can commit substitutions/name changes; validate first.
+        await self._validate_map_pool(session, encounter, match_map_model)
+        await self._preload_data(session)
+        (home_team_tuple, away_team_tuple) = await self.process_teams(session, resolved_teams)
+        home_team_db, home_players_map = home_team_tuple
+        away_team_db, away_players_map = away_team_tuple
+        players_map = {**home_players_map, **away_players_map}
+        logger.info(
+            f"Match map: {match_map_model.name} in match log {self.filename} in tournament {self.tournament.name}"
+        )
+        match_time, home_score, away_score = self.get_match_score_and_time()
+        logger.info(f"Match time: {match_time}, home score: {home_score}, away score: {away_score}")
+
         match_model = await encounter_service.get_match_by_encounter_and_map(
             session, encounter.id, match_map_model.id, []
         )
@@ -1338,12 +1370,17 @@ class MatchLogProcessor:
         return team_db, final_players_map_verified
 
     async def process_teams(
-        self, session: AsyncSession
+        self,
+        session: AsyncSession,
+        resolved_teams: tuple[
+            tuple[models.Team, list[tuple[str, models.User | None]]],
+            tuple[models.Team, list[tuple[str, models.User | None]]],
+        ],
     ) -> tuple[
         tuple[models.Team, dict[str, models.Player]],
         tuple[models.Team, dict[str, models.Player]],
     ]:
-        (home_team_tuple, away_team_tuple) = await self.find_teams_by_players(session)
+        home_team_tuple, away_team_tuple = resolved_teams
         home_team_db, home_players_from_log_tuples = home_team_tuple
         away_team_db, away_players_from_log_tuples = away_team_tuple
 

@@ -12,7 +12,6 @@ import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-
 import { formatSubroleSlug } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { PickBanTarget } from "@/types/tournament.types";
-import type { Player } from "@/types/team.types";
 
 import type { PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";
@@ -34,7 +33,7 @@ import { PickBanPlayerHeroes } from "./PickBanPlayerHeroes";
  */
 export function PickBanTargetBoard({
   targets,
-  players,
+  previousMatchId,
   selectedPlayerId,
   assignedByPlayer,
   itemsById,
@@ -43,7 +42,7 @@ export function PickBanTargetBoard({
   disabled = false
 }: Readonly<{
   targets: PickBanTarget[];
-  players: Player[];
+  previousMatchId: number | null;
   selectedPlayerId: number | null;
   /** Item id already assigned to a player in the viewer's own draft. */
   assignedByPlayer: Record<number, number | undefined>;
@@ -164,7 +163,8 @@ export function PickBanTargetBoard({
                   )}
                 </button>
                 <PickBanPlayerHeroes
-                  player={players.find((player) => player.id === target.player_id)}
+                  playerId={target.player_id}
+                  matchId={previousMatchId}
                 />
               </li>
             );

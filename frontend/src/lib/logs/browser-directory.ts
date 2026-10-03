@@ -104,10 +104,17 @@ export async function allowLogDirectoryRead(handle: LogDirectoryHandle): Promise
   }
 }
 
-export async function listLogFiles(handle: LogDirectoryHandle): Promise<LogFileHandle[]> {
+export async function listLogFiles(handle: LogDirectoryHandle, order: "name" | "newest" = "name"): Promise<LogFileHandle[]> {
   const files: LogFileHandle[] = [];
   for await (const entry of handle.values()) {
     if (entry.kind === "file" && /\.(log|txt|csv)$/i.test(entry.name)) files.push(entry);
   }
-  return files.sort((a, b) => a.name.localeCompare(b.name));
+  if (order === "name") return files.sort((a, b) => a.name.localeCompare(b.name));
+  const datedFiles = await Promise.all(files.map(async (file) => ({
+    handle: file,
+    lastModified: (await file.getFile()).lastModified
+  })));
+  return datedFiles
+    .sort((a, b) => b.lastModified - a.lastModified || a.handle.name.localeCompare(b.handle.name))
+    .map((file) => file.handle);
 }

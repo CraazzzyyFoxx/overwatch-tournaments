@@ -11,6 +11,7 @@ import pickBanService, {
   type PickBanSubmitInput
 } from "@/services/pickBan.service";
 import type { Encounter } from "@/types/encounter.types";
+import { buildSeriesSlots } from "@/lib/encounter/detail";
 import type {
   PickBanAction,
   PickBanKind,
@@ -313,9 +314,18 @@ export function PickBanPanel({
               <div className="lg:sticky lg:top-[var(--aqt-sticky-top)]">
                 <PickBanTargetBoard
                   targets={targetRoster}
-                  players={
-                    (opponentSide === "home" ? encounter.home_team : encounter.away_team)?.players ??
-                    []
+                  previousMatchId={
+                    encounter.games?.length
+                      ? buildSeriesSlots({
+                          ...encounter,
+                          matches: (encounter.matches ?? []).filter((match) => match.source === "log_parser")
+                        }).find((slot) => slot.index === (state.current_round ?? step?.round ?? 1) - 1)
+                          ?.match?.id ?? null
+                      : (encounter.matches ?? []).find(
+                          (match) =>
+                            match.source === "log_parser" &&
+                            match.map_index === (state.current_round ?? step?.round ?? 1) - 1
+                        )?.id ?? null
                   }
                   selectedPlayerId={selectedTargetId}
                   assignedByPlayer={assignedByPlayer}

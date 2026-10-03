@@ -101,9 +101,13 @@ The browser uses **relative same-origin paths**; SSR and the proxy use `NEXT_INT
 ## Pre-game hero history and match log folders
 
 The **One ban per opponent player** board shows each opponent's logged heroes inside their
-roster row, below the name and role. Heroes come from parsed logs in the active workspace,
-across tournaments, ordered by recorded playtime. Long histories scroll within the row.
-History is requested when the targeted-ban board is shown; it does not change ban eligibility.
+roster row, below the name and role. Heroes come only from the immediately previous series
+position in this encounter, deduplicated across that map's rounds. Captain-report placeholders
+and other players' heroes are excluded. The first map, a missing previous log, or legacy rows
+without enough position information show no history rather than falling back to older maps
+or account-wide statistics. Long hero lists scroll within the row.
+The board reuses the match-detail cache; room refreshes invalidate parsed match details.
+Displaying history does not change ban eligibility.
 
 **Upload match logs** uses the File System Access API (`showDirectoryPicker`, read-only).
 The first click selects a folder; its native `FileSystemDirectoryHandle` is structured-cloned
@@ -113,9 +117,18 @@ localhost; unsupported browsers show an explanation rather than a different impo
 
 Profile settings show the folder name and offer change, view/refresh and forget actions.
 Browsers do not expose its absolute path. Forgetting removes only the saved handle, not files.
-Folder scans include immediate `.log`, `.txt` and `.csv` files, not subdirectories. Files start
-unchecked and only selected files are uploaded; partial failures keep failed files selected
-without resending successful files. Uploading still requires the existing `log.create` permission.
+Folder scans include immediate `.log`, `.txt` and `.csv` files, not subdirectories. The upload
+list is ordered by the local filesystem's `File.lastModified`, newest first; equal timestamps
+use filename order. Only the newest file starts selected. Selection remains editable and
+nothing uploads automatically. Partial failures keep failed files selected without resending
+successful files. Uploading still requires the existing `log.create` permission.
+
+The parser resolves map aliases to a catalog map, then validates the effective encounter map
+pool before roster, match or statistics writes. Scope precedence is stage + round, stage, then
+tournament; an empty rules template does not replace a parent's pool. Slot candidates and
+reserve maps are accepted. Maps outside the pool fail with `map_not_in_pool`, preserving
+existing data. Without a configured pool, any catalog-resolved map remains allowed.
+This checks the configured pool, not the current veto's chosen map or next series position.
 
 ## Notifications
 

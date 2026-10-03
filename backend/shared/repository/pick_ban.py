@@ -7,10 +7,17 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
 from shared.repository.base import BaseRepository
+
+# Both pool shapes must be loaded before an async caller reads candidates.
+CONFIG_POOL_LOAD = (
+    selectinload(models.PickBanConfig.items),
+    selectinload(models.PickBanConfig.slots).selectinload(models.PickBanConfigSlot.items),
+)
 
 
 class PickBanConfigRepository(BaseRepository[models.PickBanConfig]):

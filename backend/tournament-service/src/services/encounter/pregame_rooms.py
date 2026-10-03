@@ -14,7 +14,7 @@ or ``_settle``, nothing commits and nothing emits. What it does instead is read
 the same rows in BULK (a constant number of queries, never one per encounter)
 and feed them to the very same pure functions the room uses:
 ``pick_ban_rules.current_step``/``step_progress`` for the cursor,
-``PickBanSessionService.pick_config`` for the config cascade,
+``pick_ban_config.pick_config`` for the config cascade,
 ``unavailable_reason_for`` for a room that cannot open, and
 ``PickBanActionService.step_deadline`` for the timer.
 
@@ -40,6 +40,7 @@ from shared.core.enums import (
     PickBanKind,
 )
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.pick_ban import (
@@ -51,11 +52,10 @@ from shared.models.tournament.pick_ban import (
 )
 from shared.models.tournament.stage import Stage
 from shared.models.tournament.team import Team
+from shared.repository.pick_ban import CONFIG_POOL_LOAD
 from src.schemas import pregame_rooms as schemas
 from src.services.encounter.pick_ban_action import PickBanActionService
-from src.services.encounter.pick_ban_config import CONFIG_POOL_LOAD
 from src.services.encounter.pick_ban_session import (
-    PickBanSessionService,
     resolved_steps,
     unavailable_reason_for,
 )
@@ -207,14 +207,14 @@ class PregameRoomsService:
         both_ready = readiness["home"] and readiness["away"]
         # The cascade, resolved once per kind for this encounter's coordinate.
         resolved = {
-            kind: PickBanSessionService.pick_config(
+            kind: pick_config(
                 configs_by_kind.get(kind, ()), stage_id=encounter.stage_id, round=encounter.round
             )
             for kind in _KINDS
         }
         map_config = resolved[PickBanKind.MAP]
         map_session = sessions_by_key.get((encounter.id, PickBanKind.MAP.value))
-        if map_config is None or not PickBanSessionService.has_pool(map_config):
+        if map_config is None or not has_pool(map_config):
             # Nothing to wait for: an encounter with no map room plays whatever
             # map the captains name, so round 1 is "settled" from the start.
             map_settled = True
@@ -314,7 +314,7 @@ class PregameRoomsService:
         kind at all; a summary with ``status=None`` is a configured room that
         has not opened, carrying the same reason the room itself would show."""
         if pick_ban is None:
-            if config is None or not PickBanSessionService.has_pool(config):
+            if config is None or not has_pool(config):
                 return None
             return schemas.PregameKindSummary(
                 reason=unavailable_reason_for(
