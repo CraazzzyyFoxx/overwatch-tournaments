@@ -78,6 +78,7 @@ class AuthMergePreview(BaseModel):
     data_conflicts: list[AuthMergeDataConflict] = Field(default_factory=list)
     permission_changes: bool = False
     memberships: list[AuthMergeMembership] = Field(default_factory=list)
+    issues: list[str] = Field(default_factory=list)
     state_fingerprint: str
 
 
