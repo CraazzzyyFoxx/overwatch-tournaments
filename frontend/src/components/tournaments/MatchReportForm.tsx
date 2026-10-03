@@ -6,7 +6,7 @@ import { Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { EncounterScoreControls } from "@/components/tournaments/EncounterScoreControls";
-import { getApiErrorMessage, isResultLockedError } from "@/lib/api/error";
+import { getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,7 @@ import { useMapsCatalog } from "@/hooks/useMapsCatalog";
 
 export interface MatchReportFormProps {
   encounter: Encounter;
-  /**
-   * Ran once the report is accepted — and also when the submit reveals the
-   * result was confirmed meanwhile, since either way this form is finished.
-   */
+  /** Ran once the report is accepted. */
   onSubmitted: () => void;
   /** The shell's way out, rendered beside the submit button. */
   cancelAction?: ReactNode;
@@ -175,8 +172,7 @@ function BlockHeading({
  * every map has been played and reconciled. Both render the same fields, the
  * same per-field rules and the same submit, so neither can drift.
  *
- * Assumes the result is not confirmed yet — a confirmed encounter accepts no
- * report at all, and each shell says so in its own words before mounting this.
+ * Reports remain editable after confirmation without changing the official result.
  */
 export function MatchReportForm({
   encounter,
@@ -365,7 +361,9 @@ export function MatchReportForm({
         )
       }),
     onSuccess: async (result: CaptainReportSubmitResult) => {
-      if (result.result_status === "confirmed") {
+      if (encounter.result_status === "confirmed") {
+        notify.success(t("matchReport.savedAfterConfirmation"));
+      } else if (result.result_status === "confirmed") {
         notify.success(t("matchReport.autoConfirmed"));
       } else if (result.result_status === "disputed") {
         notify.error(t("matchReport.autoDisputed"));
@@ -375,17 +373,7 @@ export function MatchReportForm({
       await refreshEncounterViews(qc, encounter.tournament_id);
       onSubmitted();
     },
-    onError: async (error) => {
-      if (isResultLockedError(error)) {
-        notify.error(t("matchReport.confirmedLockedTitle"), {
-          description: t("matchReport.confirmedLockedBody")
-        });
-        // Data was stale (result got confirmed after this form opened); refresh
-        // so the report action disappears, then hand back to the shell.
-        await refreshEncounterViews(qc, encounter.tournament_id);
-        onSubmitted();
-        return;
-      }
+    onError: (error) => {
       notify.apiError(error, {
         title: t("matchReport.submitErrorMessage"),
         description: getApiErrorMessage(error)
@@ -403,6 +391,11 @@ export function MatchReportForm({
 
   return (
     <>
+      {encounter.result_status === "confirmed" ? (
+        <p className="text-sm text-[color:var(--aqt-fg-muted)]">
+          {t("matchReport.confirmedReportHint")}
+        </p>
+      ) : null}
       <div className={cn("space-y-4", fieldsClassName)}>
         <EncounterScoreControls
           idPrefix={idPrefix}

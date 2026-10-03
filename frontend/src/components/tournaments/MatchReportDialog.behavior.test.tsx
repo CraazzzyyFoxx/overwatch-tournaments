@@ -437,6 +437,35 @@ describe("MatchReportDialog required rules", () => {
 });
 
 describe("MatchReportDialog submission", () => {
+  it("lets a captain submit a report after the result is confirmed", async () => {
+    getReports.mockResolvedValue({ reports: [], form: form() });
+    submitReport.mockResolvedValue({
+      id: 42,
+      result_status: "confirmed",
+      status: "completed",
+      home_score: 2,
+      away_score: 1,
+      closeness: 0.7,
+      reports: []
+    });
+    let closed = false;
+    await mount(
+      <MatchReportDialog
+        open
+        onOpenChange={(open) => { closed = !open; }}
+        encounter={encounter({ result_status: "confirmed", status: "completed" })}
+      />
+    );
+
+    expect(submitButton()?.disabled).toBe(false);
+    await type("match-report-42-comment", "Late captain report");
+    await act(async () => {
+      submitButton()!.click();
+    });
+
+    expect(closed).toBe(true);
+  });
+
   it("sends the comment and custom answers, dropping the blanks", async () => {
     await open(
       form({

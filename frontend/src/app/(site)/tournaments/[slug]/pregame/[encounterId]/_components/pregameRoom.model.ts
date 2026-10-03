@@ -123,7 +123,8 @@ export function derivePregameLoop(
     seriesSummary != null
       ? seriesSummary.complete
       : (encounter.best_of ?? 0) > 0 &&
-        Math.max(encounter.score?.home ?? 0, encounter.score?.away ?? 0) >= winsNeeded;
+        ((encounter.score?.home ?? 0) + (encounter.score?.away ?? 0) >= (encounter.best_of ?? 0) ||
+          Math.max(encounter.score?.home ?? 0, encounter.score?.away ?? 0) >= winsNeeded);
   const freeplayRound = !mapApplies ? (heroRound ?? 1) : null;
   const awaitingFreeplayReport =
     !mapApplies &&

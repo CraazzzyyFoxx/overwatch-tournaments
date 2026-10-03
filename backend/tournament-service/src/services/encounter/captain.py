@@ -412,6 +412,10 @@ class CaptainService:
         dispute branch needs it, to stamp the organizers' notification with who
         caused it.
         """
+        # Late reports are evidence only; the official result stays authoritative.
+        if encounter.result_status == EncounterResultStatus.CONFIRMED:
+            return False
+
         reports = list(encounter.captain_reports)
         now = datetime.now(UTC)
 
@@ -515,7 +519,7 @@ class CaptainService:
         comment: str | None = None,
         custom_fields: dict[str, str] | None = None,
     ) -> models.Encounter:
-        """Upsert the calling captain's report and recompute the derived result.
+        """Upsert the calling captain's report; only unconfirmed results are recomputed.
 
         ``home_score``/``away_score`` are in the encounter's home/away orientation.
         ``map_codes`` are ``(map_index, code)`` pairs; ``map_id`` is softly resolved
@@ -552,12 +556,6 @@ class CaptainService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Stage bracket is a preview and is not active yet; wait for the organizer to activate it",
-            )
-
-        if encounter.result_status == EncounterResultStatus.CONFIRMED:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Encounter result is confirmed; only an admin can change it",
             )
 
         side, captain_user_id, team_id = await self._resolve_captain_identity(session, auth_user, encounter)

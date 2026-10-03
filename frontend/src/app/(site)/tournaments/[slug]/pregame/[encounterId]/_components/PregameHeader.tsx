@@ -228,8 +228,9 @@ function Scoreboard({
   const t = useTranslations("pickBan.room");
   const homeScore = score?.home ?? 0;
   const awayScore = score?.away ?? 0;
-  // Bo1 has nothing to track across maps, so the pip row is skipped there.
-  const toWin = bestOf != null && bestOf > 1 ? Math.floor(bestOf / 2) + 1 : null;
+  // Even series can end in a draw, so only odd series track wins to clinch.
+  const toWin =
+    bestOf != null && bestOf > 1 && bestOf % 2 === 1 ? Math.floor(bestOf / 2) + 1 : null;
 
   return (
     <div
@@ -291,7 +292,7 @@ function Scoreboard({
           </>
         ) : (
           <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-            {t("board.score")}
+            {bestOf != null && bestOf > 1 ? t("board.bestOf", { n: bestOf }) : t("board.score")}
           </span>
         )}
         {official != null ? (

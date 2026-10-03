@@ -93,7 +93,7 @@ export function PregameRoomsBrowser({ tournamentId }: Readonly<{ tournamentId: n
 
   return (
     <div className="space-y-3">
-      <StatTileGrid>
+      <StatTileGrid className="xl:grid-cols-5">
         <StatTile
           label="Needs attention"
           value={rooms.filter((room) => room.attention.length > 0).length}
