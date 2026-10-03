@@ -1,24 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatter } from "@/lib/datetime/client";
+import type { ColumnDef } from "@tanstack/react-table";
 
-import { ClickableLogCell, ClickableLogRow } from "@/components/admin/ClickableLogRow";
 import { LiveIndicator } from "@/components/admin/LiveIndicator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable, columnMeta } from "@/components/data-table";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import type { SubscriptionCheckLogRow } from "@/types/admin.types";
 
 import {
   PROVIDER_LABELS,
@@ -28,12 +26,30 @@ import {
   StateBadge,
   formatDate
 } from "./subscription-shared";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { adminQueryKeys } from "@/lib/admin/query-keys";
 
-const STATE_FILTERS = ["all", "active", "inactive", "unknown", "error"];
-const SOURCE_FILTERS = ["all", "scheduled", "registration", "check_in", "manual", "redeem"];
-const PROVIDER_FILTERS = ["all", "boosty", "twitch"];
+const FILTER_DEFS: FilterDef[] = [
+  {
+    key: "state",
+    label: "State",
+    kind: "single",
+    options: Object.entries(STATE_LABELS).map(([value, label]) => ({ value, label }))
+  },
+  {
+    key: "provider",
+    label: "Provider",
+    kind: "single",
+    options: Object.entries(PROVIDER_LABELS).map(([value, label]) => ({ value, label }))
+  },
+  {
+    key: "source",
+    label: "Trigger",
+    kind: "single",
+    options: Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))
+  }
+];
+
+/** The endpoint's own ceiling; the table pages through it client-side. */
+const FETCH_LIMIT = 200;
 
 /**
  * Live subscription check history — one row per real provider call.
@@ -43,154 +59,156 @@ const PROVIDER_FILTERS = ["all", "boosty", "twitch"];
  * no way to see that a player flapped, when a provider went down, or why a
  * registration was refused. Rows that resolve to a player link through to that
  * person's page (F14 ·3) rather than opening a detail panel here.
+ *
+ * State/provider/trigger filter on the server (the URL holds them), so a rare
+ * `error` row is found past the newest 200; search and paging run over the
+ * fetched rows.
  */
 export function SubscriptionTaskHistory() {
   const format = useFormatter();
-  const [state, setState] = useState("all");
-  const [source, setSource] = useState("all");
-  const [provider, setProvider] = useState("all");
+  const router = useRouter();
+  const filters = useFilters(FILTER_DEFS);
+  const state = String(filters.values.state ?? "");
+  const source = String(filters.values.source ?? "");
+  const provider = String(filters.values.provider ?? "");
   // Rows come back scoped to the workspace `apiFetch` injects — key on it so a
   // workspace switch refetches instead of showing the previous tenant's history.
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
   const query = useQuery({
-    queryKey: adminQueryKeys.subscriptionsCheckLog(workspaceId, state, source, provider),
+    queryKey: adminQueryKeys.subscriptionsCheckLog(
+      workspaceId,
+      state || "all",
+      source || "all",
+      provider || "all"
+    ),
     queryFn: () =>
       adminService.getSubscriptionCheckLog({
-        state: state === "all" ? undefined : state,
-        source: source === "all" ? undefined : source,
-        provider: provider === "all" ? undefined : provider,
-        limit: 50
+        state: state || undefined,
+        source: source || undefined,
+        provider: provider || undefined,
+        limit: FETCH_LIMIT
       }),
     refetchInterval: 3000
   });
-  const rows = query.data ?? [];
+
+  const columns = useMemo<ColumnDef<SubscriptionCheckLogRow>[]>(
+    () => [
+      {
+        accessorKey: "created_at",
+        header: "Time",
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+            {formatDate(format, row.original.created_at)}
+          </span>
+        )
+      },
+      {
+        id: "player",
+        accessorFn: (row) => row.user_name ?? `auth #${row.auth_user_id ?? "?"}`,
+        header: "Player",
+        meta: columnMeta<SubscriptionCheckLogRow>({
+          searchValue: (row) => row.user_name ?? `auth #${row.auth_user_id ?? "?"}`
+        }),
+        cell: ({ row, getValue }) =>
+          row.original.user_id != null ? (
+            <Link
+              href={`/admin/people/${row.original.user_id}`}
+              className="font-medium text-primary underline-offset-2 hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {String(getValue())}
+            </Link>
+          ) : (
+            <span className="font-medium">{String(getValue())}</span>
+          )
+      },
+      {
+        accessorKey: "provider",
+        header: "Provider",
+        cell: ({ row }) => (
+          <span className="flex items-center gap-2 text-sm">
+            <SocialIcon provider={row.original.provider} size={14} decorative />
+            <span>{PROVIDER_LABELS[row.original.provider] ?? row.original.provider}</span>
+          </span>
+        )
+      },
+      {
+        accessorKey: "state",
+        header: "State",
+        cell: ({ row }) => <StateBadge state={row.original.state} />
+      },
+      {
+        id: "tier",
+        header: "Tier",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {row.original.tier_label ??
+              (row.original.tier_rank != null ? `Tier ${row.original.tier_rank}` : "—")}
+          </span>
+        )
+      },
+      {
+        accessorKey: "source",
+        header: "Trigger",
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground" title={row.original.mechanism ?? undefined}>
+            {SOURCE_LABELS[row.original.source] ?? row.original.source}
+          </span>
+        )
+      },
+      {
+        id: "reason",
+        header: "Reason",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const { error, reason } = row.original;
+          const text = error ?? (reason ? (REASON_LABELS[reason] ?? reason) : null);
+          return (
+            <span
+              className={cn(
+                "block max-w-64 truncate text-xs",
+                error ? "text-danger" : "text-muted-foreground"
+              )}
+              title={error ?? reason ?? undefined}
+            >
+              {text ?? "—"}
+            </span>
+          );
+        }
+      }
+    ],
+    [format]
+  );
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-        <div className="flex items-center gap-2">
-          <CardTitle asChild>
-            <h2>Check history</h2>
-          </CardTitle>
-          <LiveIndicator />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={state} onValueChange={setState}>
-            <SelectTrigger className="h-8 w-32 text-xs" aria-label="Filter by state">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATE_FILTERS.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {value === "all" ? "All states" : (STATE_LABELS[value] ?? value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={provider} onValueChange={setProvider}>
-            <SelectTrigger className="h-8 w-36 text-xs" aria-label="Filter by provider">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROVIDER_FILTERS.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {value === "all" ? (
-                    "All providers"
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <SocialIcon provider={value} size={12} decorative />
-                      <span>{PROVIDER_LABELS[value] ?? value}</span>
-                    </span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={source} onValueChange={setSource}>
-            <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filter by trigger">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SOURCE_FILTERS.map((value) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {value === "all" ? "All triggers" : (SOURCE_LABELS[value] ?? value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {query.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : rows.length === 0 ? (
-          <EmptyNote>
-            No subscription checks recorded yet. A row lands here each time a provider is actually
-            queried — resume collection, run &ldquo;Check all now&rdquo;, or wait for a player to
-            register in a tournament that requires a subscription.
-          </EmptyNote>
-        ) : (
-          <div className="max-h-96 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Player</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Trigger</TableHead>
-                  <TableHead>Reason</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const href = row.user_id == null ? null : `/admin/people/${row.user_id}`;
-                  const label = row.user_name ?? `auth #${row.auth_user_id ?? "?"}`;
-                  const reason =
-                    row.error ?? (row.reason ? (REASON_LABELS[row.reason] ?? row.reason) : null);
-                  return (
-                    <ClickableLogRow key={row.id} href={href}>
-                      <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                        {formatDate(format, row.created_at)}
-                      </TableCell>
-                      <ClickableLogCell href={href} label={label} />
-                      <TableCell className="text-sm">
-                        <span className="flex items-center gap-2">
-                          <SocialIcon provider={row.provider} size={14} decorative />
-                          <span>{PROVIDER_LABELS[row.provider] ?? row.provider}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <StateBadge state={row.state} />
-                      </TableCell>
-                      <TableCell className="text-xs tabular-nums text-muted-foreground">
-                        {row.tier_label ?? (row.tier_rank != null ? `Tier ${row.tier_rank}` : "—")}
-                      </TableCell>
-                      <TableCell
-                        className="text-xs text-muted-foreground"
-                        title={row.mechanism ?? undefined}
-                      >
-                        {SOURCE_LABELS[row.source] ?? row.source}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "max-w-64 truncate text-xs",
-                          row.error ? "text-danger" : "text-muted-foreground"
-                        )}
-                        title={row.error ?? row.reason ?? undefined}
-                      >
-                        {reason ?? "—"}
-                      </TableCell>
-                    </ClickableLogRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <section aria-labelledby="subscription-check-history" className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 id="subscription-check-history" className="font-semibold leading-none tracking-tight">
+          Check history
+        </h2>
+        <LiveIndicator />
+      </div>
+      <DataTable<SubscriptionCheckLogRow>
+        rows={query.data ?? []}
+        isLoading={query.isLoading}
+        columns={columns}
+        initialPageSize={20}
+        pageSizeOptions={[20, 50, 100, 200]}
+        searchPlaceholder="Search players…"
+        filterKey={filters.filterKey}
+        toolbar={<FilterBar defs={FILTER_DEFS} filters={filters} />}
+        getRowId={(row) => String(row.id)}
+        emptyMessage={
+          filters.filterKey
+            ? "No subscription check matches these filters."
+            : "No subscription checks recorded yet. A row lands here each time a provider is actually queried — resume collection, run “Check all now”, or wait for a player to register in a tournament that requires a subscription."
+        }
+        onRowClick={(row) => {
+          if (row.original.user_id != null) router.push(`/admin/people/${row.original.user_id}`);
+        }}
+      />
+    </section>
   );
 }
