@@ -446,7 +446,8 @@ function UserMergeDialogSession({
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset disabled={executeMutation.isPending} className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
+          <fieldset disabled={executeMutation.isPending} className="min-w-0 space-y-6">
           <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr]">
             <div className="rounded-md border border-destructive/40 px-3 py-2">
               <p className="text-xs text-muted-foreground">Deleted after merge</p>
@@ -624,7 +625,8 @@ function UserMergeDialogSession({
               </div>
             </div>
           ) : null}
-        </fieldset>
+          </fieldset>
+        </div>
 
         <DialogFooter className="gap-3 border-t bg-card px-6 py-4 sm:items-center">
           {submitError && <p role="alert" className="text-sm text-danger sm:mr-auto">{submitError}</p>}
