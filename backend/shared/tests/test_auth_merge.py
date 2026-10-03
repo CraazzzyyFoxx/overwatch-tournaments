@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from shared import models
 from shared.core.errors import BaseAPIException
-from shared.schemas.user_merge_auth import AuthMergeOAuthDestination, AuthMergePolicy
+from shared.schemas.user_merge_auth import AuthMergeMembershipAction, AuthMergeOAuthDestination, AuthMergePolicy
 from shared.services.auth_merge import apply_auth_merge, preview_auth_merge
 from shared.testing.db import create_test_async_engine
 
@@ -301,6 +301,80 @@ class AuthMergeTests(IsolatedAsyncioTestCase):
             )
         )
         self.assertIsNotNone(member)
+
+    async def test_keep_transfers_or_merges_operational_workspace_membership(self):
+        role = models.Role(name="member", workspace_id=self.workspace.id)
+        self.session.add(role)
+        await self.session.flush()
+        grants = models.AuthUser.__table__.metadata.tables["auth.user_roles"]
+        await self.session.execute(sa.insert(grants).values(user_id=self.donor.id, role_id=role.id))
+        await self.session.flush()
+        kept = self.policy().model_copy(update={"other_account_action": "keep"})
+        preview = await self.preview(kept)
+        self.assertEqual([self.workspace.id], [row.workspace_id for row in preview.memberships])
+        self.assertFalse(preview.memberships[0].can_merge)
+        self.assertTrue(any("transfer or merge" in issue for issue in preview.issues))
+        merged = kept.model_copy(
+            update={"membership_actions": [AuthMergeMembershipAction(workspace_id=self.workspace.id, action="merge")]}
+        )
+        self.assertTrue(any("transfer it instead" in issue for issue in (await self.preview(merged)).issues))
+        transferred = kept.model_copy(
+            update={
+                "membership_actions": [AuthMergeMembershipAction(workspace_id=self.workspace.id, action="transfer")]
+            }
+        )
+        preview = await self.preview(transferred)
+        self.assertEqual([], preview.issues)
+        self.assertTrue(preview.permission_changes)
+        await self.apply(preview)
+        holders = (
+            await self.session.execute(sa.select(grants.c.user_id).where(grants.c.role_id == role.id))
+        ).scalars().all()
+        self.assertEqual([self.survivor.id], holders)
+        self.assertIsNotNone(await self.session.get(models.AuthUser, self.donor.id))
+        member = await self.session.scalar(
+            sa.select(models.WorkspaceMember.id).where(
+                models.WorkspaceMember.workspace_id == self.workspace.id,
+                models.WorkspaceMember.player_id == self.target.id,
+            )
+        )
+        self.assertIsNotNone(member)
+
+    async def test_keep_merges_role_into_existing_workspace_membership(self):
+        role = models.Role(name="member", workspace_id=self.workspace.id)
+        self.session.add_all(
+            [
+                role,
+                models.WorkspaceMember(workspace_id=self.workspace.id, player_id=self.target.id),
+            ]
+        )
+        await self.session.flush()
+        grants = models.AuthUser.__table__.metadata.tables["auth.user_roles"]
+        await self.session.execute(
+            sa.insert(grants).values(
+                [
+                    {"user_id": self.donor.id, "role_id": role.id},
+                    {"user_id": self.survivor.id, "role_id": role.id},
+                ]
+            )
+        )
+        await self.session.flush()
+        policy = self.policy().model_copy(
+            update={
+                "other_account_action": "keep",
+                "membership_actions": [AuthMergeMembershipAction(workspace_id=self.workspace.id, action="merge")],
+            }
+        )
+        preview = await self.preview(policy)
+        self.assertTrue(preview.memberships[0].can_merge)
+        self.assertEqual([], preview.issues)
+        await self.apply(preview)
+        holders = (
+            await self.session.execute(sa.select(grants.c.user_id).where(grants.c.role_id == role.id))
+        ).scalars().all()
+        self.assertEqual([self.survivor.id], holders)
+
+
 
     async def test_last_owner_cannot_be_transferred_to_disabled_account(self):
         role = models.Role(name="owner", workspace_id=self.workspace.id)

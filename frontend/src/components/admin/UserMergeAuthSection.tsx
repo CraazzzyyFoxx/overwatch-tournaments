@@ -2,10 +2,31 @@ import { useId } from "react";
 
 import type { AuthMergePolicy, AuthMergePreview } from "@/types/admin.types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+
+const RESOURCE_LABELS: Record<string, string> = {
+  oauth_connections: "OAuth logins moved",
+  workspace_memberships: "Workspace memberships",
+  roles: "Roles moved"
+};
+
+function resourceLabel(key: string) {
+  if (RESOURCE_LABELS[key]) return RESOURCE_LABELS[key];
+  if (key.startsWith("revoked_")) {
+    const name = key.slice("revoked_".length).replace(/^auth\./, "").replaceAll("_", " ").replaceAll(".", " ");
+    if (name === "api key") return "API keys revoked";
+    if (name === "refresh token") return "Refresh tokens revoked";
+    return `${name} revoked`;
+  }
+  return key.replaceAll("_", " ").replaceAll(".", " ");
+}
+function conflictValue(value: unknown) {
+  if (value == null || value === "") return "Empty";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
+}
+
 
 type MergeSelectOption = { value: string; label: string; disabled?: boolean };
 
@@ -56,17 +77,14 @@ export function UserMergeAuthSection({
   return (
     <section className="space-y-4 rounded-lg border p-4" aria-labelledby={`${sectionId}-title`}>
       <h3 id={`${sectionId}-title`} className="text-sm font-semibold">Sign-in accounts and ownership</h3>
-      <p className="text-sm text-muted-foreground">
-        Social profile identities are not sign-in connections. Choose the owner of the surviving
-        player and the destination of each real OAuth login below. Passwords, email, active status
-        and superuser status stay with their account; credentials are never combined.
+      <p className="max-w-[68ch] text-sm text-muted-foreground">
+        Pick who owns the surviving player, and where each login goes. Passwords stay with their account.
       </p>
       {!reviewed ? (
         <Alert>
           <AlertTitle>Preview required</AlertTitle>
           <AlertDescription>
-            Account choices have changed. Counts, permission effects and issues below belong to the
-            previous preview. Run Preview merge again before acknowledging or executing this plan.
+            Choices changed. Preview again before confirming. The counts below are from the previous preview.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -80,7 +98,8 @@ export function UserMergeAuthSection({
             onValueChange={(value) => onPolicyChange({
               ...policy,
               surviving_auth_user_id: Number(value),
-              conflict_choices: {}
+              conflict_choices: {},
+              membership_actions: []
             })}
           />
         </div>
@@ -97,7 +116,8 @@ export function UserMergeAuthSection({
               onValueChange={(value) => onPolicyChange({
                 ...policy,
                 other_account_action: value as "keep" | "delete",
-                conflict_choices: {}
+                conflict_choices: {},
+                membership_actions: []
               })}
             />
           </div>
@@ -107,39 +127,72 @@ export function UserMergeAuthSection({
         {survivor ? `${accountLabel(survivor.id)} will own the target player.` : "Select a surviving owner."}
         {other ? ` ${accountLabel(other.id)} will be ${deleting ? "deleted after transfer" : "retained, without ownership of the merged player"}.` : ""}
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {preview.accounts.map((account) => (
-          <div key={account.id} className="space-y-2 rounded-md border p-3 text-sm">
-            <p className="font-medium break-words">{accountLabel(account.id)}</p>
-            <p className="break-words text-muted-foreground">{account.email}</p>
-            <div className="flex flex-wrap gap-1">
-              <Badge variant="outline">{account.has_password ? "Password set" : "No password"}</Badge>
-              <Badge variant="outline">{account.is_active ? "Active" : "Inactive"}</Badge>
-              {account.is_superuser ? <Badge variant="outline">Superuser (not transferred)</Badge> : null}
+      {other && policy.other_account_action === "keep" && preview.memberships?.length ? (
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Workspace memberships</h4>
+          <p className="text-sm text-muted-foreground">
+            Keeping {accountLabel(other.id)} unlinks it from the merged player. Move each operational
+            workspace role onto the surviving account, or merge it when that account already belongs there.
+          </p>
+          {preview.memberships.map((membership) => (
+            <div key={membership.workspace_id} className="space-y-2">
+              <Label htmlFor={`${sectionId}-membership-${membership.workspace_id}`}>
+                Workspace #{membership.workspace_id}: {membership.role_names.join(", ")} on {accountLabel(membership.auth_user_id)}
+              </Label>
+              <MergeSelect
+                id={`${sectionId}-membership-${membership.workspace_id}`}
+                value={policy.membership_actions?.find((item) => item.workspace_id === membership.workspace_id)?.action ?? ""}
+                placeholder="Choose transfer or merge"
+                options={[
+                  { value: "transfer", label: "Transfer to surviving account" },
+                  {
+                    value: "merge",
+                    label: "Merge with surviving membership",
+                    disabled: !membership.can_merge
+                  }
+                ]}
+                onValueChange={(value) => onPolicyChange({
+                  ...policy,
+                  membership_actions: [
+                    ...(policy.membership_actions ?? []).filter((item) => item.workspace_id !== membership.workspace_id),
+                    { workspace_id: membership.workspace_id, action: value as "transfer" | "merge" }
+                  ].sort((a, b) => a.workspace_id - b.workspace_id)
+                })}
+              />
             </div>
-            <p className="font-medium">Roles</p>
-            {account.roles.length ? (
-              <ul className="list-inside list-disc break-words">
-                {account.roles.map((role) => (
-                  <li key={`${role.id}:${role.workspace_id}`}>
-                    {role.name} — {role.workspace_id == null ? "global" : `workspace #${role.workspace_id}`}
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="text-muted-foreground">None</p>}
-            <p className="font-medium">Explicit denies (preserved)</p>
-            {account.denies.length ? (
-              <ul className="list-inside list-disc break-words">
-                {account.denies.map((deny) => (
-                  <li key={`${deny.permission_id}:${deny.workspace_id}`}>
-                    {deny.resource}:{deny.action} — {deny.workspace_id == null ? "global" : `workspace #${deny.workspace_id}`}
-                    {deny.reason ? ` (${deny.reason})` : ""}
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="text-muted-foreground">None</p>}
-          </div>
-        ))}
+          ))}
+        </div>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {preview.accounts.map((account) => {
+          const ownsPlayer = account.id === survivor?.id;
+          const removed = account.id === deletedAccountId;
+          return (
+            <div key={account.id} className="space-y-1.5 rounded-md border px-3 py-2 text-sm">
+              <p className="font-medium break-words">{accountLabel(account.id)}</p>
+              <p className="text-xs text-muted-foreground">
+                {ownsPlayer ? "Owns the surviving player" : removed ? "Deleted after transfer" : "Kept, unlinked from the player"}
+              </p>
+              <p className="break-words text-muted-foreground">{account.email}</p>
+              <p className="text-muted-foreground">
+                {account.has_password ? "Password set" : "No password"}, {account.is_active ? "active" : "inactive"}
+                {account.is_superuser ? ". Superuser status stays here" : ""}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Roles: </span>
+                {account.roles.length
+                  ? account.roles.map((role) => `${role.name}${role.workspace_id == null ? "" : ` in workspace ${role.workspace_id}`}`).join(", ")
+                  : "none"}
+              </p>
+              {account.denies.length ? (
+                <p>
+                  <span className="text-muted-foreground">Denies: </span>
+                  {account.denies.map((deny) => `${deny.resource} ${deny.action}${deny.reason ? ` (${deny.reason})` : ""}`).join(", ")}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
       <div className="space-y-3">
         <h4 className="text-sm font-medium">OAuth login destinations</h4>
@@ -148,11 +201,13 @@ export function UserMergeAuthSection({
             ?? connection.auth_user_id;
           const invalidDestination = destination === deletedAccountId;
           return (
-            <div key={connection.id} className="space-y-2 rounded-md border p-3">
+            <div key={connection.id} className="space-y-2">
               <Label htmlFor={`${sectionId}-oauth-${connection.id}`} className="break-words">
-                {connection.provider}: {connection.username || connection.provider_user_id} (subject {connection.provider_user_id}, connection #{connection.id})
+                {connection.provider}: {connection.username || connection.provider_user_id}
               </Label>
-              <p className="text-xs text-muted-foreground">Currently owned by {accountLabel(connection.auth_user_id)}</p>
+              <p className="text-xs text-muted-foreground">
+                Subject {connection.provider_user_id}, connection #{connection.id}. Currently owned by {accountLabel(connection.auth_user_id)}.
+              </p>
               <MergeSelect
                 id={`${sectionId}-oauth-${connection.id}`}
                 value={invalidDestination ? "" : String(destination)}
@@ -182,33 +237,33 @@ export function UserMergeAuthSection({
         }) : <EmptyNote>No OAuth logins on these accounts. Retained accounts must have a password.</EmptyNote>}
       </div>
       <div className="space-y-2">
-        <h4 className="text-sm font-medium">Reviewed resource transfers</h4>
-        {Object.entries(preview.resource_counts).length ? (
-          <dl className="space-y-2 text-sm">
-            {Object.entries(preview.resource_counts).map(([resource, count]) => (
-              <div key={resource} className="flex items-start justify-between gap-3">
-                <dt className="break-words text-muted-foreground">{resource.replaceAll("_", " ")}</dt>
-                <dd><Badge variant="secondary">{count}</Badge></dd>
+        <h4 className="text-sm font-medium">What moves with the accounts</h4>
+        {Object.entries(preview.resource_counts).some(([, count]) => count > 0) ? (
+          <dl className="space-y-1.5 text-sm">
+            {Object.entries(preview.resource_counts).filter(([, count]) => count > 0).map(([resource, count]) => (
+              <div key={resource} className="flex items-baseline justify-between gap-3">
+                <dt className="text-muted-foreground">{resourceLabel(resource)}</dt>
+                <dd className="tabular-nums">{count}</dd>
               </div>
             ))}
           </dl>
-        ) : <p className="text-sm text-muted-foreground">No auth-owned resources transfer in this preview.</p>}
-        <p className="text-sm text-muted-foreground">
-          {preview.permission_changes
-            ? "The reviewed plan changes sign-in access, roles, explicit denies, or resource ownership. Review both accounts above; permission changes require a separate acknowledgement."
-            : "The reviewed plan does not change sign-in access, roles, explicit denies, or resource ownership."}
-          {" Sessions and API keys for both affected accounts are revoked, not transferred; retained accounts must sign in again."}
-          {preview.policy.other_account_action === "keep"
-            ? " Retained accounts must still have a usable login and cannot be unlinked from required operational memberships."
-            : ""}
-        </p>
+        ) : <p className="text-sm text-muted-foreground">No auth-owned resources move in this preview.</p>}
+        {preview.permission_changes ? (
+          <p className="text-sm text-muted-foreground">Roles or access change. That needs its own confirmation below.</p>
+        ) : null}
       </div>
       {preview.data_conflicts.map((conflict) => (
         <div key={conflict.key} className="space-y-2 rounded-md border p-3">
           <Label htmlFor={`${sectionId}-conflict-${conflict.key}`}>{conflict.label} ({conflict.resource})</Label>
-          <div className="grid gap-3 sm:grid-cols-2 text-xs">
-            <div><p className="font-medium">Incoming (transferring account)</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(conflict.source_value, null, 2)}</pre></div>
-            <div><p className="font-medium">Existing (surviving account)</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(conflict.target_value, null, 2)}</pre></div>
+          <div className="grid gap-3 sm:grid-cols-2 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">From the transferring account</p>
+              <p className="whitespace-pre-wrap break-words">{conflictValue(conflict.source_value)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Already on the surviving account</p>
+              <p className="whitespace-pre-wrap break-words">{conflictValue(conflict.target_value)}</p>
+            </div>
           </div>
           <MergeSelect
             id={`${sectionId}-conflict-${conflict.key}`}

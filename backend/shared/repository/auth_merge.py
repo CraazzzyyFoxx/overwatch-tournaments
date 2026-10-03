@@ -75,6 +75,7 @@ class _Plan:
     updates: list[tuple[sa.Table, dict[str, Any], dict[str, Any]]] = field(default_factory=list)
     deletes: list[tuple[sa.Table, dict[str, Any]]] = field(default_factory=list)
     workspace_ids: set[int] = field(default_factory=set)
+    moved_role_ids: set[int] = field(default_factory=set)
 
 
 @dataclass
@@ -262,12 +263,19 @@ async def apply_auth_merge_plan(
         await session.execute(sa.update(table).where(row_identity(table, row)).values(**updates))
         applied_updates[(table, tuple(row[column.name] for column in table.primary_key.columns))] = updates
     moved = await transfer_oauth(session, plan.destinations, state)
+    existing_roles = {row["role_id"] for row in state.rows.get(user_roles, []) if row["user_id"] == survivor_id}
     if plan.donor_id is not None:
-        existing_roles = {row["role_id"] for row in state.rows.get(user_roles, []) if row["user_id"] == survivor_id}
         for grant in state.rows.get(user_roles, []):
             if grant["user_id"] == plan.donor_id and grant["role_id"] not in existing_roles:
                 await session.execute(sa.insert(user_roles).values(user_id=survivor_id, role_id=grant["role_id"]))
                 existing_roles.add(grant["role_id"])
+    for grant in state.rows.get(user_roles, []):
+        if grant["role_id"] not in plan.moved_role_ids or grant["user_id"] == survivor_id:
+            continue
+        if grant["role_id"] not in existing_roles:
+            await session.execute(sa.insert(user_roles).values(user_id=survivor_id, role_id=grant["role_id"]))
+            existing_roles.add(grant["role_id"])
+        await session.execute(sa.delete(user_roles).where(user_roles.c.id == grant["id"]))
     await link_survivor(session, source, target, survivor_id)
     for social_id, values in social_updates.items():
         await session.execute(

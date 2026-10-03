@@ -35,6 +35,7 @@ from shared.schemas.user_merge_auth import (
     AuthMergeAccount,
     AuthMergeDataConflict,
     AuthMergeDeny,
+    AuthMergeMembership,
     AuthMergeOAuthConnection,
     AuthMergePolicy,
     AuthMergePreview,
@@ -151,6 +152,7 @@ def _build_plan(
     else:
         policy = policy.model_copy(deep=True)
     policy.oauth_destinations.sort(key=lambda item: item.connection_id)
+    policy.membership_actions.sort(key=lambda item: item.workspace_id)
     survivor_id = policy.surviving_auth_user_id
     other_ids = auth_ids - {survivor_id}
     donor_id = next(iter(other_ids)) if policy.other_account_action == "delete" and len(other_ids) == 1 else None
@@ -224,13 +226,11 @@ def _build_plan(
                 ],
             )
         )
-    if policy.other_account_action == "keep":
-        for grant in pair_grants:
-            role = roles[grant["role_id"]]
-            if grant["user_id"] != survivor_id and role["workspace_id"] is not None and role["name"] != "player":
-                issues.append(
-                    f"Retaining auth account {grant['user_id']} would strand its operational workspace role {role['name']} in workspace {role['workspace_id']}."
-                )
+    choices = {}
+    for action in policy.membership_actions:
+        if action.workspace_id in choices:
+            issues.append(f"Workspace {action.workspace_id} has duplicate membership actions.")
+        choices[action.workspace_id] = action.action
 
     donor_grants = [row for row in pair_grants if row["user_id"] == donor_id]
     donor_denies = [row for row in denies if row["user_id"] == donor_id]
@@ -265,6 +265,71 @@ def _build_plan(
         for row in pair_grants
         if row["user_id"] in (survivor_id, donor_id) and roles[row["role_id"]]["workspace_id"] is not None
     )
+    accepted_memberships: set[int] = set()
+    moved_deny_ids: set[int] = set()
+    memberships: list[AuthMergeMembership] = []
+    if policy.other_account_action == "keep":
+        stranded: dict[int, list[dict[str, Any]]] = {}
+        for grant in pair_grants:
+            role = roles[grant["role_id"]]
+            if grant["user_id"] != survivor_id and role["workspace_id"] is not None and role["name"] != "player":
+                stranded.setdefault(role["workspace_id"], []).append(grant)
+        for workspace_id in choices.keys() - set(stranded):
+            issues.append(f"Unknown workspace membership action for workspace {workspace_id}.")
+        for workspace_id, grants in sorted(stranded.items()):
+            role_names = sorted({roles[grant["role_id"]]["name"] for grant in grants})
+            retained_id = grants[0]["user_id"]
+            survivor_has_role = any(
+                roles[row["role_id"]]["workspace_id"] == workspace_id
+                for row in pair_grants
+                if row["user_id"] == survivor_id
+            )
+            can_merge = workspace_id in target_members or survivor_has_role
+            memberships.append(
+                AuthMergeMembership(
+                    workspace_id=workspace_id,
+                    auth_user_id=retained_id,
+                    role_names=role_names,
+                    can_merge=can_merge,
+                )
+            )
+            action = choices.get(workspace_id)
+            names = ", ".join(role_names)
+            if action is None:
+                issues.append(
+                    f"Choose whether to transfer or merge workspace role {names} in workspace {workspace_id}."
+                )
+                continue
+            if action == "merge" and not can_merge:
+                issues.append(
+                    f"Workspace {workspace_id} has no surviving membership to merge into; transfer it instead."
+                )
+                continue
+            for grant in grants:
+                plan.moved_role_ids.add(grant["role_id"])
+            plan.workspace_ids.add(workspace_id)
+            accepted_memberships.add(workspace_id)
+            for deny in denies:
+                if deny["user_id"] != retained_id or deny["workspace_id"] != workspace_id:
+                    continue
+                collision = any(
+                    row["user_id"] == survivor_id
+                    and row["permission_id"] == deny["permission_id"]
+                    and row["workspace_id"] == workspace_id
+                    for row in denies
+                )
+                if collision:
+                    plan.deletes.append((models.UserPermissionDeny.__table__, deny))
+                else:
+                    plan.updates.append(
+                        (models.UserPermissionDeny.__table__, deny, {"user_id": survivor_id})
+                    )
+                    moved_deny_ids.add(deny["id"])
+            if "owner" in role_names:
+                for row in state.rows.get(models.Workspace.__table__, []):
+                    if row["id"] == workspace_id and row["owner_id"] == retained_id:
+                        plan.updates.append((models.Workspace.__table__, row, {"owner_id": survivor_id}))
+
 
     for table, (owner, key_columns, payload_columns) in RESOURCES.items():
         groups = {}
@@ -427,12 +492,15 @@ def _build_plan(
                         f"Cannot preserve unsupported auth-owned resource {table.fullname}.{fk.parent.name}; deletion is blocked."
                     )
     survivor = accounts.get(survivor_id)
-    resulting_denies = [row for row in denies if row["user_id"] in (survivor_id, donor_id)]
+    resulting_denies = [
+        row for row in denies if row["user_id"] in (survivor_id, donor_id) or row["id"] in moved_deny_ids
+    ]
     for grant in pair_grants:
-        if donor_id is None or grant["user_id"] not in (survivor_id, donor_id):
-            continue
         role = roles[grant["role_id"]]
+        incoming = grant["role_id"] in plan.moved_role_ids or grant["user_id"] == donor_id
         if role["name"] != "owner" or role["workspace_id"] is None:
+            continue
+        if not incoming and not (grant["user_id"] == survivor_id and (donor_id is not None or moved_deny_ids)):
             continue
         if survivor:
             governance_denied = any(
@@ -461,11 +529,16 @@ def _build_plan(
         issues.append(f"Unknown data conflict choice {key}.")
     counts["oauth_connections"] = sum(row["auth_user_id"] != destinations[row["id"]] for row in oauth_rows)
     preview.permission_changes |= bool(counts["oauth_connections"])
-    counts["workspace_memberships"] = len(plan.workspace_ids - set(target_members))
+    counts["workspace_memberships"] = len((plan.workspace_ids - set(target_members)) | accepted_memberships)
     for table in CREDENTIAL_TABLES:
         counts[f"revoked_{table.fullname}"] = len(state.rows.get(table, []))
     if donor_id is not None:
         counts["roles"] = len(donor_grants)
+    elif plan.moved_role_ids:
+        counts["roles"] = len(plan.moved_role_ids)
+    preview.memberships = memberships
+    if plan.moved_role_ids or moved_deny_ids:
+        preview.permission_changes = True
     preview.resource_counts = counts
     preview.data_conflicts = conflicts
     preview.issues = issues

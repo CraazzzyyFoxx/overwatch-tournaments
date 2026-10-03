@@ -12876,6 +12876,60 @@
       "title": "AuthMergeDeny",
       "type": "object"
     },
+    "app.AuthMergeMembership": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "can_merge": {
+          "title": "Can Merge",
+          "type": "boolean"
+        },
+        "role_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Role Names",
+          "type": "array"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "auth_user_id",
+        "role_names",
+        "can_merge"
+      ],
+      "title": "AuthMergeMembership",
+      "type": "object"
+    },
+    "app.AuthMergeMembershipAction": {
+      "properties": {
+        "action": {
+          "enum": [
+            "transfer",
+            "merge"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "workspace_id": {
+          "minimum": 1,
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "action"
+      ],
+      "title": "AuthMergeMembershipAction",
+      "type": "object"
+    },
     "app.AuthMergeOAuthConnection": {
       "properties": {
         "auth_user_id": {
@@ -12942,6 +12996,13 @@
           "title": "Conflict Choices",
           "type": "object"
         },
+        "membership_actions": {
+          "items": {
+            "$ref": "#/components/schemas/app.AuthMergeMembershipAction"
+          },
+          "title": "Membership Actions",
+          "type": "array"
+        },
         "oauth_destinations": {
           "items": {
             "$ref": "#/components/schemas/app.AuthMergeOAuthDestination"
@@ -12986,11 +13047,11 @@
           "title": "Data Conflicts",
           "type": "array"
         },
-        "issues": {
+        "memberships": {
           "items": {
-            "type": "string"
+            "$ref": "#/components/schemas/app.AuthMergeMembership"
           },
-          "title": "Issues",
+          "title": "Memberships",
           "type": "array"
         },
         "oauth_connections": {

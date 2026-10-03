@@ -31,7 +31,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { cn } from "@/lib/utils";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 import { EmptyNote } from "@/components/kit/EmptyNote";
@@ -63,48 +63,53 @@ function FieldChoiceButtons({
   fieldKey,
   preview,
   value,
+  sourceName,
+  targetName,
   onChange
 }: Readonly<{
   label: string;
   fieldKey: FieldKey;
   preview: UserMergePreviewResponse;
   value: UserMergeFieldChoice;
+  sourceName: string;
+  targetName: string;
   onChange: (value: UserMergeFieldChoice) => void;
 }>) {
   const groupId = useId();
-  const sourceValue = preview.field_options[fieldKey].source ?? "Empty";
-  const targetValue = preview.field_options[fieldKey].target ?? "Empty";
+  const options = [
+    ["source", sourceName, preview.field_options[fieldKey].source],
+    ["target", targetName, preview.field_options[fieldKey].target]
+  ] as const;
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium" id={groupId}>
-        {label}
-      </p>
+      <p className="text-sm font-medium" id={groupId}>{label}</p>
       <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby={groupId}>
-        <Button
-          type="button"
-          variant={value === "source" ? "default" : "outline"}
-          className="h-auto justify-start whitespace-normal px-3 py-2 text-left"
-          aria-pressed={value === "source"}
-          onClick={() => onChange("source")}
-        >
-          <div className="space-y-1">
-            <div className={EYEBROW_CLASS}>Source</div>
-            <div className="text-sm">{sourceValue}</div>
-          </div>
-        </Button>
-        <Button
-          type="button"
-          variant={value === "target" ? "default" : "outline"}
-          className="h-auto justify-start whitespace-normal px-3 py-2 text-left"
-          aria-pressed={value === "target"}
-          onClick={() => onChange("target")}
-        >
-          <div className="space-y-1">
-            <div className={EYEBROW_CLASS}>Target</div>
-            <div className="text-sm">{targetValue}</div>
-          </div>
-        </Button>
+        {options.map(([choice, caption, raw]) => {
+          const selected = value === choice;
+          const photo = fieldKey === "avatar_url" && raw && /^https?:\/\//.test(raw);
+          return (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(choice)}
+              className={cn(
+                "rounded-md border px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                selected ? "border-foreground bg-foreground/5" : "border-border text-muted-foreground hover:bg-muted/40"
+              )}
+            >
+              <span className="block truncate text-xs">{caption}</span>
+              {photo ? (
+                <img src={raw} alt="" className="mt-1 h-8 w-8 rounded-full object-cover" />
+              ) : (
+                <span className={cn("mt-0.5 block truncate text-sm", selected && "text-foreground")}>
+                  {raw || "None"}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -260,6 +265,10 @@ function UserMergeDialogSession({
         ) ||
         Object.entries(submittedPolicy.conflict_choices).some(([key, value]) =>
           normalizedPolicy.conflict_choices[key] !== value
+        ) ||
+        (submittedPolicy.membership_actions ?? []).length !== (normalizedPolicy.membership_actions ?? []).length ||
+        (submittedPolicy.membership_actions ?? []).some((action) =>
+          normalizedPolicy.membership_actions?.find((item) => item.workspace_id === action.workspace_id)?.action !== action.action
         )
       )) {
         setPreviewError("The preview does not match the submitted account choices. Run Preview merge again.");
@@ -429,29 +438,24 @@ function UserMergeDialogSession({
       }
       onOpenChange(nextOpen);
     }}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowRightLeft className="h-4 w-4" aria-hidden />
-            Merge player profiles
-          </DialogTitle>
-          <DialogDescription>
-            Merge the records and selected identities attached to <strong>{sourceUser.name}</strong>
-            onto the target, then permanently delete the source player. Review sign-in accounts separately.
+      <DialogContent className="flex max-h-[min(92dvh,52rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="space-y-1 px-6 pb-4 pr-12 pt-6">
+          <DialogTitle>Merge player profiles</DialogTitle>
+          <DialogDescription className="max-w-[62ch] text-sm leading-relaxed">
+            {sourceUser.name} is deleted after its records move onto the target. Sign-in accounts are chosen separately and are not combined.
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset disabled={executeMutation.isPending} className="min-w-0 space-y-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border px-4 py-3">
-              <p className={EYEBROW_CLASS}>Source</p>
-              <p className="mt-1 text-sm font-medium">{sourceUser.name}</p>
-              <p className="text-xs text-muted-foreground tabular-nums">User #{sourceUser.id}</p>
+        <fieldset disabled={executeMutation.isPending} className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
+          <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr]">
+            <div className="rounded-md border border-destructive/40 px-3 py-2">
+              <p className="text-xs text-muted-foreground">Deleted after merge</p>
+              <p className="truncate font-medium">{sourceUser.name}</p>
+              <p className="text-xs tabular-nums text-muted-foreground">#{sourceUser.id}</p>
             </div>
-            <div className="space-y-2 rounded-lg border px-4 py-3">
-              <Label htmlFor="merge-target-user" className={EYEBROW_CLASS}>
-                Target
-              </Label>
+            <ArrowRightLeft className="mx-auto hidden h-4 w-4 text-muted-foreground sm:mb-3 sm:block" aria-hidden />
+            <div className="space-y-2">
+              <Label htmlFor="merge-target-user">Target</Label>
               <UserSearchCombobox
                 id="merge-target-user"
                 value={targetUser?.id}
@@ -460,30 +464,26 @@ function UserMergeDialogSession({
                 placeholder="Select target profile"
                 searchPlaceholder="Search target user…"
               />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handlePreview}
+                disabled={!targetUser || previewPending || executeMutation.isPending}
+              >
+                {previewPending ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Loading preview…
+                  </>
+                ) : (
+                  "Preview merge"
+                )}
+              </Button>
+              {previewError ? (
+                <p role="alert" className="text-sm text-danger">{previewError}</p>
+              ) : null}
             </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3">
-            {previewError && (
-              <p role="alert" className="mr-auto text-sm text-danger">
-                The preview could not be built: {previewError}
-              </p>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePreview}
-              disabled={!targetUser || previewPending || executeMutation.isPending}
-            >
-              {previewPending ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Loading preview…
-                </>
-              ) : (
-                "Preview merge"
-              )}
-            </Button>
           </div>
 
           {preview ? (
@@ -514,6 +514,8 @@ function UserMergeDialogSession({
                     fieldKey="name"
                     preview={preview}
                     value={fieldPolicy.name}
+                    sourceName={sourceUser.name}
+                    targetName={targetUser?.name ?? "Target"}
                     onChange={(value) => handleFieldChange("name", value)}
                   />
                   <FieldChoiceButtons
@@ -521,6 +523,8 @@ function UserMergeDialogSession({
                     fieldKey="avatar_url"
                     preview={preview}
                     value={fieldPolicy.avatar_url}
+                    sourceName={sourceUser.name}
+                    targetName={targetUser?.name ?? "Target"}
                     onChange={(value) => handleFieldChange("avatar_url", value)}
                   />
                 </div>
@@ -529,27 +533,18 @@ function UserMergeDialogSession({
                   <p className="text-sm font-medium" id="merge-affected-records">
                     Records moving to {targetUser?.name ?? "the target"}
                   </p>
-                  <div className="rounded-lg border p-3" aria-labelledby="merge-affected-records">
+                  <div aria-labelledby="merge-affected-records">
                     {affectedEntries.length > 0 ? (
-                      <div className="space-y-2">
+                      <div className="space-y-1.5 text-sm">
                         {affectedEntries.map(([key, count]) => (
-                          <div
-                            key={key}
-                            className="flex items-center justify-between gap-3 text-sm"
-                          >
-                            <span className="text-muted-foreground">
-                              {AFFECTED_RECORD_LABELS[key] ?? key}
-                            </span>
-                            <Badge variant="secondary" className="tabular-nums">
-                              {count}
-                            </Badge>
+                          <div key={key} className="flex items-baseline justify-between gap-3">
+                            <span className="text-muted-foreground">{AFFECTED_RECORD_LABELS[key] ?? key}</span>
+                            <span className="tabular-nums">{count}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Nothing is linked to the source profile, so no records get reassigned.
-                      </p>
+                      <p className="text-sm text-muted-foreground">Nothing on the source profile needs to move.</p>
                     )}
                   </div>
                 </div>
@@ -562,7 +557,13 @@ function UserMergeDialogSession({
                 onToggle={handleIdentityToggle}
               />
 
-              <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <div className="space-y-3 border-t pt-4">
+                <div>
+                  <p className="text-sm font-medium">Before you merge</p>
+                  <p className="mt-1 max-w-[68ch] text-sm text-muted-foreground">
+                    Sessions and API keys for both accounts are revoked, not moved. A retained account has to sign in again.
+                  </p>
+                </div>
                 {preview.auth_merge ? (
                   <div className="flex items-start gap-3">
                     <Checkbox
@@ -573,9 +574,8 @@ function UserMergeDialogSession({
                       className="mt-0.5"
                     />
                     <Label htmlFor={`${confirmId}-auth`} className="text-sm leading-snug">
-                      I reviewed the OAuth destinations, retained login access and ownership changes
-                      for the target player. Its owner will be account #{authPolicy?.surviving_auth_user_id}.
-                      Sessions and API keys for both affected accounts will be revoked; retained accounts must sign in again.
+                      I reviewed the OAuth destinations and who owns the surviving player
+                      {authPolicy ? ` (account #${authPolicy.surviving_auth_user_id})` : ""}.
                     </Label>
                   </div>
                 ) : null}
@@ -589,9 +589,7 @@ function UserMergeDialogSession({
                       className="mt-0.5"
                     />
                     <Label htmlFor={`${confirmId}-auth-delete`} className="text-sm leading-snug">
-                      I separately confirm permanent deletion of sign-in account {deletedAccount.username}
-                      {" "} (#{deletedAccount.id}), after the reviewed resource transfers.
-                      Sessions and API keys for both affected accounts will be revoked.
+                      I separately confirm permanent deletion of sign-in account {deletedAccount.username} (#{deletedAccount.id}).
                     </Label>
                   </div>
                 ) : null}
@@ -605,11 +603,11 @@ function UserMergeDialogSession({
                       className="mt-0.5"
                     />
                     <Label htmlFor={`${confirmId}-permissions`} className="text-sm leading-snug">
-                      I reviewed and acknowledge sign-in access, roles and explicit denies, and resource access/ownership changes.
+                      I reviewed the roles and explicit denies this merge changes.
                     </Label>
                   </div>
                 ) : null}
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 rounded-md border border-destructive/40 px-3 py-2">
                   <Checkbox
                     id={confirmId}
                     checked={confirmDelete}
@@ -617,27 +615,21 @@ function UserMergeDialogSession({
                     onCheckedChange={(checked) => setConfirmDelete(checked === true)}
                     className="mt-0.5"
                   />
-                  <div className="space-y-1">
-                    <Label htmlFor={confirmId} className="text-sm font-medium leading-snug">
-                      {targetUser
-                        ? `I understand that ${sourceUser.name} (#${sourceUser.id}) is deleted for good, and that its rosters, registrations, achievements and selected identities become part of ${targetUser.name} (#${targetUser.id}).`
-                        : `I understand that ${sourceUser.name} (#${sourceUser.id}) is deleted for good once the merge runs.`}
-                    </Label>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {sourceUser.name} #{sourceUser.id}
-                      {targetUser ? ` → ${targetUser.name} #${targetUser.id}` : ""}
-                    </p>
-                  </div>
+                  <Label htmlFor={confirmId} className="text-sm leading-snug">
+                    {targetUser
+                      ? `I understand that ${sourceUser.name} (#${sourceUser.id}) is deleted for good. Rosters, registrations, achievements and selected identities become part of ${targetUser.name} (#${targetUser.id}).`
+                      : `I understand that ${sourceUser.name} (#${sourceUser.id}) is deleted for good once the merge runs.`}
+                  </Label>
                 </div>
               </div>
             </div>
           ) : null}
         </fieldset>
 
-        <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          {submitError && <p role="alert" className="mr-auto text-sm text-danger">{submitError}</p>}
+        <DialogFooter className="gap-3 border-t bg-card px-6 py-4 sm:items-center">
+          {submitError && <p role="alert" className="text-sm text-danger sm:mr-auto">{submitError}</p>}
           {executeMutation.error instanceof Error && (
-            <p role="alert" className="mr-auto text-sm text-danger">
+            <p role="alert" className="text-sm text-danger sm:mr-auto">
               The merge did not run: {executeMutation.error.message}
             </p>
           )}

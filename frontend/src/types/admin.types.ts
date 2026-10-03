@@ -1022,11 +1022,24 @@ export interface AuthMergeOAuthDestination {
   auth_user_id: number;
 }
 
+export interface AuthMergeMembershipAction {
+  workspace_id: number;
+  action: "transfer" | "merge";
+}
+
 export interface AuthMergePolicy {
   surviving_auth_user_id: number;
   other_account_action: "keep" | "delete";
   oauth_destinations: AuthMergeOAuthDestination[];
   conflict_choices: Record<string, UserMergeFieldChoice>;
+  membership_actions?: AuthMergeMembershipAction[];
+}
+
+export interface AuthMergeMembership {
+  workspace_id: number;
+  auth_user_id: number;
+  role_names: string[];
+  can_merge: boolean;
 }
 
 export interface AuthMergeRole {
@@ -1077,6 +1090,7 @@ export interface AuthMergePreview {
   resource_counts: Record<string, number>;
   data_conflicts: AuthMergeDataConflict[];
   permission_changes: boolean;
+  memberships?: AuthMergeMembership[];
   issues: string[];
   state_fingerprint: string;
 }

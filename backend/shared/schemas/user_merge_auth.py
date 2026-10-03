@@ -11,11 +11,16 @@ class AuthMergeOAuthDestination(BaseModel):
     auth_user_id: int = Field(ge=1)
 
 
+class AuthMergeMembershipAction(BaseModel):
+    workspace_id: int = Field(ge=1)
+    action: Literal["transfer", "merge"]
+
 class AuthMergePolicy(BaseModel):
     surviving_auth_user_id: int = Field(ge=1)
     other_account_action: Literal["keep", "delete"] = "keep"
     oauth_destinations: list[AuthMergeOAuthDestination] = Field(default_factory=list)
     conflict_choices: dict[str, Literal["source", "target"]] = Field(default_factory=dict)
+    membership_actions: list[AuthMergeMembershipAction] = Field(default_factory=list)
 
 
 class AuthMergeRole(BaseModel):
@@ -59,6 +64,12 @@ class AuthMergeDataConflict(BaseModel):
     target_value: Any
 
 
+class AuthMergeMembership(BaseModel):
+    workspace_id: int
+    auth_user_id: int
+    role_names: list[str]
+    can_merge: bool
+
 class AuthMergePreview(BaseModel):
     accounts: list[AuthMergeAccount]
     oauth_connections: list[AuthMergeOAuthConnection]
@@ -66,7 +77,7 @@ class AuthMergePreview(BaseModel):
     resource_counts: dict[str, int] = Field(default_factory=dict)
     data_conflicts: list[AuthMergeDataConflict] = Field(default_factory=list)
     permission_changes: bool = False
-    issues: list[str] = Field(default_factory=list)
+    memberships: list[AuthMergeMembership] = Field(default_factory=list)
     state_fingerprint: str
 
 
