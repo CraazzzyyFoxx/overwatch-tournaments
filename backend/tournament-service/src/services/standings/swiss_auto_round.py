@@ -241,7 +241,7 @@ class SwissRoundsService:
         await session.flush()
 
         logger.info(
-            "Swiss auto-round: generated %d encounters for round %d",
+            "Swiss auto-round: generated {} encounters for round {}",
             len(encounters),
             skeleton.pairings[0].round_number if skeleton.pairings else "?",
             stage_id=stage_id,

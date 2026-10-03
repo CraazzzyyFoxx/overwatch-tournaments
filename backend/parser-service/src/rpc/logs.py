@@ -329,7 +329,7 @@ def register(broker: Any, logger: Any) -> None:
                 except HTTPException as exc:
                     errors.append(schemas.LogUploadError(filename=filename, error=str(exc.detail)))
                 except Exception as exc:  # noqa: BLE001 - collected per-file, mirrors the route
-                    logger.exception("Failed to upload and queue admin log %s", filename)
+                    logger.exception("Failed to upload and queue admin log {}", filename)
                     errors.append(schemas.LogUploadError(filename=filename, error=str(exc)))
 
             return schemas.LogUploadResponse(uploaded=uploaded, errors=errors)

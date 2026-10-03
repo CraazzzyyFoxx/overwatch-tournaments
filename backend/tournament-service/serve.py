@@ -148,7 +148,7 @@ async def drain_outbox() -> None:
     async with observe_scheduled_job("event_outbox_drain"), db.async_session_maker() as session:
         published = await publish_pending_outbox_events(session, broker, limit=100, commit=True)
         if published:
-            logger.info("Published %d outbox events", published)
+            logger.info("Published {} outbox events", published)
 
 
 async def sync_registration_google_sheet_feeds() -> None:

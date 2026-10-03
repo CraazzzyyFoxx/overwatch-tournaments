@@ -913,7 +913,7 @@ class AdminStageService:
         await session.commit()
 
         logger.info(
-            "Merged %d source group stages into stage %s for tournament %s",
+            "Merged {} source group stages into stage {} for tournament {}",
             len(source_stage_ids),
             target_stage.id,
             target_stage.tournament_id,
@@ -1712,7 +1712,7 @@ class AdminStageService:
         await session.commit()
 
         logger.info(
-            "Seeded %d teams into stage %s across %d groups (mode=%s)",
+            "Seeded {} teams into stage {} across {} groups (mode={})",
             len(teams_sorted),
             stage.id,
             num_groups,
@@ -1874,7 +1874,7 @@ class AdminStageService:
             await session.flush()
 
         logger.info(
-            "Wired TENTATIVE inputs from stage %s (%d groups × top %d, top_lb %d) into stage %s (%s)",
+            "Wired TENTATIVE inputs from stage {} ({} groups × top {}, top_lb {}) into stage {} ({})",
             source_stage.id,
             num_groups,
             top,

@@ -96,7 +96,7 @@ async def _invalidate_auth_rbac_cache(auth_user_id: int, logger: Any) -> None:
     try:
         await redis.delete(f"{RBAC_USER_KEY_PREFIX}{auth_user_id}")
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to invalidate auth RBAC cache for user %s: %s", auth_user_id, exc)
+        logger.warning("Failed to invalidate auth RBAC cache for user {}: {}", auth_user_id, exc)
     finally:
         await redis.aclose()
 

@@ -29,12 +29,12 @@ def _raise_provider_call_error(exc: BaseException, *, provider_label: str, error
     if isinstance(exc, HTTPException):
         raise exc
     if isinstance(exc, httpx.TimeoutException):
-        logger.error("%s API timeout", provider_label)
+        logger.error("{} API timeout", provider_label)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"{provider_label} service unavailable",
         ) from exc
-    logger.error("%s: %s", error_detail, exc)
+    logger.error("{}: {}", error_detail, exc)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_detail) from exc
 
 
