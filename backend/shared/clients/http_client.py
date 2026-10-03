@@ -162,17 +162,32 @@ class ResilientHttpClient:
         # coroutine) so nothing is created when the circuit is open.
         try:
             return await self.circuit_breaker.call(_make_request)
-        except (httpx.HTTPError, CircuitBreakerOpen) as exc:
+        except CircuitBreakerOpen as exc:
+            # The breaker's own fast-fail: the outage was already reported once
+            # when the breaker opened. At ERROR it produced an event per blocked
+            # URL (2993 in two weeks) describing a request that never left.
+            logger.debug(
+                "{} {} skipped: circuit breaker open",
+                method,
+                self.base_url,
+                path=path,
+                detail=str(exc) or "no detail",
+            )
+            raise
+        except httpx.HTTPError as exc:
             # ``str(ConnectError)`` is frequently empty and tenacity/faststream
             # only re-raise a repr, which is how an unreachable upstream reaches
             # the logs as an anonymous traceback. Name the target and the cause.
+            # The path stays OUT of the message: with it, one upstream outage
+            # opened a Sentry issue per player URL instead of one per
+            # host+error type (message-only records group by message).
             logger.error(
-                "{} {}{} failed: {}: {}",
+                "{} {} failed: {}",
                 method,
                 self.base_url,
-                path,
                 type(exc).__name__,
-                str(exc) or "no detail",
+                path=path,
+                detail=str(exc) or "no detail",
             )
             raise
 

@@ -36,7 +36,17 @@ function makeQueryClient() {
     defaultOptions: {
       queries: {
         staleTime: 60 * 1000,
-        refetchOnWindowFocus: true
+        refetchOnWindowFocus: true,
+        // NEVER retry a gateway backpressure answer. 503 ("rpc unavailable")
+        // means the gateway's per-queue in-flight cap shed the call because
+        // that queue is already saturated, and 504 means the upstream worker
+        // did not reply in time; TanStack's default (3 retries) turned every
+        // such read into four requests inside ~7s — aimed at the one queue
+        // that is already over capacity, and billed as four Sentry events
+        // (OWT-TOURNAMENTS-23M). Everything else keeps the default.
+        retry: (failureCount, error) =>
+          !(error instanceof ApiError && (error.status === 503 || error.status === 504)) &&
+          failureCount < 3
       }
     }
   });

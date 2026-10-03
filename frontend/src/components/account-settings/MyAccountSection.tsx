@@ -23,7 +23,6 @@ import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
 
 import { SettingsGroup } from "./SettingsGroup";
-import { LogDirectorySection } from "./LogDirectorySection";
 import { userQueryKeys } from "@/lib/users/query-keys";
 
 // Providers a user can OAuth-link (and thereby verify).
@@ -298,7 +297,6 @@ export default function MyAccountSection() {
           </>
         )}
       </SettingsGroup>
-      <LogDirectorySection key={user?.id ?? "anonymous"} />
     </div>
   );
 }

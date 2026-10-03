@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import {
   allowLogDirectoryRead,
@@ -15,6 +16,8 @@ export function useLogDirectory() {
   const accountId = useAuthProfileStore((state) => state.user?.id);
   const queryClient = useQueryClient();
   const queryKey = ["local-log-directory", accountId] as const;
+  // Local like the folder handle it drives: on another browser there is no folder to watch.
+  const [autoUploadSetting, setAutoUpload] = useLocalStorageState(`aqt:log-auto-upload:${accountId ?? "anonymous"}`, false);
   const query = useQuery({
     queryKey,
     queryFn: async () => {
@@ -61,9 +64,21 @@ export function useLogDirectory() {
   async function forget() {
     const id = requireAccount();
     await forgetLogDirectory(id);
+    setAutoUpload(false);
     void queryClient.invalidateQueries({ queryKey, refetchType: "none" });
     queryClient.setQueryData(queryKey, null);
   }
 
-  return { accountId, handle: query.data ?? null, isLoading: query.isLoading, error: query.error, select, access, forget };
+  const handle = query.data ?? null;
+  return {
+    accountId,
+    handle,
+    isLoading: query.isLoading,
+    error: query.error,
+    autoUpload: accountId != null && handle != null && autoUploadSetting,
+    setAutoUpload,
+    select,
+    access,
+    forget
+  };
 }

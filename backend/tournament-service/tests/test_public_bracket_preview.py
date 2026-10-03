@@ -39,7 +39,7 @@ class PublicBracketPreview(IsolatedAsyncioTestCase):
         viewable = AsyncMock()
         preview = AsyncMock(return_value=SKELETON)
         self.enterContext(patch.object(helpers.db, "async_session_maker", FakeSessionMaker()))
-        self.enterContext(patch.object(reads, "assert_tournament_viewable", viewable))
+        self.enterContext(patch.object(reads, "ensure_tournament_viewable", viewable))
         self.enterContext(
             patch.object(reads.admin_stage_service, "get_tournament_id", AsyncMock(return_value=stage_tournament_id))
         )

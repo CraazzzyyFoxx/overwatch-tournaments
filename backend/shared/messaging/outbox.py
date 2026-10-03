@@ -62,7 +62,7 @@ async def publish_pending_outbox_events(
     commit: bool = True,
 ) -> int:
     now = now or datetime.now(UTC)
-    next_due = (
+    due = (
         select(EventOutbox)
         .where(
             EventOutbox.status.in_(PENDING_STATUSES),
@@ -72,20 +72,25 @@ async def publish_pending_outbox_events(
             ),
         )
         .order_by(EventOutbox.created_at.asc(), EventOutbox.id.asc())
-        .limit(1)
+        .limit(limit)
         .with_for_update(skip_locked=True)
     )
-    published = 0
 
-    # One row per lock, never a batch under one: the per-row commit below ends
-    # the transaction and every lock it held, so the rest of a batch would be
-    # free for another replica's drain to take and publish a second time
-    # (duplicate Discord DMs). A published or backed-off row stops matching, so
-    # each pass takes the oldest row nobody else is publishing.
-    for _ in range(limit):
-        row = await session.scalar(next_due)
-        if row is None:
-            break
+    # One locked batch, one commit at the end of it. The batch must stay locked
+    # for as long as this drain is publishing it: every tournament-service
+    # replica runs this each second, and a row released early is free for the
+    # other replica to take and publish a second time (duplicate Discord DMs).
+    # That is what rules out a commit per row — which also cost a transaction,
+    # a ``SET LOCAL statement_timeout`` and a separate locking SELECT per event
+    # (Sentry OWT-TOURNAMENTS-2BT). Delivery stays at-least-once: a crash
+    # between a publish and the commit replays the whole batch, and consumers
+    # already dedupe on ``x-event-id``.
+    rows = list(await session.scalars(due))
+    if not rows:
+        return 0
+
+    published = 0
+    for row in rows:
         try:
             await broker.publish(
                 row.payload_json,
@@ -110,9 +115,9 @@ async def publish_pending_outbox_events(
             row.last_error = None
             published += 1
 
-        await session.flush()
-        if commit:
-            await session.commit()
+    await session.flush()
+    if commit:
+        await session.commit()
 
     return published
 

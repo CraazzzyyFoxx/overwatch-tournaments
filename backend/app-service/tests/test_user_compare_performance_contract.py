@@ -497,6 +497,33 @@ def test_statistics_encounter_query_uses_union_all_sides() -> None:
     _assert_indexable_encounter_join(_postgres_sql(encounter_query))
 
 
+def test_tournament_stats_drive_statistics_from_the_tournament_matches() -> None:
+    """``matches.statistics`` is ~27M rows and has no index on ``name``, so a
+    tournament-scoped stats read must join the tournament's (few hundred) match
+    ids — materialized, or PostgreSQL inlines the CTE back into the old plan —
+    instead of reaching the tournament through ``encounter.tournament_id`` two
+    joins away, which let the stats table become the outer relation and blew
+    past ``statement_timeout`` (OWT-TOURNAMENTS-2AP). Same rows either way, so
+    only the SQL shape catches this.
+    """
+    session = _CaptureSession()
+    asyncio.run(
+        statistics_queries.get_tournament_avg_match_stat_for_user_bulk(
+            session,
+            SimpleNamespace(id=5),
+            7,
+            [enums.LogStatsName.Deaths, enums.LogStatsName.Eliminations],
+        )
+    )
+    asyncio.run(statistics_queries.get_tournament_stat_leaderboard(session, 5, enums.LogStatsName.Deaths))
+    asyncio.run(statistics_queries.get_tournament_mvp_stat_for_user(session, SimpleNamespace(id=5), 7))
+    for statement in session.statements:
+        sql = _postgres_sql(statement)
+        assert "AS MATERIALIZED" in sql
+        assert ".match_id = matches.statistics.match_id" in sql
+        assert "matches.match.id = matches.statistics.match_id" not in sql
+
+
 def test_tournament_winrate_uses_union_all_sides() -> None:
     session = _CaptureSession()
     asyncio.run(statistics_queries.get_tournament_winrate(session, SimpleNamespace(id=1), user_id=7))

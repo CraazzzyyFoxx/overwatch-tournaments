@@ -150,7 +150,7 @@ class TeamService:
             total_query = total_query.where(sa.and_(models.Team.tournament_id == params.tournament_id))
         else:
             # Cross-tournament browse: exclude teams of hidden tournaments (issue #115).
-            # A specific tournament_id is authorized upstream by assert_tournament_viewable.
+            # A specific tournament_id is authorized upstream by ensure_tournament_viewable.
             visible_ids = visible_tournament_ids_subquery(None)
             query = query.where(models.Team.tournament_id.in_(visible_ids))
             total_query = total_query.where(models.Team.tournament_id.in_(visible_ids))

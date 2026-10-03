@@ -10,10 +10,19 @@ export interface LogDirectoryHandle {
   queryPermission(options: { mode: "read" }): Promise<PermissionState>;
   requestPermission(options: { mode: "read" }): Promise<PermissionState>;
   values(): AsyncIterable<LogFileHandle | LogDirectoryHandle>;
+  getDirectoryHandle(name: string): Promise<LogDirectoryHandle>;
+}
+
+/** A listed log with the metadata `getFile()` exposes without reading the bytes. */
+export interface LogFileEntry {
+  readonly handle: LogFileHandle;
+  readonly name: string;
+  readonly lastModified: number;
+  readonly size: number;
 }
 
 type DirectoryWindow = Window & {
-  showDirectoryPicker?: (options: { mode: "read" }) => Promise<LogDirectoryHandle>;
+  showDirectoryPicker?: (options: { mode: "read"; id: string; startIn: "documents" }) => Promise<LogDirectoryHandle>;
 };
 
 type DirectoryErrorCode = "unsupported" | "storage" | "permission" | "missing" | "read" | "account";
@@ -87,13 +96,33 @@ export async function pickLogDirectory(): Promise<LogDirectoryHandle | null> {
   if (!window.isSecureContext || !browser.showDirectoryPicker) {
     throw new LogDirectoryError("unsupported");
   }
+  let picked: LogDirectoryHandle;
   try {
     // Called before any await so the picker retains the click's user activation.
-    return await browser.showDirectoryPicker({ mode: "read" });
+    // A web page cannot name a path; Documents is the closest the API lets us start.
+    picked = await browser.showDirectoryPicker({ mode: "read", id: "overwatch-workshop", startIn: "documents" });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") return null;
     throw error;
   }
+  return resolveWorkshopDirectory(picked);
+}
+
+// Overwatch writes Workshop logs to <Documents>\Overwatch\Workshop on every
+// machine; only the Documents location differs (user name, OneDrive).
+const WORKSHOP_PATH = ["Overwatch", "Workshop"];
+
+/** Picking Documents or Overwatch lands in Workshop; any other folder is kept as picked. */
+export async function resolveWorkshopDirectory(handle: LogDirectoryHandle): Promise<LogDirectoryHandle> {
+  let current = handle;
+  for (const name of WORKSHOP_PATH.slice(WORKSHOP_PATH.indexOf(handle.name) + 1)) {
+    try {
+      current = await current.getDirectoryHandle(name);
+    } catch {
+      return handle;
+    }
+  }
+  return current;
 }
 
 export async function allowLogDirectoryRead(handle: LogDirectoryHandle): Promise<void> {
@@ -104,17 +133,15 @@ export async function allowLogDirectoryRead(handle: LogDirectoryHandle): Promise
   }
 }
 
-export async function listLogFiles(handle: LogDirectoryHandle, order: "name" | "newest" = "name"): Promise<LogFileHandle[]> {
+/** Immediate .log/.txt/.csv files, newest first by local modification time. */
+export async function listLogFiles(handle: LogDirectoryHandle): Promise<LogFileEntry[]> {
   const files: LogFileHandle[] = [];
   for await (const entry of handle.values()) {
     if (entry.kind === "file" && /\.(log|txt|csv)$/i.test(entry.name)) files.push(entry);
   }
-  if (order === "name") return files.sort((a, b) => a.name.localeCompare(b.name));
-  const datedFiles = await Promise.all(files.map(async (file) => ({
-    handle: file,
-    lastModified: (await file.getFile()).lastModified
-  })));
-  return datedFiles
-    .sort((a, b) => b.lastModified - a.lastModified || a.handle.name.localeCompare(b.handle.name))
-    .map((file) => file.handle);
+  const entries = await Promise.all(files.map(async (file) => {
+    const { lastModified, size } = await file.getFile();
+    return { handle: file, name: file.name, lastModified, size };
+  }));
+  return entries.sort((a, b) => b.lastModified - a.lastModified || a.name.localeCompare(b.name));
 }

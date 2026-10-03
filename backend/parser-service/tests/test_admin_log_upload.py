@@ -12,6 +12,7 @@ helper ``src/services/match_logs/admin_reads._validate_attached_encounter``.
 
 from __future__ import annotations
 
+import base64
 import importlib
 import logging
 import os
@@ -36,6 +37,12 @@ from tests._fakes import session_factory as _session_factory
 
 rpc_logs = importlib.import_module("src.rpc.logs")
 admin_reads = importlib.import_module("src.services.match_logs.admin_reads")
+
+FINISHED_LOG = b"0,match_start,0,Ilios,Control,Home,Away\n0,match_end,100,Home,2,0\n"
+# Still being written: rows exist, but no match_end yet.
+UNFINISHED_LOG = b"0,match_start,0,Ilios,Control,Home,Away\n0,round_start,5,1\n"
+FINISHED_B64 = base64.b64encode(FINISHED_LOG).decode()
+UNFINISHED_B64 = base64.b64encode(UNFINISHED_LOG).decode()
 
 
 class _Result:
@@ -111,8 +118,8 @@ class AdminLogUploadRpcTests(IsolatedAsyncioTestCase):
                     "tournament_id": 42,
                     "encounter_id": 9,
                     "files": [
-                        {"filename": "one.log", "content_b64": ""},
-                        {"filename": "two.log", "content_b64": ""},
+                        {"filename": "one.log", "content_b64": FINISHED_B64},
+                        {"filename": "two.log", "content_b64": FINISHED_B64},
                     ],
                 },
                 msg=None,
@@ -151,7 +158,50 @@ class AdminLogUploadRpcTests(IsolatedAsyncioTestCase):
         self.assertEqual("parser.logs.upload", charge.args[1])
         self.assertEqual(5, charge.kwargs["workspace_id"])
         self.assertEqual(2, charge.kwargs["item_count"])
-        self.assertEqual(0, charge.kwargs["size_bytes"])
+        self.assertEqual(2 * len(FINISHED_B64), charge.kwargs["size_bytes"])
+
+    async def test_upload_rejects_unfinished_log_without_storing_it(self) -> None:
+        rpc_logs._SF = _session_factory(SimpleNamespace(add=lambda row: None))
+
+        with (
+            patch.object(rpc_logs.auth, "require_tournament_id_permission", AsyncMock()),
+            patch.object(
+                rpc_logs.tournament_flows,
+                "get",
+                AsyncMock(return_value=SimpleNamespace(id=42, name="Cup", workspace_id=5)),
+            ),
+            patch.object(rpc_logs, "_validate_attached_encounter", AsyncMock(return_value=None)),
+            patch.object(rpc_logs.upload_service, "validate_log_filename", side_effect=lambda name: name),
+            patch.object(rpc_logs.upload_service, "resolve_auth_uploader_id", AsyncMock(return_value=777)),
+            patch.object(
+                rpc_logs.upload_service,
+                "store_uploaded_log_bytes",
+                AsyncMock(return_value=SimpleNamespace(id=1, filename="done.log", attached_encounter_id=None)),
+            ) as store_mock,
+            patch.object(rpc_logs, "quota", SimpleNamespace(charge=AsyncMock())),
+            patch.object(rpc_logs, "publish_message", AsyncMock()) as publish_mock,
+        ):
+            envelope = await self.broker.handlers["rpc.parser.logs.upload"](
+                {
+                    "identity": _active_identity(),
+                    "tournament_id": 42,
+                    "files": [
+                        {"filename": "done.log", "content_b64": FINISHED_B64},
+                        {"filename": "live.log", "content_b64": UNFINISHED_B64},
+                    ],
+                },
+                msg=None,
+            )
+
+        self.assertTrue(envelope["ok"], envelope)
+        data = envelope["data"]
+        self.assertEqual(["done.log"], [item["filename"] for item in data["uploaded"]])
+        self.assertEqual(
+            [{"filename": "live.log", "error": rpc_logs.MATCH_NOT_FINISHED_MESSAGE}],
+            data["errors"],
+        )
+        self.assertEqual(["done.log"], [call.kwargs["filename"] for call in store_mock.await_args_list])
+        self.assertEqual(1, publish_mock.await_count)
 
     async def test_history_query_filters_by_attached_encounter(self) -> None:
         self._recording_session()
@@ -283,3 +333,14 @@ class MatchLogOversizeMessageTests(IsolatedAsyncioTestCase):
             "Log file a.log exceeds the maximum size of 10 bytes",
             match_log_oversize_message(11, 10, filename="a.log"),
         )
+
+
+class MatchLogFinishedTests(IsolatedAsyncioTestCase):
+    def test_needs_match_end_in_the_event_column(self) -> None:
+        from src.services.match_logs.limits import match_log_finished
+
+        self.assertTrue(match_log_finished(FINISHED_LOG))
+        self.assertFalse(match_log_finished(UNFINISHED_LOG))
+        self.assertFalse(match_log_finished(b""))
+        # A player literally named "match_end" is data, not the event.
+        self.assertFalse(match_log_finished(b"0,player_joined,1,Home,match_end\n"))

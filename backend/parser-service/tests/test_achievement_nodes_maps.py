@@ -120,14 +120,22 @@ class _MapFixture(_scrim._Fixture):
         )
         return match_id
 
-    def statistics(self, match_id: int, user_id: int, team_id: int, *, value: float = 1.0) -> None:
+    def statistics(
+        self,
+        match_id: int,
+        user_id: int,
+        team_id: int,
+        *,
+        value: float = 1.0,
+        name: LogStatsName = LogStatsName.HeroTimePlayed,
+    ) -> None:
         self.insert(
             models.MatchStatistics.__table__,
             id=self._id(),
             match_id=match_id,
             user_id=user_id,
             team_id=team_id,
-            name=LogStatsName.Eliminations,
+            name=name,
             value=value,
             round=0,
             hero_id=None,
@@ -381,6 +389,27 @@ class MapCoverageTests(_MapCase):
                 self.db.shim,
                 {"type": "map_coverage", "params": {**params, "value": 2}},
                 await self.context(REAL_TOURNAMENT_ID),
+            ),
+        )
+
+    async def test_stat_rows_without_playtime_do_not_count_as_playing_the_map(self) -> None:
+        setup = self._tournament(REAL_TOURNAMENT_ID, "Bench")
+        control = self.db.gamemode("Control")
+        played_map = self.db.map(control, "Ilios")
+        benched_map = self.db.map(control, "Nepal")
+        played = self.db.match(setup["encounter"], setup["home"], setup["away"], map_id=played_map)
+        benched = self.db.match(setup["encounter"], setup["home"], setup["away"], map_id=benched_map)
+        self.db.statistics(played, REAL_HOME_USER, setup["home"])
+        # The log names the player on the second map, but with no time on any hero.
+        self.db.statistics(benched, REAL_HOME_USER, setup["home"], name=LogStatsName.FirstDeaths)
+        self.db.session.commit()
+
+        rule = {"type": "map_coverage", "params": {"field": "map", "op": ">=", "value": 2}}
+        self.assertEqual(set(), await evaluator.evaluate(self.db.shim, rule, await self.context(None)))
+        self.assertEqual(
+            {(REAL_HOME_USER,)},
+            await evaluator.evaluate(
+                self.db.shim, {**rule, "params": {**rule["params"], "value": 1}}, await self.context(None)
             ),
         )
 

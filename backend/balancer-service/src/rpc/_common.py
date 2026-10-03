@@ -108,7 +108,7 @@ def _map_error(logger: Any, label: str, exc: Exception) -> dict[str, Any]:
     if isinstance(exc, ValidationError):
         message, details = validation_error(exc)
         return rpc_error("unprocessable", message, details)
-    logger.exception("balancer rpc failed: %s", label)
+    logger.exception("balancer rpc failed: {}", label)
     return rpc_error("internal", "internal error")
 
 

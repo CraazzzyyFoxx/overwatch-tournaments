@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { stageNeedsWinner, type EncounterScore } from "@/lib/encounter/score";
 import { notify } from "@/lib/notify";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
@@ -157,7 +158,7 @@ export function EncounterEditDialog({
 }
 
 /**
- * Two blocks with one write each, because the server has two writers: the
+ * Two tabs with one write each, because the server has two writers: the
  * result block confirms through the result endpoint (score, status, audit and
  * bracket advancement in one transaction), the settings block saves the
  * match's structure through the field update. Save used to carry the score as
@@ -283,8 +284,8 @@ function EncounterEditDialogBody({
     }
   });
 
-  const resultHeadingId = `encounter-edit-${encounter.id}-result`;
-  const settingsHeadingId = `encounter-edit-${encounter.id}-settings`;
+  // Both tabs stay mounted: an unsaved start time or score survives a switch.
+  const tabContentClass = "max-h-[70vh] space-y-4 overflow-y-auto pr-1 data-[state=inactive]:hidden";
 
   return (
     <DialogContent className="max-w-lg">
@@ -305,15 +306,13 @@ function EncounterEditDialogBody({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1 mt-2">
-        <section
-          aria-labelledby={resultHeadingId}
-          className="space-y-4 rounded-xl border border-[color:var(--aqt-border)] p-4"
-        >
-          <h3 id={resultHeadingId} className={EYEBROW_CLASS}>
-            {t("matchEdit.resultSection")}
-          </h3>
+      <Tabs defaultValue="result" className="mt-2">
+        <TabsList>
+          <TabsTrigger value="result">{t("matchEdit.resultSection")}</TabsTrigger>
+          <TabsTrigger value="settings">{t("matchEdit.settingsSection")}</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="result" forceMount className={tabContentClass}>
           {reports.length > 0 && (
             <CaptainReportsView encounter={encounter} reports={reports} form={reportsQuery.data?.form} />
           )}
@@ -450,16 +449,9 @@ function EncounterEditDialogBody({
               </Button>
             )}
           </div>
-        </section>
+        </TabsContent>
 
-        <section
-          aria-labelledby={settingsHeadingId}
-          className="space-y-4 rounded-xl border border-[color:var(--aqt-border)] p-4"
-        >
-          <h3 id={settingsHeadingId} className={EYEBROW_CLASS}>
-            {t("matchEdit.settingsSection")}
-          </h3>
-
+        <TabsContent value="settings" forceMount className={tabContentClass}>
           {canEditStructure && (
             <>
               <div className="space-y-1.5">
@@ -539,8 +531,8 @@ function EncounterEditDialogBody({
               </Button>
             </div>
           )}
-        </section>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <DialogFooter className="mt-4">
         <Button

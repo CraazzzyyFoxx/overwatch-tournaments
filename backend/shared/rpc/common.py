@@ -319,5 +319,5 @@ async def envelope(
         message, details = validation_error(exc)
         return rpc_error("unprocessable", message, details)
     except Exception:  # pragma: no cover - defensive worker guard
-        logger.exception("%s rpc failed: %s", service, label)
+        logger.exception("{} rpc failed: {}", service, label)
         return rpc_error("internal", "internal error")

@@ -17,6 +17,13 @@ resolving a map (``map_report.py``), and it names that resource itself.
 
 Staging/persistence/publishing all live in ``shared.services.realtime.emit``:
 call this immediately before the commit that owns the pool mutation.
+
+It also stages that room's RECONCILE (``room_reconcile``). Every write that
+moves a room already signals it here, so this one call site covers captain
+actions, undo, readiness, resets, map reports, corrections and the organizer's
+controls -- and the reconcile is what applies the heals the (now pure) state
+read used to perform. The reconcile's own signal re-enters here once; a pass
+that changes nothing emits nothing, so it converges.
 """
 
 from __future__ import annotations
@@ -24,6 +31,7 @@ from __future__ import annotations
 from typing import Any
 
 from shared.services.realtime import DomainEvent, Scope, emit
+from src.services.encounter.room_reconcile import request_room_reconcile
 
 __all__ = ("emit_pick_ban_update",)
 
@@ -45,3 +53,4 @@ async def emit_pick_ban_update(session: Any, encounter_id: int, *, kind: str = "
             payload={"encounter_id": int(encounter_id)},
         ),
     )
+    request_room_reconcile(session, encounter_id)

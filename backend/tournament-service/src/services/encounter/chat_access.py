@@ -15,7 +15,7 @@ from shared.core.enums import EncounterFormat
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.services.chat import SPECTATOR_ROLE, ChatMembership, ChatRoom, ChatService
 from shared.services.tournament.display_name import tournament_display_name
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 from src import models
 from src.core import auth
 from src.services import visibility_resolvers
@@ -44,7 +44,7 @@ class EncounterChatAccess:
         tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_encounter(
             session, encounter.id
         )
-        await assert_tournament_viewable(session, auth_user, tournament_id)
+        await ensure_tournament_viewable(session, auth_user, tournament_id)
 
         if auth_user is None:
             return _SPECTATOR

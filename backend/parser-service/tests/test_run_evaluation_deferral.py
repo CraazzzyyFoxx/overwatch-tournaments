@@ -54,6 +54,10 @@ class _FakeSession:
     def add(self, obj: object) -> None:
         self.added.append(obj)
 
+    async def execute(self, _statement):  # noqa: ANN001, ANN202
+        # The run's one batched read of stored evaluation results: nothing stored.
+        return []
+
     async def flush(self) -> None:
         return None
 

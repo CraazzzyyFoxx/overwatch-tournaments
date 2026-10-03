@@ -28,7 +28,9 @@ describe("shouldRefreshWorkspaceScope", () => {
     "/users",
     "/users/"
   ])("skips the first-load correction on workspace-independent public path %s", (pathname) => {
-    expect(shouldRefreshWorkspaceScope({ ...initialCorrection, pathname })).toBe(false);
+    expect(
+      shouldRefreshWorkspaceScope({ ...initialCorrection, pathname, initialPathname: pathname })
+    ).toBe(false);
   });
 
   it.each([
@@ -43,18 +45,39 @@ describe("shouldRefreshWorkspaceScope", () => {
     "/players",
     "/users/andremorua"
   ])("keeps the first-load correction on non-detail path %s", (pathname) => {
-    expect(shouldRefreshWorkspaceScope({ ...initialCorrection, pathname })).toBe(true);
+    expect(
+      shouldRefreshWorkspaceScope({ ...initialCorrection, pathname, initialPathname: pathname })
+    ).toBe(true);
   });
 
-  it("still refreshes a public tournament detail after a real workspace change", () => {
+  const workspaceChange = {
+    isTenantHost: false,
+    initialPathname: "/players",
+    workspaceChanged: true,
+    needsInitialCorrection: false
+  };
+
+  it.each(["/tournaments/72/teams", "/tournaments/anak-cup", "/draft/78"])(
+    "does not re-render ref-addressed path %s when the workspace follows the tournament",
+    (pathname) => {
+      expect(shouldRefreshWorkspaceScope({ ...workspaceChange, pathname })).toBe(false);
+    }
+  );
+
+  it("re-renders a workspace-scoped page after a workspace change", () => {
+    expect(
+      shouldRefreshWorkspaceScope({ ...workspaceChange, pathname: "/tournaments/analytics" })
+    ).toBe(true);
+  });
+
+  it("judges the correction by the SSR's route, not the one navigated to since", () => {
     expect(
       shouldRefreshWorkspaceScope({
-        isTenantHost: false,
-        pathname: "/tournaments/72/teams",
-        workspaceChanged: true,
-        needsInitialCorrection: false
+        ...initialCorrection,
+        pathname: "/players",
+        initialPathname: "/tournaments/72"
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("never refreshes the workspace scope on a tenant host", () => {
@@ -62,6 +85,7 @@ describe("shouldRefreshWorkspaceScope", () => {
       shouldRefreshWorkspaceScope({
         isTenantHost: true,
         pathname: "/players",
+        initialPathname: "/players",
         workspaceChanged: true,
         needsInitialCorrection: true
       })

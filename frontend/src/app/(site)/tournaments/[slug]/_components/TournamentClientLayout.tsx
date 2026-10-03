@@ -2,7 +2,6 @@
 
 import React from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 
 import TournamentBroadcastDock from "./TournamentBroadcastDock";
@@ -18,7 +17,6 @@ import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
-import { createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
@@ -88,7 +86,6 @@ export default function TournamentClientLayout({
 }: Readonly<TournamentClientLayoutProps>) {
   const t = useTranslations();
   const format = useFormatter();
-  const router = useRouter();
   const tournamentQuery = useTournamentQuery(slug);
   const tournament = tournamentQuery.data;
   // Known immediately once the overview resolves; `undefined` while pending —
@@ -97,16 +94,13 @@ export default function TournamentClientLayout({
   // numeric id is known instead of waiting for the render past the early
   // returns below.
   const tournamentId = tournament?.id;
-  const routeRefresh = React.useMemo(
-    () => createTrailingCoalescer(() => router.refresh(), 500),
-    [router, tournamentId],
-  );
-
-  React.useEffect(() => () => routeRefresh.cancel(), [routeRefresh]);
 
   // The page's single invalidation subscription: every section under this shell
   // reads keys the tournament scope owns (overview, teams, standings, brackets,
-  // streams), so one consumer keeps all of them fresh.
+  // streams), so one consumer keeps all of them fresh. That includes the section
+  // rail: it is derived from the overview query (`stages`, `teams_count`), which
+  // `tournament.structure` invalidates — no server re-render (`router.refresh()`)
+  // is needed, and one per viewer per event is what saturated the frontend.
   //
   // `detailRef` is the URL segment, not the numeric id: the overview query stays
   // keyed by the ref it was fetched with for its whole lifecycle.
@@ -115,7 +109,6 @@ export default function TournamentClientLayout({
     scopeId: tournamentId,
     workspaceId: tournament?.workspace_id,
     detailRef: slug,
-    onRouteRefresh: routeRefresh.schedule,
   });
 
   // Follow the tournament the viewer opened: switch the active workspace to its

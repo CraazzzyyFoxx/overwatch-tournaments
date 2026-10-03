@@ -157,7 +157,7 @@ async def advance_winner(
         )
         if target is None:
             logger.warning(
-                "EncounterLink %s points to missing target encounter %s",
+                "EncounterLink {} points to missing target encounter {}",
                 link.id,
                 link.target_encounter_id,
             )
@@ -296,7 +296,7 @@ async def reset_encounter_result(
         away_score_before=away_score_before,
     )
     logger.info(
-        "Reset result on encounter %s (%s)",
+        "Reset result on encounter {} ({})",
         encounter.id,
         action.value,
     )
@@ -454,7 +454,7 @@ async def _maybe_create_grand_final_reset(
         )
     await session.flush()
     logger.info(
-        "Created Grand Final Reset for tournament=%s stage=%s (LB champion won GF)",
+        "Created Grand Final Reset for tournament={} stage={} (LB champion won GF)",
         gf_encounter.tournament_id,
         gf_encounter.stage_id,
     )

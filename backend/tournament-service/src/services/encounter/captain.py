@@ -253,9 +253,10 @@ class CaptainService:
         Every caller of THIS one is a series feature -- captain reports, the
         admin result writes, the captain's own side, the pick-ban room -- so the
         format is checked once here instead of at each command.
-        Only state polling opts out of the encounter lock; its lazy mutations
-        acquire their locks at the write boundary. Eager team/stage loading and
-        the DUEL guard are identical for either path.
+        State polling opts out of the encounter lock entirely -- the room's state
+        read is pure, and every mutation it used to perform now belongs to
+        ``encounter.room_reconcile``. Eager team/stage loading and the DUEL guard
+        are identical for either path.
         """
         if for_update:
             encounter = await self.load_encounter_any_format(session, encounter_id)

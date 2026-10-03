@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 //
-// The stream collector is the thin member of the trio, and that is the point
-// being pinned: it has no check log, so its bar carries two slots — not three
-// with History greyed out. The other half is its gate: the poller is
-// platform-wide, so `stream.read` is asked for in its GLOBAL form and a
-// workspace-scoped grant is refused with a reason instead of an empty page.
+// The stream collector: health plus the tick log share the Status slot, as on
+// the rank collector, so its bar carries two slots. The other half is its gate:
+// the poller is platform-wide, so `stream.read` is asked for in its GLOBAL form
+// and a workspace-scoped grant is refused with a reason instead of an empty page.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act, type ReactNode } from "react";
@@ -20,6 +19,7 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const getStreamPollHealth = vi.fn();
+const getStreamPollTicks = vi.fn();
 
 let globalGrants: string[] = ["stream.read"];
 let workspaceGrants: string[] = [];
@@ -44,6 +44,7 @@ vi.mock("@/hooks/useAuthProfile", () => ({
 vi.mock("@/services/admin.service", () => ({
   default: {
     getStreamPollHealth: (...args: unknown[]) => getStreamPollHealth(...args),
+    getStreamPollTicks: (...args: unknown[]) => getStreamPollTicks(...args),
     getSetting: vi.fn(),
     updateSetting: vi.fn()
   }
@@ -118,6 +119,17 @@ beforeEach(() => {
     ratelimit_remaining: 700,
     credentials_configured: true
   });
+  getStreamPollTicks.mockReset().mockResolvedValue([
+    {
+      ran_at: "2026-09-03T09:00:00Z",
+      status: "unauthorized",
+      tournaments_active: 2,
+      tournaments_updated: 0,
+      channels_polled: 5,
+      live_channels: 0,
+      ratelimit_remaining: 700
+    }
+  ]);
 });
 
 afterEach(async () => {
@@ -130,7 +142,7 @@ afterEach(async () => {
 });
 
 describe("StreamCollectorPage", () => {
-  it("offers Status and Settings only — there is no check log to put behind a History slot", async () => {
+  it("offers Status and Settings only — the tick log lives under Status, not its own slot", async () => {
     superuser = true;
     const container = await mount();
 
@@ -148,6 +160,11 @@ describe("StreamCollectorPage", () => {
     expect(container.querySelectorAll("a[data-link-tab]")).toHaveLength(0);
     expect(getStreamPollHealth).toHaveBeenCalled();
     expect(container.textContent).toContain("Last tick OK");
+    // The tick log sits under the health, and shows the failure the latest
+    // tick's status has already overwritten.
+    expect(getStreamPollTicks).toHaveBeenCalled();
+    expect(container.textContent).toContain("Task history");
+    expect(container.textContent).toContain("unauthorized");
   });
 
   it("refuses a workspace-scoped stream.read holder: the poller is platform-wide", async () => {
@@ -157,5 +174,6 @@ describe("StreamCollectorPage", () => {
 
     expect(container.textContent).toContain("global stream.read");
     expect(getStreamPollHealth).not.toHaveBeenCalled();
+    expect(getStreamPollTicks).not.toHaveBeenCalled();
   });
 });

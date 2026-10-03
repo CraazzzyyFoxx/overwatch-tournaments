@@ -26,9 +26,7 @@ about -- the seed-resolution lookups (``StageItemInput``/``Stage``/
 
 from __future__ import annotations
 
-import asyncio
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
@@ -38,8 +36,6 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 from shared.core.enums import (  # noqa: E402
-    EncounterFormat,
-    EncounterGameResultSource,
     EncounterGameState,
     FirstBanRotation,
     MapPickSide,
@@ -62,15 +58,12 @@ from shared.models.tournament.pick_ban import (  # noqa: E402
     PickBanSession,
 )
 from shared.models.tournament.stage import Stage  # noqa: E402
-from src.services.encounter.captain import captain_service  # noqa: E402
-from src.services.encounter.games import encounter_game_service  # noqa: E402
 from src.services.encounter.map_report import map_report_service  # noqa: E402
 from src.services.encounter.pick_ban_action import pick_ban_action_service  # noqa: E402
 from src.services.encounter.pick_ban_session import (  # noqa: E402
     REASON_WAITING_MAP,
     pick_ban_session_service,
 )
-from src.services.encounter.room_control import set_paused  # noqa: E402
 from tests._pregame_store import _matches, _Result, _Store, staged_topics  # noqa: E402,F401
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -90,6 +83,19 @@ def _turn(state: dict) -> str:
     acting = state["acting_sides"]
     assert len(acting) == 1, f"expected a single-actor step, got {acting}"
     return acting[0]
+
+
+async def _room_state(store, encounter_id: int, kind: PickBanKind, *, viewer: str | None = None) -> dict:
+    """Heal the room, then read it.
+
+    The state read is pure, and this store has no commit hooks to run
+    ``room_reconcile``'s trigger for itself, so the loop drives the healer by
+    hand -- which is exactly what that trigger does in production.
+    """
+    await pick_ban_action_service.reconcile_room(store, encounter_id, skip_locked=False)
+    return await pick_ban_action_service.get_pick_ban_state(
+        store, encounter_id, kind, viewer_side=MapPickSide.HOME.value if viewer is None else viewer
+    )
 
 
 def v1_ruleset(**kwargs) -> dict:
@@ -185,14 +191,10 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
 
     # -- helpers ----------------------------------------------------------
     async def map_state(self) -> dict:
-        return await pick_ban_action_service.get_pick_ban_state(
-            self.store, self.encounter_id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
-        )
+        return await _room_state(self.store, self.encounter_id, PickBanKind.MAP)
 
     async def hero_state(self) -> dict:
-        return await pick_ban_action_service.get_pick_ban_state(
-            self.store, self.encounter_id, PickBanKind.HERO, viewer_side=MapPickSide.HOME.value
-        )
+        return await _room_state(self.store, self.encounter_id, PickBanKind.HERO)
 
     async def act(self, kind: PickBanKind, side: str, item_id: int, action: str = "ban") -> None:
         await pick_ban_action_service.perform_pick_ban_action(
@@ -593,9 +595,7 @@ class LoserChoiceStallTests(IsolatedAsyncioTestCase):
             readiness.encounter_id = self.encounter_id
 
     async def state(self, kind: PickBanKind) -> dict:
-        return await pick_ban_action_service.get_pick_ban_state(
-            self.store, self.encounter_id, kind, viewer_side=MapPickSide.HOME.value
-        )
+        return await _room_state(self.store, self.encounter_id, kind)
 
     async def play_map_one(self) -> None:
         """Map 1 vetoed, its four hero bans taken, its result agreed (home wins),
@@ -639,7 +639,7 @@ class LoserChoiceStallTests(IsolatedAsyncioTestCase):
             await pick_ban_action_service.perform_pick_ban_action(
                 self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=available[0], action="ban"
             )
-        # The hero session catches up with the map phase on a READ
+        # The hero session catches up with the map phase in the healer
         # (`sync_hero_rounds`), which is where the choice gate is reached.
         await self.state(PickBanKind.HERO)
 
@@ -724,17 +724,13 @@ class DeletedConfigStallTests(IsolatedAsyncioTestCase):
             readiness.encounter_id = self.encounter_id
 
     async def test_it_says_the_config_is_gone(self) -> None:
-        state = await pick_ban_action_service.get_pick_ban_state(
-            self.store, self.encounter_id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
-        )
+        state = await _room_state(self.store, self.encounter_id, PickBanKind.MAP)
         pick_ban = next(row for row in self.store.all_of(PickBanSession) if row.kind == PickBanKind.MAP)
         available = [
             entry["item_id"] for entry in state["pool"] if entry["status"] == MapPoolEntryStatus.AVAILABLE.value
         ]
         for item_id in available[:2]:
-            state = await pick_ban_action_service.get_pick_ban_state(
-                self.store, self.encounter_id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
-            )
+            state = await _room_state(self.store, self.encounter_id, PickBanKind.MAP)
             await pick_ban_action_service.perform_pick_ban_action(
                 self.store, self.encounter_id, PickBanKind.MAP, _turn(state), item_id=item_id, action="ban"
             )
@@ -756,7 +752,8 @@ class FreeplayPositionOpensOnlyForAPlayableRoomTests(IsolatedAsyncioTestCase):
     organizer previews brackets long before they are activated. Opening the
     position unconditionally wrote an ``encounter_game`` row for a matchup that
     may never exist (a preview stage), or for one whose slots are still waiting
-    on an upstream result.
+    on an upstream result. The read no longer opens it at all -- the healer
+    does, behind the very same gates.
     """
 
     def _store(self, *, encounter: Encounter, stage: Stage | None = None) -> _Store:
@@ -770,9 +767,7 @@ class FreeplayPositionOpensOnlyForAPlayableRoomTests(IsolatedAsyncioTestCase):
         return store
 
     async def _map_state(self, store: _Store, encounter: Encounter) -> dict:
-        return await pick_ban_action_service.get_pick_ban_state(
-            store, encounter.id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
-        )
+        return await _room_state(store, encounter.id, PickBanKind.MAP)
 
     async def test_a_live_freeplay_room_with_both_teams_opens_its_first_position(self) -> None:
         encounter = _encounter()
@@ -804,222 +799,3 @@ class FreeplayPositionOpensOnlyForAPlayableRoomTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([], state["games"])
         self.assertEqual([], store.all_of(EncounterGame))
-
-
-class _RoomConnection(_Store):
-    """Independent transactions sharing rows, with SQL row-lock waits."""
-
-    def __init__(self, database: _Store, locks: dict) -> None:
-        super().__init__()
-        self.database = database
-        self.rows = database.rows
-        self.locks = locks
-        self.held: list[asyncio.Lock] = []
-
-    def add(self, instance) -> None:
-        self.database.add(instance)
-        self.database._assign_ids()
-
-    async def execute(self, statement):
-        if getattr(statement, "_for_update_arg", None) is not None:
-            entity = self._entity(statement)
-            rows = self._select_rows(statement)
-            for row in rows:
-                lock = self.locks.setdefault((entity, row.id), asyncio.Lock())
-                if lock not in self.held:
-                    await lock.acquire()
-                    self.held.append(lock)
-        else:
-            # Let both readers reach an unlocked snapshot before either writes.
-            await asyncio.sleep(0)
-        return await super().execute(statement)
-
-    async def commit(self) -> None:
-        await self.database.commit()
-        self.release()
-
-    def release(self) -> None:
-        for lock in self.held:
-            lock.release()
-        self.held.clear()
-
-
-class ConcurrentRoomReadsTests(IsolatedAsyncioTestCase):
-    async def asyncSetUp(self) -> None:
-        self.database = _Store()
-        self.encounter = _encounter()
-        self.database.seed(self.encounter, _map_config())
-        self.database.seed(
-            EncounterReadiness(encounter_id=self.encounter.id, side="home"),
-            EncounterReadiness(encounter_id=self.encounter.id, side="away"),
-        )
-        self.locks = {}
-
-    async def read(self, connection: _RoomConnection, kind: PickBanKind = PickBanKind.MAP) -> dict:
-        try:
-            return await pick_ban_action_service.get_pick_ban_state(
-                connection, self.encounter.id, kind, viewer_side=None
-            )
-        finally:
-            connection.release()
-
-    async def test_two_first_readers_open_one_session_and_one_candidate_set(self) -> None:
-        states = await asyncio.gather(
-            self.read(_RoomConnection(self.database, self.locks)),
-            self.read(_RoomConnection(self.database, self.locks)),
-        )
-        self.assertEqual(states[0]["session"]["id"], states[1]["session"]["id"])
-        self.assertEqual(1, len(self.database.all_of(PickBanSession)))
-        self.assertEqual(MAP_SLOTS[0], sorted(entry.item_id for entry in self.database.all_of(PickBanEntry)))
-
-    async def test_steady_spectators_finish_while_an_editor_holds_the_encounter(self) -> None:
-        initial = await self.read(_RoomConnection(self.database, self.locks))
-        lock = self.locks.setdefault((Encounter, self.encounter.id), asyncio.Lock())
-        await lock.acquire()
-        try:
-            states = await asyncio.wait_for(
-                asyncio.gather(
-                    self.read(_RoomConnection(self.database, self.locks)),
-                    self.read(_RoomConnection(self.database, self.locks)),
-                ),
-                timeout=1,
-            )
-        finally:
-            lock.release()
-        self.assertEqual([initial, initial], states)
-
-    async def test_timeout_is_settled_once_by_simultaneous_readers(self) -> None:
-        await self.read(_RoomConnection(self.database, self.locks))
-        pick_ban = self.database.all_of(PickBanSession)[0]
-        steps = pick_ban.resolved_sequence_json
-        steps[0]["timer_seconds"] = 1
-        steps[0]["on_timeout"] = "random_fill"
-        pick_ban.resolved_sequence_json = steps
-        pick_ban.current_step_started_at = datetime.now(UTC) - timedelta(seconds=10)
-        states = await asyncio.gather(
-            self.read(_RoomConnection(self.database, self.locks)),
-            self.read(_RoomConnection(self.database, self.locks)),
-        )
-        self.assertEqual([1, 1], [state["current_step_index"] for state in states])
-        submissions = states[0]["submissions"]
-        self.assertEqual([(0, "home")], [(row["step_index"], row["side"]) for row in submissions])
-        self.assertEqual(
-            1, sum(entry.status == MapPoolEntryStatus.BANNED for entry in self.database.all_of(PickBanEntry))
-        )
-
-    async def test_simultaneous_readers_repair_a_missing_game_once(self) -> None:
-        connection = _RoomConnection(self.database, self.locks)
-        for item_id in MAP_SLOTS[0][:2]:
-            state = await self.read(connection)
-            await pick_ban_action_service.perform_pick_ban_action(
-                connection,
-                self.encounter.id,
-                PickBanKind.MAP,
-                _turn(state),
-                item_id=item_id,
-                action="ban",
-            )
-            connection.release()
-        self.database.rows[EncounterGame] = []
-        states = await asyncio.gather(
-            self.read(_RoomConnection(self.database, self.locks)),
-            self.read(_RoomConnection(self.database, self.locks)),
-        )
-        self.assertEqual(1, len(self.database.all_of(EncounterGame)))
-        self.assertEqual(
-            [[(1, MAP_SLOTS[0][-1], "awaiting_result")]] * 2,
-            [[(game["position"], game["map_id"], game["state"]) for game in state["games"]] for state in states],
-        )
-
-    async def test_paused_timeout_is_not_settled_by_simultaneous_readers(self) -> None:
-        await self.read(_RoomConnection(self.database, self.locks))
-        pick_ban = self.database.all_of(PickBanSession)[0]
-        pick_ban.resolved_sequence_json[0]["timer_seconds"] = 1
-        pick_ban.resolved_sequence_json[0]["on_timeout"] = "random_fill"
-        pick_ban.current_step_started_at = datetime.now(UTC) - timedelta(seconds=10)
-        pick_ban.paused_at = datetime.now(UTC)
-        states = await asyncio.gather(
-            self.read(_RoomConnection(self.database, self.locks)),
-            self.read(_RoomConnection(self.database, self.locks)),
-        )
-        self.assertEqual([0, 0], [state["current_step_index"] for state in states])
-        self.assertEqual([[], []], [state["submissions"] for state in states])
-        self.assertTrue(
-            all(entry.status == MapPoolEntryStatus.AVAILABLE for entry in self.database.all_of(PickBanEntry))
-        )
-
-    async def test_read_loader_bypasses_editor_lock_but_still_rejects_lobbies(self) -> None:
-        connection = _RoomConnection(self.database, self.locks)
-        lock = self.locks.setdefault((Encounter, self.encounter.id), asyncio.Lock())
-        await lock.acquire()
-        try:
-            encounter = await asyncio.wait_for(
-                captain_service._load_encounter(connection, self.encounter.id, for_update=False),
-                timeout=1,
-            )
-            self.assertEqual(self.encounter.id, encounter.id)
-            self.encounter.format = EncounterFormat.FFA
-            with self.assertRaises(HTTPException) as caught:
-                await captain_service._load_encounter(connection, self.encounter.id, for_update=False)
-            self.assertEqual(409, caught.exception.status_code)
-        finally:
-            connection.release()
-            lock.release()
-
-    async def test_simultaneous_hero_reads_append_one_round_after_a_confirmed_position(self) -> None:
-        self.database.rows[PickBanConfig] = []
-        self.database.seed(_hero_config())
-        connection = _RoomConnection(self.database, self.locks)
-        map_state = await self.read(connection)
-        for item_id in HEROES[:4]:
-            state = await self.read(connection, PickBanKind.HERO)
-            await pick_ban_action_service.perform_pick_ban_action(
-                connection,
-                self.encounter.id,
-                PickBanKind.HERO,
-                _turn(state),
-                item_id=item_id,
-                action="ban",
-            )
-            connection.release()
-        game = self.database.all_of(EncounterGame)[0]
-        self.assertEqual(map_state["games"][0]["id"], game.id)
-        await encounter_game_service.accept_result(
-            connection,
-            self.encounter,
-            game,
-            home_score=2,
-            away_score=1,
-            source=EncounterGameResultSource.CAPTAIN_AGREEMENT,
-            actor_user_id=None,
-        )
-        await connection.commit()
-
-        states = await asyncio.gather(
-            self.read(_RoomConnection(self.database, self.locks), PickBanKind.HERO),
-            self.read(_RoomConnection(self.database, self.locks), PickBanKind.HERO),
-        )
-
-        self.assertEqual([2, 2], [state["current_round"] for state in states])
-        round_two = [entry for entry in self.database.all_of(PickBanEntry) if entry.round == 2]
-        self.assertEqual(HEROES[4:], sorted(entry.item_id for entry in round_two))
-
-    async def test_idempotent_pause_and_completion_read_do_not_invert_locks(self) -> None:
-        await self.read(_RoomConnection(self.database, self.locks))
-        pick_ban = self.database.all_of(PickBanSession)[0]
-        # A paused room still owes completion when no step remains.
-        pick_ban.resolved_sequence_json = []
-        pick_ban.paused_at = datetime.now(UTC)
-        admin = _RoomConnection(self.database, self.locks)
-        try:
-            states = await asyncio.wait_for(
-                asyncio.gather(
-                    set_paused(admin, self.encounter.id, PickBanKind.MAP, paused=True, actor_auth_user_id=None),
-                    self.read(_RoomConnection(self.database, self.locks)),
-                ),
-                timeout=1,
-            )
-        finally:
-            admin.release()
-        self.assertEqual(["completed", "completed"], [state["session"]["status"] for state in states])
-        self.assertEqual([[], []], [state["games"] for state in states])

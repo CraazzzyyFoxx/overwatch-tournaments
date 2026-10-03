@@ -84,7 +84,7 @@ class _Ctx:
                 "tournament_id_for_encounter",
                 AsyncMock(return_value=TOURNAMENT_ID),
             ),
-            patch.object(chat_access, "assert_tournament_viewable", viewable_mock),
+            patch.object(chat_access, "ensure_tournament_viewable", viewable_mock),
             patch.object(chat_access.captain_service, "resolve_captain_side", side_mock),
             patch.object(chat_access.auth, "get_encounter_workspace_id", AsyncMock(return_value=WORKSPACE_ID)),
             patch.object(

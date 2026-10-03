@@ -738,4 +738,119 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
     assert asyncio.run(_run()) == [(slugs[0], 1), (slugs[1], 2)]
 
 
+def test_an_edit_that_changes_the_role_set_keeps_its_overlapping_picks(db_session) -> None:
+    """The other two shapes of the same edit: the role SET moves, and a surviving
+    role's pick list overlaps the one it replaces.
+
+    A role that survives is merged over in place (its organizer rank must not be
+    blanked), and the throwaway row the submitted answer was parsed into must
+    never reach the session -- its INSERT has no ``registration_id`` and fails
+    the whole edit. A role that is dropped goes through delete-orphan, a role
+    that is new is inserted, and the surviving role's picks are replaced by a
+    list that shares and reorders heroes -- which only commits because both
+    ``registration_role_hero`` uniques are deferred."""
+    suffix = uuid.uuid4().hex[:8]
+    # A top-hero pick must belong to the role's class, so each role gets its own.
+    classes = {
+        f"hero-{suffix}-t": enums.HeroClass.tank,
+        f"hero-{suffix}-d0": enums.HeroClass.damage,
+        f"hero-{suffix}-d1": enums.HeroClass.damage,
+        f"hero-{suffix}-s": enums.HeroClass.support,
+    }
+    slugs = list(classes)
+    tank_hero, damage_a, damage_b, support_hero = slugs
+
+    async def _run() -> tuple[list[tuple[str, int, str]], list[str], list[str]]:
+        schema = _heroes_schema()
+        seeded = await _seed(db_session, schema=schema)
+        db_session.add_all(
+            models.Hero(slug=slug, name=slug, image_path="x", type=hero_class) for slug, hero_class in classes.items()
+        )
+        await db_session.commit()
+        catalog = {
+            row.slug: HeroCatalogEntry(id=row.id, slug=row.slug, hero_class=classes[row.slug])
+            for row in (await db_session.scalars(sa.select(models.Hero).where(models.Hero.slug.in_(slugs)))).all()
+        }
+        try:
+            await registration_service.submit_public_registration(
+                db_session,
+                tournament_id=seeded["tournament_id"],
+                auth_user=seeded["auth_user"],
+                body=RegistrationSubmit(
+                    form_version_id=seeded["version_id"],
+                    answers={
+                        "battle_tag": f"E{suffix}#1234",
+                        "roles": [
+                            {"role": "tank", "is_primary": True, "top_heroes": [tank_hero]},
+                            {"role": "damage", "is_primary": False, "top_heroes": [damage_a, damage_b]},
+                        ],
+                    },
+                ),
+            )
+            registration = await registration_service.get_registration(
+                db_session, seeded["tournament_id"], seeded["auth_user"].id
+            )
+            updated = await registration_service.update_registration(
+                db_session,
+                registration,
+                tournament=await registration_service.tournament_repo.get(db_session, seeded["tournament_id"]),
+                values={
+                    "roles": [
+                        # survives, picks overlap and swap order
+                        {"role": "damage", "is_primary": True, "top_heroes": [damage_b, damage_a]},
+                        # brand new role
+                        {"role": "support", "is_primary": False, "top_heroes": [support_hero]},
+                        # "tank" is gone
+                    ]
+                },
+                schema=schema,
+                hero_catalog=catalog,
+                form_version_id=seeded["version_id"],
+            )
+            roster = (await _public_rosters(db_session, [updated])).get(updated.id)
+            assert roster is not None
+            roster_roles = [entry.role.slot_code for entry in roster.roles]
+            roster_damage_heroes = [
+                hero.slug for entry in roster.roles if entry.role.slot_code == "damage" for hero in entry.top_heroes
+            ]
+            rows = [
+                (role, priority, slug)
+                for role, priority, slug in (
+                    await db_session.execute(
+                        sa.select(
+                            models.BalancerRegistrationRole.role,
+                            models.BalancerRegistrationRoleHero.priority,
+                            models.Hero.slug,
+                        )
+                        .join(
+                            models.BalancerRegistrationRoleHero,
+                            models.BalancerRegistrationRoleHero.role_id == models.BalancerRegistrationRole.id,
+                        )
+                        .join(models.Hero, models.Hero.id == models.BalancerRegistrationRoleHero.hero_id)
+                        .where(models.BalancerRegistrationRole.registration_id == registration.id)
+                        .order_by(
+                            models.BalancerRegistrationRole.priority,
+                            models.BalancerRegistrationRoleHero.priority,
+                        )
+                    )
+                ).all()
+            ]
+            return rows, roster_roles, roster_damage_heroes
+        finally:
+            await db_session.rollback()
+            await _drop(db_session, seeded["workspace_id"])
+            await db_session.execute(sa.delete(models.Hero).where(models.Hero.slug.in_(slugs)))
+            await db_session.commit()
+
+    rows, roster_roles, roster_damage_heroes = asyncio.run(_run())
+
+    assert rows == [
+        ("damage", 1, damage_b),
+        ("damage", 2, damage_a),
+        ("support", 1, support_hero),
+    ]
+    assert roster_roles == ["damage", "support"]
+    assert roster_damage_heroes == [damage_b, damage_a]
+
+
 assert SocialAccount is not None  # imported for the model registry the gate queries

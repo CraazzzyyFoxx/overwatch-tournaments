@@ -131,24 +131,36 @@ Redis is unavailable and logged, nothing more.
 Multiple reasons registered for one tournament in a single transaction are merged into the strongest
 one before the row is written, so a burst of writes yields one event, not one per statement.
 
-### Pre-game room reads
+### Pre-game room reads and the room healer
 
-Public pick/ban state reads retain visibility, captain-side and duel-format checks, but do not
-lock the encounter merely to inspect an existing room. Steady map responses reuse one request-local
-entries/games/reports snapshot for their pool, dispute guards, games and series; state is still
-viewer-specific and is not shared-cached.
+`GET …/pick-ban/{kind}/state` is a **pure read**: it takes no row lock, writes nothing, commits
+nothing and publishes nothing. It renders the room as it stands. (It used to create the session,
+settle an expired step, append a hero round, repair game projections and open freeplay positions
+on the way past — which put every viewer's poll behind the encounter's `FOR UPDATE` and so behind
+the captains and behind each other.)
 
-Reads can still create a session, settle an expired/system step, append a hero round, repair game
-projections or open a freeplay position. Those mutation boundaries acquire the encounter before
-the pick/ban session and repeat eligibility checks with refreshed ORM rows after waiting. Admin
-actions and room controls follow the same lock order. Active polling remains necessary because
-timeout progression is lazy; paused steps do not expire.
+Every heal now belongs to `PickBanActionService.reconcile_room`, which prechecks unlocked
+(`room_owes_write`), locks encounter → session, applies the owed heals in that order, publishes one
+signal per kind it changed and commits once. It is driven from three places
+(`services/encounter/room_reconcile.py`):
+
+- a post-commit trigger staged by `emit_pick_ban_update`, so every room write heals the room it
+  touched; writes that move a room without signalling it (team changes, stage activation, pick-ban
+  config edits) stage it themselves;
+- the `pick_ban_room_due` tick, for the only change nobody writes — a step's timer running out;
+- the `pick_ban_room_sweep` backstop, for writes committed in another service.
+
+Both sweeps take the encounter with `SKIP LOCKED`, which is what makes running them on every
+replica safe. Clients do not need to poll for progress: the reconcile signals the room when it
+lands. Paused steps still never expire.
 
 ### Scheduled work
 
 | Job | Interval | What it does |
 | --- | --- | --- |
 | `event_outbox_drain` | 1 s | Drains `public.event_outbox` (batch of 100) |
+| `pick_ban_room_due` | 1 s | Settles pick-ban rooms whose step timer ran out (`SKIP LOCKED`) |
+| `pick_ban_room_sweep` | 60 s | Reconciles in-play rooms whose last writer was another service |
 | `auto_transition_tournaments` | 30 s | Applies due phase transitions |
 | `registration_google_sheet_sync` | 5 min | Pulls due Google Sheets registration feeds |
 | `challonge_active_sync` | `CHALLONGE_AUTO_SYNC_INTERVAL_MINUTES` (default 5) | Pulls Challonge → local for active tournaments |

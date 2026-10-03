@@ -17,7 +17,7 @@ from typing import Any
 
 from shared.services.realtime.scope import ScopeKind
 
-__all__ = ("MANIFEST_PATH", "Resource", "load_manifest", "route_refresh_resources", "scope_kind_of")
+__all__ = ("MANIFEST_PATH", "Resource", "load_manifest", "scope_kind_of")
 
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "realtime" / "resources.json"
 
@@ -52,16 +52,3 @@ def scope_kind_of(resource: Resource) -> ScopeKind:
     land on a topic whose subscribers are a different audience entirely.
     """
     return ScopeKind(load_manifest()["resources"][str(resource)]["scope"])
-
-
-@cache
-def route_refresh_resources() -> frozenset[Resource]:
-    """Resources whose staleness the client cannot fix by refetching queries.
-
-    Only ``tournament.structure`` today: the set of sections a tournament page
-    has is decided during server rendering, so the client has to re-run the
-    route, not a query. This replaces the former ``shouldRefreshRoute`` flag
-    that hung off the ``structure_changed`` reason.
-    """
-    manifest = load_manifest()["resources"]
-    return frozenset(Resource(name) for name, spec in manifest.items() if spec.get("route_refresh"))

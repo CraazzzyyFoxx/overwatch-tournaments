@@ -73,10 +73,7 @@ export default async function TournamentLayout({
   // the fallback is the only thing that could ever paint first. It is the same
   // skeleton the shell itself used to render while pending, and the same one
   // `loading.tsx` shows — now streamed from the server instead of appearing
-  // after hydration. A re-render of this segment (`force-dynamic` +
-  // `router.refresh()` from the invalidation subscription) is a transition, and
-  // React does not swap a transition's content for a fallback, so the shell and
-  // its nav stay mounted.
+  // after hydration.
   return (
     <Suspense fallback={<TournamentShellSkeleton />}>
       <TournamentOverviewBoundary slug={resolvedParams.slug} />

@@ -92,24 +92,29 @@ class _FakeRedis:
 class _FakeSession:
     """Answers the two statement shapes this read issues.
 
-    ``scalar`` serves the visibility gate's tournament load; ``execute`` serves the
-    batched player lookup. ``executed`` is the N+1 tripwire.
+    The first ``execute`` is the visibility gate's column row (the gate always
+    runs first — that is the contract under test); every later one is the
+    batched player lookup. ``executed`` records only the latter: the N+1 tripwire.
     """
 
     def __init__(self, tournament: Tournament | None, player_rows: list[Any] | None = None) -> None:
         self._tournament = tournament
         self._player_rows = player_rows or []
+        self._gated = False
         self.executed: list[Any] = []
 
-    async def scalar(self, statement: Any) -> Any:
-        # ``assert_tournament_viewable`` now joinedloads ``Tournament.workspace``
-        # for the workspace-hidden cascade; this fake never runs a real join, so
-        # stub a non-hidden workspace onto the transient tournament directly.
-        if self._tournament is not None:
-            self._tournament.workspace = SimpleNamespace(is_hidden=False)
-        return self._tournament
-
     async def execute(self, statement: Any) -> Any:
+        if not self._gated:
+            self._gated = True
+            t = self._tournament
+            row = (
+                None
+                if t is None
+                else SimpleNamespace(
+                    id=t.id, workspace_id=t.workspace_id, is_hidden=t.is_hidden, workspace_is_hidden=False
+                )
+            )
+            return SimpleNamespace(one_or_none=lambda: row)
         self.executed.append(statement)
         return SimpleNamespace(all=lambda: list(self._player_rows))
 

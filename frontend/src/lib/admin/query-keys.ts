@@ -60,6 +60,7 @@ export const adminQueryKeys = {
   stagesProgress: (tournamentId: KeyPart) =>
     ["admin", "stages", tournamentId, "progress"] as const,
   streamsHealth: () => ["admin", "streams", "health"] as const,
+  streamsTicks: () => ["admin", "streams", "health", "ticks"] as const,
   streams: () => ["admin", "streams"] as const,
   subscriptionsCheckLog: (workspaceId: KeyPart, state: KeyPart, source: KeyPart, provider: KeyPart) =>
     ["admin", "subscriptions", "check-log", workspaceId, state, source, provider] as const,

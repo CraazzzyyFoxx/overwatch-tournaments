@@ -5,14 +5,13 @@ encounter that plays a pick-ban room, carrying the phase it sits in, the open
 step of each kind and the handful of attention flags staff act on (a dispute,
 an expired timer, a match that started with a captain still not ready).
 
-STRICTLY read-only, and that is a hard requirement rather than a preference:
-the room's own read (``pick_ban_action.get_pick_ban_state``) lazily CREATES
-sessions, opens freeplay positions and settles expired steps. Running that for
-every encounter of a tournament would turn opening a dashboard into dozens of
-writes -- so nothing here calls ``ensure_pick_ban_session``, ``get_pick_ban_state``
-or ``_settle``, nothing commits and nothing emits. What it does instead is read
-the same rows in BULK (a constant number of queries, never one per encounter)
-and feed them to the very same pure functions the room uses:
+STRICTLY read-only, and so is the room's own read now
+(``pick_ban_action.get_pick_ban_state``) -- but this one has a second reason to
+be: it answers a whole tournament at once. Nothing here calls
+``ensure_pick_ban_session``, ``get_pick_ban_state`` or ``_settle``, nothing
+commits, nothing emits and nothing asks the healer for a pass. What it does
+instead is read the same rows in BULK (a constant number of queries, never one
+per encounter) and feed them to the very same pure functions the room uses:
 ``pick_ban_rules.current_step``/``step_progress`` for the cursor,
 ``pick_ban_config.pick_config`` for the config cascade,
 ``unavailable_reason_for`` for a room that cannot open, and

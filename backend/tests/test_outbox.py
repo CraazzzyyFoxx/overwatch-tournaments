@@ -56,9 +56,8 @@ class _Session:
         self.committed += 1
         self.db.locks = {row_id: owner for row_id, owner in self.db.locks.items() if owner is not self}
 
-    async def scalar(self, _statement) -> object | None:
-        taken = self.db.lock_due(self, limit=1)
-        return taken[0] if taken else None
+    async def scalars(self, _statement) -> list[object]:
+        return self.db.lock_due(self, limit=100)
 
 
 def _row(row_id: int, *, now: datetime | None = None) -> SimpleNamespace:
@@ -137,9 +136,9 @@ class OutboxTests(IsolatedAsyncioTestCase):
     async def test_two_drains_publish_each_event_once(self) -> None:
         """Every tournament-service replica drains the shared table each second.
 
-        A drain must only publish rows it still holds the lock on: once it has
-        committed its first row, the rest of a batch it selected is free for the
-        other replica to take -- and publish a second time.
+        A drain holds its whole batch until its single commit: a row it
+        released mid-pass would be free for the other replica to take -- and
+        publish a second time.
         """
         db = _Db([_row(row_id) for row_id in range(1, 6)])
         published: list[str] = []

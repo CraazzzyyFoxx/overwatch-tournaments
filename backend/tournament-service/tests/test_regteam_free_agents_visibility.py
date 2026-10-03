@@ -26,5 +26,5 @@ class FreeAgentsVisibilityGateTests(TestCase):
         the visibility dimension was missing, not the authentication one)."""
         source = self._handler_source()
 
-        self.assertIn("assert_tournament_viewable(session, user, tournament_id)", source)
+        self.assertIn("ensure_tournament_viewable(session, user, tournament_id)", source)
         self.assertIn("user = _identity(data)", source)

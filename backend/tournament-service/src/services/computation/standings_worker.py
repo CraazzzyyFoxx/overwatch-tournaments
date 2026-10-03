@@ -8,6 +8,7 @@ from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import AchievementEvaluateEvent
 from shared.services.scrim_scope import is_scrim_container
+from shared.services.tournament.computation import dispatch_job
 from src import models
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
@@ -50,6 +51,22 @@ async def _enqueue_achievement_evaluation(session, tournament_id: int) -> None:
     )
 
 
+async def _requeue_contended_job(session, job: models.TournamentComputationJob) -> None:
+    """Hand a lock-contended job back to the queue as if it had never run.
+
+    ``claim_job`` already spent an attempt on this delivery; losing the race for
+    the tournament row is not a failed attempt, so it is given back — otherwise
+    MAX_ATTEMPTS contended deliveries would mark the job failed and the
+    standings would never be recomputed.
+    """
+    job.status = "pending"
+    job.started_at = None
+    job.error = None
+    job.attempts = max(0, int(job.attempts) - 1)
+    await dispatch_job(session, job)
+    await session.commit()
+
+
 async def process_standings_job(job_id: int) -> None:
     async with db.async_session_maker() as session:
         job = await jobs_service.claim_job(session, job_id, kind="standings")
@@ -61,9 +78,29 @@ async def process_standings_job(job_id: int) -> None:
             current = await jobs_service.get_job(session, job_id, for_update=True)
             if current is None or current.status != "running":
                 return
-            await session.scalar(
-                sa.select(models.Tournament.id).where(models.Tournament.id == current.tournament_id).with_for_update()
+            # SKIP LOCKED, not a plain wait: whoever else is writing this
+            # tournament (a bracket job, an admin transition) holds this row for
+            # its whole transaction, and waiting burns the full statement_timeout
+            # AND one of the three attempts — three contended passes used to
+            # leave the standings permanently stale (OWT-TOURNAMENTS-R). The
+            # outbox drains every second, so handing the job back costs a tick.
+            locked = await session.scalar(
+                sa.select(models.Tournament.id)
+                .where(models.Tournament.id == current.tournament_id)
+                .with_for_update(skip_locked=True)
             )
+            if locked is None:
+                # SKIP LOCKED cannot tell "held by another writer" from "row is
+                # gone", and a deleted tournament must not requeue forever; it
+                # falls through to the recalculation that used to run anyway.
+                # ponytail: requeues are unbounded, add a backoff if a stuck
+                # lock ever spins a job.
+                still_exists = await session.scalar(
+                    sa.select(models.Tournament.id).where(models.Tournament.id == current.tournament_id)
+                )
+                if still_exists is not None:
+                    await _requeue_contended_job(session, current)
+                    return
             generation = int((current.payload_json or {}).get("generation", 0))
             standings = await standings_service.recalculate_for_tournament(
                 session,

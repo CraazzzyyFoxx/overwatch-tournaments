@@ -37,3 +37,14 @@ groups:
         annotations:
           summary: "Gateway 5xx ratio is elevated"
           description: "The gateway returned a 5xx ratio above 5% for 5 minutes."
+
+      # Per-request sheds no longer reach Sentry (one event per request buried
+      # everything else); this is the backpressure signal now.
+      - alert: GatewayRPCShedding
+        expr: sum by (queue) (rate(gateway_rpc_shed_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway is shedding RPC calls on {{ $labels.queue }}"
+          description: "{{ $labels.queue }} is at the per-queue in-flight cap (GATEWAY_RPC_MAX_INFLIGHT) and the gateway is answering 503 — the consumer service is too slow or under-provisioned."

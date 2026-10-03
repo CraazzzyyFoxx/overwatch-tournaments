@@ -88,7 +88,7 @@ class DraftChatAccessTests(IsolatedAsyncioTestCase):
         # The hidden-tournament gate is shared and tested where it lives; here
         # it is the "this room is viewable at all" precondition.
         for patcher in (
-            patch.object(chat_access, "assert_tournament_viewable", _viewable),
+            patch.object(chat_access, "ensure_tournament_viewable", _viewable),
             patch.object(chat_access, "tournament_display_name", _tournament_names),
         ):
             patcher.start()

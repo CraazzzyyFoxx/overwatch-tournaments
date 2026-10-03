@@ -60,8 +60,18 @@ def _index_rows_by_event_type(df: pd.DataFrame) -> dict[enums.LogEventType, pd.D
 
 
 async def _bulk_insert(session: AsyncSession, model: type, rows: list[dict]) -> None:
+    """One executemany for the whole list — insert against the table, not the entity.
+
+    The ORM-entity form (``sa.insert(Model)``) drops any column whose value is
+    ``None`` from the statement and starts a new batch whenever that column set
+    changes, so stat rows alternating ``hero_id``/no-``hero_id`` and kills
+    alternating ``ability``/no-``ability`` were emitted a handful of rows at a
+    time (Sentry OWT-TOURNAMENTS-2BV/2BY). The Core form keeps every key of the
+    first row and binds ``None`` as NULL, so one statement carries them all —
+    which also means every dict here must have identical keys.
+    """
     if rows:
-        await session.execute(sa.insert(model), rows)
+        await session.execute(sa.insert(model.__table__), rows)
 
 
 def _kill_feed_row(kill: models.MatchKillFeed) -> dict:

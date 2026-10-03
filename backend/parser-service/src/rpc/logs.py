@@ -41,7 +41,11 @@ from src.services.match_logs.admin_reads import (
     history_scope_conditions,
     history_search_condition,
 )
-from src.services.match_logs.limits import match_log_oversize_message
+from src.services.match_logs.limits import (
+    MATCH_NOT_FINISHED_MESSAGE,
+    match_log_finished,
+    match_log_oversize_message,
+)
 from src.services.match_logs.log_records import log_records_service
 from src.services.tournament import flows as tournament_flows
 
@@ -307,6 +311,8 @@ def register(broker: Any, logger: Any) -> None:
                     oversize = match_log_oversize_message(len(content), max_log_bytes)
                     if oversize:
                         raise HTTPException(status_code=413, detail=oversize)
+                    if not match_log_finished(content):
+                        raise HTTPException(status_code=400, detail=MATCH_NOT_FINISHED_MESSAGE)
                     record = await upload_service.store_uploaded_log_bytes(
                         session,
                         s3=_clients.s3_client,
@@ -329,7 +335,7 @@ def register(broker: Any, logger: Any) -> None:
                 except HTTPException as exc:
                     errors.append(schemas.LogUploadError(filename=filename, error=str(exc.detail)))
                 except Exception as exc:  # noqa: BLE001 - collected per-file, mirrors the route
-                    logger.exception("Failed to upload and queue admin log %s", filename)
+                    logger.exception("Failed to upload and queue admin log {}", filename)
                     errors.append(schemas.LogUploadError(filename=filename, error=str(exc)))
 
             return schemas.LogUploadResponse(uploaded=uploaded, errors=errors)

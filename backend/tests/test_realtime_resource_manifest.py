@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from shared.services.realtime import MANIFEST_PATH, Resource, load_manifest, route_refresh_resources
+from shared.services.realtime import MANIFEST_PATH, Resource, load_manifest
 from shared.services.realtime.scope import ScopeKind
 
 
@@ -39,12 +39,6 @@ def test_resource_name_matches_its_scope() -> None:
     # mismatch visible at a glance, and `emit` enforces it at runtime.
     for name, spec in load_manifest()["resources"].items():
         assert name.startswith(f"{spec['scope']}."), name
-
-
-def test_route_refresh_is_read_from_the_manifest() -> None:
-    declared = {name for name, spec in load_manifest()["resources"].items() if spec.get("route_refresh")}
-
-    assert {str(r) for r in route_refresh_resources()} == declared
 
 
 def test_manifest_is_valid_json_at_the_declared_version() -> None:

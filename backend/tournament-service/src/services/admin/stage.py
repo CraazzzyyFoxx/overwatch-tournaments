@@ -82,6 +82,7 @@ from src.services.admin.stage_common import (
 )
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
+from src.services.encounter.room_reconcile import request_stage_reconcile
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
@@ -195,9 +196,9 @@ class AdminStageService:
         """Announce that this tournament's set of page sections moved.
 
         Every stage write reaches here, and every one of them creates, removes or
-        re-shapes a stage — which is exactly ``tournament.structure``, the one
-        resource a client cannot repair by refetching a query (it has to re-run
-        the route).
+        re-shapes a stage — which is exactly ``tournament.structure``: the
+        overview (and the section rail derived from it) goes stale along with the
+        bracket reads.
         """
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
 
@@ -913,7 +914,7 @@ class AdminStageService:
         await session.commit()
 
         logger.info(
-            "Merged %d source group stages into stage %s for tournament %s",
+            "Merged {} source group stages into stage {} for tournament {}",
             len(source_stage_ids),
             target_stage.id,
             target_stage.tournament_id,
@@ -1247,6 +1248,11 @@ class AdminStageService:
         # stays -- reportable/veto-able from here on (see ``shared.services.
         # bracket.usability.is_encounter_live``).
         stage.is_published = True
+        # That flag IS the room's "is this bracket live" gate, so activation is
+        # what makes a preview stage's encounters owe their pick-ban sessions.
+        # Nothing else about them is written here, and the room's state read no
+        # longer opens a session on the way past.
+        request_stage_reconcile(session, stage.id)
 
         source_item_ids = {
             inp.source_stage_item_id
@@ -1712,7 +1718,7 @@ class AdminStageService:
         await session.commit()
 
         logger.info(
-            "Seeded %d teams into stage %s across %d groups (mode=%s)",
+            "Seeded {} teams into stage {} across {} groups (mode={})",
             len(teams_sorted),
             stage.id,
             num_groups,
@@ -1874,7 +1880,7 @@ class AdminStageService:
             await session.flush()
 
         logger.info(
-            "Wired TENTATIVE inputs from stage %s (%d groups × top %d, top_lb %d) into stage %s (%s)",
+            "Wired TENTATIVE inputs from stage {} ({} groups × top {}, top_lb {}) into stage {} ({})",
             source_stage.id,
             num_groups,
             top,

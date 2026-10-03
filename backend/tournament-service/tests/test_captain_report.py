@@ -214,7 +214,6 @@ class CaptainReportValidation(IsolatedAsyncioTestCase):
                 session, _mk_user(), 10, home_score=2, away_score=1, closeness=5
             )
 
-
     async def test_stage_not_published_rejects_report(self) -> None:
         """A bracket generated ahead of the stage's activation (organizer
         preview) must not be reportable until the stage goes live."""
@@ -237,9 +236,7 @@ class CaptainReportFlow(IsolatedAsyncioTestCase):
         ]
         for reports in cases:
             with self.subTest(existing_teams=[report.team_id for report in reports]):
-                encounter = _mk_encounter(
-                    result_status=enums.EncounterResultStatus.CONFIRMED, captain_reports=reports
-                )
+                encounter = _mk_encounter(result_status=enums.EncounterResultStatus.CONFIRMED, captain_reports=reports)
                 encounter.status = enums.EncounterStatus.COMPLETED
                 encounter.home_score, encounter.away_score = 2, 1
                 encounter.closeness = 0.7

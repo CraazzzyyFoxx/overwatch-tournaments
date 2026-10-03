@@ -46,4 +46,13 @@ DOCS: dict[str, dict] = {
             "numbers carry no workspace dimension and a workspace-scoped grant is not enough."
         ),
     },
+    "rpc.stream.ticks": {
+        "summary": "Stream poller tick history",
+        "description": (
+            "Permission: global `stream.read`. The recorded outcome of each of the last 200 Twitch live-status "
+            "poll ticks, newest first: status, when it ran, tournaments and channels covered, live channels and "
+            "Twitch's remaining rate-limit budget. Shows when polling started failing and whether it recovered, "
+            "where the health read only names the latest tick. A disabled poller records no ticks."
+        ),
+    },
 }

@@ -9369,7 +9369,7 @@ export interface paths {
         };
         /**
          * List auth users
-         * @description Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/is_active/is_superuser/workspace_id.
+         * @description Permission: `auth_user.read` — checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.
          *
          *     RPC subject: `rpc.identity.rbac.list_auth_users`
          */
@@ -11200,6 +11200,28 @@ export interface paths {
          *     RPC subject: `rpc.stream.health`
          */
         get: operations["get__api_v1_streams_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/streams/health/ticks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream poller tick history
+         * @description Permission: global `stream.read`. The recorded outcome of each of the last 200 Twitch live-status poll ticks, newest first: status, when it ran, tournaments and channels covered, live channels and Twitch's remaining rate-limit budget. Shows when polling started failing and whether it recovered, where the health read only names the latest tick. A disabled poller records no ticks.
+         *
+         *     RPC subject: `rpc.stream.ticks`
+         */
+        get: operations["get__api_v1_streams_health_ticks"];
         put?: never;
         post?: never;
         delete?: never;
@@ -19213,6 +19235,27 @@ export interface components {
              */
             workspace_id: number | null;
         };
+        /** AuthMergeMembership */
+        "app.AuthMergeMembership": {
+            /** Auth User Id */
+            auth_user_id: number;
+            /** Can Merge */
+            can_merge: boolean;
+            /** Role Names */
+            role_names: string[];
+            /** Workspace Id */
+            workspace_id: number;
+        };
+        /** AuthMergeMembershipAction */
+        "app.AuthMergeMembershipAction": {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: AppAuthMergeMembershipActionAction;
+            /** Workspace Id */
+            workspace_id: number;
+        };
         /** AuthMergeOAuthConnection */
         "app.AuthMergeOAuthConnection": {
             /** Auth User Id */
@@ -19239,6 +19282,8 @@ export interface components {
             conflict_choices?: {
                 [key: string]: AppAuthMergePolicyConflict_choices;
             };
+            /** Membership Actions */
+            membership_actions?: components["schemas"]["app.AuthMergeMembershipAction"][];
             /** Oauth Destinations */
             oauth_destinations?: components["schemas"]["app.AuthMergeOAuthDestination"][];
             /**
@@ -19258,6 +19303,8 @@ export interface components {
             data_conflicts?: components["schemas"]["app.AuthMergeDataConflict"][];
             /** Issues */
             issues?: string[];
+            /** Memberships */
+            memberships?: components["schemas"]["app.AuthMergeMembership"][];
             /** Oauth Connections */
             oauth_connections: components["schemas"]["app.AuthMergeOAuthConnection"][];
             /**
@@ -21965,6 +22012,51 @@ export interface components {
              * @default null
              */
             tournaments_updated: number | null;
+        };
+        /**
+         * StreamPollTickRead
+         * @description One recorded poll tick, for the admin task history.
+         *
+         *     The same outcome ``StreamPollHealthRead`` reports for the last tick, kept for
+         *     the last few hundred so an operator can see when polling started failing and
+         *     whether it recovered, not only what the latest tick said.
+         */
+        "stream.StreamPollTickRead": {
+            /**
+             * Channels Polled
+             * @default 0
+             */
+            channels_polled: number;
+            /**
+             * Live Channels
+             * @default 0
+             */
+            live_channels: number;
+            /**
+             * Ran At
+             * Format: date-time
+             */
+            ran_at: string;
+            /**
+             * Ratelimit Remaining
+             * @default null
+             */
+            ratelimit_remaining: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: StreamStreamPollTickReadStatus;
+            /**
+             * Tournaments Active
+             * @default 0
+             */
+            tournaments_active: number;
+            /**
+             * Tournaments Updated
+             * @default 0
+             */
+            tournaments_updated: number;
         };
         /**
          * StreamRepollRead
@@ -63457,6 +63549,7 @@ export interface operations {
                 order?: components["schemas"]["identity.SortOrder"];
                 search?: string | null;
                 role_id?: number | null;
+                exclude_role_id?: number[];
                 is_active?: boolean | null;
                 is_superuser?: boolean | null;
                 workspace_id?: number | null;
@@ -71075,6 +71168,82 @@ export interface operations {
             };
         };
     };
+    get__api_v1_streams_health_ticks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stream.StreamPollTickRead"][];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_streams_tournament__tournament_id__repoll: {
         parameters: {
             query: {
@@ -72204,6 +72373,10 @@ export enum AppAnnouncementCreateAudience {
     workspace = "workspace",
     global = "global"
 }
+export enum AppAuthMergeMembershipActionAction {
+    transfer = "transfer",
+    merge = "merge"
+}
 export enum AppAuthMergePolicyConflict_choices {
     source = "source",
     target = "target"
@@ -72266,6 +72439,16 @@ export enum ParserSortOrder {
     desc = "desc"
 }
 export enum StreamStreamPollHealthReadStatusAnyOf0 {
+    ok = "ok",
+    empty = "empty",
+    truncated = "truncated",
+    not_configured = "not_configured",
+    rate_limited = "rate_limited",
+    unauthorized = "unauthorized",
+    unavailable = "unavailable",
+    error = "error"
+}
+export enum StreamStreamPollTickReadStatus {
     ok = "ok",
     empty = "empty",
     truncated = "truncated",

@@ -42,7 +42,7 @@ from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament, TournamentPreviewAccess  # noqa: E402
 from shared.services.division_grid.access import get_default_division_grid_version_id  # noqa: E402
-from shared.services.tournament.visibility import assert_tournament_viewable  # noqa: E402
+from shared.services.tournament.visibility import assert_tournament_viewable, ensure_tournament_viewable  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src import schemas  # noqa: E402
 from src.services.tournament import flows as tournament_flows  # noqa: E402
@@ -117,7 +117,8 @@ async def _cleanup(session_maker, *, workspace_id: int) -> None:
         await session.commit()
 
 
-def test_assert_viewable_matrix() -> None:
+@pytest.mark.parametrize("gate", [assert_tournament_viewable, ensure_tournament_viewable])
+def test_assert_viewable_matrix(gate) -> None:
     suffix = uuid.uuid4().hex[:10]
 
     async def _run():
@@ -140,31 +141,31 @@ def test_assert_viewable_matrix() -> None:
                     results: dict[str, object] = {}
 
                     # not hidden -> anyone (even anon) sees it
-                    await assert_tournament_viewable(session, None, visible_id)
+                    await gate(session, None, visible_id)
                     results["visible_anon"] = "ok"
 
                     # hidden + anon -> 404
                     try:
-                        await assert_tournament_viewable(session, None, hidden_id)
+                        await gate(session, None, hidden_id)
                         results["hidden_anon"] = "leak"
                     except BaseAPIException as exc:
                         results["hidden_anon"] = exc.status_code
 
                     # hidden + superuser -> ok
-                    await assert_tournament_viewable(session, _viewer(999999, superuser=True), hidden_id)
+                    await gate(session, _viewer(999999, superuser=True), hidden_id)
                     results["hidden_superuser"] = "ok"
 
                     # hidden + workspace admin -> ok
-                    await assert_tournament_viewable(session, _viewer(999998, ws_admin=[workspace_id]), hidden_id)
+                    await gate(session, _viewer(999998, ws_admin=[workspace_id]), hidden_id)
                     results["hidden_ws_admin"] = "ok"
 
                     # hidden + allowlisted -> ok
-                    await assert_tournament_viewable(session, _viewer(allow_user_id), hidden_id)
+                    await gate(session, _viewer(allow_user_id), hidden_id)
                     results["hidden_allowlisted"] = "ok"
 
                     # hidden + non-allowlisted logged-in user -> 404
                     try:
-                        await assert_tournament_viewable(session, _viewer(999997), hidden_id)
+                        await gate(session, _viewer(999997), hidden_id)
                         results["hidden_outsider"] = "leak"
                     except BaseAPIException as exc:
                         results["hidden_outsider"] = exc.status_code

@@ -231,7 +231,7 @@ def _apply_encounter_filters(
         query = query.where(models.Encounter.tournament_id == params.tournament_id)
     else:
         # Cross-tournament browse: never surface hidden tournaments (issue #115).
-        # A specific tournament_id is authorized upstream by assert_tournament_viewable.
+        # A specific tournament_id is authorized upstream by ensure_tournament_viewable.
         query = query.where(models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None)))
     if params.stage_id is not None:
         query = query.where(models.Encounter.stage_id == params.stage_id)

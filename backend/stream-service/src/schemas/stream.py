@@ -21,6 +21,7 @@ __all__ = (
     "StreamPlayerRead",
     "StreamPollHealthRead",
     "StreamPollStatus",
+    "StreamPollTickRead",
     "StreamRepollRead",
     "StreamTeamRead",
     "TournamentStreamsRead",
@@ -155,3 +156,20 @@ class StreamPollHealthRead(BaseModel):
     #: Whether Twitch app credentials are present in this worker's environment.
     #: Distinguishes "operator never set them" from "Twitch refused them".
     credentials_configured: bool = False
+
+
+class StreamPollTickRead(BaseModel):
+    """One recorded poll tick, for the admin task history.
+
+    The same outcome ``StreamPollHealthRead`` reports for the last tick, kept for
+    the last few hundred so an operator can see when polling started failing and
+    whether it recovered, not only what the latest tick said.
+    """
+
+    ran_at: datetime
+    status: StreamPollStatus
+    tournaments_active: int = 0
+    tournaments_updated: int = 0
+    channels_polled: int = 0
+    live_channels: int = 0
+    ratelimit_remaining: int | None = None

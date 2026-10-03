@@ -138,19 +138,6 @@ describe("useInvalidation", () => {
     expect(invalidatedKeys).toEqual([]);
   });
 
-  it("re-runs the route only for a resource a refetch cannot fix", () => {
-    const onRouteRefresh = vi.fn();
-    render({ scopeKind: "tournament", scopeId: 42, onRouteRefresh });
-
-    fireEvent("tournament:42:invalidation", ["tournament.standings"]);
-    act(() => vi.advanceTimersByTime(FLUSH_MS));
-    expect(onRouteRefresh).not.toHaveBeenCalled();
-
-    fireEvent("tournament:42:invalidation", ["tournament.structure"]);
-    act(() => vi.advanceTimersByTime(FLUSH_MS));
-    expect(onRouteRefresh).toHaveBeenCalledTimes(1);
-  });
-
   it("does not carry a pending resource across a scope change", () => {
     render({ scopeKind: "tournament", scopeId: 42 });
     // Accumulated but never flushed: it belongs to tournament 42.

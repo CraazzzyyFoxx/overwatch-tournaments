@@ -43,13 +43,14 @@ and reads back an `{ok, data, error}` envelope.
 
 ## Interface
 
-One RPC namespace, `rpc.stream.*`, with three subjects:
+One RPC namespace, `rpc.stream.*`, with four subjects:
 
 | Subject | Route | Access |
 |---|---|---|
 | `rpc.stream.tournament_streams` | `GET /api/streams/tournament/{tournament_id}` | Public; hidden tournaments answer 404 |
 | `rpc.stream.repoll` | `POST /api/streams/tournament/{tournament_id}/repoll` | `stream.update` on the owning workspace |
 | `rpc.stream.health` | `GET /api/streams/health` | **Global** `stream.read` — the poller is platform-wide, so a workspace-scoped grant is not enough |
+| `rpc.stream.ticks` | `GET /api/streams/health/ticks` | **Global** `stream.read`, same as health — the last 200 tick outcomes, newest first |
 
 The full method list with request/response schemas is published at `/api/docs`, generated
 from `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`).
@@ -58,7 +59,7 @@ from `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`).
 Helix over the proxy, which would blow the gateway's RPC deadline. It clears the poll
 cursor so the next scheduler heartbeat is due, which is what its 202 describes.
 
-**Durable queues consumed:** none. The worker subscribes only to its own three RPC
+**Durable queues consumed:** none. The worker subscribes only to its own four RPC
 subjects; it consumes no domain events and reads no outbox.
 
 **Domain events published:** none. It writes no outbox row.
@@ -87,7 +88,7 @@ would make the number the admin sees a lie.
 shared SQLAlchemy metadata under `backend/shared/`, and the single Alembic project at
 `backend/migrations/` owns every migration on the platform.
 
-Live state is **Redis-only**, four keys, all TTL'd:
+Live state is **Redis-only**, five keys, all TTL'd:
 
 | Key | Contents |
 |---|---|
@@ -95,6 +96,7 @@ Live state is **Redis-only**, four keys, all TTL'd:
 | `stream:token` | The cached Twitch app access token, shared by every replica |
 | `stream:poll:last_run` | The tick's due-date cursor (24h TTL) |
 | `stream:poll:last_status` | The last tick's outcome, for `rpc.stream.health` (7d TTL) |
+| `stream:poll:history` | The last 200 tick outcomes, newest first, for `rpc.stream.ticks` (7d TTL) |
 
 Postgres access is **read-only** apart from one write: `public.audit_log`, via
 `shared.services.audit.record_audit`, journalling the admin re-poll. Read-only tables:

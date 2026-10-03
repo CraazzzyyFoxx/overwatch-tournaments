@@ -1839,7 +1839,7 @@ class ChallongeSyncService:
                     stats["errors"] += 1
                     tb = traceback.format_exc()
                     logger.exception(
-                        "Stage structure failed for challonge_id=%s tournament=%s",
+                        "Stage structure failed for challonge_id={} tournament={}",
                         source.challonge_id,
                         tournament_id,
                     )
@@ -1982,7 +1982,7 @@ class ChallongeSyncService:
                         stats["errors"] += 1
                         tb = traceback.format_exc()
                         logger.exception(
-                            "Match upsert failed challonge_match_id=%s tournament=%s",
+                            "Match upsert failed challonge_match_id={} tournament={}",
                             cm.id,
                             tournament_id,
                         )
@@ -2386,7 +2386,7 @@ class ChallongeSyncService:
                         }
                     )
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception("Challonge auto-sync failed for tournament %s", tournament_id)
+                    logger.exception("Challonge auto-sync failed for tournament {}", tournament_id)
                     results.append(
                         {
                             "tournament_id": tournament_id,
