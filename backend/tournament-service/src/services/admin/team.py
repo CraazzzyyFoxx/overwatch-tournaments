@@ -109,9 +109,9 @@ class AdminTeamService:
 
         Kept at ``tournament.structure`` rather than the narrower
         ``tournament.teams``: the FIRST team an organizer creates is what makes
-        the page grow a teams section, and that is the one thing a client cannot
-        fix by refetching a query. A later rename pays one redundant route
-        refresh for it, which is what this path already cost before.
+        the page grow a teams section, and that rides on the overview's
+        ``teams_count``, which ``tournament.teams`` does not stale. A later
+        rename pays one redundant overview refetch for it.
         """
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
 

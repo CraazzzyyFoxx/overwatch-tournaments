@@ -5,8 +5,8 @@
  * edge (wait for a quiet period, resetting on every new `schedule()` call).
  *
  * Originally written for tournament bracket realtime updates, now the timing
- * layer under `useRealtimeCoalescedRefetch` and the route refresh of the public
- * tournament shell — neither coalescer is tournament-specific.
+ * layer under `useRealtimeCoalescedRefetch` and the realtime rooms — neither
+ * coalescer is tournament-specific.
  */
 
 export type CoalescerClock<TTimer> = {

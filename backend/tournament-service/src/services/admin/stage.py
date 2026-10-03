@@ -195,9 +195,9 @@ class AdminStageService:
         """Announce that this tournament's set of page sections moved.
 
         Every stage write reaches here, and every one of them creates, removes or
-        re-shapes a stage — which is exactly ``tournament.structure``, the one
-        resource a client cannot repair by refetching a query (it has to re-run
-        the route).
+        re-shapes a stage — which is exactly ``tournament.structure``: the
+        overview (and the section rail derived from it) goes stale along with the
+        bracket reads.
         """
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
 

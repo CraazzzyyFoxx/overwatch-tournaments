@@ -31,9 +31,9 @@ from src.services.computation.jobs import jobs_service
 _TOURNAMENT_NAMES_KEY = "notification_tournament_names"
 
 #: Resources that a write to the tournament's shape (stages, teams, the
-#: tournament row itself) stales. ``tournament.structure`` is the route-refresh
-#: resource: the set of sections a page has is decided server-side, so a client
-#: cannot repair it by refetching a query.
+#: tournament row itself) stales. ``tournament.structure`` covers the overview,
+#: teams, stages, encounters and standings at once, so a page whose set of
+#: sections moved repairs itself by refetching those reads.
 STRUCTURE_RESOURCES: tuple[Resource, ...] = (Resource.TOURNAMENT_STRUCTURE,)
 
 #: Resources a recomputed or hand-edited result stales: the standings, the

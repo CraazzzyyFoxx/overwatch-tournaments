@@ -131,30 +131,6 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
   "user.notifications": () => [notificationQueryKeys.list()],
 };
 
-/**
- * Resources whose staleness a query refetch cannot fix.
- *
- * `tournament.structure` alone: which sections a tournament page has is decided
- * during server rendering, so the client has to re-run the route. Replaces the
- * former `shouldRefreshRoute` flag that hung off the `structure_changed` reason.
- */
-export const ROUTE_REFRESH_RESOURCES: Record<RealtimeResource, true | undefined> = {
-  "tournament.detail": undefined,
-  "tournament.stages": undefined,
-  "tournament.encounters": undefined,
-  "tournament.standings": undefined,
-  "tournament.teams": undefined,
-  "tournament.structure": true,
-  "tournament.registrations": undefined,
-  "tournament.registration_form": undefined,
-  "tournament.streams": undefined,
-  "workspace.logs": undefined,
-  "workspace.pickup_mix": undefined,
-  "workspace.subscriptions": undefined,
-  "workspace.analytics_jobs": undefined,
-  "user.notifications": undefined,
-};
-
 /** Every key the named resources stale, de-duplicated by serialized key. */
 export function resourceQueryKeys(
   resources: Iterable<RealtimeResource>,

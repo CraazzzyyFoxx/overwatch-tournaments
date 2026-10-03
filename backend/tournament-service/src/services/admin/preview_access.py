@@ -28,7 +28,7 @@ class PreviewAccessService:
         """``tournament.detail`` only: the allowlist changes who may preview the
         tournament and the badge its read model carries, and nothing else — no
         section appears or disappears, and no other service caches it, so this
-        needs neither the route-refresh resource nor an outbox row."""
+        needs neither ``tournament.structure`` nor an outbox row."""
         await emit(
             session,
             scope=Scope.tournament(tournament_id),

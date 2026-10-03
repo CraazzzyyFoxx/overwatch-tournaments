@@ -5,14 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   RESOURCE_QUERY_KEYS,
-  ROUTE_REFRESH_RESOURCES,
   type RealtimeResource,
   resourceQueryKeys,
 } from "@/lib/realtime/resources";
 
 type Manifest = {
   version: number;
-  resources: Record<string, { scope: string; route_refresh?: boolean }>;
+  resources: Record<string, { scope: string }>;
 };
 
 function manifest(): Manifest {
@@ -31,19 +30,6 @@ describe("realtime resource registry", () => {
     const mapped = Object.keys(RESOURCE_QUERY_KEYS).sort();
 
     expect(mapped).toEqual(declared);
-  });
-
-  it("marks route-refresh resources exactly as the manifest does", () => {
-    const declared = Object.entries(manifest().resources)
-      .filter(([, spec]) => spec.route_refresh)
-      .map(([name]) => name)
-      .sort();
-    const marked = Object.entries(ROUTE_REFRESH_RESOURCES)
-      .filter(([, value]) => value)
-      .map(([name]) => name)
-      .sort();
-
-    expect(marked).toEqual(declared);
   });
 
   it("keys every tournament resource off the scope id, and the form off the workspace too", () => {

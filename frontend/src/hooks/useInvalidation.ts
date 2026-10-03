@@ -6,7 +6,6 @@ import { useEffect, useRef } from "react";
 import { useRealtimeCoalescedRefetch } from "@/hooks/useRealtimeCoalescedRefetch";
 import {
   RESOURCE_QUERY_KEYS,
-  ROUTE_REFRESH_RESOURCES,
   type RealtimeResource,
   type ResourceKeyContext,
   resourceQueryKeys,
@@ -28,8 +27,6 @@ import {
 export type UseInvalidationOptions = ResourceKeyContext & {
   scopeKind: "tournament" | "workspace" | "user";
   scopeId: number | null | undefined;
-  /** Runs when a resource cannot be fixed by refetching (tournament.structure). */
-  onRouteRefresh?: () => void;
   /** Extra work per flush, e.g. a domain hook that also holds local state. */
   onFlush?: (resources: readonly RealtimeResource[]) => void;
 };
@@ -57,7 +54,6 @@ const CATCH_UP_FRESH_MS = 5_000;
 export function useInvalidation({
   scopeKind,
   scopeId,
-  onRouteRefresh,
   onFlush,
   ...keyContext
 }: UseInvalidationOptions): void {
@@ -120,9 +116,6 @@ export function useInvalidation({
       }
       for (const key of resourceQueryKeys(resources, scopeId, keyContext)) {
         void queryClient.invalidateQueries({ queryKey: key });
-      }
-      if (resources.some((resource) => ROUTE_REFRESH_RESOURCES[resource])) {
-        onRouteRefresh?.();
       }
       onFlush?.(resources);
     },

@@ -1,6 +1,9 @@
 type WorkspaceScopeRefreshInput = {
   isTenantHost: boolean;
+  /** The route on screen now — what `router.refresh()` would re-render. */
   pathname: string;
+  /** The route the SSR being corrected was rendered for. */
+  initialPathname: string;
   workspaceChanged: boolean;
   needsInitialCorrection: boolean;
 };
@@ -17,20 +20,27 @@ const PUBLIC_STANDALONE_DRAFT_PATH = /^\/draft\/[^/]+\/?$/;
 // exempt — that page renders server-side through the workspace-scoped api-fetch.
 const PUBLIC_USERS_INDEX_PATH = /^\/users\/?$/;
 
+// Whether this route's server render ignores the selected workspace.
+function rendersWithoutWorkspace(pathname: string): boolean {
+  return (
+    PUBLIC_TOURNAMENT_DETAIL_PATH.test(pathname) ||
+    PUBLIC_STANDALONE_DRAFT_PATH.test(pathname) ||
+    PUBLIC_USERS_INDEX_PATH.test(pathname)
+  );
+}
+
 export function shouldRefreshWorkspaceScope({
   isTenantHost,
   pathname,
+  initialPathname,
   workspaceChanged,
   needsInitialCorrection
 }: WorkspaceScopeRefreshInput): boolean {
   if (isTenantHost) return false;
-  if (workspaceChanged) return true;
-
-  // These pages render server-side without the selected workspace: by tournament ref, or not at all.
-  return (
-    needsInitialCorrection &&
-    !PUBLIC_TOURNAMENT_DETAIL_PATH.test(pathname) &&
-    !PUBLIC_STANDALONE_DRAFT_PATH.test(pathname) &&
-    !PUBLIC_USERS_INDEX_PATH.test(pathname)
-  );
+  // A tournament page switches the active workspace to its owner on open
+  // (`useSyncActiveWorkspace`); re-rendering a route that renders by ref would
+  // be a full SSR per visitor for identical output. The client cache is still
+  // invalidated by the caller.
+  if (workspaceChanged && !rendersWithoutWorkspace(pathname)) return true;
+  return needsInitialCorrection && !rendersWithoutWorkspace(initialPathname);
 }

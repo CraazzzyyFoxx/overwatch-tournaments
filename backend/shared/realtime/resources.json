@@ -36,8 +36,7 @@
     },
     "tournament.structure": {
       "scope": "tournament",
-      "route_refresh": true,
-      "doc": "The set of sections a tournament page has (stages created/removed, teams first materialized). The only resource that also forces a route-level refresh on the client."
+      "doc": "The set of sections a tournament page has (stages created/removed, teams first materialized). Clients repair it by refetching the overview, which this also stales."
     },
     "tournament.registrations": {
       "scope": "tournament",

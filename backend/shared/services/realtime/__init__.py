@@ -14,7 +14,6 @@ from shared.services.realtime.resources import (
     MANIFEST_PATH,
     Resource,
     load_manifest,
-    route_refresh_resources,
     scope_kind_of,
 )
 from shared.services.realtime.scope import Scope, ScopeKind
@@ -30,6 +29,5 @@ __all__ = (
     "emit",
     "enqueue_invalidation_outbox",
     "load_manifest",
-    "route_refresh_resources",
     "scope_kind_of",
 )

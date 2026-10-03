@@ -55,15 +55,18 @@ export default function WorkspaceBootstrap() {
 
     const shouldRefresh = shouldRefreshWorkspaceScope({
       isTenantHost,
-      pathname: initialPathname.current,
+      pathname: window.location.pathname,
+      initialPathname: initialPathname.current,
       workspaceChanged,
       needsInitialCorrection
     });
 
+    // The client cache is workspace-scoped even where the server render is not.
+    if ((workspaceChanged && !isTenantHost) || shouldRefresh) {
+      queryClient.invalidateQueries();
+    }
     if (shouldRefresh) {
       correctedInitialSsr.current = true;
-      // Invalidate client-side React Query cache
-      queryClient.invalidateQueries();
       // Re-render server components with the resolved workspace cookie
       router.refresh();
     }
