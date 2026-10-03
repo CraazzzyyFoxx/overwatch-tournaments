@@ -15,6 +15,7 @@ class AuthMergeMembershipAction(BaseModel):
     workspace_id: int = Field(ge=1)
     action: Literal["transfer", "merge"]
 
+
 class AuthMergePolicy(BaseModel):
     surviving_auth_user_id: int = Field(ge=1)
     other_account_action: Literal["keep", "delete"] = "keep"
@@ -69,6 +70,7 @@ class AuthMergeMembership(BaseModel):
     auth_user_id: int
     role_names: list[str]
     can_merge: bool
+
 
 class AuthMergePreview(BaseModel):
     accounts: list[AuthMergeAccount]

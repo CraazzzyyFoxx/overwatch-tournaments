@@ -371,9 +371,7 @@ class MatchLogProcessor:
                 f"is outside the configured map pool for encounter {encounter.id}"
             )
             logger.warning(msg)
-            raise errors.ApiHTTPException(
-                status_code=400, detail=[errors.ApiExc(code="map_not_in_pool", msg=msg)]
-            )
+            raise errors.ApiHTTPException(status_code=400, detail=[errors.ApiExc(code="map_not_in_pool", msg=msg)])
 
     async def _preload_data(self, session: AsyncSession):
         heroes_db, _ = await hero_service.get_all(session, pagination.PaginationSortParams(per_page=-1))

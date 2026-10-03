@@ -207,9 +207,7 @@ class PregameRoomsService:
         both_ready = readiness["home"] and readiness["away"]
         # The cascade, resolved once per kind for this encounter's coordinate.
         resolved = {
-            kind: pick_config(
-                configs_by_kind.get(kind, ()), stage_id=encounter.stage_id, round=encounter.round
-            )
+            kind: pick_config(configs_by_kind.get(kind, ()), stage_id=encounter.stage_id, round=encounter.round)
             for kind in _KINDS
         }
         map_config = resolved[PickBanKind.MAP]

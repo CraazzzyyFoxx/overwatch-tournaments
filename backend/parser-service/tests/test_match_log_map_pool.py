@@ -36,12 +36,23 @@ class MatchLogMapPoolTests(IsolatedAsyncioTestCase):
     async def ingest(self, configs, *, map_name="Илиос", attached_pair=(1, 2)):
         writes = []
         encounter = SimpleNamespace(
-            id=7, tournament_id=1, stage_id=4, round=2,
-            home_team_id=attached_pair[0], away_team_id=attached_pair[1],
+            id=7,
+            tournament_id=1,
+            stage_id=4,
+            round=2,
+            home_team_id=attached_pair[0],
+            away_team_id=attached_pair[1],
         )
         match = SimpleNamespace(
-            id=5, time=10.0, home_score=0, away_score=2, map_id=3,
-            home_team_id=1, away_team_id=2, log_name="old.log", log_record_id=9,
+            id=5,
+            time=10.0,
+            home_score=0,
+            away_score=2,
+            map_id=3,
+            home_team_id=1,
+            away_team_id=2,
+            log_name="old.log",
+            log_record_id=9,
         )
         session = SimpleNamespace(
             get=AsyncMock(return_value=encounter),
@@ -49,9 +60,12 @@ class MatchLogMapPoolTests(IsolatedAsyncioTestCase):
             rollback=AsyncMock(),
         )
         processor = flows.MatchLogProcessor(
-            SimpleNamespace(id=1, name="Cup"), "new.log",
+            SimpleNamespace(id=1, name="Cup"),
+            "new.log",
             [f"0,match_start,0,{map_name},Control,Home,Away", "0,match_end,100,Home,2,0"],
-            SimpleNamespace(), log_record_id=10, attached_encounter_id=7,
+            SimpleNamespace(),
+            log_record_id=10,
+            attached_encounter_id=7,
         )
         home, away = SimpleNamespace(id=1), SimpleNamespace(id=2)
         processor._preload_data = AsyncMock()
@@ -68,11 +82,19 @@ class MatchLogMapPoolTests(IsolatedAsyncioTestCase):
 
         with ExitStack() as stack:
             stack.enter_context(patch.object(flows.map_flows, "get_by_name_or_alias_and_gamemode", resolve))
-            stack.enter_context(patch.object(flows._pick_ban_config_repo, "list_by_tournament", AsyncMock(return_value=configs)))
-            stack.enter_context(patch.object(flows.encounter_service, "get_match_by_encounter_and_map", AsyncMock(return_value=match)))
-            stack.enter_context(patch.object(flows._match_repo, "create", AsyncMock(side_effect=lambda *args: writes.append("match"))))
+            stack.enter_context(
+                patch.object(flows._pick_ban_config_repo, "list_by_tournament", AsyncMock(return_value=configs))
+            )
+            stack.enter_context(
+                patch.object(flows.encounter_service, "get_match_by_encounter_and_map", AsyncMock(return_value=match))
+            )
+            stack.enter_context(
+                patch.object(flows._match_repo, "create", AsyncMock(side_effect=lambda *args: writes.append("match")))
+            )
             for repo in (flows._stats_repo, flows._events_repo, flows._kill_feed_repo):
-                stack.enter_context(patch.object(repo, "delete_for_match", AsyncMock(side_effect=lambda *args: writes.append("delete"))))
+                stack.enter_context(
+                    patch.object(repo, "delete_for_match", AsyncMock(side_effect=lambda *args: writes.append("delete")))
+                )
             stack.enter_context(patch.object(flows, "_bulk_insert", AsyncMock()))
             stack.enter_context(patch.object(flows, "_enqueue_match_log_tournament_events", AsyncMock()))
             try:
@@ -85,13 +107,16 @@ class MatchLogMapPoolTests(IsolatedAsyncioTestCase):
         for name in ("Ilios", "Илиос"):
             with self.subTest(name=name):
                 result, match, writes = await self.ingest(
-                    [config(items=(3,)), config(items=(8,), stage_id=4, round=2)], map_name=name,
+                    [config(items=(3,)), config(items=(8,), stage_id=4, round=2)],
+                    map_name=name,
                 )
                 self.assertIsInstance(result, flows.errors.ApiHTTPException)
                 self.assertEqual(400, result.status_code)
                 self.assertEqual("map_not_in_pool", result.detail[0]["code"])
-                self.assertEqual((10.0, 0, 2, "old.log", 9),
-                                 (match.time, match.home_score, match.away_score, match.log_name, match.log_record_id))
+                self.assertEqual(
+                    (10.0, 0, 2, "old.log", 9),
+                    (match.time, match.home_score, match.away_score, match.log_name, match.log_record_id),
+                )
                 self.assertEqual([], writes)
 
     async def test_configured_candidates_and_reserves_accept_canonical_alias(self):
@@ -99,8 +124,10 @@ class MatchLogMapPoolTests(IsolatedAsyncioTestCase):
             with self.subTest(pool=pool):
                 result, match, writes = await self.ingest([pool])
                 self.assertIs(result, match)
-                self.assertEqual((100.0, 2, 0, "new.log", 10),
-                                 (match.time, match.home_score, match.away_score, match.log_name, match.log_record_id))
+                self.assertEqual(
+                    (100.0, 2, 0, "new.log", 10),
+                    (match.time, match.home_score, match.away_score, match.log_name, match.log_record_id),
+                )
                 self.assertIn("roster", writes)
                 self.assertIn("commit", writes)
 

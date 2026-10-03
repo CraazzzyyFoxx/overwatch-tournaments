@@ -729,7 +729,6 @@ class CaptainService:
         self._reject_unfinished_series(encounter, resolved_home, resolved_away)
         await self._drop_unplayed_later_swiss_rounds(session, encounter)
 
-
         if closeness is not None:
             encounter.closeness = closeness / 10.0
         else:
@@ -819,10 +818,7 @@ class CaptainService:
             return
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"{home_score}:{away_score} is not a valid final score for a "
-                f"best-of-{encounter.best_of} series"
-            ),
+            detail=(f"{home_score}:{away_score} is not a valid final score for a best-of-{encounter.best_of} series"),
         )
 
     @staticmethod
@@ -864,7 +860,6 @@ class CaptainService:
             await remove_swiss_bye_round(session, encounter.stage_id, encounter.stage_item_id, round_number)
         for row in later:
             await session.delete(row)
-
 
 
 captain_service = CaptainService()
