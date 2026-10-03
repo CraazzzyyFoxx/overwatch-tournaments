@@ -52,7 +52,6 @@ from shared.repository import PickBanConfigRepository, StageRepository
 from shared.repository.pick_ban import CONFIG_POOL_LOAD
 from src.services.encounter.veto_session import SLOT_CANDIDATE_FLOOR
 
-
 #: ``detail["code"]`` of the 422 a ruleset with validation errors raises. The
 #: constructor branches on it to paint the offending fields.
 RULESET_INVALID = "ruleset_invalid"

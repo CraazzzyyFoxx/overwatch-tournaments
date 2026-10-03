@@ -11,7 +11,7 @@ from shared import models
 from shared.core.errors import BaseAPIException
 from shared.schemas.user_merge_auth import AuthMergeOAuthDestination, AuthMergePolicy
 from shared.testing.db import create_test_async_engine
-from src.schemas.admin.user_merge import UserMergeExecuteRequest, UserMergePreviewRequest
+from src import schemas
 from src.services.admin.user_merge import UserMergeService
 
 
@@ -75,13 +75,13 @@ class UserMergeAuthTransactionTests(IsolatedAsyncioTestCase):
     async def request(self, **confirmations):
         preview = await self.merges.preview_merge(
             self.session,
-            UserMergePreviewRequest(
+            schemas.UserMergePreviewRequest(
                 source_user_id=self.ids["source"], target_user_id=self.ids["target"], auth_policy=self.policy
             ),
         )
         self.assertFalse(preview.conflicts.has_auth_conflict)
         self.assertEqual([], preview.auth_merge.issues)
-        return UserMergeExecuteRequest(
+        return schemas.UserMergeExecuteRequest(
             source_user_id=self.ids["source"],
             target_user_id=self.ids["target"],
             preview_fingerprint=preview.preview_fingerprint,
