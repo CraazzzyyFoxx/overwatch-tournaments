@@ -200,6 +200,7 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
           tournamentId={encounter.tournament_id}
           encounters={[encounter]}
           initialEncounterId={encounterId}
+          autoUpload
           onUploaded={room.invalidateRoom}
           trigger={
             <Button type="button" variant="outline" size="sm" className="self-start">

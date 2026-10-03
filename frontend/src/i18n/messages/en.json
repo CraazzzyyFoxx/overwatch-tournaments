@@ -829,9 +829,9 @@
       "auto": {
         "title": "Automatic upload",
         "toggle": "Upload new logs automatically",
-        "toggleHint": "Works while a tournament page where you can upload logs is open. Each new log is sent once its match ends; files already in the folder are left alone.",
+        "toggleHint": "Works while an encounter room where you can upload logs is open. Each new log is sent once its match ends; files already in the folder are left alone. Admin pages only upload manually.",
         "needsFolder": "Select a log folder above to turn this on.",
-        "idle": "Starts when you open a tournament page.",
+        "idle": "Starts when you open an encounter room.",
         "otherTab": "Running in another tab of this site",
         "watching": "Watching {folder}",
         "targetEncounter": "New logs are attached to {encounter}",

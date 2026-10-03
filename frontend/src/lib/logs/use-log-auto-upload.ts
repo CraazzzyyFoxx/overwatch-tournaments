@@ -83,20 +83,22 @@ async function ensurePermission(handle: LogDirectoryHandle, signal: AbortSignal)
 }
 
 /**
- * Watches the saved log folder while a tournament page is open and uploads each
+ * Watches the saved log folder while an encounter room is open and uploads each
  * log that appears or changes after watching began, once it has been quiet.
  * Files already in the folder are never sent. One watcher per browser: the Web
- * Lock makes other tabs (and other dialogs on this page) wait their turn.
+ * Lock makes other tabs wait their turn. `enabled` is the page's opt-in; the
+ * account setting alone does not start it.
  */
 export function useLogAutoUpload({
+  enabled,
   tournamentId,
   encounterId,
   onUploaded
-}: Readonly<{ tournamentId: number; encounterId: number | null; onUploaded?: () => void }>) {
+}: Readonly<{ enabled: boolean; tournamentId: number; encounterId: number | null; onUploaded?: () => void }>) {
   const t = useTranslations("accountSettings.logDirectory.auto");
   const directory = useLogDirectory();
   const instance = useId();
-  const handle = directory.autoUpload ? directory.handle : null;
+  const handle = enabled && directory.autoUpload ? directory.handle : null;
   const accountId = directory.accountId;
   const latest = useRef({ t, onUploaded });
   useEffect(() => {

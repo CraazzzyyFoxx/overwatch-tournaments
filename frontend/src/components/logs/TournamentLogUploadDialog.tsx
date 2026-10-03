@@ -35,6 +35,8 @@ interface TournamentLogUploadDialogProps {
   trigger: ReactNode;
   initialEncounterId?: number | null;
   onUploaded?: () => void;
+  /** Watch the folder and offer the automatic tab. Only the encounter room opts in. */
+  autoUpload?: boolean;
 }
 
 const NO_ENCOUNTER_VALUE = "none";
@@ -56,13 +58,13 @@ export function TournamentLogUploadDialog(props: Readonly<TournamentLogUploadDia
 }
 
 function DirectoryUploadDialog({
-  tournamentId, encounters, trigger, initialEncounterId = null, onUploaded
+  tournamentId, encounters, trigger, initialEncounterId = null, onUploaded, autoUpload = false
 }: Readonly<TournamentLogUploadDialogProps>) {
   const t = useTranslations("accountSettings.logDirectory");
   const format = useFormatter();
   const directory = useLogDirectory();
   // Mounted with the trigger, not the open dialog: watching outlives the modal.
-  useLogAutoUpload({ tournamentId, encounterId: initialEncounterId, onUploaded });
+  useLogAutoUpload({ enabled: autoUpload, tournamentId, encounterId: initialEncounterId, onUploaded });
   const watcher = useLogAutoUploadStore();
   const encounterInputId = useId();
   const scanId = useRef(0);
@@ -182,12 +184,14 @@ function DirectoryUploadDialog({
           </DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={setTab} className="min-w-0 space-y-4">
-          <TabsList variant="pill" aria-label={t("tabs.label")}>
-            <TabsTrigger value="manual">{t("tabs.manual")}</TabsTrigger>
-            <TabsTrigger value="auto" dot={watching ? { tone: "accent", label: t("tabs.autoOn") } : undefined}>
-              {t("tabs.auto")}
-            </TabsTrigger>
-          </TabsList>
+          {autoUpload ? (
+            <TabsList variant="pill" aria-label={t("tabs.label")}>
+              <TabsTrigger value="manual">{t("tabs.manual")}</TabsTrigger>
+              <TabsTrigger value="auto" dot={watching ? { tone: "accent", label: t("tabs.autoOn") } : undefined}>
+                {t("tabs.auto")}
+              </TabsTrigger>
+            </TabsList>
+          ) : null}
 
           <TabsContent value="manual" className="mt-0 space-y-4">
             {directory.handle ? (

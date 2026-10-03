@@ -37,7 +37,7 @@ it("ignores existing files, waits for quiet, uploads once, retries a rejected fi
   files.set("old.log", { lastModified: 1, body: "old" });
 
   function Probe() {
-    useLogAutoUpload({ tournamentId: 42, encounterId: 7 });
+    useLogAutoUpload({ enabled: true, tournamentId: 42, encounterId: 7 });
     return null;
   }
   const root = createRoot(document.createElement("div"));
@@ -68,5 +68,20 @@ it("ignores existing files, waits for quiet, uploads once, retries a rejected fi
   expect(upload).toHaveBeenCalledTimes(2);
   expect(upload.mock.calls.flatMap((call) => call[0].files.map((file: File) => file.name))).toEqual(["live.log", "live.log"]);
 
+  act(() => root.unmount());
+});
+
+it("never watches on a page that did not opt in, even with the account setting on", async () => {
+  vi.useFakeTimers();
+  upload.mockClear();
+  function AdminProbe() {
+    useLogAutoUpload({ enabled: false, tournamentId: 42, encounterId: null });
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  await act(async () => root.render(<AdminProbe />));
+  files.set("admin-page.log", { lastModified: Date.now(), body: "0,match_end,1" });
+  await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+  expect(upload).not.toHaveBeenCalled();
   act(() => root.unmount());
 });
