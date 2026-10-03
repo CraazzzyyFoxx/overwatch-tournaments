@@ -3,8 +3,9 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { FileUp, FolderOpen, RefreshCw, Settings } from "lucide-react";
+import { FilePlus, FileUp, FolderOpen, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger
@@ -68,17 +69,26 @@ function DirectoryUploadDialog({
   const watcher = useLogAutoUploadStore();
   const encounterInputId = useId();
   const scanId = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("manual");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<{ handle: LogDirectoryHandle; files: LogFileEntry[]; at: number } | null>(null);
-  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
+  // Files chosen one by one from any folder, beside the saved folder's listing.
+  const [picked, setPicked] = useState<{ files: File[]; at: number }>({ files: [], at: 0 });
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [selectedEncounterId, setSelectedEncounterId] = useState(
     initialEncounterId != null ? initialEncounterId.toString() : NO_ENCOUNTER_VALUE
   );
   const availableFiles = listing?.handle === directory.handle ? listing.files : [];
-  const selectedFiles = availableFiles.filter((file) => selectedNames.has(file.name));
+  const rows = [
+    ...picked.files.map((file) => ({ key: `picked:${file.name}`, name: file.name, lastModified: file.lastModified, size: file.size, at: picked.at, read: async () => file, folder: false })),
+    ...availableFiles.map((entry) => ({ key: `folder:${entry.name}`, name: entry.name, lastModified: entry.lastModified, size: entry.size, at: listing?.at ?? 0, read: () => entry.handle.getFile(), folder: true }))
+  ];
+  const selectedRows = rows.filter((row) => selectedKeys.has(row.key));
+  // A picked file may share its name with a folder file; one upload cannot carry both.
+  const duplicateNames = [...new Set(selectedRows.map((row) => row.name).filter((name, index, names) => names.indexOf(name) !== index))];
   // The pregame room passes its own encounter only: nothing to choose.
   const fixedEncounter = initialEncounterId != null && encounters.length === 1 ? encounters[0] : null;
   const watching = watcher.holder != null && watcher.status === "watching";
@@ -95,7 +105,7 @@ function DirectoryUploadDialog({
       if (accountId == null || useAuthProfileStore.getState().user?.id !== accountId) {
         throw new LogDirectoryError("account");
       }
-      const files = await Promise.all(selectedFiles.map((entry) => entry.handle.getFile()));
+      const files = await Promise.all(selectedRows.map((row) => row.read()));
       if (useAuthProfileStore.getState().user?.id !== accountId) throw new LogDirectoryError("account");
       return adminService.uploadMatchLogs({
         tournamentId,
@@ -107,8 +117,9 @@ function DirectoryUploadDialog({
       const uploadedCount = result.uploaded.length;
       const errorCount = result.errors.length;
       const uploadedNames = new Set(result.uploaded.map((item) => item.filename.split(/[\\/]/).at(-1) ?? item.filename));
-      setSelectedNames((names) => new Set(Array.from(names).filter((name) => !uploadedNames.has(name))));
+      setSelectedKeys((keys) => new Set(Array.from(keys).filter((key) => !uploadedNames.has(key.slice(key.indexOf(":") + 1)))));
       setListing((current) => current ? { ...current, files: current.files.filter((file) => !uploadedNames.has(file.name)) } : null);
+      setPicked((current) => ({ ...current, files: current.files.filter((file) => !uploadedNames.has(file.name)) }));
       if (uploadedCount) onUploaded?.();
       if (errorCount) {
         // Keep the dialog and failed selection: retry must not resend successes.
@@ -140,7 +151,11 @@ function DirectoryUploadDialog({
       setListing({ handle, files, at });
       // The match just played: the newest log the game has stopped writing.
       const newestFinished = files.find((file) => at - file.lastModified >= WRITING_MS);
-      setSelectedNames(new Set(newestFinished ? [newestFinished.name] : []));
+      // Keep the user's own picks selected across a folder refresh.
+      setSelectedKeys((keys) => new Set([
+        ...Array.from(keys).filter((key) => key.startsWith("picked:")),
+        ...(newestFinished ? [`folder:${newestFinished.name}`] : [])
+      ]));
       uploadMutation.reset();
     } catch (cause) {
       if (currentScanId === scanId.current) setError(t(`errors.${directoryErrorCode(cause)}`));
@@ -149,8 +164,18 @@ function DirectoryUploadDialog({
     }
   }
 
+  function addPickedFiles(list: FileList | null) {
+    const added = Array.from(list ?? []);
+    if (!added.length) return;
+    const addedNames = new Set(added.map((file) => file.name));
+    // Picking the same name again replaces the earlier pick.
+    setPicked((current) => ({ files: [...added, ...current.files.filter((file) => !addedNames.has(file.name))], at: Date.now() }));
+    setSelectedKeys((keys) => new Set([...keys, ...added.map((file) => `picked:${file.name}`)]));
+    uploadMutation.reset();
+  }
+
   const locked = busy || uploadMutation.isPending;
-  const canSubmit = selectedFiles.length > 0 && !locked;
+  const canSubmit = selectedRows.length > 0 && duplicateNames.length === 0 && !locked;
   const visibleError = error ?? (directory.error ? t(`errors.${directoryErrorCode(directory.error)}`) : null);
 
   function handleOpenChange(nextOpen: boolean) {
@@ -164,6 +189,8 @@ function DirectoryUploadDialog({
       // without one, the empty state asks first instead of springing the picker.
       if (directory.handle) void loadFiles();
       else setListing(null);
+      setPicked({ files: [], at: 0 });
+      setSelectedKeys(new Set());
     }
     setOpen(nextOpen);
   }
@@ -214,52 +241,79 @@ function DirectoryUploadDialog({
                   <p className="text-ui font-semibold text-[color:var(--aqt-fg)]">{t("emptyTitle")}</p>
                   <p className="text-caption text-pretty text-[color:var(--aqt-fg-muted)]">{t("hint")}</p>
                 </div>
-                <Button type="button" variant="outline" disabled={locked || directory.isLoading} onClick={() => void loadFiles(true)}>
-                  <FolderOpen className="size-4" aria-hidden />
-                  {t("select")}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" disabled={locked || directory.isLoading} onClick={() => void loadFiles(true)}>
+                    <FolderOpen className="size-4" aria-hidden />
+                    {t("select")}
+                  </Button>
+                  <Button type="button" variant="ghost" disabled={locked} onClick={() => fileInput.current?.click()}>
+                    <FilePlus className="size-4" aria-hidden />
+                    {t("pickFiles")}
+                  </Button>
+                </div>
               </div>
             )}
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              accept=".log,.txt,.csv"
+              className="hidden"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(event) => {
+                addPickedFiles(event.target.files);
+                // Same file twice in a row must still fire `change`.
+                event.target.value = "";
+              }}
+            />
             <p className="sr-only" role="status">{busy ? t("scanning") : ""}</p>
             {visibleError ? <p className="text-sm text-destructive" role="alert">{visibleError}</p> : null}
-            {listing && listing.handle === directory.handle ? (
-              availableFiles.length ? (
-                <fieldset disabled={locked} className="min-w-0">
-                  <legend className="sr-only">{t("files")}</legend>
-                  <ul className="max-h-72 divide-y divide-[color:var(--aqt-border)] overflow-y-auto rounded-lg border border-[color:var(--aqt-border)]">
-                    {availableFiles.map((file) => (
-                      <li key={file.name}>
-                        <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-[color:var(--aqt-overlay-2)] has-[:checked]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_8%,transparent)]">
-                          <input
-                            type="checkbox"
-                            className="size-4 shrink-0 accent-primary"
-                            checked={selectedNames.has(file.name)}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              setSelectedNames((current) => {
-                                const next = new Set(current);
-                                if (checked) next.add(file.name); else next.delete(file.name);
-                                return next;
-                              });
-                            }}
-                          />
-                          <span className="min-w-0 flex-1 truncate text-[color:var(--aqt-fg)]" title={file.name}>{file.name}</span>
-                          {listing.at - file.lastModified < WRITING_MS ? (
-                            <span className="shrink-0 text-caption text-warning">{t("writing")}</span>
-                          ) : (
-                            <span className="shrink-0 text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
-                              {format.relativeTime(new Date(file.lastModified), { now: listing.at, style: "short" })}
-                            </span>
-                          )}
-                          <span className="w-16 shrink-0 text-right text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
-                            {format.number(Math.max(1, file.size / 1024), { style: "unit", unit: "kilobyte", maximumFractionDigits: 0 })}
+            {rows.length ? (
+              <fieldset disabled={locked} className="min-w-0">
+                <legend className="sr-only">{t("files")}</legend>
+                <ul className="max-h-72 divide-y divide-[color:var(--aqt-border)] overflow-y-auto rounded-lg border border-[color:var(--aqt-border)]">
+                  {rows.map((row) => (
+                    <li key={row.key}>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-[color:var(--aqt-overlay-2)] has-[[data-state=checked]]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_8%,transparent)]">
+                        <Checkbox
+                          checked={selectedKeys.has(row.key)}
+                          disabled={locked}
+                          onCheckedChange={(checked) => {
+                            setSelectedKeys((current) => {
+                              const next = new Set(current);
+                              if (checked === true) next.add(row.key); else next.delete(row.key);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[color:var(--aqt-fg)]" title={row.name}>{row.name}</span>
+                        {row.folder && row.at - row.lastModified < WRITING_MS ? (
+                          <span className="shrink-0 text-caption text-warning">{t("writing")}</span>
+                        ) : (
+                          <span className="shrink-0 text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
+                            {format.relativeTime(new Date(row.lastModified), { now: row.at, style: "short" })}
                           </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </fieldset>
-              ) : <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("empty")}</p>
+                        )}
+                        <span className="w-16 shrink-0 text-right text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
+                          {format.number(Math.max(1, row.size / 1024), { style: "unit", unit: "kilobyte", maximumFractionDigits: 0 })}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </fieldset>
+            ) : listing && listing.handle === directory.handle ? (
+              <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("empty")}</p>
+            ) : null}
+            {directory.handle ? (
+              <Button type="button" variant="ghost" size="sm" className="-ml-2" disabled={locked} onClick={() => fileInput.current?.click()}>
+                <FilePlus className="size-4" aria-hidden />
+                {t("pickFilesElsewhere")}
+              </Button>
+            ) : null}
+            {duplicateNames.length ? (
+              <p className="text-sm text-destructive" role="alert">{t("duplicate", { names: duplicateNames.join(", ") })}</p>
             ) : null}
             {uploadMutation.data?.errors.length ? (
               <ul className="space-y-1 text-sm text-destructive" role="alert">
@@ -312,7 +366,7 @@ function DirectoryUploadDialog({
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={locked}>{t("cancel")}</Button>
               <Button type="button" onClick={() => { setError(null); uploadMutation.mutate(); }} disabled={!canSubmit}>
                 {uploadMutation.isPending ? <Spinner className="mr-2" /> : <FileUp className="mr-2 size-4" aria-hidden />}
-                {t("upload", { count: selectedFiles.length })}
+                {t("upload", { count: selectedRows.length })}
               </Button>
             </>
           ) : (
