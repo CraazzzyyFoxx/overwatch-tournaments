@@ -493,13 +493,13 @@ class AdminSetResult(IsolatedAsyncioTestCase):
         # The encounter score stays 0-0 until an auto-confirm, so confirming a
         # pending single-report encounter must adopt the captain's reported
         # score instead of finalizing a bogus 0-0 draw.
-        report = _mk_report(team_id=1, home=3, away=0, closeness=7)
+        report = _mk_report(team_id=1, home=2, away=0, closeness=7)
         encounter = _mk_encounter(
             result_status=enums.EncounterResultStatus.PENDING_CONFIRMATION,
             captain_reports=[report],
         )
         captured, session = await self._set(encounter)
-        self.assertEqual((captured["home_score"], captured["away_score"]), (3, 0))
+        self.assertEqual((captured["home_score"], captured["away_score"]), (2, 0))
         self.assertEqual(encounter.result_status, enums.EncounterResultStatus.CONFIRMED)
         self.assertAlmostEqual(encounter.closeness, 0.7)
 
@@ -508,7 +508,7 @@ class AdminSetResult(IsolatedAsyncioTestCase):
         self.assertEqual(enums.EncounterResultAuditAction.CONFIRM, audit[0].action)
         self.assertEqual(self.ADMIN, audit[0].actor_user_id)
         self.assertEqual((0, 0), (audit[0].home_score_before, audit[0].away_score_before))
-        self.assertEqual((3, 0), (audit[0].home_score_after, audit[0].away_score_after))
+        self.assertEqual((2, 0), (audit[0].home_score_after, audit[0].away_score_after))
 
     async def test_averages_only_the_reports_that_carry_a_rating(self) -> None:
         """A disabled match-quality field leaves NULL ratings the average must skip."""
@@ -547,13 +547,13 @@ class AdminSetResult(IsolatedAsyncioTestCase):
         """The dispute-resolution path: "team 2 was right" is one call, not an
         edit followed by a confirm."""
         home = _mk_report(team_id=1, home=2, away=0, closeness=5, report_id=1)
-        away = _mk_report(team_id=2, home=0, away=3, closeness=9, report_id=2)
+        away = _mk_report(team_id=2, home=0, away=2, closeness=9, report_id=2)
         encounter = _mk_encounter(
             result_status=enums.EncounterResultStatus.DISPUTED,
             captain_reports=[home, away],
         )
         captured, session = await self._set(encounter, adopt_report_team_id=2)
-        self.assertEqual((captured["home_score"], captured["away_score"]), (0, 3))
+        self.assertEqual((captured["home_score"], captured["away_score"]), (0, 2))
         self.assertEqual(2, _audit_rows(session)[0].adopted_team_id)
 
     async def test_keeps_an_already_edited_encounter_score(self) -> None:
@@ -569,13 +569,110 @@ class AdminSetResult(IsolatedAsyncioTestCase):
         self.assertEqual((captured["home_score"], captured["away_score"]), (2, 1))
 
     async def test_explicit_closeness_overrides_the_report_average(self) -> None:
-        report = _mk_report(team_id=1, home=3, away=0, closeness=2)
+        report = _mk_report(team_id=1, home=2, away=0, closeness=2)
         encounter = _mk_encounter(
             result_status=enums.EncounterResultStatus.PENDING_CONFIRMATION,
             captain_reports=[report],
         )
         await self._set(encounter, closeness=9)
         self.assertAlmostEqual(encounter.closeness, 0.9)
+
+    async def test_an_unfinished_bo2_is_refused(self) -> None:
+        encounter = _mk_encounter(best_of=2)
+        session = _mk_session(encounter, [])
+        with assert_http_status(self, 400):
+            await captain_service.captain_service.set_encounter_result(
+                session, 10, actor_user_id=self.ADMIN, home_score=1, away_score=0
+            )
+
+    async def test_a_bo2_draw_is_a_finished_series(self) -> None:
+        encounter = _mk_encounter(best_of=2)
+        captured, _ = await self._set(encounter, home_score=1, away_score=1)
+        self.assertEqual((1, 1), (captured["home_score"], captured["away_score"]))
+
+    async def test_correcting_a_swiss_result_drops_an_unplayed_later_round(self) -> None:
+        later = SimpleNamespace(
+            id=11,
+            round=2,
+            status=enums.EncounterStatus.OPEN,
+            home_score=0,
+            away_score=0,
+            result_status=enums.EncounterResultStatus.NONE,
+        )
+        encounter = _mk_encounter(best_of=2)
+        encounter.round = 1
+        encounter.stage_item_id = 7
+        encounter.stage = SimpleNamespace(stage_type=enums.StageType.SWISS)
+        deleted: list = []
+
+        class _Session:
+            async def execute(self, _query):
+                result = Mock()
+                scalars = Mock()
+                scalars.all.return_value = [later]
+                result.scalars.return_value = scalars
+                return result
+
+            async def delete(self, row):
+                deleted.append(row)
+
+            def add(self, row):
+                return None
+
+            async def commit(self):
+                return None
+
+            async def refresh(self, _row):
+                return None
+
+        with (
+            patch.object(
+                captain_service.captain_service.encounter_repo, "get_for_update", AsyncMock(return_value=encounter)
+            ),
+            patch.object(captain_service.captain_service.finalize, "finalize_encounter_score", AsyncMock()),
+            patch.object(captain_service.captain_service, "_enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(captain_service.captain_service, "_enqueue_encounter_completed", AsyncMock()),
+            patch.object(captain_service, "resolve_encounter_challonge", AsyncMock(return_value={})),
+            patch.object(captain_service, "remove_swiss_bye_round", AsyncMock()) as drop_bye,
+        ):
+            await captain_service.captain_service.set_encounter_result(
+                _Session(), 10, actor_user_id=self.ADMIN, home_score=2, away_score=0
+            )
+        self.assertEqual([later], deleted)
+        drop_bye.assert_awaited_once()
+
+    async def test_a_played_later_swiss_round_blocks_the_correction(self) -> None:
+        later = SimpleNamespace(
+            id=11,
+            round=2,
+            status=enums.EncounterStatus.COMPLETED,
+            home_score=2,
+            away_score=0,
+            result_status=enums.EncounterResultStatus.CONFIRMED,
+        )
+        encounter = _mk_encounter(best_of=2)
+        encounter.round = 1
+        encounter.stage_item_id = 7
+        encounter.stage = SimpleNamespace(stage_type=enums.StageType.SWISS)
+
+        class _Session:
+            async def execute(self, _query):
+                result = Mock()
+                scalars = Mock()
+                scalars.all.return_value = [later]
+                result.scalars.return_value = scalars
+                return result
+
+        with (
+            patch.object(
+                captain_service.captain_service.encounter_repo, "get_for_update", AsyncMock(return_value=encounter)
+            ),
+            assert_http_status(self, 409),
+        ):
+            await captain_service.captain_service.set_encounter_result(
+                _Session(), 10, actor_user_id=self.ADMIN, home_score=2, away_score=0
+            )
+
 
     async def test_rejects_an_unresolvable_score(self) -> None:
         """No explicit score, no report to adopt and a still-0-0 encounter: a

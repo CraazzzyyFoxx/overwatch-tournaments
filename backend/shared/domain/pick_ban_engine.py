@@ -190,3 +190,19 @@ def series_complete(score: SeriesScore, best_of: int) -> bool:
     if best_of < 1:
         return False
     return score.played >= best_of or max(score.home_wins, score.away_wins) * 2 > best_of
+
+
+def legal_series_result(home_score: int, away_score: int, best_of: int) -> bool:
+    """A score a best-of-N series can actually end on.
+
+    The winner has exactly ``floor(N/2)+1`` maps and the loser has no more than
+    the rest. An even N may also be drawn down the middle (Bo2 → 1:1). A 1:0 on
+    Bo2 has a map left; a 2:1 has played one map too many.
+    """
+    if best_of < 1 or home_score < 0 or away_score < 0:
+        return False
+    wins_needed = best_of // 2 + 1
+    if home_score == away_score:
+        return best_of % 2 == 0 and home_score == best_of // 2
+    winner, loser = max(home_score, away_score), min(home_score, away_score)
+    return winner == wins_needed and loser <= best_of - wins_needed

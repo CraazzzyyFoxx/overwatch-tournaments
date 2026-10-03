@@ -387,3 +387,13 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
         self.assertEqual(5, kept.best_of)
         self.assertEqual(3, stage.best_of_default)
         self.assertEqual(7, stage.best_of_final)
+
+    async def test_omitted_best_of_final_is_cleared_instead_of_crashing(self) -> None:
+        stage = self._stage()
+        stage.best_of_final = 5
+        stage.round_best_of = []
+
+        await self._update(stage, schemas.StageUpdate(best_of={"default": 2, "by_round": {}}))
+
+        self.assertEqual(2, stage.best_of_default)
+        self.assertIsNone(stage.best_of_final)
