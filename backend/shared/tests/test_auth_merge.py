@@ -328,8 +328,8 @@ class AuthMergeTests(IsolatedAsyncioTestCase):
         self.assertTrue(preview.permission_changes)
         await self.apply(preview)
         holders = (
-            await self.session.execute(sa.select(grants.c.user_id).where(grants.c.role_id == role.id))
-        ).scalars().all()
+            (await self.session.execute(sa.select(grants.c.user_id).where(grants.c.role_id == role.id))).scalars().all()
+        )
         self.assertEqual([self.survivor.id], holders)
         self.assertIsNotNone(await self.session.get(models.AuthUser, self.donor.id))
         member = await self.session.scalar(
@@ -370,11 +370,9 @@ class AuthMergeTests(IsolatedAsyncioTestCase):
         self.assertEqual([], preview.issues)
         await self.apply(preview)
         holders = (
-            await self.session.execute(sa.select(grants.c.user_id).where(grants.c.role_id == role.id))
-        ).scalars().all()
+            (await self.session.execute(sa.select(grants.c.user_id).where(grants.c.role_id == role.id))).scalars().all()
+        )
         self.assertEqual([self.survivor.id], holders)
-
-
 
     async def test_last_owner_cannot_be_transferred_to_disabled_account(self):
         role = models.Role(name="owner", workspace_id=self.workspace.id)

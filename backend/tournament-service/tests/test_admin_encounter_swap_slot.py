@@ -136,7 +136,9 @@ class SwapSlots(IsolatedAsyncioTestCase):
             },
             envelope["data"],
         )
-        self.assertEqual((3, 2, 1, 4), (source.home_team_id, source.away_team_id, target.home_team_id, target.away_team_id))
+        self.assertEqual(
+            (3, 2, 1, 4), (source.home_team_id, source.away_team_id, target.home_team_id, target.away_team_id)
+        )
         self.assertFalse(stage.is_published)
 
     async def test_swaps_between_two_open_encounters(self) -> None:

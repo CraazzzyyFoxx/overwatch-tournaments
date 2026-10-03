@@ -321,15 +321,12 @@ def _build_plan(
                 if collision:
                     plan.deletes.append((models.UserPermissionDeny.__table__, deny))
                 else:
-                    plan.updates.append(
-                        (models.UserPermissionDeny.__table__, deny, {"user_id": survivor_id})
-                    )
+                    plan.updates.append((models.UserPermissionDeny.__table__, deny, {"user_id": survivor_id}))
                     moved_deny_ids.add(deny["id"])
             if "owner" in role_names:
                 for row in state.rows.get(models.Workspace.__table__, []):
                     if row["id"] == workspace_id and row["owner_id"] == retained_id:
                         plan.updates.append((models.Workspace.__table__, row, {"owner_id": survivor_id}))
-
 
     for table, (owner, key_columns, payload_columns) in RESOURCES.items():
         groups = {}

@@ -673,7 +673,6 @@ class AdminSetResult(IsolatedAsyncioTestCase):
                 _Session(), 10, actor_user_id=self.ADMIN, home_score=2, away_score=0
             )
 
-
     async def test_rejects_an_unresolvable_score(self) -> None:
         """No explicit score, no report to adopt and a still-0-0 encounter: a
         bogus draw would also 400 on elimination stages."""
