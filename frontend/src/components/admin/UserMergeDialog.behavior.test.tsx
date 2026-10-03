@@ -11,6 +11,17 @@ import type { AuthMergePolicy, UserMergePreviewRequest, UserMergePreviewResponse
 import type { MinimizedUser, User } from "@/types/user.types";
 import { UserMergeDialog } from "./UserMergeDialog";
 
+for (const [name, value] of Object.entries({
+  hasPointerCapture: () => false,
+  setPointerCapture: () => undefined,
+  releasePointerCapture: () => undefined,
+  scrollIntoView: () => undefined
+})) {
+  if (!(name in Element.prototype)) {
+    Object.defineProperty(Element.prototype, name, { value, writable: true });
+  }
+}
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
 }
@@ -160,6 +171,36 @@ async function choose(text: string, value: string) {
   });
 }
 
+/** Radix Select: opens on pointerdown, listbox is portalled to the document. */
+async function openSelect(text: string) {
+  const trigger = labelledControl(text);
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function option(label: string): HTMLElement {
+  const found = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
+    (item) => (item.textContent ?? "").trim() === label
+  );
+  if (!found) throw new Error(`Missing option: ${label}`);
+  return found;
+}
+
+async function selectOption(label: string) {
+  const item = option(label);
+  await act(async () => {
+    item.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    item.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+async function pick(text: string, label: string) {
+  await openSelect(text);
+  await selectOption(label);
+}
+
 async function prepare() {
   await render();
   await choose("Target", "2");
@@ -175,12 +216,12 @@ describe("profile/auth merge review boundaries", () => {
     await prepare();
     await acknowledge("I reviewed the OAuth destinations");
     await acknowledge("I understand that Source");
-    await choose("Other account:", "delete");
+    await pick("Other account:", "Delete account and transfer its resources");
     expect(labelledControl<HTMLButtonElement>("I reviewed the OAuth destinations").getAttribute("aria-checked")).toBe("false");
-    const destination = labelledControl<HTMLSelectElement>("discord: incoming-login");
-    expect(destination.value).toBe("");
-    expect(destination.querySelector<HTMLOptionElement>('option[value="11"]')?.disabled).toBe(true);
-    await choose("discord: incoming-login", "22");
+    expect(labelledControl("discord: incoming-login").textContent).toBe("Choose a retained sign-in account");
+    await openSelect("discord: incoming-login");
+    expect(option("incoming-auth (#11) — selected for deletion").getAttribute("aria-disabled")).toBe("true");
+    await selectOption("existing-auth (#22)");
     await click(button("Merge and delete source"));
     expect(executeMerge).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("Run “Preview merge” for the current account choices");
@@ -206,9 +247,9 @@ describe("profile/auth merge review boundaries", () => {
     const stalePolicy = Promise.withResolvers<UserMergePreviewResponse>();
     previewMerge.mockReturnValueOnce(stalePolicy.promise);
     await click(button("Preview merge"));
-    await choose("Surviving player owner", "11");
+    await pick("Surviving player owner", "incoming-auth (#11)");
     await act(async () => stalePolicy.resolve(preview(2)));
-    expect(labelledControl<HTMLSelectElement>("Surviving player owner").value).toBe("11");
+    expect(labelledControl("Surviving player owner").textContent).toBe("incoming-auth (#11)");
     expect(labelledControl<HTMLButtonElement>("I reviewed the OAuth destinations").disabled).toBe(true);
     await click(button("Merge and delete source"));
     expect(executeMerge).not.toHaveBeenCalled();
@@ -233,11 +274,11 @@ describe("profile/auth merge review boundaries", () => {
 
   it("rejects a preview that returns ownership choices different from the submitted plan", async () => {
     await prepare();
-    await choose("Surviving player owner", "11");
+    await pick("Surviving player owner", "incoming-auth (#11)");
     previewMerge.mockResolvedValueOnce(preview(2, policy()));
     await click(button("Preview merge"));
     expect(document.body.textContent).toContain("The preview does not match the submitted account choices");
-    expect(labelledControl<HTMLSelectElement>("Surviving player owner").value).toBe("11");
+    expect(labelledControl("Surviving player owner").textContent).toBe("incoming-auth (#11)");
     expect(labelledControl<HTMLButtonElement>("I reviewed the OAuth destinations").disabled).toBe(true);
     await click(button("Merge and delete source"));
     expect(executeMerge).not.toHaveBeenCalled();
@@ -253,13 +294,13 @@ describe("profile/auth merge review boundaries", () => {
     await prepare();
     expect(document.body.textContent).toContain("Resolve preference collision");
     expect(button("Merge and delete source").disabled).toBe(true);
-    await choose("Theme (preferences)", "source");
+    await pick("Theme (preferences)", "Incoming");
     await click(button("Merge and delete source"));
     expect(executeMerge).not.toHaveBeenCalled();
     await click(button("Preview merge"));
     await acknowledge("I reviewed the OAuth destinations");
     await acknowledge("I understand that Source");
-    await choose("Theme (preferences)", "target");
+    await pick("Theme (preferences)", "Existing");
     expect(labelledControl<HTMLButtonElement>("I understand that Source").getAttribute("aria-checked")).toBe("false");
     await click(button("Merge and delete source"));
     expect(executeMerge).not.toHaveBeenCalled();

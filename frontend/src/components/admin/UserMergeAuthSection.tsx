@@ -4,9 +4,33 @@ import type { AuthMergePolicy, AuthMergePreview } from "@/types/admin.types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
-const SELECT_CLASS = "h-10 w-full rounded-md border bg-background px-3 text-sm";
+type MergeSelectOption = { value: string; label: string; disabled?: boolean };
+
+function MergeSelect({ id, value, options, placeholder, invalid, describedBy, onValueChange }: Readonly<{
+  id: string;
+  value: string;
+  options: MergeSelectOption[];
+  placeholder?: string;
+  invalid?: boolean;
+  describedBy?: string;
+  onValueChange: (value: string) => void;
+}>) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger id={id} className="h-10" aria-invalid={invalid} aria-describedby={describedBy}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value} disabled={option.disabled}>{option.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function UserMergeAuthSection({
   preview,
@@ -49,37 +73,33 @@ export function UserMergeAuthSection({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor={`${sectionId}-owner`}>Surviving player owner</Label>
-          <select
+          <MergeSelect
             id={`${sectionId}-owner`}
-            className={SELECT_CLASS}
-            value={policy.surviving_auth_user_id}
-            onChange={(event) => onPolicyChange({
+            value={String(policy.surviving_auth_user_id)}
+            options={preview.accounts.map((account) => ({ value: String(account.id), label: accountLabel(account.id) }))}
+            onValueChange={(value) => onPolicyChange({
               ...policy,
-              surviving_auth_user_id: Number(event.target.value),
+              surviving_auth_user_id: Number(value),
               conflict_choices: {}
             })}
-          >
-            {preview.accounts.map((account) => (
-              <option key={account.id} value={account.id}>{accountLabel(account.id)}</option>
-            ))}
-          </select>
+          />
         </div>
         {other ? (
           <div className="space-y-2">
             <Label htmlFor={`${sectionId}-other`}>Other account: {accountLabel(other.id)}</Label>
-            <select
+            <MergeSelect
               id={`${sectionId}-other`}
-              className={SELECT_CLASS}
               value={policy.other_account_action}
-              onChange={(event) => onPolicyChange({
+              options={[
+                { value: "keep", label: "Keep account (unlink from the merged player)" },
+                { value: "delete", label: "Delete account and transfer its resources" }
+              ]}
+              onValueChange={(value) => onPolicyChange({
                 ...policy,
-                other_account_action: event.target.value as "keep" | "delete",
+                other_account_action: value as "keep" | "delete",
                 conflict_choices: {}
               })}
-            >
-              <option value="keep">Keep account (unlink from the merged player)</option>
-              <option value="delete">Delete account and transfer its resources</option>
-            </select>
+            />
           </div>
         ) : null}
       </div>
@@ -133,27 +153,25 @@ export function UserMergeAuthSection({
                 {connection.provider}: {connection.username || connection.provider_user_id} (subject {connection.provider_user_id}, connection #{connection.id})
               </Label>
               <p className="text-xs text-muted-foreground">Currently owned by {accountLabel(connection.auth_user_id)}</p>
-              <select
+              <MergeSelect
                 id={`${sectionId}-oauth-${connection.id}`}
-                className={SELECT_CLASS}
-                value={invalidDestination ? "" : destination}
-                aria-invalid={Boolean(invalidDestination)}
-                aria-describedby={invalidDestination ? `${sectionId}-oauth-error-${connection.id}` : undefined}
-                onChange={(event) => onPolicyChange({
+                value={invalidDestination ? "" : String(destination)}
+                placeholder="Choose a retained sign-in account"
+                invalid={Boolean(invalidDestination)}
+                describedBy={invalidDestination ? `${sectionId}-oauth-error-${connection.id}` : undefined}
+                options={preview.accounts.map((account) => ({
+                  value: String(account.id),
+                  label: `${accountLabel(account.id)}${account.id === deletedAccountId ? " — selected for deletion" : ""}`,
+                  disabled: account.id === deletedAccountId
+                }))}
+                onValueChange={(value) => onPolicyChange({
                   ...policy,
                   oauth_destinations: [
                     ...policy.oauth_destinations.filter((item) => item.connection_id !== connection.id),
-                    { connection_id: connection.id, auth_user_id: Number(event.target.value) }
+                    { connection_id: connection.id, auth_user_id: Number(value) }
                   ].sort((a, b) => a.connection_id - b.connection_id)
                 })}
-              >
-                <option value="" disabled>Choose a retained sign-in account</option>
-                {preview.accounts.map((account) => (
-                  <option key={account.id} value={account.id} disabled={account.id === deletedAccountId}>
-                    {accountLabel(account.id)}{account.id === deletedAccountId ? " — selected for deletion" : ""}
-                  </option>
-                ))}
-              </select>
+              />
               {invalidDestination ? (
                 <p id={`${sectionId}-oauth-error-${connection.id}`} className="text-sm text-danger">
                   Move this login to a retained account before deleting its current owner.
@@ -192,19 +210,16 @@ export function UserMergeAuthSection({
             <div><p className="font-medium">Incoming (transferring account)</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(conflict.source_value, null, 2)}</pre></div>
             <div><p className="font-medium">Existing (surviving account)</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(conflict.target_value, null, 2)}</pre></div>
           </div>
-          <select
+          <MergeSelect
             id={`${sectionId}-conflict-${conflict.key}`}
-            className={SELECT_CLASS}
             value={policy.conflict_choices[conflict.key] ?? ""}
-            onChange={(event) => onPolicyChange({
+            placeholder="Choose which value to keep"
+            options={[{ value: "source", label: "Incoming" }, { value: "target", label: "Existing" }]}
+            onValueChange={(value) => onPolicyChange({
               ...policy,
-              conflict_choices: { ...policy.conflict_choices, [conflict.key]: event.target.value as "source" | "target" }
+              conflict_choices: { ...policy.conflict_choices, [conflict.key]: value as "source" | "target" }
             })}
-          >
-            <option value="" disabled>Choose which value to keep</option>
-            <option value="source">Incoming</option>
-            <option value="target">Existing</option>
-          </select>
+          />
         </div>
       ))}
       {preview.issues.length ? (
