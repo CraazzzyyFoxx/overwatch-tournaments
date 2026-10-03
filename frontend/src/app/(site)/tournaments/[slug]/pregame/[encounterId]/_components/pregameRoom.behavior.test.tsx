@@ -24,6 +24,7 @@ import type {
 import { pickedItemsInOrder } from "@/components/pick-ban/pick-ban-model";
 
 import { PregameRoom } from "./PregameRoom";
+import { derivePregameLoop } from "./pregameRoom.model";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -569,6 +570,27 @@ describe("closed-door copy", () => {
 });
 
 describe("phase selection", () => {
+  it.each([
+    { bestOf: 2, home: 1, away: 0, phase: "report" },
+    { bestOf: 2, home: 1, away: 1, phase: "done" },
+    { bestOf: 3, home: 1, away: 1, phase: "report" }
+  ])(
+    "routes BO$bestOf $home:$away to $phase without a series summary",
+    ({ bestOf, home, away, phase }) => {
+      const loop = derivePregameLoop(
+        { ...encounter(), best_of: bestOf, score: { home, away } },
+        unavailableState("not_configured", { home: true, away: true }),
+        readyState({
+          session: session({ kind: "hero", status: "completed" }),
+          is_complete: true,
+          pool: [entry({ item_id: 101, round: 2, status: "banned" })]
+        })
+      );
+
+      expect(loop.phase).toBe(phase);
+    }
+  );
+
   it("renders the map phase first when both kinds are configured", async () => {
     mockStates(
       readyState({

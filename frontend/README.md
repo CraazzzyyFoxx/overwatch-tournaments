@@ -112,6 +112,10 @@ have no errors; disconnected/error states use a 30000–32499 ms fallback to rec
 Polling-driven progression also refreshes the other phase. WebSocket reconnect uses exponential
 backoff with equal jitter, capped at 30 seconds; per-IP protective limits are unchanged.
 
+BO2 accepts a final 1:1 draw as well as 2:0 or 0:2. Even-length series show their best-of
+format on the scoreboard rather than a first-to-win target; odd-length series retain that
+target. Without a series summary, reaching the map limit also closes the pre-game loop.
+
 ## Pre-game hero history and match log folders
 
 The **One ban per opponent player** board shows each opponent's logged heroes inside their
