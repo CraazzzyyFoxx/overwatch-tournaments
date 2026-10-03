@@ -39,6 +39,7 @@ from shared.quota import admin as quota_admin
 from shared.rbac import RBAC_USER_KEY_PREFIX
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission, rehydrate_user_optional
+from shared.rpc.query import parse_id_list
 from shared.schemas.quota import QuotaPlanLimitRead
 from shared.services.audit import record_admin_audit
 from shared.services.discord_client import DiscordClient
@@ -349,6 +350,10 @@ def register(broker: Any, logger: Any) -> None:
                 per_page = min(max(per_page, 1), 100)
             search = c.q1(data, "search", str, None)
             role_id = c.q1(data, "role_id", int, None)
+            try:
+                exclude_role_id = parse_id_list(c.q(data, "exclude_role_id"))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail="exclude_role_id must be an integer") from exc
             sort = c.q1(data, "sort", str, "username")
             if sort not in MEMBERS_SORT_FIELDS:
                 sort = "username"
@@ -360,6 +365,7 @@ def register(broker: Any, logger: Any) -> None:
                 per_page=per_page,
                 search=search,
                 role_id=role_id,
+                exclude_role_id=exclude_role_id or None,
                 sort=sort,
                 order=order,
             )

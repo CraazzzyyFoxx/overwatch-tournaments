@@ -131,22 +131,20 @@ export default function WorkspaceMembersPage() {
     [scopedRoles]
   );
 
-  // One chip: every role scoped to this workspace, system and custom alike,
-  // carrying the `role_id` the members endpoint takes. Declared even while the
-  // catalogue is still loading, so `?role=` in the URL is read on mount.
-  const filterDefs = useMemo<FilterDef[]>(
-    () => [
-      {
-        key: "role",
-        label: "Role",
-        kind: "single",
-        options: (scopedRoles ?? []).map((role) => ({ value: String(role.id), label: role.name }))
-      }
-    ],
-    [scopedRoles]
-  );
+  // Role chips carry the ids the members endpoint takes. Declared even while
+  // the catalogue is still loading, so `?role=` / `?exclude_role=` are read on mount.
+  const filterDefs = useMemo<FilterDef[]>(() => {
+    const options = (scopedRoles ?? []).map((role) => ({ value: String(role.id), label: role.name }));
+    return [
+      { key: "role", label: "Role", kind: "single", options },
+      { key: "exclude_role", label: "Exclude role", kind: "multi", options }
+    ];
+  }, [scopedRoles]);
   const filters = useFilters(filterDefs);
   const roleFilter = String(filters.values.role ?? "");
+  const excludeRoleIds = Array.isArray(filters.values.exclude_role)
+    ? filters.values.exclude_role.map(Number).filter((id) => Number.isInteger(id))
+    : [];
 
   const invalidateMembers = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.memberList(currentWorkspaceId) });
@@ -418,7 +416,7 @@ export default function WorkspaceMembersPage() {
         queryKey={(page, search, pageSize, sortField, sortDir) => [
           "workspace-members",
           currentWorkspaceId,
-          { page, search, pageSize, sortField, sortDir, roleId: roleFilter || null }
+          { page, search, pageSize, sortField, sortDir, roleId: roleFilter || null, excludeRoleIds }
         ]}
         queryFn={(page, search, pageSize, sortField, sortDir) =>
           workspaceService.getMembers(currentWorkspaceId, {
@@ -426,6 +424,7 @@ export default function WorkspaceMembersPage() {
             per_page: pageSize,
             search,
             role_id: roleFilter ? Number(roleFilter) : null,
+            exclude_role_id: excludeRoleIds,
             sort: sortField === "role" ? "role" : "username",
             order: sortDir
           })

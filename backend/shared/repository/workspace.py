@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core.pagination import PaginationSortParams
-from shared.models.identity.rbac import role_permissions, user_roles
+from shared.models.identity.rbac import role_permissions, user_lacks_roles, user_roles
 from shared.rbac.catalog import WORKSPACE_SYSTEM_ROLE_NAMES
 from shared.repository.base import BaseRepository
 
@@ -280,6 +280,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         per_page: int,
         search: str | None = None,
         role_id: int | None = None,
+        exclude_role_id: Sequence[int] | None = None,
         sort: str = "username",
         descending: bool = False,
         unlimited_cap: int = 10_000,
@@ -300,6 +301,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
                 workspace_id=workspace_id,
                 search=search,
                 role_id=role_id,
+                exclude_role_id=exclude_role_id,
             )
         )
 
@@ -321,6 +323,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
             workspace_id=workspace_id,
             search=search,
             role_id=role_id,
+            exclude_role_id=exclude_role_id,
         ).order_by(*order_cols)
         if per_page == -1:
             page_query = page_query.limit(unlimited_cap)
@@ -352,6 +355,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
         workspace_id: int,
         search: str | None,
         role_id: int | None,
+        exclude_role_id: Sequence[int] | None = None,
     ) -> sa.Select[typing.Any]:
         """The auth-linked join + workspace scope shared by the count and the page.
 
@@ -374,6 +378,8 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
                     user_roles.c.role_id == role_id,
                 )
             )
+        if exclude_role_id:
+            base = base.where(user_lacks_roles(models.AuthUser.id, exclude_role_id))
         return base
 
     @staticmethod

@@ -219,7 +219,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.app.workspaces.members_list": {
         "summary": "List workspace members",
-        "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles; 404 if workspace missing.",
+        "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles. `role_id` keeps holders of that role; `exclude_role_id` drops holders of any listed role. 404 if workspace missing.",
     },
     "rpc.app.workspaces.members_autofill_roles": {
         "summary": "Autofill member roles",

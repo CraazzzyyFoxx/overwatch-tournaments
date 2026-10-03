@@ -3635,7 +3635,7 @@
       "summary": "Autofill member roles"
     },
     "rpc.app.workspaces.members_list": {
-      "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles; 404 if workspace missing.",
+      "description": "Permission: workspace `workspace_member.read`. Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles. `role_id` keeps holders of that role; `exclude_role_id` drops holders of any listed role. 404 if workspace missing.",
       "query_params": [
         {
           "name": "page",
@@ -3663,6 +3663,17 @@
           "required": false,
           "schema": {
             "type": "integer"
+          }
+        },
+        {
+          "name": "exclude_role_id",
+          "required": false,
+          "schema": {
+            "description": "Drop members who hold any of these roles. Repeat the param or comma-separate ids.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         {
@@ -4911,7 +4922,7 @@
       "summary": "Get user roles"
     },
     "rpc.identity.rbac.list_auth_users": {
-      "description": "Permission: `auth_user.read` \u2014 checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/is_active/is_superuser/workspace_id.",
+      "description": "Permission: `auth_user.read` \u2014 checked in the workspace when workspace_id is given, globally otherwise. Returns auth users filtered by search/role_id/exclude_role_id/is_active/is_superuser/workspace_id. `exclude_role_id` drops users holding any listed role.",
       "query_params": [
         {
           "name": "page",
@@ -5007,6 +5018,18 @@
             ],
             "default": null,
             "title": "Role Id"
+          }
+        },
+        {
+          "name": "exclude_role_id",
+          "required": false,
+          "schema": {
+            "description": "Drop users who hold any of these roles. Repeat the param or comma-separate ids.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Exclude Role Id",
+            "type": "array"
           }
         },
         {
@@ -26867,6 +26890,14 @@
             "type": "string"
           },
           "title": "Entities",
+          "type": "array"
+        },
+        "exclude_role_id": {
+          "description": "Drop users who hold any of these roles. Repeat the param or comma-separate ids.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Exclude Role Id",
           "type": "array"
         },
         "is_active": {

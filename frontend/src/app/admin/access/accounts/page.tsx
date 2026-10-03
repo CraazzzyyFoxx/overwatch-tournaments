@@ -77,6 +77,12 @@ export default function AccessAdminAccountsPage() {
         options: roles.map((role) => ({ value: String(role.id), label: role.name }))
       },
       {
+        key: "exclude_role",
+        label: "Exclude role",
+        kind: "multi",
+        options: roles.map((role) => ({ value: String(role.id), label: role.name }))
+      },
+      {
         key: "status",
         label: "Status",
         kind: "single",
@@ -92,6 +98,9 @@ export default function AccessAdminAccountsPage() {
 
   const filters = useFilters(defs);
   const roleFilter = String(filters.values.role ?? "");
+  const excludeRoleIds = Array.isArray(filters.values.exclude_role)
+    ? filters.values.exclude_role.map(Number).filter((id) => Number.isInteger(id))
+    : [];
   const statusFilter = String(filters.values.status ?? "");
   const superuserFilter = filters.values.superuser === true;
 
@@ -242,7 +251,7 @@ export default function AccessAdminAccountsPage() {
             pageSize,
             sortField,
             sortDir,
-            { role: roleFilter, status: statusFilter, superuser: superuserFilter }
+            { role: roleFilter, excludeRole: excludeRoleIds, status: statusFilter, superuser: superuserFilter }
           ]}
           queryFn={async (page, search, pageSize, sortField, sortDir) => {
             const result = await rbacService.listUsers({
@@ -252,6 +261,7 @@ export default function AccessAdminAccountsPage() {
               order: sortDir,
               search: search || undefined,
               role_id: roleFilter ? Number(roleFilter) : undefined,
+              exclude_role_id: excludeRoleIds.length ? excludeRoleIds : undefined,
               is_active: statusFilter ? statusFilter === "active" : undefined,
               is_superuser: superuserFilter ? true : undefined
             });

@@ -353,6 +353,7 @@ class WorkspaceService:
         per_page: int,
         search: str | None,
         role_id: int | None = None,
+        exclude_role_id: typing.Sequence[int] | None = None,
         sort: str = "username",
         order: str = "asc",
     ) -> tuple[int, list[tuple[models.WorkspaceMember, models.AuthUser, list[models.Role]]]]:
@@ -373,6 +374,7 @@ class WorkspaceService:
             per_page=per_page,
             search=search,
             role_id=role_id,
+            exclude_role_id=exclude_role_id,
             sort=sort,
             descending=order == "desc",
         )

@@ -20,6 +20,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 from shared import models
 from shared.core.pagination import PaginationSortParams
 from shared.core.utils import join_entity
+from shared.models.identity.rbac import user_lacks_roles
 from shared.repository.base import BaseRepository
 
 
@@ -504,6 +505,7 @@ class AuthUserRepository(BaseRepository[models.AuthUser]):
         *,
         search: str | None = None,
         role_id: int | None = None,
+        exclude_role_id: Sequence[int] | None = None,
         is_active: bool | None = None,
         is_superuser: bool | None = None,
         include_player: bool = False,
@@ -521,6 +523,8 @@ class AuthUserRepository(BaseRepository[models.AuthUser]):
             )
         if role_id is not None:
             filters.append(models.AuthUser.roles.any(models.Role.id == role_id))
+        if exclude_role_id:
+            filters.append(user_lacks_roles(models.AuthUser.id, exclude_role_id))
         if is_active is not None:
             filters.append(models.AuthUser.is_active == is_active)
         if is_superuser is not None:

@@ -81,6 +81,7 @@ class AuthUserService:
             params,
             search=params.search,
             role_id=params.role_id,
+            exclude_role_id=params.exclude_role_id or None,
             is_active=params.is_active,
             is_superuser=params.is_superuser,
             include_player=include_player,

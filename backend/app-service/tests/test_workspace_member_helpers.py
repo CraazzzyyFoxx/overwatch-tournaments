@@ -274,19 +274,43 @@ def test_list_members_page_role_filter_and_sort(db_session) -> None:
         _f_total, f_rows = await workspace_service.list_members_page(
             db_session, workspace.id, page=1, per_page=50, search=None, role_id=admin_role.id
         )
+        member_role = await get_workspace_system_role(db_session, workspace.id, "member")
+        ex_total, ex_rows = await workspace_service.list_members_page(
+            db_session,
+            workspace.id,
+            page=1,
+            per_page=50,
+            search=None,
+            exclude_role_id=[admin_role.id],
+        )
+        both_total, both_rows = await workspace_service.list_members_page(
+            db_session,
+            workspace.id,
+            page=1,
+            per_page=50,
+            search=None,
+            exclude_role_id=[admin_role.id, member_role.id],
+        )
         _s_total, s_rows = await workspace_service.list_members_page(
             db_session, workspace.id, page=1, per_page=50, search=None, sort="role", order="asc"
         )
         return (
             {au.id for (_m, au, _r) in f_rows},
+            {au.id for (_m, au, _r) in ex_rows},
+            ex_total,
+            both_total,
+            len(both_rows),
             [au.id for (_m, au, _r) in s_rows],
             au_admin.id,
             au_member.id,
         )
 
-    filtered_ids, sorted_ids, admin_id, member_id = asyncio.run(_run())
+    filtered_ids, excluded_ids, ex_total, both_total, both_len, sorted_ids, admin_id, member_id = asyncio.run(_run())
 
     assert filtered_ids == {admin_id}  # role filter keeps only the admin
+    assert excluded_ids == {member_id}  # excluding admin keeps the member
+    assert ex_total == 1
+    assert both_total == 0 and both_len == 0  # both hold member; excluding it drops everyone
     assert sorted_ids.index(admin_id) < sorted_ids.index(member_id)  # admin rank < member rank
 
 

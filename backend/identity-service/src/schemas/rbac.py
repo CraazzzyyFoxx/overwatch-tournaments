@@ -2,13 +2,14 @@
 RBAC (Role-Based Access Control) schemas
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from shared.core import pagination
+from shared.rpc.query import parse_id_list
 
 __all__ = (
     "AuthUserLinkedPlayerRead",
@@ -195,9 +196,18 @@ class AuthUserListQueryParams(pagination.PaginationSortQueryParams[_AUTH_USER_SO
     order: pagination.SortOrder = pagination.SortOrder.DESC
     search: str | None = None
     role_id: int | None = None
+    exclude_role_id: list[int] = Field(
+        default_factory=list,
+        description="Drop users who hold any of these roles. Repeat the param or comma-separate ids.",
+    )
     is_active: bool | None = None
     is_superuser: bool | None = None
     workspace_id: int | None = None
+
+    @field_validator("exclude_role_id", mode="before")
+    @classmethod
+    def _split_exclude_role_id(cls, value: Any) -> list[int]:
+        return parse_id_list(value)
 
 
 @dataclass
@@ -205,6 +215,7 @@ class AuthUserListParams(pagination.PaginationSortParams):
     per_page: int = 20
     search: str | None = None
     role_id: int | None = None
+    exclude_role_id: list[int] = field(default_factory=list)
     is_active: bool | None = None
     is_superuser: bool | None = None
     workspace_id: int | None = None
