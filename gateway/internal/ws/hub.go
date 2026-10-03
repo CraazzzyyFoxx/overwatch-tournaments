@@ -2,7 +2,9 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"sort"
 	"sync"
 	"time"
@@ -10,10 +12,24 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/protocol"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 )
 
-const sendTimeout = 2 * time.Second
+const (
+	sendTimeout    = 2 * time.Second
+	sendQueueSize  = 64
+	sendQueueBytes = 4 << 20
+)
+
+var errSendBacklog = errors.New("websocket send backlog exceeded")
+
+type outboundFrame struct {
+	topic   string // empty for direct replies; topic frames are dropped after revocation
+	payload []byte
+	replay  [][]byte // one ordered subscription replay + acknowledgement
+	bytes   int
+}
 
 // Conn is a single live WebSocket connection and its subscription state.
 type Conn struct {
@@ -22,8 +38,14 @@ type Conn struct {
 	baseCtx context.Context
 	log     *slog.Logger // request-scoped: carries correlation_id
 
-	writeMu   sync.Mutex // serializes writes to the socket
-	closeOnce sync.Once
+	sendMu       sync.Mutex // guards enqueue, close, byte budget and hub ownership
+	outbound     chan outboundFrame
+	done         chan struct{} // outbound is never closed: producers may race cleanup
+	writerDone   chan struct{}
+	pendingBytes int // includes the frame currently being written
+	cancel       context.CancelFunc
+	hub          *Hub
+	closed       bool
 
 	topicsMu sync.RWMutex
 	topics   map[string]struct{}
@@ -37,15 +59,133 @@ func newConn(ctx context.Context, c *websocket.Conn, user *auth.User, log *slog.
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Conn{ws: c, user: user, baseCtx: ctx, log: log, topics: make(map[string]struct{})}
+	ctx, cancel := context.WithCancel(ctx)
+	conn := &Conn{
+		ws: c, user: user, baseCtx: ctx, log: log, topics: make(map[string]struct{}),
+		outbound: make(chan outboundFrame, sendQueueSize), done: make(chan struct{}),
+		writerDone: make(chan struct{}), cancel: cancel,
+	}
+	safego.Go(conn.writeLoop)
+	return conn
 }
 
+// send only enqueues. All socket writes, including direct replies, use one pump.
+// Payloads are immutable after enqueue; fan-out shares the serialized bytes.
 func (c *Conn) send(payload []byte) error {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	ctx, cancel := context.WithTimeout(c.baseCtx, sendTimeout)
-	defer cancel()
-	return c.ws.Write(ctx, websocket.MessageText, payload)
+	return c.enqueue(outboundFrame{payload: payload, bytes: len(payload)})
+}
+
+func (c *Conn) enqueue(frame outboundFrame) error {
+	c.sendMu.Lock()
+	err := c.enqueueLocked(frame)
+	c.sendMu.Unlock()
+	if err != nil {
+		c.close()
+	}
+	return err
+}
+
+func (c *Conn) enqueueLocked(frame outboundFrame) error {
+	if c.closed {
+		return net.ErrClosed
+	}
+	if frame.topic != "" && !c.hasTopic(frame.topic) {
+		return nil
+	}
+	if frame.bytes > sendQueueBytes-c.pendingBytes {
+		return errSendBacklog
+	}
+	select {
+	case c.outbound <- frame:
+		c.pendingBytes += frame.bytes
+		return nil
+	default:
+		return errSendBacklog
+	}
+}
+
+// Subscribe and queue catch-up atomically with respect to live enqueue. A replay
+// is one queue item so a valid replay larger than 64 events doesn't overflow the
+// live-event slot budget or interleave live frames before its acknowledgement.
+func (c *Conn) sendSubscription(topic string, events []protocol.Envelope, cursor int64) error {
+	frame := outboundFrame{topic: topic, replay: make([][]byte, 0, len(events)+1)}
+	for _, ev := range events {
+		payload := protocol.EventFrame(topic, ev)
+		frame.bytes += len(payload)
+		if frame.bytes > sendQueueBytes {
+			c.close()
+			return errSendBacklog
+		}
+		frame.replay = append(frame.replay, payload)
+	}
+	ack := protocol.SubscribedFrame(topic, cursor)
+	frame.replay = append(frame.replay, ack)
+	frame.bytes += len(ack)
+	c.sendMu.Lock()
+	if !c.closed {
+		c.subscribe(topic)
+	}
+	err := c.enqueueLocked(frame)
+	c.sendMu.Unlock()
+	if err != nil {
+		c.close()
+	}
+	return err
+}
+
+func (c *Conn) writeLoop() {
+	defer close(c.writerDone)
+	// Release any queued payload references on exit, even if a revoker still
+	// holds this Conn in its subscriber snapshot.
+	defer func() {
+		c.close()
+		// Never perform even socket-close I/O on the Redis fan-in goroutine.
+		// CloseNow interrupts the reader without waiting for a peer handshake;
+		// the read handler still owns presence/IP cleanup.
+		_ = c.ws.CloseNow()
+		c.sendMu.Lock()
+		defer c.sendMu.Unlock()
+		for len(c.outbound) > 0 {
+			<-c.outbound
+		}
+		c.pendingBytes = 0
+	}()
+	for {
+		select {
+		case <-c.baseCtx.Done():
+			return
+		case <-c.done:
+			return
+		case frame := <-c.outbound:
+			if c.baseCtx.Err() != nil {
+				return
+			}
+			write := func(payload []byte) error {
+				if frame.topic != "" && !c.hasTopic(frame.topic) {
+					return nil
+				}
+				ctx, cancel := context.WithTimeout(c.baseCtx, sendTimeout)
+				defer cancel()
+				return c.ws.Write(ctx, websocket.MessageText, payload)
+			}
+			var err error
+			if frame.replay != nil {
+				for _, payload := range frame.replay {
+					if err = write(payload); err != nil {
+						break
+					}
+				}
+			} else {
+				err = write(frame.payload)
+			}
+			if err != nil {
+				return
+			}
+			c.sendMu.Lock()
+			c.pendingBytes -= frame.bytes
+			c.sendMu.Unlock()
+		}
+	}
 }
 
 func (c *Conn) subscribe(topic string) {
@@ -97,11 +237,19 @@ func (c *Conn) allowPublish(now time.Time) bool {
 }
 
 func (c *Conn) close() {
-	// Both the fan-out path (on send failure) and cleanup may close a
-	// connection; sync.Once keeps it to a single underlying Close.
-	c.closeOnce.Do(func() {
-		_ = c.ws.Close(websocket.StatusNormalClosure, "")
-	})
+	c.sendMu.Lock()
+	if c.closed {
+		c.sendMu.Unlock()
+		return
+	}
+	c.closed = true
+	close(c.done)
+	c.cancel()
+	hub := c.hub
+	c.sendMu.Unlock()
+	if hub != nil {
+		hub.remove(c)
+	}
 }
 
 // Hub is the in-process registry of live connections.
@@ -116,6 +264,12 @@ func NewHub() *Hub {
 }
 
 func (h *Hub) add(c *Conn) {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	if c.closed {
+		return
+	}
+	c.hub = h
 	h.mu.Lock()
 	h.conns[c] = struct{}{}
 	h.mu.Unlock()
@@ -154,9 +308,8 @@ func (h *Hub) DistinctUsers() int {
 	return len(seen)
 }
 
-// CloseAll closes every live connection. Used on shutdown so clients receive a
-// clean close and reconnect, rather than being left dangling (http.Server's
-// Shutdown does not wait for hijacked WebSocket connections).
+// CloseAll disconnects every live connection on shutdown. HTTP Shutdown does
+// not wait for hijacked sockets; cancellation also terminates their writers.
 func (h *Hub) CloseAll() {
 	h.mu.Lock()
 	conns := make([]*Conn, 0, len(h.conns))
@@ -187,9 +340,9 @@ func (h *Hub) SubscribersOf(topic string) []*Conn {
 	return subs
 }
 
-// Route delivers a pre-serialized frame to every connection subscribed to
-// topic, except exclude. Failed sends drop the offending connection. Sends run
-// concurrently so one slow client cannot stall fan-out to the others.
+// Route queues a pre-serialized frame for every subscriber except exclude.
+// Enqueue never waits for socket I/O; a bounded-backlog overflow disconnects
+// that client, without delaying subsequent Redis events or other rooms.
 func (h *Hub) Route(topic string, payload []byte, exclude *Conn) {
 	h.mu.RLock()
 	targets := make([]*Conn, 0, len(h.conns))
@@ -203,25 +356,9 @@ func (h *Hub) Route(topic string, payload []byte, exclude *Conn) {
 	}
 	h.mu.RUnlock()
 
-	if len(targets) == 0 {
-		return
-	}
-
-	var wg sync.WaitGroup
 	for _, c := range targets {
-		wg.Add(1)
-		// safego.Go recovers a panic in this per-target send (this runs for every
-		// realtime message to every subscriber) so one bad connection cannot crash
-		// the whole process. wg.Done is deferred inside so it fires even on panic.
-		safego.Go(func() {
-			defer wg.Done()
-			if err := c.send(payload); err != nil {
-				h.remove(c)
-				c.close()
-			}
-		})
+		_ = c.enqueue(outboundFrame{topic: topic, payload: payload, bytes: len(payload)})
 	}
-	wg.Wait()
 }
 
 // presenceUserIDs returns the distinct authenticated user ids currently

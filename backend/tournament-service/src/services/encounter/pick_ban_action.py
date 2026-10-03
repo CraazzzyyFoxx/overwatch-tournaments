@@ -35,6 +35,8 @@ from shared.division_grid import DivisionGrid
 from shared.domain import pick_ban_engine as engine
 from shared.domain import pick_ban_rules as pbr
 from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_game import EncounterGame
+from shared.models.tournament.encounter_report import EncounterMapReport
 from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession, PickBanSubmission
 from shared.models.tournament.team import Player
 from shared.repository import (
@@ -62,6 +64,8 @@ from src.services.encounter.room_journal import record_room_event
 #: default could not tell an admin acting FOR a side (who must get the neutral,
 #: privacy-free view) from the captain acting as themselves.
 ACTING_VIEWER = "__acting__"
+
+GameSnapshot = tuple[list[EncounterGame], dict[int, list[EncounterMapReport]]]
 
 
 def _source_of(viewer_side: str | None) -> str:
@@ -578,9 +582,9 @@ class PickBanActionService:
         and the staff member who paused the room is exactly who still has to be
         able to fix what they paused it for.
         """
-        encounter = await self.encounter_repo.get(session, encounter_id)
-        if encounter is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+        # Admin actions bypass the captain RPC loader. Keep every mutation in
+        # encounter -> session order, including the room journal's FK writes.
+        encounter = await self.sessions._lock_encounter(session, encounter_id)
         pick_ban = await self.sessions.get_pick_ban_session(session, encounter_id, kind, for_update=True)
         if pick_ban is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pick-ban session is not initialized")
@@ -803,49 +807,69 @@ class PickBanActionService:
         return await self.get_pick_ban_state(session, encounter_id, kind, viewer_side=None)
 
     # -- the room's state --------------------------------------------------
-    async def _series_state(
-        self, session: AsyncSession, encounter: Encounter, pick_ban: PickBanSession | None
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        """The series' positions and its live score, as the room renders them.
-
-        With a map session the picks own the positions; without one (freeplay,
-        or a room that never opened) exactly one position is offered at a time --
-        but only for a room that can actually be played. A preview bracket, or an
-        encounter whose slots are still waiting on an upstream result, has no
-        series to open: creating its position on a mere READ wrote an
-        ``encounter_game`` row for a matchup that may never exist.
-
-        A CANCELLED map session counts as no session here: the organizer dropped
-        the veto mid-series, so the maps it already settled keep their positions
-        and everything after them is named by the captains, exactly as a room
-        with no veto at all works.
-        """
-        if pick_ban is not None and str(pick_ban.status) != MapVetoSessionStatus.CANCELLED:
-            games = await self.games.sync_games_with_picks(session, encounter, pick_ban)
+    async def _game_snapshot(
+        self, session: AsyncSession, encounter: Encounter, *, refresh: bool = False
+    ) -> GameSnapshot:
+        if refresh:
+            # The pre-lock identity-map rows are not a mutation snapshot.
+            result = await session.execute(
+                self.games.game_repo.select()
+                .where(
+                    EncounterGame.encounter_id == encounter.id,
+                    EncounterGame.state != EncounterGameState.CANCELLED,
+                )
+                .order_by(EncounterGame.position, EncounterGame.id)
+                .execution_options(populate_existing=True)
+            )
+            games = list(result.scalars().all())
         else:
+            games = await self.games.list_games(session, encounter.id)
+        return games, await self.games.reports_by_game(session, games)
+
+    async def _series_state(self, session: AsyncSession, encounter: Encounter) -> GameSnapshot:
+        """Freeplay offers one position at a time, only for a playable room."""
+        snapshot = await self._game_snapshot(session, encounter)
+        games, _ = snapshot
+        if (
+            encounter.home_team_id is not None
+            and encounter.away_team_id is not None
+            and len(games) < encounter.best_of
+            and not engine.series_complete(self.games.live_score(games), encounter.best_of)
+            and not any(
+                game.state
+                in (
+                    EncounterGameState.PLANNED,
+                    EncounterGameState.AWAITING_RESULT,
+                    EncounterGameState.DISPUTED,
+                )
+                for game in games
+            )
+            and await is_encounter_live(session, encounter)
+        ):
+            # No row exists to lock for a new position. Refresh the encounter,
+            # then let ensure_freeplay_game recheck the games under that lock.
+            encounter = await self.sessions._lock_encounter(session, encounter.id)
+            snapshot = await self._game_snapshot(session, encounter, refresh=True)
+            map_session = await self.sessions.get_pick_ban_session(
+                session, encounter.id, PickBanKind.MAP, for_update=True
+            )
+            if map_session is not None and str(map_session.status) != MapVetoSessionStatus.CANCELLED:
+                # A concurrent bootstrap/reset opened the map room while this
+                # reader waited; it, not freeplay, now owns the positions.
+                return snapshot
             if (
                 encounter.home_team_id is not None
                 and encounter.away_team_id is not None
                 and await is_encounter_live(session, encounter)
             ):
-                # Committed here: the read RPC never commits, so a position opened
-                # only on this session rolled back with it -- the room was handed a
-                # game id that did not exist, and naming its map 404'd. Savepoint:
-                # two viewers opening the room at once race onto
-                # `uq_encounter_game_encounter_position`; the loser reads the
-                # winner's row instead of failing the read.
                 try:
                     async with session.begin_nested():
                         await self.games.ensure_freeplay_game(session, encounter)
                     await session.commit()
                 except IntegrityError:
                     pass
-            games = await self.games.list_games(session, encounter.id)
-        reports = await self.games.reports_by_game(session, games)
-        return (
-            [self.games.serialize(game, reports.get(game.id, [])) for game in games],
-            self.games.serialize_series(encounter, games),
-        )
+                snapshot = await self._game_snapshot(session, encounter)
+        return snapshot
 
     async def get_pick_ban_state(
         self,
@@ -872,24 +896,37 @@ class PickBanActionService:
             reason = await self.sessions.unavailable_reason(session, encounter, kind)
             state = build_unavailable_state(reason, readiness=readiness)
             if kind == PickBanKind.MAP:
-                state["games"], state["series"] = await self._series_state(session, encounter, None)
+                games, reports = await self._series_state(session, encounter)
+                state["games"] = [self.games.serialize(game, reports.get(game.id, [])) for game in games]
+                state["series"] = self.games.serialize_series(encounter, games)
             return state
 
         rt = await self._load(session, pick_ban, encounter)
+        snapshot: GameSnapshot | None = None
         if self._pending(rt):
             # Double-checked: the unlocked read above only answers "is something
             # owed at all"; the decision is re-made under the lock, where another
             # reader may already have settled it.
+            # Steady reads never enter here. Mutations follow the same
+            # encounter -> session order as captain/admin writes and hero sync.
+            encounter = await self.sessions._lock_encounter(session, encounter_id)
             locked = await self.sessions.get_pick_ban_session(session, encounter_id, kind, for_update=True)
-            if locked is not None:
-                rt = await self._load(session, locked, encounter, refresh=True)
-                if await self._settle(session, rt):
-                    await session.flush()
-                    if kind == PickBanKind.MAP:
-                        await self.games.sync_games_with_picks(session, encounter, rt.pick_ban)
-                    await emit_pick_ban_update(session, encounter_id, kind=kind.value)
-                    await session.commit()
-        return await self._build_state(session, rt, kind, readiness=readiness, viewer_side=viewer_side)
+            if locked is None:
+                # A reset deleted the snapshot while this reader waited.
+                return await self.get_pick_ban_state(session, encounter_id, kind, viewer_side=viewer_side)
+            rt = await self._load(session, locked, encounter, refresh=True)
+            if await self._settle(session, rt):
+                await session.flush()
+                if kind == PickBanKind.MAP:
+                    snapshot = await self._game_snapshot(session, encounter, refresh=True)
+                    games, reports = snapshot
+                    games = await self.games._sync_games_with_snapshot(session, encounter, rt.entries, games, reports)
+                    snapshot = games, reports
+                await emit_pick_ban_update(session, encounter_id, kind=kind.value)
+                await session.commit()
+        return await self._build_state(
+            session, rt, kind, readiness=readiness, viewer_side=viewer_side, snapshot=snapshot
+        )
 
     async def _build_state(
         self,
@@ -899,7 +936,35 @@ class PickBanActionService:
         *,
         readiness: dict[str, bool],
         viewer_side: str | None,
+        snapshot: GameSnapshot | None = None,
     ) -> dict[str, Any]:
+        if snapshot is None:
+            if kind == PickBanKind.MAP and str(rt.pick_ban.status) == MapVetoSessionStatus.CANCELLED:
+                snapshot = await self._series_state(session, rt.encounter)
+            else:
+                snapshot = await self._game_snapshot(session, rt.encounter)
+        games, reports = snapshot
+        if kind == PickBanKind.MAP and str(rt.pick_ban.status) != MapVetoSessionStatus.CANCELLED:
+            changes, stale = self.games._pick_game_changes(rt.entries, games, reports)
+            if changes or stale:
+                encounter = await self.sessions._lock_encounter(session, rt.encounter.id)
+                locked = await self.sessions.get_pick_ban_session(session, encounter.id, kind, for_update=True)
+                if locked is None:
+                    return await self.get_pick_ban_state(session, encounter.id, kind, viewer_side=viewer_side)
+                rt = await self._load(session, locked, encounter, refresh=True)
+                if str(locked.status) == MapVetoSessionStatus.CANCELLED:
+                    games, reports = await self._series_state(session, encounter)
+                else:
+                    games, reports = await self._game_snapshot(session, encounter, refresh=True)
+                    changes, stale = self.games._pick_game_changes(rt.entries, games, reports)
+                    if changes or stale:
+                        games = await self.games._sync_games_with_snapshot(
+                            session, encounter, rt.entries, games, reports
+                        )
+                        await session.commit()
+        blocked_rounds = frozenset(
+            game.position for game in games if game.state == EncounterGameState.CONFIRMED or reports.get(game.id)
+        )
         step = pbr.current_step(rt.steps, rt.submissions)
         acting: list[str] = []
         if step is not None:
@@ -961,12 +1026,13 @@ class PickBanActionService:
                 rt.steps,
                 rt.submissions,
                 side=viewer_side,
-                blocked_rounds=await self._blocked_rounds(session, rt.encounter),
+                blocked_rounds=blocked_rounds,
             ).to_json(),
             "undo": pick_ban_undo.undo_state(rt.pick_ban, rt.steps, rt.submissions),
         }
         if kind == PickBanKind.MAP:
-            state["games"], state["series"] = await self._series_state(session, rt.encounter, rt.pick_ban)
+            state["games"] = [self.games.serialize(game, reports.get(game.id, [])) for game in games]
+            state["series"] = self.games.serialize_series(rt.encounter, games)
         return state
 
 

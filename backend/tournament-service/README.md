@@ -131,6 +131,19 @@ Redis is unavailable and logged, nothing more.
 Multiple reasons registered for one tournament in a single transaction are merged into the strongest
 one before the row is written, so a burst of writes yields one event, not one per statement.
 
+### Pre-game room reads
+
+Public pick/ban state reads retain visibility, captain-side and duel-format checks, but do not
+lock the encounter merely to inspect an existing room. Steady map responses reuse one request-local
+entries/games/reports snapshot for their pool, dispute guards, games and series; state is still
+viewer-specific and is not shared-cached.
+
+Reads can still create a session, settle an expired/system step, append a hero round, repair game
+projections or open a freeplay position. Those mutation boundaries acquire the encounter before
+the pick/ban session and repeat eligibility checks with refreshed ORM rows after waiting. Admin
+actions and room controls follow the same lock order. Active polling remains necessary because
+timeout progression is lazy; paused steps do not expire.
+
 ### Scheduled work
 
 | Job | Interval | What it does |

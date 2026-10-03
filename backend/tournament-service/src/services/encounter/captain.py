@@ -245,14 +245,24 @@ class CaptainService:
             )
         return encounter
 
-    async def _load_encounter(self, session: AsyncSession, encounter_id: int) -> models.Encounter:
+    async def _load_encounter(
+        self, session: AsyncSession, encounter_id: int, *, for_update: bool = True
+    ) -> models.Encounter:
         """:meth:`load_encounter_any_format`, refused for a lobby.
 
         Every caller of THIS one is a series feature -- captain reports, the
         admin result writes, the captain's own side, the pick-ban room -- so the
         format is checked once here instead of at each command.
+        Only state polling opts out of the encounter lock; its lazy mutations
+        acquire their locks at the write boundary. Eager team/stage loading and
+        the DUEL guard are identical for either path.
         """
-        encounter = await self.load_encounter_any_format(session, encounter_id)
+        if for_update:
+            encounter = await self.load_encounter_any_format(session, encounter_id)
+        else:
+            encounter = await self.encounter_repo.get(session, encounter_id, options=list(_ENCOUNTER_LOCK_OPTIONS))
+            if encounter is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
         ensure_format(encounter, EncounterFormat.DUEL)
         return encounter
 

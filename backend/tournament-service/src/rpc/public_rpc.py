@@ -319,7 +319,7 @@ def register(broker: Any, logger: Any) -> None:
                 session, encounter_id
             )
             await assert_tournament_viewable(session, user, tournament_id)
-            encounter = await captain_service._load_encounter(session, encounter_id)
+            encounter = await captain_service._load_encounter(session, encounter_id, for_update=False)
             viewer_side = await resolve_optional_viewer_side(session, user, encounter)
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
                 session, encounter_id, kind, viewer_side=viewer_side

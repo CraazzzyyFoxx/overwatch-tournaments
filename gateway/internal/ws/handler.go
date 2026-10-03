@@ -554,11 +554,9 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 		return
 	}
 
-	conn.subscribe(op.Topic)
-	for _, ev := range events {
-		_ = conn.send(protocol.EventFrame(op.Topic, ev))
+	if err := conn.sendSubscription(op.Topic, events, cursor); err != nil {
+		return
 	}
-	_ = conn.send(protocol.SubscribedFrame(op.Topic, cursor))
 
 	if IsPresenceTopic(op.Topic) {
 		h.broadcastPresence(op.Topic)

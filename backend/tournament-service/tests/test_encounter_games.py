@@ -320,6 +320,33 @@ class GameLifecycleTests(IsolatedAsyncioTestCase):
         self.assertEqual((2, 0), (audit.home_score_after, audit.away_score_after))
         self.assertEqual([1], [game.position for game in self._games()])
 
+    async def test_sync_preserves_claimed_and_confirmed_positions_when_picks_change(self) -> None:
+        pick_ban = self._map_session(11, 22)
+        games = await self.service.sync_games_with_picks(self.store, self.encounter, pick_ban)
+        self.store.seed(EncounterMapReport(game_id=games[0].id, side="home", home_score=2, away_score=1))
+        await self.service.accept_result(
+            self.store,
+            self.encounter,
+            games[1],
+            home_score=2,
+            away_score=0,
+            source=EncounterGameResultSource.CAPTAIN_AGREEMENT,
+            actor_user_id=None,
+        )
+        entries = self.store.all_of(PickBanEntry)
+        entries[0].item_id = 12
+        entries[1].status = MapPoolEntryStatus.AVAILABLE
+        entries[1].action_index = None
+
+        games = await self.service.sync_games_with_picks(self.store, self.encounter, pick_ban)
+
+        self.assertEqual([(1, 11), (2, 22)], [(game.position, game.map_id) for game in games])
+        self.assertEqual(
+            [EncounterGameState.AWAITING_RESULT, EncounterGameState.CONFIRMED],
+            [game.state for game in games],
+        )
+        self.assertEqual(SeriesScore(home_wins=1, away_wins=0, played=1), self.service.live_score(games))
+
 
 class GameSerializationTests(IsolatedAsyncioTestCase):
     async def test_serialize_puts_home_before_away_and_iso_formats_the_confirmation(self) -> None:

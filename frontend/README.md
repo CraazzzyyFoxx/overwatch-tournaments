@@ -98,6 +98,20 @@ The browser uses **relative same-origin paths**; SSR and the proxy use `NEXT_INT
 `frontend/src/lib/api/routes.ts`. Multidomain / white-label tenancy is resolved in
 `frontend/src/proxy.ts`, which maps the request `Host` to a workspace.
 
+## Pre-game room refresh
+
+Map and hero state share one 250–749 ms realtime batch. Ordinary pick/ban changes refresh the
+two authoritative states without rereading full encounter/parsed-match details. Game, series,
+session-control and local upload changes refresh those details; tournament encounter invalidations
+also refresh the room when their `encounter_ids` include it, preserving remote parsed-log history.
+Reconnect acknowledgements trigger a full catch-up.
+
+Incomplete active sessions retain lazy-timeout polling at independently jittered 4000–6499 ms
+intervals. Paused sessions do not poll while realtime is connected and both room subscriptions
+have no errors; disconnected/error states use a 30000–32499 ms fallback to recover missed resumes.
+Polling-driven progression also refreshes the other phase. WebSocket reconnect uses exponential
+backoff with equal jitter, capped at 30 seconds; per-IP protective limits are unchanged.
+
 ## Pre-game hero history and match log folders
 
 The **One ban per opponent player** board shows each opponent's logged heroes inside their

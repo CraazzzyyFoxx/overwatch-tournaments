@@ -89,6 +89,8 @@ describe("realtime subscribed confirmations", () => {
       value: originalWindow,
     });
     globalThis.WebSocket = originalWebSocket;
+    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("notifies every current subscriber after storing the confirmed cursor", () => {
@@ -138,6 +140,31 @@ describe("realtime subscribed confirmations", () => {
     expect(confirmations).toBe(2);
     unsubscribe();
     vi.useRealTimers();
+  });
+
+  it("spreads reconnect attempts while keeping exponential backoff", () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValueOnce(0.2).mockReturnValueOnce(0.8);
+    const unsubscribe = trackCleanup(realtimeClient.subscribe("tournament:42:bracket", () => undefined));
+    currentSocket().open();
+    currentSocket().close();
+
+    vi.advanceTimersByTime(599);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(MockWebSocket.instances).toHaveLength(2);
+
+    // A failed handshake keeps increasing the backoff, with a fresh random delay.
+    currentSocket().close();
+    vi.advanceTimersByTime(1_799);
+    expect(MockWebSocket.instances).toHaveLength(2);
+    vi.advanceTimersByTime(1);
+    expect(MockWebSocket.instances).toHaveLength(3);
+
+    currentSocket().close();
+    unsubscribe();
+    vi.advanceTimersByTime(30_000);
+    expect(MockWebSocket.instances).toHaveLength(3);
   });
 
   it("does not treat an ordinary event as a subscription confirmation", () => {

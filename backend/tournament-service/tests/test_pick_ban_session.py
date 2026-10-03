@@ -291,7 +291,7 @@ class _FakeSession:
         self.games = games or []
         # `advance_to_next_round` reads `best_of` off the encounter to cap the
         # rounds it will ever open.
-        self.encounter = encounter
+        self.encounter = encounter if encounter is not None else _encounter(best_of=3)
         # Defaults to published so every pre-existing test (all written
         # before the bracket-preview gate existed) keeps exercising
         # config/team logic unchanged; only tests that care about the gate
@@ -331,6 +331,8 @@ class _FakeSession:
         col = statement.column_descriptions[0]
         entity = col["entity"]
         col_name = str(col.get("name") or col.get("expr") or "")
+        if entity is Encounter:
+            return _Result([self.encounter])
         if entity is None or col_name.endswith("round"):
             # `list_rounds` is `SELECT pick_ban_entry.round`.
             if "round" in col_name or entity is None:
@@ -428,7 +430,7 @@ class EnsurePickBanSessionSlotReservesTests(IsolatedAsyncioTestCase):
                 _slot(3, [31, 32], reserve=98),  # out of play at best_of=2
             ]
         )
-        session = _FakeSession(config=config)
+        session = _FakeSession(config=config, encounter=_encounter(best_of=2))
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
             session, _encounter(best_of=2), PickBanKind.MAP
@@ -450,7 +452,7 @@ class EnsurePickBanSessionSlotReservesTests(IsolatedAsyncioTestCase):
 
     async def test_no_reserves_is_an_empty_snapshot_not_none(self) -> None:
         config = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
-        session = _FakeSession(config=config)
+        session = _FakeSession(config=config, encounter=_encounter(best_of=2))
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
             session, _encounter(best_of=2), PickBanKind.MAP
@@ -479,7 +481,7 @@ class EnsurePickBanSessionSlotCountMismatchTests(IsolatedAsyncioTestCase):
 
     async def test_best_of_equal_to_the_slot_count_is_playable(self) -> None:
         config = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
-        session = _FakeSession(config=config)
+        session = _FakeSession(config=config, encounter=_encounter(best_of=2))
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
             session, _encounter(best_of=2), PickBanKind.MAP
@@ -1131,7 +1133,7 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
 
     async def test_slot_mode_creates_only_the_first_round(self) -> None:
         config = _config(slots=[_slot(1, [11, 12, 13]), _slot(2, [21, 22, 23])])
-        session = _FakeSession(config=config)
+        session = _FakeSession(config=config, encounter=_encounter(best_of=2))
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
             session, _encounter(best_of=2), PickBanKind.MAP
@@ -1191,7 +1193,9 @@ class ProgressiveRoundCreationTests(IsolatedAsyncioTestCase):
             items=[101, 102, 103],
             sequence=["ban_first", "ban_second", "decider"],
         )
-        session = _FakeSession(config=config, map_session=SimpleNamespace(id=800), pool_count=1)
+        session = _FakeSession(
+            config=config, map_session=SimpleNamespace(id=800), pool_count=1, encounter=_encounter(best_of=1)
+        )
 
         pick_ban = await pick_ban_session_service.ensure_pick_ban_session(
             session, _encounter(best_of=1), PickBanKind.HERO

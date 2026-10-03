@@ -342,10 +342,11 @@ class RealtimeClient {
   private scheduleReconnect(): void {
     this.clearReconnectTimer();
     useRealtimeStore.getState().setConnectionState("reconnecting");
-    const delay = Math.min(
+    const backoff = Math.min(
       RECONNECT_BASE_MS * 2 ** this.reconnectAttempt,
       RECONNECT_MAX_MS
     );
+    const delay = backoff * (0.5 + Math.random() * 0.5);
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => this.ensureSocket(), delay);
   }

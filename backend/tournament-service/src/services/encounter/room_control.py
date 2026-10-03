@@ -61,6 +61,9 @@ async def _load_active(
     the resume arithmetic reads ``current_step_started_at`` and writes it back, so
     a settling reader must not be sitting between the two.
     """
+    # Idempotent controls can read state before releasing their session lock.
+    # Match the settling reader's encounter -> session order.
+    await captain_service.encounter_repo.get_for_update(session, encounter_id)
     pick_ban = await pick_ban_session_service.get_pick_ban_session(session, encounter_id, kind, for_update=True)
     if pick_ban is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Pick-ban session is not initialized")

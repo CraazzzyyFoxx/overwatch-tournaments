@@ -22,6 +22,7 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared.core.enums import (
     EncounterFormat,
@@ -41,6 +42,7 @@ from shared.models.catalog.gamemode import Gamemode
 from shared.models.catalog.hero import Hero
 from shared.models.catalog.map import Map
 from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.pick_ban import (
     EncounterReadiness,
     PickBanConfig,
@@ -532,6 +534,31 @@ class PickBanSessionService:
         ``kind=map`` config is untouched: one round (``round IS NULL``) whose
         sequence settles the whole series, because that IS the classic veto.
         """
+        return await self._ensure_pick_ban_session(session, encounter, kind, commit=commit)
+
+    async def _lock_encounter(self, session: AsyncSession, encounter_id: int) -> Encounter:
+        """Room mutation lock; discard the pre-lock encounter snapshot."""
+        result = await session.execute(
+            select(Encounter)
+            .where(Encounter.id == encounter_id)
+            .options(selectinload(Encounter.stage))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        encounter = result.unique().scalars().first()
+        if encounter is None:
+            raise HTTPException(status_code=404, detail="Encounter not found")
+        return encounter
+
+    async def _ensure_pick_ban_session(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        kind: PickBanKind,
+        *,
+        commit: bool,
+        encounter_locked: bool = False,
+    ) -> PickBanSession | None:
         existing = await self.get_pick_ban_session(session, encounter.id, kind)
         if existing is not None:
             return existing
@@ -573,6 +600,13 @@ class PickBanSessionService:
         # hero round behind the same gate.
         if kind == PickBanKind.HERO and not await self.map_round_settled(session, encounter, 1):
             return None
+        if not encounter_locked:
+            # A missing session has no row to lock. Lock its encounter only once
+            # creation is actually owed, then repeat ALL gates and the existence
+            # check against the refreshed row. Existing/unavailable rooms stay
+            # unlocked; initialization and readiness/team resets serialize.
+            encounter = await self._lock_encounter(session, encounter.id)
+            return await self._ensure_pick_ban_session(session, encounter, kind, commit=commit, encounter_locked=True)
 
         pool_size = sum(len(s) for s in slots) if slots is not None else len(config.items)
         seeds = await resolve_seeds(session, encounter)
@@ -1026,6 +1060,16 @@ class PickBanSessionService:
         freeze the room with nothing on screen to act on and nothing but a
         session-wiping reset to reach for (design §7's named escape hatch).
         """
+        await session.execute(
+            select(Encounter)
+            .where(Encounter.id == pick_ban.encounter_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        locked = await self.lock_pick_ban_session(session, pick_ban)
+        if locked is None:
+            raise HTTPException(status_code=400, detail="No round is awaiting an opener choice")
+        pick_ban = locked
         if not pick_ban.awaiting_choice:
             raise HTTPException(status_code=400, detail="No round is awaiting an opener choice")
         if acting_side is not None:
@@ -1107,6 +1151,16 @@ class PickBanSessionService:
         round missing and both inserted its candidates — the round then offered
         every hero twice.
         """
+        await self._sync_hero_rounds(session, encounter, commit=commit)
+
+    async def _sync_hero_rounds(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        *,
+        commit: bool,
+        encounter_locked: bool = False,
+    ) -> None:
         hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO)
         if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:
             return
@@ -1116,7 +1170,9 @@ class PickBanSessionService:
             return
         confirmed = score.played
         map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
-        map_session = await self.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
+        map_session = await self.get_pick_ban_session(
+            session, encounter.id, PickBanKind.MAP, for_update=encounter_locked
+        )
         if (
             map_config is not None
             and has_pool(map_config)
@@ -1130,6 +1186,17 @@ class PickBanSessionService:
             target = min(confirmed + 1, int(encounter.best_of))
         if (await self.highest_round_of(session, hero) or 0) >= target:
             return
+        if not encounter_locked:
+            # Append/journal writes must use encounter -> session, just like
+            # the action paths. Repeat the series/map ceiling after waiting:
+            # a result correction or a reset may have removed the round owed.
+            encounter = await self._lock_encounter(session, encounter.id)
+            await session.execute(
+                self.games.game_repo.select()
+                .where(EncounterGame.encounter_id == encounter.id)
+                .execution_options(populate_existing=True)
+            )
+            return await self._sync_hero_rounds(session, encounter, commit=commit, encounter_locked=True)
 
         hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO, for_update=True)
         if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:

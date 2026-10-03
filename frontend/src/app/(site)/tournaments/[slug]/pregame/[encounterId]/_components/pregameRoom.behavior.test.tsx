@@ -118,12 +118,8 @@ vi.mock("@/services/hero.service", () => ({
 vi.mock("@/services/roomChat.service", () => ({
   default: { getEnvelope: vi.fn().mockResolvedValue(null), postMessage: vi.fn() }
 }));
-/** Topic -> the room's handler, so a test can fire what the hub would push. */
-const realtimeHandlers = new Map<string, () => void>();
 vi.mock("@/hooks/useRealtimeTopic", () => ({
-  useRealtimeTopic: (topic: string, onEvent: () => void) => {
-    realtimeHandlers.set(topic, onEvent);
-  }
+  useRealtimeTopic: vi.fn()
 }));
 const usePermissionsMock = vi.fn(() => ({
   isSuperuser: false,
@@ -393,7 +389,6 @@ beforeEach(() => {
   getEncounter.mockResolvedValue(encounter());
   getMyRole.mockResolvedValue({ side: null });
   getReports.mockResolvedValue({ reports: [], form: undefined });
-  realtimeHandlers.clear();
   search = new URLSearchParams();
   usePermissionsMock.mockReturnValue({
     isSuperuser: false,
@@ -1614,33 +1609,6 @@ describe("phase selection", () => {
     expect(items[1].textContent).toContain("0:2");
     expect(items[2].textContent).toContain(ROOM.series.awaiting);
     expect(items[2].textContent).not.toMatch(/\d:\d/);
-  });
-
-  it("refetches the encounter when a map result lands over the wire", async () => {
-    // The series score lives on the encounter, not in the pool, so the captain
-    // who reported FIRST only sees it move on a refetch of THAT query — the
-    // realtime handler used to refresh the two pick-ban states and nothing else.
-    mockStates(
-      readyState({
-        session: session({ kind: "map" }),
-        is_complete: true,
-        viewer_side: "home",
-        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
-      }),
-      readyState({
-        session: session({ kind: "hero" }),
-        is_complete: true,
-        sequence: [step({ index: 0 })],
-        pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
-      })
-    );
-    await render();
-    const before = getEncounter.mock.calls.length;
-
-    realtimeHandlers.get("encounter:4242:map-veto")?.();
-    await settle();
-
-    expect(getEncounter.mock.calls.length).toBeGreaterThan(before);
   });
 
   it("stays on the hero phase while the hero round for the pending map is still catching up", async () => {
