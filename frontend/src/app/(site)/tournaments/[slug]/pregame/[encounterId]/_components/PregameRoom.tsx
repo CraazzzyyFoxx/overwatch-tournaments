@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronDown, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ChevronDown, FileUp, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
 import encounterService from "@/services/encounter.service";
@@ -125,6 +126,7 @@ function RoomSkeleton() {
  */
 function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameRoomProps>) {
   const t = useTranslations("pickBan.room");
+  const logT = useTranslations("accountSettings.logDirectory");
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams?.get(RETURN_TO_PARAM), `/encounters/${encounterId}`);
@@ -193,6 +195,20 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
         official={seriesSummary?.official ?? null}
         returnTo={returnTo}
       />
+      {workspaceId != null && hasWorkspacePermission(workspaceId, "log.create") ? (
+        <TournamentLogUploadDialog
+          tournamentId={encounter.tournament_id}
+          encounters={[encounter]}
+          initialEncounterId={encounterId}
+          onUploaded={room.invalidateRoom}
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="self-start">
+              <FileUp className="h-4 w-4" aria-hidden />
+              {logT("uploadTitle")}
+            </Button>
+          }
+        />
+      ) : null}
       {/* A cancelled kind leaves no phase behind, so without this line the
           room simply looks like one that never had a veto — and the captains
           naming their own map have no idea why. */}

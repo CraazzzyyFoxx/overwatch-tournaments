@@ -8,7 +8,7 @@ import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
-import { TournamentLogUploadDialog } from "@/app/admin/tournaments/[id]/components/TournamentLogUploadDialog";
+import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { pregameRoomHref } from "@/lib/encounter/pregame-room";

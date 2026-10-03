@@ -313,6 +313,10 @@ export function PickBanPanel({
               <div className="lg:sticky lg:top-[var(--aqt-sticky-top)]">
                 <PickBanTargetBoard
                   targets={targetRoster}
+                  players={
+                    (opponentSide === "home" ? encounter.home_team : encounter.away_team)?.players ??
+                    []
+                  }
                   selectedPlayerId={selectedTargetId}
                   assignedByPlayer={assignedByPlayer}
                   itemsById={itemsById}

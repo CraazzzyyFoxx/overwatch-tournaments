@@ -98,6 +98,25 @@ The browser uses **relative same-origin paths**; SSR and the proxy use `NEXT_INT
 `frontend/src/lib/api/routes.ts`. Multidomain / white-label tenancy is resolved in
 `frontend/src/proxy.ts`, which maps the request `Host` to a workspace.
 
+## Pre-game hero history and match log folders
+
+The **One ban per opponent player** board shows each opponent's logged heroes inside their
+roster row, below the name and role. Heroes come from parsed logs in the active workspace,
+across tournaments, ordered by recorded playtime. Long histories scroll within the row.
+History is requested when the targeted-ban board is shown; it does not change ban eligibility.
+
+**Upload match logs** uses the File System Access API (`showDirectoryPicker`, read-only).
+The first click selects a folder; its native `FileSystemDirectoryHandle` is structured-cloned
+into IndexedDB, keyed by the signed-in account and isolated by browser origin. Later clicks
+reuse it and request read permission if needed. This requires Chrome or Edge on HTTPS or
+localhost; unsupported browsers show an explanation rather than a different import method.
+
+Profile settings show the folder name and offer change, view/refresh and forget actions.
+Browsers do not expose its absolute path. Forgetting removes only the saved handle, not files.
+Folder scans include immediate `.log`, `.txt` and `.csv` files, not subdirectories. Files start
+unchecked and only selected files are uploaded; partial failures keep failed files selected
+without resending successful files. Uploading still requires the existing `log.create` permission.
+
 ## Notifications
 
 The header carries the inbox bell (`src/components/notifications/NotificationBell.tsx`, hidden

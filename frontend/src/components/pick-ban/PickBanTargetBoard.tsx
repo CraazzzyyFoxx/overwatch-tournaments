@@ -12,9 +12,11 @@ import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-
 import { formatSubroleSlug } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { PickBanTarget } from "@/types/tournament.types";
+import type { Player } from "@/types/team.types";
 
 import type { PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";
+import { PickBanPlayerHeroes } from "./PickBanPlayerHeroes";
 
 /**
  * The opponent's roster, as the board a per-player ban step is played on.
@@ -32,6 +34,7 @@ import { PickBanItemThumb } from "./PickBanItemThumb";
  */
 export function PickBanTargetBoard({
   targets,
+  players,
   selectedPlayerId,
   assignedByPlayer,
   itemsById,
@@ -40,6 +43,7 @@ export function PickBanTargetBoard({
   disabled = false
 }: Readonly<{
   targets: PickBanTarget[];
+  players: Player[];
   selectedPlayerId: number | null;
   /** Item id already assigned to a player in the viewer's own draft. */
   assignedByPlayer: Record<number, number | undefined>;
@@ -79,7 +83,16 @@ export function PickBanTargetBoard({
                 ? tRoot(PLAYER_ROLE_LABEL_KEY[role])
                 : null;
             return (
-              <li key={target.player_id}>
+              <li
+                key={target.player_id}
+                className={cn(
+                  "rounded-lg border transition-colors",
+                  selected
+                    ? "border-[color:var(--aqt-teal)]/60 bg-[color:var(--aqt-teal)]/10"
+                    : "border-[color:var(--aqt-border)]",
+                  !disabled ? "hover:border-[color:var(--aqt-teal)]/50" : null
+                )}
+              >
                 <button
                   type="button"
                   disabled={disabled}
@@ -87,13 +100,10 @@ export function PickBanTargetBoard({
                   aria-pressed={selected}
                   onClick={() => onSelect(target.player_id)}
                   className={cn(
-                    "flex w-full min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left outline-none transition-colors",
-                    selected
-                      ? "border-[color:var(--aqt-teal)]/60 bg-[color:var(--aqt-teal)]/10"
-                      : "border-[color:var(--aqt-border)]",
+                    "flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left outline-none",
                     disabled
                       ? "cursor-default opacity-70"
-                      : "cursor-pointer hover:border-[color:var(--aqt-teal)]/50 focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                      : "cursor-pointer focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
                   )}
                 >
                   <span
@@ -153,6 +163,9 @@ export function PickBanTargetBoard({
                     />
                   )}
                 </button>
+                <PickBanPlayerHeroes
+                  player={players.find((player) => player.id === target.player_id)}
+                />
               </li>
             );
           })}

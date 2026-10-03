@@ -793,6 +793,40 @@
   },
   "accountSettings": {
     "title": "Account settings",
+    "logDirectory": {
+      "title": "Match log folder",
+      "hint": "Saved only for this account in this browser. Only the folder name is available; files are uploaded only after you select them.",
+      "none": "No folder selected",
+      "select": "Select folder",
+      "replace": "Change folder",
+      "forget": "Forget folder",
+      "refresh": "View / refresh files",
+      "loading": "Loading folder…",
+      "scanning": "Reading folder…",
+      "empty": "No .log, .txt or .csv files in this folder.",
+      "files": "Available log files",
+      "selection": "{count} selected",
+      "duplicate": "Duplicate file names: {names}",
+      "uploadTitle": "Upload match logs",
+      "uploadHint": "Select files from your saved folder and optionally attach them to an encounter. Nothing is uploaded automatically.",
+      "encounter": "Attached encounter",
+      "noEncounter": "No encounter",
+      "cancel": "Cancel",
+      "upload": "Upload selected files",
+      "queued": "Logs queued",
+      "queuedDescription": "{count} files queued for processing",
+      "partial": "Some logs could not be uploaded",
+      "partialDescription": "{uploaded} queued, {failed} failed. Failed files remain selected.",
+      "errors": {
+        "unsupported": "Folder access requires Chrome or Edge on HTTPS (or localhost).",
+        "storage": "Could not read or save the folder in browser storage. Check browser storage permissions and try again.",
+        "permission": "Read access was denied. Grant folder access or select another folder.",
+        "missing": "The folder or a file is no longer available. Restore it or select another folder.",
+        "read": "Could not read this folder. Try again or select another folder.",
+        "account": "Sign in to save and use a log folder.",
+        "upload": "The upload failed. Your selected files have not been cleared."
+      }
+    },
     "tabs": {
       "profile": "Profile",
       "privacy": "Privacy",
@@ -3046,6 +3080,16 @@
   },
   "pickBan": {
     "room": {
+      "playerHeroes": {
+        "title": "Heroes from logs",
+        "loading": "Loading heroes…",
+        "error": "Could not load hero history.",
+        "retry": "Try again",
+        "empty": "No heroes played in available logs.",
+        "noUser": "This player is not linked to a user profile.",
+        "noWorkspace": "Select a workspace to view log history.",
+        "playtime": "{minutes, number} min"
+      },
       "map": {
         "title": "Map Pool",
         "itemNumber": "Map #{id}"
