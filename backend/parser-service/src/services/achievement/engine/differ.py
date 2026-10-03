@@ -139,7 +139,8 @@ async def _resolve_member_ids(
             WorkspaceMember.player_id.in_(sorted(player_ids)),
         )
     )
-    member_ids = dict(rows)
+    # list() first: Result has .keys(), so dict(result) would treat it as a mapping.
+    member_ids = dict(list(rows))
     for player_id in sorted(player_ids - member_ids.keys()):
         member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=player_id)
         member_ids[player_id] = member.id

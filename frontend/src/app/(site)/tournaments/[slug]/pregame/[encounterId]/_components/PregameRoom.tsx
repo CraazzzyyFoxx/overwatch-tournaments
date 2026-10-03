@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronDown, FileUp, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ChevronDown, FileUp, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { TournamentLogUploadDialog } from "@/components/logs/TournamentLogUploadDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
@@ -176,6 +177,10 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
       ? (encounter.home_team?.name ?? t("side.home"))
       : (encounter.away_team?.name ?? t("side.away"));
   const seriesSummary = mapState.series ?? null;
+  // The readiness gate already shows both rosters inline; every later screen
+  // has its pool or report there, so the rosters sit one click away instead.
+  const showRostersButton = !loop.waitingOnReadiness;
+  const canUploadLog = workspaceId != null && hasWorkspacePermission(workspaceId, "log.create");
   const header = (
     <>
       <PregameHeader
@@ -195,20 +200,37 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
         official={seriesSummary?.official ?? null}
         returnTo={returnTo}
       />
-      {workspaceId != null && hasWorkspacePermission(workspaceId, "log.create") ? (
-        <TournamentLogUploadDialog
-          tournamentId={encounter.tournament_id}
-          encounters={[encounter]}
-          initialEncounterId={encounterId}
-          autoUpload
-          onUploaded={room.invalidateRoom}
-          trigger={
-            <Button type="button" variant="outline" size="sm" className="self-start">
-              <FileUp className="h-4 w-4" aria-hidden />
-              {logT("uploadAction")}
-            </Button>
-          }
-        />
+      {showRostersButton || canUploadLog ? (
+        <div className="flex flex-wrap gap-2">
+          {showRostersButton ? (
+            <EncounterRostersModal
+              encounterId={encounterId}
+              homeTeamName={sideNameOf("home")}
+              awayTeamName={sideNameOf("away")}
+              trigger={
+                <Button type="button" variant="outline" size="sm">
+                  <Users className="h-4 w-4" aria-hidden />
+                  {t("rosters")}
+                </Button>
+              }
+            />
+          ) : null}
+          {canUploadLog ? (
+            <TournamentLogUploadDialog
+              tournamentId={encounter.tournament_id}
+              encounters={[encounter]}
+              initialEncounterId={encounterId}
+              autoUpload
+              onUploaded={room.invalidateRoom}
+              trigger={
+                <Button type="button" variant="outline" size="sm">
+                  <FileUp className="h-4 w-4" aria-hidden />
+                  {logT("uploadAction")}
+                </Button>
+              }
+            />
+          ) : null}
+        </div>
       ) : null}
       {/* A cancelled kind leaves no phase behind, so without this line the
           room simply looks like one that never had a veto — and the captains

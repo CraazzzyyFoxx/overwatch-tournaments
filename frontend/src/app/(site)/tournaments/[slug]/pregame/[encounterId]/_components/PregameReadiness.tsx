@@ -4,6 +4,7 @@ import { Check, Hourglass } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
+import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
@@ -31,7 +32,9 @@ interface PregameReadinessProps {
  * standing.
  *
  * So the room renders for real: header above, and this panel where the pool
- * will go, naming both sides and which of them the room is still waiting on.
+ * will go, naming both sides and which of them the room is still waiting on,
+ * with both rosters under the ready button (captains crowned) so the wait shows
+ * who is playing and whom to ping.
  */
 export function PregameReadiness({
   encounter,
@@ -84,6 +87,19 @@ export function PregameReadiness({
           </div>
         )
       ) : null}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EncounterRosterPanel
+          team={encounter.home_team ?? null}
+          side="home"
+          tournamentGrid={encounter.tournament?.division_grid_version ?? null}
+        />
+        <EncounterRosterPanel
+          team={encounter.away_team ?? null}
+          side="away"
+          tournamentGrid={encounter.tournament?.division_grid_version ?? null}
+        />
+      </div>
     </section>
   );
 }

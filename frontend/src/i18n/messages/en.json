@@ -807,6 +807,9 @@
       "emptyTitle": "Choose your Overwatch log folder",
       "files": "Log files",
       "writing": "Being written",
+      "pickFiles": "Choose files",
+      "pickFilesElsewhere": "Add files from another folder",
+      "duplicate": "Files with the same name are selected: {names}. Keep only one of each.",
       "uploadTitle": "Upload match logs",
       "uploadAction": "Upload logs",
       "uploadHintEncounter": "Logs are attached to {encounter}.",
@@ -3195,6 +3198,7 @@
       "slotUnderfilledHint": "One of this match's slots has fewer than two candidates, so there is nothing to ban there. The organizer has to fill it before this room can open.",
       "notReadyTitle": "Waiting for both captains",
       "notReadyHint": "This room opens once both captains confirm they are ready.",
+      "rosters": "Rosters",
       "bracketPreviewTitle": "Bracket preview",
       "bracketPreviewHint": "The organizer generated this bracket ahead of time. It opens once they activate the stage.",
       "ready": {
