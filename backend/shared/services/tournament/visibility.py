@@ -18,9 +18,9 @@ Every tournament-scoped read across tournament-service AND app-service routes
 through this module. Gate coverage is the crux of the feature — see issue #115.
 
 Cache note: public read serializers are cashews-cached WITHOUT the viewer.
-``assert_tournament_viewable`` loads the tournament fresh (uncached) and must be
-called BEFORE any cached read, so an ineligible viewer is rejected before the
-shared cache is consulted.
+``assert_tournament_viewable`` / ``ensure_tournament_viewable`` read the
+tournament fresh (uncached) and must be called BEFORE any cached read, so an
+ineligible viewer is rejected before the shared cache is consulted.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ __all__ = (
     "can_view_tournament",
     "can_view_workspace_tournaments",
     "assert_tournament_viewable",
+    "ensure_tournament_viewable",
     "admin_visible_workspace_ids",
     "visible_tournaments_predicate",
     "visible_tournament_ids_subquery",
@@ -117,23 +118,61 @@ async def assert_tournament_viewable(session: AsyncSession, user: AuthUser | Non
     )
     if tournament is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
-    if not can_view_workspace_tournaments(user, tournament.workspace_id, tournament.workspace.is_hidden):
+    await _gate(session, user, tournament, workspace_is_hidden=tournament.workspace.is_hidden)
+    return tournament
+
+
+async def ensure_tournament_viewable(session: AsyncSession, user: AuthUser | None, tournament_id: int) -> None:
+    """``assert_tournament_viewable`` for callers that only need the verdict.
+
+    Same gate, same 404s, but ONE column-only SELECT instead of the full ORM
+    load: ``Tournament`` and ``Workspace`` carry ``selectin`` relationships
+    (phase schedule, division grids and their tiers), so loading the entity costs
+    five extra round-trips that a gate-only read throws away.
+    """
+    row = (
+        await session.execute(
+            sa.select(
+                Tournament.id,
+                Tournament.workspace_id,
+                Tournament.is_hidden,
+                Workspace.is_hidden.label("workspace_is_hidden"),
+            )
+            .join(Workspace, Workspace.id == Tournament.workspace_id)
+            .where(Tournament.id == tournament_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
+    await _gate(session, user, row, workspace_is_hidden=row.workspace_is_hidden)
+
+
+async def _gate(
+    session: AsyncSession,
+    user: AuthUser | None,
+    tournament: Tournament | sa.Row,
+    *,
+    workspace_is_hidden: bool,
+) -> None:
+    """Raise 404 unless ``user`` may see ``tournament``. Reads only ``id``,
+    ``workspace_id`` and ``is_hidden``, so a column row serves as well as the
+    entity."""
+    if not can_view_workspace_tournaments(user, tournament.workspace_id, workspace_is_hidden):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
     if not tournament.is_hidden:
-        return tournament
+        return
 
-    if user is not None and await is_scrim_container(session, tournament_id):
+    if user is not None and await is_scrim_container(session, tournament.id):
         if user.is_superuser or tournament.workspace_id in user.get_workspace_ids():
-            return tournament
+            return
 
     preview_user_ids: set[int] = set()
     # Only the allowlist lookup is conditional; admins/superusers short-circuit
     # without the extra query.
     if user is not None and not user.is_workspace_admin(tournament.workspace_id):
-        preview_user_ids = await load_preview_user_ids(session, tournament_id)
-    if not can_view_tournament(user, tournament, preview_user_ids):
+        preview_user_ids = await load_preview_user_ids(session, tournament.id)
+    if not can_view_tournament(user, tournament, preview_user_ids):  # type: ignore[arg-type]
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
-    return tournament
 
 
 def admin_visible_workspace_ids(user: AuthUser) -> list[int]:

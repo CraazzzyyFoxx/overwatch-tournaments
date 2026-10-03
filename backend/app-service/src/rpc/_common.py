@@ -29,7 +29,7 @@ from shared.rpc.common import (
 from shared.rpc.common import (
     envelope as _envelope,
 )
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 
 __all__ = (
     "identity_user_id",
@@ -60,4 +60,4 @@ async def gate_tournament(session: Any, data: dict[str, Any], tournament_id: int
     """
     if tournament_id is None:
         return
-    await assert_tournament_viewable(session, optional_actor(data), int(tournament_id))
+    await ensure_tournament_viewable(session, optional_actor(data), int(tournament_id))

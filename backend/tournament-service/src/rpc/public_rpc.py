@@ -55,7 +55,7 @@ from shared.services.chat import (
 )
 from shared.services.subscriptions.realtime import emit_subscriptions_updated
 from shared.services.subscriptions.wiring import build_resolver, build_store
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 from src import models, schemas
 from src.core import db
 from src.core.broker import optional_broker
@@ -293,7 +293,7 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_encounter(
                 session, encounter_id
             )
-            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
+            await ensure_tournament_viewable(session, _optional_identity(data), tournament_id)
             # The form config rides this envelope so the report dialog opens with
             # exactly the rules the submit endpoint will enforce, in one round trip.
             return {
@@ -318,7 +318,7 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_encounter(
                 session, encounter_id
             )
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             encounter = await captain_service._load_encounter(session, encounter_id, for_update=False)
             viewer_side = await resolve_optional_viewer_side(session, user, encounter)
             return await pick_ban_action.pick_ban_action_service.get_pick_ban_state(
@@ -585,7 +585,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             # Public route — no identity required, but hidden tournaments 404.
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
+            await ensure_tournament_viewable(session, _optional_identity(data), tournament_id)
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
             if form is None:
                 return None
@@ -614,7 +614,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             body = RegistrationSubmit.model_validate(_payload(data))
 
             # Admission gate, sign-up stage. Every requirement the tournament armed
@@ -651,7 +651,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 return None
@@ -697,7 +697,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             body = RegistrationUpdate.model_validate(_payload(data))
 
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
@@ -773,7 +773,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
@@ -788,7 +788,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
@@ -858,7 +858,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
             return _dump(
                 await subscription_status_for_user(
@@ -881,7 +881,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             body = SubscriptionRedeemRequest.model_validate(_payload(data))
             form = await reg_common._common_service.get_registration_form(session, tournament_id)
             if form is None:
@@ -928,7 +928,7 @@ def register(broker: Any, logger: Any) -> None:
             # (expensive, viewer-agnostic) read-model build below is coalesced
             # across concurrent callers -- see ``_coalesced_registration_list``.
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
+            await ensure_tournament_viewable(session, _optional_identity(data), tournament_id)
             return _dump(await _coalesced_registration_list(tournament_id))
 
         return await _run(logger, op)
@@ -948,7 +948,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             tournament_id = _path_int(data, "tournament_id")
             user = _optional_identity(data)
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             pairs = await team_service.teams_service.list_teams(
                 session,
                 tournament_id=tournament_id,
@@ -1010,7 +1010,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             body = RegistrationTeamCreateRequest.model_validate(_payload(data))
 
             # Same gate as solo registration, same stage: the captain is a registrant
@@ -1088,7 +1088,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
-            await assert_tournament_viewable(session, user, tournament_id)
+            await ensure_tournament_viewable(session, user, tournament_id)
             items = await team_service.teams_service.list_free_agents(session, tournament_id)
             return _dump(RegistrationFreeAgentListResponse(items=items, total=len(items)))
 

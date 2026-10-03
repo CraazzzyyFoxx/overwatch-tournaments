@@ -60,7 +60,7 @@ from shared.repository import (
     UserRepository,
 )
 from shared.services.settings_provider import settings_provider
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 from src import models
 from src.services.encounter import pick_ban_config as pick_ban_config_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
@@ -377,7 +377,7 @@ class ScrimService:
             # The source tournament may be hidden or from another workspace; gate it
             # exactly as any other read would, or copying a pool becomes a way to
             # read a tournament the caller cannot see.
-            await assert_tournament_viewable(session, user, int(origin_id))
+            await ensure_tournament_viewable(session, user, int(origin_id))
             configs: list[PickBanConfig] = []
             for kind in (PickBanKind.MAP, PickBanKind.HERO):
                 resolved = await pick_ban_session_service.resolve_config_at_level(
@@ -421,12 +421,12 @@ class ScrimService:
     async def get_room_by_token(self, session: AsyncSession, user: models.AuthUser | None, token: str) -> dict:
         """One room, gated by the container's own visibility rules.
 
-        ``assert_tournament_viewable`` is what makes a room private: a stranger with
+        ``ensure_tournament_viewable`` is what makes a room private: a stranger with
         the token still gets 404, because holding the link is not membership. The
         link only matters for the ONE action it unlocks — see ``claim_side``.
         """
         room = await self._load_room(session, token)
-        await assert_tournament_viewable(session, user, room.tournament_id)
+        await ensure_tournament_viewable(session, user, room.tournament_id)
         return await self.serialize_room(session, room, user)
 
     async def list_rooms_for_viewer(

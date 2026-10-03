@@ -21,7 +21,7 @@ from shared.models.identity.auth_user import AuthUser
 from shared.repository.draft import DraftSessionRepository, DraftTeamRepository
 from shared.services.chat import SPECTATOR_ROLE, ChatMembership, ChatRoom, ChatService
 from shared.services.tournament.display_name import tournament_display_name
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 
 __all__ = ("DraftChatAccess", "draft_chat_service")
 
@@ -53,7 +53,7 @@ class DraftChatAccess:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Draft chat is not available")
         # Before anything else: an outsider must not learn that a hidden
         # tournament is drafting, chat setting or not.
-        await assert_tournament_viewable(session, auth_user, draft.tournament_id)
+        await ensure_tournament_viewable(session, auth_user, draft.tournament_id)
 
         if auth_user is None:
             return _SPECTATOR

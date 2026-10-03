@@ -453,10 +453,10 @@ class ClosingARoom(IsolatedAsyncioTestCase):
     """``close_room`` end to end over a fake session.
 
     The room itself comes back from ``execute`` (the repository's
-    ``unique().scalars().first()``); the scalar queue is the rest of the call's
-    read order: the caller's player id, then — after the write — what the re-read
-    ``get_room_by_token`` needs (the container, the scrim-container probe, the
-    player id again).
+    ``unique().scalars().first()``), and so does the visibility gate's column row
+    (``one_or_none()``); the scalar queue is the rest of the call's read order:
+    the caller's player id, then — after the write — what the re-read
+    ``get_room_by_token`` needs (the scrim-container probe, the player id again).
     """
 
     def _session(self, room: Any, *, player_id: int | None) -> Any:
@@ -464,15 +464,18 @@ class ClosingARoom(IsolatedAsyncioTestCase):
             id=room.tournament_id,
             workspace_id=room.workspace_id,
             is_hidden=True,
-            workspace=SimpleNamespace(is_hidden=False),
+            workspace_is_hidden=False,
         )
 
         class _RoomSession(_ScalarSession):
             async def execute(self, _statement: Any) -> Any:
                 scalars = SimpleNamespace(first=lambda: room)
-                return SimpleNamespace(unique=lambda: SimpleNamespace(scalars=lambda: scalars))
+                return SimpleNamespace(
+                    unique=lambda: SimpleNamespace(scalars=lambda: scalars),
+                    one_or_none=lambda: container,
+                )
 
-        return _RoomSession(player_id, container, room.id, player_id)
+        return _RoomSession(player_id, room.id, player_id)
 
     async def test_staff_close_a_room_they_neither_created_nor_play(self) -> None:
         room = _room(away_captain=200)

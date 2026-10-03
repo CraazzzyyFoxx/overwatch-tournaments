@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.tournament.link import TournamentLink
 from shared.repository import StreamTargetRepository
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 from src.core import db
 from src.schemas.stream import (
     StreamEntryRead,
@@ -302,14 +302,14 @@ async def build_tournament_streams(
 async def tournament_streams(session: AsyncSession, redis: Redis, data: dict[str, Any]) -> TournamentStreamsRead:
     """Gate, then read. The order is the contract, not a style choice.
 
-    ``assert_tournament_viewable`` runs FIRST, before a single stream row or Redis
+    ``ensure_tournament_viewable`` runs FIRST, before a single stream row or Redis
     key is touched: the gateway caches this response without the viewer in the key
     (``respcache.TTLOnly``), so an ineligible viewer must be rejected before the
     shared cache is consulted (see ``shared/services/tournament/visibility.py``).
     A hidden tournament answers 404, not 403 — existence itself is not disclosed.
     """
     tournament_id = c.require_path_int(data, "tournament_id")
-    await assert_tournament_viewable(session, c.optional_actor(data), tournament_id)
+    await ensure_tournament_viewable(session, c.optional_actor(data), tournament_id)
     return await build_tournament_streams(session, redis, tournament_id)
 
 

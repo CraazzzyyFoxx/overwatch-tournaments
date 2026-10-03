@@ -30,7 +30,7 @@ from shared.domain.ffa_scoring import FfaGameLine
 from shared.repository import UserRepository
 from shared.rpc.identity import ensure_workspace_permission, rehydrate_user_optional
 from shared.services.audit import record_admin_audit
-from shared.services.tournament.visibility import assert_tournament_viewable
+from shared.services.tournament.visibility import ensure_tournament_viewable
 from src import models
 from src.core import auth
 from src.rpc._helpers import _dump, _identity, _path_int, _payload, _read, _require_id, _run
@@ -81,7 +81,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             # Public route — no identity required, but hidden tournaments 404.
             tournament_id = _require_id(data)
-            await assert_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
+            await ensure_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
             lobbies = await ffa_encounter_service.load_stage_lobbies(
                 session, _path_int(data, "stage_id"), tournament_id=tournament_id
             )
@@ -96,7 +96,7 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = await visibility_resolvers.visibility_resolvers_service.tournament_id_for_encounter(
                 session, encounter_id
             )
-            await assert_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
+            await ensure_tournament_viewable(session, rehydrate_user_optional(data.get("identity")), tournament_id)
             return public_view(await ffa_encounter_service.load_lobby(session, encounter_id))
 
         return await _read(logger, op)
