@@ -16,8 +16,25 @@ os.environ["DEBUG"] = "true"
 
 jobs = importlib.import_module("src.services.computation.jobs")
 bracket_worker = importlib.import_module("src.services.computation.bracket_worker")
+standings_worker = importlib.import_module("src.services.computation.standings_worker")
 topology = importlib.import_module("shared.messaging.topology")
 computation = importlib.import_module("shared.services.tournament.computation")
+
+
+def _session_maker(session):
+    """Stand-in for ``db.async_session_maker``: every ``async with`` yields ``session``."""
+
+    class _Maker:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *exc):
+            return False
+
+    return _Maker()
 
 
 class ComputationJobTests(IsolatedAsyncioTestCase):
@@ -210,3 +227,34 @@ class ComputationJobTests(IsolatedAsyncioTestCase):
             }
             self.assertEqual(1, calls[expected_call])
             self.assertEqual(1, sum(calls.values()))
+
+    async def test_contended_tournament_lock_requeues_without_spending_an_attempt(self) -> None:
+        """A standings job that loses the race for the tournament row must come
+        back later with its retry budget intact: waiting out ``statement_timeout``
+        three times used to mark it failed and leave the standings stale
+        (OWT-TOURNAMENTS-R)."""
+        job = SimpleNamespace(
+            id=7, status="running", attempts=2, error="old", started_at="now", tournament_id=1, payload_json={}
+        )
+        session = SimpleNamespace(
+            # FOR UPDATE SKIP LOCKED finds nothing, the tournament still exists.
+            scalar=AsyncMock(side_effect=[None, 1]),
+            commit=AsyncMock(),
+        )
+
+        with (
+            patch.object(standings_worker.db, "async_session_maker", _session_maker(session)),
+            patch.object(standings_worker.jobs_service, "claim_job", AsyncMock(return_value=job)),
+            patch.object(standings_worker.jobs_service, "get_job", AsyncMock(return_value=job)),
+            patch.object(standings_worker, "dispatch_job", AsyncMock()) as dispatch,
+            patch.object(standings_worker.standings_service, "recalculate_for_tournament", AsyncMock()) as recalculate,
+        ):
+            await standings_worker.process_standings_job(7)
+
+        self.assertEqual("pending", job.status)
+        self.assertEqual(1, job.attempts)
+        self.assertIsNone(job.error)
+        self.assertEqual(2, session.scalar.await_count)
+        dispatch.assert_awaited_once_with(session, job)
+        session.commit.assert_awaited_once()
+        recalculate.assert_not_awaited()
