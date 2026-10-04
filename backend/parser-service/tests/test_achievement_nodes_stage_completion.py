@@ -70,7 +70,10 @@ class StageCompletedNodeTests(_StageCase):
         self.stage(enums.StageType.SINGLE_ELIMINATION, order=10, completed=False)
         self.db.session.commit()
 
-        self.assertEqual({HOME_KEY, (REAL_AWAY_USER, REAL_TOURNAMENT_ID)}, await self.node("stage_completed", {"op": "<=", "value": 1}))
+        self.assertEqual(
+            {HOME_KEY, (REAL_AWAY_USER, REAL_TOURNAMENT_ID)},
+            await self.node("stage_completed", {"op": "<=", "value": 1}),
+        )
         self.assertEqual(set(), await self.node("stage_completed", {"value": 2}))
         self.assertEqual(set(), await self.node("stage_completed", {"op": ">=", "value": 1}))
         # No stage 3 exists: that is not a finished stage 3.
