@@ -1502,7 +1502,6 @@ class UserService:
             )
             output.append(tournament)
 
-        output = sorted(output, key=lambda x: x.id, reverse=True)
         return output
 
     @cache(

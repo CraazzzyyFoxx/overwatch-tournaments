@@ -395,6 +395,9 @@ class UserProfileQueries:
                 selectinload(models.Team.standings).selectinload(models.Standing.stage_item),
             )
             .join(agg, agg.c.team_id == models.Team.id)
+            .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
+            # Newest event first; undated (legacy) tournaments last, by id.
+            .order_by(models.Tournament.start_date.desc().nulls_last(), models.Tournament.id.desc())
         )
 
         result = await session.execute(query)
