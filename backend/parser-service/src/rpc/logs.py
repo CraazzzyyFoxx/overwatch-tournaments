@@ -213,8 +213,23 @@ def register(broker: Any, logger: Any) -> None:
             record_id = c.require_id(data)
             workspace_id = await auth._get_log_record_workspace_id(session, record_id)
             await auth._require_workspace_permission(user, workspace_id=workspace_id, resource="log", action="update")
+            body = schemas.LogRetryRequest.model_validate(c.payload(data))
 
-            # `log_records_service.retry` commits — stage the row on that session first.
+            if body.encounter_id is not None:
+                record = await session.get(models.LogProcessingRecord, record_id)
+                if record is None:
+                    raise HTTPException(status_code=404, detail="Log processing record not found")
+                # A processed log already filed its match under some encounter;
+                # re-filing it would leave that match behind as a duplicate.
+                if record.status == LogProcessingStatus.done:
+                    raise HTTPException(status_code=409, detail="A processed log cannot be re-attached")
+                encounter = await _validate_attached_encounter(
+                    session, tournament_id=record.tournament_id, encounter_id=body.encounter_id
+                )
+                record.attached_encounter = encounter
+
+            # `log_records_service.retry` commits — stage the row and the
+            # attachment on that session first.
             await record_admin_audit(
                 session,
                 action="match_log.retry",
@@ -223,6 +238,7 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=workspace_id,
                 entity_type="match_log",
                 entity_id=record_id,
+                after={"attached_encounter_id": body.encounter_id} if body.encounter_id is not None else None,
             )
             record = await log_records_service.retry(session, record_id)
             if record is None:

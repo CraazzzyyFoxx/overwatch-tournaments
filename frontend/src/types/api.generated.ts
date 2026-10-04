@@ -6485,7 +6485,7 @@ export interface paths {
         put?: never;
         /**
          * Retry log processing
-         * @description Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist.
+         * @description Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist. An optional `encounter_id` first attaches the log to that encounter of the record's tournament (404 unknown encounter, 400 another tournament's, 409 on a processed record), which is how an `encounter_ambiguous` failure is resolved.
          *
          *     RPC subject: `rpc.parser.logs.retry`
          */
@@ -15621,6 +15621,11 @@ export interface components {
              */
             max_upload_bytes: number | null;
             /**
+             * Public Requests Used
+             * @default null
+             */
+            public_requests_used: number | null;
+            /**
              * Requests Per Minute
              * @default null
              */
@@ -15735,18 +15740,32 @@ export interface components {
          * TokenApiKeyInfo
          * @description API key metadata returned by token validation for downstream services.
          *
-         *     Identity only: quotas live in the ``quota`` schema and are resolved by the
-         *     service that enforces them, never carried on the credential.
+         *     Identity plus ``limits.requests_per_minute``: the gateway meters every
+         *     keyed request against it before any worker sees the call, so it has to
+         *     travel on the credential. Every other dimension is resolved by the service
+         *     that enforces it, from the ``quota`` schema.
          */
         "identity.TokenApiKeyInfo": {
             /** Id */
             id: number;
+            limits?: components["schemas"]["identity.TokenApiKeyLimits"];
             /** Public Id */
             public_id: string;
             /** Scopes */
             scopes?: string[];
             /** Workspace Id */
             workspace_id: number;
+        };
+        /**
+         * TokenApiKeyLimits
+         * @description The one quota number the gateway enforces itself, on every request.
+         */
+        "identity.TokenApiKeyLimits": {
+            /**
+             * Requests Per Minute
+             * @default null
+             */
+            requests_per_minute: number | null;
         };
         /**
          * TokenPayload
@@ -21560,6 +21579,14 @@ export interface components {
             tournament_name: string | null;
             /** Uploader Name */
             uploader_name: string | null;
+        };
+        /** LogRetryRequest */
+        "parser.LogRetryRequest": {
+            /**
+             * Encounter Id
+             * @default null
+             */
+            encounter_id: number | null;
         };
         /**
          * LogStatsRead
@@ -50539,7 +50566,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["parser.LogRetryRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {

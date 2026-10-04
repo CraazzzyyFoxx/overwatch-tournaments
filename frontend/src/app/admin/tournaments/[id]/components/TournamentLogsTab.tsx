@@ -7,13 +7,14 @@ import {
   ChevronRight,
   Clock3,
   FolderInput,
+  Link2,
   Loader2,
   RefreshCw,
   RotateCcw,
   XCircle
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { columnMeta, createKebabColumn, DataTable } from "@/components/data-table";
@@ -21,6 +22,17 @@ import { StatusPill } from "@/components/kit/StatusPill";
 import { type Tone } from "@/components/kit/tone";
 import type { DateFormatter } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import SearchableImageSelect from "@/components/ui/searchable-image-select";
+import { encounterScopeLabel } from "@/components/admin/encounters/EncounterCells";
+import { bracketRoundLabelEn, UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -133,6 +145,70 @@ function getFilterCount(filter: LogFilter, stats: LogProcessingStats | undefined
   return stats ? stats[filter] : undefined;
 }
 
+/** Two encounters of one pair share a name, so the stage and round tell them apart. */
+function encounterOptionLabel(encounter: Encounter) {
+  return `${encounter.name} · ${encounterScopeLabel(encounter)} · ${bracketRoundLabelEn(encounter.round, UNKNOWN_ROUND_SHAPE)}`;
+}
+
+function AttachLogDialog({
+  record,
+  encounters,
+  isPending,
+  onAttach,
+  onClose
+}: Readonly<{
+  record: LogProcessingRecord | null;
+  encounters: Encounter[];
+  isPending: boolean;
+  onAttach: (encounterId: number) => void;
+  onClose: () => void;
+}>) {
+  const [picked, setPicked] = useState<string | undefined>(undefined);
+  const value =
+    picked ?? (record?.attached_encounter_id != null ? String(record.attached_encounter_id) : undefined);
+
+  return (
+    <Dialog
+      open={record != null}
+      onOpenChange={(open) => {
+        if (open) return;
+        setPicked(undefined);
+        onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Attach log to encounter</DialogTitle>
+          <DialogDescription className="break-all">
+            {record ? getLogFileName(record.filename) : null} is reprocessed into the encounter you
+            pick. Its teams must be the ones the log shows.
+          </DialogDescription>
+        </DialogHeader>
+        <SearchableImageSelect
+          value={value}
+          onValueChange={setPicked}
+          options={encounters.map((encounter) => ({
+            value: String(encounter.id),
+            label: encounterOptionLabel(encounter)
+          }))}
+          placeholder="Pick an encounter"
+          searchPlaceholder="Search team, stage or round"
+          triggerClassName="h-9"
+        />
+        <DialogFooter>
+          <Button
+            disabled={value === undefined || isPending}
+            onClick={() => value !== undefined && onAttach(Number(value))}
+          >
+            {isPending ? <Spinner /> : <Link2 aria-hidden />}
+            Attach and reprocess
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function TournamentLogsTab({
   tournamentId,
   workspaceId,
@@ -234,6 +310,17 @@ export function TournamentLogsTab({
     mutationFn: () => adminService.processAllTournamentLogs(tournamentId!),
     onSuccess: () => {
       notify.success("Processing queued for all S3 logs");
+      refreshAll();
+    }
+  });
+
+  const [attachTarget, setAttachTarget] = useState<LogProcessingRecord | null>(null);
+  const attachMutation = useMutation({
+    mutationFn: ({ recordId, encounterId }: { recordId: number; encounterId: number }) =>
+      adminService.retryLogRecord(recordId, encounterId),
+    onSuccess: () => {
+      notify.success("Log attached and queued");
+      setAttachTarget(null);
       refreshAll();
     }
   });
@@ -345,6 +432,14 @@ export function TournamentLogsTab({
           icon: RotateCcw,
           hidden: record.status === "done",
           onSelect: () => retryMutation.mutate([record.id])
+        },
+        // A processed log already filed its match; only an unfinished one can
+        // be re-filed. The workspace-wide console holds no encounter list.
+        {
+          label: "Attach to encounter…",
+          icon: Link2,
+          hidden: record.status === "done" || encounters.length === 0,
+          onSelect: () => setAttachTarget(record)
         }
       ],
       { rowLabel: (record) => getLogFileName(record.filename) }
@@ -512,6 +607,15 @@ export function TournamentLogsTab({
           }
         />
       </div>
+      <AttachLogDialog
+        record={attachTarget}
+        encounters={encounters}
+        isPending={attachMutation.isPending}
+        onAttach={(encounterId) =>
+          attachTarget && attachMutation.mutate({ recordId: attachTarget.id, encounterId })
+        }
+        onClose={() => setAttachTarget(null)}
+      />
     </TooltipProvider>
   );
 }

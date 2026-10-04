@@ -20,7 +20,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.parser.logs.retry": {
         "summary": "Retry log processing",
-        "description": "Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist.",
+        "description": "Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist. An optional `encounter_id` first attaches the log to that encounter of the record's tournament (404 unknown encounter, 400 another tournament's, 409 on a processed record), which is how an `encounter_ambiguous` failure is resolved.",
     },
     "rpc.parser.logs.upload": {
         "summary": "Upload match logs",

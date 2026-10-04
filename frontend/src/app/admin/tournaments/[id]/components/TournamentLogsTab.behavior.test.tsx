@@ -9,6 +9,7 @@ import type {
   LogProcessingRecord,
   LogProcessingStats
 } from "@/types/admin.types";
+import type { Encounter } from "@/types/encounter.types";
 import { TournamentLogsTab } from "./TournamentLogsTab";
 
 declare global {
@@ -19,17 +20,19 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const getLogStats = vi.fn();
 const getLogHistory = vi.fn();
+const retryLogRecord = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
     getLogStats: (...args: unknown[]) => getLogStats(...args),
     getLogHistory: (...args: unknown[]) => getLogHistory(...args),
-    retryLogRecord: vi.fn(),
+    retryLogRecord: (...args: unknown[]) => retryLogRecord(...args),
     processAllTournamentLogs: vi.fn()
   }
 }));
 vi.mock("@/hooks/useRealtimeTopic", () => ({ useRealtimeTopic: () => {} }));
 vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key
 }));
 vi.mock("@/lib/datetime/client", () => ({
   useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() })
@@ -125,7 +128,7 @@ function Harness({ render }: Readonly<{ render: () => ReactNode }>) {
   return <>{render()}</>;
 }
 
-async function mount(tournamentId: number | null = 78) {
+async function mount(tournamentId: number | null = 78, encounters: Encounter[] = []) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -139,7 +142,7 @@ async function mount(tournamentId: number | null = 78) {
             <TournamentLogsTab
               tournamentId={tournamentId}
               workspaceId={1}
-              encounters={[]}
+              encounters={encounters}
               canUploadLogs={false}
             />
           )}
@@ -172,10 +175,17 @@ function commandItem(label: string) {
   );
 }
 
+function menuItem(label: string) {
+  return Array.from(document.querySelectorAll("[role='menuitem']")).find(
+    (item) => item.textContent?.trim() === label
+  );
+}
+
 beforeEach(() => {
   getLogStats.mockReset().mockResolvedValue(STATS);
   getLogHistory.mockReset().mockResolvedValue(FIRST_PAGE);
   replace.mockClear();
+  retryLogRecord.mockReset().mockResolvedValue(record(1, { status: "pending" }));
   window.history.replaceState(null, "", "/admin/tournaments/78/matches/logs");
 });
 
@@ -302,6 +312,26 @@ describe("TournamentLogsTab", () => {
     expect(labels).not.toContain("Actions for round_2.txt");
     // Attempt count surfaces the requeue loop on the row itself.
     expect(scope.textContent).toContain("×3");
+  });
+
+  it("re-files a failed log under the encounter the operator picks", async () => {
+    // Two encounters of one pair share a name; the option says which round it is.
+    const playoff = {
+      id: 6662,
+      name: "Home vs Away",
+      round: -3,
+      stage: { name: "Playoffs" },
+      stage_item: null
+    } as unknown as Encounter;
+    const scope = await mount(78, [playoff]);
+
+    await click(scope.querySelector('button[aria-label="Actions for round_1.txt"]'));
+    await click(menuItem("Attach to encounter…"));
+    await click(document.querySelector('button[aria-label="Pick an encounter"]'));
+    await click(commandItem("Home vs Away · Playoffs · LB Round 3"));
+    await click(button(document, "Attach and reprocess"));
+
+    expect(retryLogRecord).toHaveBeenCalledWith(1, 6662);
   });
 
   it("points forward when the tournament has no logs at all", async () => {

@@ -1483,8 +1483,12 @@ class AdminService {
     return response.json();
   }
 
-  async retryLogRecord(recordId: number): Promise<LogProcessingRecord> {
-    const response = await apiFetch(`/api/v1/admin/logs/${recordId}/retry`, { method: "POST" });
+  /** `encounterId` attaches the log to that encounter before it is requeued. */
+  async retryLogRecord(recordId: number, encounterId?: number): Promise<LogProcessingRecord> {
+    const response = await apiFetch(`/api/v1/admin/logs/${recordId}/retry`, {
+      method: "POST",
+      body: { encounter_id: encounterId ?? null }
+    });
     return response.json();
   }
 

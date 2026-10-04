@@ -168,7 +168,7 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
         processor.validate = AsyncMock(return_value=True)
         processor._preload_data = AsyncMock()
         processor.find_teams_by_players = AsyncMock(return_value=((team, []), (team, [])))
-        processor._validate_map_pool = AsyncMock()
+        processor._validate_map_pool = Mock()
         processor.process_teams = AsyncMock(return_value=((team, {}), (team, {})))
         processor.get_map = AsyncMock(return_value=SimpleNamespace(id=3, name="Ilios"))
         processor.get_match_score_and_time = Mock(return_value=(1.0, 2, 1))
@@ -178,6 +178,7 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(flows.encounter_flows, "resolve_for_log", AsyncMock(return_value=SimpleNamespace(id=9))),
+            patch.object(flows._pick_ban_config_repo, "list_by_tournament", AsyncMock(return_value=[])),
             patch.object(
                 flows.encounter_service, "get_match_by_encounter_and_map", AsyncMock(return_value=match_model)
             ),
@@ -215,7 +216,7 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
         processor.validate = AsyncMock(return_value=True)
         processor._preload_data = AsyncMock()
         processor.find_teams_by_players = AsyncMock(return_value=((team, []), (team, [])))
-        processor._validate_map_pool = AsyncMock()
+        processor._validate_map_pool = Mock()
         processor.process_teams = AsyncMock(return_value=((team, {}), (team, {})))
         processor.get_map = AsyncMock(return_value=SimpleNamespace(id=3, name="Ilios"))
         processor.get_match_score_and_time = Mock(return_value=(1.0, 2, 1))
@@ -225,6 +226,7 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(flows.encounter_flows, "resolve_for_log", AsyncMock(return_value=SimpleNamespace(id=9))),
+            patch.object(flows._pick_ban_config_repo, "list_by_tournament", AsyncMock(return_value=[])),
             patch.object(
                 flows.encounter_service, "get_match_by_encounter_and_map", AsyncMock(return_value=match_model)
             ),

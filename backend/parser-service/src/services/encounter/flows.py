@@ -1,5 +1,9 @@
+from collections.abc import Sequence
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.domain.pick_ban_config import pool_allows
+from shared.models.tournament.pick_ban import PickBanConfig
 from src import models
 from src.core import errors
 
@@ -12,6 +16,8 @@ async def resolve_for_log(
     away_team_id: int,
     *,
     log_name: str,
+    map_id: int,
+    map_pools: Sequence[PickBanConfig],
     attached_encounter_id: int | None = None,
 ) -> models.Encounter:
     """The encounter a parsed log's two teams played.
@@ -23,6 +29,11 @@ async def resolve_for_log(
     files the map's statistics under the wrong series. A re-parse keeps the
     encounter an earlier run of the same file chose, so a pair that became
     ambiguous after that first run does not strand the log.
+
+    When the pair alone is ambiguous, the log's map narrows it: only an
+    encounter whose round pool admits the map can hold it, and an encounter
+    that already holds that map from another log cannot hold a second one --
+    matches are keyed by (encounter, map), so filing there would overwrite it.
     """
     if attached_encounter_id is not None:
         encounter = await session.get(models.Encounter, attached_encounter_id)
@@ -59,6 +70,19 @@ async def resolve_for_log(
     if len(previous) == 1:
         return next(encounter for encounter in candidates if encounter.id in previous)
 
+    # Each narrowing only applies when it leaves someone: a map outside every
+    # pool is the map-pool check's refusal to make, not this one's.
+    candidates = [
+        encounter
+        for encounter in candidates
+        if pool_allows(map_pools, stage_id=encounter.stage_id, round=encounter.round, item_id=map_id)
+    ] or candidates
+    if len(candidates) > 1:
+        played = await service.encounter_ids_with_map(session, [encounter.id for encounter in candidates], map_id)
+        candidates = [encounter for encounter in candidates if encounter.id not in played] or candidates
+    if len(candidates) == 1:
+        return candidates[0]
+
     candidate_ids = ", ".join(str(encounter.id) for encounter in candidates)
     raise errors.ApiHTTPException(
         status_code=409,
@@ -66,8 +90,8 @@ async def resolve_for_log(
             errors.ApiExc(
                 code="encounter_ambiguous",
                 msg=(
-                    f"Teams [{home_team_id}, {away_team_id}] play several encounters ({candidate_ids}); "
-                    "upload the log again attached to one of them"
+                    f"Teams [{home_team_id}, {away_team_id}] play several encounters ({candidate_ids}) "
+                    f"that map {map_id} fits; attach the log to one of them"
                 ),
             )
         ],

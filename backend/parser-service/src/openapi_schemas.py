@@ -34,7 +34,7 @@ OPERATIONS: dict[str, Op] = {
             QueryParam("workspace_id", "integer"),
         ),
     ),
-    "rpc.parser.logs.retry": Op(response=schemas.LogRecordRead),
+    "rpc.parser.logs.retry": Op(request=schemas.LogRetryRequest, response=schemas.LogRecordRead),
     "rpc.parser.logs.upload": Op(response=schemas.LogUploadResponse),
     # ── OverFast rank (public reads) ───────────────────────────────────────
     "rpc.parser.rank.user_history": Op(
