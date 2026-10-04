@@ -64,9 +64,12 @@ class OutboundFailureLoggingTests(TestCase):
             with self.assertRaises(httpx.ReadError):
                 asyncio.run(client.request("GET", PATH))
 
-        errors = captured.at("ERROR")
-        self.assertEqual(len(errors), 1)
-        record = errors[0]
+        # A single failed request is re-raised to its caller, which decides
+        # whether it is an error; only the breaker opening is one here.
+        self.assertEqual(captured.at("ERROR"), [])
+        warnings = captured.at("WARNING")
+        self.assertEqual(len(warnings), 1)
+        record = warnings[0]
         self.assertEqual(record["message"], f"GET {BASE_URL} failed: ReadError")
         self.assertNotIn(PATH, record["message"])
         self.assertEqual(record["extra"]["path"], PATH)
@@ -85,15 +88,15 @@ class OutboundFailureLoggingTests(TestCase):
         with _Records() as captured:
             asyncio.run(scenario())
 
-        # One ERROR for the real failure (plus the breaker's own "opened" line,
-        # emitted first from inside ``CircuitBreaker.call``), none for the
-        # blocked request.
+        # One ERROR: the breaker's own "opened" line. The failed request itself
+        # is a WARNING and the blocked one is DEBUG.
         self.assertEqual(
             [r["message"] for r in captured.at("ERROR")],
-            [
-                f"Circuit breaker for {BASE_URL} opened after 1 consecutive failures",
-                f"GET {BASE_URL} failed: ReadError",
-            ],
+            [f"Circuit breaker for {BASE_URL} opened after 1 consecutive failures"],
+        )
+        self.assertEqual(
+            [r["message"] for r in captured.at("WARNING")],
+            [f"GET {BASE_URL} failed: ReadError"],
         )
         skipped = [r for r in captured.at("DEBUG") if "circuit breaker open" in r["message"]]
         self.assertEqual(len(skipped), 1)

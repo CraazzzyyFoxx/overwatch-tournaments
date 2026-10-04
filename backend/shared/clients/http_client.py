@@ -181,7 +181,12 @@ class ResilientHttpClient:
             # The path stays OUT of the message: with it, one upstream outage
             # opened a Sentry issue per player URL instead of one per
             # host+error type (message-only records group by message).
-            logger.error(
+            # WARNING, not ERROR: the exception is re-raised, so the caller owns
+            # the verdict (the rank fetch records a backoff and moves on; an
+            # unhandled one still surfaces as its own event), and a real outage is
+            # already reported once by the breaker's "opened" ERROR. At ERROR every
+            # slow OverFast player summary became a Sentry event (OWT-TOURNAMENTS-2C1).
+            logger.warning(
                 "{} {} failed: {}",
                 method,
                 self.base_url,
