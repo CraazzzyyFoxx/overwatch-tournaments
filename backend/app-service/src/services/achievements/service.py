@@ -51,13 +51,19 @@ class AchievementService:
         session: AsyncSession,
         rules: typing.Sequence[tuple[AchievementRule, float]],
         entities: list[str],
+        *,
+        merge_slugs: bool = False,
     ) -> list[schemas.AchievementRead]:
         output: list[schemas.AchievementRead] = []
         count = None
 
         if "count" in entities:
-            rule_ids = [rule.id for rule, _ in rules]
-            count = await self.queries.get_count_users(session, rule_ids)
+            if merge_slugs:
+                by_slug = await self.queries.get_count_users_by_slug(session, [rule.slug for rule, _ in rules])
+                count = {rule.id: by_slug.get(rule.slug, 0) for rule, _ in rules}
+            else:
+                rule_ids = [rule.id for rule, _ in rules]
+                count = await self.queries.get_count_users(session, rule_ids)
 
         for rule, rarity in rules:
             hero = None
@@ -108,7 +114,7 @@ class AchievementService:
             total=total,
             per_page=params.per_page,
             page=params.page,
-            results=await self.bulk_to_achievement_read(session, rules, params.entities),
+            results=await self.bulk_to_achievement_read(session, rules, params.entities, merge_slugs=not workspace_id),
         )
 
     async def get_user_achievements(
@@ -130,14 +136,15 @@ class AchievementService:
             without_tournament=without_tournament,
         )
 
-        cache: dict[int, schemas.UserAchievementRead] = {}
+        # Keyed by slug: unique within a workspace, and in the cross-workspace view
+        # (``workspace_id=None``) it folds every workspace's copy of a rule into one.
+        cache: dict[str, schemas.UserAchievementRead] = {}
 
         for result_row in results:
-            rule_id = result_row.rule.id
             rule = result_row.rule
 
-            if rule_id not in cache:
-                cache[rule_id] = schemas.UserAchievementRead(
+            if rule.slug not in cache:
+                cache[rule.slug] = schemas.UserAchievementRead(
                     **rule.to_dict(),
                     rarity=result_row.rarity or 0.0,
                     count=1,
@@ -148,11 +155,12 @@ class AchievementService:
                     hero=None,
                 )
             else:
-                cache[rule_id].count += 1
-                if result_row.tournament_id and result_row.tournament_id not in cache[rule_id].tournaments_ids:
-                    cache[rule_id].tournaments_ids.append(result_row.tournament_id)
-                if result_row.match_id and result_row.match_id not in cache[rule_id].matches_ids:
-                    cache[rule_id].matches_ids.append(result_row.match_id)
+                achievement = cache[rule.slug]
+                achievement.count += 1
+                if result_row.tournament_id and result_row.tournament_id not in achievement.tournaments_ids:
+                    achievement.tournaments_ids.append(result_row.tournament_id)
+                if result_row.match_id and result_row.match_id not in achievement.matches_ids:
+                    achievement.matches_ids.append(result_row.match_id)
 
         for achievement in cache.values():
             achievement.tournaments_ids.sort()
@@ -163,9 +171,9 @@ class AchievementService:
         if include_locked and tournament_id is None and not without_tournament:
             all_rules = await self.queries.get_all_rules_with_rarity(session, workspace_id=workspace_id)
             for rule, rarity in all_rules:
-                if rule.id in cache:
+                if rule.slug in cache:
                     continue
-                cache[rule.id] = schemas.UserAchievementRead(
+                cache[rule.slug] = schemas.UserAchievementRead(
                     **rule.to_dict(),
                     rarity=rarity or 0.0,
                     count=0,
