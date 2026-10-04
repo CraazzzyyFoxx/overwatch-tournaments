@@ -88,7 +88,9 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    cookie-authenticated `/bff/*` and `/auth/*` route handlers, `/api/health` — to
    `frontend:3000`. It drops client-supplied `x-owt-*` scoping headers, stamps
    `Cache-Control: private, no-store` on `/bff/*` responses that carry none, and caches the
-   signed-out homepage for 30 s. It emits a JSON access log
+   signed-out homepage for 30 s (one copy for any query string). Homepage renders go through
+   the `frontend_home` upstream, capped at 16 concurrent per frontend replica, so a flood on
+   `/` that gets past the cache cannot starve the rest of the site. It emits a JSON access log
    (`$uri` only — the WS token must never be logged) carrying `$limit_req_status`, which
    promtail turns into both Loki streams and Prometheus rejection counters. The limits are
    enforced (`limit_req_dry_run off`, `limit_conn_dry_run off`).
