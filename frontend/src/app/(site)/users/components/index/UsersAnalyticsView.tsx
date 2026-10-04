@@ -12,7 +12,6 @@ import { getPlayerSlug } from "@/lib/player";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserOverviewRow } from "@/types/user.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { scopeHref, type StatsScope } from "@/lib/site/stats-scope";
 
 import { DivisionHex } from "./DivisionHex";
 import { UserDetailsRow } from "./UserDetailsRow";
@@ -33,7 +32,7 @@ export function UsersAnalyticsView({
 }>) {
   const t = useTranslations();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
-  const { page, perPage, order, scope } = controls.params;
+  const { page, perPage, order } = controls.params;
   const { overviewQuery, maxPage, range } = data;
   const rows = overviewQuery.data;
   // `isPending`, not `isLoading`: the server never fetches, so there `isLoading`
@@ -102,7 +101,6 @@ export function UsersAnalyticsView({
                       <PlayerRow
                         user={user}
                         grids={rows.division_grids}
-                        scope={scope}
                         globalRank={(rows.page - 1) * rows.per_page + index + 1}
                         expanded={expandedRows.has(user.id)}
                         onToggle={() => toggleRow(user.id)}
@@ -152,14 +150,12 @@ export function UsersAnalyticsView({
 function PlayerRow({
   user,
   grids,
-  scope,
   globalRank,
   expanded,
   onToggle
 }: Readonly<{
   user: UserOverviewRow;
   grids: DivisionGridVersion[] | undefined;
-  scope: StatsScope;
   globalRank: number;
   expanded: boolean;
   onToggle: () => void;
@@ -180,7 +176,7 @@ function PlayerRow({
           <div className={styles.playerInfo}>
             <HoverPrefetchLink
               className={styles.playerName}
-              href={scopeHref(`/users/${getPlayerSlug(user.name)}`, scope)}
+              href={`/users/${getPlayerSlug(user.name)}`}
               title={user.name}
             >
               {handle}

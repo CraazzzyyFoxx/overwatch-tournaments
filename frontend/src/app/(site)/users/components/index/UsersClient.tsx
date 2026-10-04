@@ -5,8 +5,7 @@ import { BarChart3, LayoutGrid, Trophy } from "lucide-react";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { StatsScopeToggle } from "@/components/site/StatsScopeToggle";
-import type { StatsScopeState } from "@/lib/site/stats-scope";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 import { SORT_OPTIONS, type ViewMode } from "./users-index.model";
 import { useUsersIndexParams } from "./useUsersIndexParams";
@@ -22,12 +21,12 @@ import styles from "./Users.module.css";
  * stay mounted — switching is a CSS toggle, so returning to a view keeps its
  * scroll position and its already-fetched page.
  *
- * `scopeState` is resolved on the server (the cross-workspace mode does not
- * exist on a tenant host).
+ * `scope` is resolved on the server (the cross-workspace mode does not exist
+ * on a tenant host).
  */
-const UsersClient = ({ scopeState }: Readonly<{ scopeState: StatsScopeState }>) => {
+const UsersClient = ({ scope }: Readonly<{ scope: StatsScope }>) => {
   const t = useTranslations();
-  const controls = useUsersIndexParams(scopeState.scope);
+  const controls = useUsersIndexParams(scope);
   const data = useUsersIndexData(controls.params);
   const { view, sort } = controls.params;
   const sortLabel = t(
@@ -57,7 +56,6 @@ const UsersClient = ({ scopeState }: Readonly<{ scopeState: StatsScopeState }>) 
           </ToggleGroupItem>
         </ToggleGroup>
         <div className={styles.toolbarActions}>
-          <StatsScopeToggle state={scopeState} />
           <span className={styles.pill}>
             <Trophy size={11} aria-hidden /> {t("users.list.view.rosterLive")}
           </span>

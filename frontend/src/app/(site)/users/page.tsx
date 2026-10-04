@@ -4,14 +4,12 @@ import { resolveStatsScope } from "@/lib/site/tenant-host";
 
 import UsersClient from "./components/index/UsersClient";
 
-const UsersPage = async ({
-  searchParams
-}: Readonly<{ searchParams: Promise<{ scope?: string }> }>) => {
-  const scopeState = await resolveStatsScope((await searchParams).scope);
+const UsersPage = async () => {
+  const scope = await resolveStatsScope();
 
   return (
     <Suspense fallback={null}>
-      <UsersClient scopeState={scopeState} />
+      <UsersClient scope={scope} />
     </Suspense>
   );
 };

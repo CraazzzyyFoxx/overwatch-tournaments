@@ -1,5 +1,5 @@
-import { headers } from "next/headers";
-import type { StatsScopeState } from "@/lib/site/stats-scope";
+import { cookies, headers } from "next/headers";
+import { STATS_SCOPE_COOKIE, type StatsScope } from "@/lib/site/stats-scope";
 import workspaceService from "@/services/workspace.service";
 
 /**
@@ -18,13 +18,18 @@ export async function isTenantHost(): Promise<boolean> {
 }
 
 /**
- * The public-statistics read scope for this request: `?scope=all` opts into
- * cross-workspace numbers, but only on the platform apex — a tenant host has
- * no such mode, so the param is ignored and the toggle is hidden. Server-only.
+ * The public-statistics read scope for this request: the switcher's
+ * {@link STATS_SCOPE_COOKIE} opts into cross-workspace numbers, but only on the
+ * platform apex — a tenant host has no such mode, so the cookie is ignored.
+ * Server-only.
  */
-export async function resolveStatsScope(raw: string | undefined): Promise<StatsScopeState> {
-  const available = !(await isTenantHost());
-  return { scope: available && raw === "all" ? "all" : "workspace", available };
+export async function resolveStatsScope(): Promise<StatsScope> {
+  if (await isTenantHost()) return "workspace";
+  try {
+    return (await cookies()).get(STATS_SCOPE_COOKIE)?.value === "all" ? "all" : "workspace";
+  } catch {
+    return "workspace";
+  }
 }
 
 /** Tenant (white-label) host branding: the host workspace's name + icon. */
