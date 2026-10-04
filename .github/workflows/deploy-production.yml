@@ -264,7 +264,9 @@ jobs:
       - deploy
     # Last, on purpose: the Release entry means "this is what production is
     # running", so it is written after the deploy succeeded and not before.
-    if: ${{ needs.deploy.result == 'success' && vars.DEPLOY_FREEZE != 'true' }}
+    # `always()`: with skip_build the skipped `build` upstream would otherwise
+    # skip this job too, even though the deploy succeeded.
+    if: ${{ always() && needs.deploy.result == 'success' && vars.DEPLOY_FREEZE != 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
