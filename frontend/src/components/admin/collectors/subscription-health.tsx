@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Pause, Play, RefreshCw } from "lucide-react";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
@@ -21,10 +22,10 @@ import { RUN_STATE_TONES } from "./collector-state";
 import {
   PROVIDER_LABELS,
   STATE_BAR,
-  STATE_LABELS,
   STATE_ORDER,
   formatInterval,
-  formatRelative
+  formatRelative,
+  useSubscriptionLabels
 } from "./subscription-shared";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
@@ -37,6 +38,7 @@ const SUBSCRIPTION_KEY = "parser.subscription_collection";
  * as `<state> <count>` text, so the state is never carried by colour alone.
  */
 function StateBar({ stats }: Readonly<{ stats: SubscriptionCollectionStats }>) {
+  const labels = useSubscriptionLabels();
   const total = stats.total || 1;
   const counts = stats.by_state ?? {};
   return (
@@ -48,7 +50,7 @@ function StateBar({ stats }: Readonly<{ stats: SubscriptionCollectionStats }>) {
               key={s}
               className={cn("h-full", STATE_BAR[s])}
               style={{ width: `${(counts[s] / total) * 100}%` }}
-              title={`${s}: ${counts[s]}`}
+              title={`${labels.state[s]}: ${counts[s]}`}
             />
           ) : null
         )}
@@ -58,7 +60,8 @@ function StateBar({ stats }: Readonly<{ stats: SubscriptionCollectionStats }>) {
           counts[s] ? (
             <span key={s} className="inline-flex items-center gap-1.5 text-muted-foreground">
               <span aria-hidden className={cn("h-2 w-2 rounded-full", STATE_BAR[s])} />
-              {STATE_LABELS[s] ?? s} <span className="tabular-nums text-foreground">{counts[s]}</span>
+              {labels.state[s]}{" "}
+              <span className="tabular-nums text-foreground">{counts[s]}</span>
             </span>
           ) : null
         )}
@@ -68,6 +71,8 @@ function StateBar({ stats }: Readonly<{ stats: SubscriptionCollectionStats }>) {
 }
 
 export function SubscriptionHealthDashboard() {
+  const t = useTranslations("collectors.subscriptions");
+  const tCommon = useTranslations("collectors.common");
   const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
@@ -87,13 +92,11 @@ export function SubscriptionHealthDashboard() {
     // No `user_id` = sweep every open tournament that requires a subscription.
     mutationFn: () => adminService.triggerSubscriptionCollection({}),
     onSuccess: (result) => {
-      notify.success(
-        result.checked === 1 ? "Checked 1 subscription" : `Checked ${result.checked} subscriptions`
-      );
+      notify.success(t("swept", { count: result.checked }));
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.subscriptions() });
     },
     onError: (error) =>
-      notify.apiError(error, { title: "Could not run the subscription sweep — try again" })
+      notify.apiError(error, { title: t("sweepError") })
   });
 
   const toggleMutation = useMutation({
@@ -103,11 +106,11 @@ export function SubscriptionHealthDashboard() {
       return adminService.updateSetting(SUBSCRIPTION_KEY, { value });
     },
     onSuccess: () => {
-      notify.success(stats?.enabled ? "Collection paused" : "Collection resumed");
+      notify.success(tCommon(stats?.enabled ? "collectionPaused" : "collectionResumed"));
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.subscriptionsStatsAll() });
     },
     onError: (error) =>
-      notify.apiError(error, { title: "Could not change the collection state — try again" })
+      notify.apiError(error, { title: tCommon("collectionToggleError") })
   });
 
   if (statsQuery.isLoading || !stats) {
@@ -130,15 +133,17 @@ export function SubscriptionHealthDashboard() {
           <TintedBadge
             value={stats.enabled ? "running" : "paused"}
             tones={RUN_STATE_TONES}
-            labels={{ running: "Collecting", paused: "Paused" }}
-            fallback="Paused"
+            labels={{ running: t("run.collecting"), paused: tCommon("health.paused") }}
+            fallback={tCommon("health.paused")}
             dot
           />
           <span className="text-muted-foreground">
-            <span className="tabular-nums">{stats.active_tournaments}</span>{" "}
-            {stats.active_tournaments === 1 ? "tournament" : "tournaments"} gated · every{" "}
-            <span className="tabular-nums">{formatInterval(stats.interval_seconds)}</span> ·{" "}
-            <span className="tabular-nums">{stats.batch_size}</span>/batch
+            {t.rich("pace", {
+              count: stats.active_tournaments,
+              interval: formatInterval(format, stats.interval_seconds),
+              batch: stats.batch_size,
+              num: (chunks) => <span className="tabular-nums">{chunks}</span>
+            })}
           </span>
         </output>
         <div className="flex items-center gap-2">
@@ -153,7 +158,7 @@ export function SubscriptionHealthDashboard() {
             ) : (
               <RefreshCw aria-hidden className="mr-1.5 h-4 w-4" />
             )}
-            Check all now
+            {t("checkAll")}
           </Button>
           {isSuperuser && (
             <Button
@@ -169,7 +174,7 @@ export function SubscriptionHealthDashboard() {
               ) : (
                 <Play aria-hidden className="mr-1.5 h-4 w-4" />
               )}
-              {stats.enabled ? "Pause collection" : "Resume collection"}
+              {tCommon(stats.enabled ? "pauseCollection" : "resumeCollection")}
             </Button>
           )}
         </div>
@@ -179,32 +184,43 @@ export function SubscriptionHealthDashboard() {
         {/* Not a StatTile: the tile owns a stacked distribution bar below the value. */}
         <div className="space-y-3 rounded-xl border border-border/60 bg-card/70 p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <p className={EYEBROW_CLASS}>Entitlements</p>
+            <p className={EYEBROW_CLASS}>{t("tiles.entitlements")}</p>
             <p className="text-2xl font-semibold tabular-nums">{stats.total}</p>
           </div>
           <StateBar stats={stats} />
         </div>
 
         <StatTile
-          label="Players tracked"
+          label={t("tiles.tracked")}
           value={stats.tracked_users}
-          detail={`${stats.never_checked} never checked · ${
-            providers.length
+          detail={t("tiles.trackedDetail", {
+            never: stats.never_checked,
+            providers: providers.length
               ? providers.map(([p, n]) => `${PROVIDER_LABELS[p] ?? p} ${n}`).join(" · ")
-              : "no providers yet"
-          }`}
+              : t("tiles.noProviders")
+          })}
         />
 
         <StatTile
-          label="Coverage (checked)"
+          label={t("tiles.coverage")}
           value={stats.coverage_24h}
-          detail={`${stats.coverage_24h} distinct players in 24h · ${stats.coverage_7d} in 7d · last check ${formatRelative(format, stats.last_check_at)}`}
+          detail={t("tiles.coverageDetail", {
+            day: stats.coverage_24h,
+            week: stats.coverage_7d,
+            last: formatRelative(format, stats.last_check_at)
+          })}
         />
 
         <StatTile
-          label="Checks (24h)"
+          label={t("tiles.checks")}
           value={stats.checks_24h_total ?? 0}
-          detail={`${errRate}% unresolved · active ${activeCount} · inactive ${inactiveCount} · unresolved ${failedCount} · last active ${formatRelative(format, stats.last_success_at)}`}
+          detail={t("tiles.checksDetail", {
+            rate: errRate,
+            active: activeCount,
+            inactive: inactiveCount,
+            failed: failedCount,
+            last: formatRelative(format, stats.last_success_at)
+          })}
           tone={errRate >= 20 ? "danger" : "neutral"}
           icon={errRate >= 20 ? AlertTriangle : undefined}
         />

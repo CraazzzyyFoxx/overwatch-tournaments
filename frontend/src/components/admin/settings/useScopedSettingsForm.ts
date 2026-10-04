@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import { notify } from "@/lib/notify";
 
@@ -61,6 +62,7 @@ export function useScopedSettingsForm<TForm, TPayload>({
   submit,
   onSaved
 }: ScopedSettingsFormOptions<TForm, TPayload>): ScopedSettingsForm<TForm, TPayload> {
+  const t = useTranslations("admin.saveBar");
   const changesBetween = (form: TForm, base: TForm) => {
     const diff = toPayload(form, base);
     return countChanges
@@ -99,9 +101,9 @@ export function useScopedSettingsForm<TForm, TPayload>({
     },
     onSuccess: () => {
       onSaved?.();
-      notify.success("Settings saved");
+      notify.success(t("saved"));
     },
-    onError: (error) => notify.apiError(error, { title: "Could not save these settings" })
+    onError: (error) => notify.apiError(error, { title: t("saveFailed") })
   });
 
   const patch = useCallback(
@@ -120,7 +122,7 @@ export function useScopedSettingsForm<TForm, TPayload>({
     form: state?.form ?? null,
     patch,
     dirty: changedCount > 0,
-    summary: changedCount === 1 ? "1 changed field" : `${changedCount} changed fields`,
+    summary: t("changedFields", { count: changedCount }),
     saving: mutation.isPending,
     payload,
     save: () => mutation.mutate(),

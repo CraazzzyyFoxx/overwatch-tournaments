@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Pause, Play, RotateCcw } from "lucide-react";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
@@ -24,7 +25,8 @@ import {
   STATUS_ORDER,
   formatInterval,
   formatRelative,
-  rankParsingOutage
+  rankParsingOutage,
+  useRankStatusLabels
 } from "./rank-shared";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
@@ -37,6 +39,7 @@ const RANK_SETTING_KEY = "parser.rank_collection";
  * as `<status> <count>` text, so the state is never carried by colour alone.
  */
 function StatusBar({ stats }: Readonly<{ stats: RankCollectionStats }>) {
+  const labels = useRankStatusLabels();
   const total = stats.total || 1;
   const counts = stats.by_status || {};
   return (
@@ -48,7 +51,7 @@ function StatusBar({ stats }: Readonly<{ stats: RankCollectionStats }>) {
               key={s}
               className={cn("h-full", STATUS_BAR[s])}
               style={{ width: `${(counts[s] / total) * 100}%` }}
-              title={`${s}: ${counts[s]}`}
+              title={`${labels[s]}: ${counts[s]}`}
             />
           ) : null
         )}
@@ -58,7 +61,7 @@ function StatusBar({ stats }: Readonly<{ stats: RankCollectionStats }>) {
           counts[s] ? (
             <span key={s} className="inline-flex items-center gap-1.5 text-muted-foreground">
               <span aria-hidden className={cn("h-2 w-2 rounded-full", STATUS_BAR[s])} />
-              {s} <span className="tabular-nums text-foreground">{counts[s]}</span>
+              {labels[s]} <span className="tabular-nums text-foreground">{counts[s]}</span>
             </span>
           ) : null
         )}
@@ -68,6 +71,8 @@ function StatusBar({ stats }: Readonly<{ stats: RankCollectionStats }>) {
 }
 
 export function RankHealthDashboard() {
+  const t = useTranslations("collectors.rank");
+  const tCommon = useTranslations("collectors.common");
   const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
@@ -86,11 +91,11 @@ export function RankHealthDashboard() {
   const reenableMutation = useMutation({
     mutationFn: () => adminService.reenableDisabledRankCollection(false),
     onSuccess: (result) => {
-      notify.success(`Re-enabled ${result.reenabled} disabled battle tag(s)`);
+      notify.success(t("reenabled", { count: result.reenabled }));
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.rank() });
     },
     onError: (error) =>
-      notify.apiError(error, { title: "Could not re-enable the disabled tags — try again" })
+      notify.apiError(error, { title: t("reenableError") })
   });
 
   const toggleMutation = useMutation({
@@ -100,11 +105,13 @@ export function RankHealthDashboard() {
       return adminService.updateSetting(RANK_SETTING_KEY, { value });
     },
     onSuccess: () => {
-      notify.success(stats?.enabled ? "Collection paused" : "Collection resumed");
+      notify.success(
+        tCommon(stats?.enabled ? "collectionPaused" : "collectionResumed")
+      );
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.rankStatsAll() });
     },
     onError: (error) =>
-      notify.apiError(error, { title: "Could not change the collection state — try again" })
+      notify.apiError(error, { title: tCommon("collectionToggleError") })
   });
 
   if (statsQuery.isLoading || !stats) {
@@ -118,6 +125,9 @@ export function RankHealthDashboard() {
   const errCount = (stats.fetch_24h?.error ?? 0) + (stats.fetch_24h?.rate_limited ?? 0);
   const invalidTags = stats.invalid_battle_tags_24h ?? 0;
   const outage = rankParsingOutage(stats);
+  // A breaker state the backend grows later still renders, as its raw token.
+  const circuitKey = `circuit.${stats.overfast_circuit_state ?? "closed"}` as "circuit.closed";
+  const circuitState = t.has(circuitKey) ? t(circuitKey) : (stats.overfast_circuit_state ?? "");
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -126,14 +136,18 @@ export function RankHealthDashboard() {
           <TintedBadge
             value={stats.enabled ? "running" : "paused"}
             tones={RUN_STATE_TONES}
-            labels={{ running: "Collecting", paused: "Paused" }}
-            fallback="Paused"
+            labels={{ running: t("run.collecting"), paused: tCommon("health.paused") }}
+            fallback={tCommon("health.paused")}
             dot
           />
           <span className="text-muted-foreground">
-            scope <b className="text-foreground">{stats.scope}</b> · every{" "}
-            <span className="tabular-nums">{formatInterval(stats.interval_seconds)}</span> ·{" "}
-            <span className="tabular-nums">{stats.rate_limit_per_minute}</span>/min
+            {t.rich("pace", {
+              scope: stats.scope,
+              interval: formatInterval(format, stats.interval_seconds),
+              rate: stats.rate_limit_per_minute,
+              b: (chunks) => <b className="text-foreground">{chunks}</b>,
+              num: (chunks) => <span className="tabular-nums">{chunks}</span>
+            })}
           </span>
         </output>
         {isSuperuser && (
@@ -150,7 +164,7 @@ export function RankHealthDashboard() {
             ) : (
               <Play aria-hidden className="mr-1.5 h-4 w-4" />
             )}
-            {stats.enabled ? "Pause collection" : "Resume collection"}
+            {tCommon(stats.enabled ? "pauseCollection" : "resumeCollection")}
           </Button>
         )}
       </div>
@@ -161,13 +175,14 @@ export function RankHealthDashboard() {
       {outage && (
         <Alert variant="destructive">
           <AlertTriangle aria-hidden className="h-4 w-4" />
-          <AlertTitle>Battle-tag rank parsing is down</AlertTitle>
+          <AlertTitle>{t("outage.title")}</AlertTitle>
           <AlertDescription>
             {outage.reason === "circuit_open"
-              ? `The circuit breaker to ${stats.overfast_base_url || "OverFast"} is open — every fetch is refused inside the worker, so the counters below stopped moving instead of reporting errors.`
-              : `No battle tag has been collected successfully since ${formatRelative(format, stats.last_success_at)}, although collection is switched on.`}{" "}
-            Check that {stats.overfast_base_url || "the OverFast instance"} resolves and answers, then watch this
-            banner clear on the next tick.
+              ? t("outage.circuitOpen", {
+                  host: stats.overfast_base_url || t("outage.hostFallback")
+                })
+              : t("outage.stale", { since: formatRelative(format, stats.last_success_at) })}{" "}
+            {t("outage.action", { host: stats.overfast_base_url || t("outage.hostFallback") })}
           </AlertDescription>
         </Alert>
       )}
@@ -176,30 +191,42 @@ export function RankHealthDashboard() {
         {/* Not a StatTile: the tile owns a stacked distribution bar below the value. */}
         <div className="space-y-3 rounded-xl border border-border/60 bg-card/70 p-4">
           <div className="flex items-baseline justify-between gap-3">
-            <p className={EYEBROW_CLASS}>Battle tags</p>
+            <p className={EYEBROW_CLASS}>{t("tiles.battleTags")}</p>
             <p className="text-2xl font-semibold tabular-nums">{stats.total}</p>
           </div>
           <StatusBar stats={stats} />
         </div>
 
         <StatTile
-          label="Coverage (snapshots)"
+          label={t("tiles.coverage")}
           value={stats.coverage_24h}
-          detail={`${stats.total ? Math.round((stats.coverage_24h / stats.total) * 100) : 0}% of all tags in 24h · ${stats.coverage_7d} distinct accounts in 7d`}
+          detail={t("tiles.coverageDetail", {
+            percent: stats.total ? Math.round((stats.coverage_24h / stats.total) * 100) : 0,
+            week: stats.coverage_7d
+          })}
         />
 
         <StatTile
-          label="Fetches (24h)"
+          label={t("tiles.fetches")}
           value={stats.fetch_24h_total ?? 0}
-          detail={`${errRate}% errors · ok ${okCount} · not found ${notFoundCount} · errors ${errCount} · last success ${formatRelative(format, stats.last_success_at)}`}
+          detail={t("tiles.fetchesDetail", {
+            rate: errRate,
+            ok: okCount,
+            notFound: notFoundCount,
+            errors: errCount,
+            last: formatRelative(format, stats.last_success_at)
+          })}
           tone={errRate >= 20 ? "danger" : "neutral"}
           icon={errRate >= 20 ? AlertTriangle : undefined}
         />
 
         <StatTile
-          label="Upstream (OverFast)"
-          value={outage?.reason === "circuit_open" ? "unreachable" : (stats.overfast_circuit_state ?? "closed")}
-          detail={`${stats.overfast_base_url || "not configured"} · ${invalidTags} malformed battle tag(s) rejected in 24h`}
+          label={t("tiles.upstream")}
+          value={outage?.reason === "circuit_open" ? t("tiles.upstreamUnreachable") : circuitState}
+          detail={t("tiles.upstreamDetail", {
+            host: stats.overfast_base_url || t("tiles.upstreamNotConfigured"),
+            count: invalidTags
+          })}
           tone={outage || invalidTags > 0 ? "danger" : "neutral"}
           icon={outage || invalidTags > 0 ? AlertTriangle : undefined}
         />
@@ -212,7 +239,9 @@ export function RankHealthDashboard() {
           )}
         >
           <div className="flex items-baseline justify-between gap-3">
-            <p className={cn(EYEBROW_CLASS, disabled > 0 && "text-danger")}>Auto-disabled tags</p>
+            <p className={cn(EYEBROW_CLASS, disabled > 0 && "text-danger")}>
+              {t("tiles.autoDisabled")}
+            </p>
             <p className={cn("text-2xl font-semibold tabular-nums", disabled > 0 && "text-danger")}>
               {disabled}
             </p>
@@ -230,12 +259,10 @@ export function RankHealthDashboard() {
               ) : (
                 <RotateCcw aria-hidden className="mr-1.5 h-4 w-4" />
               )}
-              Re-enable all tags
+              {t("tiles.reenableAll")}
             </Button>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              No tags disabled after repeated fetch failures.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("tiles.noneDisabled")}</p>
           )}
         </div>
       </StatTileGrid>

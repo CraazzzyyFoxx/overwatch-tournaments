@@ -1199,7 +1199,10 @@
       "discard": "Discard",
       "discardTitle": "Discard unsaved changes?",
       "discardDescription": "You have unsaved changes on this page. Leave now and the current edits will be lost.",
-      "discardConfirm": "Discard changes"
+      "discardConfirm": "Discard changes",
+      "changedFields": "{count, plural, one {# changed field} other {# changed fields}}",
+      "saved": "Settings saved",
+      "saveFailed": "Could not save these settings"
     },
     "roundSchedule": {
       "title": "Round schedule",
@@ -7051,6 +7054,318 @@
       "encounter_not_duel": "This match is an FFA lobby, not a duel.",
       "ffa_field_not_editable": "That field cannot be edited on a lobby.",
       "ffa_lobby_size": "A lobby seats between 2 and 100 teams."
+    }
+  },
+  "collectors": {
+    "views": {
+      "status": "Status",
+      "settings": "Settings",
+      "mapping": "Mapping",
+      "rankAria": "Rank collector views",
+      "subscriptionsAria": "Subscription collector views",
+      "streamsAria": "Stream collector views"
+    },
+    "access": {
+      "title": "Not available",
+      "rank": "Reading rank collection health needs the rank.read permission in this workspace.",
+      "subscriptions": "Reading subscription collection health needs the subscription.read permission in this workspace.",
+      "streams": "Reading poller health needs the global stream.read permission — the poller is platform-wide, so a workspace-scoped grant does not reach it."
+    },
+    "settings": {
+      "loading": "Loading settings…",
+      "loadErrorTitle": "Could not load the settings",
+      "loadErrorDescription": "Check your connection and reload the page.",
+      "rank": {
+        "collection": {
+          "title": "Collection",
+          "enabled": "Collect ranks in the background",
+          "enabledHint": "Manual fetches from a person's page work either way.",
+          "scope": "Whose ranks to collect",
+          "scopeHint": "Registered players: the battle tags entered in a registration, main and smurfs.",
+          "scopeRegistrations": "Registered players",
+          "scopeAll": "All users",
+          "extraAccounts": "Extra accounts per registration",
+          "extraAccountsHint": "Also collect up to this many of a registrant's other battle.net accounts. 0 collects only the registered tags."
+        },
+        "pace": {
+          "title": "Pace",
+          "interval": "Interval, seconds",
+          "intervalHint": "Each battle tag is fetched again every {duration}.",
+          "autoPace": "Auto-pace",
+          "autoPaceHint": "Spread every tag evenly across the interval instead of claiming a fixed batch per tick.",
+          "maxPerTick": "Max fetches per tick",
+          "maxPerTickHint": "A hard ceiling under auto-pace. Leave it blank to derive it from the rate limit.",
+          "auto": "auto",
+          "jitter": "Jitter",
+          "jitterHint": "Random delay on rescheduling, as a share of the interval: 0 is exact, 0.15 is up to 15% later. Keeps tags fetched together from recurring together."
+        },
+        "limits": {
+          "title": "OverFast limits",
+          "rate": "Requests per minute",
+          "rateHint": "Ceiling on OverFast requests. A fetch over it waits for the next free slot.",
+          "batch": "Batch size",
+          "batchHint": "Tags claimed per tick with auto-pace off; the per-tick cap with it on."
+        },
+        "failures": {
+          "title": "Failures",
+          "maxFailures": "Disable after failures in a row",
+          "maxFailuresHint": "Counts only failures of the tag itself, such as a battle tag that does not exist. OverFast outages back off but never disable.",
+          "backoff": "Backoff base, seconds",
+          "backoffHint": "First retry after {duration}, doubled after every further failure."
+        }
+      },
+      "subscriptions": {
+        "title": "Background checks",
+        "enabled": "Check subscriptions in the background",
+        "enabledHint": "Registration, check-in and manual checks run either way.",
+        "interval": "Check interval, seconds",
+        "intervalHint": "The next sweep starts {duration} after the last one.",
+        "batch": "Batch size",
+        "batchHint": "Participants resolved and committed per provider round trip. Lower it if a provider starts rate-limiting."
+      },
+      "streams": {
+        "title": "Live-status polling",
+        "enabled": "Poll Twitch live status",
+        "enabledHint": "Off on a fresh deploy: adding Twitch credentials does not start polling by itself.",
+        "interval": "Poll interval, seconds",
+        "intervalHint": "Twitch is asked again {duration} after the last tick. From 30 seconds to 1 hour; raise it if the shared Helix rate limit runs low.",
+        "batch": "Batch size",
+        "batchHint": "Channels per Helix call. 100 is Twitch's own ceiling for GET /streams, so a larger value cannot be honoured."
+      }
+    },
+    "mapping": {
+      "description": "Which division of the Overwatch ladder each OverFast rank lands on. The division's lower bound is stored; each workspace resolves it against its own grid.",
+      "reset": "Reset to OW2 defaults",
+      "selectAria": "Ladder division for {rank}",
+      "selectPlaceholder": "Select division"
+    },
+    "hub": {
+      "title": "Collectors",
+      "description": "Background pollers: OverFast ranks, Boosty/Twitch subscriptions, Twitch live status.",
+      "tabs": {
+        "rank": "Rank",
+        "subscriptions": "Subscriptions",
+        "streams": "Streams"
+      }
+    },
+    "common": {
+      "taskHistory": "Task history",
+      "time": "Time",
+      "status": "Status",
+      "source": "Source",
+      "error": "Error",
+      "pauseCollection": "Pause collection",
+      "resumeCollection": "Resume collection",
+      "collectionPaused": "Collection paused",
+      "collectionResumed": "Collection resumed",
+      "collectionToggleError": "Could not change the collection state — try again",
+      "health": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "failing": "Failing",
+        "paused": "Paused"
+      }
+    },
+    "rank": {
+      "run": {
+        "collecting": "Collecting"
+      },
+      "pace": "scope <b>{scope}</b> · every <num>{interval}</num> · <num>{rate}</num>/min",
+      "status": {
+        "ok": "OK",
+        "pending": "Pending",
+        "not_found": "Not found",
+        "private": "Private",
+        "error": "Error",
+        "rate_limited": "Rate limited",
+        "disabled": "Disabled",
+        "never": "never"
+      },
+      "sourceLabel": {
+        "scheduled": "Scheduled",
+        "registration": "Registration",
+        "manual": "Manual"
+      },
+      "circuit": {
+        "closed": "closed",
+        "open": "open",
+        "half_open": "half-open"
+      },
+      "reenabled": "{count, plural, one {Re-enabled # disabled battle tag} other {Re-enabled # disabled battle tags}}",
+      "reenableError": "Could not re-enable the disabled tags — try again",
+      "outage": {
+        "title": "Battle-tag rank parsing is down",
+        "hostFallback": "OverFast",
+        "circuitOpen": "The circuit breaker to {host} is open — every fetch is refused inside the worker, so the counters below stopped moving instead of reporting errors.",
+        "stale": "No battle tag has been collected successfully since {since}, although collection is switched on.",
+        "action": "Check that {host} resolves and answers, then watch this banner clear on the next tick."
+      },
+      "tiles": {
+        "battleTags": "Battle tags",
+        "coverage": "Coverage (snapshots)",
+        "coverageDetail": "{percent}% of all tags in 24h · {week} distinct accounts in 7d",
+        "fetches": "Fetches (24h)",
+        "fetchesDetail": "{rate}% errors · ok {ok} · not found {notFound} · errors {errors} · last success {last}",
+        "upstream": "Upstream (OverFast)",
+        "upstreamUnreachable": "unreachable",
+        "upstreamNotConfigured": "not configured",
+        "upstreamDetail": "{host} · {count, plural, one {# malformed battle tag} other {# malformed battle tags}} rejected in 24h",
+        "autoDisabled": "Auto-disabled tags",
+        "reenableAll": "Re-enable all tags",
+        "noneDisabled": "No tags disabled after repeated fetch failures."
+      },
+      "history": {
+        "battleTag": "Battle tag",
+        "snapshots": "Snapshots",
+        "searchPlaceholder": "Search battle tags…",
+        "emptyFiltered": "No fetch task matches these filters.",
+        "empty": "No fetch tasks recorded yet. The worker logs a row here each time it queries OverFast — resume collection or collect a single player to see activity."
+      }
+    },
+    "subscriptions": {
+      "run": {
+        "collecting": "Collecting"
+      },
+      "pace": "<num>{count}</num> {count, plural, one {tournament} other {tournaments}} gated · every <num>{interval}</num> · <num>{batch}</num>/batch",
+      "checkAll": "Check all now",
+      "swept": "{count, plural, one {Checked # subscription} other {Checked # subscriptions}}",
+      "sweepError": "Could not run the subscription sweep — try again",
+      "state": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "unknown": "Unresolved",
+        "error": "Error",
+        "never": "Never checked"
+      },
+      "sourceLabel": {
+        "scheduled": "Scheduled sweep",
+        "registration": "Registration",
+        "check_in": "Check-in",
+        "manual": "Manual re-check",
+        "redeem": "Code redeemed"
+      },
+      "reason": {
+        "not_subscribed": "not subscribed",
+        "not_a_member": "not in the Discord server",
+        "no_mapped_role": "no matching role",
+        "no_code_redeemed": "no code redeemed",
+        "code_redeemed": "code redeemed",
+        "no_linked_discord_account": "Discord not linked",
+        "no_linked_twitch_account": "Twitch not linked",
+        "missing_scope": "Twitch scope missing — needs reconnect",
+        "broadcaster_not_configured": "broadcaster not configured",
+        "broadcaster_not_eligible": "broadcaster not eligible",
+        "guild_not_configured": "guild not configured",
+        "guild_not_accessible": "bot cannot read the guild",
+        "bot_not_configured": "our Discord bot token is not configured",
+        "twitch_client_not_configured": "our Twitch client id is not configured",
+        "no_role_tiers_configured": "no role tiers configured",
+        "role_mapping_drift": "role mapping drifted",
+        "provider_not_configured": "provider not configured",
+        "provider_disabled": "provider disabled",
+        "no_codes_configured": "no codes configured",
+        "no_strategy_for_provider": "no strategy for provider",
+        "provider_unavailable": "provider unavailable",
+        "strategy_error": "provider call failed",
+        "not_resolved": "provider gave no answer"
+      },
+      "tiles": {
+        "entitlements": "Entitlements",
+        "tracked": "Players tracked",
+        "trackedDetail": "{never} never checked · {providers}",
+        "noProviders": "no providers yet",
+        "coverage": "Coverage (checked)",
+        "coverageDetail": "{day} distinct players in 24h · {week} in 7d · last check {last}",
+        "checks": "Checks (24h)",
+        "checksDetail": "{rate}% unresolved · active {active} · inactive {inactive} · unresolved {failed} · last active {last}"
+      },
+      "history": {
+        "title": "Check history",
+        "player": "Player",
+        "provider": "Provider",
+        "state": "State",
+        "tier": "Tier",
+        "tierRank": "Tier {rank}",
+        "trigger": "Trigger",
+        "reason": "Reason",
+        "searchPlaceholder": "Search players…",
+        "emptyFiltered": "No subscription check matches these filters.",
+        "empty": "No subscription checks recorded yet. A row lands here each time a provider is actually queried — resume collection, run “Check all now”, or wait for a player to register in a tournament that requires a subscription."
+      }
+    },
+    "streams": {
+      "run": {
+        "polling": "Polling"
+      },
+      "pace": "every <num>{interval}</num> · <num>{batch}</num>/batch",
+      "pausePolling": "Pause polling",
+      "resumePolling": "Resume polling",
+      "pollingPaused": "Polling paused",
+      "pollingResumed": "Polling resumed",
+      "pollingToggleError": "Could not change the polling state — try again",
+      "status": {
+        "ok": {
+          "label": "Last tick OK",
+          "hint": ""
+        },
+        "empty": {
+          "label": "Nothing to poll",
+          "hint": "The last tick found no active tournament with a Twitch channel attached. Add a stream link to a live tournament to give the poller something to do."
+        },
+        "truncated": {
+          "label": "Tick cut short",
+          "hint": "More channels were due than one tick could cover. Raise the batch size (up to Twitch's 100 ceiling) or lower the interval so the backlog drains."
+        },
+        "not_configured": {
+          "label": "Twitch credentials missing",
+          "hint": "Set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET in backend/env/stream.env, then restart stream-service."
+        },
+        "rate_limited": {
+          "label": "Helix rate limit reached",
+          "hint": "The 800 requests/min bucket is shared with identity-service's OAuth sign-ins, so exhausting it breaks logins, not just stream badges. Fix it by RAISING the poll interval (or lowering the batch size) — not by retrying."
+        },
+        "unauthorized": {
+          "label": "Twitch rejected the credentials",
+          "hint": "The credentials are present but Twitch refused them. Re-check the client id/secret pair in the Twitch developer console (a rotated or deleted app reads exactly like this) and update backend/env/stream.env."
+        },
+        "unavailable": {
+          "label": "Twitch unreachable",
+          "hint": "Twitch did not answer. Nothing to do on our side — the next tick retries. If it persists, check the Twitch status page and this worker's egress."
+        },
+        "error": {
+          "label": "Tick failed",
+          "hint": "The tick raised an unexpected error. Check the stream-service logs for the traceback — the tick swallows failures to keep the scheduler alive, so nothing else surfaces it."
+        },
+        "off": {
+          "label": "Polling is off",
+          "hint": "This is the shipped default — a fresh deploy never touches Twitch. Turn on background polling in the Settings tab to start it."
+        },
+        "no_tick": {
+          "label": "No tick recorded yet",
+          "hint": "Polling is on and configured, but the scheduler has not reached a due tick. This is not a failure — give it one interval."
+        }
+      },
+      "nothingToDo": "Last tick {time}. Nothing to do.",
+      "tiles": {
+        "lastTick": "Last tick",
+        "neverRun": "Never run — no outcome recorded yet",
+        "tournaments": "Tournaments",
+        "tournamentsDetail": "{count, plural, one {# changed state on the last tick} other {# changed state on the last tick}}",
+        "channels": "Channels polled",
+        "channelsDetail": "Twitch channels asked about on the last tick",
+        "live": "Live now",
+        "liveDetail": "Channels Twitch reported as streaming",
+        "rateLimit": "Rate limit left",
+        "rateLimitDetail": "Of an 800/min Helix bucket shared with sign-ins"
+      },
+      "history": {
+        "tournaments": "Tournaments",
+        "channels": "Channels",
+        "live": "Live",
+        "rateLimit": "Rate limit left",
+        "emptyFiltered": "No tick matches this status.",
+        "empty": "No ticks recorded yet. The poller logs a row here on every tick once polling is on and an interval has elapsed."
+      }
     }
   }
 }

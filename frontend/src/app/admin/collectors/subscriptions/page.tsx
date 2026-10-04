@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { SubscriptionHealthDashboard } from "@/components/admin/collectors/subscription-health";
 import { SubscriptionTaskHistory } from "@/components/admin/collectors/subscription-history";
 import { SubscriptionSettingsPanel } from "@/components/admin/collectors/subscription-settings";
@@ -23,13 +25,14 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  * are workspace settings, and live at /admin/settings/subscriptions.
  */
 export default function SubscriptionCollectorPage() {
+  const t = useTranslations("collectors");
   const { canAccessPermission, isSuperuser } = usePermissions();
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const canRead = canAccessPermission("subscription.read");
 
   const { activeKey, items } = useCollectorTab("subscriptions", [
-    { key: "status", label: "Status" },
-    { key: "settings", label: "Settings", hidden: !isSuperuser }
+    { key: "status", label: t("views.status") },
+    { key: "settings", label: t("views.settings"), hidden: !isSuperuser }
   ]);
 
   // Every query on this page lives under the `["admin","subscriptions"]` prefix,
@@ -45,8 +48,8 @@ export default function SubscriptionCollectorPage() {
     return (
       <PageStateCard
         state="not-found"
-        title="Not available"
-        description="Reading subscription collection health needs the subscription.read permission in this workspace."
+        title={t("access.title")}
+        description={t("access.subscriptions")}
       />
     );
   }
@@ -58,7 +61,7 @@ export default function SubscriptionCollectorPage() {
           items={items}
           activeKey={activeKey}
           level={2}
-          ariaLabel="Subscription collector views"
+          ariaLabel={t("views.subscriptionsAria")}
         />
       )}
       {activeKey === "settings" ? (

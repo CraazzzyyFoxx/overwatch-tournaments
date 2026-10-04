@@ -174,8 +174,10 @@ describe("Workspace settings › Branding", () => {
     await render();
 
     await type(container.querySelector<HTMLInputElement>("#brand-primary")!, "#ff0055");
+    // next-intl is the identity here: the summary renders as its key, and the
+    // PATCH below is what pins "one field".
     expect(container.querySelector('[aria-label="unsavedChanges"]')?.textContent).toContain(
-      "1 changed field"
+      "changedFields"
     );
 
     await act(async () => {

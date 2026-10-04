@@ -11,9 +11,12 @@
 //     is a workspace grant must not be offered it — and the bar must not fire
 //     the health request that would 403 either.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import en from "@/i18n/messages/en.json";
 
 import CollectorsLayout from "./layout";
 
@@ -88,11 +91,13 @@ async function mount() {
   mounted.push({ root, container });
   await act(async () => {
     root.render(
-      <QueryClientProvider client={client}>
-        <CollectorsLayout>
-          <p>slot</p>
-        </CollectorsLayout>
-      </QueryClientProvider>
+      <NextIntlClientProvider locale="en" messages={en}>
+        <QueryClientProvider client={client}>
+          <CollectorsLayout>
+            <p>slot</p>
+          </CollectorsLayout>
+        </QueryClientProvider>
+      </NextIntlClientProvider>
     );
   });
   await settle();

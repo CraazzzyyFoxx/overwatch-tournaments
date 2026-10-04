@@ -2,10 +2,11 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
 import { rankHealthDot } from "@/components/admin/collectors/rank-shared";
-import { streamHealthDot } from "@/components/admin/collectors/stream-shared";
+import { diagnoseStreamHealth } from "@/components/admin/collectors/stream-shared";
 import { subscriptionHealthDot } from "@/components/admin/collectors/subscription-shared";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
@@ -32,6 +33,9 @@ const COLLECTORS = ["rank", "subscriptions", "streams"] as const;
  */
 export default function CollectorsLayout({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const t = useTranslations("collectors.hub");
+  const tHealth = useTranslations("collectors.common.health");
+  const tStream = useTranslations("collectors.streams.status");
   const { canAccessPermission } = usePermissions();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
@@ -59,37 +63,45 @@ export default function CollectorsLayout({ children }: Readonly<{ children: Reac
 
   const active = COLLECTORS.find((key) => pathname.startsWith(`/admin/collectors/${key}`));
 
+  // The word, not just the colour: `LinkTabs` renders it `sr-only`.
+  const rankHealth = rankQuery.data ? rankHealthDot(rankQuery.data) : undefined;
+  const subscriptionHealth = subscriptionQuery.data
+    ? subscriptionHealthDot(subscriptionQuery.data)
+    : undefined;
+  const streamHealth = streamQuery.data ? diagnoseStreamHealth(streamQuery.data) : undefined;
+
   const items: LinkTabItem[] = [
     {
       key: "rank",
-      label: "Rank",
+      label: t("tabs.rank"),
       href: "/admin/collectors/rank",
       hidden: !canReadRank,
-      dot: rankQuery.data ? rankHealthDot(rankQuery.data) : undefined
+      dot: rankHealth ? { tone: rankHealth.tone, label: tHealth(rankHealth.state) } : undefined
     },
     {
       key: "subscriptions",
-      label: "Subscriptions",
+      label: t("tabs.subscriptions"),
       href: "/admin/collectors/subscriptions",
       hidden: !canReadSubscriptions,
-      dot: subscriptionQuery.data ? subscriptionHealthDot(subscriptionQuery.data) : undefined
+      dot: subscriptionHealth
+        ? { tone: subscriptionHealth.tone, label: tHealth(subscriptionHealth.state) }
+        : undefined
     },
     {
       key: "streams",
-      label: "Streams",
+      label: t("tabs.streams"),
       href: "/admin/collectors/streams",
       hidden: !canReadStreams,
-      dot: streamQuery.data ? streamHealthDot(streamQuery.data) : undefined
+      dot: streamHealth
+        ? { tone: streamHealth.tone, label: tStream(`${streamHealth.key}.label`) }
+        : undefined
     }
   ];
 
   return (
     <div className="space-y-4">
-      <AdminPageHeader
-        title="Collectors"
-        description="Background pollers: OverFast ranks, Boosty/Twitch subscriptions, Twitch live status."
-      />
-      <LinkTabs items={items} activeKey={active ?? "rank"} ariaLabel="Collectors" />
+      <AdminPageHeader title={t("title")} description={t("description")} />
+      <LinkTabs items={items} activeKey={active ?? "rank"} ariaLabel={t("title")} />
       {children}
     </div>
   );

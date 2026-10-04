@@ -1,6 +1,13 @@
+"use client";
+
+import { useMemo } from "react";
+import { useTranslations } from "next-intl";
+
 import { TintedBadge } from "@/components/admin/TintedBadge";
 import type { Tone } from "@/components/kit/tone";
 import type { RankCollectionStats } from "@/types/admin.types";
+
+import type { CollectorHealth } from "./collector-state";
 
 export { formatDate, formatInterval, formatRelative } from "@/components/kit/format-time";
 
@@ -41,8 +48,26 @@ export const STATUS_ORDER = [
   "disabled"
 ] as const;
 
+/**
+ * Display wording per fetch status, in the UI language.
+ *
+ * A hook rather than a constant map: the badge, the distribution legend and the
+ * history filter all name the same statuses, and a module-level map would have
+ * to pin a locale (the whole reason the dashboards printed `not_found` at the
+ * operator in the first place).
+ */
+export function useRankStatusLabels(): Record<string, string> {
+  const t = useTranslations("collectors.rank.status");
+  return useMemo(
+    () => Object.fromEntries(STATUS_ORDER.map((status) => [status, t(status)])),
+    [t]
+  );
+}
+
 export function StatusBadge({ status }: Readonly<{ status: string | null }>) {
-  return <TintedBadge value={status} tones={STATUS_TONES} fallback="never" />;
+  const t = useTranslations("collectors.rank.status");
+  const labels = useRankStatusLabels();
+  return <TintedBadge value={status} tones={STATUS_TONES} labels={labels} fallback={t("never")} />;
 }
 
 /** Collection is considered stalled once the newest capture is this old. */
@@ -80,13 +105,16 @@ export function rankParsingOutage(
  * Ordered by what the operator must act on first: a paused collector explains
  * every other number on the page, a dead upstream outranks a bad error ratio
  * (it is why there is no ratio to read), and a fleet-wide error rate outranks a
- * handful of tags the worker gave up on. The word is not decoration — the tab
- * renders it `sr-only`, because a dot alone encodes state in colour.
+ * handful of tags the worker gave up on. The verdict is not decoration — the
+ * tab renders its word `sr-only`, because a dot alone encodes state in colour.
+ *
+ * Returns the state, not the word: a plain function cannot call `useTranslations`,
+ * so the tab bar looks the word up under `collectors.common.health`.
  */
-export function rankHealthDot(stats: RankCollectionStats): { tone: Tone; label: string } {
-  if (!stats.enabled) return { tone: "neutral", label: "Paused" };
-  if (rankParsingOutage(stats)) return { tone: "danger", label: "Failing" };
-  if ((stats.error_rate_24h ?? 0) >= 0.2) return { tone: "danger", label: "Failing" };
-  if ((stats.by_status?.disabled ?? 0) > 0) return { tone: "warning", label: "Degraded" };
-  return { tone: "success", label: "Healthy" };
+export function rankHealthDot(stats: RankCollectionStats): CollectorHealth {
+  if (!stats.enabled) return { tone: "neutral", state: "paused" };
+  if (rankParsingOutage(stats)) return { tone: "danger", state: "failing" };
+  if ((stats.error_rate_24h ?? 0) >= 0.2) return { tone: "danger", state: "failing" };
+  if ((stats.by_status?.disabled ?? 0) > 0) return { tone: "warning", state: "degraded" };
+  return { tone: "success", state: "healthy" };
 }

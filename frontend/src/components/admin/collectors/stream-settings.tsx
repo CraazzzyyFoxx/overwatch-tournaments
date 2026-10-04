@@ -1,12 +1,14 @@
 "use client";
 
-// Same shape as the subscription collector's settings card: this is the second
-// runtime-editable collector config, and it is edited the same way.
+import { useId } from "react";
+import { useTranslations } from "next-intl";
 
 import { CollectionSettingsPanel, useCollectionSettings } from "@/components/admin/CollectionSettingsPanel";
-import { Label } from "@/components/ui/label";
+import { formatInterval } from "@/components/kit/format-time";
+import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
+import { useFormatter } from "@/lib/datetime/client";
 import type { StreamCollectionConfig } from "@/types/admin.types";
 
 const STREAM_COLLECTION_KEY = "stream.collection";
@@ -20,66 +22,61 @@ const DEFAULTS: StreamCollectionConfig = {
   batch_size: 100
 };
 
+const read = (stored: Partial<StreamCollectionConfig> | undefined) => ({ ...DEFAULTS, ...stored });
+
 export function StreamSettingsPanel() {
-  const { form, setForm, settingsQuery, mutation } = useCollectionSettings<StreamCollectionConfig>({
+  const t = useTranslations("collectors.settings.streams");
+  const format = useFormatter();
+  const ids = useId();
+  const settings = useCollectionSettings<StreamCollectionConfig>({
     settingKey: STREAM_COLLECTION_KEY,
-    defaults: DEFAULTS,
+    read,
     invalidateKeys: [["admin", "streams"]]
   });
 
   return (
-    <CollectionSettingsPanel
-      title="Stream collection"
-      isLoading={settingsQuery.isLoading}
-      loadError={settingsQuery.isError}
-      isSaving={mutation.isPending}
-      saveSuccess={mutation.isSuccess}
-      saveError={mutation.isError}
-      onSave={() => mutation.mutate()}
-    >
-      <div className="flex items-center gap-2">
-        <Switch
-          id="stream-enabled"
-          checked={form.enabled}
-          onCheckedChange={(enabled) => setForm({ ...form, enabled })}
-        />
-        <Label htmlFor="stream-enabled">Enable background Twitch live-status polling</Label>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          {/* min/max are the backend's own bounds. Without them the server
-              answers 422 with nothing this form can show the operator. */}
-          <Label htmlFor="stream-interval">Poll interval (seconds)</Label>
-          <NumberInput
-            id="stream-interval"
-            integer
-            min={30}
-            max={3600}
-            value={form.interval_seconds}
-            onValueChange={(next) => setForm({ ...form, interval_seconds: next ?? 60 })}
-          />
-          <p className="text-xs text-muted-foreground">
-            How long the poller waits after its last tick before asking Twitch again. 30s to 1h.
-            Raise it if the shared Helix rate-limit bucket runs low.
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="stream-batch">Batch size</Label>
-          <NumberInput
-            id="stream-batch"
-            integer
-            min={1}
-            max={100}
-            value={form.batch_size}
-            onValueChange={(next) => setForm({ ...form, batch_size: next ?? 100 })}
-          />
-          <p className="text-xs text-muted-foreground">
-            Channels resolved per Helix call. 100 is Twitch&apos;s hard ceiling on{" "}
-            <code>GET /streams</code>, not our own limit — a larger value cannot be honoured.
-          </p>
-        </div>
-      </div>
+    <CollectionSettingsPanel settings={settings}>
+      {(form, patch) => (
+        <SettingGroup title={t("title")}>
+          <SettingRow htmlFor={`${ids}-enabled`} label={t("enabled")} hint={t("enabledHint")}>
+            <Switch
+              id={`${ids}-enabled`}
+              checked={form.enabled}
+              onCheckedChange={(enabled) => patch({ enabled })}
+            />
+          </SettingRow>
+          <SettingRow
+            htmlFor={`${ids}-interval`}
+            label={t("interval")}
+            hint={t("intervalHint", {
+              duration: formatInterval(format, form.interval_seconds)
+            })}
+          >
+            {/* min/max are the backend's own bounds: past them it answers 422
+                with nothing this form can show. */}
+            <NumberInput
+              id={`${ids}-interval`}
+              integer
+              min={30}
+              max={3600}
+              value={form.interval_seconds}
+              onValueChange={(next) => patch({ interval_seconds: next ?? DEFAULTS.interval_seconds })}
+              className="h-8 w-28"
+            />
+          </SettingRow>
+          <SettingRow htmlFor={`${ids}-batch`} label={t("batch")} hint={t("batchHint")}>
+            <NumberInput
+              id={`${ids}-batch`}
+              integer
+              min={1}
+              max={100}
+              value={form.batch_size}
+              onValueChange={(next) => patch({ batch_size: next ?? DEFAULTS.batch_size })}
+              className="h-8 w-28"
+            />
+          </SettingRow>
+        </SettingGroup>
+      )}
     </CollectionSettingsPanel>
   );
 }

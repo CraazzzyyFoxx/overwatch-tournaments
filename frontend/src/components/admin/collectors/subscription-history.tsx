@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -20,33 +21,12 @@ import type { SubscriptionCheckLogRow } from "@/types/admin.types";
 
 import {
   PROVIDER_LABELS,
-  REASON_LABELS,
-  SOURCE_LABELS,
-  STATE_LABELS,
+  STATE_ORDER,
+  SOURCE_ORDER,
   StateBadge,
-  formatDate
+  formatDate,
+  useSubscriptionLabels
 } from "./subscription-shared";
-
-const FILTER_DEFS: FilterDef[] = [
-  {
-    key: "state",
-    label: "State",
-    kind: "single",
-    options: Object.entries(STATE_LABELS).map(([value, label]) => ({ value, label }))
-  },
-  {
-    key: "provider",
-    label: "Provider",
-    kind: "single",
-    options: Object.entries(PROVIDER_LABELS).map(([value, label]) => ({ value, label }))
-  },
-  {
-    key: "source",
-    label: "Trigger",
-    kind: "single",
-    options: Object.entries(SOURCE_LABELS).map(([value, label]) => ({ value, label }))
-  }
-];
 
 /** The endpoint's own ceiling; the table pages through it client-side. */
 const FETCH_LIMIT = 200;
@@ -65,9 +45,35 @@ const FETCH_LIMIT = 200;
  * fetched rows.
  */
 export function SubscriptionTaskHistory() {
+  const t = useTranslations("collectors.subscriptions");
+  const tCommon = useTranslations("collectors.common");
   const format = useFormatter();
   const router = useRouter();
-  const filters = useFilters(FILTER_DEFS);
+  const labels = useSubscriptionLabels();
+  const filterDefs = useMemo<FilterDef[]>(
+    () => [
+      {
+        key: "state",
+        label: t("history.state"),
+        kind: "single",
+        options: STATE_ORDER.map((value) => ({ value, label: labels.state[value] }))
+      },
+      {
+        key: "provider",
+        label: t("history.provider"),
+        kind: "single",
+        options: Object.entries(PROVIDER_LABELS).map(([value, label]) => ({ value, label }))
+      },
+      {
+        key: "source",
+        label: t("history.trigger"),
+        kind: "single",
+        options: SOURCE_ORDER.map((value) => ({ value, label: labels.source[value] }))
+      }
+    ],
+    [t, labels]
+  );
+  const filters = useFilters(filterDefs);
   const state = String(filters.values.state ?? "");
   const source = String(filters.values.source ?? "");
   const provider = String(filters.values.provider ?? "");
@@ -96,7 +102,7 @@ export function SubscriptionTaskHistory() {
     () => [
       {
         accessorKey: "created_at",
-        header: "Time",
+        header: tCommon("time"),
         cell: ({ row }) => (
           <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
             {formatDate(format, row.original.created_at)}
@@ -106,7 +112,7 @@ export function SubscriptionTaskHistory() {
       {
         id: "player",
         accessorFn: (row) => row.user_name ?? `auth #${row.auth_user_id ?? "?"}`,
-        header: "Player",
+        header: t("history.player"),
         meta: columnMeta<SubscriptionCheckLogRow>({
           searchValue: (row) => row.user_name ?? `auth #${row.auth_user_id ?? "?"}`
         }),
@@ -125,7 +131,7 @@ export function SubscriptionTaskHistory() {
       },
       {
         accessorKey: "provider",
-        header: "Provider",
+        header: t("history.provider"),
         cell: ({ row }) => (
           <span className="flex items-center gap-2 text-sm">
             <SocialIcon provider={row.original.provider} size={14} decorative />
@@ -135,36 +141,38 @@ export function SubscriptionTaskHistory() {
       },
       {
         accessorKey: "state",
-        header: "State",
+        header: t("history.state"),
         cell: ({ row }) => <StateBadge state={row.original.state} />
       },
       {
         id: "tier",
-        header: "Tier",
+        header: t("history.tier"),
         enableSorting: false,
         cell: ({ row }) => (
           <span className="text-xs tabular-nums text-muted-foreground">
             {row.original.tier_label ??
-              (row.original.tier_rank != null ? `Tier ${row.original.tier_rank}` : "—")}
+              (row.original.tier_rank != null
+                ? t("history.tierRank", { rank: row.original.tier_rank })
+                : "—")}
           </span>
         )
       },
       {
         accessorKey: "source",
-        header: "Trigger",
+        header: t("history.trigger"),
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground" title={row.original.mechanism ?? undefined}>
-            {SOURCE_LABELS[row.original.source] ?? row.original.source}
+            {labels.source[row.original.source] ?? row.original.source}
           </span>
         )
       },
       {
         id: "reason",
-        header: "Reason",
+        header: t("history.reason"),
         enableSorting: false,
         cell: ({ row }) => {
           const { error, reason } = row.original;
-          const text = error ?? (reason ? (REASON_LABELS[reason] ?? reason) : null);
+          const text = error ?? (reason ? labels.reason(reason) : null);
           return (
             <span
               className={cn(
@@ -179,14 +187,14 @@ export function SubscriptionTaskHistory() {
         }
       }
     ],
-    [format]
+    [format, t, tCommon, labels]
   );
 
   return (
     <section aria-labelledby="subscription-check-history" className="space-y-3">
       <div className="flex items-center gap-2">
         <h2 id="subscription-check-history" className="font-semibold leading-none tracking-tight">
-          Check history
+          {t("history.title")}
         </h2>
         <LiveIndicator />
       </div>
@@ -196,15 +204,11 @@ export function SubscriptionTaskHistory() {
         columns={columns}
         initialPageSize={20}
         pageSizeOptions={[20, 50, 100, 200]}
-        searchPlaceholder="Search players…"
+        searchPlaceholder={t("history.searchPlaceholder")}
         filterKey={filters.filterKey}
-        toolbar={<FilterBar defs={FILTER_DEFS} filters={filters} />}
+        toolbar={<FilterBar defs={filterDefs} filters={filters} />}
         getRowId={(row) => String(row.id)}
-        emptyMessage={
-          filters.filterKey
-            ? "No subscription check matches these filters."
-            : "No subscription checks recorded yet. A row lands here each time a provider is actually queried — resume collection, run “Check all now”, or wait for a player to register in a tournament that requires a subscription."
-        }
+        emptyMessage={filters.filterKey ? t("history.emptyFiltered") : t("history.empty")}
         onRowClick={(row) => {
           if (row.original.user_id != null) router.push(`/admin/people/${row.original.user_id}`);
         }}
