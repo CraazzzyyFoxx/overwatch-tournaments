@@ -36,6 +36,10 @@ on:
 #   dispatch with a tag      -> build and deploy it, no gates (operator's call)
 #   dispatch with skip_build -> deploy a tag whose images already exist (rollback)
 #
+# Repo variable DEPLOY_FREEZE=true turns every deploy above into a pre-pull: the
+# host downloads the tag's images and the running stack is left alone, and no
+# Release is written. Unset it and dispatch the tag with skip_build to go live.
+#
 # Each gate CALLS the workflow a PR already runs (workflow_call), so a release
 # is held to exactly the same bar with no second copy of the commands.
 concurrency:
@@ -214,6 +218,7 @@ jobs:
         env:
           TAG: ${{ needs.meta.outputs.tag }}
           PROD_SIZE: ${{ vars.PROD_SIZE || 'medium' }}
+          PULL_ONLY: ${{ vars.DEPLOY_FREEZE == 'true' }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -244,9 +249,9 @@ jobs:
           # mid-pull. A dropped session kills the remote script wherever it is --
           # during `prod-up` that is a half-restarted stack.
           {
-            printf 'TAG=%q\nPROD_SIZE=%q\nGHCR_USER=%q\nGHCR_TOKEN=%q\n' \
-              "$TAG" "$PROD_SIZE" "$GHCR_USER" "$GHCR_TOKEN"
-            printf 'export TAG PROD_SIZE GHCR_USER GHCR_TOKEN\n'
+            printf 'TAG=%q\nPROD_SIZE=%q\nPULL_ONLY=%q\nGHCR_USER=%q\nGHCR_TOKEN=%q\n' \
+              "$TAG" "$PROD_SIZE" "$PULL_ONLY" "$GHCR_USER" "$GHCR_TOKEN"
+            printf 'export TAG PROD_SIZE PULL_ONLY GHCR_USER GHCR_TOKEN\n'
             cat ops/deploy/remote-deploy.sh
           } | ssh -i ~/.ssh/deploy_key -o BatchMode=yes \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
@@ -259,7 +264,7 @@ jobs:
       - deploy
     # Last, on purpose: the Release entry means "this is what production is
     # running", so it is written after the deploy succeeded and not before.
-    if: ${{ needs.deploy.result == 'success' }}
+    if: ${{ needs.deploy.result == 'success' && vars.DEPLOY_FREEZE != 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
