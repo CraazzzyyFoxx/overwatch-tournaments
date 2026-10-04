@@ -12,6 +12,7 @@ from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
     RegistrationApprovedEvent,
+    RegistrationRankCheckRequestedEvent,
     RegistrationRejectedEvent,
     TournamentStateChangedEvent,
 )
@@ -277,6 +278,26 @@ async def enqueue_registration_rejected(
         # A row created in this same transaction has no id until it flushes;
         # entity_ids is optional precision, so no id just means no narrowing.
         entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
+    )
+
+
+async def enqueue_registration_rank_check(
+    session: AsyncSession,
+    registration: models.BalancerRegistration,
+) -> None:
+    """Ask parser-service to re-fetch the registrant's battle tags (the profile check)."""
+    await enqueue_outbox_event(
+        session,
+        RegistrationRankCheckRequestedEvent(
+            tournament_id=registration.tournament_id,
+            workspace_id=await get_registration_workspace_id(session, registration.tournament_id),
+            registration_id=registration.id,
+            user_id=await get_registration_player_id(session, registration),
+            battle_tag=registration.battle_tag,
+            source_service="tournament-service",
+        ),
+        exchange=TOURNAMENT_EVENTS_EXCHANGE,
+        routing_key="tournament.registration.rank_check_requested",
     )
 
 

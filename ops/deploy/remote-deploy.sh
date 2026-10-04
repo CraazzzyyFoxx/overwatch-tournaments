@@ -12,6 +12,7 @@
 #   PROD_SIZE   small | medium | large (replica counts, see the Makefile)
 #   GHCR_USER   GitHub actor for `docker login ghcr.io`
 #   GHCR_TOKEN  the workflow's own GITHUB_TOKEN -- valid for that run only
+#   PULL_ONLY   true -> pull the tag's images and exit, touching nothing else
 #
 # Manual run (rollback without GitHub):
 #   TAG=v1.2.3 PROD_SIZE=medium bash ops/deploy/remote-deploy.sh
@@ -31,7 +32,6 @@ cd "$REPO_DIR"
 # fails here on purpose instead of being forced over -- host-specific knobs
 # (ANALYTICS_WORKER_CPUS, ports, secrets) belong in .env, which is untracked.
 git fetch --tags --prune --force origin
-git checkout --detach "refs/tags/${TAG}"
 
 if [ -n "${GHCR_TOKEN:-}" ]; then
     echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER:-x}" --password-stdin
@@ -39,6 +39,23 @@ if [ -n "${GHCR_TOKEN:-}" ]; then
 fi
 
 export IMAGE_TAG="${TAG}"
+
+# PULL_ONLY=true (DEPLOY_FREEZE in the workflow): download this release's images
+# and stop. The running stack, the checkout and nginx.conf stay as they are; the
+# compose file is read from the tag itself, so a service the release adds gets
+# fetched too. The later real deploy of the same tag finds every image on disk
+# and is down to migrations plus `prod-up`.
+if [ "${PULL_ONLY:-false}" = "true" ]; then
+    PREFETCH_FILE="$(mktemp -p "$REPO_DIR" .prefetch.XXXXXX.yml)"
+    trap 'rm -f "$PREFETCH_FILE"; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+    git show "refs/tags/${TAG}:${COMPOSE_FILE}" > "$PREFETCH_FILE"
+    docker compose -f "$PREFETCH_FILE" pull --quiet --policy missing
+    echo "pulled ${TAG}; running stack left untouched"
+    exit 0
+fi
+
+git checkout --detach "refs/tags/${TAG}"
+
 # `--policy missing`, not a plain pull: the stack also names redis, rabbitmq,
 # nginx and xray, and Docker Hub is not reachable from this host (which is why
 # the xray proxy exists at all) -- a plain pull fails the whole deploy on

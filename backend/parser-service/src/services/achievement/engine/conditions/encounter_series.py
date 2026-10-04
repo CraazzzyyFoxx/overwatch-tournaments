@@ -48,7 +48,7 @@ def _series_roster_query() -> sa.Select:
     description="A completed series ended in this outcome and scoreline shape",
     required=("outcome",),
     optional=("margin", "opponent_score", "round_type"),
-    depends_on=("tournament.encounter", "tournament.player"),
+    depends_on=("tournament.encounter", "tournament.player", "tournament.stage"),
 )
 async def execute_encounter_result(
     session: AsyncSession,

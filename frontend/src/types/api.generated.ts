@@ -3914,6 +3914,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tournaments/{tournament_id}/registration/me/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-check my profile and subscriptions
+         * @description Permission: authenticated user; self-service — the caller's own registration only. Forces a live subscription check and queues a re-fetch of the registration's BattleTags, each only when the tournament requires it; returns 204 and the client refetches its registration. One call per user per 60 seconds: a repeat answers 429 with Retry-After.
+         *
+         *     RPC subject: `rpc.tournament.reg_pub_recheck_me`
+         */
+        post: operations["post__api_v1_tournaments__tournament_id__registration_me_recheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tournaments/{tournament_id}/subscription/me": {
         parameters: {
             query?: never;
@@ -6463,7 +6485,7 @@ export interface paths {
         put?: never;
         /**
          * Retry log processing
-         * @description Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist.
+         * @description Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist. An optional `encounter_id` first attaches the log to that encounter of the record's tournament (404 unknown encounter, 400 another tournament's, 409 on a processed record), which is how an `encounter_ambiguous` failure is resolved.
          *
          *     RPC subject: `rpc.parser.logs.retry`
          */
@@ -15599,6 +15621,11 @@ export interface components {
              */
             max_upload_bytes: number | null;
             /**
+             * Public Requests Used
+             * @default null
+             */
+            public_requests_used: number | null;
+            /**
              * Requests Per Minute
              * @default null
              */
@@ -15713,18 +15740,32 @@ export interface components {
          * TokenApiKeyInfo
          * @description API key metadata returned by token validation for downstream services.
          *
-         *     Identity only: quotas live in the ``quota`` schema and are resolved by the
-         *     service that enforces them, never carried on the credential.
+         *     Identity plus ``limits.requests_per_minute``: the gateway meters every
+         *     keyed request against it before any worker sees the call, so it has to
+         *     travel on the credential. Every other dimension is resolved by the service
+         *     that enforces it, from the ``quota`` schema.
          */
         "identity.TokenApiKeyInfo": {
             /** Id */
             id: number;
+            limits?: components["schemas"]["identity.TokenApiKeyLimits"];
             /** Public Id */
             public_id: string;
             /** Scopes */
             scopes?: string[];
             /** Workspace Id */
             workspace_id: number;
+        };
+        /**
+         * TokenApiKeyLimits
+         * @description The one quota number the gateway enforces itself, on every request.
+         */
+        "identity.TokenApiKeyLimits": {
+            /**
+             * Requests Per Minute
+             * @default null
+             */
+            requests_per_minute: number | null;
         };
         /**
          * TokenPayload
@@ -21538,6 +21579,14 @@ export interface components {
             tournament_name: string | null;
             /** Uploader Name */
             uploader_name: string | null;
+        };
+        /** LogRetryRequest */
+        "parser.LogRetryRequest": {
+            /**
+             * Encounter Id
+             * @default null
+             */
+            encounter_id: number | null;
         };
         /**
          * LogStatsRead
@@ -40927,6 +40976,82 @@ export interface operations {
             };
         };
     };
+    post__api_v1_tournaments__tournament_id__registration_me_recheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_tournaments__tournament_id__subscription_me: {
         parameters: {
             query?: never;
@@ -50441,7 +50566,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["parser.LogRetryRequest"];
+            };
+        };
         responses: {
             /** @description Success */
             200: {

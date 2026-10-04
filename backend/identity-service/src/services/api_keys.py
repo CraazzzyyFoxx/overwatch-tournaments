@@ -13,6 +13,7 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -632,8 +633,29 @@ class ApiKeyService:
                 public_id=api_key.public_id,
                 workspace_id=api_key.workspace_id,
                 scopes=list(scopes),
+                limits=schemas.TokenApiKeyLimits(requests_per_minute=await self._edge_rpm(api_key)),
             ),
         )
+
+    @staticmethod
+    async def _edge_rpm(api_key: models.ApiKey) -> int | None:
+        """The key-scope ``requests_per_minute`` the gateway enforces per request.
+
+        Resolved by the same ``PolicyStore`` the workers use (cached, so a hit
+        costs a dict lookup). A policy read that fails must not fail the
+        credential: ``None`` sends the gateway to its platform default.
+        """
+        try:
+            resolved = await quota.enforcer().policy.resolve(
+                operation="",
+                principal_scope="key",
+                api_key_id=api_key.id,
+                workspace_id=api_key.workspace_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - validation outranks one quota number
+            logger.warning(f"api key {api_key.id}: edge rate limit unresolved, gateway default applies: {exc}")
+            return None
+        return resolved.principal.requests_per_minute
 
 
 api_keys = ApiKeyService()

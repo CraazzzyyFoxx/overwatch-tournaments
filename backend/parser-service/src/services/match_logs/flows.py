@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+from collections.abc import Sequence
 
 import pandas as pd
 import sqlalchemy as sa
@@ -12,9 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.clients.s3 import S3Client
 from shared.core import impact as impact_consts
 from shared.core.social import SocialProvider
-from shared.domain.pick_ban_config import has_pool, pick_config
+from shared.domain.pick_ban_config import pool_allows
 from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
+from shared.models.tournament.pick_ban import PickBanConfig
 from shared.repository.identity import UserRepository
 from shared.repository.match_logs import MatchEventRepository, MatchKillFeedRepository, MatchStatisticsRepository
 from shared.repository.pick_ban import CONFIG_POOL_LOAD, PickBanConfigRepository
@@ -358,24 +360,11 @@ class MatchLogProcessor:
             session, map_name_raw, gamemode_raw, log_record_id=self.log_record_id
         )
 
-    async def _validate_map_pool(
-        self, session: AsyncSession, encounter: models.Encounter, match_map: models.Map
+    def _validate_map_pool(
+        self, encounter: models.Encounter, match_map: models.Map, map_pools: Sequence[PickBanConfig]
     ) -> None:
-        configs = await _pick_ban_config_repo.list_by_tournament(
-            session, encounter.tournament_id, kind=enums.PickBanKind.MAP, options=CONFIG_POOL_LOAD
-        )
-        config = pick_config(configs, stage_id=encounter.stage_id, round=encounter.round)
         # No pool (including a rules-only template) means captains choose freely.
-        if config is None or not has_pool(config):
-            return
-        if config.mode == enums.MapVetoMode.SLOTS:
-            in_pool = any(
-                match_map.id == slot.reserve_item_id or any(match_map.id == item.item_id for item in slot.items)
-                for slot in config.slots
-            )
-        else:
-            in_pool = any(match_map.id == item.item_id for item in config.items)
-        if not in_pool:
+        if not pool_allows(map_pools, stage_id=encounter.stage_id, round=encounter.round, item_id=match_map.id):
             msg = (
                 f"Map '{match_map.name}' (id={match_map.id}) in log {self.filename} "
                 f"is outside the configured map pool for encounter {encounter.id}"
@@ -1096,16 +1085,23 @@ class MatchLogProcessor:
             return None
         resolved_teams = await self.find_teams_by_players(session)
         (home_team_db, _), (away_team_db, _) = resolved_teams
+        # The map is read before the encounter: it is what tells apart two
+        # encounters the same pair plays.
+        match_map_model = await self.get_map(session)
+        map_pools = await _pick_ban_config_repo.list_by_tournament(
+            session, self.tournament.id, kind=enums.PickBanKind.MAP, options=CONFIG_POOL_LOAD
+        )
         encounter = await encounter_flows.resolve_for_log(
             session,
             home_team_db.id,
             away_team_db.id,
             log_name=self.filename,
+            map_id=match_map_model.id,
+            map_pools=map_pools,
             attached_encounter_id=self.attached_encounter_id,
         )
-        match_map_model = await self.get_map(session)
         # Roster repair can commit substitutions/name changes; validate first.
-        await self._validate_map_pool(session, encounter, match_map_model)
+        self._validate_map_pool(encounter, match_map_model, map_pools)
         await self._preload_data(session)
         (home_team_tuple, away_team_tuple) = await self.process_teams(session, resolved_teams)
         home_team_db, home_players_map = home_team_tuple

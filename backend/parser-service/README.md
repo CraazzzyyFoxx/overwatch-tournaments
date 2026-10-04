@@ -77,6 +77,7 @@ The full method list with request/response schemas is published at `/api/docs`, 
 | `achievement_evaluate.deferred` | `AchievementEvaluateEvent` | Resumes a `queued` run an unverified workspace's manual/`rule_version_bump` recompute was parked as; own channel, prefetch 1 |
 | `tournament_encounter_completed` | `EncounterCompletedEvent` | Bound to the `tournament.events` exchange; enqueues an achievement evaluation |
 | `tournament_registration_approved` | — | Bound to the same exchange; prioritises and enqueues a rank check for the approved player |
+| `tournament_registration_rank_check` | `RegistrationRankCheckRequestedEvent` | Same rank check, asked for by the registrant from their own card |
 | `rank_fetch`, `rank_fetch_priority` | `FetchRankEvent` | One OverFast call per battle tag; shared channel with prefetch `RANK_FETCH_WORKER_PREFETCH` |
 
 Every one of those queues carries `x-dead-letter-exchange=dlx` and an `x-message-ttl`; the worker

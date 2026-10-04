@@ -6088,7 +6088,11 @@
       "summary": "Match-log queue depths"
     },
     "rpc.parser.logs.retry": {
-      "description": "Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist.",
+      "description": "Permission: workspace `log.update` in the record's workspace. Resets a failed/processed log record to pending, re-enqueues it for processing and returns the updated record, 404ing when the record does not exist. An optional `encounter_id` first attaches the log to that encounter of the record's tournament (404 unknown encounter, 400 another tournament's, 409 on a processed record), which is how an `encounter_ambiguous` failure is resolved.",
+      "request": {
+        "array": false,
+        "ref": "parser.LogRetryRequest"
+      },
       "response": {
         "array": false,
         "ref": "parser.LogRecordRead"
@@ -9186,6 +9190,10 @@
     "rpc.tournament.reg_pub_list": {
       "description": "Permission: public; no authentication required \u2014 gated only by the tournament's visibility rule. Returns the live public registration list for a tournament with tournament-history and division grids.",
       "summary": "List public registrations"
+    },
+    "rpc.tournament.reg_pub_recheck_me": {
+      "description": "Permission: authenticated user; self-service \u2014 the caller's own registration only. Forces a live subscription check and queues a re-fetch of the registration's BattleTags, each only when the tournament requires it; returns 204 and the client refetches its registration. One call per user per 60 seconds: a repeat answers 429 with Retry-After.",
+      "summary": "Re-check my profile and subscriptions"
     },
     "rpc.tournament.reg_pub_update_me": {
       "description": "Permission: authenticated user; self-service \u2014 the caller's own registration only. Lets a user update their own still-pending registration after re-validating the input.",
@@ -16940,6 +16948,18 @@
           ],
           "default": null,
           "title": "Max Upload Bytes"
+        },
+        "public_requests_used": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public Requests Used"
         },
         "requests_per_minute": {
           "anyOf": [
@@ -28219,6 +28239,18 @@
           "default": null,
           "title": "Max Upload Bytes"
         },
+        "public_requests_used": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public Requests Used"
+        },
         "requests_per_minute": {
           "anyOf": [
             {
@@ -28947,11 +28979,14 @@
       "type": "object"
     },
     "identity.TokenApiKeyInfo": {
-      "description": "API key metadata returned by token validation for downstream services.\n\nIdentity only: quotas live in the ``quota`` schema and are resolved by the\nservice that enforces them, never carried on the credential.",
+      "description": "API key metadata returned by token validation for downstream services.\n\nIdentity plus ``limits.requests_per_minute``: the gateway meters every\nkeyed request against it before any worker sees the call, so it has to\ntravel on the credential. Every other dimension is resolved by the service\nthat enforces it, from the ``quota`` schema.",
       "properties": {
         "id": {
           "title": "Id",
           "type": "integer"
+        },
+        "limits": {
+          "$ref": "#/components/schemas/identity.TokenApiKeyLimits"
         },
         "public_id": {
           "title": "Public Id",
@@ -28975,6 +29010,25 @@
         "workspace_id"
       ],
       "title": "TokenApiKeyInfo",
+      "type": "object"
+    },
+    "identity.TokenApiKeyLimits": {
+      "description": "The one quota number the gateway enforces itself, on every request.",
+      "properties": {
+        "requests_per_minute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requests Per Minute"
+        }
+      },
+      "title": "TokenApiKeyLimits",
       "type": "object"
     },
     "identity.TokenPayload": {
@@ -30707,6 +30761,24 @@
         "finished_at"
       ],
       "title": "LogRecordRead",
+      "type": "object"
+    },
+    "parser.LogRetryRequest": {
+      "properties": {
+        "encounter_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Encounter Id"
+        }
+      },
+      "title": "LogRetryRequest",
       "type": "object"
     },
     "parser.LogStatsRead": {

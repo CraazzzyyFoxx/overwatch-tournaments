@@ -67,6 +67,7 @@ def configure(
     session_factory: Callable[[], Any],
     redis_url: str,
     enabled: bool = True,
+    edge_workspace_metering: bool = False,
 ) -> QuotaEnforcer:
     """Wire the process-global enforcer. Idempotent per process."""
     global _enforcer
@@ -75,6 +76,7 @@ def configure(
             policy=PolicyStore(session_factory),
             redis_url=redis_url,
             enabled=enabled,
+            edge_workspace_metering=edge_workspace_metering,
         )
     return _enforcer
 

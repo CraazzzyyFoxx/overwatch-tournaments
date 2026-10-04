@@ -33,7 +33,11 @@ You can also upload from an encounter: on **Encounters**, open a row and press *
 | **Processed** | The file is parsed and its statistics are recorded. |
 | **Failed** | Parsing failed. |
 
-The same words are the filter chips, and search covers the file name, the error text, the uploader and the encounter. A failed row expands to show its error, and the button beside it (**Retry log**) queues the file again; on a row that never finished it reads **Requeue log**. When several files failed, a bar appears with **Show failed** and **Retry … loaded**.
+The same words are the filter chips, and search covers the file name, the error text, the uploader and the encounter. A failed row expands to show its error. Each unfinished row has a **⋯** menu (also on right-click): **Retry log** queues the file again (**Requeue log** on a row that never finished), and **Attach to encounter…** files it under the encounter you pick and reprocesses it. To retry several at once, tick their rows and press **Retry …**; **Show failed** narrows the list to the failures.
+
+### Which encounter a log lands in
+
+Without an attached encounter, the log's two teams pick it. When they meet more than once — groups and then playoffs, a lower-bracket rematch — the map decides: the log goes to the encounter whose round map pool contains it, and an encounter that already has that map from another log is passed over. If both still fit, the log fails with **play several encounters** and waits for you to attach it.
 
 ## Uploading through the Discord bot
 
@@ -79,6 +83,7 @@ The number of open rows shows as a badge on the **Unresolved names** tab.
 | --- | --- |
 | A log is stuck on **Queued** or **Processing** | Stalled files are requeued automatically; to skip the wait, press **Requeue log**. |
 | A log is **Failed** | Expand the error text on the row and press **Retry log**. |
+| A log failed with **play several encounters** | The teams meet more than once and the map fits both. Open the row's **⋯** menu, choose **Attach to encounter…** and pick the right one. |
 | An encounter has no logs | On **Encounters**, apply the **No logs** filter and upload what is missing. |
 | A map or hero is missing from the statistics | Check the **Unresolved names** queue — the name may not have been recognised. |
 | The same map appears twice | Identical files are skipped; if maps still doubled up, check **Parsed maps** and the provenance of each row. |

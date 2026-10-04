@@ -1292,6 +1292,10 @@ DOCS: dict[str, dict] = {
         "summary": "Check in to tournament",
         "description": "Permission: authenticated user; self-service — the caller's own registration only. Checks the calling user's own registration in, blocking when the form requires a confirmed-public OW profile that is private, or when a required subscription is confirmed missing (an undetermined verdict fails open).",
     },
+    "rpc.tournament.reg_pub_recheck_me": {
+        "summary": "Re-check my profile and subscriptions",
+        "description": "Permission: authenticated user; self-service — the caller's own registration only. Forces a live subscription check and queues a re-fetch of the registration's BattleTags, each only when the tournament requires it; returns 204 and the client refetches its registration. One call per user per 60 seconds: a repeat answers 429 with Retry-After.",
+    },
     "rpc.tournament.sub_me": {
         "summary": "My subscription status",
         "description": "Permission: authenticated user; self-service — the caller's own subscription standing only. Returns the calling user's composed subscription outcome for the tournament plus a per-provider verdict; never forces a provider refresh.",

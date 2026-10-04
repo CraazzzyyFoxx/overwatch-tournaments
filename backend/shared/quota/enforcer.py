@@ -27,7 +27,7 @@ from redis.exceptions import RedisError
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.quota.policy import PolicyStore, QuotaLimits, ResolvedQuota, Scope
+from shared.quota.policy import PolicyStore, ResolvedQuota, Scope
 from shared.rpc.identity import credential_type
 
 __all__ = (
@@ -58,9 +58,10 @@ CONCURRENCY_RETRY_AFTER_SECONDS = 30
 _UNLIMITED = -1
 
 # KEYS 1-3: workspace rpm / day / lease set. KEYS 4-6: the same for the
-# principal. An empty key name means "this scope bounds nothing", and the
-# script then neither reads nor writes it -- an unconfigured workspace budget
-# must not spawn a counter per tenant per minute.
+# principal. An empty key name means "no such scope" (a call with no tenant),
+# and the script then neither reads nor writes it. A scope with no ceiling is
+# still counted: the usage view reports spend against "no ceiling", and a
+# budget set later must not start from a blind zero.
 CHARGE_SCRIPT = """
 local now = tonumber(ARGV[1])
 local cost = tonumber(ARGV[2])
@@ -187,12 +188,17 @@ class QuotaEnforcer:
         redis_url: str | None = None,
         redis_client: Any = None,
         enabled: bool = True,
+        edge_workspace_metering: bool = False,
     ) -> None:
         if redis_client is None and redis_url is None:
             raise ValueError("QuotaEnforcer needs redis_url or redis_client")
         self._policy = policy
         self._redis = redis_client or redis.from_url(redis_url, decode_responses=True)
         self._enabled = enabled
+        # The gateway owns the workspace per-minute bucket: it counts every REST
+        # request into it and refuses at the edge, so counting a metered call a
+        # second time here would double it.
+        self._edge_workspace_metering = edge_workspace_metering
         # Registered so the script runs as EVALSHA (with an automatic EVAL
         # fallback on NOSCRIPT) instead of re-sending the source every call.
         self._charge_script = self._redis.register_script(CHARGE_SCRIPT)
@@ -345,12 +351,15 @@ class QuotaEnforcer:
             rpm_key = self._rpm_key(namespace, bucket_id)
             day_key = self._day_key(namespace, bucket_id)
             slot_key = self._slot_key(namespace, bucket_id)
+            public_used: int | None = None
             try:
                 requests_used = int(await self._redis.get(rpm_key) or 0)
                 requests_reset_in = int(await self._redis.ttl(rpm_key))
                 heavy_used = int(await self._redis.get(day_key) or 0)
                 heavy_reset_in = int(await self._redis.ttl(day_key))
                 concurrent_used = int(await self._redis.zcard(slot_key))
+                if scope == "workspace":
+                    public_used = int(await self._redis.get(self._public_rpm_key(bucket_id)) or 0)
             except RedisError as exc:
                 QUOTA_UNAVAILABLE_TOTAL.labels(operation="usage", outcome="allowed").inc()
                 logger.warning(f"quota: usage read unavailable: {exc}")
@@ -369,6 +378,7 @@ class QuotaEnforcer:
                     "concurrent_used": concurrent_used,
                     "max_upload_bytes": limits.max_upload_bytes,
                     "max_items_per_request": limits.max_items_per_request,
+                    "public_requests_used": public_used,
                 }
             )
         return {"workspace_id": workspace_id, "scopes": report}
@@ -381,6 +391,13 @@ class QuotaEnforcer:
         return f"q:{namespace}:{principal_id}:rpm"
 
     @staticmethod
+    def _public_rpm_key(workspace_id: int) -> str:
+        """Statistics only: requests naming this workspace from outside it --
+        anonymous visitors and signed-in non-members. Written by the gateway,
+        never limited, never part of the workspace budget."""
+        return f"q:pub:ws:{workspace_id}:rpm"
+
+    @staticmethod
     def _day_key(namespace: str, principal_id: int) -> str:
         day = datetime.now(UTC).strftime("%Y%m%d")
         return f"q:{namespace}:{principal_id}:heavy:{day}"
@@ -389,8 +406,8 @@ class QuotaEnforcer:
     def _slot_key(namespace: str, principal_id: int) -> str:
         return f"q:{namespace}:{principal_id}:heavy:active"
 
-    def _keys_for(self, namespace: str, principal_id: int | None, limits: QuotaLimits) -> list[str]:
-        if principal_id is None or not limits.counts_anything:
+    def _keys_for(self, namespace: str, principal_id: int | None) -> list[str]:
+        if principal_id is None:
             return ["", "", ""]
         return [
             self._rpm_key(namespace, principal_id),
@@ -432,10 +449,18 @@ class QuotaEnforcer:
         # touched: a request that is too large by itself never consumes budget.
         self._enforce_caps(operation, resolved, size_bytes=size_bytes, item_count=item_count)
 
-        workspace_keys = self._keys_for("ws", workspace_id, resolved.workspace)
-        principal_keys = self._keys_for(_namespace(principal_kind), principal_id, resolved.principal)
-        if not any(workspace_keys + principal_keys):
-            return self._lease_or_none(lease_id, principal, workspace_id)
+        workspace_keys = self._keys_for("ws", workspace_id)
+        if self._edge_workspace_metering:
+            # Neither checked nor counted here: the gateway already did both for
+            # this very request. Day budget and slots stay with the enforcer.
+            workspace_keys[0] = ""
+        principal_keys = self._keys_for(_namespace(principal_kind), principal_id)
+        if principal_kind == "api_key":
+            # Every keyed request already spent its token at the gateway
+            # (``q:key:{id}:rpm``, the same key) and was refused there at the
+            # ceiling; charging it again here billed a metered call twice and
+            # refused the last request the gateway had just admitted.
+            principal_keys[0] = ""
 
         try:
             verdict = await self._charge_script(

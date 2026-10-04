@@ -24,6 +24,8 @@ from shared.messaging.config import (
     TOURNAMENT_EVENTS_EXCHANGE,
     TOURNAMENT_REGISTRATION_APPROVED_DLQ,
     TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
+    TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ,
+    TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE,
     UPLOAD_MATCH_LOG_DLQ,
     UPLOAD_MATCH_LOG_QUEUE,
 )
@@ -130,6 +132,7 @@ _OWNED_DLQS = (
     RANK_FETCH_PRIORITY_DLQ,
     TOURNAMENT_ENCOUNTER_COMPLETED_DLQ,
     TOURNAMENT_REGISTRATION_APPROVED_DLQ,
+    TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ,
 )
 
 # Expose the worker broker to publishers that don't thread one through (the
@@ -151,6 +154,7 @@ configure_quota(
     session_factory=db.async_session_maker,
     redis_url=str(config.settings.redis_url),
     enabled=config.settings.quota_enabled,
+    edge_workspace_metering=config.settings.quota_edge_workspace_metering,
 )
 
 # Typed-RPC subscribers for parser-unique domains served behind the gateway.
@@ -451,6 +455,18 @@ async def process_registration_approved_rank_check(data: dict, msg: RabbitMessag
     async with observe_message_processing(
         queue=TOURNAMENT_REGISTRATION_APPROVED_QUEUE,
         handler="process_registration_approved_rank_check",
+        message=msg,
+        logger=logger,
+    ):
+        await rank_tasks.handle_registration_approved(data, broker=broker)
+
+
+# The registrant's own "check again" from their card: same rank check, own queue.
+@broker.subscriber(TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE, exchange=TOURNAMENT_EVENTS_EXCHANGE)
+async def process_registration_rank_check(data: dict, msg: RabbitMessage) -> None:
+    async with observe_message_processing(
+        queue=TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE,
+        handler="process_registration_rank_check",
         message=msg,
         logger=logger,
     ):

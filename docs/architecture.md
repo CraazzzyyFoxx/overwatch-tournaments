@@ -233,7 +233,9 @@ Nothing builds on the server and no self-hosted runner takes part. `workflow_dis
 deploys a tag without the gates (an operator's call, and the only way out while CI is
 red), and with `skip_build` it redeploys images that already exist — which is the
 rollback. The remote half is [`ops/deploy/remote-deploy.sh`](../ops/deploy/remote-deploy.sh),
-runnable by hand.
+runnable by hand. With the repo variable `DEPLOY_FREEZE=true` (e.g. during a tournament
+final) any of these only pre-pulls the tag's images onto the host and writes no Release;
+unset it and dispatch the tag with `skip_build` to restart onto them in seconds.
 
 ## 7. Observability
 

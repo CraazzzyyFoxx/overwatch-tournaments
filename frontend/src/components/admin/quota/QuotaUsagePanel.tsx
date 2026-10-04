@@ -89,6 +89,12 @@ function QuotaScopeBars({ usage }: Readonly<{ usage: QuotaScopeUsage }>) {
             </div>
           );
         })}
+        {usage.public_requests_used != null ? (
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-muted-foreground">{t("publicRequests")}</dt>
+            <dd className="text-xs tabular-nums">{format.number(usage.public_requests_used)}</dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   );

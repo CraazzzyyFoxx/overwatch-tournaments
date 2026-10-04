@@ -433,7 +433,15 @@
         "checkIn": "Check-in"
       },
       "showDetails": "Show details",
-      "hideDetails": "Hide details"
+      "hideDetails": "Hide details",
+      "recheck": {
+        "action": "Check again",
+        "pending": "Checking…",
+        "cooldown": "Check again · {seconds}s",
+        "title": "Re-check your profile and subscriptions",
+        "started": "Check started — your status will update within a couple of minutes.",
+        "failed": "Could not start the check."
+      }
     }
   },
   "registrationTeams": {
@@ -2249,6 +2257,7 @@
       "reached_playoffs": "Reached Playoffs",
       "registration_flag": "Registration Flag",
       "registration_timing": "Registration Timing",
+      "stage_completed": "Stage Completed",
       "standing_count": "Standing Count",
       "team_otp_count": "Team One-Tricks",
       "teammate_recurrence": "Recurring Teammate",
@@ -6864,6 +6873,7 @@
     "spent": "{used} of {limit}",
     "spentUnlimited": "{used} spent, no ceiling",
     "resetsIn": "Resets {relative}",
+    "publicRequests": "Public requests this minute (not limited)",
     "megabytes": "{value} MB",
     "plan": "Plan: {slug}",
     "planUnknown": "Plan not resolved",

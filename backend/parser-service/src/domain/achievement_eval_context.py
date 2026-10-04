@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from shared.division_grid import DivisionGrid, DivisionTier
 from shared.services.division_grid.normalization import DivisionGridNormalizer
@@ -23,6 +24,11 @@ class EvalContext:
     #: stays silent. Mutable by design (the dataclass is frozen, the dict is
     #: not) — this is a side channel, not part of the context's identity.
     evidence: dict[tuple[int, ...], dict] = field(default_factory=dict, repr=False, compare=False)
+    #: Run-scoped memo for leaves whose one query answers many rules (e.g.
+    #: ``hero_kd_best`` for every hero at once). The runner hands every rule's
+    #: context the same dict, so N per-hero rules cost one query, not N. Only
+    #: read-only telemetry belongs here: a run never writes what it caches.
+    leaf_cache: dict[tuple, Any] = field(default_factory=dict, repr=False, compare=False)
 
     def record_evidence(self, key: tuple[int, ...], **values: object) -> None:
         """Attach measured values to one result key."""

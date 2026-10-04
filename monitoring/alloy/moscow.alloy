@@ -412,16 +412,15 @@ loki.process "nginx" {
 	}
 
 	// Rate-limit outcome as Prometheus counters on Alloy's own /metrics
-	// (scraped as job="alloy"). prefix = "" keeps the names rules/nginx.yml
-	// queries; the default prefix (and Promtail's promtail_custom_ before it)
-	// meant those rules never matched anything.
+	// (scraped as job="alloy"). Alloy treats an empty `prefix` as unset, so
+	// every name below is exported as loki_process_custom_<name>, which is what
+	// rules/nginx.yml queries.
 	// max_idle_duration: rejections are rare; a series that expires between
 	// bursts would make the recording rule's sum() come back empty.
 	stage.metrics {
 		metric.counter {
 			name              = "nginx_limit_req_rejected_total"
 			description       = "Requests rejected by an nginx limit_req zone"
-			prefix            = ""
 			source            = "limit_req"
 			value             = "REJECTED"
 			action            = "inc"
@@ -431,7 +430,6 @@ loki.process "nginx" {
 		metric.counter {
 			name              = "nginx_limit_req_rejected_dry_run_total"
 			description       = "Requests an nginx limit_req zone would have rejected (dry run)"
-			prefix            = ""
 			source            = "limit_req"
 			value             = "REJECTED_DRY_RUN"
 			action            = "inc"
@@ -441,7 +439,6 @@ loki.process "nginx" {
 		metric.counter {
 			name              = "nginx_limit_conn_rejected_total"
 			description       = "Requests rejected by an nginx limit_conn zone"
-			prefix            = ""
 			source            = "limit_conn"
 			value             = "REJECTED"
 			action            = "inc"
@@ -451,9 +448,19 @@ loki.process "nginx" {
 		metric.counter {
 			name              = "nginx_limit_conn_rejected_dry_run_total"
 			description       = "Requests an nginx limit_conn zone would have rejected (dry run)"
-			prefix            = ""
 			source            = "limit_conn"
 			value             = "REJECTED_DRY_RUN"
+			action            = "inc"
+			max_idle_duration = "24h"
+		}
+
+		// Homepage documents (rules/nginx.yml HomepageRequestSurge). "/" was the
+		// 2026-09-30 flood target; stub_status has no per-path counters.
+		metric.counter {
+			name              = "nginx_root_requests_total"
+			description       = "Requests for the homepage document"
+			source            = "uri"
+			value             = "/"
 			action            = "inc"
 			max_idle_duration = "24h"
 		}

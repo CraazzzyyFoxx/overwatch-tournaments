@@ -3,9 +3,10 @@
 import {
   createElement,
   Fragment,
+  useEffect,
   useState
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
@@ -17,12 +18,14 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
-  Pencil
+  Pencil,
+  RefreshCw
 } from "lucide-react";
 
 import { StatusDot } from "@/components/ui/status-dot";
 import { LateSignUpBadge, OnCallBadge } from "@/components/status/RegistrationBadges";
 import { cn, hexToRgba } from "@/lib/utils";
+import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { activeRequirements, formatAdmissionReason, formatRequirementName } from "@/lib/registration/admission";
 import { formatShortfall } from "@/lib/registration/team-shortfall";
 import { getRegistrationTeamStatus } from "@/lib/registration/team-tone";
@@ -32,6 +35,7 @@ import { answerFlag, answerText } from "@/lib/forms/answers";
 import { IDENTITY_PROVIDERS, identityKey, identityProvider } from "@/lib/forms/builtin-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationTeamService from "@/services/registration-team.service";
+import registrationService from "@/services/registration.service";
 import MyRegistrationEditDialog from "@/components/registration/MyRegistrationEditDialog";
 import type { Tournament } from "@/types/tournament.types";
 import type {
@@ -234,6 +238,9 @@ const CARD_OWN_COLUMN_IDS: Record<string, true> = {
   public_notes: true
 };
 
+/** Mirrors the server's `RECHECK_COOLDOWN_SECONDS`; a 429 corrects it anyway. */
+const RECHECK_COOLDOWN_SECONDS = 60;
+
 function MyRegistrationCard({
   registration,
   canCheckIn,
@@ -265,6 +272,33 @@ function MyRegistrationCard({
   const tSlot = useTranslations("rosterShape.slotCodes");
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const queryClient = useQueryClient();
+  // Seconds left before the re-check may run again. The server enforces the
+  // cooldown; this only keeps the button from inviting a 429.
+  const [recheckLeft, setRecheckLeft] = useState(0);
+  useEffect(() => {
+    if (recheckLeft <= 0) return;
+    const id = window.setTimeout(() => setRecheckLeft((left) => left - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [recheckLeft]);
+  const recheckMutation = useMutation({
+    mutationFn: () => registrationService.recheckMyRegistration(tournament.id),
+    onSuccess: () => {
+      setRecheckLeft(RECHECK_COOLDOWN_SECONDS);
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
+      });
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.subscriptionStatus(tournament.id)
+      });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 429) {
+        const retryAfter = (error.body as { retry_after?: unknown } | undefined)?.retry_after;
+        setRecheckLeft(typeof retryAfter === "number" ? retryAfter : RECHECK_COOLDOWN_SECONDS);
+      }
+    }
+  });
 
   // §12.5 needs two facts the inline brief deliberately omits: the per-slot
   // shortfall ("what is still missing") and whether the team already made it
@@ -404,6 +438,16 @@ function MyRegistrationCard({
       };
     }
   );
+
+  // Only while something is left to prove: once every requirement is green, or
+  // check-in has spent them, there is nothing for the player to re-check.
+  const canRecheck =
+    !isTerminal && !isCheckedIn && requirementSteps.some((step) => step.tone !== "done");
+  const recheckError =
+    recheckMutation.isError &&
+    !(recheckMutation.error instanceof ApiError && recheckMutation.error.status === 429)
+      ? getApiErrorMessage(recheckMutation.error, t("registration.myCard.recheck.failed"))
+      : null;
 
   // Check-in is the one step whose marker has four distinct outcomes, so it is
   // resolved here rather than inline: a completed check-in wins outright, a dead
@@ -629,6 +673,16 @@ function MyRegistrationCard({
                 {t("registration.reserve.explainer")}
               </p>
             ) : null}
+            {canRecheck && recheckMutation.isSuccess && recheckLeft > 0 ? (
+              <p className="mt-0.5 text-xs text-[color:var(--aqt-fg-muted)]">
+                {t("registration.myCard.recheck.started")}
+              </p>
+            ) : null}
+            {canRecheck && recheckError ? (
+              <p role="alert" className="mt-0.5 text-xs text-[color:var(--aqt-rose)]">
+                {recheckError}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -654,6 +708,27 @@ function MyRegistrationCard({
               {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
             </button>
           )}
+          {canRecheck ? (
+            <button
+              type="button"
+              data-registration-recheck="true"
+              onClick={() => recheckMutation.mutate()}
+              disabled={recheckMutation.isPending || recheckLeft > 0}
+              title={t("registration.myCard.recheck.title")}
+              className="inline-flex items-center justify-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-2.5 py-1.5 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)] transition-all hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              {recheckMutation.isPending ? (
+                <Spinner className="size-3" />
+              ) : (
+                <RefreshCw className="size-3" aria-hidden />
+              )}
+              {recheckMutation.isPending
+                ? t("registration.myCard.recheck.pending")
+                : recheckLeft > 0
+                  ? t("registration.myCard.recheck.cooldown", { seconds: recheckLeft })
+                  : t("registration.myCard.recheck.action")}
+            </button>
+          ) : null}
           {/* Edit sits before Withdraw: "fix my answer" is the cheaper of the
               two and the one a player reaches for first. Disabled-with-a-reason
               rather than silently absent, because a registrant who edited

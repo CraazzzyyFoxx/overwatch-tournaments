@@ -26,8 +26,9 @@ from src.services.tournament.events import (
 # writes its generation, so they read the previous standings or were skipped by
 # the dependency filter entirely (review 2026-09-16 §1.6). The outbox row goes
 # out in the same transaction as the standings themselves, so the evaluation can
-# never observe an older generation than the one that triggered it.
-_STANDINGS_CHANGED_TABLES = ["tournament.standing", "tournament.player", "tournament.team"]
+# never observe an older generation than the one that triggered it. The same job
+# flips ``Stage.is_completed``, which the stage-completion rules read.
+_STANDINGS_CHANGED_TABLES = ["tournament.standing", "tournament.player", "tournament.team", "tournament.stage"]
 
 
 async def _enqueue_achievement_evaluation(session, tournament_id: int) -> None:

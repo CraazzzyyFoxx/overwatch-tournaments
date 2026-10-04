@@ -22,7 +22,7 @@ the per-service ``_resolve_user_from_db`` consumes:
          "rbac_roles": [...], "rbac_permissions": [{"resource","action"}]}
       ],
       "credential_type": "access_token" | "api_key" | "discord",
-      "api_key": {"id","public_id","workspace_id","scopes"} | None
+      "api_key": {"id","public_id","workspace_id","scopes","limits"} | None
     }
 
 The last two describe the *credential*, not the account: an API key is owned by a
@@ -130,8 +130,8 @@ def _stamp_credential(user: AuthUser, identity: dict[str, Any]) -> None:
     api_key = identity.get("api_key")
     if not isinstance(api_key, dict):
         return
-    # Deliberately not ``limits``: that is balancer's own quota input, and it
-    # stamps it itself from the same payload.
+    # Deliberately not ``limits``: that is the gateway's per-request ceiling,
+    # and every worker-side quota is resolved from the ``quota`` schema instead.
     object.__setattr__(user, "_api_key_id", api_key.get("id"))
     object.__setattr__(user, "_api_key_public_id", api_key.get("public_id"))
     object.__setattr__(user, "_api_key_workspace_id", api_key.get("workspace_id"))

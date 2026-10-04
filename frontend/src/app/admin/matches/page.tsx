@@ -151,7 +151,6 @@ export default function AdminMatchesPage() {
           workspaceId={workspaceId}
           encounters={[]}
           canUploadLogs={false}
-          enabled
         />
       ) : null}
     </div>

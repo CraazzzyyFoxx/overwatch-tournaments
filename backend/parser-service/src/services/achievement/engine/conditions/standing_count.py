@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.achievements.achievement import AchievementGrain
 from src import models
-from src.domain.achievement_stage_filters import standing_is_elimination
+from src.domain.achievement_stage_filters import stage_is_completed, standing_is_elimination
 
 from ..context import EvalContext
 from . import ResultSet, register
@@ -29,7 +29,7 @@ from .stat_threshold import OPERATORS
     description="How many times a standing position was reached",
     required=("op", "value"),
     optional=("count_by", "is_league", "position_op", "position_value"),
-    depends_on=("tournament.standing", "tournament.player"),
+    depends_on=("tournament.stage", "tournament.standing", "tournament.player"),
 )
 async def execute_standing_count(
     session: AsyncSession,
@@ -64,6 +64,7 @@ async def execute_standing_count(
     where_clauses = [
         pos_fn(models.Standing.overall_position, position_value),
         standing_is_elimination(standing=models.Standing, stage=models.Stage),
+        stage_is_completed(stage=models.Stage),
         models.Tournament.workspace_id == context.workspace_id,
         models.Player.is_substitution.is_(False),
     ]

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.achievements.achievement import AchievementGrain
 from src import models
-from src.domain.achievement_stage_filters import standing_is_elimination, standing_is_groups
+from src.domain.achievement_stage_filters import stage_is_completed, standing_is_elimination, standing_is_groups
 
 from ..context import EvalContext
 from . import ResultSet, register
@@ -45,7 +45,7 @@ def _standing_base_query() -> sa.Select:
     description="Final standing position in the tournament",
     required=("op", "value"),
     optional=("include_groups",),
-    depends_on=("tournament.standing", "tournament.player"),
+    depends_on=("tournament.stage", "tournament.standing", "tournament.player"),
 )
 async def execute_position(
     session: AsyncSession,
@@ -61,6 +61,7 @@ async def execute_position(
         op_fn(models.Standing.overall_position, value),
         models.Tournament.workspace_id == context.workspace_id,
         models.Player.is_substitution.is_(False),
+        stage_is_completed(stage=models.Stage),
     ]
     if not include_groups:
         where_clauses.append(
@@ -85,7 +86,7 @@ async def execute_position(
     description="Win/loss/draw record on a standings row",
     required=("field", "op", "value"),
     optional=("groups_only", "include_groups"),
-    depends_on=("tournament.standing", "tournament.player"),
+    depends_on=("tournament.stage", "tournament.standing", "tournament.player"),
 )
 async def execute_record(
     session: AsyncSession,
@@ -120,6 +121,7 @@ async def execute_record(
         op_fn(column, value),
         models.Tournament.workspace_id == context.workspace_id,
         models.Player.is_substitution.is_(False),
+        stage_is_completed(stage=models.Stage),
     ]
     if groups_only:
         where_clauses.append(

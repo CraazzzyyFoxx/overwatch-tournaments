@@ -29,7 +29,6 @@ export default function LogsViewPage() {
           workspaceId={workspaceId}
           encounters={encountersQuery.data?.results ?? []}
           canUploadLogs={canAccessPermission("match.update", workspaceId)}
-          enabled
         />
       )}
     </MatchesView>

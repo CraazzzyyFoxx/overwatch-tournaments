@@ -97,6 +97,17 @@ class EncounterService:
         )
         return set(result.scalars().all())
 
+    async def encounter_ids_with_map(
+        self, session: AsyncSession, encounter_ids: typing.Sequence[int], map_id: int
+    ) -> set[int]:
+        """Which of ``encounter_ids`` already hold a parsed match on ``map_id``."""
+        result = await session.execute(
+            sa.select(models.Match.encounter_id)
+            .where(models.Match.encounter_id.in_(encounter_ids), models.Match.map_id == map_id)
+            .distinct()
+        )
+        return set(result.scalars().all())
+
     async def create_match(
         self,
         session: AsyncSession,
@@ -133,4 +144,5 @@ encounter_service = EncounterService()
 get_match_by_encounter_and_map = encounter_service.get_match_by_encounter_and_map
 list_by_teams = encounter_service.list_by_teams
 encounter_ids_with_log = encounter_service.encounter_ids_with_log
+encounter_ids_with_map = encounter_service.encounter_ids_with_map
 create_match = encounter_service.create_match

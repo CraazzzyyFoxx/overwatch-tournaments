@@ -87,6 +87,18 @@ type Config struct {
 	// GATEWAY_API_KEY_RATE_LIMIT <= 0 disables per-key throttling entirely
 	// (the balancer worker still enforces its own Redis-backed job quotas).
 	APIKeyRateLimit int
+	// EdgeWorkspaceMetering turns on per-workspace request metering at the
+	// gateway edge: EVERY REST request (API key, session, anonymous) is counted
+	// against its workspace's q:ws:{id}:rpm bucket and refused when the
+	// workspace-scope requests_per_minute ceiling is crossed. Traffic that
+	// cannot be attributed to a member (anonymous or non-member) is counted in a
+	// statistics-only q:pub:ws:{id}:rpm bucket and never refused.
+	//
+	// Off by default, and OFF means byte-for-byte today's behaviour (per-key
+	// metering only). Shared with the Python enforcer
+	// (QUOTA_EDGE_WORKSPACE_METERING in backend/env/common.env): when it is on,
+	// Python stops charging q:ws itself because the gateway owns that bucket.
+	EdgeWorkspaceMetering bool
 	// ResponseCacheTTL is the staleness backstop for the gateway's in-memory
 	// response cache on anonymous public tournament reads (internal/respcache).
 	// Invalidation is event-driven (the worker's tournament_changed consumer
@@ -208,6 +220,7 @@ func Load() (*Config, error) {
 		AnonRateLimit:            getenvInt("GATEWAY_ANON_RATE_LIMIT", 0), // 0 = disabled (pass-through)
 		AnonRateWindow:           time.Duration(getenvInt("GATEWAY_ANON_RATE_WINDOW", 10)) * time.Second,
 		APIKeyRateLimit:          getenvInt("GATEWAY_API_KEY_RATE_LIMIT", 60),
+		EdgeWorkspaceMetering:    getenvBool("QUOTA_EDGE_WORKSPACE_METERING", false),
 		ResponseCacheTTL:         time.Duration(getenvInt("GATEWAY_RESPONSE_CACHE_TTL", 30)) * time.Second,
 		RPCMaxInFlight:           getenvInt("GATEWAY_RPC_MAX_INFLIGHT", 64),
 		Sentry: Sentry{

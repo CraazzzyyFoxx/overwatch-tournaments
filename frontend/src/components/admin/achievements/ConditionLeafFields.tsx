@@ -119,7 +119,7 @@ export function ConditionLeafFields({
         </div>
       )}
       {/* ── op + value conditions ── */}
-      {(conditionType === "standing_position" || conditionType === "tournament_count" || conditionType === "div_level") && (
+      {(conditionType === "standing_position" || conditionType === "tournament_count" || conditionType === "div_level" || conditionType === "stage_completed") && (
         <div className="flex gap-1">
           <Select value={(params.op as string) ?? "=="} onValueChange={(v) => setParam("op", v)}>
             <SelectTrigger className="h-7 text-xs w-16" aria-label={controlName("Operator")}><SelectValue /></SelectTrigger>

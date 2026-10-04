@@ -62,6 +62,7 @@ configure_quota(
     session_factory=db.async_session_maker,
     redis_url=config.redis_url,
     enabled=config.quota_enabled,
+    edge_workspace_metering=config.quota_edge_workspace_metering,
 )
 
 # Typed-RPC subscribers replacing the HTTP balancer-service behind the Go gateway.

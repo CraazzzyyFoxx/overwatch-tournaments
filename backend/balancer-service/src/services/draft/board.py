@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
+from uuid import uuid4
 
 import sqlalchemy as sa
 from cashews import cache
@@ -46,6 +49,77 @@ _SHARED_READ_TTL = "15s"
 def _shared_read_key(session_id: int, version: int, last_event_id: int | None, parts: tuple[Any, ...]) -> str:
     tail = ":".join(str(part) for part in parts)
     return f"backend:balancer:draft_read:{session_id}:{version}:{last_event_id or 0}:{tail}"
+
+
+# Cross-replica single flight. The in-process map folds a replica's own burst,
+# but every replica still rebuilds the same answer for a new board state: with
+# three replicas that was three identical snapshot rebuilds per pick
+# (2026-09-30). The TTL must outlive a realistic compute -- p50 was 8s at the
+# peak of the incident -- yet stay under the gateway's 15s read deadline, so a
+# dead leader's lock clears while its followers can still answer in time.
+_LOCK_TTL_SECONDS = 10.0
+_LOCK_POLL_SECONDS = 0.1
+
+
+async def _cached(key: str) -> Any | None:
+    try:
+        return await cache.get(key)
+    except Exception:  # noqa: BLE001 — cache is best-effort
+        return None
+
+
+async def _await_leader(key: str, lock_key: str) -> Any | None:
+    """Poll for the leader's answer; give up as soon as its lock is gone without one."""
+    deadline = time.monotonic() + _LOCK_TTL_SECONDS
+    while time.monotonic() < deadline:
+        await asyncio.sleep(_LOCK_POLL_SECONDS)
+        result = await _cached(key)
+        if result is not None:
+            return result
+        try:
+            if not await cache.is_locked(lock_key):
+                return None  # leader died, failed or was cancelled -- answer for ourselves
+        except Exception:  # noqa: BLE001 — cache is best-effort
+            return None
+    return None
+
+
+async def _compute_once[T](key: str, compute: Callable[[], Awaitable[T]], expire: str) -> T:
+    """Compute ``key`` once across replicas; the others reuse the stored answer.
+
+    Whoever wins the Redis ``SET NX PX`` lock computes, stores and releases;
+    the rest poll for that answer. A leader's failure is never a follower's
+    failure -- its lock disappears without a result and the follower computes
+    for itself -- and Redis is best-effort end to end: no cache, or any cache
+    error, just means everybody computes, as before.
+    """
+    if not cache.is_setup():
+        return await compute()
+    lock_key = f"{key}:lock"
+    token = uuid4().hex
+    try:
+        leader = await cache.set_lock(lock_key, token, expire=_LOCK_TTL_SECONDS)
+    except Exception:  # noqa: BLE001 — cache is best-effort
+        return await compute()
+    if not leader:
+        shared = await _await_leader(key, lock_key)
+        if shared is not None:
+            return shared
+    try:
+        result = await compute()
+        # Stored before the lock goes: a follower that sees the lock gone with
+        # no answer would compute for itself.
+        try:
+            await cache.set(key, result, expire=expire)
+        except Exception:  # noqa: BLE001 — cache is best-effort
+            pass
+    finally:
+        if leader:
+            try:
+                await cache.unlock(lock_key, token)
+            except Exception:  # noqa: BLE001 — cache is best-effort
+                pass
+    return result
 
 
 class VisibleCustomField(NamedTuple):
@@ -176,15 +250,21 @@ class DraftBoardService:
         # expired.
         last_event_id = await draft_rt.last_event_id(session, draft_session.tournament_id)
         cache_key = _board_cache_key(draft_session.id, last_event_id)
-        if cache.is_setup():
-            try:
-                cached = await cache.get(cache_key)
-            except Exception:  # noqa: BLE001 — cache is best-effort
-                cached = None
-            if cached is not None:
-                # server_time drives client clock sync; never serve a stale one.
-                return cached.model_copy(update={"server_time": datetime.now(UTC)})
+        cached: schemas.DraftBoardSnapshot | None = await _cached(cache_key) if cache.is_setup() else None
+        if cached is None:
+            cached = await single_flight(
+                cache_key,
+                lambda: _compute_once(
+                    cache_key, lambda: self._load_board(session, draft_session, last_event_id), _BOARD_CACHE_TTL
+                ),
+            )
+        # server_time drives client clock sync; never serve a stale one.
+        return cached.model_copy(update={"server_time": datetime.now(UTC)})
 
+    async def _load_board(
+        self, session: AsyncSession, draft_session: DraftSession, last_event_id: int | None
+    ) -> schemas.DraftBoardSnapshot:
+        """Build the public board snapshot from the database (no caching -- see ``build_board``)."""
         teams = await self.teams_repo.list_by_session(session, draft_session.id, options=loaders.team_options())
         picks = await self.picks_repo.list_by_session(session, draft_session.id, options=loaders.pick_options())
         players = await self.players_repo.list_by_session(session, draft_session.id, options=loaders.player_options())
@@ -225,11 +305,6 @@ class DraftBoardService:
             server_time=datetime.now(UTC),
             last_event_id=last_event_id,
         )
-        if cache.is_setup():
-            try:
-                await cache.set(cache_key, snapshot, expire=_BOARD_CACHE_TTL)
-            except Exception:  # noqa: BLE001 — cache is best-effort
-                pass
         return snapshot
 
     async def shared_read[T](
@@ -247,30 +322,18 @@ class DraftBoardService:
         Keyed like the board -- ``last_event_id`` -- plus the session's
         ``version``, so any persisted change is a new key; ``parts`` must carry
         whatever else the answer depends on that no event records (the team, its
-        private queue). Redis shares the answer across replicas; the in-flight map
-        folds the burst that arrives before the first answer lands. Read paths
-        only: a write that resolves after mutating would read its own past.
+        private queue). Read paths only: a write that resolves after mutating
+        would read its own past. One replica leads the computation for the whole
+        cluster (``_compute_once``); the in-flight map folds the burst that
+        arrives on this one before that answer lands.
         """
         event_id = await draft_rt.last_event_id(session, draft_session.tournament_id)
         key = _shared_read_key(draft_session.id, draft_session.version, event_id, parts)
         if cache.is_setup():
-            try:
-                cached = await cache.get(key)
-            except Exception:  # noqa: BLE001 — cache is best-effort
-                cached = None
+            cached = await _cached(key)
             if cached is not None:
                 return cached
-
-        async def compute_and_store() -> T:
-            result = await compute()
-            if cache.is_setup():
-                try:
-                    await cache.set(key, result, expire=_SHARED_READ_TTL)
-                except Exception:  # noqa: BLE001 — cache is best-effort
-                    pass
-            return result
-
-        return await single_flight(key, compute_and_store)
+        return await single_flight(key, lambda: _compute_once(key, compute, _SHARED_READ_TTL))
 
 
 board_service = DraftBoardService()

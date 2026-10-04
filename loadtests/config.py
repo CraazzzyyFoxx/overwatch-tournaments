@@ -29,3 +29,21 @@ SEED_TIMEOUT: float = float(os.getenv("OWT_SEED_TIMEOUT", "30"))
 
 #: Cap for how many ids of each entity the seeder keeps in its pools.
 SEED_POOL_SIZE: int = int(os.getenv("OWT_SEED_POOL_SIZE", "100"))
+
+# -- draft room scenario (draft_locustfile.py) ------------------------------
+
+#: Tournament whose LIVE draft the scenario drives. Required by that
+#: locustfile; the public suite ignores it.
+DRAFT_TOURNAMENT_ID: int | None = _int_or_none("OWT_DRAFT_TOURNAMENT_ID")
+
+#: Token for the draft room. Fit, queue and feasibility are AuthRequired and
+#: the driver's autopick needs the `team:create` workspace permission, so one
+#: organizer token covers every seat the scenario simulates.
+DRAFT_TOKEN: str = os.getenv("OWT_DRAFT_TOKEN", "").strip() or AUTH_TOKEN
+
+#: Seconds between the driver's autopicks — the event rate the room reacts to.
+DRAFT_PICK_INTERVAL: float = float(os.getenv("OWT_DRAFT_PICK_INTERVAL", "10"))
+
+#: How many of the viewers are organizers (they also re-read feasibility);
+#: the rest are captains holding one team each.
+DRAFT_ORGANIZERS: int = int(os.getenv("OWT_DRAFT_ORGANIZERS", "1"))

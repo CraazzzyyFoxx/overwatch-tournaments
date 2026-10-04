@@ -106,6 +106,10 @@ class QuotaScopeUsage(BaseModel):
     concurrent_used: int = 0
     max_upload_bytes: int | None = None
     max_items_per_request: int | None = None
+    #: Workspace scope only: requests in the current minute that named this
+    #: workspace from outside it (anonymous, signed-in non-members). Statistics,
+    #: never limited and not part of ``requests_used``. ``None`` on other scopes.
+    public_requests_used: int | None = None
 
 
 class QuotaScopePolicy(BaseModel):

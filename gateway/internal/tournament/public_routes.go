@@ -77,6 +77,7 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "PATCH", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_update_me", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_withdraw_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/check-in", Queue: "rpc.tournament.reg_pub_check_in", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/recheck", Queue: "rpc.tournament.reg_pub_recheck_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired, Success: 204},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/list", Queue: "rpc.tournament.reg_pub_list", Path: []string{"tournament_id"}, Auth: edge.AuthOptional, Timeout: regReadTimeout},
 	// `IDParam`, not `Path`: this dispatches into `reads.py`, whose handlers read
 	// the path id as `data["id"]` (see its module docstring). Declaring it as

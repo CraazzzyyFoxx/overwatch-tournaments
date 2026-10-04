@@ -151,11 +151,12 @@ function DirectoryUploadDialog({
       setListing({ handle, files, at });
       // The match just played: the newest log the game has stopped writing.
       const newestFinished = files.find((file) => at - file.lastModified >= WRITING_MS);
-      // Keep the user's own picks selected across a folder refresh.
-      setSelectedKeys((keys) => new Set([
-        ...Array.from(keys).filter((key) => key.startsWith("picked:")),
-        ...(newestFinished ? [`folder:${newestFinished.name}`] : [])
-      ]));
+      // Hand-picked files stay the selection across a refresh; only without them
+      // does the folder's newest log get preselected.
+      setSelectedKeys((keys) => {
+        const picks = Array.from(keys).filter((key) => key.startsWith("picked:"));
+        return new Set(picks.length || !newestFinished ? picks : [`folder:${newestFinished.name}`]);
+      });
       uploadMutation.reset();
     } catch (cause) {
       if (currentScanId === scanId.current) setError(t(`errors.${directoryErrorCode(cause)}`));
@@ -170,7 +171,11 @@ function DirectoryUploadDialog({
     const addedNames = new Set(added.map((file) => file.name));
     // Picking the same name again replaces the earlier pick.
     setPicked((current) => ({ files: [...added, ...current.files.filter((file) => !addedNames.has(file.name))], at: Date.now() }));
-    setSelectedKeys((keys) => new Set([...keys, ...added.map((file) => `picked:${file.name}`)]));
+    // Picking files by hand means "these ones": drop the folder's preselected newest log.
+    setSelectedKeys((keys) => new Set([
+      ...Array.from(keys).filter((key) => key.startsWith("picked:")),
+      ...added.map((file) => `picked:${file.name}`)
+    ]));
     uploadMutation.reset();
   }
 

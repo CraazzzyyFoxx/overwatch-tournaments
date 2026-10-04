@@ -2,7 +2,7 @@
 
 Extracted verbatim from the former ``src/routes/admin/logs.py`` HTTP route so the
 typed-RPC handlers (``src/rpc/logs.py``) keep emitting byte-identical payloads after
-the FastAPI face was removed. These are pure response models — no FastAPI imports.
+the FastAPI face was removed. No FastAPI imports.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ __all__ = (
     "QueueDepth",
     "LogRecordRead",
     "LogHistoryResponse",
+    "LogRetryRequest",
     "LogStatsRead",
     "LogUploadItem",
     "LogUploadError",
@@ -28,6 +29,12 @@ class QueueDepth(BaseModel):
     messages_unacknowledged: int
     consumers: int
     status: str = "ok"  # "ok" | "not_found" | "error"
+
+
+class LogRetryRequest(BaseModel):
+    # Attaches the log to this encounter before requeueing it: the way out of an
+    # `encounter_ambiguous` failure. Omitted = keep the current attachment.
+    encounter_id: int | None = None
 
 
 class LogRecordRead(BaseModel):
