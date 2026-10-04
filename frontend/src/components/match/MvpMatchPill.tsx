@@ -1,26 +1,18 @@
 "use client";
 
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MvpPill, formatOverperformance, mvpRank, ordinal, resolveMvpPlacement } from "@/components/match/cells";
 import { cn } from "@/lib/utils";
 import type { MatchWithUserStats } from "@/types/user.types";
 
 /** One "<label> … <rank chip>" line in the card. Shows an em dash when the rank is absent. */
-const RankRow = ({
-  label,
-  rank,
-  locale
-}: {
-  label: string;
-  rank: number | null | undefined;
-  locale: string;
-}) => (
+const RankRow = ({ label, rank }: { label: string; rank: number | null | undefined }) => (
   <div className="flex items-center justify-between gap-3">
     <span className="text-xs text-muted-foreground">{label}</span>
     {rank != null ? (
-      <MvpPill rank={mvpRank(rank)} label={ordinal(rank, locale)} />
+      <MvpPill rank={mvpRank(rank)} label={ordinal(rank)} />
     ) : (
       <span className="text-xs tabular-nums text-muted-foreground">—</span>
     )}
@@ -38,7 +30,6 @@ const RankRow = ({
  */
 export const MvpMatchPill = ({ match }: { match: MatchWithUserStats }) => {
   const t = useTranslations();
-  const locale = useLocale();
   const placement = resolveMvpPlacement(match);
   if (placement == null) return null;
 
@@ -49,7 +40,7 @@ export const MvpMatchPill = ({ match }: { match: MatchWithUserStats }) => {
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="cursor-default">
-          <MvpPill rank={mvpRank(placement)} label={ordinal(placement, locale)} />
+          <MvpPill rank={mvpRank(placement)} label={ordinal(placement)} />
         </span>
       </TooltipTrigger>
       {/* Override the tooltip's default solid-primary surface with the popover card look. */}
@@ -69,8 +60,8 @@ export const MvpMatchPill = ({ match }: { match: MatchWithUserStats }) => {
           <p className="text-label font-semibold uppercase tracking-wide text-muted-foreground">
             {t("users.matches.mvp.title")}
           </p>
-          <RankRow label={t("users.matches.mvp.newRank")} rank={match.impact_rank} locale={locale} />
-          <RankRow label={t("users.matches.mvp.oldRank")} rank={match.performance} locale={locale} />
+          <RankRow label={t("users.matches.mvp.newRank")} rank={match.impact_rank} />
+          <RankRow label={t("users.matches.mvp.oldRank")} rank={match.performance} />
           {over ? (
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">{t("users.matches.overperformanceBadge")}</span>
