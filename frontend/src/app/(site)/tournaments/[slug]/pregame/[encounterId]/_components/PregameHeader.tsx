@@ -523,7 +523,7 @@ function SeriesStrip({ series }: Readonly<{ series: PregameSeriesMap[] }>) {
   const t = useTranslations("pickBan.room");
 
   return (
-    <ol aria-label={t("series.label")} className="flex flex-wrap items-start gap-4">
+    <ol aria-label={t("series.label")} className="flex flex-wrap gap-4">
       {series.map((map) => {
         const awaiting = map.state === "awaiting";
         const stateLabel = awaiting
@@ -581,10 +581,11 @@ function SeriesStrip({ series }: Readonly<{ series: PregameSeriesMap[] }>) {
             </span>
             {/* Two lines, not one: "Watchpoint: Gibraltar" truncated to
                 "Watchpoint: …" at a single line of this width, which named
-                nothing. The fixed height keeps every column's score aligned. */}
+                nothing. No fixed height: the row stretches every column to the
+                tallest, and the score's `mt-auto` keeps them aligned. */}
             <span
               title={map.name}
-              className="line-clamp-2 h-[2.2rem] w-full text-center text-label font-medium leading-tight"
+              className="line-clamp-2 w-full text-center text-label font-medium leading-tight"
             >
               {map.name}
             </span>
@@ -593,7 +594,7 @@ function SeriesStrip({ series }: Readonly<{ series: PregameSeriesMap[] }>) {
                 caption here wrapped to two lines and knocked every column out
                 of alignment. */}
             {map.score != null ? (
-              <span className="font-onest text-sm font-semibold tabular-nums">
+              <span className="mt-auto inline-flex items-baseline gap-1 font-onest text-sm font-semibold tabular-nums">
                 <span style={{ color: "var(--aqt-teal)" }}>{map.score.home}</span>
                 <span className="text-[color:var(--aqt-fg-faint)]">:</span>
                 <span style={{ color: "var(--aqt-rose)" }}>{map.score.away}</span>
