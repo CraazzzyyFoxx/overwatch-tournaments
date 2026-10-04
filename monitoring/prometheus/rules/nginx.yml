@@ -16,13 +16,15 @@ groups:
         expr: rate(nginx_http_requests_total[5m])
 
       # Rejections and would-be rejections in one series, so the dashboards and
-      # alerts below do not need editing when dry_run is turned off.
+      # alerts below do not need editing when dry_run is turned off. Alloy
+      # exports these with its default `loki_process_custom_` prefix (an empty
+      # `prefix` is ignored), and a dry-run series exists only once it has
+      # counted something: one sum over a name regex, because `sum(a) + sum(b)`
+      # is empty whenever either side is — this rule recorded nothing until
+      # 2026-10-04, through the whole 2026-09-30 flood.
       - record: nginx:limit_rejected:rate5m
         expr: |
-          sum(rate(nginx_limit_req_rejected_total[5m]))
-          + sum(rate(nginx_limit_req_rejected_dry_run_total[5m]))
-          + sum(rate(nginx_limit_conn_rejected_total[5m]))
-          + sum(rate(nginx_limit_conn_rejected_dry_run_total[5m]))
+          sum(rate({__name__=~"loki_process_custom_nginx_limit_(req|conn)_rejected(_dry_run)?_total"}[5m]))
 
   - name: nginx-alerts
     interval: 30s
@@ -52,6 +54,54 @@ groups:
             Sustained limit_req/limit_conn rejections for 5 minutes. Check the
             nginx job in Loki, grouped by uri and remote_addr, to tell a flood
             from a mis-sized zone.
+
+      # Rejections as a share of all traffic. The absolute spike above stays
+      # quiet while a flood is small; on 2026-09-30 nearly every request was a
+      # 429 within a minute of the 1 r/s homepage limit going in.
+      - alert: NginxRejectedShareHigh
+        expr: |
+          nginx:limit_rejected:rate5m / sum(nginx:requests:rate5m) > 0.2
+          and sum(nginx:requests:rate5m) > 5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of nginx requests are rejected with 429"
+          description: >-
+            More than a fifth of all requests hit a limit_req/limit_conn zone for
+            3 minutes. A flood or a zone sized too tightly; group the nginx job in
+            Loki by uri and remote_addr.
+
+      # The homepage document is the 2026-09-30 flood target (222 952 requests a
+      # minute at the peak). Normal traffic is at most ~150 an hour, so one a
+      # second for two minutes is already a flood, whatever the cache absorbs.
+      - alert: HomepageRequestSurge
+        expr: sum(rate(loki_process_custom_nginx_root_requests_total[2m])) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Homepage requests at {{ $value | printf \"%.1f\" }}/s"
+          description: >-
+            "/" is normally loaded a few times a minute at most. Check the nginx
+            job in Loki for the sources and the HAProxy ban table.
+
+      # nginx and the gateway run under a CPU quota. A throttled edge delays
+      # every request on the site, not one route. Measured baseline: under 0.2%
+      # of periods; 2026-09-30 pinned nginx at 99.9% (stray `tail` processes
+      # inside the container shared its single CPU).
+      - alert: EdgeCpuThrottled
+        expr: |
+          rate(container_cpu_cfs_throttled_periods_total{job="cadvisor",name=~"owt-(nginx|gateway)-[0-9]+"}[5m])
+          / rate(container_cpu_cfs_periods_total{job="cadvisor",name=~"owt-(nginx|gateway)-[0-9]+"}[5m]) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} is CPU-throttled in {{ $value | humanizePercentage }} of periods"
+          description: >-
+            The container keeps hitting its CPU limit. Check `docker top` for
+            processes that do not belong there before raising the limit.
 
       # `reading` counts connections whose request headers are still arriving.
       # Steady-state this sits near zero; a sustained pile-up with flat request

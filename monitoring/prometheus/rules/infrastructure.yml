@@ -46,6 +46,41 @@ groups:
           summary: "Host memory usage above 90%"
           description: "The host has been using more than 90% of RAM for 10 minutes. OOM kills are likely next."
 
+      # HostMemoryHigh waits 10 minutes; on 2026-09-30 available memory fell
+      # from 3.3 GB to 0.96 GB in four, and swap was full a minute later. Normal
+      # floor over the following days: 2.5 GB available (20%).
+      - alert: HostMemoryCritical
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.12
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host available memory at {{ $value | humanizePercentage }}"
+          description: "Less than 12% of RAM is available. Swap and OOM kills follow within minutes; find the container that is growing."
+
+      # Baseline swap use is 0.3-0.9 GB of 4.3 GB. On 2026-09-30 it filled
+      # completely in three minutes and SSH stopped answering.
+      - alert: HostSwapFilling
+        expr: |
+          (1 - node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes) > 0.5
+          and node_memory_SwapTotal_bytes > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host swap {{ $value | humanizePercentage }} full"
+          description: "The host is swapping hard; everything slows down, SSH included. Free memory before it fills."
+
+      # /proc/vmstat oom_kill counts every kernel OOM kill, cgroup-limited
+      # container kills included (gateway and nginx on 2026-09-30).
+      - alert: OomKill
+        expr: increase(node_vmstat_oom_kill[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kernel OOM-killed {{ $value | printf \"%.0f\" }} process(es) in 5 minutes"
+          description: "A container hit its memory limit (or the host ran out). `dmesg | grep -i oom` names the process and its cgroup."
+
       - alert: HostCpuHigh
         expr: |
           1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
