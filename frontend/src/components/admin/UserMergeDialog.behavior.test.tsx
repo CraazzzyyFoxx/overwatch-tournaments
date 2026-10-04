@@ -225,7 +225,9 @@ describe("profile/auth merge review boundaries", () => {
     await click(button("Merge and delete source"));
     expect(executeMerge).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("Run “Preview merge” for the current account choices");
-    await click(button("Preview merge"));
+    const previewButtons = Array.from(document.body.querySelectorAll("button")).filter((item) => item.textContent?.trim() === "Preview merge");
+    expect(previewButtons).toHaveLength(2);
+    await click(previewButtons[1]);
     await acknowledge("I reviewed the OAuth destinations");
     await acknowledge("I understand that Source");
     await click(button("Merge and delete source"));
