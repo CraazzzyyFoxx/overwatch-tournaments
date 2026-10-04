@@ -342,8 +342,9 @@ beforeEach(() => {
   deleteUser.mockReset().mockResolvedValue(undefined);
   assignRole.mockReset().mockResolvedValue(undefined);
   const notifications = {
-    discord_dm: { tournament: true, matches: true, team: true },
+    discord_dm: { tournament: true, matches: true, team: true, staff: true },
     discord_linked: true,
+    staff_workspaces: [],
     unread_count: 2,
     recent_deliveries: []
   };
