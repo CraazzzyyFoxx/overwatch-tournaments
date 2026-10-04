@@ -187,8 +187,8 @@ class ResolutionTests(IsolatedAsyncioTestCase):
     async def test_no_rows_at_all_means_unlimited(self) -> None:
         resolved = await _Policy().resolve(operation="op", principal_scope="key", api_key_id=7, workspace_id=1)
 
-        self.assertFalse(resolved.principal.counts_anything)
-        self.assertFalse(resolved.workspace.counts_anything)
+        self.assertEqual(QuotaLimits(), resolved.principal)
+        self.assertEqual(QuotaLimits(), resolved.workspace)
 
     async def test_a_principal_outside_any_tenant_still_gets_a_plan(self) -> None:
         """The hole a smoke test found: no workspace resolved no plan at all,
@@ -214,7 +214,7 @@ class ChargeCallTests(IsolatedAsyncioTestCase):
                 "q:ws:42:rpm",
                 script.keys[1],
                 "q:ws:42:heavy:active",
-                "q:key:7:rpm",
+                "",  # the key's minute is the gateway's (q:key:7:rpm)
                 script.keys[4],
                 "q:key:7:heavy:active",
             ],
@@ -239,24 +239,6 @@ class ChargeCallTests(IsolatedAsyncioTestCase):
         await gate.charge(user, "balancer.jobs.read")
 
         self.assertEqual("q:ws:42:rpm", script.keys[0])
-
-    async def test_a_scope_that_bounds_nothing_gets_no_keys(self) -> None:
-        """An unconfigured tenant budget must not spawn a counter per minute."""
-        script = _Script()
-        gate = enforcer(_Policy(plan={"key": PLAN}), script)
-
-        await gate.charge(api_key_user(), "balancer.job", workspace_id=42)
-
-        self.assertEqual(["", "", ""], script.keys[:3])
-        self.assertEqual(-1, script.args[7])
-
-    async def test_nothing_is_charged_when_no_scope_is_configured(self) -> None:
-        script = _Script()
-        gate = enforcer(_Policy(), script)
-
-        await gate.charge(api_key_user(), "balancer.job", workspace_id=42)
-
-        self.assertEqual(0, script.calls)
 
     async def test_the_kill_switch_short_circuits_before_policy_and_redis(self) -> None:
         script = _Script()
@@ -381,7 +363,7 @@ class QuotaScriptTests(IsolatedAsyncioTestCase):
         await self.redis.aclose()
 
     async def _flush(self) -> None:
-        for namespace in ("ws", "key"):
+        for namespace in ("ws", "key", "user", "pub:ws"):
             async for key in self.redis.scan_iter(match=f"q:{namespace}:{os.getpid()}*"):
                 await self.redis.delete(key)
 
@@ -389,9 +371,9 @@ class QuotaScriptTests(IsolatedAsyncioTestCase):
         return QuotaEnforcer(policy=policy, redis_client=self.redis)
 
     async def test_the_window_refuses_the_call_past_the_limit(self) -> None:
-        policy = _Policy(plan={"key": QuotaLimits(requests_per_minute=2)}, plan_slug=DEFAULT_PLAN_SLUG)
+        policy = _Policy(plan={"session": QuotaLimits(requests_per_minute=2)}, plan_slug=DEFAULT_PLAN_SLUG)
         gate = self._gate(policy)
-        user = api_key_user(api_key_id=os.getpid())
+        user = session_user(user_id=os.getpid())
 
         await gate.charge(user, "op")
         await gate.charge(user, "op")
@@ -399,7 +381,19 @@ class QuotaScriptTests(IsolatedAsyncioTestCase):
             await gate.charge(user, "op")
 
         self.assertEqual("requests_per_minute", caught.exception.detail["limit_name"])
-        self.assertEqual("key", caught.exception.detail["scope"])
+        self.assertEqual("session", caught.exception.detail["scope"])
+
+    async def test_a_keyed_call_the_gateway_admitted_at_its_ceiling_is_not_charged_again(self) -> None:
+        """The gateway spends ``q:key:{id}:rpm`` on every keyed request. Charging
+        a metered call into it again billed the key twice and refused the very
+        request the edge had just let through at the ceiling."""
+        key = os.getpid()
+        policy = _Policy(plan={"key": QuotaLimits(requests_per_minute=2)}, plan_slug=DEFAULT_PLAN_SLUG)
+        await self.redis.set(f"q:key:{key}:rpm", 2, ex=60)
+
+        await self._gate(policy).charge(api_key_user(api_key_id=key), "op")
+
+        self.assertEqual("2", await self.redis.get(f"q:key:{key}:rpm"))
 
     async def test_the_tenant_budget_is_not_spent_when_the_key_refuses(self) -> None:
         """All-or-nothing: a retry loop must not drain a pool it never used."""
@@ -432,3 +426,45 @@ class QuotaScriptTests(IsolatedAsyncioTestCase):
         held = await gate.lease(user, "op", ttl_seconds=60, lease_id="live")
 
         self.assertEqual("live", held.lease_id)
+
+    async def test_a_workspace_without_a_ceiling_still_reports_its_spend(self) -> None:
+        """No ``workspace`` row is seeded, so this is every tenant by default:
+        the budget view must show what was spent, not a permanent zero."""
+        gate = self._gate(_Policy(plan={"key": PLAN}))
+        user = api_key_user(api_key_id=os.getpid())
+
+        await gate.charge(user, "op", workspace_id=os.getpid())
+        await gate.charge(user, "op", workspace_id=os.getpid())
+
+        report = await gate.usage(principal_kind="api_key", principal_id=os.getpid(), workspace_id=os.getpid())
+        workspace = report["scopes"][0]
+        self.assertEqual(
+            ("workspace", None, 2), (workspace["scope"], workspace["requests_per_minute"], workspace["requests_used"])
+        )
+
+    async def test_under_edge_metering_a_metered_call_leaves_the_workspace_minute_to_the_gateway(self) -> None:
+        """The gateway already counted this request and admitted it at the
+        ceiling: re-checking would refuse the call it just let through, and
+        counting it again would spend the tenant's minute twice."""
+        ws = os.getpid()
+        policy = _Policy(plan={"workspace": QuotaLimits(requests_per_minute=1, heavy_per_day=10)}, costs={"op": 1})
+        gate = QuotaEnforcer(policy=policy, redis_client=self.redis, edge_workspace_metering=True)
+        await self.redis.set(f"q:ws:{ws}:rpm", 1, ex=60)
+
+        await gate.charge(session_user(user_id=ws), "op", workspace_id=ws)
+
+        report = await gate.usage(principal_kind="user", principal_id=ws, workspace_id=ws)
+        workspace = report["scopes"][0]
+        self.assertEqual((1, 1), (workspace["requests_used"], workspace["heavy_used"]))
+
+    async def test_the_workspace_reports_public_traffic_apart_from_its_budget(self) -> None:
+        ws = os.getpid()
+        gate = self._gate(_Policy())
+        await self.redis.set(f"q:pub:ws:{ws}:rpm", 5, ex=60)
+
+        report = await gate.usage(principal_kind="user", principal_id=ws, workspace_id=ws)
+
+        self.assertEqual(
+            [("workspace", 0, 5), ("session", 0, None)],
+            [(row["scope"], row["requests_used"], row["public_requests_used"]) for row in report["scopes"]],
+        )

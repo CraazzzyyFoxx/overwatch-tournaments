@@ -13,13 +13,19 @@ budget. This is the client-facing contract; the enforcement code is `backend/sha
 
 ## 1. What is metered
 
-Reads are not metered. Writes and compute are: every operation that spends CPU, storage or a
-third-party API quota calls the shared gate before it starts, and the gate either lets it through or
-refuses it.
+Reads are not metered per principal. Writes and compute are: every operation that spends CPU,
+storage or a third-party API quota calls the shared gate before it starts, and the gate either lets
+it through or refuses it. The **workspace** per-minute budget is the exception: with edge metering on
+(`QUOTA_EDGE_WORKSPACE_METERING`, §11) the gateway counts *every* REST request of the tenant into it,
+reads included.
 
 Each metered call spends **two** things:
 
-1. **One request token**, always, against `requests_per_minute`.
+1. **One request token**, always, against `requests_per_minute`. For an **API key** the token is
+   spent by the gateway on *every* request, metered or not, and the call is not charged a second
+   one when it reaches the gate; the key's ceiling is its effective `key`-scope value (key override,
+   else workspace override, else plan), carried to the gateway on the validated credential. For an
+   interactive **session** the token is spent by the gate, on metered calls only.
 2. **The operation's cost** in *heavy units*, against `heavy_per_day` — but only if the operation is
    priced. An operation with no row in the catalogue (§5) costs nothing beyond its request token.
 
@@ -215,8 +221,10 @@ Two behaviours worth relying on:
 - **A failed heavy job is not refunded.** `heavy_per_day` is charged when the job is admitted, not
   when it succeeds: a failed expensive job consumed the same CPU as a successful one.
 
-The 429 is also what the edge returns when the gateway's own per-key bucket refuses first — same
-`code`, same body shape — so branch on `rate_limited` rather than on which layer answered.
+The 429 for an API key's `requests_per_minute` comes from the gateway, before any worker sees the
+request — same `code`, same body shape — so branch on `rate_limited` rather than on which layer
+answered. A change to a key's override reaches the gateway within about a minute (the policy cache
+of identity-service) plus 5 s (the gateway's credential cache).
 
 ## 7. Rate-limit headers
 
@@ -273,6 +281,10 @@ counter, `*_reset_in` the seconds until it rolls. The `scopes` list carries the 
 and the principal entry (`key` or `session`) second — which is exactly the pair of bars to render, and
 the cheapest way to answer "is it me or is it us?" before opening a support ticket.
 
+The workspace entry also carries `public_requests_used`: requests in the current minute that named
+this workspace from outside it (§11). It is statistics only — not part of `requests_used`, never
+limited — and `null` on the principal entry.
+
 Both are RPC subjects: no HTTP route is exposed at the edge for them yet. They are declared in
 identity-service's `OPERATIONS`/`DOCS` tables, so they appear in the generated reference at
 `/api/docs` as soon as a gateway route lands.
@@ -280,7 +292,8 @@ identity-service's `OPERATIONS`/`DOCS` tables, so they appear in the generated r
 ## 9. What is not metered
 
 - **Anonymous public reads.** Tournament pages, standings and other unauthenticated `GET`s spend no
-  quota. They are bounded at the edge instead: nginx allows 40 r/s per client IP across the whole API
+  quota (with edge metering they are *counted* per workspace as public traffic, §11, but never
+  refused). They are bounded at the edge instead: nginx allows 40 r/s per client IP across the whole API
   with a burst of 120, 10 r/m on the upload endpoints, and 100 concurrent in-flight requests per IP
   (`nginx/nginx.conf`, the `req_edge` / `req_upload` / `conn_edge` zones). The gateway additionally
   has a per-IP anonymous bucket, disabled by default (`GATEWAY_ANON_RATE_LIMIT`,
@@ -319,5 +332,36 @@ the platform operators for anything that raises a ceiling.
 | Live edits (plans, prices, per-workspace and per-key overrides) | the admin surface over the `quota` schema — `rpc.quota.plan.*`, `rpc.quota.operation.*`, `rpc.app.workspaces.quota_set`, `rpc.identity.api_key.quota_set` |
 | Disable one operation | set its `enabled = false` in `quota.operation`; it takes effect without a deploy |
 | Disable the whole gate | `QUOTA_ENABLED=false` (restart-scoped; [`backend/shared/core/config.py`](../backend/shared/core/config.py)) |
+| Count every request into the workspace budget at the edge | `QUOTA_EDGE_WORKSPACE_METERING` (§11; restart gateway **and** workers) |
 | Enforcement itself | [`backend/shared/quota/`](../backend/shared/quota/) |
 | Edge per-key bucket | `GATEWAY_API_KEY_RATE_LIMIT` (default 60/min for a key with no `requests_per_minute` of its own), `gateway/internal/config/config.go` |
+
+## 11. Edge workspace metering
+
+`QUOTA_EDGE_WORKSPACE_METERING=true` (shared `backend/env/common.env`, read by the gateway and every
+worker; default `false` when unset) moves the workspace per-minute bucket to the gateway:
+
+| Request | Counted into | Refused by the workspace ceiling |
+|---|---|---|
+| API key | its own `key` bucket (as before) **and** its workspace's bucket | yes |
+| Session, `workspace_id` names a workspace the user belongs to (or a superuser) | that workspace's bucket | yes |
+| Session, no `workspace_id`, member of exactly one workspace | that workspace's bucket | yes |
+| Session naming a workspace it does not belong to; anonymous request naming any workspace | that workspace's **public** counter | never |
+| Anything that names no workspace | nothing | — |
+
+Only a credential can spend a tenant's budget: `workspace_id` in the query string is chosen by the
+client, so a request from outside the workspace is never charged to it — otherwise anyone could
+exhaust a tenant's budget by naming it. Interactive sessions get no per-user bucket at the edge (the
+`session` plan's 120/min is sized for metered operations, not for a UI page load), and still get no
+`RateLimit-*` headers.
+
+The ceiling is the workspace scope's effective `requests_per_minute` (workspace override, else plan),
+read by the gateway from the `quota` tables with a 60 s cache, so an edit takes up to a minute to
+reach every replica — the same window the workers have. While the flag is on, the workers neither
+check nor count that bucket for metered calls (the gateway already did, for the same request); their
+`heavy_per_day` and concurrency accounting is unchanged. Redis unreachable: the request is allowed
+uncounted, as for the per-key bucket.
+
+Cost: one Redis script per counted request (the per-key bucket already paid one; the workspace key
+rides in the same call) and one cached Postgres lookup per workspace per minute per replica.
+

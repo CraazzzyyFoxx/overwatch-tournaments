@@ -64,16 +64,6 @@ class QuotaLimits:
     max_upload_bytes: int | None = None
     max_items_per_request: int | None = None
 
-    @property
-    def counts_anything(self) -> bool:
-        """Whether this scope has any counter at all.
-
-        A scope that bounds nothing gets no Redis keys: an unconfigured
-        workspace budget must not spawn a counter per tenant per minute just to
-        compare it against ``None``.
-        """
-        return any(getattr(self, name) is not None for name in _COUNTERS)
-
     @classmethod
     def of(cls, row: Any) -> QuotaLimits:
         return cls(**{name: getattr(row, name) for name in (*_COUNTERS, *_CAPS)})

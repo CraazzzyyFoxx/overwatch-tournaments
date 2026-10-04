@@ -98,6 +98,21 @@ const (
 	// is lazily materialized, so "no row" is not "no such room": it means the
 	// room still runs on its kind's default — see roomSpectatorReadDefault.
 	roomSpectatorReadSQL = `SELECT spectators_can_read FROM chat_room_settings WHERE room_kind = $1 AND room_ref_id = $2`
+	// Effective workspace-scope requests_per_minute, resolved exactly the way
+	// PolicyStore does in backend/shared/quota/policy.py: the workspace's own
+	// override, else its plan's row, else NULL (unlimited). The plan is the
+	// explicitly assigned one when there is one, otherwise the plan named after
+	// the workspace's verification_status tier. One row per call, all lookups
+	// by primary key or unique index.
+	workspaceRPMSQL = `SELECT COALESCE(
+		(SELECT wl.requests_per_minute FROM quota.workspace_limit wl
+		  WHERE wl.workspace_id = w.id AND wl.scope = 'workspace'),
+		(SELECT pl.requests_per_minute FROM quota.plan_limit pl
+		  WHERE pl.scope = 'workspace'
+		    AND pl.plan_id = COALESCE(
+		      (SELECT p.id FROM quota.plan p WHERE p.id = w.quota_plan_id),
+		      (SELECT p.id FROM quota.plan p WHERE p.slug = w.verification_status)))
+	) FROM workspace w WHERE w.id = $1`
 
 	tournamentCacheTTL = 5 * time.Minute
 	// Matches the auth-service RBAC cache TTL, so membership changes propagate
@@ -129,6 +144,12 @@ const (
 	// long ANOTHER gateway process can keep admitting new subscribes on the old
 	// answer.
 	roomSettingsCacheTTL = 15 * time.Second
+	// A quota change (plan move, superuser override) should take effect within
+	// about a minute, same window as membershipCacheTTL. Bounded like
+	// customDomains and for the same reason: the key is a workspace id taken
+	// from an anonymous request's query string.
+	workspaceRPMCacheTTL        = 60 * time.Second
+	workspaceRPMCacheMaxEntries = 4096
 )
 
 // Store answers ACL lookups against the database, with small TTL caches.
@@ -145,6 +166,7 @@ type Store struct {
 	draftCaptains *ttlCache[draftCaptainKey, bool]
 	draftTourn    *ttlCache[int64, int64]
 	roomSettings  *ttlCache[roomKey, bool]
+	wsRPM         *ttlCache[int64, wsRPM]
 }
 
 type memberKey struct {
@@ -168,6 +190,14 @@ type roomKey struct {
 	refID int64
 }
 
+// wsRPM is one cached answer of WorkspaceRequestsPerMinute. The zero value is
+// the "no such workspace" answer, which is cached like any other.
+type wsRPM struct {
+	limit   int
+	limited bool
+	exists  bool
+}
+
 // New returns a workspace Store backed by the given pool.
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
@@ -183,6 +213,7 @@ func New(pool *pgxpool.Pool) *Store {
 		draftCaptains: newTTLCache[draftCaptainKey, bool](membershipCacheTTL),
 		draftTourn:    newTTLCache[int64, int64](tournamentCacheTTL),
 		roomSettings:  newTTLCache[roomKey, bool](roomSettingsCacheTTL),
+		wsRPM:         newBoundedTTLCache[int64, wsRPM](workspaceRPMCacheTTL, workspaceRPMCacheMaxEntries),
 	}
 }
 
@@ -220,6 +251,45 @@ func (s *Store) IsWorkspaceMember(ctx context.Context, userID, workspaceID int64
 
 	s.members.set(key, member)
 	return member, nil
+}
+
+// WorkspaceRequestsPerMinute returns the workspace-scope requests_per_minute
+// ceiling in force for a workspace: limited=false means "no ceiling anywhere"
+// (unlimited), exists=false means there is no such workspace at all.
+//
+// It MIRRORS PolicyStore.resolve for the `workspace` scope in
+// backend/shared/quota/policy.py and must change with it: nearest level that
+// names a value wins — the workspace's own quota.workspace_limit override
+// first, then its plan's quota.plan_limit row, where the plan is
+// workspace.quota_plan_id when set and otherwise the plan whose slug equals
+// the workspace's verification_status. NULL the whole way down is unlimited.
+//
+// Both outcomes are cached, including "no such workspace": the id reaching
+// here can come from an ANONYMOUS request's ?workspace_id= query string, so a
+// flood of made-up ids must cost at most one query each per TTL and must not
+// grow the cache past its bound (hence newBoundedTTLCache). A query error
+// caches nothing — the next request retries.
+func (s *Store) WorkspaceRequestsPerMinute(ctx context.Context, workspaceID int64) (int, bool, bool, error) {
+	if v, ok := s.wsRPM.get(workspaceID); ok {
+		return v.limit, v.limited, v.exists, nil
+	}
+
+	var limit *int32
+	err := s.pool.QueryRow(ctx, workspaceRPMSQL, workspaceID).Scan(&limit)
+	if errors.Is(err, pgx.ErrNoRows) {
+		s.wsRPM.set(workspaceID, wsRPM{})
+		return 0, false, false, nil
+	}
+	if err != nil {
+		return 0, false, false, fmt.Errorf("workspace rpm lookup: %w", err)
+	}
+
+	v := wsRPM{exists: true}
+	if limit != nil {
+		v.limit, v.limited = int(*limit), true
+	}
+	s.wsRPM.set(workspaceID, v)
+	return v.limit, v.limited, v.exists, nil
 }
 
 // IsWorkspaceOrganizer reports whether the user is staff of the workspace --

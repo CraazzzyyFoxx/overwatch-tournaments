@@ -467,18 +467,50 @@ func run() error {
 	// layer further in. It sits INSIDE WrapAnon because the two are mutually
 	// exclusive (anonymous means no bearer at all) and both 429s must still be
 	// metered, access-logged and given a Cache-Control. The window is fixed at a
-	// minute: the budget it spends is the key's own requests_per_minute, and only
-	// cfg.APIKeyRateLimit's default applies to a key that carries none.
+	// minute: the budget it spends is the key's own requests_per_minute (resolved
+	// by identity-svc from the quota tables and carried as api_key.limits), and
+	// only cfg.APIKeyRateLimit's default applies to a key that carries none.
 	// resolver.APIKeyQuota short-circuits on the API-key prefix, so session and
 	// anonymous traffic reach the mux without any added identity lookup.
 	//
 	// Metered in Redis over the realtime bus's client (no second pool), on the
-	// same q:key:{id}:rpm counter the Python enforcers charge: a key's published
-	// requests_per_minute is a contract, so it cannot be multiplied by the
-	// replica count the way the local anon/auth guardrails are. Fails open.
+	// q:key:{id}:rpm counter the Python usage view reads (the workers no longer
+	// charge it): a key's published requests_per_minute is a contract, so it
+	// cannot be multiplied by the replica count the way the local anon/auth
+	// guardrails are. Fails open.
 	apiKeyLimiter := ratelimit.New(cfg.APIKeyRateLimit, time.Minute).OnReject(mtr.RateLimited)
 	apiKeyShared := ratelimit.NewRedis(rdb, apiKeyLimiter, logger, mtr.RateLimitRedisFallback)
-	apiSurface := apiver.Middleware(cachecontrol.Middleware(anonLimiter.WrapAnon(apiKeyShared.WrapAPIKey(mux, resolver.APIKeyQuota))))
+
+	// QUOTA_EDGE_WORKSPACE_METERING widens that inner layer from "API keys only"
+	// to EVERY request: the same q:key bucket and 429 for a key, plus its
+	// workspace's q:ws:{id}:rpm bucket, the workspace ceiling enforced here, and
+	// traffic no member can be billed for (anonymous visitors, non-members
+	// reading a public page) counted in q:pub:ws:{id}:rpm as statistics that
+	// never refuse anyone. It needs Redis — the bucket is per tenant, not per
+	// replica — so without a client the per-key-only wrapper stands. With the
+	// flag off the wiring is unchanged.
+	//
+	// The caller adapter below is why sessions get metered at all: unlike
+	// APIKeyQuota it resolves EVERY bearer token, which costs one cache hit on
+	// the entry the route itself is about to resolve anyway.
+	metered := apiKeyShared.WrapAPIKey(mux, resolver.APIKeyQuota)
+	if cfg.EdgeWorkspaceMetering && rdb != nil {
+		metered = apiKeyShared.WrapMetered(mux, func(r *http.Request) (ratelimit.Caller, bool) {
+			info, ok, err := resolver.Principal(r)
+			if err != nil || !ok {
+				return ratelimit.Caller{}, false
+			}
+			return ratelimit.Caller{
+				APIKey:            info.IsAPIKey(),
+				APIKeyID:          info.APIKeyID,
+				RequestsPerMinute: info.RequestsPerMinute,
+				WorkspaceID:       info.APIKeyWorkspaceID,
+				WorkspaceIDs:      info.WorkspaceIDs,
+				Superuser:         info.IsSuperuser,
+			}, true
+		}, wsStore.WorkspaceRequestsPerMinute)
+	}
+	apiSurface := apiver.Middleware(cachecontrol.Middleware(anonLimiter.WrapAnon(metered)))
 	instrumented := httplog.Middleware(mtr.Middleware(apiSurface, authn, activeUsers), logger, authn)
 	traced := tracing.Middleware(instrumented)
 	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)

@@ -21,6 +21,7 @@ __all__ = (
     "ServiceToken",
     "ServiceTokenPayload",
     "TokenApiKeyInfo",
+    "TokenApiKeyLimits",
     "AuthLinkedPlayer",
     "AuthUser",
     "UserUpdate",
@@ -140,17 +141,29 @@ class WorkspaceMembership(BaseModel):
     rbac_permissions: list[dict[str, str]] = Field(default_factory=list)
 
 
+class TokenApiKeyLimits(BaseModel):
+    """The one quota number the gateway enforces itself, on every request."""
+
+    #: The key's effective ``key``-scope ceiling (key override, else workspace
+    #: override, else plan). ``None`` lets the gateway fall back to
+    #: ``GATEWAY_API_KEY_RATE_LIMIT``.
+    requests_per_minute: int | None = None
+
+
 class TokenApiKeyInfo(BaseModel):
     """API key metadata returned by token validation for downstream services.
 
-    Identity only: quotas live in the ``quota`` schema and are resolved by the
-    service that enforces them, never carried on the credential.
+    Identity plus ``limits.requests_per_minute``: the gateway meters every
+    keyed request against it before any worker sees the call, so it has to
+    travel on the credential. Every other dimension is resolved by the service
+    that enforces it, from the ``quota`` schema.
     """
 
     id: int
     public_id: str
     workspace_id: int
     scopes: list[str] = Field(default_factory=list)
+    limits: TokenApiKeyLimits = Field(default_factory=TokenApiKeyLimits)
 
 
 class TokenPayload(BaseModel):

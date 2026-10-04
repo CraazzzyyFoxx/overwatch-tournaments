@@ -6873,6 +6873,7 @@
     "spent": "{used} of {limit}",
     "spentUnlimited": "{used} spent, no ceiling",
     "resetsIn": "Resets {relative}",
+    "publicRequests": "Public requests this minute (not limited)",
     "megabytes": "{value} MB",
     "plan": "Plan: {slug}",
     "planUnknown": "Plan not resolved",

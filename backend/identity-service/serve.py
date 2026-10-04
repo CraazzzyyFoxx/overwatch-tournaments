@@ -74,6 +74,7 @@ configure_quota(
     session_factory=db.async_session_maker,
     redis_url=settings.REDIS_URL,
     enabled=settings.quota_enabled,
+    edge_workspace_metering=settings.quota_edge_workspace_metering,
 )
 
 for _module in (tokens, auth, oauth, api_keys, rbac, players, avatars):

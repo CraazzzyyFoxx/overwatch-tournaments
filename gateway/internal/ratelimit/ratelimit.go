@@ -33,11 +33,13 @@ const maxKeys = 8192
 
 // Layer names reported to the reject hook, one per wrapper. They are what lets
 // an operator tell "someone is scanning us" (anon) from "a client outgrew its
-// key" (api_key) apart in one Prometheus counter.
+// key" (api_key) or "a tenant outgrew its plan" (workspace) apart in one
+// Prometheus counter.
 const (
-	layerAuth   = "auth"
-	layerAnon   = "anon"
-	layerAPIKey = "api_key"
+	layerAuth      = "auth"
+	layerAnon      = "anon"
+	layerAPIKey    = "api_key"
+	layerWorkspace = "workspace"
 )
 
 type bucket struct {

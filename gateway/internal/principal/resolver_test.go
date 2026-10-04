@@ -294,6 +294,45 @@ func TestResolver_PrincipalTypedView(t *testing.T) {
 	}
 }
 
+// TestResolver_PrincipalAttributionFields covers the three fields edge quota
+// metering attributes a request with: the workspace a key is pinned to, every
+// workspace a session belongs to (stringly-typed ids included — the payload has
+// historically carried both shapes), and the superuser flag that lets an
+// operator be metered against a tenant it is not a member of.
+func TestResolver_PrincipalAttributionFields(t *testing.T) {
+	key := New(&stubCaller{reply: []byte(apiKeyReply)})
+	info, ok, err := key.Principal(reqWithToken("owt_sk_pub7_secret"))
+	if err != nil || !ok {
+		t.Fatalf("principal failed: ok=%v err=%v", ok, err)
+	}
+	if info.APIKeyWorkspaceID != 11 {
+		t.Errorf("APIKeyWorkspaceID: want the key's workspace 11, got %d", info.APIKeyWorkspaceID)
+	}
+	if len(info.WorkspaceIDs) != 1 || info.WorkspaceIDs[0] != 11 {
+		t.Errorf("WorkspaceIDs: want [11], got %v", info.WorkspaceIDs)
+	}
+	if info.IsSuperuser {
+		t.Errorf("is_superuser=false must not read as a superuser")
+	}
+
+	su := New(&stubCaller{reply: []byte(`{"ok":true,"data":{"user_id":9,"is_superuser":true,
+		"credential_type":"access_token",
+		"workspaces":[{"workspace_id":3},{"workspace_id":"4"},{"slug":"no-id"}]}}`)})
+	info, ok, err = su.Principal(reqWithToken("session"))
+	if err != nil || !ok {
+		t.Fatalf("principal failed: ok=%v err=%v", ok, err)
+	}
+	if !info.IsSuperuser {
+		t.Errorf("is_superuser=true must be parsed")
+	}
+	if len(info.WorkspaceIDs) != 2 || info.WorkspaceIDs[0] != 3 || info.WorkspaceIDs[1] != 4 {
+		t.Errorf("WorkspaceIDs: want [3 4] (a string id parsed, an id-less entry skipped), got %v", info.WorkspaceIDs)
+	}
+	if info.APIKeyWorkspaceID != 0 {
+		t.Errorf("a session carries no key workspace, got %d", info.APIKeyWorkspaceID)
+	}
+}
+
 // TestResolver_PrincipalSessionHasNoKeyFields guards the session path: an
 // access-token payload must yield no api-key identity (so nothing downstream
 // mistakes a session for a key) while still exposing its user id and grants.

@@ -139,6 +139,25 @@ per key against `requests_per_minute` when the credential carries one, otherwise
 in `balancer-service` (`src/core/security/api_key_limiter.py` / `api_key_policy.py`)
 and are not identity defaults. Exceeding a quota returns 429 with `Retry-After`.
 
+`QUOTA_EDGE_WORKSPACE_METERING=true` (default false, shared with the Python enforcer)
+additionally counts **every** REST request against its workspace's
+`q:ws:{workspace_id}:rpm` bucket and enforces the workspace-scope
+`requests_per_minute` ceiling at the edge. The workspace is attributed from the
+credential and the `?workspace_id=` query parameter:
+
+- **API key** — its own workspace; still metered on `q:key:{id}:rpm` with the
+  unchanged `RateLimit-*` headers and 429.
+- **Session** — the queried workspace when the user is a member (or a superuser),
+  otherwise its single workspace. No per-user bucket and no `RateLimit-*` headers.
+- **Anonymous, or a session that is not a member** — counted in
+  `q:pub:ws:{workspace_id}:rpm`, statistics only: public traffic is never refused,
+  so strangers cannot spend a tenant offline.
+
+Nothing is charged when the request names no (existing) workspace, when the token
+cannot be validated, or when Redis is unreachable (fail-open). A refused request
+charges no bucket at all. With the flag off the gateway meters API keys exactly as
+described above and writes no `q:ws`/`q:pub` keys.
+
 ## Internal packages
 
 Under `internal/`:
@@ -179,8 +198,10 @@ annotated set. Highlights:
 - `RABBITMQ_URL`, `REDIS_URL`, `POSTGRES_*` / `DB_PGBOUNCER` (shared with the workers).
 - WebSocket knobs (`WS_IDLE_TIMEOUT`, `WS_REPLAY_LIMIT`, `GATEWAY_WS_ALLOWED_ORIGINS`,
   per-IP conn/topic caps), rate-limit knobs (`GATEWAY_AUTH_RATE_LIMIT`,
-  `GATEWAY_ANON_RATE_LIMIT`, WS custom-domain lookup limits), the response-cache TTL
-  (`GATEWAY_RESPONSE_CACHE_TTL`), and the RPC bulkhead (`GATEWAY_RPC_MAX_INFLIGHT`).
+  `GATEWAY_ANON_RATE_LIMIT`, `GATEWAY_API_KEY_RATE_LIMIT`,
+  `QUOTA_EDGE_WORKSPACE_METERING`, WS custom-domain lookup limits), the
+  response-cache TTL (`GATEWAY_RESPONSE_CACHE_TTL`), and the RPC bulkhead
+  (`GATEWAY_RPC_MAX_INFLIGHT`).
 
 ## Build & run
 

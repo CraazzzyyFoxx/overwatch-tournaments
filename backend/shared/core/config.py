@@ -72,6 +72,12 @@ class BaseServiceSettings(BaseSettings):
     # Per-operation disabling is a data change (``quota.operation.enabled``);
     # this one is the blunt instrument. Env: QUOTA_ENABLED.
     quota_enabled: bool = True
+    # The gateway meters every REST request against its workspace's per-minute
+    # bucket (``q:ws:{id}:rpm``) and enforces that ceiling at the edge. While on,
+    # the enforcer leaves that bucket to the gateway instead of counting metered
+    # calls into it a second time. Read by the gateway too (same env var, shared
+    # common.env), so both sides must agree. Env: QUOTA_EDGE_WORKSPACE_METERING.
+    quota_edge_workspace_metering: bool = False
 
     # Database pool
     db_pool_size: int = 10

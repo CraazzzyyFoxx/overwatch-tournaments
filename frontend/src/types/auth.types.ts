@@ -89,6 +89,12 @@ export interface QuotaScopeUsage {
   concurrent_used: number;
   max_upload_bytes: number | null;
   max_items_per_request: number | null;
+  /**
+   * Workspace scope only: requests this minute that named the workspace from
+   * outside it (anonymous visitors, signed-in non-members). Statistics — never
+   * limited and not part of `requests_used`.
+   */
+  public_requests_used?: number | null;
 }
 
 export interface QuotaUsage {

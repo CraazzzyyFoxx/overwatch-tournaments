@@ -6873,6 +6873,7 @@
     "spent": "{used} из {limit}",
     "spentUnlimited": "{used} потрачено, без потолка",
     "resetsIn": "Сброс {relative}",
+    "publicRequests": "Публичные запросы за минуту (без лимита)",
     "megabytes": "{value} МБ",
     "plan": "План: {slug}",
     "planUnknown": "План не определён",

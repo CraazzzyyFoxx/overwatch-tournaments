@@ -71,6 +71,18 @@ type Info struct {
 	// surfaces gated by MEMBERSHIP rather than permission (the WebSocket feed)
 	// must not treat as authenticated.
 	WorkspaceGrants int
+	// IsSuperuser is the payload's is_superuser flag: a platform operator, who
+	// may act on a workspace without appearing on its roster. Edge metering
+	// trusts it to attribute such a request to the named workspace rather than
+	// to the anonymous/public bucket.
+	IsSuperuser bool
+	// APIKeyWorkspaceID is the single workspace an API key is pinned to
+	// (payload api_key.workspace_id); zero for a session.
+	APIKeyWorkspaceID int64
+	// WorkspaceIDs lists every workspace the payload carries, in order. It is
+	// the membership set edge metering attributes a request to — a session may
+	// hold several, an API key exactly one.
+	WorkspaceIDs []int64
 }
 
 // IsAPIKey reports whether this identity was authenticated by an API key rather
@@ -255,7 +267,10 @@ func parseInfo(payload map[string]any) Info {
 	if payload == nil {
 		return Info{}
 	}
-	info := Info{CredentialType: asString(payload["credential_type"])}
+	info := Info{
+		CredentialType: asString(payload["credential_type"]),
+		IsSuperuser:    asBool(payload["is_superuser"]),
+	}
 	// identity-svc dumps TokenPayload with "sub"; the Python rehydrate path
 	// accepts either spelling (shared/rpc/identity.py::_payload_user_id), so
 	// mirror it here rather than pinning one.
@@ -265,6 +280,7 @@ func parseInfo(payload map[string]any) Info {
 	if key, ok := payload["api_key"].(map[string]any); ok {
 		info.APIKeyID = asInt64(key["id"])
 		info.APIKeyPublicID = asString(key["public_id"])
+		info.APIKeyWorkspaceID = asInt64(key["workspace_id"])
 		if limits, ok := key["limits"].(map[string]any); ok {
 			info.RequestsPerMinute = int(asInt64(limits["requests_per_minute"]))
 		}
@@ -272,6 +288,9 @@ func parseInfo(payload map[string]any) Info {
 	for _, raw := range asSlice(payload["workspaces"]) {
 		if ws, ok := raw.(map[string]any); ok {
 			info.WorkspaceGrants += len(asSlice(ws["rbac_permissions"]))
+			if id := asInt64(ws["workspace_id"]); id > 0 {
+				info.WorkspaceIDs = append(info.WorkspaceIDs, id)
+			}
 		}
 	}
 	return info
@@ -294,6 +313,11 @@ func asInt64(v any) int64 {
 func asString(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func asBool(v any) bool {
+	b, _ := v.(bool)
+	return b
 }
 
 func asSlice(v any) []any {

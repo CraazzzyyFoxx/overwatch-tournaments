@@ -106,6 +106,7 @@ configure_quota(
     session_factory=db.async_session_maker,
     redis_url=str(config.settings.redis_url),
     enabled=config.settings.quota_enabled,
+    edge_workspace_metering=config.settings.quota_edge_workspace_metering,
 )
 
 # Cross-service half: resources another service stales that this one caches.

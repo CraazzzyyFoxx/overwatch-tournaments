@@ -4,12 +4,15 @@ import asyncio
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pytest  # noqa: E402
 
+from shared import quota  # noqa: E402
+from shared.quota.policy import QuotaLimits, ResolvedQuota  # noqa: E402
 from shared.rbac import ALL_SCOPE_NAMES  # noqa: E402
 from shared.rpc.identity import credential_type, rehydrate_user  # noqa: E402
 from src import models, schemas  # noqa: E402
@@ -254,6 +257,53 @@ def test_validate_api_key_narrows_owner_rbac_to_the_key_scopes(monkeypatch: pyte
     assert payload.workspaces[0].rbac_permissions == _TEAM_CREATE
     assert row.last_used_at is not None
     assert session.commit_calls == 1
+
+
+class _KeyPolicy:
+    """Answers ``resolve`` the way PolicyStore would for one key-scope ceiling."""
+
+    def __init__(self, rpm: int | None = None, error: Exception | None = None) -> None:
+        self.rpm, self.error, self.calls = rpm, error, []
+
+    async def resolve(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        return ResolvedQuota(
+            workspace=QuotaLimits(), principal=QuotaLimits(requests_per_minute=self.rpm), principal_scope="key", cost=0
+        )
+
+
+def test_validate_carries_the_keys_resolved_rate_limit_for_the_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The gateway meters every keyed request on ``api_key.limits`` alone, so a
+    per-key override that never reaches the payload is never enforced."""
+    policy = _KeyPolicy(rpm=25)
+    quota.set_enforcer(SimpleNamespace(policy=policy))
+    try:
+        _patch_owner(monkeypatch, _owner_payload(workspace_permissions=_TEAM_CREATE))
+        payload = asyncio.run(
+            api_keys.validate(_FakeSession([{"scalar": _api_key_row()}]), "aqt_sk_publicid_secret-token")
+        )
+    finally:
+        quota.set_enforcer(None)
+
+    assert payload is not None and payload.api_key is not None
+    assert payload.api_key.limits.requests_per_minute == 25
+    assert policy.calls == [{"operation": "", "principal_scope": "key", "api_key_id": 123, "workspace_id": 11}]
+
+
+def test_validate_survives_an_unreadable_quota_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    quota.set_enforcer(SimpleNamespace(policy=_KeyPolicy(error=RuntimeError("quota tables down"))))
+    try:
+        _patch_owner(monkeypatch, _owner_payload(workspace_permissions=_TEAM_CREATE))
+        payload = asyncio.run(
+            api_keys.validate(_FakeSession([{"scalar": _api_key_row()}]), "aqt_sk_publicid_secret-token")
+        )
+    finally:
+        quota.set_enforcer(None)
+
+    assert payload is not None and payload.api_key is not None
+    assert payload.api_key.limits.requests_per_minute is None
 
 
 def test_validate_api_key_normalizes_the_legacy_balancer_scope(monkeypatch: pytest.MonkeyPatch) -> None:
