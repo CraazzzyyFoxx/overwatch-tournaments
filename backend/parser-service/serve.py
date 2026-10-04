@@ -79,6 +79,7 @@ from src.services.achievement.engine.consumer import (
 )
 from src.services.match_logs import flows as logs_flows
 from src.services.match_logs import reaper as logs_reaper
+from src.services.match_logs import retention as logs_retention
 from src.services.match_logs import uploads as upload_service
 from src.services.match_logs.binary import binary_match_logs
 from src.services.match_logs.result_events import publish_match_log_result
@@ -200,6 +201,8 @@ async def start_worker() -> None:
     # Requeue match-log records the queue dropped (expired ProcessMatchLogEvent,
     # worker killed mid-parse). Redis leader-locked across worker replicas.
     logs_reaper.start_scheduler(redis=realtime_redis, broker=broker)
+    # Drop failed match logs (S3 object + record) past their retention window.
+    logs_retention.start_scheduler(redis=realtime_redis, s3=s3_client)
     subscription_scheduler.start_scheduler()
     logger.info("Parser worker started")
 
@@ -208,6 +211,7 @@ async def start_worker() -> None:
 async def stop_worker() -> None:
     rank_scheduler.shutdown_scheduler()
     logs_reaper.shutdown_scheduler()
+    logs_retention.shutdown_scheduler()
     subscription_scheduler.shutdown_scheduler()
 
 

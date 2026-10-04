@@ -475,7 +475,6 @@ class MatchLogProcessor:
                     return team_db
 
         player_names_str = ", ".join([name for name, _ in players])
-        await binary_match_logs.delete_log(self._s3, self.tournament.id, self.filename)
         raise errors.ApiHTTPException(
             status_code=400,
             detail=[

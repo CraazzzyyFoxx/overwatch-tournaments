@@ -207,13 +207,14 @@ on subscribe, so a missed signal self-heals, and the actual log data stays gated
 
 ### Scheduled work
 
-All three are APScheduler interval jobs guarded by a Redis leader lock, so only one replica acts per
+All four are APScheduler interval jobs guarded by a Redis leader lock, so only one replica acts per
 tick.
 
 | Job | Cadence | What it does |
 | --- | --- | --- |
 | OverFast rank collection | 60s tick | Selects and *claims* due battle tags and publishes one `FetchRankEvent` each — it never calls OverFast itself. Per-tag cadence comes from `next_eligible_at`, so changing the admin interval needs no restart. No-ops while collection is disabled in settings. |
 | Match-log stall reaper | `LOG_REAPER_TICK_SECONDS` (300s) | Requeues records the queue dropped: `pending` older than `LOG_REAPER_PENDING_AFTER_SECONDS` (kept above the 5-minute queue TTL so a message still waiting on a busy consumer is not double-parsed) and `processing` older than `LOG_REAPER_PROCESSING_AFTER_SECONDS`. Records past `LOG_REAPER_MAX_ATTEMPTS` are retired as `failed`. |
+| Failed match-log retention | 1h tick | Deletes the S3 object and the record of `failed` logs finished more than `FAILED_LOG_RETENTION_DAYS` (14) ago. Records a match still points at are kept; the object stays while another live record or a match uses the same key. Unfinished logs (no `MatchEnd`) are not retained at all — `validate` deletes them on the spot. |
 | Subscription collection | 60s heartbeat | Decides inside the tick whether the admin-configured `interval_seconds` has elapsed (read from the append-only check log), then re-checks entitlements for active tournament participants. |
 
 ## Data owned
@@ -274,6 +275,7 @@ attaches the alias and closes the miss in one request.
 - **Stall reaper** — `LOG_REAPER_ENABLED`, `LOG_REAPER_TICK_SECONDS`,
   `LOG_REAPER_PENDING_AFTER_SECONDS`, `LOG_REAPER_PROCESSING_AFTER_SECONDS`,
   `LOG_REAPER_MAX_ATTEMPTS`, `LOG_REAPER_BATCH_SIZE`.
+- **Failed-log retention** — `FAILED_LOG_RETENTION_DAYS` (14).
 - **OverFast** — `OVERFAST_BASE_URL`, `OVERFAST_TIMEOUT`, `OVERFAST_MAX_RETRIES`,
   `OVERFAST_PROXY_URL` (production: `socks5://proxy:1080`), `RANK_FETCH_WORKER_PREFETCH` (kept
   low to protect the upstream). The operational

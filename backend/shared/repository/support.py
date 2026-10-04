@@ -321,6 +321,65 @@ class LogProcessingRepository(BaseRepository[models.LogProcessingRecord]):
         )
         return result.scalars().all()
 
+    async def claim_expired_failed(
+        self,
+        session: AsyncSession,
+        *,
+        cutoff: datetime,
+        limit: int,
+    ) -> Sequence[sa.Row[tuple[int, int, str]]]:
+        """Lock ``(id, tournament_id, filename)`` of ``failed`` records finished
+        before ``cutoff``. A record a match still points at is skipped: it is that
+        map's provenance, not a dead upload."""
+        record = models.LogProcessingRecord
+        result = await session.execute(
+            sa.select(record.id, record.tournament_id, record.filename)
+            .where(
+                record.status == models.LogProcessingStatus.failed,
+                record.finished_at < cutoff,
+                ~sa.exists().where(models.Match.log_record_id == record.id),
+            )
+            .order_by(record.finished_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True, of=record)
+        )
+        return result.all()
+
+    async def log_file_in_use(
+        self,
+        session: AsyncSession,
+        *,
+        record_id: int,
+        tournament_id: int,
+        filename: str,
+        cutoff: datetime,
+    ) -> bool:
+        """Whether ``logs/{tournament_id}/{filename}`` still backs something other
+        than an expired failure: another live record for the same key, or a match
+        (including pre-provenance ones that only carry ``log_name``)."""
+        record = models.LogProcessingRecord
+        other_record = sa.exists().where(
+            record.tournament_id == tournament_id,
+            record.filename == filename,
+            record.id != record_id,
+            sa.or_(
+                record.status != models.LogProcessingStatus.failed,
+                record.finished_at.is_(None),
+                record.finished_at >= cutoff,
+            ),
+        )
+        match = sa.exists().where(
+            models.Match.log_name == filename,
+            models.Match.encounter_id == models.Encounter.id,
+            models.Encounter.tournament_id == tournament_id,
+        )
+        result = await session.execute(sa.select(sa.or_(other_record, match)))
+        return bool(result.scalar_one())
+
+    async def delete_by_ids(self, session: AsyncSession, ids: Sequence[int]) -> None:
+        if ids:
+            await session.execute(sa.delete(models.LogProcessingRecord).where(models.LogProcessingRecord.id.in_(ids)))
+
 
 class ChallongeMappingRepository:
     sources = BaseRepository(models.ChallongeSource)
