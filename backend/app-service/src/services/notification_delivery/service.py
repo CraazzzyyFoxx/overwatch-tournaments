@@ -32,7 +32,7 @@ from shared.repository.notification import (
     NotificationWorkspaceConfigRepository,
 )
 from shared.schemas.events import DiscordCommandEvent, NotificationBroadcastEvent, NotificationCreatedEvent
-from shared.services.notifications import wants_discord_dm
+from shared.services.notifications import NOTIFICATION_KIND_GROUPS, wants_discord_dm
 from shared.services.subscriptions.strategies import load_provider_user_ids
 from src.core import config
 from src.domain.notification_render import render_discord
@@ -65,12 +65,14 @@ class NotificationDeliveryService:
             return "skipped_missing"
 
         stored = await self._preferences.stored_discord_dm(session, row.recipient_auth_user_id)
-        if not wants_discord_dm(stored, row.kind):
+        if not wants_discord_dm(stored, row.kind, workspace_id=row.source_workspace_id):
             return "skipped_pref_off"
 
         payload = row.payload_json or {}
         tournament_id = payload.get("tournament_id")
-        if isinstance(tournament_id, int):
+        # The organizer's mute silences what the tournament tells its players,
+        # not the organizers' own pager about it.
+        if isinstance(tournament_id, int) and NOTIFICATION_KIND_GROUPS.get(row.kind) != "staff":
             # Read now, not at write time: the organizer's switch also stops a
             # DM still waiting in the outbox. A deleted tournament mutes nothing.
             dms_enabled = (

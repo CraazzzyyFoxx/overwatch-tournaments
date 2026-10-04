@@ -33,6 +33,7 @@ __all__ = (
     "NotificationDmGroupsUpdate",
     "NotificationPreferencesRead",
     "NotificationPreferencesUpdate",
+    "NotificationStaffWorkspace",
     "NotificationDeliveryItem",
     "AdminUserNotificationsRead",
     "NotificationWorkspaceConfigRead",
@@ -151,18 +152,19 @@ class NotificationRetireResult(BaseModel):
 
 
 class NotificationDmGroups(BaseModel):
-    """The three Discord-DM switches, defaults already filled in.
+    """The Discord-DM group switches, defaults already filled in.
 
     Spelled out as fields rather than a free dict because this is a public
     response shape: the client renders one toggle per group and the generated
     OpenAPI has to name them. ``test_notification_preferences_rpc`` pins the
-    field set against ``NOTIFICATION_GROUPS``, so a fourth group cannot be
+    field set against ``NOTIFICATION_GROUPS``, so a new group cannot be
     added upstream without this following.
     """
 
     tournament: bool
     matches: bool
     team: bool
+    staff: bool
 
 
 class NotificationDmGroupsUpdate(BaseModel):
@@ -173,6 +175,19 @@ class NotificationDmGroupsUpdate(BaseModel):
     tournament: bool | None = None
     matches: bool | None = None
     team: bool | None = None
+    staff: bool | None = None
+
+
+class NotificationStaffWorkspace(BaseModel):
+    """One workspace where the account is staff, and its own ``staff`` DM switch.
+
+    Effective like the groups (untouched = on). It only bites while the
+    ``staff`` group itself is on: the group is the master switch.
+    """
+
+    workspace_id: int
+    name: str
+    enabled: bool
 
 
 class NotificationPreferencesRead(BaseModel):
@@ -180,12 +195,17 @@ class NotificationPreferencesRead(BaseModel):
     #: False = the switches change nothing yet, so the UI offers the link flow
     #: instead of silently doing nothing.
     discord_linked: bool
+    #: Empty = not staff anywhere, and the UI hides the ``staff`` group.
+    staff_workspaces: list[NotificationStaffWorkspace] = []
 
 
 class NotificationPreferencesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    discord_dm: NotificationDmGroupsUpdate
+    discord_dm: NotificationDmGroupsUpdate = Field(default_factory=NotificationDmGroupsUpdate)
+    #: Partial per-workspace staff switches, ``{workspace_id: enabled}``. A
+    #: workspace the account is not staff in is a 422.
+    staff_workspaces: dict[int, bool] = {}
 
 
 class NotificationDeliveryItem(BaseRead):
@@ -217,6 +237,7 @@ class AdminUserNotificationsRead(BaseModel):
 
     discord_dm: NotificationDmGroups
     discord_linked: bool
+    staff_workspaces: list[NotificationStaffWorkspace] = []
     #: The number this account's own bell shows -- same audience rules as their
     #: inbox, not a global count.
     unread_count: int

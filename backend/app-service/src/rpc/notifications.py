@@ -92,6 +92,7 @@ def register(broker: Any, logger: Any) -> None:
                 # (or explicitly null) group keeps its stored value, while
                 # False is a value like any other.
                 discord_dm=body.discord_dm.model_dump(exclude_none=True),
+                staff_workspaces=body.staff_workspaces,
             )
 
         return await c.envelope(logger, "notifications.preferences_update", op, session_factory=_SF)

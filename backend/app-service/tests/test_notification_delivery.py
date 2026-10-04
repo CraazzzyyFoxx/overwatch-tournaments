@@ -450,6 +450,49 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         self.assertEqual(self.commands(), [])
         self.assertEqual(self.ledger(), [])
 
+    def dispute_review(self) -> Notification:
+        row = self.personal(kind="encounter.dispute_review")
+        row.payload_json = {
+            "encounter_id": 5,
+            "tournament_id": 3,
+            "position": 0,
+            "home_team_name": "A",
+            "away_team_name": "B",
+        }
+        self.session.flush()
+        return row
+
+    async def test_a_tournament_mute_does_not_silence_the_organizers(self) -> None:
+        """The mute is what the tournament tells its players; a dispute still pages staff."""
+        self.session.execute(
+            sa.insert(models.Tournament.__table__).values(
+                id=3, workspace_id=WORKSPACE, name="Cup", slug="cup", discord_dms_enabled=False
+            )
+        )
+        row = self.dispute_review()
+        self.link_discord()
+
+        status = await self.service.deliver_personal(self.shim, NotificationCreatedEvent(notification_id=row.id))
+
+        self.assertEqual(status, "sent")
+
+    async def test_a_staff_dm_needs_its_workspace_switch_too(self) -> None:
+        """Muting one workspace leaves the staff group on for the others."""
+        row = self.dispute_review()
+        self.link_discord()
+        self.session.add(
+            NotificationPreference(
+                auth_user_id=RECIPIENT,
+                discord_dm={"staff_workspaces": {str(WORKSPACE): False, str(WORKSPACE + 1): True}},
+            )
+        )
+        self.session.flush()
+
+        status = await self.service.deliver_personal(self.shim, NotificationCreatedEvent(notification_id=row.id))
+
+        self.assertEqual(status, "skipped_pref_off")
+        self.assertEqual(self.commands(), [])
+
     async def test_another_groups_switch_does_not_silence_this_one(self) -> None:
         """Groups are independent -- and an absent key is still the default."""
         row = self.personal(kind="encounter.scheduled")

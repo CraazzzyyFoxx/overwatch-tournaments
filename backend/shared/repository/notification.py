@@ -24,7 +24,7 @@ import base64
 import binascii
 from collections.abc import Sequence
 from datetime import datetime
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -448,7 +448,7 @@ class NotificationPreferenceRepository(BaseRepository[models.NotificationPrefere
     def __init__(self) -> None:
         super().__init__(models.NotificationPreference)
 
-    async def stored_discord_dm(self, session: AsyncSession, auth_user_id: int) -> dict[str, bool]:
+    async def stored_discord_dm(self, session: AsyncSession, auth_user_id: int) -> dict[str, Any]:
         """Only what this user changed -- ``{}`` when they never touched it."""
         row = await self.get_by(session, auth_user_id=auth_user_id)
         return dict(row.discord_dm or {}) if row is not None else {}
@@ -458,7 +458,7 @@ class NotificationPreferenceRepository(BaseRepository[models.NotificationPrefere
         session: AsyncSession,
         *,
         auth_user_id: int,
-        discord_dm: dict[str, bool],
+        discord_dm: dict[str, Any],
     ) -> models.NotificationPreference:
         """Upsert the whole switch map. Flushes, never commits."""
         row = await self.get_by(session, auth_user_id=auth_user_id)

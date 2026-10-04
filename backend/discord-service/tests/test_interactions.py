@@ -258,7 +258,9 @@ class MuteEverythingTests(IsolatedAsyncioTestCase):
             await _dispatcher().handle(prompt, "notifications.mute", "all")
 
         (_, body) = rpc.calls[-1]
-        self.assertEqual(body["payload"], {"discord_dm": {"tournament": False, "matches": False, "team": False}})
+        self.assertEqual(
+            body["payload"], {"discord_dm": {"tournament": False, "matches": False, "team": False, "staff": False}}
+        )
         # The prompt becomes the answer rather than gaining a second reply beneath it.
         prompt.followup.send.assert_not_awaited()
         self.assertIn("отключены", _reply_text(prompt.edit_original_response.await_args.kwargs["view"]))

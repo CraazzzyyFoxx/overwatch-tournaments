@@ -226,8 +226,9 @@ class NotificationDelivery(db.Base):
 class NotificationPreference(db.Base):
     """A user's opt-outs from Discord DMs, per kind group.
 
-    ``discord_dm`` holds only what the user changed: ``{"matches": false}``.
-    A missing key is the default (on), so a new group needs no backfill.
+    ``discord_dm`` holds only what the user changed: ``{"matches": false}``,
+    plus ``{"staff_workspaces": {"<id>": false}}`` for per-workspace staff
+    opt-outs. A missing key is the default (on), so a new group needs no backfill.
     """
 
     __tablename__ = "notification_preference"
@@ -239,7 +240,7 @@ class NotificationPreference(db.Base):
         autoincrement=False,
     )
     # NOTE: JSONB does not track in-place mutation -- always reassign.
-    discord_dm: Mapped[dict[str, bool]] = mapped_column(JSONB(), nullable=False, server_default=text("'{}'"))
+    discord_dm: Mapped[dict[str, Any]] = mapped_column(JSONB(), nullable=False, server_default=text("'{}'"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

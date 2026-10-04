@@ -913,6 +913,10 @@
         "team": {
           "label": "Teams",
           "desc": "Invites, answers to them, and being removed from a roster."
+        },
+        "staff": {
+          "label": "For organizers",
+          "desc": "Disputed results waiting for your decision. Delivered even in tournaments with direct messages turned off."
         }
       },
       "footnote": "A closed Discord inbox (or no server in common with the bot) stops delivery on its own — nothing is queued and nothing is retried."

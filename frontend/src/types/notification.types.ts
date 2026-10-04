@@ -100,10 +100,18 @@ export interface AnnouncementCreateBody {
 
 /**
  * Delivery groups a personal notification kind belongs to — the opt-out
- * granularity of Discord DMs. Three groups rather than a switch per kind: a
- * reader who does not want match pings wants none of them.
+ * granularity of Discord DMs. Groups rather than a switch per kind: a reader
+ * who does not want match pings wants none of them. `staff` is the organizers'
+ * pager, and the only group split further, per workspace.
  */
-export type NotificationGroup = "tournament" | "matches" | "team";
+export type NotificationGroup = "tournament" | "matches" | "team" | "staff";
+
+/** One workspace where the account is staff, with its own effective `staff` switch. */
+export interface NotificationStaffWorkspace {
+  workspace_id: number;
+  name: string;
+  enabled: boolean;
+}
 
 /**
  * `GET/PUT /api/v1/notifications/preferences`.
@@ -111,16 +119,20 @@ export type NotificationGroup = "tournament" | "matches" | "team";
  * Read answers with EFFECTIVE values — a group the account never touched comes
  * back `true` — so the switches never have to reproduce the server's defaults.
  * `discord_linked` is what turns the "link Discord first" hint on: every switch
- * here is inert until there is an account to DM.
+ * here is inert until there is an account to DM. `staff_workspaces` is empty
+ * for anyone who is staff nowhere, and then the `staff` group is not offered.
  */
 export interface NotificationPreferences {
   discord_dm: Record<NotificationGroup, boolean>;
   discord_linked: boolean;
+  staff_workspaces: NotificationStaffWorkspace[];
 }
 
-/** The write body. Partial: a switch sends its own group and nothing else. */
+/** The write body. Partial: a switch sends its own group (or workspace) and nothing else. */
 export interface NotificationPreferencesUpdate {
-  discord_dm: Partial<Record<NotificationGroup, boolean>>;
+  discord_dm?: Partial<Record<NotificationGroup, boolean>>;
+  /** Keyed by workspace id. */
+  staff_workspaces?: Record<number, boolean>;
 }
 
 /** One DM handed to the bot for an account (`notification_delivery`); sends only, never skips. */

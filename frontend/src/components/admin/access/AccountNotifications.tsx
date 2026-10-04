@@ -13,13 +13,24 @@ import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import notificationService from "@/services/notification.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import type { AdminUserNotifications, NotificationGroup } from "@/types/notification.types";
+import type {
+  AdminUserNotifications,
+  NotificationGroup,
+  NotificationPreferencesUpdate
+} from "@/types/notification.types";
 
 const GROUPS: readonly { key: NotificationGroup; label: string; hint: string }[] = [
   { key: "tournament", label: "Tournaments", hint: "Check-in opening, registration decisions" },
   { key: "matches", label: "Matches", hint: "Match scheduled or moved, disputed reports" },
   { key: "team", label: "Teams", hint: "Invites, answers, removals" }
 ];
+
+/** Shown only for an account that is staff somewhere, like on the self-service screen. */
+const STAFF_GROUP = {
+  key: "staff",
+  label: "For organizers",
+  hint: "Disputes awaiting a decision; ignores the tournament DM mute"
+} as const;
 
 /** The personal kinds a DM can carry (`NOTIFICATION_KIND_GROUPS`); others fall back to the raw kind. */
 const KIND_LABELS: Record<string, string> = {
@@ -37,9 +48,9 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 /**
- * What reaches this account and where: the three Discord-DM switches, the
- * badge its bell shows, and the last DMs actually sent — the answer to "why
- * did I not get a message" without opening the database.
+ * What reaches this account and where: the Discord-DM group switches (plus one
+ * per staff workspace), the badge its bell shows, and the last DMs actually
+ * sent — the answer to "why did I not get a message" without opening the database.
  *
  * The switches are the user's own settings; an admin can flip them (support
  * asks for it) with `auth_user.update`, and every write answers with the
@@ -62,8 +73,8 @@ export function AccountNotifications({
   const data = query.data;
 
   const save = useMutation({
-    mutationFn: (discord_dm: Partial<Record<NotificationGroup, boolean>>) =>
-      notificationService.updateAdminUserPreferences(userId, { discord_dm }),
+    mutationFn: (body: NotificationPreferencesUpdate) =>
+      notificationService.updateAdminUserPreferences(userId, body),
     onSuccess: (saved: AdminUserNotifications) => queryClient.setQueryData(queryKey, saved),
     onError: (error) => notify.apiError(error, { title: "Could not change the DM setting" })
   });
@@ -87,7 +98,7 @@ export function AccountNotifications({
 
           <div role="group" aria-label="Discord direct messages" className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Discord DMs</p>
-            {GROUPS.map((group) => (
+            {[...GROUPS, ...(data.staff_workspaces.length > 0 ? [STAFF_GROUP] : [])].map((group) => (
               <div key={group.key} className="flex items-center justify-between gap-3 py-0.5">
                 <div className="min-w-0">
                   <p id={`${idPrefix}-${group.key}`} className="text-sm">
@@ -103,12 +114,35 @@ export function AccountNotifications({
                 <Switch
                   checked={data.discord_dm[group.key]}
                   disabled={!canEdit || save.isPending}
-                  onCheckedChange={(next) => save.mutate({ [group.key]: next })}
+                  onCheckedChange={(next) => save.mutate({ discord_dm: { [group.key]: next } })}
                   aria-labelledby={`${idPrefix}-${group.key}`}
                   aria-describedby={`${idPrefix}-${group.key}-hint`}
                 />
               </div>
             ))}
+            {data.staff_workspaces.length > 1
+              ? data.staff_workspaces.map((workspace) => (
+                  <div
+                    key={workspace.workspace_id}
+                    className="flex items-center justify-between gap-3 py-0.5 pl-4"
+                  >
+                    <p
+                      id={`${idPrefix}-staff-${workspace.workspace_id}`}
+                      className="min-w-0 truncate text-xs text-muted-foreground"
+                    >
+                      {workspace.name}
+                    </p>
+                    <Switch
+                      checked={workspace.enabled}
+                      disabled={!canEdit || !data.discord_dm.staff || save.isPending}
+                      onCheckedChange={(next) =>
+                        save.mutate({ staff_workspaces: { [workspace.workspace_id]: next } })
+                      }
+                      aria-labelledby={`${idPrefix}-staff-${workspace.workspace_id}`}
+                    />
+                  </div>
+                ))
+              : null}
           </div>
 
           <div className="space-y-1">
