@@ -119,7 +119,7 @@ export function StreamHealthDashboard() {
         )}
       </div>
 
-      <StatTileGrid>
+      <StatTileGrid className="xl:grid-cols-5">
         <StatTile
           label="Last tick"
           value={formatRelative(format, health.last_run_at)}
