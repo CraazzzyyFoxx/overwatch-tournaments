@@ -143,6 +143,8 @@ class _NodeFixture(_scrim._Fixture):
             stage_type=stage_type,
             order=order,
             max_rounds=1,
+            # Every scenario here is a played-out tournament.
+            is_completed=True,
         )
         return stage_id
 

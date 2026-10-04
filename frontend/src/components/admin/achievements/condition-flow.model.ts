@@ -123,6 +123,7 @@ export const SIDEBAR_GROUPS: RulePaletteGroup[] = [
       { type: "leaf", leafType: "encounter_revenge", label: "Encounter revenge" },
       { type: "leaf", leafType: "bracket_path", label: "Bracket path" },
       { type: "leaf", leafType: "tournament_format", label: "Format" },
+      { type: "leaf", leafType: "stage_completed", label: "Stage completed" },
     ],
   },
   {

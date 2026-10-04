@@ -314,6 +314,7 @@ from . import (  # noqa: E402, F401
     rank_history,
     reached_playoffs,
     registration,
+    stage_completed,
     standing,
     standing_count,
     stat_threshold,

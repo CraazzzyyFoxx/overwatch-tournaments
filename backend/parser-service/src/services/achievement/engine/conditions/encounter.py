@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.achievements.achievement import AchievementGrain
 from src import models
-from src.domain.achievement_stage_filters import encounter_is_bracket
+from src.domain.achievement_stage_filters import encounter_is_bracket, stage_is_completed
 
 from ..context import EvalContext
 from . import ResultSet, register
@@ -30,7 +30,9 @@ def join_final_encounters(query: sa.Select, workspace_id: int) -> sa.Select:
 
     Stage identity matters: the highest round number alone would let an earlier
     stage's round of the same number pass as the final, so the last bracket
-    stage is picked first and the last round is taken *within* that stage.
+    stage is picked first and the last round is taken *within* that stage --
+    and only once that stage is completed: mid-stage its last round played so
+    far is not the final, and a double elimination may still add a reset.
     """
     bracket_clause = encounter_is_bracket(
         encounter=models.Encounter,
@@ -72,6 +74,7 @@ def join_final_encounters(query: sa.Select, workspace_id: int) -> sa.Select:
             models.Encounter.status == "COMPLETED",
             models.Tournament.workspace_id == workspace_id,
             bracket_clause,
+            stage_is_completed(stage=models.Stage),
         )
         .group_by(models.Encounter.tournament_id, stage_order)
         .subquery("final_round")
@@ -93,7 +96,7 @@ def join_final_encounters(query: sa.Select, workspace_id: int) -> sa.Select:
     description="A series ended with one of the listed scorelines",
     required=("scores",),
     optional=("round_type", "side", "winner"),
-    depends_on=("tournament.encounter", "tournament.player"),
+    depends_on=("tournament.encounter", "tournament.player", "tournament.stage"),
 )
 async def execute_encounter_score(
     session: AsyncSession,

@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.achievements.achievement import AchievementGrain
 from src import models
-from src.domain.achievement_stage_filters import encounter_is_lower_bracket, encounter_is_upper_bracket
+from src.domain.achievement_stage_filters import (
+    encounter_is_lower_bracket,
+    encounter_is_upper_bracket,
+    stage_is_completed,
+)
 
 from ..context import EvalContext
 from . import ResultSet, register
@@ -25,6 +29,9 @@ def _encounter_base_query(context: EvalContext) -> sa.Select:
         .where(
             models.Encounter.status == "COMPLETED",
             models.Tournament.workspace_id == context.workspace_id,
+            # A route is only known once its bracket is over: mid-stage an
+            # "upper only" team may still drop, a lost round may still change.
+            stage_is_completed(stage=models.Stage),
         )
     )
 
@@ -106,7 +113,7 @@ def _loser_teams_query(
     grain=AchievementGrain.user_tournament,
     description="The team's route through the bracket",
     optional=("lost_in_round", "min_lower_bracket_wins", "played_lower_bracket", "played_upper_bracket"),
-    depends_on=("tournament.encounter", "tournament.player"),
+    depends_on=("tournament.encounter", "tournament.player", "tournament.stage"),
 )
 async def execute_bracket_path(
     session: AsyncSession,
