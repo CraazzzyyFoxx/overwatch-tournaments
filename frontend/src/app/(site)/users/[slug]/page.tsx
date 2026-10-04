@@ -27,7 +27,7 @@ import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderS
 import { ProfileJsonLd } from "@/app/(site)/users/components/shared/profile-jsonld";
 import UserProfileEmpty from "@/app/(site)/users/components/shared/UserProfileEmpty";
 import { resolveStatsScope } from "@/lib/site/tenant-host";
-import type { StatsScope, StatsScopeState } from "@/lib/site/stats-scope";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 // The route still renders dynamically (api-fetch reads the workspace cookie),
 // but we no longer force `fetchCache: force-no-store` — public, workspace-scoped
@@ -43,8 +43,6 @@ type UserPageSearchParams = {
   page?: string;
   selectedTournamentId?: string;
   achievementTournamentId?: string;
-  /** `all` reads every workspace; ignored on a tenant host. */
-  scope?: string;
   // Matches-tab server-side filters
   mResult?: string;
   mStage?: string;
@@ -127,18 +125,18 @@ type UserAndProfile = Awaited<ReturnType<typeof getUserAndProfile>>;
 const UserHeaderSection = async ({
   userAndProfile,
   slug,
-  scopeState
+  scope
 }: {
   userAndProfile: Promise<UserAndProfile>;
   slug: string;
-  scopeState: StatsScopeState;
+  scope: StatsScope;
 }) => {
   const { user, profile } = await userAndProfile;
   const canonical = new URL(`/users/${slug}`, SITE_URL_OBJ).toString();
   return (
     <>
       <ProfileJsonLd user={user} profile={profile} url={canonical} />
-      <UserHeader user={user} profile={profile} scopeState={scopeState} />
+      <UserHeader user={user} profile={profile} scope={scope} />
     </>
   );
 };
@@ -345,8 +343,8 @@ export default async function UserPage({
 }>) {
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
-  const scopeState = await resolveStatsScope(resolvedSearchParams.scope);
-  const userAndProfile = getUserAndProfile(resolvedParams.slug, scopeState.scope);
+  const scope = await resolveStatsScope();
+  const userAndProfile = getUserAndProfile(resolvedParams.slug, scope);
 
   const requestedTab = resolvedSearchParams.tab ?? "overview";
   const activeTab: UserTab = isUserTab(requestedTab) ? requestedTab : "overview";
@@ -369,7 +367,7 @@ export default async function UserPage({
     pageNumber,
     achievementTournamentId,
     matchFilters,
-    scope: scopeState.scope
+    scope
   });
 
   return (
@@ -378,7 +376,7 @@ export default async function UserPage({
         <UserHeaderSection
           userAndProfile={userAndProfile}
           slug={resolvedParams.slug}
-          scopeState={scopeState}
+          scope={scope}
         />
       </Suspense>
       <Suspense

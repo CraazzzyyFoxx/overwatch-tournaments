@@ -91,7 +91,7 @@ it("renders the users index with a row and its expanded detail", async () => {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
-          <UsersClient scopeState={{ scope: "workspace", available: true }} />
+          <UsersClient scope="workspace" />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );

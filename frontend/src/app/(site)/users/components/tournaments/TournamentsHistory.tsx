@@ -6,7 +6,6 @@ import { EncounterWithUserStats, UserProfile, UserTournament } from "@/types/use
 import userService from "@/services/user.service";
 import {
   type TournamentGroup,
-  groupMaxId,
   groupRepId,
   groupTournamentIds,
   groupTournamentsByLeague,
@@ -24,20 +23,6 @@ interface Props {
   profile?: UserProfile | null;
 }
 
-/** Rep-id of the most-recent event group (greatest tournament id). */
-const mostRecentKey = (groups: TournamentGroup[]): number | null => {
-  let best: number | null = null;
-  let bestId = -Infinity;
-  for (const group of groups) {
-    const id = groupMaxId(group);
-    if (id > bestId) {
-      bestId = id;
-      best = groupRepId(group);
-    }
-  }
-  return best;
-};
-
 const TournamentsHistory = ({ tournaments, selfUserId, profile = null }: Props) => {
   const searchParams = useSearchParams();
   const dossierRef = useRef<HTMLDivElement>(null);
@@ -53,7 +38,8 @@ const TournamentsHistory = ({ tournaments, selfUserId, profile = null }: Props) 
       const match = groups.find((group) => groupTournamentIds(group).includes(id));
       if (match) return groupRepId(match);
     }
-    return mostRecentKey(groups);
+    // The API returns events newest-first (by start date).
+    return groups.length ? groupRepId(groups[0]) : null;
     // Deep-link is read from the initial searchParams snapshot; selection is
     // client state thereafter (URL is kept in sync via replaceState on select).
   }, [groups, searchParams]);
@@ -156,7 +142,8 @@ const TournamentsHistory = ({ tournaments, selfUserId, profile = null }: Props) 
             loadingEncounters={encountersStatus === "loading"}
           />
         </div>
-        <div className="order-1 min-[1081px]:order-2">
+        {/* Desktop: the list is taken out of flow so the row height is the dossier's and the list scrolls inside it. */}
+        <div className="order-1 min-[1081px]:relative min-[1081px]:order-2 min-[1081px]:min-h-[520px]">
           <TournamentList groups={groups} selectedKey={effectiveKey} onSelect={selectEvent} />
         </div>
       </div>

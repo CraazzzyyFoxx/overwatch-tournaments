@@ -151,7 +151,7 @@ const TournamentList = ({ groups, selectedKey, onSelect }: Props) => {
   };
 
   return (
-    <div className="aqt-card-surface flex flex-col">
+    <div className="aqt-card-surface flex flex-col min-[1081px]:absolute min-[1081px]:inset-0">
       <div className="flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
         <span className="aqt-card-title">
           <span className="truncate">{t("users.tournaments.list.title")}</span>
@@ -193,7 +193,7 @@ const TournamentList = ({ groups, selectedKey, onSelect }: Props) => {
       </div>
 
       {visible.length > 0 ? (
-        <div className="max-h-[720px] overflow-y-auto">
+        <div className="max-h-[720px] overflow-y-auto min-[1081px]:max-h-none min-[1081px]:min-h-0 min-[1081px]:flex-1">
           {visible.map((group) => {
             const repId = groupRepId(group);
             return (

@@ -78,10 +78,6 @@ export const groupBestPlacement = (group: TournamentGroup): number | null => {
   return placements.length ? Math.min(...placements) : null;
 };
 
-/** Greatest tournament id in a group — used for "most recent" default + sort. */
-export const groupMaxId = (group: TournamentGroup): number =>
-  Math.max(...groupEntries(group).map((t) => t.id), 0);
-
 /** Aggregate W-D-L + map tallies across a group's entries. */
 export interface GroupAggregate {
   won: number;

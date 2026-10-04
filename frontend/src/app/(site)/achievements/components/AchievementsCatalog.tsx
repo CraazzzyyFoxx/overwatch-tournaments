@@ -30,8 +30,7 @@ import {
   type Rarity
 } from "@/app/(site)/users/components/achievements/rarity";
 
-import { StatsScopeToggle } from "@/components/site/StatsScopeToggle";
-import type { StatsScopeState } from "@/lib/site/stats-scope";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 import AchievementsHero from "./AchievementsHero";
 import AchievementTile from "./AchievementTile";
@@ -76,7 +75,7 @@ const PageSkeleton = () => (
   </div>
 );
 
-const AchievementsCatalog = ({ scopeState }: Readonly<{ scopeState: StatsScopeState }>) => {
+const AchievementsCatalog = ({ scope }: Readonly<{ scope: StatsScope }>) => {
   const t = useTranslations();
   const ranges = rarityRanges(t);
   const titles = rarityTitles(t);
@@ -93,9 +92,9 @@ const AchievementsCatalog = ({ scopeState }: Readonly<{ scopeState: StatsScopeSt
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   // One value carries the workspace dimension of the read and its cache key.
-  const scopeId = scopeState.scope === "all" ? "all" : workspaceId;
+  const scopeId = scope === "all" ? "all" : workspaceId;
   const workspaceName =
-    scopeState.scope === "all"
+    scope === "all"
       ? t("common.scope.all")
       : workspaces.find((w) => w.id === workspaceId)?.name;
 
@@ -231,7 +230,6 @@ const AchievementsCatalog = ({ scopeState }: Readonly<{ scopeState: StatsScopeSt
 
       {/* Toolbar: rarity + category filters, sort, search */}
       <div className="flex flex-wrap items-center gap-2">
-        <StatsScopeToggle state={scopeState} />
         <FilterChipGroup label={t("common.filters")}>
           <FilterChip
             active={!filtersActive}
@@ -339,9 +337,9 @@ const AchievementsCatalog = ({ scopeState }: Readonly<{ scopeState: StatsScopeSt
   );
 };
 
-const AchievementsCatalogPage = ({ scopeState }: Readonly<{ scopeState: StatsScopeState }>) => (
+const AchievementsCatalogPage = ({ scope }: Readonly<{ scope: StatsScope }>) => (
   <Suspense fallback={<PageSkeleton />}>
-    <AchievementsCatalog scopeState={scopeState} />
+    <AchievementsCatalog scope={scope} />
   </Suspense>
 );
 

@@ -4,14 +4,12 @@ import { resolveStatsScope } from "@/lib/site/tenant-host";
 
 import HeroLeaderboardContent from "./components/HeroLeaderboardContent";
 
-const HeroesComparePage = async ({
-  searchParams
-}: Readonly<{ searchParams: Promise<{ scope?: string }> }>) => {
-  const scopeState = await resolveStatsScope((await searchParams).scope);
+const HeroesComparePage = async () => {
+  const scope = await resolveStatsScope();
 
   return (
     <Suspense fallback={null}>
-      <HeroLeaderboardContent scopeState={scopeState} />
+      <HeroLeaderboardContent scope={scope} />
     </Suspense>
   );
 };

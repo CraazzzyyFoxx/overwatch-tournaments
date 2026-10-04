@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Check, ChevronsUpDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Cookies from "js-cookie";
+import { ArrowUpRight, Check, ChevronsUpDown, Globe2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import { STATS_SCOPE_COOKIE } from "@/lib/site/stats-scope";
 import { cn, initials } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Workspace } from "@/types/workspace.types";
@@ -51,15 +55,31 @@ function WorkspaceAvatar({
 
 export default function WorkspaceSwitcher() {
   const t = useTranslations();
+  const router = useRouter();
+  const statsScopeId = useId();
   const [open, setOpen] = useState(false);
   const { workspaces, currentWorkspaceId, fetchWorkspaces, setCurrentWorkspace } =
     useWorkspaceStore();
+  // The switcher only renders on the platform apex (the header swaps it out on
+  // a tenant host) and only after the workspaces load client-side, so reading
+  // the cookie during render cannot mismatch the server HTML.
+  const [allWorkspacesStats, setAllWorkspacesStats] = useState(
+    () => typeof document !== "undefined" && Cookies.get(STATS_SCOPE_COOKIE) === "all"
+  );
 
   useEffect(() => {
     fetchWorkspaces();
   }, [fetchWorkspaces]);
 
   const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+
+  const toggleAllWorkspacesStats = (next: boolean) => {
+    if (next) Cookies.set(STATS_SCOPE_COOKIE, "all", { sameSite: "lax", expires: 365 });
+    else Cookies.remove(STATS_SCOPE_COOKIE);
+    setAllWorkspacesStats(next);
+    // The scope is resolved by the server components; re-render them.
+    router.refresh();
+  };
 
   if (workspaces.length === 0) return null;
 
@@ -100,6 +120,9 @@ export default function WorkspaceSwitcher() {
             ) : (
               <span className="text-sm text-muted-foreground">WS</span>
             )}
+            {allWorkspacesStats ? (
+              <Globe2 className="size-4 text-[color:var(--aqt-fg-muted)]" aria-hidden />
+            ) : null}
             <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden />
           </button>
         </PopoverTrigger>
@@ -155,6 +178,19 @@ export default function WorkspaceSwitcher() {
               </Link>
             </>
           ) : null}
+          <div className="my-1 h-px bg-border" />
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <Globe2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <label htmlFor={statsScopeId} className="min-w-0 flex-1 cursor-pointer">
+              <span className="block text-sm">{t("common.scope.toggle")}</span>
+              <span className="block text-xs text-muted-foreground">{t("common.scope.hint")}</span>
+            </label>
+            <Switch
+              id={statsScopeId}
+              checked={allWorkspacesStats}
+              onCheckedChange={toggleAllWorkspacesStats}
+            />
+          </div>
         </PopoverContent>
       </Popover>
     </>

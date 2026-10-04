@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mirrors the vi.mock("next/headers", ...) pattern used by the
 // /auth/sso route test — lets us drive the request header from the test.
 let requestHeaders: Record<string, string | undefined> = {};
+let requestCookies: Record<string, string | undefined> = {};
 
 // bun's mock.module is process-global, so this replaces `next/headers` for the
 // whole run. Export `cookies` too (a benign stub) so we don't strip an export
@@ -12,7 +13,7 @@ vi.mock("next/headers", () => ({
     get: (name: string) => requestHeaders[name] ?? null,
   }),
   cookies: async () => ({
-    get: () => undefined,
+    get: (name: string) => (requestCookies[name] ? { value: requestCookies[name] } : undefined),
   }),
 }));
 
@@ -41,18 +42,21 @@ describe("isTenantHost", () => {
 describe("resolveStatsScope", () => {
   beforeEach(() => {
     requestHeaders = {};
+    requestCookies = {};
   });
 
   it("opts into all workspaces on the platform apex", async () => {
-    expect(await resolveStatsScope("all")).toEqual({ scope: "all", available: true });
+    requestCookies["owt-stats-scope"] = "all";
+    expect(await resolveStatsScope()).toBe("all");
   });
 
-  it("defaults to the workspace scope without the param", async () => {
-    expect(await resolveStatsScope(undefined)).toEqual({ scope: "workspace", available: true });
+  it("defaults to the workspace scope without the cookie", async () => {
+    expect(await resolveStatsScope()).toBe("workspace");
   });
 
-  it("ignores scope=all on a tenant host and hides the toggle", async () => {
+  it("ignores the cookie on a tenant host", async () => {
     requestHeaders["x-owt-host-mode"] = "tenant";
-    expect(await resolveStatsScope("all")).toEqual({ scope: "workspace", available: false });
+    requestCookies["owt-stats-scope"] = "all";
+    expect(await resolveStatsScope()).toBe("workspace");
   });
 });

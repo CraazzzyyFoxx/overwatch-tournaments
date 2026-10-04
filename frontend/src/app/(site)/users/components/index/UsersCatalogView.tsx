@@ -9,7 +9,6 @@ import { getPlayerSlug } from "@/lib/player";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserCatalogEntry } from "@/types/user.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { scopeHref, type StatsScope } from "@/lib/site/stats-scope";
 
 import { DivisionHex } from "./DivisionHex";
 import { ALPHABET, gridForRole, primaryRoleLabel, splitTag } from "./users-index.model";
@@ -26,7 +25,7 @@ export function UsersCatalogView({
   data: UsersIndexData;
 }>) {
   const t = useTranslations();
-  const { letter, scope } = controls.params;
+  const { letter } = controls.params;
   const { catalogQuery, availableLetters } = data;
 
   return (
@@ -75,7 +74,6 @@ export function UsersCatalogView({
                     key={cardUser.id}
                     user={cardUser}
                     grids={catalogQuery.data?.division_grids}
-                    scope={scope}
                   />
                 ))}
               </div>
@@ -122,12 +120,10 @@ export function UsersCatalogView({
 
 function CatalogCard({
   user,
-  grids,
-  scope
+  grids
 }: Readonly<{
   user: UserCatalogEntry;
   grids: DivisionGridVersion[] | undefined;
-  scope: StatsScope;
 }>) {
   const t = useTranslations();
   const { handle, tag } = splitTag(user.name);
@@ -135,7 +131,7 @@ function CatalogCard({
 
   return (
     <HoverPrefetchLink
-      href={scopeHref(`/users/${getPlayerSlug(user.name)}`, scope)}
+      href={`/users/${getPlayerSlug(user.name)}`}
       className={styles.catCard}
     >
       <div className={styles.catCardTop}>
