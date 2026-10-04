@@ -75,10 +75,11 @@ DiscordButton = Annotated[DiscordLinkButton | DiscordActionButton, Field(discrim
 class DiscordCard(BaseModel):
     """One Components V2 message: an accent-coloured container the bot lays out as
 
-    ``text`` (with ``thumbnail_url`` beside it), a divider, ``details`` and the
-    ``answers`` row, with one action row per entry of ``rows`` under the
-    container rather than in it. ``answers`` holds the card's one-click answers,
-    ``rows`` where to read more and how to stop hearing it.
+    ``text`` (with ``thumbnail_url`` beside it), a divider, ``details``,
+    ``image_url`` as a full-width picture and the ``answers`` row, with one
+    action row per entry of ``rows`` under the container rather than in it.
+    ``answers`` holds the card's one-click answers, ``rows`` where to read more
+    and how to stop hearing it.
     Both texts are Discord markdown, already escaped by the publisher. The
     layout lives in discord-service; this is only what fills it.
     """
@@ -87,6 +88,9 @@ class DiscordCard(BaseModel):
     text: str = Field(min_length=1)
     details: str | None = None
     thumbnail_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://")
+    #: A picture the card is *about* (an encounter's OpenGraph image), not its
+    #: icon: Discord shows it full width, fetching the URL itself.
+    image_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://")
     answers: list[DiscordButton] = Field(default_factory=list, max_length=5)
     # Discord's own caps: five buttons to a row, five rows to a message.
     rows: list[Annotated[list[DiscordButton], Field(min_length=1, max_length=5)]] = Field(

@@ -69,6 +69,16 @@ DEADLINE = "2026-09-25T18:00:00+00:00"
 # 2026-09-25T18:00:00Z as Discord reads it.
 DEADLINE_UNIX = int(datetime(2026, 9, 25, 18, 0, tzinfo=UTC).timestamp())
 
+#: Both teams known; the hour is a separate question (``exclude_none`` leaves
+#: ``scheduled_at`` out entirely when there is none).
+SCHEDULED = {
+    "encounter_id": 5,
+    "tournament_id": 3,
+    "tournament_name": "Cup",
+    "home_team_name": "A",
+    "away_team_name": "B",
+}
+
 
 class RenderTests(IsolatedAsyncioTestCase):
     """The templates themselves -- no session, no broker."""
@@ -260,6 +270,60 @@ class RenderTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(remote.thumbnail_url, "https://cdn/x.png")
         self.assertIsNone(relative.thumbnail_url)
+
+    def test_a_match_with_no_time_yet_is_still_worth_a_card(self) -> None:
+        """Both teams are known the moment the bracket advances; the hour often
+        is not. The card announces the match, and drops the empty time line."""
+        tbd = render_discord("encounter.scheduled", SCHEDULED, locale="ru", site_url=SITE)
+        timed = render_discord(
+            "encounter.scheduled", {**SCHEDULED, "scheduled_at": DEADLINE}, locale="ru", site_url=SITE
+        )
+
+        self.assertIn("### Следующий матч", tbd.text)
+        self.assertIsNone(tbd.details)
+        self.assertIn("### Матч назначен", timed.text)
+        self.assertIn(f"<t:{DEADLINE_UNIX}:F>", timed.details)
+
+    def test_the_match_card_leads_with_what_its_reader_can_do(self) -> None:
+        """A DM's reader plays the match: the room comes first, named after what
+        waits there. A channel post is read by everyone, so it leads with the
+        public page and only shows the room when there is a pick-ban to enter."""
+        pick_ban = {**SCHEDULED, "pick_ban": True}
+        room, match = f"{SITE}/tournaments/3/pregame/5", f"{SITE}/encounters/5"
+
+        dm = render_discord("encounter.scheduled", SCHEDULED, locale="ru", site_url=SITE, personal=True)
+        dm_pick_ban = render_discord("encounter.scheduled", pick_ban, locale="en", site_url=SITE, personal=True)
+        post = render_discord("encounter.scheduled", SCHEDULED, locale="ru", site_url=SITE)
+        post_pick_ban = render_discord("encounter.scheduled", pick_ban, locale="en", site_url=SITE)
+
+        self.assertEqual(
+            [(b.label, getattr(b, "url", b.type)) for b in dm.rows[-1]],
+            [("Комната матча", room), ("Матч", match), ("🔕", "action")],
+        )
+        self.assertEqual(
+            [(b.label, getattr(b, "url", b.type)) for b in dm_pick_ban.rows[-1]],
+            [("Pick-ban", room), ("Match", match), ("🔕", "action")],
+        )
+        self.assertEqual([(b.label, b.url) for b in post.rows[-1]], [("Матч", match)])
+        self.assertEqual([(b.label, b.url) for b in post_pick_ban.rows[-1]], [("Match", match), ("Pick-ban", room)])
+
+    def test_the_match_card_carries_its_own_opengraph_image(self) -> None:
+        """``?v=`` busts Discord's per-URL media cache: the same payload has to
+        keep the same URL, a new opponent or a new time a different one."""
+        card = render_discord("encounter.scheduled", SCHEDULED, locale="ru", site_url=f"{SITE}/")
+        again = render_discord("encounter.scheduled", dict(reversed(SCHEDULED.items())), locale="en", site_url=SITE)
+        timed = render_discord(
+            "encounter.scheduled", {**SCHEDULED, "scheduled_at": DEADLINE}, locale="ru", site_url=SITE
+        )
+        other = render_discord(
+            "check_in.opened", {"tournament_id": 3, "tournament_name": "Cup"}, locale="ru", site_url=SITE
+        )
+
+        self.assertRegex(card.image_url, rf"^{SITE}/encounters/5/og\?v=[0-9a-f]{{12}}$")
+        self.assertEqual(card.image_url, again.image_url)
+        self.assertNotEqual(card.image_url, timed.image_url)
+        # Only an encounter has a picture of its own.
+        self.assertIsNone(other.image_url)
 
 
 class _AsyncSessionShim:

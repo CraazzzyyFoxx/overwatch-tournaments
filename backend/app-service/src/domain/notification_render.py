@@ -27,6 +27,8 @@ Rules every card obeys:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -230,17 +232,29 @@ TEMPLATES: dict[str, dict[str, tuple[str, str, tuple[str, ...]]]] = {
     },
 }
 
-#: Link captions, one per destination.
+#: ``encounter.scheduled`` fires as soon as both teams are known, so the hour
+#: may still be missing: then the card announces the match itself (its detail
+#: line drops itself for want of ``scheduled_at``), not a time.
+_NO_TIME_HEADINGS = {"ru": "Следующий матч", "en": "Next match"}
+
+#: Link captions, one per destination. ``encounter.scheduled`` names its own
+#: three (D8): the room the readers play in, and the public match page.
 _LINK_LABELS: dict[str, dict[str, str]] = {
     "ru": {
         "participants": "Перейти к участникам",
         "pregame": "Открыть матч",
         "tournament": "Открыть турнир",
+        "match_room": "Комната матча",
+        "pick_ban": "Бан-пик",
+        "match": "Матч",
     },
     "en": {
         "participants": "View participants",
         "pregame": "Open match",
         "tournament": "Open tournament",
+        "match_room": "Match room",
+        "pick_ban": "Pick-ban",
+        "match": "Match",
     },
 }
 
@@ -366,6 +380,45 @@ def _action_row(kind: str, payload: Mapping[str, Any], labels: Mapping[str, str]
     return []
 
 
+def _scheduled_links(
+    payload: Mapping[str, Any], base: str, labels: Mapping[str, str], *, personal: bool
+) -> list[DiscordButton]:
+    """Where an ``encounter.scheduled`` card points (D8).
+
+    A DM leads with the room its reader acts in -- the pick-ban when the match
+    has one, the captains' lobby-code chat otherwise -- and offers the public
+    match page second. A channel post leads with that page, and shows the room
+    only when there is a pick-ban to walk into.
+    """
+    room = deep_link_path("encounter.scheduled", payload)
+    encounter_id = payload.get("encounter_id")
+    match = f"{base}/encounters/{encounter_id}" if isinstance(encounter_id, int) else None
+    pick_ban = payload.get("pick_ban") is True
+    buttons: list[DiscordButton] = []
+    if personal and room is not None:
+        buttons.append(DiscordLinkButton(label=labels["pick_ban" if pick_ban else "match_room"], url=f"{base}{room}"))
+    if match is not None:
+        buttons.append(DiscordLinkButton(label=labels["match"], url=match))
+    if not personal and pick_ban and room is not None:
+        buttons.append(DiscordLinkButton(label=labels["pick_ban"], url=f"{base}{room}"))
+    return buttons
+
+
+def _og_image_url(payload: Mapping[str, Any], base: str) -> str | None:
+    """The encounter's OpenGraph card, shown inside the Discord message itself.
+
+    ``?v=`` is the payload's own digest: Discord caches a media URL for good,
+    so a new opponent or a new time has to arrive as a new URL. The frontend
+    route ignores the query -- it is a cache buster, not an argument.
+    """
+    encounter_id = payload.get("encounter_id")
+    if not isinstance(encounter_id, int):
+        return None
+    snapshot = json.dumps(dict(payload), sort_keys=True, default=str)
+    version = hashlib.sha1(snapshot.encode(), usedforsecurity=False).hexdigest()[:12]
+    return f"{base}/encounters/{encounter_id}/og?v={version}"
+
+
 def render_discord(
     kind: str,
     payload: Mapping[str, Any],
@@ -393,6 +446,8 @@ def render_discord(
         raise ValueError(f"no Discord template for notification kind {kind!r}")
 
     heading, sentence, detail_lines = template
+    if kind == "encounter.scheduled" and not payload.get("scheduled_at"):
+        heading = _NO_TIME_HEADINGS[locale]
     fields = _fields(kind, payload, locale)
 
     text = f"### {heading}\n{sentence.format_map(fields)}"
@@ -409,10 +464,15 @@ def render_discord(
     color = _ANSWER_COLORS.get(str(payload.get("answer")), _BLUE) if kind == "team_invite.answered" else _COLORS[kind]
 
     base = site_url.rstrip("/")
-    onward: list[DiscordButton] = []
-    path = deep_link_path(kind, payload)
-    if path is not None:
-        onward.append(DiscordLinkButton(label=_LINK_LABELS[locale][_destination(kind)], url=f"{base}{path}"))
+    labels = _LINK_LABELS[locale]
+    onward: list[DiscordButton]
+    if kind == "encounter.scheduled":
+        onward = _scheduled_links(payload, base, labels, personal=personal)
+    else:
+        onward = []
+        path = deep_link_path(kind, payload)
+        if path is not None:
+            onward.append(DiscordLinkButton(label=labels[_destination(kind)], url=f"{base}{path}"))
     if personal:
         onward.append(DiscordActionButton(label=_MENU_LABEL, action="notifications.menu", target="all"))
 
@@ -422,6 +482,8 @@ def render_discord(
         details="\n".join(details) or None,
         # Discord only fetches absolute http(s) media; anything else is a 400.
         thumbnail_url=image_url if image_url and image_url.startswith(("https://", "http://")) else None,
+        # The branding thumbnail is beside the text; this is the card's subject.
+        image_url=_og_image_url(payload, base) if kind == "encounter.scheduled" else None,
         # Answers in the card; where to read more and how to stop hearing it under it.
         answers=_action_row(kind, payload, _ACTION_LABELS[locale]),
         rows=[onward] if onward else [],
