@@ -37,6 +37,12 @@ const nextConfig = {
   },
   // Only use standalone output in production builds
   ...(process.env.NODE_ENV === "production" && { output: "standalone" }),
+  // `src/app/fonts/onest-*.ttf` is read at runtime by the OpenGraph renderer
+  // (`src/lib/og/encounter.tsx`), not imported, so nothing traces it on its
+  // own and the standalone image would ship without it.
+  outputFileTracingIncludes: {
+    "/**": ["./src/app/fonts/onest-400.ttf", "./src/app/fonts/onest-700.ttf"]
+  },
   // Enable polling only inside Docker (native fs watcher doesn't work with bind mounts)
   ...(process.env.DOCKER === "1" && { watchOptions: { pollIntervalMs: 1000 } }),
   // Extra hosts allowed to reach `next dev` through a tunnel (cloudpub, ngrok,

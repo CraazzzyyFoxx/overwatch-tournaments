@@ -5,7 +5,7 @@ import type {
   DivisionTier,
 } from "@/types/workspace.types";
 
-type DivisionGridLike = Pick<DivisionGrid, "tiers"> | Pick<DivisionGridVersion, "tiers">;
+export type DivisionGridLike = Pick<DivisionGrid, "tiers"> | Pick<DivisionGridVersion, "tiers">;
 
 /**
  * The Overwatch ladder as a grid, derived from `@/lib/divisions/ow-ladder`.

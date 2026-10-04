@@ -3136,6 +3136,9 @@
         "itemNumber": "Герой №{id}"
       },
       "title": "Предигровая комната",
+      "metaTitle": "Бан-пик: {home} против {away}",
+      "metaDescription": "Комната бан-пика {home} против {away} на {siteName}.",
+      "metaDescriptionFallback": "Комната бан-пика на {siteName}.",
       "phase": {
         "map": "Вето карт",
         "hero": "Баны героев",
@@ -6535,7 +6538,7 @@
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {Отчёт по вашему матчу оспорен} other {Отчёт по карте # вашего матча оспорен}}",
         "dispute_review": "{position, plural, =0 {Капитаны {home_team_name} и {away_team_name} разошлись в итоговом счёте серии — нужно решение организатора} other {Капитаны {home_team_name} и {away_team_name} разошлись в счёте карты # — нужно решение организатора}}",
-        "scheduled": "Матч {home_team_name} — {away_team_name} на {tournament_name} назначен на {scheduled_at}"
+        "scheduled": "Матч {home_team_name} — {away_team_name} на {tournament_name} {scheduled_at, select, none {готов к игре — время ещё не назначено} other {назначен на {scheduled_at}}}"
       },
       "announcement": {
         "published": "Новое объявление"

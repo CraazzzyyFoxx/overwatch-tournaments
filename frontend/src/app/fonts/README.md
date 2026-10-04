@@ -19,6 +19,7 @@ each family's licence sits beside its `.woff2` here, as the licence requires.
 | --- | --- |
 | `inter-variable.woff2` | `ofl/inter/Inter[opsz,wght].ttf` |
 | `onest-variable.woff2` | `ofl/onest/Onest[wght].ttf` |
+| `onest-400.ttf`, `onest-700.ttf` | `ofl/onest/Onest[wght].ttf`, instanced |
 
 [gf]: https://github.com/google/fonts
 
@@ -32,6 +33,17 @@ pyftsubset "<Family>[wght].ttf" \
 
 `fonttools[woff]` provides `pyftsubset`; the `[woff]` extra is what pulls in
 brotli for the woff2 flavour. Both families take the same ranges.
+
+The two `onest-*.ttf` are for Satori (`src/lib/og/encounter.tsx`), which
+rasterizes OpenGraph cards outside the browser: it cannot read `woff2` and
+cannot interpolate a variable axis, and the font `next/og` ships with has no
+Cyrillic. Same ranges, one static instance per weight the card uses:
+
+```sh
+python -m fontTools.varLib.instancer "Onest[wght].ttf" wght=400 -o inst-400.ttf
+python -m fontTools.subset inst-400.ttf --unicodes="<ranges above>" \
+  --no-hinting --output-file=onest-400.ttf
+```
 
 ## Why these ranges
 

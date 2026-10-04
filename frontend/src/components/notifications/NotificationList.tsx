@@ -204,11 +204,15 @@ const NotificationList = ({
         });
       }
     }
-    // A phase with no end carries no `closes_at` at all, and an ICU `select`
-    // needs its argument in every case: the message branches on this sentinel
-    // rather than the key existing.
+    // A phase with no end carries no `closes_at` at all, and a match whose time
+    // is not fixed yet carries no `scheduled_at`; an ICU `select` needs its
+    // argument in every case, so the message branches on this sentinel rather
+    // than the key existing.
     if (item.kind === "registration.opened" || item.kind === "check_in.opened") {
       values.closes_at ??= "none";
+    }
+    if (item.kind === "encounter.scheduled") {
+      values.scheduled_at ??= "none";
     }
     return t(key, values);
   };

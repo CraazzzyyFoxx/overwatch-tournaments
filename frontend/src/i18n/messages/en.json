@@ -3136,6 +3136,9 @@
         "itemNumber": "Hero #{id}"
       },
       "title": "Pre-game Room",
+      "metaTitle": "Pick-ban: {home} vs {away}",
+      "metaDescription": "Pick-ban room for {home} vs {away} on {siteName}.",
+      "metaDescriptionFallback": "Pick-ban room on {siteName}.",
       "phase": {
         "map": "Map veto",
         "hero": "Hero bans",
@@ -6535,7 +6538,7 @@
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
         "dispute_review": "{position, plural, =0 {{home_team_name} and {away_team_name} disagree on the final series score — an organizer has to decide} other {{home_team_name} and {away_team_name} disagree on the score of map # — an organizer has to decide}}",
-        "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} is scheduled for {scheduled_at}"
+        "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} {scheduled_at, select, none {is ready to play — the time is still to be announced} other {is scheduled for {scheduled_at}}}"
       },
       "announcement": {
         "published": "New announcement"
