@@ -28,6 +28,9 @@ class AppConfig(BaseServiceSettings):
     log_reaper_processing_after_seconds: int = 1800
     log_reaper_max_attempts: int = 5
     log_reaper_batch_size: int = 25
+    # Failed logs (src/services/match_logs/retention.py) stay in S3 this long for
+    # inspection/retry. Unfinished logs are deleted immediately instead.
+    failed_log_retention_days: int = 14
 
     redis_url: RedisDsn
 

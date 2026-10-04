@@ -46,8 +46,9 @@ vi.mock("@/stores/account-settings-modal.store", () => ({
 }));
 
 const LINKED: NotificationPreferences = {
-  discord_dm: { tournament: true, matches: true, team: true },
-  discord_linked: true
+  discord_dm: { tournament: true, matches: true, team: true, staff: true },
+  discord_linked: true,
+  staff_workspaces: []
 };
 
 function tick(ms = 0) {
@@ -94,10 +95,10 @@ beforeEach(() => {
   document.body.innerHTML = "";
   setActiveTab.mockReset();
   preferences.mockReset().mockResolvedValue(LINKED);
-  updatePreferences.mockReset().mockImplementation((body: { discord_dm: Record<string, boolean> }) =>
+  updatePreferences.mockReset().mockImplementation((body: { discord_dm?: Record<string, boolean> }) =>
     Promise.resolve({
-      discord_dm: { ...LINKED.discord_dm, ...body.discord_dm },
-      discord_linked: true
+      ...LINKED,
+      discord_dm: { ...LINKED.discord_dm, ...body.discord_dm }
     })
   );
 });
@@ -142,5 +143,31 @@ describe("NotificationsSection", () => {
     const container = await mount();
 
     expect(container.textContent).not.toContain("notifications.linkDiscordHint");
+  });
+
+  it("offers the organizer switches only to staff, one per workspace, inert while the group is off", async () => {
+    const plain = await mount();
+    expect(plain.querySelector('[aria-labelledby="dm-staff-label"]')).toBeNull();
+
+    document.body.innerHTML = "";
+    const staff: NotificationPreferences = {
+      ...LINKED,
+      staff_workspaces: [
+        { workspace_id: 1, name: "Alpha", enabled: true },
+        { workspace_id: 2, name: "Beta", enabled: true }
+      ]
+    };
+    preferences.mockResolvedValue(staff);
+    updatePreferences.mockImplementation((body: { discord_dm?: Record<string, boolean> }) =>
+      Promise.resolve({ ...staff, discord_dm: { ...staff.discord_dm, ...body.discord_dm } })
+    );
+    const container = await mount();
+
+    await click(switchFor(container, "staff-2"));
+    expect(updatePreferences).toHaveBeenCalledWith({ staff_workspaces: { 2: false } });
+
+    await click(switchFor(container, "staff"));
+    expect(updatePreferences).toHaveBeenLastCalledWith({ discord_dm: { staff: false } });
+    expect(switchFor(container, "staff-1").disabled).toBe(true);
   });
 });

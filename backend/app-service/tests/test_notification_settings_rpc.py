@@ -32,7 +32,7 @@ from cashews import cache  # noqa: E402
 
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.oauth import OAuthConnection  # noqa: E402
-from shared.models.identity.rbac import Role, user_roles  # noqa: E402
+from shared.models.identity.rbac import Permission, Role, UserPermissionDeny, role_permissions, user_roles  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
 from shared.models.platform.notification import (  # noqa: E402
     Notification,
@@ -70,6 +70,10 @@ TABLES = (
     User.__table__,
     Role.__table__,
     user_roles,
+    # The staff half: which workspaces offer a per-workspace ``staff`` switch.
+    Permission.__table__,
+    role_permissions,
+    UserPermissionDeny.__table__,
 )
 
 ALICE = 100
@@ -243,9 +247,13 @@ class PreferencesRpcTests(_SettingsCase):
         )
 
         self.assertTrue(first["ok"], first)
-        self.assertEqual(first["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True})
+        self.assertEqual(
+            first["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True, "staff": True}
+        )
         self.assertTrue(second["ok"], second)
-        self.assertEqual(second["data"]["discord_dm"], {"tournament": True, "matches": False, "team": False})
+        self.assertEqual(
+            second["data"]["discord_dm"], {"tournament": True, "matches": False, "team": False, "staff": True}
+        )
         self.assertEqual(self.stored(), {"matches": False, "team": False})
 
     async def test_an_unknown_group_is_rejected(self) -> None:
@@ -262,6 +270,57 @@ class PreferencesRpcTests(_SettingsCase):
         """``NotificationDmGroups`` is hand-written for OpenAPI; keep it honest."""
         self.assertEqual(set(schemas.NotificationDmGroups.model_fields), set(NOTIFICATION_GROUPS))
         self.assertEqual(set(schemas.NotificationDmGroupsUpdate.model_fields), set(NOTIFICATION_GROUPS))
+
+    def make_staff(self, workspace_id: int, name: str, *, organizer: bool = True) -> None:
+        """Alice holds a role in a new workspace: an organizer one (``match.result``) or a bare one."""
+        self.session.add(Workspace(id=workspace_id, slug=f"ws{workspace_id}", name=name))
+        self.session.add(Role(id=workspace_id, name=f"role-{workspace_id}", workspace_id=workspace_id))
+        self.session.flush()
+        # Association ``created_at`` defaults to ``now()``, which SQLite lacks.
+        if organizer:
+            self.session.add(
+                Permission(id=workspace_id, name=f"match:result:{workspace_id}", resource="match", action="result")
+            )
+            self.session.flush()
+            self.session.execute(
+                sa.insert(role_permissions).values(role_id=workspace_id, permission_id=workspace_id, created_at=PAST)
+            )
+        self.session.execute(sa.insert(user_roles).values(user_id=ALICE, role_id=workspace_id, created_at=PAST))
+
+    async def test_staff_workspaces_are_listed_and_switch_one_at_a_time(self) -> None:
+        """A per-workspace switch is partial like a group, and only exists where Alice is staff."""
+        self.make_staff(1, "Beta")
+        self.make_staff(2, "Alpha")
+        # A role without the organizer permission is not staff: no switch for it.
+        self.make_staff(3, "Gamma", organizer=False)
+
+        answer = await self.call(
+            "rpc.app.notification_preferences_update",
+            {"identity": _ALICE, "payload": {"staff_workspaces": {"1": False}}},
+        )
+
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(
+            answer["data"]["staff_workspaces"],
+            [
+                {"workspace_id": 2, "name": "Alpha", "enabled": True},
+                {"workspace_id": 1, "name": "Beta", "enabled": False},
+            ],
+        )
+        self.assertEqual(self.stored(), {"staff_workspaces": {"1": False}})
+
+    async def test_a_workspace_alice_is_not_staff_in_is_rejected(self) -> None:
+        """Otherwise the row collects switches that can never do anything."""
+        self.make_staff(3, "Gamma", organizer=False)
+
+        answer = await self.call(
+            "rpc.app.notification_preferences_update",
+            {"identity": _ALICE, "payload": {"staff_workspaces": {"3": False}}},
+        )
+
+        self.assertFalse(answer["ok"], answer)
+        self.assertEqual(answer["error"]["code"], "unprocessable")
+        self.assertIsNone(self.stored())
 
 
 class AdminUserNotificationsRpcTests(_SettingsCase):
@@ -378,7 +437,9 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         answer = await self.read(_READER)
 
         self.assertTrue(answer["ok"], answer)
-        self.assertEqual(answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True})
+        self.assertEqual(
+            answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True, "staff": True}
+        )
         self.assertTrue(answer["data"]["discord_linked"])
 
     async def test_the_unread_count_is_the_one_that_accounts_bell_shows(self) -> None:
@@ -433,7 +494,9 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         answer = await self.write(_EDITOR, matches=False)
 
         self.assertTrue(answer["ok"], answer)
-        self.assertEqual(answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True})
+        self.assertEqual(
+            answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": True, "staff": True}
+        )
         self.assertEqual(answer["data"]["unread_count"], 0)
         self.assertEqual(answer["data"]["recent_deliveries"], [])
         self.assertEqual(self.stored(TARGET), {"matches": False})
@@ -446,7 +509,9 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         await self.write(_EDITOR, matches=False)
         answer = await self.write(_EDITOR, team=False)
 
-        self.assertEqual(answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": False})
+        self.assertEqual(
+            answer["data"]["discord_dm"], {"tournament": True, "matches": False, "team": False, "staff": True}
+        )
         self.assertEqual(self.stored(TARGET), {"matches": False, "team": False})
 
 

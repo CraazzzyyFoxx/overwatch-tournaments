@@ -98,6 +98,7 @@ def register(broker: Any, logger: Any) -> None:
                 # ``exclude_none`` keeps the edit partial, as in the self-service
                 # write this delegates to.
                 discord_dm=body.discord_dm.model_dump(exclude_none=True),
+                staff_workspaces=body.staff_workspaces,
             )
 
         return await c.envelope(logger, "notifications.admin_user_preferences_update", op, session_factory=_SF)

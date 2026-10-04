@@ -20,6 +20,7 @@ transaction that is about to commit.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,42 +109,82 @@ class NotificationRecipientRepository:
         platform operators about every tournament on the site. The organizers of
         the workspace that owns the rows are the ones who can act on them.
         """
-        permission_grants = sa.or_(
-            sa.and_(
-                models.Permission.resource.in_((resource, "*")),
-                models.Permission.action.in_((action, "*")),
-            ),
-            # ``is_workspace_admin``'s wildcard: ``admin:*`` is admin-equivalent
-            # without naming a resource.
-            sa.and_(models.Permission.resource == "admin", models.Permission.action == "*"),
-        )
-        denied = (
-            sa.select(models.UserPermissionDeny.user_id)
-            .join(models.Permission, models.Permission.id == models.UserPermissionDeny.permission_id)
-            .where(
-                # No wildcard expansion on the deny side -- a deny row removes
-                # exactly the pair it names, which is what the model documents.
-                models.Permission.resource == resource,
-                models.Permission.action == action,
-                sa.or_(
-                    models.UserPermissionDeny.workspace_id.is_(None),
-                    models.UserPermissionDeny.workspace_id == workspace_id,
-                ),
-            )
-        )
         query = (
-            sa.select(user_roles.c.user_id)
-            .join(models.Role, models.Role.id == user_roles.c.role_id)
-            # Outer: an ``owner``/``admin`` role grants without carrying a single
-            # permission row, and an inner join would drop exactly those people.
-            .outerjoin(role_permissions, role_permissions.c.role_id == models.Role.id)
-            .outerjoin(models.Permission, models.Permission.id == role_permissions.c.permission_id)
-            .where(
-                models.Role.workspace_id == workspace_id,
-                sa.or_(models.Role.name.in_(("owner", "admin")), permission_grants),
-                user_roles.c.user_id.not_in(denied),
-            )
+            _staff_grants(resource, action, user_roles.c.user_id)
+            .where(models.Role.workspace_id == workspace_id)
             .distinct()
         )
         result = await session.scalars(query)
         return [int(value) for value in result.all()]
+
+    async def staff_workspaces(
+        self,
+        session: AsyncSession,
+        auth_user_id: int,
+        resource: str,
+        action: str,
+    ) -> list[tuple[int, str]]:
+        """``(workspace_id, name)`` for every workspace where this account is staff.
+
+        The other direction of ``workspace_staff_auth_user_ids``, over the same
+        predicate, so the settings page offers a switch exactly where that read
+        would page this account. Sorted by name for a stable list.
+        """
+        query = (
+            _staff_grants(resource, action, models.Workspace.id, models.Workspace.name)
+            .join(models.Workspace, models.Workspace.id == models.Role.workspace_id)
+            .where(user_roles.c.user_id == auth_user_id)
+            .distinct()
+            .order_by(models.Workspace.name, models.Workspace.id)
+        )
+        result = await session.execute(query)
+        return [(int(workspace_id), name) for workspace_id, name in result.all()]
+
+
+def _staff_grants(resource: str, action: str, *columns: Any) -> sa.Select:
+    """``columns`` over the ``user_roles ⋈ role`` rows granting ``(resource, action)``
+    in the role's own workspace.
+
+    Shared by both directions of the staff lookup; the caller pins either the
+    workspace or the account. ``select_from`` is explicit because the selected
+    columns need not come from the leftmost table.
+    """
+    permission_grants = sa.or_(
+        sa.and_(
+            models.Permission.resource.in_((resource, "*")),
+            models.Permission.action.in_((action, "*")),
+        ),
+        # ``is_workspace_admin``'s wildcard: ``admin:*`` is admin-equivalent
+        # without naming a resource.
+        sa.and_(models.Permission.resource == "admin", models.Permission.action == "*"),
+    )
+    denied = (
+        sa.select(models.UserPermissionDeny.user_id)
+        .join(models.Permission, models.Permission.id == models.UserPermissionDeny.permission_id)
+        .where(
+            models.UserPermissionDeny.user_id == user_roles.c.user_id,
+            # No wildcard expansion on the deny side -- a deny row removes
+            # exactly the pair it names, which is what the model documents.
+            models.Permission.resource == resource,
+            models.Permission.action == action,
+            sa.or_(
+                models.UserPermissionDeny.workspace_id.is_(None),
+                models.UserPermissionDeny.workspace_id == models.Role.workspace_id,
+            ),
+        )
+        .correlate(user_roles, models.Role)
+    )
+    return (
+        sa.select(*columns)
+        .select_from(user_roles)
+        .join(models.Role, models.Role.id == user_roles.c.role_id)
+        # Outer: an ``owner``/``admin`` role grants without carrying a single
+        # permission row, and an inner join would drop exactly those people.
+        .outerjoin(role_permissions, role_permissions.c.role_id == models.Role.id)
+        .outerjoin(models.Permission, models.Permission.id == role_permissions.c.permission_id)
+        .where(
+            models.Role.workspace_id.is_not(None),
+            sa.or_(models.Role.name.in_(("owner", "admin")), permission_grants),
+            ~sa.exists(denied),
+        )
+    )

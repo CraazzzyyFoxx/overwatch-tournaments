@@ -53,6 +53,8 @@ __all__ = (
     "NOTIFICATION_GROUPS",
     "NOTIFICATION_KINDS",
     "NOTIFICATION_KIND_GROUPS",
+    "STAFF_PERMISSION",
+    "STAFF_WORKSPACES_KEY",
     "SUPPORTED_LOCALES",
     "AnnouncementLocale",
     "AnnouncementPayload",
@@ -73,6 +75,7 @@ __all__ = (
     "notify",
     "validate_notification_payload",
     "wants_discord_dm",
+    "wants_staff_workspace",
 )
 
 Audience = Literal["user", "workspace", "global"]
@@ -191,12 +194,18 @@ class TournamentPhaseOpenedPayload(_Payload):
 
 
 class EncounterScheduledPayload(_Payload):
+    """A match both rosters can now prepare for. ``scheduled_at`` is absent
+    while the organizer has not given the match a time -- "you play X, time
+    TBD" is still the news -- and ``pick_ban`` says whether the room the
+    message links to runs a pick-ban."""
+
     encounter_id: int
     tournament_id: int
     tournament_name: str
     home_team_name: str
     away_team_name: str
-    scheduled_at: datetime
+    scheduled_at: datetime | None = None
+    pick_ban: bool = False
 
 
 class AnnouncementText(_Payload):
@@ -280,9 +289,11 @@ NOTIFICATION_KINDS: dict[str, type[BaseModel]] = {
 #: announcement (operator text that already has its own banner).
 BROADCASTABLE_KINDS: frozenset[str] = frozenset({"registration.opened", "check_in.opened", "encounter.scheduled"})
 
-#: The three switches a user sees for Discord DMs. Groups rather than one
-#: toggle per kind: twelve checkboxes is a settings page nobody reads.
-NotificationGroup = Literal["tournament", "matches", "team"]
+#: The switches a user sees for Discord DMs. Groups rather than one toggle per
+#: kind: twelve checkboxes is a settings page nobody reads. ``staff`` is the
+#: organizer's pager and is the only group split further, per workspace -- see
+#: ``STAFF_WORKSPACES_KEY``.
+NotificationGroup = Literal["tournament", "matches", "team", "staff"]
 NOTIFICATION_GROUPS: tuple[NotificationGroup, ...] = get_args(NotificationGroup)
 
 #: Every personal kind -> its DM group. ``registration.opened`` and
@@ -294,13 +305,25 @@ NOTIFICATION_KIND_GROUPS: dict[str, NotificationGroup] = {
     "registration.rejected": "tournament",
     "encounter.scheduled": "matches",
     "encounter.report_disputed": "matches",
-    "encounter.dispute_review": "matches",
+    "encounter.dispute_review": "staff",
     "team_invite.received": "team",
     "team_invite.answered": "team",
     "team.kicked": "team",
     "team.disbanded": "team",
     "team.rejected": "team",
 }
+
+#: The permission that makes somebody an organizer of a workspace for the
+#: ``staff`` group: it is what ending a dispute needs, and the settings page
+#: offers a per-workspace switch exactly where this is held.
+#: ``ponytail:`` one permission while ``encounter.dispute_review`` is the only
+#: staff kind; a staff kind gated on something else turns this into a set.
+STAFF_PERMISSION: tuple[str, str] = ("match", "result")
+
+#: Key inside ``notification_preference.discord_dm`` holding the per-workspace
+#: staff opt-outs, ``{"<workspace_id>": false}``. String keys because JSON has
+#: no other kind; like the groups, only what the user changed is stored.
+STAFF_WORKSPACES_KEY = "staff_workspaces"
 
 
 def effective_discord_dm(stored: Mapping[str, Any]) -> dict[NotificationGroup, bool]:
@@ -313,10 +336,23 @@ def effective_discord_dm(stored: Mapping[str, Any]) -> dict[NotificationGroup, b
     return {group: stored.get(group) is not False for group in NOTIFICATION_GROUPS}
 
 
-def wants_discord_dm(stored: Mapping[str, Any], kind: str) -> bool:
-    """Whether a personal row of ``kind`` should also reach the user's Discord DMs."""
+def wants_staff_workspace(stored: Mapping[str, Any], workspace_id: int) -> bool:
+    """The per-workspace staff switch alone, default on; the group switch is separate."""
+    overrides = stored.get(STAFF_WORKSPACES_KEY)
+    return not isinstance(overrides, Mapping) or overrides.get(str(workspace_id)) is not False
+
+
+def wants_discord_dm(stored: Mapping[str, Any], kind: str, *, workspace_id: int | None) -> bool:
+    """Whether a personal row of ``kind`` should also reach the user's Discord DMs.
+
+    ``workspace_id`` is the row's source workspace; it only matters for a
+    ``staff`` kind, where the group switch and that workspace's switch must
+    both be on.
+    """
     group = NOTIFICATION_KIND_GROUPS.get(kind)
-    return group is not None and effective_discord_dm(stored)[group]
+    if group is None or not effective_discord_dm(stored)[group]:
+        return False
+    return group != "staff" or workspace_id is None or wants_staff_workspace(stored, workspace_id)
 
 
 def validate_notification_payload(

@@ -6,10 +6,8 @@ import { PlayerWithStats, TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
 import { TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { sortTeamPlayers } from "@/lib/player";
-import PlayerName from "@/components/PlayerName";
-import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { RosterPlayer, RosterRank, RosterRole } from "@/components/TournamentTeamCard";
 import { PerformanceBadge } from "@/components/PerformanceBadge";
-import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TeamLogo } from "@/components/TeamName";
 import type { DivisionGridVersion } from "@/types/workspace.types";
@@ -101,7 +99,7 @@ const MatchTeamTable = ({
           </span>
         </TableHead>
         <TableHead scope="col" className="text-center">
-          {t("matches.col.division")}
+          {t("teams.roster.rank")}
         </TableHead>
         <TableHead scope="col" className="text-center">
           {t("common.heroes")}
@@ -137,18 +135,17 @@ const MatchTeamTable = ({
                 background: `linear-gradient(to right, color-mix(in srgb, ${teamAccent} 22%, var(--aqt-card)), var(--aqt-card) 60%)`
               }}
             >
-              <PlayerRoleIcon role={player.role} />
-              <PlayerName player={player} includeSpecialization={true} />
+              {/* One map lists only who played it, so there is no substitution branch. */}
+              <RosterRole role={player.role} />
+              <RosterPlayer player={player} captainUserId={team.captain_id} />
             </TableCell>
             <TableCell>
-              <div className="flex justify-center">
-                <DivisionIcon
-                  division={player.division}
-                  width={32}
-                  height={32}
-                  tournamentGrid={tournamentGrid}
-                />
-              </div>
+              <RosterRank
+                division={player.division}
+                rank={player.rank}
+                tournamentGrid={tournamentGrid}
+                className="justify-center"
+              />
             </TableCell>
             <TableCell>
               <div className="flex justify-center">

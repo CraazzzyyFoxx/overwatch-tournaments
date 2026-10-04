@@ -185,6 +185,26 @@ class ButtonContractTests(IsolatedAsyncioTestCase):
         self.assertIn("Срок приглашения истёк", _reply_text(dispatcher.reply(outcome, "invite.accept", "ru")))
 
 
+class CardLayoutTests(IsolatedAsyncioTestCase):
+    """What the coloured container holds, and in which order."""
+
+    async def test_a_cards_own_picture_hangs_under_its_text(self) -> None:
+        """``image_url`` is the card's subject (an encounter's OpenGraph image),
+        so it is a full-width gallery below the details, not the thumbnail."""
+        plain = card_view(DiscordCard(text="### Match", details="**Starts:** soon"))
+        with_image = card_view(
+            DiscordCard(text="### Match", details="**Starts:** soon", image_url="https://og.example/5.png")
+        )
+
+        (bare,) = plain.to_components()
+        (container,) = with_image.to_components()
+        # 10 text, 14 separator, 12 media gallery.
+        self.assertEqual([child["type"] for child in bare["components"]], [10, 14, 10])
+        self.assertEqual([child["type"] for child in container["components"]], [10, 14, 10, 12])
+        gallery = container["components"][-1]
+        self.assertEqual([item["media"]["url"] for item in gallery["items"]], ["https://og.example/5.png"])
+
+
 class CardAfterTheClickTests(IsolatedAsyncioTestCase):
     async def test_settling_removes_only_the_spent_buttons(self) -> None:
         settled = settle(card_view(_invite_card()), retire=ACTIONS["invite.accept"].settles, note="-# accepted")
@@ -258,7 +278,9 @@ class MuteEverythingTests(IsolatedAsyncioTestCase):
             await _dispatcher().handle(prompt, "notifications.mute", "all")
 
         (_, body) = rpc.calls[-1]
-        self.assertEqual(body["payload"], {"discord_dm": {"tournament": False, "matches": False, "team": False}})
+        self.assertEqual(
+            body["payload"], {"discord_dm": {"tournament": False, "matches": False, "team": False, "staff": False}}
+        )
         # The prompt becomes the answer rather than gaining a second reply beneath it.
         prompt.followup.send.assert_not_awaited()
         self.assertIn("отключены", _reply_text(prompt.edit_original_response.await_args.kwargs["view"]))

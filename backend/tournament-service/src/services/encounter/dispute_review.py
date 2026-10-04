@@ -21,14 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
 from shared.repository.notification_recipients import NotificationRecipientRepository
-from shared.services.notifications import notify
+from shared.services.notifications import STAFF_PERMISSION, notify
 
 __all__ = ("notify_dispute_review",)
-
-#: The permission that makes somebody able to END a dispute (adopt a side, set
-#: the score). Read access would page spectators of the admin panel.
-DISPUTE_RESOURCE = "match"
-DISPUTE_ACTION = "result"
 
 _recipients = NotificationRecipientRepository()
 
@@ -57,7 +52,9 @@ async def notify_dispute_review(
         # A tournament with no tenant has no organizers to page; the captains'
         # own notifications still went out.
         return
-    staff = await _recipients.workspace_staff_auth_user_ids(session, workspace_id, DISPUTE_RESOURCE, DISPUTE_ACTION)
+    # The permission that can END a dispute (adopt a side, set the score); read
+    # access would page spectators of the admin panel.
+    staff = await _recipients.workspace_staff_auth_user_ids(session, workspace_id, *STAFF_PERMISSION)
     already_told = set(skip_auth_user_ids)
     # ponytail: the dedupe key is the game (or the series), so once an organizer
     # has been paged about this position they are never paged about it again --

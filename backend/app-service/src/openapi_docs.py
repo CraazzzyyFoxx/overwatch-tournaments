@@ -622,9 +622,12 @@ DOCS: dict[str, dict] = {
         "summary": "Read the caller's Discord DM preferences",
         "description": (
             "Permission: authenticated (active) user; self-service — the caller's own preferences only. Returns the"
-            " three Discord-DM switches (`tournament`, `matches`, `team`) with the defaults filled in: a group the user"
-            " never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether"
-            " the account has a Discord connection at all — the switches deliver nothing without one."
+            " Discord-DM group switches (`tournament`, `matches`, `team`, `staff`) with the defaults filled in: a group"
+            " the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked`"
+            " reports whether the account has a Discord connection at all — the switches deliver nothing without one."
+            " `staff_workspaces` lists every workspace where the caller may resolve match results, each with its own"
+            " effective switch; a staff DM needs both the `staff` group and its workspace's switch on. Empty when the"
+            " caller is staff nowhere."
         ),
     },
     "rpc.app.notification_preferences_update": {
@@ -632,8 +635,9 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: authenticated (active) user; self-service — the caller's own preferences only. The edit is"
             " partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert"
-            " the other two. Unknown group names are a 422. Answers with the same effective shape as the read."
-            " In-app notifications are not switchable — this only governs delivery to Discord."
+            " the other two. Unknown group names are a 422. `staff_workspaces` (`{workspace_id: bool}`) merges the"
+            " same way; a workspace the caller is not staff in is a 422. Answers with the same effective shape as the"
+            " read. In-app notifications are not switchable — this only governs delivery to Discord."
         ),
     },
     # ── notifications admin (workspace-scoped operator screen) ──────────────────────────────────────
@@ -662,7 +666,8 @@ DOCS: dict[str, dict] = {
         "summary": "Read one account's notification state",
         "description": (
             "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by"
-            " the path id: the three effective Discord-DM switches with defaults filled in, whether a Discord account"
+            " the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults"
+            " filled in, whether a Discord account"
             " is connected at all, the unread count that account's own bell shows (same audience rules as their inbox,"
             " not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first."
             " Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in"
@@ -675,8 +680,9 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id"
             " — the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted"
-            " group keeps its stored value and unknown group names are a 422. The edited row is the target's, never"
-            " the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when"
+            " group keeps its stored value, unknown group names are a 422 and so is a `staff_workspaces` key the"
+            " account is not staff in. The edited row is the target's, never the caller's. Answers with the same"
+            " full payload as the read, so the screen needs no refetch. 404 when"
             " the account does not exist."
         ),
     },

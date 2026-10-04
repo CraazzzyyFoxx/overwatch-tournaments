@@ -85,11 +85,7 @@ def _repos(*encounters: SimpleNamespace):
             AsyncMock(side_effect=lambda _s, eid, **_k: by_id.get(eid)),
         ),
         patch.object(service.team_repo, "get", AsyncMock(side_effect=lambda _s, tid: SimpleNamespace(name=f"t{tid}"))),
-        patch.object(
-            enc_service.pick_ban_session_service,
-            "sync_all_pick_ban_sessions_after_team_change",
-            AsyncMock(),
-        ) as sync,
+        patch.object(enc_service, "after_encounter_teams_changed", AsyncMock()) as sync,
         patch.object(enc_service, "enqueue_tournament_recalculation", AsyncMock()) as enqueue,
     ):
         yield SimpleNamespace(sync=sync, enqueue=enqueue)

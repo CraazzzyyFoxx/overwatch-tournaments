@@ -1,7 +1,8 @@
 """Cards as Components V2 layouts: notification messages and button replies alike.
 
 One container per card: the text (with the thumbnail beside it), a divider, the
-details and the ``DiscordCard.answers`` row. The other buttons sit *under* it,
+details, ``DiscordCard.image_url`` as a full-width gallery and the
+``DiscordCard.answers`` row. The other buttons sit *under* it,
 one action row per ``DiscordCard.rows`` entry, outside the coloured box -- the
 way buttons hang under a classic embed.
 Link buttons are opened by Discord itself; action buttons carry
@@ -56,6 +57,10 @@ def card_view(card: DiscordCard, *, extra_rows: Sequence[discord.ui.ActionRow] =
     ]
     if card.details:
         children += [discord.ui.Separator(), discord.ui.TextDisplay(card.details)]
+    if card.image_url:
+        # Full width under the text, unlike the thumbnail beside it: the card
+        # is *about* this picture. Discord fetches the URL itself.
+        children.append(discord.ui.MediaGallery(discord.MediaGalleryItem(card.image_url)))
     if card.answers:
         children.append(discord.ui.ActionRow(*(_button(button) for button in card.answers)))
     view = discord.ui.LayoutView(timeout=None)

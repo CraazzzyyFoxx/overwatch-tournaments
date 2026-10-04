@@ -461,14 +461,29 @@ class DiscordDmGroupTests(IsolatedAsyncioTestCase):
         self.assertTrue(BROADCASTABLE_KINDS <= set(NOTIFICATION_KINDS))
 
     def test_groups_default_on_and_honour_an_opt_out(self) -> None:
-        self.assertEqual({"tournament": True, "matches": True, "team": True}, effective_discord_dm({}))
-        self.assertTrue(wants_discord_dm({}, "encounter.scheduled"))
-        self.assertFalse(wants_discord_dm({"matches": False}, "encounter.scheduled"))
-        self.assertTrue(wants_discord_dm({"matches": False}, "check_in.opened"))
+        self.assertEqual({"tournament": True, "matches": True, "team": True, "staff": True}, effective_discord_dm({}))
+        self.assertTrue(wants_discord_dm({}, "encounter.scheduled", workspace_id=1))
+        self.assertFalse(wants_discord_dm({"matches": False}, "encounter.scheduled", workspace_id=1))
+        self.assertTrue(wants_discord_dm({"matches": False}, "check_in.opened", workspace_id=1))
         # Not personal: never DMed, whatever is stored.
-        self.assertFalse(wants_discord_dm({}, "registration.opened"))
+        self.assertFalse(wants_discord_dm({}, "registration.opened", workspace_id=1))
         # Garbage in the JSONB is not an opt-out.
-        self.assertTrue(wants_discord_dm({"team": "no"}, "team.kicked"))
+        self.assertTrue(wants_discord_dm({"team": "no"}, "team.kicked", workspace_id=1))
+
+    def test_a_staff_dm_needs_the_group_and_its_workspace(self) -> None:
+        muted_one = {"staff_workspaces": {"1": False}}
+        self.assertFalse(wants_discord_dm(muted_one, "encounter.dispute_review", workspace_id=1))
+        self.assertTrue(wants_discord_dm(muted_one, "encounter.dispute_review", workspace_id=2))
+        # The group is the master switch: a workspace left on does not override it.
+        self.assertFalse(
+            wants_discord_dm(
+                {"staff": False, "staff_workspaces": {"2": True}}, "encounter.dispute_review", workspace_id=2
+            )
+        )
+        # Workspace switches are staff-only; a participant kind ignores them.
+        self.assertTrue(wants_discord_dm(muted_one, "encounter.scheduled", workspace_id=1))
+        # Garbage under the key is not an opt-out.
+        self.assertTrue(wants_discord_dm({"staff_workspaces": "no"}, "encounter.dispute_review", workspace_id=1))
 
 
 _TEAM_EVENT = {

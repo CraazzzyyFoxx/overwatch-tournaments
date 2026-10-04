@@ -57,7 +57,7 @@ from src import models, schemas
 from src.clients.challonge import challonge_client
 from src.core import config
 from src.services.encounter.finalize import finalize_service
-from src.services.encounter.pick_ban_session import pick_ban_session_service
+from src.services.notifications.lifecycle import after_encounter_teams_changed
 from src.services.team.service import team_service
 from src.services.tournament.events import (
     RESULT_RESOURCES,
@@ -1611,8 +1611,10 @@ class ChallongeSyncService:
         await session.flush()
         if teams_changed:
             # Challonge corrected a team slot: sync map/hero pick-ban sessions
-            # (ensure when both teams are now known, reset a stale existing one).
-            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+            # (ensure when both teams are now known, reset a stale existing one)
+            # and tell the rosters. No channel post: a sync rewrites a whole
+            # bracket at once.
+            await after_encounter_teams_changed(session, encounter, channel=False)
         await self.mapping._ensure_match_mapping(session, source, match.id, encounter, match_lookup)
 
         if newly_completed:

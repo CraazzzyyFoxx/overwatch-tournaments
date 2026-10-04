@@ -90,11 +90,7 @@ class SwapSlots(IsolatedAsyncioTestCase):
                 "get",
                 AsyncMock(side_effect=lambda _s, tid: SimpleNamespace(name=f"T{tid}")),
             ),
-            patch.object(
-                admin_encounter.pick_ban_session_service,
-                "sync_all_pick_ban_sessions_after_team_change",
-                AsyncMock(),
-            ),
+            patch.object(admin_encounter, "after_encounter_teams_changed", AsyncMock()),
             patch.object(admin_encounter, "enqueue_tournament_recalculation", AsyncMock()),
         ):
             return await service.swap_slots(session, encounters[0].id, data)

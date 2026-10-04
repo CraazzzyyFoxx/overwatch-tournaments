@@ -488,6 +488,20 @@ describe("account menu inbox", () => {
             away_team_name: "Beta",
             scheduled_at: scheduledAt
           }
+        }),
+        // Both teams are known before a time is fixed: the payload carries no
+        // `scheduled_at` at all.
+        item({
+          id: 24,
+          kind: "encounter.scheduled",
+          payload: {
+            encounter_id: 10,
+            tournament_id: 5,
+            tournament_name: "Autumn Cup",
+            home_team_name: "Gamma",
+            away_team_name: "Delta",
+            pick_ban: true
+          }
         })
       ])
     );
@@ -501,6 +515,9 @@ describe("account menu inbox", () => {
 
     expect(text).toContain(`Registration for Autumn Cup is open until ${stamp(closesAt)}`);
     expect(text).toContain(`Alpha vs Beta in Autumn Cup is scheduled for ${stamp(scheduledAt)}`);
+    expect(text).toContain(
+      "Gamma vs Delta in Autumn Cup is ready to play — the time is still to be announced"
+    );
     // The wire stamp itself never reaches the reader, and neither does the
     // sentinel the optional window branches on.
     expect(text).not.toContain(closesAt);
@@ -510,7 +527,12 @@ describe("account menu inbox", () => {
     const rows = [...document.body.querySelectorAll("li a")].map((node) =>
       node.getAttribute("href")
     );
-    expect(rows).toEqual(["/tournaments/5", "/tournaments/5", "/tournaments/5/pregame/9"]);
+    expect(rows).toEqual([
+      "/tournaments/5",
+      "/tournaments/5",
+      "/tournaments/5/pregame/9",
+      "/tournaments/5/pregame/10"
+    ]);
   });
 
   it("links an announcement row to its href", async () => {

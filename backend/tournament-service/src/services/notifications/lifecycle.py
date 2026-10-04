@@ -1,5 +1,5 @@
 """Lifecycle facts a competitor is waiting to hear: registration opened, the
-check-in started, their match got a time.
+check-in started, their next match is ready to play.
 
 Called inline from the three mutations that produce those facts
 (``transition_status``, encounter create/update, bracket advancement), inside
@@ -12,8 +12,9 @@ Every call is keyed. ``dedupe_key`` is what makes the hooks re-entrant, and
 they need to be: a status can flap (REGISTRATION -> ANNOUNCEMENT ->
 REGISTRATION), the round scheduler sends one PATCH per encounter with the time
 it already has, and an encounter reaches :meth:`on_encounter_changed` from
-three different paths. The key says "this event", so a repeat writes nothing;
-a *new* match time is a new key, hence a fresh "rescheduled" notification.
+every site that can fill a team slot. The key says "this event", so a repeat
+writes nothing; a *new* opponent or a *new* match time is a new key, hence a
+fresh notification.
 
 ``ponytail:`` a window that opens *lazily* -- a manual transition made before
 ``starts_at``, a ``set_schedule`` landing a start time already in the past, or
@@ -31,17 +32,20 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import enums, tournament_state
+from shared.domain.pick_ban_config import has_pool
 from shared.repository.notification_recipients import NotificationRecipientRepository
 from shared.repository.tournament import (
     TeamRepository,
     TournamentPhaseScheduleRepository,
     TournamentRepository,
 )
+from shared.services.bracket.usability import is_encounter_live
 from shared.services.notifications import broadcast, notify
 from shared.services.registration_window import is_registration_window_open
 from src import models
+from src.services.encounter.pick_ban_session import pick_ban_session_service
 
-__all__ = ("LifecycleNotifier", "lifecycle_notifier")
+__all__ = ("LifecycleNotifier", "after_encounter_teams_changed", "lifecycle_notifier")
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -171,19 +175,31 @@ class LifecycleNotifier:
                 dedupe_key=dedupe_key,
             )
 
-    async def on_encounter_changed(self, session: AsyncSession, encounter: models.Encounter) -> None:
-        """Tell both rosters when (and against whom) they play.
+    async def on_encounter_changed(
+        self,
+        session: AsyncSession,
+        encounter: models.Encounter,
+        *,
+        channel: bool = True,
+    ) -> None:
+        """Tell both rosters they have a match ready to play, and against whom.
 
-        Guards first, and all three off the instance in hand: an encounter with
-        no time, an empty slot or a time in the past (backfilled results,
-        Challonge imports) is not news, and asking the database about it would
-        be a query per bracket row for nothing.
+        A time is not what makes it news -- knowing the opponent is -- so an
+        encounter with both slots filled notifies whether or not it is
+        scheduled. What silences it is the match being unplayable or already
+        under way: an empty slot, a preview bracket nobody can enter, a
+        started or completed encounter (backfilled results, Challonge
+        imports), a finished tournament.
+
+        ``channel=False`` keeps the event personal. Bulk producers (stage
+        activation, Swiss rounds, requalification, Challonge sync) fill a
+        dozen encounters in one go, and a dozen channel posts is spam.
         """
-        scheduled_at = encounter.scheduled_at
-        if scheduled_at is None or encounter.home_team_id is None or encounter.away_team_id is None:
+        if encounter.home_team_id is None or encounter.away_team_id is None:
             return
-        scheduled_at = _as_utc(scheduled_at)
-        if scheduled_at <= datetime.now(UTC):
+        if encounter.started_at is not None or encounter.status == enums.EncounterStatus.COMPLETED:
+            return
+        if not await is_encounter_live(session, encounter):
             return
 
         tournament = await self.tournament_repo.get(session, encounter.tournament_id)
@@ -193,9 +209,13 @@ class LifecycleNotifier:
         if encounter.id is None:
             # ``create_encounter`` calls this before its own flush when the
             # recalculation enqueue was skipped (scrim containers); the id is
-            # half the dedupe key.
+            # part of the dedupe key.
             await session.flush()
 
+        # Normalized to UTC first: the same instant arriving as a naive column
+        # value and as an offset-aware payload must produce the same key, or a
+        # re-save of an unchanged time would read as a reschedule.
+        scheduled_at = _as_utc(encounter.scheduled_at) if encounter.scheduled_at is not None else None
         team_ids: Sequence[int] = (encounter.home_team_id, encounter.away_team_id)
         names = {team.id: team.name for team in await self.team_repo.bulk_get(session, list(team_ids))}
         payload = {
@@ -205,11 +225,14 @@ class LifecycleNotifier:
             "home_team_name": names.get(encounter.home_team_id, ""),
             "away_team_name": names.get(encounter.away_team_id, ""),
             "scheduled_at": scheduled_at,
+            "pick_ban": await self._has_pick_ban(session, encounter),
         }
-        # Normalized to UTC first: the same instant arriving as a naive column
-        # value and as an offset-aware payload must produce the same key, or a
-        # re-save of an unchanged time would read as a reschedule.
-        dedupe_key = f"encounter:{encounter.id}:{scheduled_at.isoformat()}"
+        # The opponent is half the event: a slot refilled with another team is
+        # a new match to prepare for, not a repeat of the old one.
+        dedupe_key = (
+            f"encounter:{encounter.id}:{encounter.home_team_id}:{encounter.away_team_id}:"
+            f"{scheduled_at.isoformat() if scheduled_at is not None else 'tbd'}"
+        )
         for auth_user_id in await self.recipient_repo.team_roster_auth_user_ids(session, team_ids):
             await notify(
                 session,
@@ -219,7 +242,7 @@ class LifecycleNotifier:
                 payload=payload,
                 dedupe_key=dedupe_key,
             )
-        if not tournament.is_hidden and tournament.discord_broadcasts_enabled:
+        if channel and not tournament.is_hidden and tournament.discord_broadcasts_enabled:
             await broadcast(
                 session,
                 kind="encounter.scheduled",
@@ -228,5 +251,43 @@ class LifecycleNotifier:
                 dedupe_key=dedupe_key,
             )
 
+    @staticmethod
+    async def _has_pick_ban(session: AsyncSession, encounter: models.Encounter) -> bool:
+        """Whether this encounter's coordinate resolves to a pick-ban with a
+        pool -- the same question ``PregameRoomLink`` asks on the frontend.
+
+        Sessions are not consulted: they only exist once both captains are
+        ready, which is after the message this flag is for.
+        """
+        for kind in (enums.PickBanKind.MAP, enums.PickBanKind.HERO):
+            config = await pick_ban_session_service.resolve_config_at_level(
+                session,
+                tournament_id=encounter.tournament_id,
+                kind=kind,
+                stage_id=encounter.stage_id,
+                round=encounter.round,
+            )
+            if config is not None and has_pool(config):
+                return True
+        return False
+
 
 lifecycle_notifier = LifecycleNotifier()
+
+
+async def after_encounter_teams_changed(
+    session: AsyncSession,
+    encounter: models.Encounter,
+    *,
+    channel: bool,
+) -> None:
+    """Everything a filled-in (or re-assigned) team slot owes, in one call.
+
+    The pick-ban rooms follow the new pairing, then both rosters hear who they
+    play. Lives here rather than beside the pick-ban service because the
+    notifier already resolves pick-ban configs; the service is reached through
+    its singleton, so a test patching ``pick_ban_session_service`` at any call
+    site still intercepts the sync.
+    """
+    await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+    await lifecycle_notifier.on_encounter_changed(session, encounter, channel=channel)

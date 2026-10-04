@@ -913,6 +913,10 @@
         "team": {
           "label": "Teams",
           "desc": "Invites, answers to them, and being removed from a roster."
+        },
+        "staff": {
+          "label": "For organizers",
+          "desc": "Disputed results waiting for your decision. Delivered even in tournaments with direct messages turned off."
         }
       },
       "footnote": "A closed Discord inbox (or no server in common with the bot) stops delivery on its own — nothing is queued and nothing is retried."
@@ -2003,16 +2007,20 @@
     "roster": {
       "role": "Role",
       "battleTag": "Battle tag",
-      "division": "Div",
+      "rank": "Rank",
       "newcomer": "New",
+      "newcomerHint": "First tournament on the platform",
       "newcomerRole": "New role",
+      "newcomerRoleHint": "First tournament on this role",
+      "captain": "Captain",
+      "substitution": "Substitute",
+      "substituteFor": "for {name}",
       "avgSr": "Avg. SR"
     }
   },
   "matches": {
     "col": {
       "score": "Score",
-      "division": "Division",
       "prs": "PRS",
       "fb": "FB",
       "e": "E",
@@ -2922,8 +2930,7 @@
       "mapScoreAria": "{home} {homeScore}, {away} {awayScore}",
       "openScoreboard": "Scoreboard",
       "rosters": "Rosters",
-      "rostersMeta": "Substitutes are indented under the player they replaced",
-      "rosterAria": "{team} roster",
+      "rostersMeta": "Substitutes branch off the player they replaced",
       "seriesStats": "Series statistics",
       "seriesStatsMeta": "Totalled across {maps, plural, one {# map} other {# maps}}",
       "seriesStatsNoLogs": "No game logs were parsed for this series, so per-player statistics are unavailable.",
@@ -2980,21 +2987,7 @@
       }
     },
     "team": {
-      "colName": "Name",
-      "colDivision": "Division",
-      "colDivisionShort": "DIV",
-      "colNew": "New",
-      "colNewShort": "NEW",
-      "colNewTitle": "First tournament on the platform",
-      "colNewRole": "New Role",
-      "colNewRoleShort": "ROLE",
-      "colNewRoleTitle": "First tournament on this role",
-      "newcomerYes": "Newcomer",
-      "newcomerNo": "Not a newcomer",
-      "newRoleYes": "New to this role",
-      "newRoleNo": "Not new to this role",
-      "captain": "Captain",
-      "substitution": "Substitute"
+      "colName": "Name"
     },
     "chart": {
       "title": "Kills and Assists Overview",
@@ -3143,6 +3136,9 @@
         "itemNumber": "Hero #{id}"
       },
       "title": "Pre-game Room",
+      "metaTitle": "Pick-ban: {home} vs {away}",
+      "metaDescription": "Pick-ban room for {home} vs {away} on {siteName}.",
+      "metaDescriptionFallback": "Pick-ban room on {siteName}.",
       "phase": {
         "map": "Map veto",
         "hero": "Hero bans",
@@ -6542,7 +6538,7 @@
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
         "dispute_review": "{position, plural, =0 {{home_team_name} and {away_team_name} disagree on the final series score — an organizer has to decide} other {{home_team_name} and {away_team_name} disagree on the score of map # — an organizer has to decide}}",
-        "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} is scheduled for {scheduled_at}"
+        "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} {scheduled_at, select, none {is ready to play — the time is still to be announced} other {is scheduled for {scheduled_at}}}"
       },
       "announcement": {
         "published": "New announcement"

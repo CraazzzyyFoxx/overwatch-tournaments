@@ -25,7 +25,16 @@
 }
 
 .team-card .tc-header {
-  padding: 14px 18px 16px;
+  padding: 10px 14px 12px;
+}
+
+/* Encounter-bound cards: the side's colour along the top edge. */
+.team-card[data-side="home"] {
+  border-top: 3px solid var(--aqt-teal);
+}
+
+.team-card[data-side="away"] {
+  border-top: 3px solid var(--aqt-rose);
 }
 
 .team-card .tc-tags {
@@ -165,26 +174,21 @@
   text-transform: uppercase;
   color: var(--aqt-fg-faint);
   text-align: left;
-  padding: 8px 12px;
-  height: 30px;
+  padding: 6px 10px;
+  height: 26px;
 }
 
-.roster th.c {
-  text-align: center;
-}
-
+/* 10px left padding is load-bearing: `RosterRole` draws the substitution
+   branch through the role icon's centre at 22px. */
 .roster td {
-  padding: 8px 12px;
+  padding: 5px 10px;
   border-top: 1px solid var(--aqt-overlay-border);
   font-size: var(--text-caption);
   vertical-align: middle;
 }
 
-.roster td.c {
-  text-align: center;
-}
-
-.roster tr:hover td {
+/* One <tbody> per roster slot: a player lights up together with their subs. */
+.roster tbody:hover td {
   background: var(--aqt-overlay-2);
 }
 

@@ -22,8 +22,7 @@ from shared.services.bracket.advancement import reset_encounter_result
 from shared.services.bracket.swiss_state import remove_swiss_bye_round
 from src import models, schemas
 from src.core import enums
-from src.services.encounter.pick_ban_session import pick_ban_session_service
-from src.services.notifications.lifecycle import lifecycle_notifier
+from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier
 from src.services.tournament.events import enqueue_tournament_recalculation
 
 # ``enqueue_tournament_recalculation`` emits ``tournament.encounters``, and the
@@ -260,9 +259,10 @@ class AdminEncounterService:
         # first write of this transaction (see the outbox-ordering regression test).
         session.add(encounter)
         await enqueue_tournament_recalculation(session, data.tournament_id)
-        if data.scheduled_at is not None:
-            # After the enqueue, whose flush is what gives the row its id.
-            await lifecycle_notifier.on_encounter_changed(session, encounter)
+        # After the enqueue, whose flush is what gives the row its id. The
+        # notifier applies its own guards -- a slot-less or already-played row
+        # tells nobody; a time is not required.
+        await lifecycle_notifier.on_encounter_changed(session, encounter)
         await session.commit()
         await session.refresh(encounter)
 
@@ -351,10 +351,10 @@ class AdminEncounterService:
         teams_changed = (encounter.home_team_id, encounter.away_team_id) != previous_teams
         if teams_changed:
             # Admin re-assigned a team slot: sync map/hero pick-ban sessions
-            # (ensure when both teams are now known, reset a stale existing one).
-            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
-
-        if teams_changed or ("scheduled_at" in update_data and encounter.scheduled_at != previous_scheduled_at):
+            # (ensure when both teams are now known, reset a stale existing one)
+            # and tell the rosters who they now play.
+            await after_encounter_teams_changed(session, encounter, channel=True)
+        elif "scheduled_at" in update_data and encounter.scheduled_at != previous_scheduled_at:
             await lifecycle_notifier.on_encounter_changed(session, encounter)
 
         await enqueue_tournament_recalculation(session, tournament_id)
@@ -466,7 +466,7 @@ class AdminEncounterService:
                 await self._team_name(session, encounter.home_team_id),
                 await self._team_name(session, encounter.away_team_id),
             )
-            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+            await after_encounter_teams_changed(session, encounter, channel=True)
 
         await enqueue_tournament_recalculation(session, source.tournament_id)
         await session.commit()

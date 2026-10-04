@@ -2763,14 +2763,14 @@ export interface paths {
         };
         /**
          * Read the caller's Discord DM preferences
-         * @description Permission: authenticated (active) user; self-service — the caller's own preferences only. Returns the three Discord-DM switches (`tournament`, `matches`, `team`) with the defaults filled in: a group the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether the account has a Discord connection at all — the switches deliver nothing without one.
+         * @description Permission: authenticated (active) user; self-service — the caller's own preferences only. Returns the Discord-DM group switches (`tournament`, `matches`, `team`, `staff`) with the defaults filled in: a group the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether the account has a Discord connection at all — the switches deliver nothing without one. `staff_workspaces` lists every workspace where the caller may resolve match results, each with its own effective switch; a staff DM needs both the `staff` group and its workspace's switch on. Empty when the caller is staff nowhere.
          *
          *     RPC subject: `rpc.app.notification_preferences_get`
          */
         get: operations["get__api_v1_notifications_preferences"];
         /**
          * Update the caller's Discord DM preferences
-         * @description Permission: authenticated (active) user; self-service — the caller's own preferences only. The edit is partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert the other two. Unknown group names are a 422. Answers with the same effective shape as the read. In-app notifications are not switchable — this only governs delivery to Discord.
+         * @description Permission: authenticated (active) user; self-service — the caller's own preferences only. The edit is partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert the other two. Unknown group names are a 422. `staff_workspaces` (`{workspace_id: bool}`) merges the same way; a workspace the caller is not staff in is a 422. Answers with the same effective shape as the read. In-app notifications are not switchable — this only governs delivery to Discord.
          *
          *     RPC subject: `rpc.app.notification_preferences_update`
          */
@@ -4641,7 +4641,7 @@ export interface paths {
         };
         /**
          * Read one account's notification state
-         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the three effective Discord-DM switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
+         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
          *
          *     RPC subject: `rpc.app.admin_user_notifications_get`
          */
@@ -4664,7 +4664,7 @@ export interface paths {
         get?: never;
         /**
          * Update one account's Discord DM preferences
-         * @description Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id — the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted group keeps its stored value and unknown group names are a 422. The edited row is the target's, never the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when the account does not exist.
+         * @description Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id — the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted group keeps its stored value, unknown group names are a 422 and so is a `staff_workspaces` key the account is not staff in. The edited row is the target's, never the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when the account does not exist.
          *
          *     RPC subject: `rpc.app.admin_user_notification_preferences_update`
          */
@@ -12533,17 +12533,19 @@ export interface components {
         };
         /**
          * NotificationDmGroups
-         * @description The three Discord-DM switches, defaults already filled in.
+         * @description The Discord-DM group switches, defaults already filled in.
          *
          *     Spelled out as fields rather than a free dict because this is a public
          *     response shape: the client renders one toggle per group and the generated
          *     OpenAPI has to name them. ``test_notification_preferences_rpc`` pins the
-         *     field set against ``NOTIFICATION_GROUPS``, so a fourth group cannot be
+         *     field set against ``NOTIFICATION_GROUPS``, so a new group cannot be
          *     added upstream without this following.
          */
         "app.NotificationDmGroups": {
             /** Matches */
             matches: boolean;
+            /** Staff */
+            staff: boolean;
             /** Team */
             team: boolean;
             /** Tournament */
@@ -12559,6 +12561,11 @@ export interface components {
              * @default null
              */
             matches: boolean | null;
+            /**
+             * Staff
+             * @default null
+             */
+            staff: boolean | null;
             /**
              * Team
              * @default null
@@ -12645,10 +12652,37 @@ export interface components {
             discord_dm: components["schemas"]["app.NotificationDmGroups"];
             /** Discord Linked */
             discord_linked: boolean;
+            /**
+             * Staff Workspaces
+             * @default []
+             */
+            staff_workspaces: components["schemas"]["app.NotificationStaffWorkspace"][];
         };
         /** NotificationPreferencesUpdate */
         "app.NotificationPreferencesUpdate": {
-            discord_dm: components["schemas"]["app.NotificationDmGroupsUpdate"];
+            discord_dm?: components["schemas"]["app.NotificationDmGroupsUpdate"];
+            /**
+             * Staff Workspaces
+             * @default {}
+             */
+            staff_workspaces: {
+                [key: string]: boolean;
+            };
+        };
+        /**
+         * NotificationStaffWorkspace
+         * @description One workspace where the account is staff, and its own ``staff`` DM switch.
+         *
+         *     Effective like the groups (untouched = on). It only bites while the
+         *     ``staff`` group itself is on: the group is the master switch.
+         */
+        "app.NotificationStaffWorkspace": {
+            /** Enabled */
+            enabled: boolean;
+            /** Name */
+            name: string;
+            /** Workspace Id */
+            workspace_id: number;
         };
         /** Paginated[AchievementEarned] */
         "app.Paginated_AchievementEarned_": {
@@ -19029,6 +19063,11 @@ export interface components {
              * @default []
              */
             recent_deliveries: components["schemas"]["app.NotificationDeliveryItem"][];
+            /**
+             * Staff Workspaces
+             * @default []
+             */
+            staff_workspaces: components["schemas"]["app.NotificationStaffWorkspace"][];
             /** Unread Count */
             unread_count: number;
         };

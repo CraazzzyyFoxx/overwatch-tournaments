@@ -909,6 +909,10 @@
         "team": {
           "label": "Команды",
           "desc": "Приглашения, ответы на них и исключение из состава."
+        },
+        "staff": {
+          "label": "Организаторам",
+          "desc": "Оспоренные результаты, по которым нужно ваше решение. Приходят даже в турнирах с выключенными личными сообщениями."
         }
       },
       "footnote": "Если личные сообщения в Discord закрыты (или у вас нет общего сервера с ботом), доставка просто не состоится — ничего не копится и не отправляется повторно."
@@ -2003,16 +2007,20 @@
     "roster": {
       "role": "Роль",
       "battleTag": "BattleTag",
-      "division": "Див",
+      "rank": "Ранг",
       "newcomer": "Новичок",
+      "newcomerHint": "Первый турнир на платформе",
       "newcomerRole": "Новая роль",
+      "newcomerRoleHint": "Первый турнир на этой роли",
+      "captain": "Капитан",
+      "substitution": "Замена",
+      "substituteFor": "вместо {name}",
       "avgSr": "Средний SR"
     }
   },
   "matches": {
     "col": {
       "score": "Счёт",
-      "division": "Дивизион",
       "prs": "PRS",
       "fb": "FB",
       "e": "E",
@@ -2922,8 +2930,7 @@
       "mapScoreAria": "{home} {homeScore}, {away} {awayScore}",
       "openScoreboard": "Статистика",
       "rosters": "Составы",
-      "rostersMeta": "Замены — с отступом под заменённым игроком",
-      "rosterAria": "Состав команды {team}",
+      "rostersMeta": "Замены — веткой от заменённого игрока",
       "seriesStats": "Статистика серии",
       "seriesStatsMeta": "Суммарно за {maps, plural, one {# карту} few {# карты} many {# карт} other {# карты}}",
       "seriesStatsNoLogs": "Логи этой серии не разобраны, поэтому статистика по игрокам недоступна.",
@@ -2980,21 +2987,7 @@
       }
     },
     "team": {
-      "colName": "Имя",
-      "colDivision": "Дивизион",
-      "colDivisionShort": "ДИВ",
-      "colNew": "Новый",
-      "colNewShort": "НОВ",
-      "colNewTitle": "Первый турнир на платформе",
-      "colNewRole": "Новая роль",
-      "colNewRoleShort": "РОЛЬ",
-      "colNewRoleTitle": "Первый турнир на этой роли",
-      "newcomerYes": "Новичок",
-      "newcomerNo": "Не новичок",
-      "newRoleYes": "Новичок на этой роли",
-      "newRoleNo": "Не новичок на этой роли",
-      "captain": "Капитан",
-      "substitution": "Замена"
+      "colName": "Имя"
     },
     "chart": {
       "title": "Обзор убийств и ассистов",
@@ -3143,6 +3136,9 @@
         "itemNumber": "Герой №{id}"
       },
       "title": "Предигровая комната",
+      "metaTitle": "Бан-пик: {home} против {away}",
+      "metaDescription": "Комната бан-пика {home} против {away} на {siteName}.",
+      "metaDescriptionFallback": "Комната бан-пика на {siteName}.",
       "phase": {
         "map": "Вето карт",
         "hero": "Баны героев",
@@ -6542,7 +6538,7 @@
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {Отчёт по вашему матчу оспорен} other {Отчёт по карте # вашего матча оспорен}}",
         "dispute_review": "{position, plural, =0 {Капитаны {home_team_name} и {away_team_name} разошлись в итоговом счёте серии — нужно решение организатора} other {Капитаны {home_team_name} и {away_team_name} разошлись в счёте карты # — нужно решение организатора}}",
-        "scheduled": "Матч {home_team_name} — {away_team_name} на {tournament_name} назначен на {scheduled_at}"
+        "scheduled": "Матч {home_team_name} — {away_team_name} на {tournament_name} {scheduled_at, select, none {готов к игре — время ещё не назначено} other {назначен на {scheduled_at}}}"
       },
       "announcement": {
         "published": "Новое объявление"

@@ -22,8 +22,7 @@ from shared.services.encounter.finalize import (
     finalize_encounter_score as _finalize_encounter_score,
 )
 from src import models
-from src.services.encounter.pick_ban_session import pick_ban_session_service
-from src.services.notifications.lifecycle import lifecycle_notifier
+from src.services.notifications.lifecycle import after_encounter_teams_changed
 
 __all__ = (
     "FinalizeSource",
@@ -44,8 +43,7 @@ class FinalizeService:
     """
 
     async def _post_advance(self, session: AsyncSession, encounter: models.Encounter) -> None:
-        await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
-        await lifecycle_notifier.on_encounter_changed(session, encounter)
+        await after_encounter_teams_changed(session, encounter, channel=True)
 
     async def finalize_encounter_score(
         self,

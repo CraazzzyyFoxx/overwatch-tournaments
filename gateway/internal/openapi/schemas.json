@@ -542,7 +542,7 @@
       "summary": "Update workspace"
     },
     "rpc.app.admin_user_notification_preferences_update": {
-      "description": "Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id \u2014 the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted group keeps its stored value and unknown group names are a 422. The edited row is the target's, never the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when the account does not exist.",
+      "description": "Permission: global `auth_user.update`. Flips the Discord-DM switches of the account named by the path id \u2014 the operator-side twin of the self-service write, with the same partial-merge semantics: an omitted group keeps its stored value, unknown group names are a 422 and so is a `staff_workspaces` key the account is not staff in. The edited row is the target's, never the caller's. Answers with the same full payload as the read, so the screen needs no refetch. 404 when the account does not exist.",
       "request": {
         "array": false,
         "ref": "app.NotificationPreferencesUpdate"
@@ -554,7 +554,7 @@
       "summary": "Update one account's Discord DM preferences"
     },
     "rpc.app.admin_user_notifications_get": {
-      "description": "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the three effective Discord-DM switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent \u2014 it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.",
+      "description": "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent \u2014 it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.",
       "response": {
         "array": false,
         "ref": "app.AdminUserNotificationsRead"
@@ -1267,7 +1267,7 @@
       "summary": "Retire notifications a workspace produced"
     },
     "rpc.app.notification_preferences_get": {
-      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. Returns the three Discord-DM switches (`tournament`, `matches`, `team`) with the defaults filled in: a group the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether the account has a Discord connection at all \u2014 the switches deliver nothing without one.",
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. Returns the Discord-DM group switches (`tournament`, `matches`, `team`, `staff`) with the defaults filled in: a group the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether the account has a Discord connection at all \u2014 the switches deliver nothing without one. `staff_workspaces` lists every workspace where the caller may resolve match results, each with its own effective switch; a staff DM needs both the `staff` group and its workspace's switch on. Empty when the caller is staff nowhere.",
       "response": {
         "array": false,
         "ref": "app.NotificationPreferencesRead"
@@ -1275,7 +1275,7 @@
       "summary": "Read the caller's Discord DM preferences"
     },
     "rpc.app.notification_preferences_update": {
-      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. The edit is partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert the other two. Unknown group names are a 422. Answers with the same effective shape as the read. In-app notifications are not switchable \u2014 this only governs delivery to Discord.",
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. The edit is partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert the other two. Unknown group names are a 422. `staff_workspaces` (`{workspace_id: bool}`) merges the same way; a workspace the caller is not staff in is a 422. Answers with the same effective shape as the read. In-app notifications are not switchable \u2014 this only governs delivery to Discord.",
       "request": {
         "array": false,
         "ref": "app.NotificationPreferencesUpdate"
@@ -12304,6 +12304,14 @@
           "title": "Recent Deliveries",
           "type": "array"
         },
+        "staff_workspaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/app.NotificationStaffWorkspace"
+          },
+          "title": "Staff Workspaces",
+          "type": "array"
+        },
         "unread_count": {
           "title": "Unread Count",
           "type": "integer"
@@ -15155,10 +15163,14 @@
       "type": "object"
     },
     "app.NotificationDmGroups": {
-      "description": "The three Discord-DM switches, defaults already filled in.\n\nSpelled out as fields rather than a free dict because this is a public\nresponse shape: the client renders one toggle per group and the generated\nOpenAPI has to name them. ``test_notification_preferences_rpc`` pins the\nfield set against ``NOTIFICATION_GROUPS``, so a fourth group cannot be\nadded upstream without this following.",
+      "description": "The Discord-DM group switches, defaults already filled in.\n\nSpelled out as fields rather than a free dict because this is a public\nresponse shape: the client renders one toggle per group and the generated\nOpenAPI has to name them. ``test_notification_preferences_rpc`` pins the\nfield set against ``NOTIFICATION_GROUPS``, so a new group cannot be\nadded upstream without this following.",
       "properties": {
         "matches": {
           "title": "Matches",
+          "type": "boolean"
+        },
+        "staff": {
+          "title": "Staff",
           "type": "boolean"
         },
         "team": {
@@ -15173,7 +15185,8 @@
       "required": [
         "tournament",
         "matches",
-        "team"
+        "team",
+        "staff"
       ],
       "title": "NotificationDmGroups",
       "type": "object"
@@ -15193,6 +15206,18 @@
           ],
           "default": null,
           "title": "Matches"
+        },
+        "staff": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Staff"
         },
         "team": {
           "anyOf": [
@@ -15369,6 +15394,14 @@
         "discord_linked": {
           "title": "Discord Linked",
           "type": "boolean"
+        },
+        "staff_workspaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/app.NotificationStaffWorkspace"
+          },
+          "title": "Staff Workspaces",
+          "type": "array"
         }
       },
       "required": [
@@ -15383,11 +15416,16 @@
       "properties": {
         "discord_dm": {
           "$ref": "#/components/schemas/app.NotificationDmGroupsUpdate"
+        },
+        "staff_workspaces": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "default": {},
+          "title": "Staff Workspaces",
+          "type": "object"
         }
       },
-      "required": [
-        "discord_dm"
-      ],
       "title": "NotificationPreferencesUpdate",
       "type": "object"
     },
@@ -15444,6 +15482,30 @@
         "retired"
       ],
       "title": "NotificationRetireResult",
+      "type": "object"
+    },
+    "app.NotificationStaffWorkspace": {
+      "description": "One workspace where the account is staff, and its own ``staff`` DM switch.\n\nEffective like the groups (untouched = on). It only bites while the\n``staff`` group itself is on: the group is the master switch.",
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "name",
+        "enabled"
+      ],
+      "title": "NotificationStaffWorkspace",
       "type": "object"
     },
     "app.NotificationWorkspaceConfigRead": {

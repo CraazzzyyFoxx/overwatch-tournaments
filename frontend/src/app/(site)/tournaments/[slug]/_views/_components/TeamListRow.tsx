@@ -188,7 +188,7 @@ export const TeamListRow = ({
           <span>{t("teams.roster.role")}</span>
           <span>{t("teams.roster.battleTag")}</span>
           <span>
-            {t("teams.roster.division")} · {t("tournamentDetail.teams.sr")}
+            {t("teams.roster.rank")} · {t("tournamentDetail.teams.sr")}
           </span>
           {withHeroes ? <span>{t("common.heroes")}</span> : null}
           <span />

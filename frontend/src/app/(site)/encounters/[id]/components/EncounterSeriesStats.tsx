@@ -7,8 +7,7 @@ import { useFormatter } from "@/lib/datetime/client";
 
 import { cn } from "@/lib/utils";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import DivisionIcon from "@/components/DivisionIcon";
-import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { RosterPlayer, RosterRank, RosterRole, isReplaced, rosterSlots } from "@/components/TournamentTeamCard";
 import { PerformanceBadge } from "@/components/PerformanceBadge";
 import TeamName from "@/components/TeamName";
 import { HeroStrip } from "@/components/hero/HeroImage";
@@ -28,9 +27,8 @@ import {
   columnMaxima,
   GROUP_COLOR
 } from "@/lib/match-stats";
-import { sortTeamPlayers } from "@/lib/player";
 import { aggregateSeriesStats, type SeriesAggregate } from "@/lib/encounter/detail";
-import { Fact, PlayerIdentity } from "@/components/match/EncounterAtoms";
+import { Fact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
@@ -182,7 +180,7 @@ function SeriesPlayerTable({
           <thead>
             <tr>
               <th scope="col">{t("encounters.team.colName")}</th>
-              <th scope="col">{t("encounters.team.colDivision")}</th>
+              <th scope="col">{t("teams.roster.rank")}</th>
               <th scope="col">{t("common.heroes")}</th>
               <th scope="col" title={t("encounters.detail.colMapsTitle")}>
                 {t("encounters.detail.colMaps")}
@@ -213,17 +211,22 @@ function SeriesPlayerTable({
                   <TeamName team={team} size="xs" />
                 </td>
               </tr>
-              {sortTeamPlayers(team.players).map((player) => (
-                <SeriesPlayerRow
-                  key={player.id}
-                  player={player}
-                  round={aggregate.round}
-                  columns={columns}
-                  maxima={maxima}
-                  mapsPlayed={aggregate.meta[player.id]?.mapsPlayed ?? 0}
-                  tournamentGrid={tournamentGrid}
-                />
-              ))}
+              {rosterSlots(team.players).flatMap((slot) =>
+                slot.map((player, index) => (
+                  <SeriesPlayerRow
+                    key={player.id}
+                    player={player}
+                    slot={slot}
+                    index={index}
+                    captainUserId={team.captain_id}
+                    round={aggregate.round}
+                    columns={columns}
+                    maxima={maxima}
+                    mapsPlayed={aggregate.meta[player.id]?.mapsPlayed ?? 0}
+                    tournamentGrid={tournamentGrid}
+                  />
+                ))
+              )}
             </tbody>
           ))}
         </table>
@@ -234,6 +237,9 @@ function SeriesPlayerTable({
 
 function SeriesPlayerRow({
   player,
+  slot,
+  index,
+  captainUserId,
   round,
   columns,
   maxima,
@@ -241,6 +247,10 @@ function SeriesPlayerRow({
   tournamentGrid
 }: Readonly<{
   player: PlayerWithStats;
+  /** The player's roster slot (them plus their subs), for the substitution branch. */
+  slot: PlayerWithStats[];
+  index: number;
+  captainUserId: number;
   round: number;
   columns: LogStatsName[];
   maxima: Record<string, number>;
@@ -249,24 +259,25 @@ function SeriesPlayerRow({
 }>) {
   const heroes = player.heroes?.[round] ?? [];
   const placement = player.stats?.[round]?.[LogStatsName.Performance];
+  const position = { slot, index };
+  const dimmed = isReplaced(position);
 
   return (
     <tr>
       <td className={styles.seriesPlayerCell}>
         <span className={styles.seriesPlayer}>
-          <PlayerRoleIcon role={player.role} size={16} />
-          <PlayerIdentity player={player} />
+          <RosterRole role={player.role} position={position} inline />
+          <RosterPlayer player={player} captainUserId={captainUserId} dimmed={dimmed} />
         </span>
       </td>
       <td>
-        <span className={styles.rosterCell}>
-          <DivisionIcon
-            division={player.division}
-            width={26}
-            height={26}
-            tournamentGrid={tournamentGrid}
-          />
-        </span>
+        <RosterRank
+          division={player.division}
+          rank={player.rank}
+          tournamentGrid={tournamentGrid}
+          dimmed={dimmed}
+          className="justify-end"
+        />
       </td>
       <td>
         <span className={styles.rosterCell}>

@@ -25,6 +25,7 @@ from shared.domain.tournament_utils import (
 from shared.repository import EncounterRepository, StageRepository
 from src import models
 from src.services.admin.stage import _collect_item_team_ids, stage_service
+from src.services.notifications.lifecycle import lifecycle_notifier
 
 DEFAULT_STAGE_MAX_ROUNDS = 5
 
@@ -239,6 +240,11 @@ class SwissRoundsService:
             team_names_by_id=team_names_by_id,
         )
         await session.flush()
+
+        # DMs only: a Swiss round pairs the whole scope at once, and a channel
+        # post per pairing is spam.
+        for encounter in encounters:
+            await lifecycle_notifier.on_encounter_changed(session, encounter, channel=False)
 
         logger.info(
             "Swiss auto-round: generated {} encounters for round {}",

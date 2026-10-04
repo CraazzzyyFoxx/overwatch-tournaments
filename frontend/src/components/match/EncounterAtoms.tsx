@@ -1,48 +1,12 @@
 import React from "react";
-import Link from "next/link";
 
 import { cn } from "@/lib/utils";
-import { formatSubRoleLabel, getPlayerSlug } from "@/lib/player";
 import styles from "@/components/match/EncounterDetail.module.css";
 
 /**
  * Presentational atoms shared by the encounter detail page. No hooks, so they
  * render from both the server page and its client panels.
  */
-
-export interface PlayerIdentityInput {
-  name: string;
-  sub_role?: string | null;
-}
-
-/**
- * Player name + BattleTag discriminator + specialization.
- *
- * Deliberately NOT the shared `PlayerName`: that one paints the tag with a
- * shadcn `<Badge variant="secondary">` and the specialization with
- * `text-muted-foreground`, both of which resolve against the shadcn theme
- * variables and read a shade off on these `--aqt-*` surfaces.
- */
-export function PlayerIdentity({
-  player,
-  className
-}: Readonly<{
-  player: PlayerIdentityInput;
-  className?: string;
-}>) {
-  const [handle, tag] = player.name.split("#");
-  const specialization = formatSubRoleLabel(player.sub_role);
-
-  return (
-    <span className={cn(styles.rosterPlayerName, className)}>
-      <Link href={`/users/${getPlayerSlug(player.name)}`} className={styles.playerLink}>
-        {handle}
-        {tag ? <span className={styles.playerTag}>#{tag}</span> : null}
-      </Link>
-      {specialization ? <span className={styles.playerSpec}>{specialization}</span> : null}
-    </span>
-  );
-}
 
 /** Label-over-value block used by the hairline fact strips. */
 export function Fact({

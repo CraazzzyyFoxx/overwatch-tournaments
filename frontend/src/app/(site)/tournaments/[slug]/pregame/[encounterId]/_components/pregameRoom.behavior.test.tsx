@@ -156,8 +156,8 @@ const HERO_CATALOG = [
 function encounter(): Encounter {
   return {
     id: 4242,
-    home_team: { id: 7, name: "Bright Wolves" },
-    away_team: { id: 8, name: "Quiet Foxes" },
+    home_team: { id: 7, name: "Bright Wolves", avg_sr: 3000, captain_id: 1, players: [] },
+    away_team: { id: 8, name: "Quiet Foxes", avg_sr: 3000, captain_id: 2, players: [] },
     tournament: { id: 3, workspace_id: 1 }
   } as unknown as Encounter;
 }

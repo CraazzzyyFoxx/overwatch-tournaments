@@ -28,7 +28,7 @@ workspace announcement ever published.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import sqlalchemy as sa
@@ -44,7 +44,13 @@ from shared.repository.notification import (
     NotificationPreferenceRepository,
     NotificationRepository,
 )
-from shared.services.notifications import effective_discord_dm
+from shared.repository.notification_recipients import NotificationRecipientRepository
+from shared.services.notifications import (
+    STAFF_PERMISSION,
+    STAFF_WORKSPACES_KEY,
+    effective_discord_dm,
+    wants_staff_workspace,
+)
 from shared.services.subscriptions.strategies import load_provider_user_ids
 from src import schemas
 
@@ -68,6 +74,7 @@ logger = logging.getLogger(__name__)
 repository = NotificationRepository()
 preference_repository = NotificationPreferenceRepository()
 delivery_repository = NotificationDeliveryRepository()
+recipient_repository = NotificationRecipientRepository()
 
 #: How much of the delivery ledger the admin inspector shows. Ten is a glance at
 #: "did anything go out lately", not an audit trail -- the ledger itself is.
@@ -220,13 +227,23 @@ async def preferences(session: Any, *, auth_user_id: int) -> schemas.Notificatio
 
     ``discord_linked`` rides along because the switches are inert without a
     connected account: a settings page that offers three toggles and delivers
-    nothing is the bug this field prevents.
+    nothing is the bug this field prevents. ``staff_workspaces`` is where the
+    ``staff`` group can page this account, each with its own switch.
     """
     stored = await preference_repository.stored_discord_dm(session, auth_user_id)
     linked = await load_provider_user_ids(session, auth_user_ids=[auth_user_id], oauth_provider="discord")
+    staff = await recipient_repository.staff_workspaces(session, auth_user_id, *STAFF_PERMISSION)
     return schemas.NotificationPreferencesRead(
         discord_dm=schemas.NotificationDmGroups(**effective_discord_dm(stored)),
         discord_linked=bool(linked.get(auth_user_id)),
+        staff_workspaces=[
+            schemas.NotificationStaffWorkspace(
+                workspace_id=workspace_id,
+                name=name,
+                enabled=wants_staff_workspace(stored, workspace_id),
+            )
+            for workspace_id, name in staff
+        ],
     )
 
 
@@ -235,16 +252,31 @@ async def update_preferences(
     *,
     auth_user_id: int,
     discord_dm: dict[str, bool],
+    staff_workspaces: Mapping[int, bool] | None = None,
 ) -> schemas.NotificationPreferencesRead:
     """Merge a partial edit into the stored switches and answer with the effect.
 
     Partial rather than replacing: the row holds only what the user changed, so
     a group added upstream stays on its default for everybody until they touch
     it -- and one toggle flipped in a stale tab cannot silently re-assert the
-    other two.
+    other two. The per-workspace staff switches merge the same way, and only
+    for workspaces the account is staff in: anything else would be a stored
+    key that never does anything.
     """
     stored = await preference_repository.stored_discord_dm(session, auth_user_id)
     stored.update(discord_dm)
+    if staff_workspaces:
+        staff = {
+            workspace_id
+            for workspace_id, _ in await recipient_repository.staff_workspaces(session, auth_user_id, *STAFF_PERMISSION)
+        }
+        foreign = sorted(set(staff_workspaces) - staff)
+        if foreign:
+            raise HTTPException(status_code=422, detail=f"Not staff in workspace(s): {foreign}")
+        current = stored.get(STAFF_WORKSPACES_KEY)
+        overrides = dict(current) if isinstance(current, Mapping) else {}
+        overrides.update({str(workspace_id): enabled for workspace_id, enabled in staff_workspaces.items()})
+        stored[STAFF_WORKSPACES_KEY] = overrides
     await preference_repository.set_discord_dm(session, auth_user_id=auth_user_id, discord_dm=stored)
     await session.commit()
     return await preferences(session, auth_user_id=auth_user_id)
@@ -273,6 +305,7 @@ async def _admin_summary(session: Any, *, auth_user_id: int) -> schemas.AdminUse
     return schemas.AdminUserNotificationsRead(
         discord_dm=prefs.discord_dm,
         discord_linked=prefs.discord_linked,
+        staff_workspaces=prefs.staff_workspaces,
         unread_count=unread,
         recent_deliveries=[schemas.NotificationDeliveryItem.model_validate(row) for row in deliveries],
     )
@@ -298,6 +331,7 @@ async def admin_update_user_preferences(
     *,
     auth_user_id: int,
     discord_dm: dict[str, bool],
+    staff_workspaces: Mapping[int, bool] | None = None,
 ) -> schemas.AdminUserNotificationsRead:
     """Flip another account's DM switches on their behalf, then answer as the read.
 
@@ -307,5 +341,7 @@ async def admin_update_user_preferences(
     that issued the write does not need a second round trip to refresh.
     """
     await _require_auth_user(session, auth_user_id)
-    await update_preferences(session, auth_user_id=auth_user_id, discord_dm=discord_dm)
+    await update_preferences(
+        session, auth_user_id=auth_user_id, discord_dm=discord_dm, staff_workspaces=staff_workspaces
+    )
     return await _admin_summary(session, auth_user_id=auth_user_id)
