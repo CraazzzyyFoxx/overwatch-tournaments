@@ -70,6 +70,18 @@ def registration_load_options() -> list[Any]:
     ]
 
 
+def _pool_clauses(tournament_id: int) -> tuple[Any, ...]:
+    """The balancer pool predicate, exactly as the panel defines it."""
+    return (
+        BalancerRegistration.status == "approved",
+        BalancerRegistration.deleted_at.is_(None),
+        balancer_pool_included_clause(
+            BalancerRegistration.balancer_status,
+            sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id).scalar_subquery(),
+        ),
+    )
+
+
 def _hero_refs(role: BalancerRegistrationRole) -> tuple[HeroRef, ...]:
     return tuple(
         HeroRef(id=entry.hero.id, slug=entry.hero.slug, image_path=entry.hero.image_path)
@@ -121,14 +133,7 @@ class RosterEngine:
         if not include_deleted:
             query = query.where(BalancerRegistration.deleted_at.is_(None))
         if pool_only:
-            query = query.where(
-                BalancerRegistration.status == "approved",
-                BalancerRegistration.deleted_at.is_(None),
-                balancer_pool_included_clause(
-                    BalancerRegistration.balancer_status,
-                    sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id).scalar_subquery(),
-                ),
-            )
+            query = query.where(*_pool_clauses(tournament_id))
         if registration_ids is not None:
             if not registration_ids:
                 return {}
@@ -141,6 +146,24 @@ class RosterEngine:
             workspace_id=workspace_id,
             tournament_id=tournament_id,
         )
+
+    async def pool_ids(self, session: AsyncSession, tournament_id: int, registration_ids: Sequence[int]) -> set[int]:
+        """Which of these registrations the balancer pool includes -- ids only.
+
+        For a caller that resolves several leniencies at once: narrowing with
+        this and then resolving the union in ONE :meth:`for_tournament` pass
+        costs one cheap id query instead of a second full engine run.
+        """
+        if not registration_ids:
+            return set()
+        rows = await session.scalars(
+            sa.select(BalancerRegistration.id).where(
+                BalancerRegistration.tournament_id == tournament_id,
+                BalancerRegistration.id.in_(list(registration_ids)),
+                *_pool_clauses(tournament_id),
+            )
+        )
+        return set(rows)
 
     async def resolve(
         self,
