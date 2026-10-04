@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,11 +19,9 @@ import {
 } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
+import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
 import { Combobox, ComboboxCheck } from "@/components/kit/Combobox";
-import {
-  AdminDetailTableShell,
-  getAdminDetailTableStyles
-} from "@/components/admin/AdminDetailTable";
+import { getAdminDetailTableStyles } from "@/components/admin/AdminDetailTable";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { WizardShell } from "@/components/kit/WizardShell";
 import { Badge } from "@/components/ui/badge";
@@ -52,9 +51,7 @@ import type {
   ChallongeTeamPreviewTeam
 } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
-import { TOURNAMENT_DETAIL_PREVIEW_LIMIT } from "./tournamentWorkspace.helpers";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
-import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
@@ -77,6 +74,39 @@ const UNMAPPED_TEAM_VALUE = "unmapped";
 function getChallongeParticipantKey(participant: ChallongeTeamPreviewParticipant) {
   return `${participant.participant_id}:${participant.group_id ?? "none"}`;
 }
+
+const TEAM_COLUMNS: ColumnDef<Team>[] = [
+  {
+    accessorKey: "name",
+    header: "Team",
+    cell: ({ row }) => <TeamName team={row.original} size="xs" nameClassName="font-medium" />,
+    // Player names too: an admin often knows who is on a roster, not what it is called.
+    meta: columnMeta<Team>({
+      searchValue: (team) => [team.name, ...team.players.map((player) => player.name)].join(" ")
+    })
+  },
+  {
+    accessorKey: "avg_sr",
+    header: "Avg SR",
+    cell: ({ row }) => row.original.avg_sr.toFixed(0),
+    meta: columnMeta<Team>({ align: "right", numeric: true })
+  },
+  {
+    accessorKey: "total_sr",
+    header: "Total SR",
+    meta: columnMeta<Team>({ align: "right", numeric: true })
+  },
+  {
+    id: "players",
+    accessorFn: (team) => team.players.length,
+    header: "Players",
+    meta: columnMeta<Team>({ align: "right", numeric: true })
+  },
+  createKebabColumn<Team>(
+    (team) => [{ label: "Open team", icon: Pencil, href: `/admin/teams/${team.id}` }],
+    { rowLabel: (team) => team.name }
+  )
+];
 
 function summarizeChallongeSyncResult(result: {
   created: number;
@@ -423,77 +453,15 @@ export function TournamentTeamsTab({
           </div>
         </CardHeader>
         <CardContent>
-          <AdminDetailTableShell variant="compact">
-            <Table>
-              <TableHeader>
-                <TableRow className={tableStyles.headerRow}>
-                  <TableHead className={tableStyles.head}>Team</TableHead>
-                  <TableHead className={tableStyles.head}>Avg SR</TableHead>
-                  <TableHead className={tableStyles.head}>Total SR</TableHead>
-                  <TableHead className={tableStyles.head}>Players</TableHead>
-                  <TableHead className={`${tableStyles.head} text-right`}>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teams.length ? (
-                  teams.slice(0, TOURNAMENT_DETAIL_PREVIEW_LIMIT).map((team) => (
-                    <TableRow key={team.id} className={tableStyles.row}>
-                      <TableCell className={tableStyles.cell}>
-                        <TeamName team={team} size="xs" nameClassName="font-medium" />
-                      </TableCell>
-                      <TableCell className={`${tableStyles.cell} tabular-nums`}>
-                        {team.avg_sr.toFixed(0)}
-                      </TableCell>
-                      <TableCell className={`${tableStyles.cell} tabular-nums`}>
-                        {team.total_sr}
-                      </TableCell>
-                      <TableCell className={`${tableStyles.cell} tabular-nums`}>
-                        {team.players.length}
-                      </TableCell>
-                      <TableCell className={tableStyles.cell}>
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            asChild
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Open team ${team.name}`}
-                          >
-                            <Link href={`/admin/teams/${team.id}`}>
-                              <Pencil className="mr-2 h-4 w-4" aria-hidden />
-                              Open team
-                            </Link>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow className={tableStyles.row}>
-                    <TableCell className={tableStyles.cell} colSpan={5}>
-                      <EmptyNote
-                        action={
-                          <div className="flex flex-wrap gap-2">
-                            {syncTeamsButton}
-                            {canManageTeams ? (
-                              <Button asChild variant="outline" size="sm">
-                                <Link href={teamsAdminHref}>
-                                  <Plus className="size-3.5" aria-hidden />
-                                  Manage teams
-                                </Link>
-                              </Button>
-                            ) : null}
-                          </div>
-                        }
-                      >
-                        No teams loaded for this tournament yet. Sync from Challonge or open the
-                        dedicated teams workspace to create the first roster.
-                      </EmptyNote>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </AdminDetailTableShell>
+          <DataTable
+            rows={teams}
+            columns={TEAM_COLUMNS}
+            getRowId={(team) => String(team.id)}
+            searchPlaceholder="Search teams or players…"
+            rowUnit="teams"
+            onRowClick={(row) => router.push(`/admin/teams/${row.original.id}`)}
+            emptyMessage="No teams loaded for this tournament yet. Sync from Challonge or open the teams workspace to create the first roster."
+          />
         </CardContent>
       </Card>
 
