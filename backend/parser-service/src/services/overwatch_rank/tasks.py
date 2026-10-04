@@ -131,7 +131,8 @@ async def handle_registration_approved(
     redis: Any | None = None,
     session_factory: Any = db.async_session_maker,
 ) -> int:
-    """On registration approval, prioritize + enqueue a rank check for the player.
+    """On registration approval (or the registrant's own re-check request),
+    prioritize + enqueue a rank check for the player.
 
     Reference-only: snapshots are stored for admin display; the player's declared
     registration rank is never overwritten. Skips unlinked registrations (the

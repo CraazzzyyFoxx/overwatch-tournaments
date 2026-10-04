@@ -333,6 +333,7 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.tournament.reg_pub_withdraw_me": Op(response=reg_schemas.RegistrationStatusResponse),
     "rpc.tournament.reg_pub_check_in": Op(response=reg_schemas.RegistrationRead),
+    "rpc.tournament.reg_pub_recheck_me": Op(),
     "rpc.tournament.sub_me": Op(response=reg_schemas.SubscriptionStatusRead),
     "rpc.tournament.sub_redeem_code": Op(
         request=reg_schemas.SubscriptionRedeemRequest,

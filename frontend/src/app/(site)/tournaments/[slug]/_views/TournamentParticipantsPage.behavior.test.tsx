@@ -18,6 +18,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { ApiError } from "@/lib/api/error";
 import type {
   Registration,
   RegistrationForm,
@@ -40,6 +41,7 @@ const getForm = vi.fn();
 const checkInMyRegistration = vi.fn();
 const withdrawMyRegistration = vi.fn();
 const updateMyRegistration = vi.fn();
+const recheckMyRegistration = vi.fn();
 
 vi.mock("@/services/registration.service", () => ({
   default: {
@@ -49,6 +51,7 @@ vi.mock("@/services/registration.service", () => ({
     checkInMyRegistration: (...args: unknown[]) => checkInMyRegistration(...args),
     withdrawMyRegistration: (...args: unknown[]) => withdrawMyRegistration(...args),
     updateMyRegistration: (...args: unknown[]) => updateMyRegistration(...args),
+    recheckMyRegistration: (...args: unknown[]) => recheckMyRegistration(...args),
     getMySubscriptionStatus: () => Promise.resolve({ required: false, verdicts: {} })
   }
 }));
@@ -523,6 +526,62 @@ describe("registration progress steps", () => {
     expect(
       stepLabels().filter((candidate) => candidate.className.includes("aqt-rose"))
     ).toHaveLength(0);
+  });
+});
+
+describe("re-checking profile and subscriptions", () => {
+  const BLOCKED = makeRegistration({
+    admission: {
+      decision: "not_admitted",
+      requirements: [
+        requirement({
+          key: "open_profile",
+          state: "blocked",
+          reasons: [{ code: "profile_private", actor: "player", subject: "Anak#2100" }]
+        })
+      ],
+      blockers: [],
+      overridden: [],
+      checked_in: false,
+      ready: true
+    }
+  });
+
+  function recheckButton(): HTMLButtonElement | null {
+    return container.querySelector<HTMLButtonElement>('[data-registration-recheck="true"]');
+  }
+
+  it("is offered only while a requirement is still unmet", async () => {
+    await mount();
+    expect(recheckButton()).toBeNull();
+  });
+
+  it("locks itself for the cooldown after a check", async () => {
+    getMyRegistration.mockResolvedValue(BLOCKED);
+    recheckMyRegistration.mockResolvedValue(undefined);
+    await mount();
+
+    await act(async () => recheckButton()?.click());
+    await settle();
+
+    expect(recheckMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID);
+    expect(recheckButton()?.disabled).toBe(true);
+    expect(recheckButton()?.textContent).toContain("60s");
+  });
+
+  it("takes the server's remaining cooldown from a 429", async () => {
+    getMyRegistration.mockResolvedValue(BLOCKED);
+    recheckMyRegistration.mockRejectedValue(
+      new ApiError(429, [{ msg: "slow down", code: "recheck_cooldown" }], { retry_after: 17 })
+    );
+    await mount();
+
+    await act(async () => recheckButton()?.click());
+    await settle();
+
+    expect(recheckButton()?.disabled).toBe(true);
+    expect(recheckButton()?.textContent).toContain("17s");
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 });
 

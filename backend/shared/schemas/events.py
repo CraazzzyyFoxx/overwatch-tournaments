@@ -329,6 +329,16 @@ class RegistrationApprovedEvent(BaseEvent):
     battle_tag: str | None = Field(default=None, description="Approved registration battle tag")
 
 
+class RegistrationRankCheckRequestedEvent(RegistrationApprovedEvent):
+    """The registrant asked to re-check their profile from their own card.
+
+    Same payload as the approval event, so parser-service runs the same rank check
+    for it; a distinct type and routing key so it is never read as an approval.
+    """
+
+    event_type: str = Field(default="registration_rank_check_requested", frozen=True)
+
+
 class RegistrationRejectedEvent(BaseEvent):
     """Domain event emitted when a tournament registration is rejected."""
 

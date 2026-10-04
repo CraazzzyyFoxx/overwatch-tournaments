@@ -125,6 +125,7 @@ from src.services.registration import subscription_config
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.answers import answer_service
+from src.services.registration.recheck import assert_recheck_allowed, recheck_registration
 from src.services.registration.self_edit import SelfEditPolicy, self_edit_policy, submitted_late
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_codes import redeem_challenge_code
@@ -844,6 +845,29 @@ def register(broker: Any, logger: Any) -> None:
                     submitted_late=late,
                 )
             )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.reg_pub_recheck_me")
+    async def _reg_pub_recheck_me(data: dict, msg: RabbitMessage) -> dict:
+        """Re-check the caller's profile and subscriptions now, behind a cooldown.
+
+        No body: the client refetches its registration, whose admission then
+        carries the fresh subscription verdict (the profile one follows once
+        parser-service has fetched the tags).
+        """
+
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _path_int(data, "tournament_id")
+            await ensure_tournament_viewable(session, user, tournament_id)
+            reg = await reg_service.registration_service.get_registration(session, tournament_id, user.id)
+            if reg is None:
+                raise HTTPException(status_code=404, detail="No registration found")
+            await assert_recheck_allowed(auth_user_id=user.id)
+            await recheck_registration(session, reg, auth_user_id=user.id)
+            await session.commit()
+            return None
 
         return await _run(logger, op)
 

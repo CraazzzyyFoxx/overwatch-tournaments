@@ -9187,6 +9187,10 @@
       "description": "Permission: public; no authentication required \u2014 gated only by the tournament's visibility rule. Returns the live public registration list for a tournament with tournament-history and division grids.",
       "summary": "List public registrations"
     },
+    "rpc.tournament.reg_pub_recheck_me": {
+      "description": "Permission: authenticated user; self-service \u2014 the caller's own registration only. Forces a live subscription check and queues a re-fetch of the registration's BattleTags, each only when the tournament requires it; returns 204 and the client refetches its registration. One call per user per 60 seconds: a repeat answers 429 with Retry-After.",
+      "summary": "Re-check my profile and subscriptions"
+    },
     "rpc.tournament.reg_pub_update_me": {
       "description": "Permission: authenticated user; self-service \u2014 the caller's own registration only. Lets a user update their own still-pending registration after re-validating the input.",
       "request": {

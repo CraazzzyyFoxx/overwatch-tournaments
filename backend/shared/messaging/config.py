@@ -325,6 +325,22 @@ TOURNAMENT_REGISTRATION_APPROVED_DLQ = RabbitQueue(
     durable=True,
 )
 
+TOURNAMENT_REGISTRATION_RANK_CHECK_QUEUE = RabbitQueue(
+    "tournament_registration_rank_check",
+    durable=True,
+    routing_key="tournament.registration.rank_check_requested",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "tournament_registration_rank_check.dlq",
+        "x-message-ttl": 600000,  # 10 minutes
+    },
+)
+
+TOURNAMENT_REGISTRATION_RANK_CHECK_DLQ = RabbitQueue(
+    "tournament_registration_rank_check.dlq",
+    durable=True,
+)
+
 TOURNAMENT_REGISTRATION_REJECTED_QUEUE = RabbitQueue(
     "tournament_registration_rejected",
     durable=True,

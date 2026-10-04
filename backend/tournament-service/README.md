@@ -106,6 +106,7 @@ All of these go through the outbox, never directly from the request transaction:
 | `tournament.state.changed` | `tournament.events` | Status transition (manual or automatic) |
 | `tournament.registration.approved` | `tournament.events` | Registration approved |
 | `tournament.registration.rejected` | `tournament.events` | Registration rejected |
+| `tournament.registration.rank_check_requested` | `tournament.events` | Registrant asked to re-check their profile |
 | `tournament.encounter.completed` | `tournament.events` | Encounter result confirmed |
 | `tournament.compute.division-grid-import` | `tournament.compute` | Grid import job dispatched |
 

@@ -53,6 +53,14 @@ const registrationService = {
     return response.json();
   },
 
+  /** Re-check profile and subscriptions now. Server-side cooldown: a repeat
+   *  within it answers 429 with `retry_after`. Refetch the registration after. */
+  async recheckMyRegistration(tournamentId: number): Promise<void> {
+    await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me/recheck`,
+      { method: "POST" },
+    );
+  },
+
   /** The caller's own subscription standing. Never forces a provider refresh, so
    *  the registration form can poll it on render. */
   async getMySubscriptionStatus(tournamentId: number): Promise<SubscriptionStatus> {

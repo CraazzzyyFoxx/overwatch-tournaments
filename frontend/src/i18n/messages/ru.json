@@ -433,7 +433,15 @@
         "checkIn": "Чек-ин"
       },
       "showDetails": "Подробнее",
-      "hideDetails": "Скрыть"
+      "hideDetails": "Скрыть",
+      "recheck": {
+        "action": "Проверить",
+        "pending": "Проверяем…",
+        "cooldown": "Проверить · {seconds} с",
+        "title": "Проверить профиль и подписки заново",
+        "started": "Проверка запущена — статус обновится в течение пары минут.",
+        "failed": "Не удалось запустить проверку."
+      }
     }
   },
   "registrationTeams": {
@@ -2249,6 +2257,7 @@
       "reached_playoffs": "Выход в плей-офф",
       "registration_flag": "Признак заявки",
       "registration_timing": "Время заявки",
+      "stage_completed": "Стадия завершена",
       "standing_count": "Количество мест",
       "team_otp_count": "Вантрики в команде",
       "teammate_recurrence": "Постоянный тиммейт",
