@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid, division_case_expr
+from shared.services.division_grid.access import effective_division_number_expr
 from shared.services.tournament.visibility import visible_tournament_ids_subquery
 from src import models
 from src.core import enums, pagination
@@ -450,7 +451,13 @@ class HeroQueries:
                 models.WorkspaceMember.player_id.label("user_id"),
                 models.Player.name,
                 models.Player.role,
-                division_case_expr(models.Player.rank, grid).label("div"),
+                (
+                    # All-workspaces read: the player's division belongs to
+                    # their own tournament's grid, not to one request grid.
+                    division_case_expr(models.Player.rank, grid)
+                    if workspace_id is not None
+                    else effective_division_number_expr(models.Player.rank, models.Player.tournament_id)
+                ).label("div"),
                 models.Team.id.label("team_id"),
                 models.Team.name.label("team"),
                 sa.func.row_number()

@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import userService from "@/services/user.service";
 import { User } from "@/types/user.types";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import { Skeleton } from "@/components/ui/skeleton";
 import MatchesTable, { type MatchesFilters } from "@/app/(site)/users/components/matches/MatchesTable";
 import type { StageStats } from "@/app/(site)/users/components/matches/MatchesSidebars";
@@ -23,11 +24,13 @@ export const UserEncountersPageSkeleton = () => {
 export const UserEncountersPage = async ({
   user,
   page,
-  filters
+  filters,
+  scope
 }: {
   user: User;
   page: number;
   filters?: MatchesFilters;
+  scope: StatsScope;
 }) => {
   const perPage = 15;
   const t = await getTranslations();
@@ -38,8 +41,17 @@ export const UserEncountersPage = async ({
   let summary: Awaited<ReturnType<typeof userService.getUserMatchesSummary>> | null = null;
   try {
     [encounters, summary] = await Promise.all([
-      userService.getUserEncounters(user.id, page, perPage, undefined, undefined, undefined, filters),
-      userService.getUserMatchesSummary(user.id).catch(() => null)
+      userService.getUserEncounters(
+        user.id,
+        page,
+        perPage,
+        undefined,
+        undefined,
+        undefined,
+        filters,
+        scope
+      ),
+      userService.getUserMatchesSummary(user.id, scope).catch(() => null)
     ]);
   } catch {
     return (

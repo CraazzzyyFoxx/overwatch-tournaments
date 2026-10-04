@@ -5,12 +5,12 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.models.division_grid import DivisionGrid as DivisionGridModel
-from shared.models.division_grid import DivisionGridMapping, DivisionGridVersion
+from shared.models.division_grid import DivisionGridMapping, DivisionGridTier, DivisionGridVersion
 from shared.models.identity.auth_user import AuthUser
 from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
@@ -24,6 +24,111 @@ from shared.services.division_grid.normalization import (
     DivisionGridNormalizer,
     WeightedDivisionTarget,
 )
+
+
+def _system_default_version_id_expr() -> sa.ScalarSelect[int]:
+    """SQL twin of :func:`get_default_division_grid_version_id`."""
+    version = aliased(DivisionGridVersion)
+    grid = aliased(DivisionGridModel)
+    return (
+        sa.select(version.id)
+        .select_from(version)
+        .join(grid, grid.id == version.grid_id)
+        .where(grid.workspace_id.is_(None))
+        .order_by(version.id.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def tournament_effective_version_id_expr(tournament_id: sa.ColumnElement[int]) -> sa.ScalarSelect[int]:
+    """SQL twin of :func:`get_tournament_division_grid_version_id`.
+
+    ``coalesce(tournament pin, owning workspace default, system default)``,
+    correlated to ``tournament_id``. Needed where the rows being read span
+    workspaces (the public all-workspaces mode): each row's division belongs
+    to its own tournament's grid, which no single per-request grid can express.
+    Every model it touches is aliased, so it never collides with (or
+    accidentally correlates to) a ``Tournament``/``Workspace`` the enclosing
+    query already joined.
+    """
+    tournament = aliased(Tournament)
+    workspace = aliased(Workspace)
+    return (
+        sa.select(
+            sa.func.coalesce(
+                tournament.division_grid_version_id,
+                workspace.default_division_grid_version_id,
+                _system_default_version_id_expr(),
+            )
+        )
+        .select_from(tournament)
+        .outerjoin(workspace, workspace.id == tournament.workspace_id)
+        .where(tournament.id == tournament_id)
+        # Only the aliases above belong in this subquery's FROM; whatever table
+        # ``tournament_id`` comes from stays correlated to the enclosing query
+        # (auto-correlation does not reach through two levels of nesting).
+        .correlate_except(tournament, workspace)
+        .scalar_subquery()
+    )
+
+
+def effective_division_number_expr(
+    rank_column: sa.ColumnElement[int],
+    tournament_id_column: sa.ColumnElement[int],
+) -> sa.ScalarSelect[int]:
+    """SQL twin of ``DivisionGrid.resolve_division(rank).number`` on the row's own grid.
+
+    Mirrors :func:`shared.domain.division_rank.resolve_tier_for_rank`: the tier
+    whose ``[rank_min, rank_max]`` band contains the rank (unbounded top tier
+    included), and the grid's floor tier for a rank below every band.
+
+    ponytail: one correlated subquery per row — only the opt-in
+    all-workspaces reads use it; the single-grid path stays on the
+    index-friendly ``division_rank_bounds``/``division_case_expr``.
+    """
+    tier = aliased(DivisionGridTier)
+    matched = sa.and_(
+        tier.rank_min <= rank_column,
+        sa.or_(tier.rank_max.is_(None), rank_column <= tier.rank_max),
+    )
+    return (
+        sa.select(tier.number)
+        .select_from(tier)
+        .correlate_except(tier)
+        .where(tier.version_id == tournament_effective_version_id_expr(tournament_id_column))
+        # Containing tier first (highest floor, matching the Python iteration
+        # order on overlapping bands); otherwise the grid floor tier.
+        .order_by(
+            sa.case((matched, 0), else_=1),
+            sa.case((matched, -tier.rank_min), else_=tier.rank_min),
+        )
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def effective_division_filter_predicates(
+    rank_column: sa.ColumnElement[int],
+    tournament_id_column: sa.ColumnElement[int],
+    div_min: int | None,
+    div_max: int | None,
+) -> list[sa.ColumnElement[bool]]:
+    """``div_min <= division(rank) <= div_max`` resolved on each row's own grid.
+
+    All-workspaces counterpart of
+    :func:`shared.division_grid.division_filter_predicates`, which can only
+    translate a division range against one grid.
+    """
+    if div_min is None and div_max is None:
+        return []
+
+    division = effective_division_number_expr(rank_column, tournament_id_column)
+    if div_min is not None and div_max is not None:
+        return [division.between(div_min, div_max)]
+    if div_min is not None:
+        return [division >= div_min]
+    return [division <= div_max]
 
 
 def require_grid_version_read_access(user: AuthUser, workspace_id: int | None) -> None:
@@ -180,7 +285,6 @@ async def load_division_grid_snapshot(
 
 async def get_effective_division_grid_version_ids(
     session: AsyncSession,
-    workspace_id: int | None,
     tournament_ids: Iterable[int],
 ) -> dict[int, int | None]:
     """Batch equivalent of calling ``get_effective_division_grid_version_id`` once per id.
@@ -194,15 +298,15 @@ async def get_effective_division_grid_version_ids(
     fixed with ``asyncio.gather`` over the per-id calls instead). This
     resolves the whole set in a constant number of round trips: one Redis MGET
     for the effective-version cache, at most one DB query for the tournaments
-    that missed, and one more round trip for the shared workspace default
-    (resolved once, not per tournament). Every resolved value is written back
-    to cache exactly like the single-item path, so a later single lookup (or
-    the next batch) still gets full cache benefit.
+    that missed, and one more round trip per distinct owning workspace whose
+    default is still needed. Every resolved value is written back to cache
+    exactly like the single-item path, so a later single lookup (or the next
+    batch) still gets full cache benefit.
 
-    Every id in ``tournament_ids`` is assumed to belong to ``workspace_id`` --
-    true for every current caller, a read model already scoped to one
-    workspace -- which is what lets the workspace default collapse to one
-    lookup no matter how many tournaments fall through to it.
+    The fallback default is each tournament's *own* workspace default, so a
+    set spanning workspaces (the public all-workspaces reads) resolves exactly
+    like the per-id function would -- the effective version is a property of
+    the tournament alone, never of the reader's scope.
     """
     ids = list(dict.fromkeys(tournament_ids))
     if not ids:
@@ -215,31 +319,32 @@ async def get_effective_division_grid_version_ids(
 
     rows = (
         await session.execute(
-            sa.select(Tournament.id, Tournament.division_grid_version_id).where(Tournament.id.in_(missing))
+            sa.select(Tournament.id, Tournament.division_grid_version_id, Tournament.workspace_id).where(
+                Tournament.id.in_(missing)
+            )
         )
     ).all()
-    own_version_by_tournament = {
-        int(tournament_id): (int(version_id) if version_id is not None else None) for tournament_id, version_id in rows
-    }
+    row_by_tournament = {int(row[0]): row for row in rows}
 
-    default_version_id: int | None = None
-    default_resolved = False
+    default_by_workspace: dict[int, int | None] = {}
     to_cache: dict[int, int | None] = {}
     for tournament_id in missing:
-        if tournament_id not in own_version_by_tournament:
+        row = row_by_tournament.get(tournament_id)
+        if row is None:
             # Row vanished between the caller's own query and this one (e.g. the
             # tournament was deleted); mirror get_tournament_division_grid_version_id
             # returning None for a missing tournament, with no workspace fallback.
             version_id = None
+        elif row[1] is not None:
+            version_id = int(row[1])
         else:
-            own_version_id = own_version_by_tournament[tournament_id]
-            if own_version_id is not None:
-                version_id = own_version_id
-            else:
-                if not default_resolved:
-                    default_version_id = await get_workspace_division_grid_version_id(session, workspace_id)
-                    default_resolved = True
-                version_id = default_version_id
+            tournament_workspace_id = int(row[2])
+            if tournament_workspace_id not in default_by_workspace:
+                default_by_workspace[tournament_workspace_id] = await get_workspace_division_grid_version_id(
+                    session,
+                    tournament_workspace_id,
+                )
+            version_id = default_by_workspace[tournament_workspace_id]
         resolved[tournament_id] = version_id
         to_cache[tournament_id] = version_id
 
@@ -279,6 +384,19 @@ async def load_division_grid_snapshots(
         await division_grid_cache.set_grid_version_snapshots(fresh)
 
     return snapshot_by_version
+
+
+async def load_division_grids(
+    session: AsyncSession,
+    version_ids: Iterable[int],
+) -> dict[int, DivisionGrid]:
+    """Runtime grids for many versions at once (cached, one query for the misses).
+
+    A version id missing from the result was not found in the database; callers
+    fall back to their request-level grid.
+    """
+    snapshots = await load_division_grid_snapshots(session, version_ids)
+    return {version_id: snapshot.to_runtime_grid() for version_id, snapshot in snapshots.items()}
 
 
 def _division_grid_version_read_payload(version: DivisionGridVersion) -> dict[str, Any]:

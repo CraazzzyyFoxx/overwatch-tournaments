@@ -13,6 +13,6 @@ import type { KeyPart } from "@/lib/query-keys";
 export const heroQueryKeys = {
   all: () => ["heroes"] as const,
   catalog: () => ["heroes", "catalog"] as const,
-  leaderboard: (heroId: KeyPart, tournamentId: KeyPart) =>
-    ["hero-leaderboard", heroId, tournamentId] as const,
+  leaderboard: (heroId: KeyPart, tournamentId: KeyPart, scope: KeyPart) =>
+    ["hero-leaderboard", heroId, tournamentId, scope] as const,
 };

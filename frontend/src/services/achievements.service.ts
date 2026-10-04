@@ -3,7 +3,8 @@ import { apiFetch } from "@/lib/api/fetch";
 import { Achievement, AchievementEarned } from "@/types/achievement.types";
 
 export default class achievementsService {
-  static async getAll(page: number, perPage: number, workspaceId?: number | null): Promise<PaginatedResponse<Achievement>> {
+  /** `workspaceId` may be `"all"` — every workspace (platform apex only). */
+  static async getAll(page: number, perPage: number, workspaceId?: number | "all" | null): Promise<PaginatedResponse<Achievement>> {
     return apiFetch(`/api/v1/achievements`, {
       query: {
         per_page: perPage,

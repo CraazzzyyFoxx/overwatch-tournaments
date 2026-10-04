@@ -6,9 +6,14 @@ from statistics import mean
 from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.division_grid import DivisionGrid
 from shared.domain.roster_shape import RegistrationRoleCode
-from shared.services.division_grid.access import build_workspace_division_grid_normalizer
+from shared.services.division_grid.access import (
+    build_workspace_division_grid_normalizer,
+    get_effective_division_grid_version_ids,
+    load_division_grid_version_read_payloads,
+    load_division_grids,
+)
 from shared.services.division_grid.normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
@@ -81,6 +86,78 @@ def _build_baseline_average_row(rows: list[dict[str, typing.Any]]) -> dict[str, 
         else:
             baseline[key] = float(sum(float(value) for value in values) / len(values))
     return baseline
+
+
+async def _division_grid_version_reads(
+    session: AsyncSession,
+    version_ids: typing.Iterable[int | None],
+) -> dict[int, schemas.DivisionGridVersionRead]:
+    """Read models for grid versions a response refers to (cached, one query for misses)."""
+    payloads = await load_division_grid_version_read_payloads(
+        session,
+        {version_id for version_id in version_ids if version_id is not None},
+    )
+    return {
+        version_id: schemas.DivisionGridVersionRead.model_validate(payload) for version_id, payload in payloads.items()
+    }
+
+
+async def _tournament_grid_versions(
+    session: AsyncSession,
+    tournament_ids: typing.Sequence[int],
+) -> tuple[dict[int, int | None], dict[int, schemas.DivisionGridVersionRead]]:
+    """Each tournament's effective grid version id, plus those versions' read models."""
+    version_by_tournament = await get_effective_division_grid_version_ids(session, tournament_ids)
+    return version_by_tournament, await _division_grid_version_reads(session, version_by_tournament.values())
+
+
+async def _overview_role_divisions(
+    session: AsyncSession,
+    raw_roles_map: dict[int, list[tuple[enums.HeroClass, int, int | None]]],
+    *,
+    grid: DivisionGrid,
+    normalizer: DivisionGridNormalizer | None,
+    workspace_id: int | None,
+) -> tuple[dict[int, list[schemas.UserOverviewRoleDivision]], list[schemas.DivisionGridVersionRead]]:
+    """Per-user role divisions, plus the grids those division numbers live on.
+
+    A workspace-scoped read normalizes every rank onto the one workspace grid,
+    so all roles share its version. The all-workspaces read has no such target:
+    each role keeps its own tournament's effective grid, and the response ships
+    every referenced grid so the client can render the right tier names/icons.
+    """
+    all_workspaces = workspace_id is None
+    source_version_ids = {
+        version_id for rows in raw_roles_map.values() for _role, _rank, version_id in rows if version_id is not None
+    }
+    grids_by_version = await load_division_grids(session, source_version_ids) if all_workspaces else {}
+    scoped_version_id = normalizer.target_version_id if normalizer is not None else grid.version_id
+
+    roles_by_user: dict[int, list[schemas.UserOverviewRoleDivision]] = {}
+    used_version_ids: set[int] = set()
+    for user_id, rows in raw_roles_map.items():
+        roles: list[schemas.UserOverviewRoleDivision] = []
+        for role, rank, version_id in rows:
+            division_grid_version_id = version_id if all_workspaces else scoped_version_id
+            if division_grid_version_id is not None:
+                used_version_ids.add(division_grid_version_id)
+            roles.append(
+                schemas.UserOverviewRoleDivision(
+                    role=role,
+                    division=resolve_workspace_division(
+                        rank,
+                        source_version_id=version_id,
+                        fallback_grid=grid,
+                        normalizer=normalizer,
+                        source_grid=grids_by_version.get(version_id),
+                    ),
+                    division_grid_version_id=division_grid_version_id,
+                )
+            )
+        roles_by_user[user_id] = roles
+
+    reads = await _division_grid_version_reads(session, used_version_ids)
+    return roles_by_user, [reads[version_id] for version_id in sorted(reads)]
 
 
 def _compute_rank_and_percentile(
@@ -291,7 +368,7 @@ class UserService:
         *,
         grid: DivisionGrid,
         normalizer: DivisionGridNormalizer | None = None,
-    ) -> pagination.Paginated[schemas.UserOverviewRow]:
+    ) -> schemas.UserOverviewResponse:
         if params.div_min is not None and params.div_max is not None and params.div_min > params.div_max:
             raise errors.ApiHTTPException(
                 status_code=400,
@@ -305,7 +382,7 @@ class UserService:
 
         users, total = await self.overview.get_overview_users(session, params, grid, workspace_id=workspace_id)
         if not users:
-            return pagination.Paginated(
+            return schemas.UserOverviewResponse(
                 page=params.page,
                 per_page=params.per_page,
                 total=total,
@@ -322,20 +399,17 @@ class UserService:
             hero_metrics_map,
         ) = await self._gather_overview_enrichment(session, user_ids, workspace_id=workspace_id)
 
+        roles_by_user, division_grids = await _overview_role_divisions(
+            session,
+            raw_roles_map,
+            grid=grid,
+            normalizer=normalizer,
+            workspace_id=workspace_id,
+        )
+
         rows: list[schemas.UserOverviewRow] = []
         for user in users:
-            roles = [
-                schemas.UserOverviewRoleDivision(
-                    role=role,
-                    division=resolve_workspace_division(
-                        rank,
-                        source_version_id=version_id,
-                        fallback_grid=grid,
-                        normalizer=normalizer,
-                    ),
-                )
-                for role, rank, version_id in raw_roles_map.get(user.id, [])
-            ]
+            roles = roles_by_user.get(user.id, [])
 
             top_heroes: list[schemas.UserOverviewHero] = []
             for hero, playtime_seconds in top_heroes_map.get(user.id, []):
@@ -384,11 +458,12 @@ class UserService:
                 )
             )
 
-        return pagination.Paginated(
+        return schemas.UserOverviewResponse(
             page=params.page,
             per_page=params.per_page,
             total=total,
             results=rows,
+            division_grids=division_grids,
         )
 
     async def get_overview_stats(
@@ -477,22 +552,19 @@ class UserService:
             top_heroes_limit=3,
         )
 
+        roles_by_user, division_grids = await _overview_role_divisions(
+            session,
+            raw_roles_map,
+            grid=grid,
+            normalizer=normalizer,
+            workspace_id=workspace_id,
+        )
+
         catalog_letters: list[schemas.UserCatalogLetter] = []
         for letter_label, users in letters_with_users:
             entries: list[schemas.UserCatalogEntry] = []
             for user in users:
-                roles = [
-                    schemas.UserOverviewRoleDivision(
-                        role=role,
-                        division=resolve_workspace_division(
-                            rank,
-                            source_version_id=version_id,
-                            fallback_grid=grid,
-                            normalizer=normalizer,
-                        ),
-                    )
-                    for role, rank, version_id in raw_roles_map.get(user.id, [])
-                ]
+                roles = roles_by_user.get(user.id, [])
 
                 top_heroes: list[schemas.UserOverviewHero] = []
                 for hero, playtime_seconds in top_heroes_map.get(user.id, []):
@@ -542,6 +614,7 @@ class UserService:
             letters=catalog_letters,
             total=total_users,
             available_letters=available_letters,
+            division_grids=division_grids,
         )
 
     async def get_compare(
@@ -1041,12 +1114,28 @@ class UserService:
         """A user's per-role record and current division across tournaments.
 
         ``grid`` resolves divisions from the raw player rank, and ``workspace_id`` scopes
-        the roles to a single workspace when given.
+        the roles to a single workspace when given. Without a workspace there is no
+        single target grid to normalize to, so each role reports the division — and
+        the grid version — of the tournament its latest rank comes from.
         """
         roles = await self.profile.get_roles(session, user_id, workspace_id=workspace_id)
+        latest_by_role = [
+            (role, maps_won, maps_lost, division, max(division, key=lambda item: item["tournament"]))
+            for role, maps_won, maps_lost, division in roles
+        ]
+
+        all_workspaces = workspace_id is None
+        source_version_ids = {
+            latest_role["division_grid_version_id"]
+            for *_rest, latest_role in latest_by_role
+            if latest_role["division_grid_version_id"] is not None
+        }
+        grids_by_version = await load_division_grids(session, source_version_ids) if all_workspaces else {}
+        version_reads = await _division_grid_version_reads(session, source_version_ids) if all_workspaces else {}
+
         payload: list[schemas.UserRole] = []
-        for role, maps_won, maps_lost, division in roles:
-            latest_role = max(division, key=lambda item: item["tournament"])
+        for role, maps_won, maps_lost, division, latest_role in latest_by_role:
+            source_version_id = latest_role["division_grid_version_id"]
             payload.append(
                 schemas.UserRole(
                     role=role,
@@ -1055,11 +1144,14 @@ class UserService:
                     maps=maps_won + maps_lost,
                     division=resolve_workspace_division(
                         latest_role["rank"],
-                        source_version_id=latest_role["division_grid_version_id"],
+                        source_version_id=source_version_id,
                         fallback_grid=grid,
                         normalizer=normalizer,
+                        source_grid=grids_by_version.get(source_version_id),
                     ),
-                    division_grid_version=division_grid_version,
+                    division_grid_version=(
+                        version_reads.get(source_version_id) if all_workspaces else division_grid_version
+                    ),
                 )
             )
         return payload
@@ -1132,9 +1224,18 @@ class UserService:
         tournaments_won: int = 0
 
         # Narrow tournament summary — only fields the frontend renders on the user
-        # overview. Pure CPU conversion (no SQL), no need to fan out.
+        # overview. Each card carries the grid version its tournament's divisions
+        # are on (effective, so unpinned tournaments report one too).
+        version_by_tournament, tournament_version_reads = await _tournament_grid_versions(
+            session,
+            [team.tournament_id for team in teams],
+        )
         tournaments: list[schemas.UserTournamentSummary] = [
-            _mappers.to_user_tournament_summary(team.tournament) for team in teams
+            _mappers.to_user_tournament_summary(
+                team.tournament,
+                division_grid_version=tournament_version_reads.get(version_by_tournament.get(team.tournament_id)),
+            )
+            for team in teams
         ]
 
         for team in teams:
@@ -1325,6 +1426,11 @@ class UserService:
         )
         avg_mvp_map = await self.encounters.get_roster_avg_mvp_bulk(session, tournaments_ids, roster_user_ids)
         top_heroes_map = await self.encounters.get_roster_top_heroes_bulk(session, tournaments_ids, roster_user_ids)
+        version_by_tournament, tournament_version_reads = await _tournament_grid_versions(session, tournaments_ids)
+        grids_by_version = await load_division_grids(
+            session,
+            {version_id for version_id in version_by_tournament.values() if version_id is not None},
+        )
 
         for team, wins, losses, avg_closeness in tournaments:
             user_role: enums.HeroClass | None = None
@@ -1334,12 +1440,11 @@ class UserService:
             draw: int = 0
             placement = _mappers.resolve_team_placement(team)
 
-            # Use tournament-specific grid if available, otherwise fall back to workspace grid
-            tournament_grid = (
-                load_runtime_grid(team.tournament.division_grid_version)
-                if team.tournament.division_grid_version is not None
-                else grid
-            )
+            # Each tournament's divisions live on its own effective grid (own pin,
+            # else its workspace default, else the system default) — in the
+            # all-workspaces read the request grid is not that grid.
+            effective_version_id = version_by_tournament.get(team.tournament_id)
+            tournament_grid = grids_by_version.get(effective_version_id) or grid
 
             for player in team.players:
                 if player.workspace_member is not None and player.workspace_member.player_id == user.id:
@@ -1356,13 +1461,7 @@ class UserService:
                 lost += standing.lose
                 draw += standing.draw
 
-            division_grid_version = (
-                schemas.DivisionGridVersionRead.model_validate(
-                    team.tournament.division_grid_version, from_attributes=True
-                )
-                if team.tournament.division_grid_version is not None
-                else None
-            )
+            division_grid_version = tournament_version_reads.get(effective_version_id)
 
             players_read = [
                 _mappers.to_user_tournament_player(

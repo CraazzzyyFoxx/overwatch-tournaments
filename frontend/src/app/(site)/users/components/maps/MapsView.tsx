@@ -17,9 +17,11 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import { LayoutGrid } from "lucide-react";
 import { getWinrateColor } from "@/lib/colors";
 import { userQueryKeys } from "@/lib/users/query-keys";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 interface Props {
   userId: number;
+  scope: StatsScope;
 }
 
 const MODE_ORDER = ["Control", "Escort", "Hybrid", "Flashpoint", "Push", "Assault"] as const;
@@ -27,7 +29,7 @@ const MODE_ORDER = ["Control", "Escort", "Hybrid", "Flashpoint", "Push", "Assaul
 type SortKey = "winrate" | "count" | "name";
 type OrderKey = "asc" | "desc";
 
-const MapsView = ({ userId }: Props) => {
+const MapsView = ({ userId, scope }: Props) => {
   const t = useTranslations();
   const [modeFilter, setModeFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -49,8 +51,8 @@ const MapsView = ({ userId }: Props) => {
   }
 
   const tournamentsQuery = useQuery({
-    queryKey: userQueryKeys.tournamentsAll(userId),
-    queryFn: () => userService.getUserTournaments(userId),
+    queryKey: userQueryKeys.tournaments(userId, scope),
+    queryFn: () => userService.getUserTournaments(userId, scope === "all" ? "all" : undefined),
     staleTime: 5 * 60 * 1000
   });
 
@@ -60,7 +62,7 @@ const MapsView = ({ userId }: Props) => {
   );
 
   const mapsQuery = useQuery({
-    queryKey: userQueryKeys.maps(userId, debouncedSearch, minCount, tournamentId),
+    queryKey: userQueryKeys.maps(userId, debouncedSearch, minCount, tournamentId, scope),
     queryFn: () =>
       userService.getUserMaps(userId, {
         page: 1,
@@ -69,18 +71,20 @@ const MapsView = ({ userId }: Props) => {
         order: "desc",
         query: debouncedSearch.trim(),
         minCount,
-        tournamentId
+        tournamentId,
+        scope
       }),
     staleTime: 60_000
   });
 
   const summaryQuery = useQuery({
-    queryKey: userQueryKeys.mapsSummary(userId, debouncedSearch, minCount, tournamentId),
+    queryKey: userQueryKeys.mapsSummary(userId, debouncedSearch, minCount, tournamentId, scope),
     queryFn: () =>
       userService.getUserMapsSummary(userId, {
         query: debouncedSearch.trim(),
         minCount,
-        tournamentId
+        tournamentId,
+        scope
       }),
     staleTime: 60_000
   });

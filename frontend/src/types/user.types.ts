@@ -3,6 +3,7 @@ import { Hero, HeroPlaytime } from "@/types/hero.types";
 import { Score } from "@/types/encounter.types";
 import { MapRead } from "@/types/map.types";
 import { LogStatsName } from "@/types/stats.types";
+import type { PaginatedResponse } from "@/types/pagination.types";
 import { UserTournamentStat } from "@/types/statistics.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 
@@ -339,6 +340,13 @@ export type UserRoleType = PlayerRoleOption;
 export interface UserOverviewRoleDivision {
   role: UserRoleType;
   division: number;
+  /**
+   * The grid version `division` belongs to — the workspace's target grid in
+   * workspace scope, the tournament's own effective grid in all-workspaces
+   * scope (where ranks are never normalized across grids). Resolve it against
+   * the response's `division_grids`.
+   */
+  division_grid_version_id: number | null;
 }
 
 interface UserOverviewHeroMetric {
@@ -403,6 +411,13 @@ export interface UserCatalogResponse {
   letters: UserCatalogLetter[];
   total: number;
   available_letters: string[];
+  /** Every grid version referenced by a role in this response, once. */
+  division_grids: DivisionGridVersion[];
+}
+
+/** The users index page, plus the grid versions its role divisions point at. */
+export interface UserOverviewResponse extends PaginatedResponse<UserOverviewRow> {
+  division_grids: DivisionGridVersion[];
 }
 
 export type UserCompareBaselineMode = "target_user" | "global" | "cohort";

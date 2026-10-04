@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import type { StatsScopeState } from "@/lib/site/stats-scope";
 import workspaceService from "@/services/workspace.service";
 
 /**
@@ -14,6 +15,16 @@ export async function isTenantHost(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * The public-statistics read scope for this request: `?scope=all` opts into
+ * cross-workspace numbers, but only on the platform apex — a tenant host has
+ * no such mode, so the param is ignored and the toggle is hidden. Server-only.
+ */
+export async function resolveStatsScope(raw: string | undefined): Promise<StatsScopeState> {
+  const available = !(await isTenantHost());
+  return { scope: available && raw === "all" ? "all" : "workspace", available };
 }
 
 /** Tenant (white-label) host branding: the host workspace's name + icon. */

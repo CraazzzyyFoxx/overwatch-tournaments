@@ -1,5 +1,6 @@
 import { ROLE_LABEL_KEY, type Translate } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserOverviewRoleDivision, UserRoleType } from "@/types/user.types";
+import type { DivisionGridVersion } from "@/types/workspace.types";
 
 export type SortValue = "name" | "tournaments_count" | "achievements_count" | "avg_placement";
 export type OrderValue = "asc" | "desc";
@@ -64,6 +65,19 @@ export function primaryRoleLabel(roles: UserOverviewRoleDivision[], t: Translate
   if (roles.length === 1) return t(ROLE_LABEL_KEY[roles[0].role]);
   const abbr = roles.map((r) => t(ROLE_LABEL_KEY[r.role]).slice(0, 3).toUpperCase()).join(" / ");
   return `${t("common.roles.flex")} · ${abbr}`;
+}
+
+/**
+ * The grid version a row's division number belongs to, from the grids the
+ * response shipped alongside the rows. `null` means "fall back to the
+ * workspace grid" — the only possibility before the backend sends ids.
+ */
+export function gridForRole(
+  role: UserOverviewRoleDivision,
+  grids: DivisionGridVersion[] | undefined
+): DivisionGridVersion | null {
+  if (role.division_grid_version_id == null) return null;
+  return grids?.find((grid) => grid.id === role.division_grid_version_id) ?? null;
 }
 
 /**

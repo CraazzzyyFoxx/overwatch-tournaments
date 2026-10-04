@@ -52,6 +52,7 @@ __all__ = (
     "UserOverviewHero",
     "UserOverviewAverages",
     "UserOverviewRow",
+    "UserOverviewResponse",
     "UserOverviewQueryParams",
     "UserOverviewParams",
     "UserOverviewStats",
@@ -498,6 +499,10 @@ class UserSearch(BaseModel):
 class UserOverviewRoleDivision(BaseModel):
     role: enums.HeroClass
     division: int
+    # Which grid ``division`` is a number on: the workspace's target grid in a
+    # scoped read, the role's own tournament grid in the all-workspaces read.
+    # The grids themselves ship once per response in ``division_grids``.
+    division_grid_version_id: int | None = None
 
 
 class UserOverviewHeroMetric(BaseModel):
@@ -526,6 +531,12 @@ class UserOverviewRow(BaseModel):
     tournaments_count: int
     achievements_count: int
     averages: UserOverviewAverages
+
+
+class UserOverviewResponse(pagination.Paginated[UserOverviewRow]):
+    """Overview page plus every division grid its rows' divisions refer to."""
+
+    division_grids: list[DivisionGridVersionRead] = Field(default_factory=list)
 
 
 class UserOverviewQueryParams(
@@ -596,6 +607,7 @@ class UserCatalogResponse(BaseModel):
     letters: list[UserCatalogLetter]
     total: int
     available_letters: list[str]
+    division_grids: list[DivisionGridVersionRead] = Field(default_factory=list)
 
 
 class UserCatalogQueryParams(BaseModel):

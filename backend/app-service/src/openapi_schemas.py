@@ -93,7 +93,7 @@ OPERATIONS: dict[str, Op] = {
         response_array=True,
         query_params=(QueryParam("query"), QueryParam("fields", array=True)),
     ),
-    "rpc.app.users.overview": Op(response=Paginated[schemas.UserOverviewRow], query=schemas.UserOverviewQueryParams),
+    "rpc.app.users.overview": Op(response=schemas.UserOverviewResponse, query=schemas.UserOverviewQueryParams),
     "rpc.app.users.overview_stats": Op(response=schemas.UserOverviewStats, query=schemas.UserOverviewStatsQueryParams),
     "rpc.app.users.overview_catalog": Op(response=schemas.UserCatalogResponse, query=schemas.UserCatalogQueryParams),
     "rpc.app.users.compare": Op(response=schemas.UserCompareResponse, query=schemas.UserCompareQueryParams),

@@ -11,6 +11,7 @@ from sqlalchemy.orm import aliased, joinedload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.division_grid import DivisionGrid, division_filter_predicates
+from shared.services.division_grid.access import effective_division_filter_predicates
 from src import models
 from src.core import enums, utils
 
@@ -180,7 +181,15 @@ def _apply_overview_role_filters(
     div_min: int | None,
     div_max: int | None,
     grid: DivisionGrid,
+    workspace_id: int | None = None,
 ) -> sa.Select:
+    """Keep users who have a player row matching the role/division chips.
+
+    Workspace-scoped reads resolve the division range against the one
+    workspace grid. The all-workspaces read (``workspace_id is None``) cannot:
+    the same rank is a different division in different grids, so each player
+    row is matched against its own tournament's effective grid.
+    """
     role_filters: list[typing.Any] = [
         models.Player.workspace_member.has(models.WorkspaceMember.player_id == models.User.id),
         models.Player.is_substitution.is_(False),
@@ -188,9 +197,19 @@ def _apply_overview_role_filters(
 
     if role is not None:
         role_filters.append(models.Player.role == role)
-    role_filters.extend(division_filter_predicates(models.Player.rank, div_min, div_max, grid))
+    if workspace_id is None:
+        role_filters.extend(
+            effective_division_filter_predicates(
+                models.Player.rank,
+                models.Player.tournament_id,
+                div_min,
+                div_max,
+            )
+        )
+    else:
+        role_filters.extend(division_filter_predicates(models.Player.rank, div_min, div_max, grid))
 
-    role_exists = sa.exists(sa.select(1).select_from(models.Player).where(*role_filters))
+    role_exists = sa.exists(sa.select(1).select_from(models.Player).where(*role_filters).correlate(models.User))
     return query.where(role_exists)
 
 

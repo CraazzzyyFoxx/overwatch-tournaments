@@ -108,15 +108,28 @@ DOCS: dict[str, dict] = {
     },
     "rpc.app.users.overview": {
         "summary": "Users overview",
-        "description": "Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid.",
+        "description": (
+            "Permission: public; no authentication required. Returns a paginated, workspace-normalized "
+            "player overview table built from the workspace grid. `workspace_id=all` reads across every "
+            "workspace instead: divisions are then resolved on each row's own tournament grid and every "
+            "referenced grid is returned in `division_grids`. A missing `workspace_id` is a 400."
+        ),
     },
     "rpc.app.users.overview_stats": {
         "summary": "Users overview stats",
-        "description": "Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid.",
+        "description": (
+            "Permission: public; no authentication required. Returns aggregate statistics for the "
+            "players-overview table computed against the workspace grid, or across every workspace "
+            "(each row on its own tournament grid) with `workspace_id=all`."
+        ),
     },
     "rpc.app.users.overview_catalog": {
         "summary": "Users overview catalog",
-        "description": "Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid.",
+        "description": (
+            "Permission: public; no authentication required. Returns the filter-catalog (facets) for the "
+            "players-overview table from the workspace grid, or across every workspace with "
+            "`workspace_id=all` (see `division_grids`)."
+        ),
     },
     "rpc.app.users.compare": {
         "summary": "Compare users",

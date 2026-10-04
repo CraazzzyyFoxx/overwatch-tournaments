@@ -107,18 +107,19 @@ class GetEffectiveDivisionGridVersionIdsBatchTests(IsolatedAsyncioTestCase):
             AsyncMock(return_value={1: 10, 2: None, 3: 30}),
         ):
             result = await division_grid_access.get_effective_division_grid_version_ids(
-                session=session, workspace_id=5, tournament_ids=[1, 2, 3]
+                session=session, tournament_ids=[1, 2, 3]
             )
 
         self.assertEqual({1: 10, 2: None, 3: 30}, result)
         session.execute.assert_not_awaited()
 
-    async def test_cache_misses_cost_exactly_one_batched_query(self) -> None:
-        # 1 -> cache hit; 2 and 3 -> cache miss, both own a grid; 4 -> cache
-        # miss, falls through to the (single) workspace default.
+    async def test_cache_misses_cost_one_query_plus_one_default_per_workspace(self) -> None:
+        # 1 -> cache hit; 2 -> cache miss, owns a grid; 3 and 4 -> cache miss,
+        # unpinned in workspace 5; 8 -> unpinned in workspace 6, so it gets
+        # workspace 6's default, not the first workspace's.
         session = Mock(
             execute=AsyncMock(
-                return_value=_execute_result([(2, 20), (3, None), (4, None)]),
+                return_value=_execute_result([(2, 20, 5), (3, None, 5), (4, None, 5), (8, None, 6)]),
             )
         )
         set_calls: list[dict[int, int | None]] = []
@@ -137,17 +138,20 @@ class GetEffectiveDivisionGridVersionIdsBatchTests(IsolatedAsyncioTestCase):
             patch.object(
                 division_grid_access,
                 "get_workspace_division_grid_version_id",
-                AsyncMock(return_value=99),
+                AsyncMock(side_effect=lambda _session, workspace_id: 99 if workspace_id == 5 else 77),
             ) as get_default,
         ):
             result = await division_grid_access.get_effective_division_grid_version_ids(
-                session=session, workspace_id=5, tournament_ids=[1, 2, 3, 4]
+                session=session, tournament_ids=[1, 2, 3, 4, 8]
             )
 
-        self.assertEqual({1: 10, 2: 20, 3: 99, 4: 99}, result)
+        self.assertEqual({1: 10, 2: 20, 3: 99, 4: 99, 8: 77}, result)
         session.execute.assert_awaited_once()
-        get_default.assert_awaited_once_with(session, 5)
-        self.assertEqual([{2: 20, 3: 99, 4: 99}], set_calls)
+        # One default lookup per distinct owning workspace, not per tournament.
+        self.assertEqual(
+            [((session, 5), {}), ((session, 6), {})], [tuple(call) for call in get_default.await_args_list]
+        )
+        self.assertEqual([{2: 20, 3: 99, 4: 99, 8: 77}], set_calls)
 
     async def test_deleted_tournament_returns_none_without_workspace_fallback(self) -> None:
         # Tournament 7 missed the cache and no longer has a database row
@@ -168,7 +172,7 @@ class GetEffectiveDivisionGridVersionIdsBatchTests(IsolatedAsyncioTestCase):
             ) as get_default,
         ):
             result = await division_grid_access.get_effective_division_grid_version_ids(
-                session=session, workspace_id=5, tournament_ids=[7]
+                session=session, tournament_ids=[7]
             )
 
         self.assertEqual({7: None}, result)
@@ -179,7 +183,7 @@ class GetEffectiveDivisionGridVersionIdsBatchTests(IsolatedAsyncioTestCase):
 
         with patch.object(division_grid_cache, "get_tournament_effective_version_ids", AsyncMock()) as get_cached:
             result = await division_grid_access.get_effective_division_grid_version_ids(
-                session=session, workspace_id=5, tournament_ids=[]
+                session=session, tournament_ids=[]
             )
 
         self.assertEqual({}, result)

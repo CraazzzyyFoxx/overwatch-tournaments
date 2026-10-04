@@ -439,6 +439,13 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
             patch.object(user_flows.users.encounters, "count_teams_by_tournament_bulk", AsyncMock(return_value={3: 8})),
             patch.object(user_flows.users.encounters, "get_roster_avg_mvp_bulk", AsyncMock(return_value={})),
             patch.object(user_flows.users.encounters, "get_roster_top_heroes_bulk", AsyncMock(return_value={})),
+            # Resolving each tournament's effective grid version is a DB/cache
+            # round trip this session-less fake cannot serve.
+            patch.object(
+                user_flows,
+                "get_effective_division_grid_version_ids",
+                AsyncMock(return_value={3: None}),
+            ),
             patch.object(
                 user_flows.users.encounters,
                 "get_user_encounter_matches_unpaginated",

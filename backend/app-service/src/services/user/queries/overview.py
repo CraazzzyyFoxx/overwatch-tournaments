@@ -10,6 +10,7 @@ from sqlalchemy.orm import aliased
 
 from shared.division_grid import DivisionGrid
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
+from shared.services.division_grid.access import tournament_effective_version_id_expr
 from src import models
 from src.core import config, enums, pagination
 
@@ -508,6 +509,7 @@ class UserOverviewQueries:
                 div_min=params.div_min,
                 div_max=params.div_max,
                 grid=grid,
+                workspace_id=workspace_id,
             )
             total_query = _apply_overview_role_filters(
                 total_query,
@@ -515,6 +517,7 @@ class UserOverviewQueries:
                 div_min=params.div_min,
                 div_max=params.div_max,
                 grid=grid,
+                workspace_id=workspace_id,
             )
 
         sort_expr = self._overview_sort_expr(sort_key, grid)
@@ -538,11 +541,13 @@ class UserOverviewQueries:
     ) -> dict[int, list[tuple[enums.HeroClass, int, int | None]]]:
         """Return (role, rank, division_grid_version_id) for each user's most recent entry per role.
 
-        Division computation is intentionally deferred to the caller so that each
-        player's rank can be normalised through the tournament's own grid version
-        rather than a single global grid. When ``workspace_id`` is given, only that
-        workspace's tournaments are considered (so the "latest" rank per role is the
-        latest *within the workspace*), matching the scoped user list.
+        The version id is the tournament's *effective* one (own pin, else its
+        workspace default, else the system default), never NULL unless no grid
+        exists at all. Division computation is deferred to the caller so each
+        rank can be resolved on the grid it was actually played on. When
+        ``workspace_id`` is given, only that workspace's tournaments are
+        considered (so the "latest" rank per role is the latest *within the
+        workspace*), matching the scoped user list.
         """
         if not user_ids:
             return {}
@@ -573,16 +578,12 @@ class UserOverviewQueries:
             ).where(models.Tournament.workspace_id == workspace_id)
         latest_roles_subquery = latest_roles_select.subquery()
 
-        query = (
-            sa.select(
-                latest_roles_subquery.c.user_id,
-                latest_roles_subquery.c.role,
-                latest_roles_subquery.c.rank,
-                models.Tournament.division_grid_version_id,
-            )
-            .join(models.Tournament, models.Tournament.id == latest_roles_subquery.c.tournament_id)
-            .where(latest_roles_subquery.c.row_num == 1)
-        )
+        query = sa.select(
+            latest_roles_subquery.c.user_id,
+            latest_roles_subquery.c.role,
+            latest_roles_subquery.c.rank,
+            tournament_effective_version_id_expr(latest_roles_subquery.c.tournament_id),
+        ).where(latest_roles_subquery.c.row_num == 1)
 
         result = await session.execute(query)
 
@@ -957,6 +958,7 @@ class UserOverviewQueries:
                 div_min=div_min,
                 div_max=div_max,
                 grid=grid,
+                workspace_id=workspace_id,
             )
 
         # The candidate set stays in SQL. Every sub-aggregate below semi-joins
@@ -1160,6 +1162,7 @@ class UserOverviewQueries:
                 div_min=div_min,
                 div_max=div_max,
                 grid=grid,
+                workspace_id=workspace_id,
             )
 
         all_users = list((await session.execute(base_query)).unique().scalars().all())

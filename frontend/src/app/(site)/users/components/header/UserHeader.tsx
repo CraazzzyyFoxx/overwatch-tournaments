@@ -14,10 +14,13 @@ import { FormStreak, type FormResult } from "@/app/(site)/users/components/share
 import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
 import userService from "@/services/user.service";
 import { HeroFrame } from "@/components/site/PageHero";
+import { StatsScopeToggle } from "@/components/site/StatsScopeToggle";
+import { scopeHref, type StatsScope, type StatsScopeState } from "@/lib/site/stats-scope";
 
 interface UserHeaderProps {
   profile: UserProfile;
   user: User;
+  scopeState: StatsScopeState;
 }
 
 const formatPlace = (value: number | null | undefined) => {
@@ -27,9 +30,18 @@ const formatPlace = (value: number | null | undefined) => {
   return value.toFixed(1);
 };
 
-const deriveFormStreak = async (userId: number): Promise<FormResult[]> => {
+const deriveFormStreak = async (userId: number, scope: StatsScope): Promise<FormResult[]> => {
   try {
-    const encounters = await userService.getUserEncounters(userId, 1, 10, "played_at", "desc");
+    const encounters = await userService.getUserEncounters(
+      userId,
+      1,
+      10,
+      "played_at",
+      "desc",
+      undefined,
+      undefined,
+      scope
+    );
     return encounters.results.slice(0, 10).reverse().map((enc): FormResult => {
       const homePlayers = enc.home_team?.players ?? [];
       const isUserHome = homePlayers.some((p) => p.user_id === userId);
@@ -49,7 +61,7 @@ const primaryRoleOf = (profile: UserProfile) => {
   return profile.roles.reduce((best, current) => (current.tournaments > best.tournaments ? current : best));
 };
 
-const UserHeader = async ({ profile, user }: UserHeaderProps) => {
+const UserHeader = async ({ profile, user, scopeState }: UserHeaderProps) => {
   const t = await getTranslations();
   const [name, tag] = user.name.split("#");
   const primaryRole = primaryRoleOf(profile);
@@ -65,7 +77,7 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
   // The form streak and the last-tournament fetch are independent — run them
   // in parallel instead of awaiting sequentially.
   const [formStreak, lastTournament] = await Promise.all([
-    deriveFormStreak(user.id),
+    deriveFormStreak(user.id, scopeState.scope),
     lastSummary
       ? userService.getUserTournament(user.id, lastSummary.id).catch(() => null)
       : Promise.resolve(null)
@@ -84,27 +96,30 @@ const UserHeader = async ({ profile, user }: UserHeaderProps) => {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 pt-4 md:px-9 md:pt-5">
         <p className="aqt-tnum m-0 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
           <span aria-hidden className="mr-1.5 text-[color:var(--aqt-fg-dim)]">{"//"}</span>
-          <HoverPrefetchLink href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</HoverPrefetchLink>
+          <HoverPrefetchLink href={scopeHref("/users", scopeState.scope)} className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</HoverPrefetchLink>
           <span aria-hidden className="mx-1">·</span>
           <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
         </p>
-        <ProfileToolbar
-          playerId={user.id}
-          card={{
-            name,
-            tag: tag ?? null,
-            role: primaryRole?.role ?? null,
-            roleTint,
-            division: primaryRole?.division ?? null,
-            winrate,
-            avgPlacement: profile.avg_placement,
-            titles: profile.tournaments_won,
-            tournaments: profile.tournaments_count,
-            mapsWon: profile.maps_won,
-            mapsTotal: profile.maps_total,
-            form: formStreak
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <StatsScopeToggle state={scopeState} />
+          <ProfileToolbar
+            playerId={user.id}
+            card={{
+              name,
+              tag: tag ?? null,
+              role: primaryRole?.role ?? null,
+              roleTint,
+              division: primaryRole?.division ?? null,
+              winrate,
+              avgPlacement: profile.avg_placement,
+              titles: profile.tournaments_won,
+              tournaments: profile.tournaments_count,
+              mapsWon: profile.maps_won,
+              mapsTotal: profile.maps_total,
+              form: formStreak
+            }}
+          />
+        </div>
       </div>
 
       <div className="grid gap-6 px-5 pb-6 pt-5 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-8 md:px-9 md:py-7">

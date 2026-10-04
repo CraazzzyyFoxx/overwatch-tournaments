@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { User } from "@/types/user.types";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import userService from "@/services/user.service";
 import { AchievementRarity } from "@/types/achievement.types";
 import AchievementsView from "@/app/(site)/users/components/achievements/AchievementsView";
@@ -7,6 +8,7 @@ import AchievementsView from "@/app/(site)/users/components/achievements/Achieve
 interface UserAchievementPageProps {
   user: User;
   selectedTournamentId?: string;
+  scope: StatsScope;
 }
 
 const parseAchievementFilter = (selectedTournamentId?: string) => {
@@ -32,7 +34,11 @@ const parseAchievementFilter = (selectedTournamentId?: string) => {
   return { tournamentId: undefined, withoutTournament: undefined, selectValue: "all" };
 };
 
-const UserAchievementPage = async ({ user, selectedTournamentId }: UserAchievementPageProps) => {
+const UserAchievementPage = async ({
+  user,
+  selectedTournamentId,
+  scope
+}: UserAchievementPageProps) => {
   const { tournamentId, withoutTournament, selectValue } = parseAchievementFilter(selectedTournamentId);
   const t = await getTranslations();
 
@@ -45,10 +51,11 @@ const UserAchievementPage = async ({ user, selectedTournamentId }: UserAchieveme
           tournamentId,
           withoutTournament,
           // Locked achievements only make sense for the global (all-tournaments) view.
-          includeLocked: selectValue === "all"
+          includeLocked: selectValue === "all",
+          scope
         })
         .catch(() => [] as AchievementRarity[]),
-      userService.getUserProfile(user.id)
+      userService.getUserProfile(user.id, scope)
     ]);
   } catch {
     return (

@@ -16,7 +16,7 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-const { isTenantHost } = await import("./tenant-host");
+const { isTenantHost, resolveStatsScope } = await import("./tenant-host");
 
 describe("isTenantHost", () => {
   beforeEach(() => {
@@ -35,5 +35,24 @@ describe("isTenantHost", () => {
   it("returns false for any non-'tenant' value", async () => {
     requestHeaders["x-owt-host-mode"] = "platform";
     expect(await isTenantHost()).toBe(false);
+  });
+});
+
+describe("resolveStatsScope", () => {
+  beforeEach(() => {
+    requestHeaders = {};
+  });
+
+  it("opts into all workspaces on the platform apex", async () => {
+    expect(await resolveStatsScope("all")).toEqual({ scope: "all", available: true });
+  });
+
+  it("defaults to the workspace scope without the param", async () => {
+    expect(await resolveStatsScope(undefined)).toEqual({ scope: "workspace", available: true });
+  });
+
+  it("ignores scope=all on a tenant host and hides the toggle", async () => {
+    requestHeaders["x-owt-host-mode"] = "tenant";
+    expect(await resolveStatsScope("all")).toEqual({ scope: "workspace", available: false });
   });
 });

@@ -514,9 +514,7 @@ async def _build_tournament_history(
     # sequential per-tournament await; see get_effective_division_grid_version_ids's
     # docstring for why that can't just be asyncio.gather'd instead).
     tournament_ids_with_rank = {row[0] for row in rows if row[3] is not None}
-    tournament_to_version = await get_effective_division_grid_version_ids(
-        session, workspace_id, tournament_ids_with_rank
-    )
+    tournament_to_version = await get_effective_division_grid_version_ids(session, tournament_ids_with_rank)
 
     distinct_version_ids = {vid for vid in tournament_to_version.values() if vid is not None}
 

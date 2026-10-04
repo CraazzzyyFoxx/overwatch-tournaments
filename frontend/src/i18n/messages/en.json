@@ -162,6 +162,11 @@
       "reconnectTwitchCta": "Reconnect Twitch to confirm your subscription",
       "registrationBlocked": "You cannot sign up yet: an active subscription is required ({rule}). Subscribe with the account linked to your profile, then reload this form."
     },
+    "scope": {
+      "label": "Statistics scope",
+      "workspace": "Current workspace",
+      "all": "All workspaces"
+    },
     "divisionWithId": "Division {id}",
     "stageWithId": "Stage {id}",
     "showingRange": "Showing {start}–{end} of {total}",

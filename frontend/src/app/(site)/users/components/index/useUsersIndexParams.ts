@@ -5,7 +5,8 @@ import { useDebounce } from "use-debounce";
 
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { clampDivisionToGrid } from "@/lib/divisions/grid";
+import { clampDivisionToGrid, getDefaultDivisionGrid } from "@/lib/divisions/grid";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import { parseOptionalInt, parsePositiveInt } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserRoleType } from "@/types/user.types";
 
@@ -22,6 +23,8 @@ export interface UsersIndexParams {
   divMin: number | undefined;
   divMax: number | undefined;
   letter: string | undefined;
+  /** Resolved server-side: `all` reads every workspace (platform apex only). */
+  scope: StatsScope;
 }
 
 export interface UsersIndexParamControls {
@@ -44,9 +47,12 @@ export interface UsersIndexParamControls {
  * screen. `useQueryParams` already resets `page` whenever any other param
  * changes, so paging passes only `page` and is left alone.
  */
-export function useUsersIndexParams(): UsersIndexParamControls {
+export function useUsersIndexParams(scope: StatsScope): UsersIndexParamControls {
   const { searchParams, setParams } = useQueryParams();
-  const divisionGrid = useDivisionGrid();
+  const workspaceGrid = useDivisionGrid();
+  // All-workspaces divisions span every grid, so the filter is plain tier
+  // numbers from the reference grid rather than this workspace's own.
+  const divisionGrid = scope === "all" ? getDefaultDivisionGrid() : workspaceGrid;
 
   const query = searchParams?.get("query") ?? "";
   const params: UsersIndexParams = {
@@ -59,7 +65,8 @@ export function useUsersIndexParams(): UsersIndexParamControls {
     role: (searchParams?.get("role") as UserRoleType | null) ?? undefined,
     divMin: clampDivisionToGrid(divisionGrid, parseOptionalInt(searchParams?.get("div_min") ?? null)),
     divMax: clampDivisionToGrid(divisionGrid, parseOptionalInt(searchParams?.get("div_max") ?? null)),
-    letter: searchParams?.get("letter") ?? undefined
+    letter: searchParams?.get("letter") ?? undefined,
+    scope
   };
 
   const [searchInput, setSearchInput] = useState(query);
