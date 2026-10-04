@@ -2003,16 +2003,20 @@
     "roster": {
       "role": "Роль",
       "battleTag": "BattleTag",
-      "division": "Див",
+      "rank": "Ранг",
       "newcomer": "Новичок",
+      "newcomerHint": "Первый турнир на платформе",
       "newcomerRole": "Новая роль",
+      "newcomerRoleHint": "Первый турнир на этой роли",
+      "captain": "Капитан",
+      "substitution": "Замена",
+      "substituteFor": "вместо {name}",
       "avgSr": "Средний SR"
     }
   },
   "matches": {
     "col": {
       "score": "Счёт",
-      "division": "Дивизион",
       "prs": "PRS",
       "fb": "FB",
       "e": "E",
@@ -2922,8 +2926,7 @@
       "mapScoreAria": "{home} {homeScore}, {away} {awayScore}",
       "openScoreboard": "Статистика",
       "rosters": "Составы",
-      "rostersMeta": "Замены — с отступом под заменённым игроком",
-      "rosterAria": "Состав команды {team}",
+      "rostersMeta": "Замены — веткой от заменённого игрока",
       "seriesStats": "Статистика серии",
       "seriesStatsMeta": "Суммарно за {maps, plural, one {# карту} few {# карты} many {# карт} other {# карты}}",
       "seriesStatsNoLogs": "Логи этой серии не разобраны, поэтому статистика по игрокам недоступна.",
@@ -2980,21 +2983,7 @@
       }
     },
     "team": {
-      "colName": "Имя",
-      "colDivision": "Дивизион",
-      "colDivisionShort": "ДИВ",
-      "colNew": "Новый",
-      "colNewShort": "НОВ",
-      "colNewTitle": "Первый турнир на платформе",
-      "colNewRole": "Новая роль",
-      "colNewRoleShort": "РОЛЬ",
-      "colNewRoleTitle": "Первый турнир на этой роли",
-      "newcomerYes": "Новичок",
-      "newcomerNo": "Не новичок",
-      "newRoleYes": "Новичок на этой роли",
-      "newRoleNo": "Не новичок на этой роли",
-      "captain": "Капитан",
-      "substitution": "Замена"
+      "colName": "Имя"
     },
     "chart": {
       "title": "Обзор убийств и ассистов",

@@ -628,125 +628,23 @@
   gap: 6px;
 }
 
-.rosterScroll {
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: thin;
-}
-
-.rosterScroll:focus-visible {
-  outline: 1px solid var(--ed-teal);
-  outline-offset: -2px;
-}
-
+/* Loading skeleton of the roster card (role · player · rank). */
 .rosterTable {
-  /* Four columns now the SR one is gone, so the panel stops needing a
-     horizontal scroll several hundred pixels earlier. */
-  min-width: 24rem;
   display: flex;
   flex-direction: column;
 }
 
 .rosterRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 3.5rem 3rem 3.5rem;
+  grid-template-columns: 1.5rem minmax(0, 1fr) 6rem;
   align-items: center;
   gap: 10px;
-  padding: 8px 18px;
+  padding: 8px 14px;
   border-bottom: 1px solid color-mix(in srgb, var(--ed-border) 55%, var(--ed-card));
 }
 
 .rosterRow:last-child {
   border-bottom: 0;
-}
-
-.rosterHeadRow {
-  background: var(--aqt-overlay-1);
-  padding-top: 7px;
-  padding-bottom: 7px;
-}
-
-/* The head cells carry abbreviations because the columns are ~3rem wide; the
-   full column name is the accessible name and the explanation is the title. */
-.rosterHeadCell {
-  font-size: var(--text-label);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--ed-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rosterBodyRow {
-  transition: 0.15s;
-}
-
-.rosterBodyRow:hover {
-  background: var(--aqt-overlay-2);
-}
-
-.rosterPlayer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* A substitute is indented under the player they came in for, so the
-   substitution chain `sortTeamPlayers` already produces is visible instead of
-   being flattened into an unexplained extra row. */
-.rosterRowSub .rosterPlayer {
-  padding-left: 16px;
-  position: relative;
-}
-
-.rosterRowSub .rosterPlayer::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 50%;
-  width: 8px;
-  height: 1px;
-  background: var(--ed-border-3);
-}
-
-.rosterPlayerName {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.playerLink {
-  font-size: var(--text-caption);
-  font-weight: 600;
-  color: var(--ed-fg);
-  text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: 0.15s;
-}
-
-.playerLink:hover {
-  color: var(--ed-teal);
-}
-
-.playerTag {
-  font-family: var(--ed-mono);
-  font-size: var(--text-label);
-  color: var(--ed-faint);
-}
-
-.playerSpec {
-  font-family: var(--ed-mono);
-  font-size: var(--text-label);
-  color: var(--ed-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .rosterCell {
@@ -755,23 +653,13 @@
   align-items: center;
 }
 
-.flagOn {
-  color: var(--ed-amber);
-}
-
 .flagOff {
   color: color-mix(in srgb, var(--ed-faint) 55%, transparent);
 }
 
-/* "Ready" is a completed state, not a warning — emerald, not the amber the
-   newcomer flags use. */
+/* "Ready" is a completed state, not a warning: emerald, not amber. */
 .flagGood {
   color: var(--ed-emerald);
-}
-
-.captainMark {
-  color: var(--ed-amber);
-  flex-shrink: 0;
 }
 
 /* ============ Series statistics ============ */
@@ -864,6 +752,12 @@
 .seriesPlayerCell {
   background: var(--ed-card);
   min-width: 14rem;
+}
+
+/* The shared roster identity (`RosterPlayer`) reads in the body font
+   everywhere else; the stats columns keep the data font. */
+.seriesTable td.seriesPlayerCell {
+  font-family: inherit;
 }
 
 .seriesPlayer {

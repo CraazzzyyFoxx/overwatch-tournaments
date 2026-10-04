@@ -102,11 +102,9 @@ export default function Loading() {
               <div className={styles.rosterTable}>
                 {Array.from({ length: 5 }).map((_, row) => (
                   <div key={row} className={styles.rosterRow}>
+                    <Block className="h-6 w-6 rounded-full" />
                     <Block className="h-4 w-32" />
-                    <Block className="mx-auto h-7 w-7 rounded-full" />
-                    <Block className="ml-auto h-4 w-10" />
-                    <Block className="mx-auto h-4 w-4 rounded-full" />
-                    <Block className="mx-auto h-4 w-4 rounded-full" />
+                    <Block className="h-6 w-16" />
                   </div>
                 ))}
               </div>

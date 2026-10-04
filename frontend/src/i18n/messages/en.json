@@ -2003,16 +2003,20 @@
     "roster": {
       "role": "Role",
       "battleTag": "Battle tag",
-      "division": "Div",
+      "rank": "Rank",
       "newcomer": "New",
+      "newcomerHint": "First tournament on the platform",
       "newcomerRole": "New role",
+      "newcomerRoleHint": "First tournament on this role",
+      "captain": "Captain",
+      "substitution": "Substitute",
+      "substituteFor": "for {name}",
       "avgSr": "Avg. SR"
     }
   },
   "matches": {
     "col": {
       "score": "Score",
-      "division": "Division",
       "prs": "PRS",
       "fb": "FB",
       "e": "E",
@@ -2922,8 +2926,7 @@
       "mapScoreAria": "{home} {homeScore}, {away} {awayScore}",
       "openScoreboard": "Scoreboard",
       "rosters": "Rosters",
-      "rostersMeta": "Substitutes are indented under the player they replaced",
-      "rosterAria": "{team} roster",
+      "rostersMeta": "Substitutes branch off the player they replaced",
       "seriesStats": "Series statistics",
       "seriesStatsMeta": "Totalled across {maps, plural, one {# map} other {# maps}}",
       "seriesStatsNoLogs": "No game logs were parsed for this series, so per-player statistics are unavailable.",
@@ -2980,21 +2983,7 @@
       }
     },
     "team": {
-      "colName": "Name",
-      "colDivision": "Division",
-      "colDivisionShort": "DIV",
-      "colNew": "New",
-      "colNewShort": "NEW",
-      "colNewTitle": "First tournament on the platform",
-      "colNewRole": "New Role",
-      "colNewRoleShort": "ROLE",
-      "colNewRoleTitle": "First tournament on this role",
-      "newcomerYes": "Newcomer",
-      "newcomerNo": "Not a newcomer",
-      "newRoleYes": "New to this role",
-      "newRoleNo": "Not new to this role",
-      "captain": "Captain",
-      "substitution": "Substitute"
+      "colName": "Name"
     },
     "chart": {
       "title": "Kills and Assists Overview",
