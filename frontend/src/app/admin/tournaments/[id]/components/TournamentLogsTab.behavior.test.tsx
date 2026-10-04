@@ -141,7 +141,6 @@ async function mount(tournamentId: number | null = 78) {
               workspaceId={1}
               encounters={[]}
               canUploadLogs={false}
-              enabled
             />
           )}
         />
@@ -263,19 +262,31 @@ describe("TournamentLogsTab", () => {
     });
   });
 
-  it("reports loaded-vs-matched progress and offers the next page", async () => {
+  it("pages through the server by offset", async () => {
     const scope = await mount();
 
-    const statuses = [...scope.querySelectorAll("output")].map((node) => node.textContent);
-    expect(statuses).toContain("Showing 25 of 128 logs");
-    expect(scope.textContent).toContain("Load more logs");
+    expect(scope.textContent).toContain("1–25 of 128");
+    await click(scope.querySelector('button[aria-label="Next page"]'));
+    await settle();
+
+    expect(getLogHistory).toHaveBeenLastCalledWith(78, {
+      limit: 25,
+      offset: 25,
+      status: undefined,
+      search: ""
+    });
   });
 
-  it("names the failure and scopes the bulk retry to what is loaded", async () => {
+  it("names the failure and bulk-retries only rows that are not done", async () => {
     const scope = await mount();
 
     expect(scope.textContent).toContain("gateway timeout");
-    expect(scope.textContent).toContain("Retry 1 loaded");
+    // A processed log has nothing to retry, so it cannot join the selection.
+    expect(scope.querySelector('button[aria-label="Select row 2"]')).toBeNull();
+
+    await click(scope.querySelector('button[aria-label="Select row 1"]'));
+    await click(scope.querySelector('button[aria-label="Select row 99"]'));
+    expect(button(scope, "Retry 2")).toBeTruthy();
   });
 
   it("offers a requeue for a queued row the worker dropped", async () => {
@@ -286,8 +297,9 @@ describe("TournamentLogsTab", () => {
     const labels = [...scope.querySelectorAll("button[aria-label]")].map((node) =>
       node.getAttribute("aria-label")
     );
-    expect(labels).toContain("Requeue log round_99.txt");
-    expect(labels).toContain("Retry log round_1.txt");
+    expect(labels).toContain("Actions for round_99.txt");
+    expect(labels).toContain("Actions for round_1.txt");
+    expect(labels).not.toContain("Actions for round_2.txt");
     // Attempt count surfaces the requeue loop on the row itself.
     expect(scope.textContent).toContain("×3");
   });
