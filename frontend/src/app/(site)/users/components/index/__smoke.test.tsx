@@ -31,7 +31,7 @@ vi.mock("@/services/user.service", () => ({
         {
           id: 7,
           name: "Ana#1234",
-          roles: [{ role: "Tank", division: 5 }],
+          roles: [{ role: "Tank", division: 5, division_grid_version_id: null }],
           tournaments_count: 9,
           achievements_count: 3,
           averages: {
@@ -45,7 +45,8 @@ vi.mock("@/services/user.service", () => ({
       ],
       total: 1,
       page: 1,
-      per_page: 20
+      per_page: 20,
+      division_grids: []
     })),
     getUsersOverviewStats: vi.fn(async () => ({
       total_players: 100,
@@ -60,7 +61,12 @@ vi.mock("@/services/user.service", () => ({
       active_last_30d: 20,
       active_last_30d_pct: 20
     })),
-    getUsersCatalog: vi.fn(async () => ({ letters: [], available_letters: [], total: 0 }))
+    getUsersCatalog: vi.fn(async () => ({
+      letters: [],
+      available_letters: [],
+      total: 0,
+      division_grids: []
+    }))
   }
 }));
 
@@ -85,7 +91,7 @@ it("renders the users index with a row and its expanded detail", async () => {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
-          <UsersClient />
+          <UsersClient scopeState={{ scope: "workspace", available: true }} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );

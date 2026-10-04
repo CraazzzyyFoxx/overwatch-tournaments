@@ -66,15 +66,22 @@ def _division_grid_version(tournament: models.Tournament) -> DivisionGridVersion
 
 def to_user_tournament_summary(
     tournament: models.Tournament,
+    *,
+    division_grid_version: DivisionGridVersionRead | None,
 ) -> schemas.UserTournamentSummary:
-    """Narrow tournament card for UserProfile.tournaments + filter lists."""
+    """Narrow tournament card for UserProfile.tournaments + filter lists.
+
+    ``division_grid_version`` is supplied by the caller (resolved in bulk) so
+    an unpinned tournament still reports the grid its divisions are on, which
+    the ORM relationship alone cannot express.
+    """
     return schemas.UserTournamentSummary(
         id=tournament.id,
         name=tournament.name,
         is_league=tournament.is_league,
         is_finished=tournament.is_finished,
         status=tournament.status,
-        division_grid_version=_division_grid_version(tournament),
+        division_grid_version=division_grid_version,
     )
 
 

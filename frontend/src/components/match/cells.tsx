@@ -64,15 +64,8 @@ const ORDINAL_SUFFIXES: Partial<Record<Intl.LDMLPluralRule, string>> = {
   few: "rd"
 };
 
-/**
- * Locale-aware ordinal for a positive integer. English gets a suffix
- * ("1st", "2nd", "13th"); locales that have no ordinal suffix form — Russian
- * writes "1 место" — get the bare number, matching `formatPlace` in the
- * analytics helpers. This used to hardcode the English suffixes, so every MVP
- * pill read "1st"/"2nd" on the Russian site.
- */
-export const ordinal = (n: number, locale: string): string => {
+/** Ordinal for a positive integer ("1st", "2nd", "13th"), shown in every locale. */
+export const ordinal = (n: number): string => {
   if (!Number.isFinite(n)) return String(n);
-  if (!locale.startsWith("en")) return String(n);
   return `${n}${ORDINAL_SUFFIXES[ORDINAL_PLURAL_RULES.select(n)] ?? "th"}`;
 };

@@ -22,8 +22,10 @@ import HeroLeaderboardTable from "./HeroLeaderboardTable";
 import { heroQueryKeys } from "@/lib/heroes/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
+import { StatsScopeToggle } from "@/components/site/StatsScopeToggle";
+import type { StatsScopeState } from "@/lib/site/stats-scope";
 
-const HeroLeaderboardContent = () => {
+const HeroLeaderboardContent = ({ scopeState }: Readonly<{ scopeState: StatsScopeState }>) => {
   const t = useTranslations();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -55,9 +57,14 @@ const HeroLeaderboardContent = () => {
   });
 
   const leaderboardQuery = useQuery({
-    queryKey: heroQueryKeys.leaderboard(heroId, tournamentId),
+    queryKey: heroQueryKeys.leaderboard(heroId, tournamentId, scopeState.scope),
     enabled: heroId !== undefined,
-    queryFn: () => heroService.getHeroLeaderboard(heroId!, { tournamentId, perPage: -1 }),
+    queryFn: () =>
+      heroService.getHeroLeaderboard(heroId!, {
+        tournamentId,
+        perPage: -1,
+        scope: scopeState.scope,
+      }),
   });
 
   const heroOptions: SearchableImageOption[] = useMemo(
@@ -151,6 +158,10 @@ const HeroLeaderboardContent = () => {
   return (
     <div className="space-y-[22px]">
       <HeroCompareHero selectedHero={selectedHero} rows={rows} />
+
+      <div className="flex justify-end">
+        <StatsScopeToggle state={scopeState} />
+      </div>
 
       <HeroLeaderboardFiltersCard
         heroId={heroId}

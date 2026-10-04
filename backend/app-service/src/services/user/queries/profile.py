@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.division_grid import DivisionGrid, division_case_expr
 from shared.models import mv_hero_global_stats
+from shared.services.division_grid.access import tournament_effective_version_id_expr
 from src import models
 from src.core import enums, pagination
 
@@ -258,8 +259,10 @@ class UserProfileQueries:
         """Per-role ``(role, maps won, maps lost, tournament entries)`` rows for a user.
 
         Each tournament entry is a dict of ``tournament``, ``rank`` and
-        ``division_grid_version_id`` — the rank is raw, so the caller resolves the
-        division against the grid version that tournament was played on.
+        ``division_grid_version_id`` — the tournament's *effective* grid version
+        (own pin, else its workspace default, else the system default). The rank
+        is raw, so the caller resolves the division against the grid version that
+        tournament was actually played on.
         """
 
         def _side(team_fk, won, lost):
@@ -270,7 +273,7 @@ class UserProfileQueries:
                     lost.label("maps_lost"),
                     models.Team.tournament_id.label("tournament_id"),
                     models.Player.rank.label("rank"),
-                    models.Tournament.division_grid_version_id.label("division_grid_version_id"),
+                    tournament_effective_version_id_expr(models.Team.tournament_id).label("division_grid_version_id"),
                 )
                 .join(models.Team, models.Team.id == models.Player.team_id)
                 .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)

@@ -565,6 +565,29 @@ function UserMergeDialogSession({
                     Sessions and API keys for both accounts are revoked, not moved. A retained account has to sign in again.
                   </p>
                 </div>
+                {!reviewed ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2">
+                    <p className={previewError ? "text-sm text-danger" : "text-sm text-muted-foreground"}>
+                      {previewError ?? "Choices changed since the last preview. Preview the merge again to enable these confirmations."}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePreview}
+                      disabled={previewPending || executeMutation.isPending}
+                    >
+                      {previewPending ? (
+                        <>
+                          <Spinner className="mr-2" />
+                          Loading preview…
+                        </>
+                      ) : (
+                        "Preview merge"
+                      )}
+                    </Button>
+                  </div>
+                ) : null}
                 {preview.auth_merge ? (
                   <div className="flex items-start gap-3">
                     <Checkbox

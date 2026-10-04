@@ -19,13 +19,11 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 
 import {
   PROVIDER_LABELS,
-  REASON_LABELS,
-  SOURCE_LABELS,
   STATE_BAR,
-  STATE_LABELS,
   StateBadge,
   formatDate,
-  formatRelative
+  formatRelative,
+  useSubscriptionLabels
 } from "@/components/admin/collectors/subscription-shared";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Spinner } from "@/components/ui/spinner";
@@ -184,6 +182,7 @@ export function SubscriptionPlayerSearch({ onSelect }: Readonly<{ onSelect: Sele
  */
 function PlayerCheckTimeline({ userId }: Readonly<{ userId: number }>) {
   const format = useFormatter();
+  const labels = useSubscriptionLabels();
   // Scoped server-side to the injected workspace; see `admin.service.ts`.
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const query = useQuery({
@@ -204,7 +203,7 @@ function PlayerCheckTimeline({ userId }: Readonly<{ userId: number }>) {
       ) : (
         <ol className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
           {rows.map((row) => {
-            const reason = row.error ?? (row.reason ? (REASON_LABELS[row.reason] ?? row.reason) : null);
+            const reason = row.error ?? (row.reason ? labels.reason(row.reason) : null);
             return (
               <li
                 key={row.id}
@@ -215,14 +214,14 @@ function PlayerCheckTimeline({ userId }: Readonly<{ userId: number }>) {
                   {formatDate(format, row.created_at)}
                 </span>
                 <span className="font-medium">{PROVIDER_LABELS[row.provider] ?? row.provider}</span>
-                <span>{STATE_LABELS[row.state] ?? row.state}</span>
+                <span>{labels.state[row.state] ?? row.state}</span>
                 {row.tier_label || row.tier_rank != null ? (
                   <span className="text-muted-foreground">
                     {row.tier_label ?? `Tier ${row.tier_rank}`}
                   </span>
                 ) : null}
                 <span className="text-muted-foreground">
-                  · {SOURCE_LABELS[row.source] ?? row.source}
+                  · {labels.source[row.source] ?? row.source}
                 </span>
                 {reason ? (
                   <span className={cn("truncate", row.error ? "text-danger" : "text-muted-foreground")}>
@@ -252,6 +251,7 @@ export function SubscriptionPlayerPanel({
   label
 }: Readonly<{ userId: number; label: string }>) {
   const format = useFormatter();
+  const labels = useSubscriptionLabels();
   const queryClient = useQueryClient();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
@@ -340,7 +340,7 @@ export function SubscriptionPlayerPanel({
                     {formatRelative(format, row.checked_at)}
                   </TableCell>
                   <TableCell className="max-w-40 truncate text-xs text-muted-foreground">
-                    {row.reason ? (REASON_LABELS[row.reason] ?? row.reason) : "—"}
+                    {row.reason ? labels.reason(row.reason) : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

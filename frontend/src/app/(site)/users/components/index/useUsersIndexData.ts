@@ -6,13 +6,12 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import userService from "@/services/user.service";
 import { userQueryKeys } from "@/lib/users/query-keys";
 import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
-import type { PaginatedResponse } from "@/types/pagination.types";
-import type { UserCatalogResponse, UserOverviewRow, UserOverviewStats } from "@/types/user.types";
+import type { UserCatalogResponse, UserOverviewResponse, UserOverviewStats } from "@/types/user.types";
 
 import type { UsersIndexParams } from "./useUsersIndexParams";
 
 export interface UsersIndexData {
-  overviewQuery: UseQueryResult<PaginatedResponse<UserOverviewRow>>;
+  overviewQuery: UseQueryResult<UserOverviewResponse>;
   statsQuery: UseQueryResult<UserOverviewStats>;
   catalogQuery: UseQueryResult<UserCatalogResponse>;
   maxPage: number;
@@ -26,8 +25,11 @@ export interface UsersIndexData {
  * list — the stats strip is shared by both, so it always runs.
  */
 export function useUsersIndexData(params: UsersIndexParams): UsersIndexData {
-  const workspaceId = useCurrentWorkspaceId();
-  const { page, perPage, query, sort, order, role, divMin, divMax, letter, view } = params;
+  const currentWorkspaceId = useCurrentWorkspaceId();
+  const { page, perPage, query, sort, order, role, divMin, divMax, letter, view, scope } = params;
+  // One value carries the workspace dimension of every read and every key:
+  // a workspace id, or the backend's cross-workspace sentinel.
+  const workspaceId = scope === "all" ? "all" : currentWorkspaceId;
 
   const overviewQuery = useQuery({
     queryKey: userQueryKeys.overview(workspaceId, page, perPage, query, sort, order, role, divMin, divMax),

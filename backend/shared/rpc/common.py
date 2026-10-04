@@ -27,12 +27,14 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
 from shared.rpc.identity import MissingIdentityError, rehydrate_user, rehydrate_user_optional
 from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
+from shared.services.workspace_scope import ALL_WORKSPACES, WorkspaceScope
 
 __all__ = (
     "identity_user_id",
     "q",
     "q1",
-    "qbool",
+    "q_workspace_scope",
+    "q_workspace_id",
     "payload",
     "actor",
     "optional_actor",
@@ -75,6 +77,34 @@ def q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str, default
         return cast(vals[0])
     except (TypeError, ValueError):
         return default
+
+
+def q_workspace_scope(data: dict[str, Any]) -> WorkspaceScope | None:
+    """Parse ``?workspace_id=`` into a domain-read workspace scope.
+
+    ``"all"`` is the public opt-in for a deliberate cross-workspace read
+    (``ALL_WORKSPACES``), an integer is a scoped read, and anything else
+    (missing, junk) is ``None`` — which ``require_workspace_scope`` turns into
+    a 400 on the surfaces that must stay workspace-scoped.
+    """
+    raw = q1(data, "workspace_id")
+    if raw == ALL_WORKSPACES.value:
+        return ALL_WORKSPACES
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def q_workspace_id(data: dict[str, Any]) -> int | None:
+    """Concrete ``workspace_id`` for reads whose default already is global.
+
+    ``all`` — like a missing or malformed param — means "every workspace" and
+    maps to ``None``. Reads that must fail closed on a missing scope use
+    :func:`q_workspace_scope` with ``require_workspace_scope`` instead.
+    """
+    scope = q_workspace_scope(data)
+    return scope if isinstance(scope, int) else None
 
 
 def qbool(value: str) -> bool:

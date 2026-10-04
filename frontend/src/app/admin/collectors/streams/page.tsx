@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { StreamHealthDashboard } from "@/components/admin/collectors/stream-health";
 import { StreamTaskHistory } from "@/components/admin/collectors/stream-history";
 import { StreamSettingsPanel } from "@/components/admin/collectors/stream-settings";
@@ -24,12 +26,13 @@ import { usePermissions } from "@/hooks/usePermissions";
  * `PUT /api/v1/admin/settings/{key}`, which is superuser-only.
  */
 export default function StreamCollectorPage() {
+  const t = useTranslations("collectors");
   const { canAccessPermission, isSuperuser } = usePermissions();
   const canReadHealth = canAccessPermission("stream.read", null);
 
   const { activeKey, items } = useCollectorTab("streams", [
-    { key: "status", label: "Status" },
-    { key: "settings", label: "Settings", hidden: !isSuperuser }
+    { key: "status", label: t("views.status") },
+    { key: "settings", label: t("views.settings"), hidden: !isSuperuser }
   ]);
 
   // Defensive rather than routine: `adminRoutePermissions` already turns this
@@ -41,8 +44,8 @@ export default function StreamCollectorPage() {
     return (
       <PageStateCard
         state="not-found"
-        title="Not available"
-        description="Reading poller health needs the global stream.read permission — the poller is platform-wide, so a workspace-scoped grant does not reach it."
+        title={t("access.title")}
+        description={t("access.streams")}
       />
     );
   }
@@ -54,7 +57,7 @@ export default function StreamCollectorPage() {
           items={items}
           activeKey={activeKey}
           level={2}
-          ariaLabel="Stream collector views"
+          ariaLabel={t("views.streamsAria")}
         />
       )}
       {activeKey === "settings" ? (

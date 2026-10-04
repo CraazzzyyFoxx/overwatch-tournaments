@@ -16,16 +16,19 @@ export const userQueryKeys = {
   rankHistory: (userId: KeyPart, params: unknown) =>
     ["rank-history", "user", userId, params] as const,
   rankResolve: (battleTag: KeyPart) => ["rank-user-resolve", battleTag] as const,
-  heroMaps: (userId: KeyPart, tournamentId: KeyPart) =>
-    ["user-heroes-maps", userId, tournamentId] as const,
-  heroes: (userId: KeyPart, tournamentId: KeyPart) =>
-    ["user-heroes", userId, tournamentId] as const,
-  mapsSummary: (userId: KeyPart, query: KeyPart, minCount: KeyPart, tournamentId: KeyPart) =>
-    ["user-maps-summary", userId, query, minCount, tournamentId] as const,
-  maps: (userId: KeyPart, query: KeyPart, minCount: KeyPart, tournamentId: KeyPart) =>
-    ["user-maps", userId, query, minCount, tournamentId] as const,
+  heroMaps: (userId: KeyPart, tournamentId: KeyPart, scope: KeyPart) =>
+    ["user-heroes-maps", userId, tournamentId, scope] as const,
+  heroes: (userId: KeyPart, tournamentId: KeyPart, scope: KeyPart) =>
+    ["user-heroes", userId, tournamentId, scope] as const,
+  mapsSummary: (userId: KeyPart, query: KeyPart, minCount: KeyPart, tournamentId: KeyPart, scope: KeyPart) =>
+    ["user-maps-summary", userId, query, minCount, tournamentId, scope] as const,
+  maps: (userId: KeyPart, query: KeyPart, minCount: KeyPart, tournamentId: KeyPart, scope: KeyPart) =>
+    ["user-maps", userId, query, minCount, tournamentId, scope] as const,
+  /** `workspaceId` is the read's workspace dimension: an id, or `"all"` /
+   *  `"workspace"` for the public profile's scope. */
   tournaments: (userId: KeyPart, workspaceId: KeyPart) =>
     ["user-tournaments", userId, workspaceId] as const,
+  /** Prefix over every workspace dimension — for invalidation, not for a read. */
   tournamentsAll: (userId: KeyPart) => ["user-tournaments", userId] as const,
   overviewCatalog: (workspaceId: KeyPart, query: KeyPart, role: KeyPart, divMin: KeyPart, divMax: KeyPart, letter: KeyPart) =>
     ["users-overview-catalog", workspaceId, query, role, divMin, divMax, letter] as const,

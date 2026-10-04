@@ -2,6 +2,7 @@ import { Hero, HeroLeaderboardEntry, HeroPlaytime } from "@/types/hero.types";
 import { LookupItem, PaginatedResponse } from "@/types/pagination.types";
 import { LogStatsName } from "@/types/stats.types";
 import { apiFetch } from "@/lib/api/fetch";
+import { scopeQuery, type StatsScope } from "@/lib/site/stats-scope";
 
 export default class heroService {
   static async lookup(): Promise<LookupItem[]> {
@@ -60,12 +61,14 @@ export default class heroService {
       tournamentId,
       stat = LogStatsName.Performance,
       page = 1,
-      perPage = 50
+      perPage = 50,
+      scope
     }: {
       tournamentId?: number | null;
       stat?: LogStatsName;
       page?: number;
       perPage?: number;
+      scope?: StatsScope;
     } = {}
   ): Promise<PaginatedResponse<HeroLeaderboardEntry>> {
     return apiFetch(`/api/v1/heroes/${heroId}/leaderboard`, {
@@ -73,7 +76,8 @@ export default class heroService {
         tournament_id: tournamentId ?? undefined,
         stat,
         page,
-        per_page: perPage
+        per_page: perPage,
+        ...scopeQuery(scope)
       }
     }).then((res) => res.json());
   }

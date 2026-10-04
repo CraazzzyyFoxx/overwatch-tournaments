@@ -235,9 +235,10 @@ describe("Settings › General", () => {
 
     await type(container.querySelector<HTMLInputElement>("#settings-name")!, "OWT 65");
     // `next-intl` is mocked to the identity here (house convention for admin
-    // behavior tests), so `SaveBar`'s own copy renders as its message keys.
+    // behavior tests), so the save bar's copy, change summary included, renders
+    // as its message keys; the PATCH below is what pins "one field".
     expect(container.querySelector('[aria-label="unsavedChanges"]')?.textContent).toContain(
-      "1 changed field"
+      "changedFields"
     );
 
     await act(async () => {

@@ -2954,7 +2954,7 @@
       "summary": "Preview user merge"
     },
     "rpc.app.users.overview": {
-      "description": "Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid.",
+      "description": "Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid. `workspace_id=all` reads across every workspace instead: divisions are then resolved on each row's own tournament grid and every referenced grid is returned in `division_grids`. A missing `workspace_id` is a 400.",
       "query_params": [
         {
           "name": "page",
@@ -3095,12 +3095,12 @@
       ],
       "response": {
         "array": false,
-        "ref": "app.Paginated_UserOverviewRow_"
+        "ref": "app.UserOverviewResponse"
       },
       "summary": "Users overview"
     },
     "rpc.app.users.overview_catalog": {
-      "description": "Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid.",
+      "description": "Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid, or across every workspace with `workspace_id=all` (see `division_grids`).",
       "query_params": [
         {
           "name": "role",
@@ -3217,7 +3217,7 @@
       "summary": "Users overview catalog"
     },
     "rpc.app.users.overview_stats": {
-      "description": "Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid.",
+      "description": "Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid, or across every workspace (each row on its own tournament grid) with `workspace_id=all`.",
       "query_params": [
         {
           "name": "role",
@@ -16076,37 +16076,6 @@
       "title": "Paginated[UserMap]",
       "type": "object"
     },
-    "app.Paginated_UserOverviewRow_": {
-      "properties": {
-        "page": {
-          "title": "Page",
-          "type": "integer"
-        },
-        "per_page": {
-          "title": "Per Page",
-          "type": "integer"
-        },
-        "results": {
-          "items": {
-            "$ref": "#/components/schemas/app.UserOverviewRow"
-          },
-          "title": "Results",
-          "type": "array"
-        },
-        "total": {
-          "title": "Total",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "page",
-        "per_page",
-        "total",
-        "results"
-      ],
-      "title": "Paginated[UserOverviewRow]",
-      "type": "object"
-    },
     "app.Paginated_WorkspaceMemberRead_": {
       "properties": {
         "page": {
@@ -17890,6 +17859,13 @@
             "type": "string"
           },
           "title": "Available Letters",
+          "type": "array"
+        },
+        "division_grids": {
+          "items": {
+            "$ref": "#/components/schemas/app.DivisionGridVersionRead"
+          },
+          "title": "Division Grids",
           "type": "array"
         },
         "letters": {
@@ -19847,11 +19823,62 @@
       "title": "UserOverviewQueryParams",
       "type": "object"
     },
+    "app.UserOverviewResponse": {
+      "description": "Overview page plus every division grid its rows' divisions refer to.",
+      "properties": {
+        "division_grids": {
+          "items": {
+            "$ref": "#/components/schemas/app.DivisionGridVersionRead"
+          },
+          "title": "Division Grids",
+          "type": "array"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/app.UserOverviewRow"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "UserOverviewResponse",
+      "type": "object"
+    },
     "app.UserOverviewRoleDivision": {
       "properties": {
         "division": {
           "title": "Division",
           "type": "integer"
+        },
+        "division_grid_version_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Division Grid Version Id"
         },
         "role": {
           "$ref": "#/components/schemas/app.HeroClass"

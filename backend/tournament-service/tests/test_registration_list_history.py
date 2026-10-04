@@ -81,7 +81,7 @@ def _patches(*, version_map: dict[int, int | None], division: int = 4):
     and the tests died on ``patch.object``'s missing-attribute check.
     """
 
-    async def fake_version_ids(_session, _workspace_id, tournament_ids):
+    async def fake_version_ids(_session, tournament_ids):
         return {tid: version_map.get(tid) for tid in tournament_ids}
 
     grid = SimpleNamespace(resolve_division_number=lambda _rank: division)

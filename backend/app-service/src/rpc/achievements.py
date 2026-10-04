@@ -52,7 +52,7 @@ def register(broker: Any, logger: Any) -> None:
                 c.q(data, "entities") or [],
                 tournament_id=tournament_id,
                 without_tournament=without_tournament,
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=c.q_workspace_id(data),
                 include_locked=c.q1(data, "include_locked", c.qbool, False),
             )
 

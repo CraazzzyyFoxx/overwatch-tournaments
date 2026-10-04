@@ -11,10 +11,12 @@
 //     render comparing the NEW baseline against the OLD form and flash a save
 //     bar for an edit nobody made.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import en from "@/i18n/messages/en.json";
 import { useScopedSettingsForm } from "./useScopedSettingsForm";
 
 declare global {
@@ -58,9 +60,11 @@ function Section({ baseline }: Readonly<{ baseline: Form }>) {
 async function render(baseline: Form) {
   await act(async () => {
     root.render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <Section baseline={baseline} />
-      </QueryClientProvider>
+      <NextIntlClientProvider locale="en" messages={en}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Section baseline={baseline} />
+        </QueryClientProvider>
+      </NextIntlClientProvider>
     );
   });
 }

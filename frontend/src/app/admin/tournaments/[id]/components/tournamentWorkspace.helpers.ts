@@ -50,8 +50,6 @@ export type TournamentFormState = {
   draft_format_json: DraftFormatSettings | null;
 };
 
-export const TOURNAMENT_DETAIL_PREVIEW_LIMIT = 8;
-
 /** A tournament day. Stored as a UTC midnight, so read in UTC — any other zone shifts it. */
 export function formatDate(format: DateFormatter, value?: Date | string | null) {
   if (!value) return "-";

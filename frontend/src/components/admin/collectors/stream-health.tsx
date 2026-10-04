@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Clock, Gauge, Pause, Play, Radio, Trophy } from "lucide-react";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
@@ -17,7 +18,7 @@ import adminService from "@/services/admin.service";
 import { Spinner } from "@/components/ui/spinner";
 
 import { RUN_STATE_TONES } from "./collector-state";
-import { STREAM_STATUS_META, diagnoseStreamHealth } from "./stream-shared";
+import { diagnoseStreamHealth } from "./stream-shared";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const STREAM_KEY = "stream.collection";
@@ -29,6 +30,8 @@ const STREAM_KEY = "stream.collection";
 const REFETCH_MS = 30_000;
 
 export function StreamHealthDashboard() {
+  const t = useTranslations("collectors.streams");
+  const tCommon = useTranslations("collectors.common");
   const format = useFormatter();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
@@ -49,12 +52,12 @@ export function StreamHealthDashboard() {
       return adminService.updateSetting(STREAM_KEY, { value });
     },
     onSuccess: () => {
-      notify.success(health?.enabled ? "Polling paused" : "Polling resumed");
+      notify.success(t(health?.enabled ? "pollingPaused" : "pollingResumed"));
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.streams() });
       queryClient.invalidateQueries({ queryKey: adminQueryKeys.settings() });
     },
     onError: (error) =>
-      notify.apiError(error, { title: "Could not change the polling state — try again" })
+      notify.apiError(error, { title: t("pollingToggleError") })
   });
 
   if (healthQuery.isLoading || !health) {
@@ -62,6 +65,7 @@ export function StreamHealthDashboard() {
   }
 
   const diagnosis = diagnoseStreamHealth(health);
+  const hint = t(`status.${diagnosis.key}.hint`);
   // 800/min shared with identity-service sign-ins; a low reading is a sign-in
   // outage waiting to happen, so it is worth a tone rather than a bare number.
   const remaining = health.ratelimit_remaining;
@@ -75,13 +79,16 @@ export function StreamHealthDashboard() {
           <TintedBadge
             value={health.enabled ? "running" : "paused"}
             tones={RUN_STATE_TONES}
-            labels={{ running: "Polling", paused: "Paused" }}
-            fallback="Paused"
+            labels={{ running: t("run.polling"), paused: tCommon("health.paused") }}
+            fallback={tCommon("health.paused")}
             dot
           />
           <span className="text-muted-foreground">
-            every <span className="tabular-nums">{formatInterval(health.interval_seconds)}</span> ·{" "}
-            <span className="tabular-nums">{health.batch_size}</span>/batch
+            {t.rich("pace", {
+              interval: formatInterval(format, health.interval_seconds),
+              batch: health.batch_size,
+              num: (chunks) => <span className="tabular-nums">{chunks}</span>
+            })}
           </span>
         </output>
         {isSuperuser && (
@@ -98,7 +105,7 @@ export function StreamHealthDashboard() {
             ) : (
               <Play aria-hidden className="mr-1.5 h-4 w-4" />
             )}
-            {health.enabled ? "Pause polling" : "Resume polling"}
+            {t(health.enabled ? "pausePolling" : "resumePolling")}
           </Button>
         )}
       </div>
@@ -108,56 +115,54 @@ export function StreamHealthDashboard() {
           {diagnosis.tone === "danger" || diagnosis.tone === "warning" ? (
             <AlertTriangle aria-hidden className="h-4 w-4 shrink-0" />
           ) : null}
-          {diagnosis.label}
+          {t(`status.${diagnosis.key}.label`)}
         </p>
-        {diagnosis.hint ? (
-          <p className="text-muted-foreground">{diagnosis.hint}</p>
+        {hint ? (
+          <p className="text-muted-foreground">{hint}</p>
         ) : (
           <p className="text-muted-foreground">
-            Last tick {formatRelative(format, health.last_run_at)}. Nothing to do.
+            {t("nothingToDo", { time: formatRelative(format, health.last_run_at) })}
           </p>
         )}
       </div>
 
       <StatTileGrid className="xl:grid-cols-5">
         <StatTile
-          label="Last tick"
+          label={t("tiles.lastTick")}
           value={formatRelative(format, health.last_run_at)}
           detail={
-            health.status === null
-              ? "Never run — no outcome recorded yet"
-              : STREAM_STATUS_META[health.status].label
+            health.status === null ? t("tiles.neverRun") : t(`status.${health.status}.label`)
           }
           icon={Clock}
           tone={diagnosis.tone}
         />
 
         <StatTile
-          label="Tournaments"
+          label={t("tiles.tournaments")}
           value={health.tournaments_active ?? "—"}
-          detail={`${health.tournaments_updated ?? 0} changed state on the last tick`}
+          detail={t("tiles.tournamentsDetail", { count: health.tournaments_updated ?? 0 })}
           icon={Trophy}
         />
 
         <StatTile
-          label="Channels polled"
+          label={t("tiles.channels")}
           value={health.channels_polled ?? "—"}
-          detail="Twitch channels asked about on the last tick"
+          detail={t("tiles.channelsDetail")}
           icon={Radio}
         />
 
         <StatTile
-          label="Live now"
+          label={t("tiles.live")}
           value={health.live_channels ?? "—"}
-          detail="Channels Twitch reported as streaming"
+          detail={t("tiles.liveDetail")}
           icon={Radio}
           tone={(health.live_channels ?? 0) > 0 ? "success" : "neutral"}
         />
 
         <StatTile
-          label="Rate limit left"
+          label={t("tiles.rateLimit")}
           value={remaining ?? "—"}
-          detail="Of an 800/min Helix bucket shared with sign-ins"
+          detail={t("tiles.rateLimitDetail")}
           icon={Gauge}
           tone={rateTone}
         />

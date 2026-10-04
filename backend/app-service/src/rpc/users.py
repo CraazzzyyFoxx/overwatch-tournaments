@@ -18,7 +18,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.query import build_query_model
 from src import schemas
 from src.core import db, enums, pagination
-from src.core.workspace import get_division_grid, resolve_workspace_context
+from src.core.workspace import get_division_grid, require_workspace_scope, resolve_workspace_context
 from src.rpc import _common as c
 from src.services.map.service import maps as map_service
 from src.services.user.service import users as user_service
@@ -31,20 +31,17 @@ _MAPS_SORT = typing.Literal["id", "count", "win", "loss", "draw", "winrate", "ga
 _TEAMMATES_SORT = typing.Literal["id", "name", "winrate", "tournaments"]
 
 
-def _ws_id(data: dict[str, Any]) -> int:
+def _ws_id(data: dict[str, Any]) -> int | None:
     """Fail-closed workspace scope for the ``/users/*`` domain reads.
 
     Every ``/users/*`` read is workspace-scoped and the frontend always sends
     ``workspace_id``. A missing scope is treated as a bug: returning unfiltered
     rows would span every workspace (cross-tenant leak — see H8), so raise 400
-    instead of defaulting to ``None``. A deliberate cross-workspace read must go
-    through ``resolve_workspace_context(..., ALL_WORKSPACES)`` explicitly, not
-    this helper.
+    instead of defaulting to ``None``. ``workspace_id=all`` is the public
+    opt-in for a deliberate cross-workspace read and resolves to ``None`` —
+    the only way this helper returns one.
     """
-    workspace_id = c.q1(data, "workspace_id", int)
-    if workspace_id is None:
-        raise HTTPException(status_code=400, detail="workspace_id query parameter is required")
-    return workspace_id
+    return require_workspace_scope(c.q_workspace_scope(data))
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -68,7 +65,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.overview")
     async def _overview(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ws = await resolve_workspace_context(session, _ws_id(data))
+            ws = await resolve_workspace_context(session, c.q_workspace_scope(data))
             qp = build_query_model(schemas.UserOverviewQueryParams, data.get("query"))
             return await user_service.get_overview(
                 session,
@@ -83,7 +80,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.overview_stats")
     async def _overview_stats(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ws = await resolve_workspace_context(session, _ws_id(data))
+            ws = await resolve_workspace_context(session, c.q_workspace_scope(data))
             # Route passes the QueryParams model straight to the flow (no from_query_params).
             params = build_query_model(schemas.UserOverviewStatsQueryParams, data.get("query"))
             return await user_service.get_overview_stats(session, params, grid=ws.grid, workspace_id=ws.id)
@@ -93,7 +90,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.overview_catalog")
     async def _overview_catalog(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ws = await resolve_workspace_context(session, _ws_id(data))
+            ws = await resolve_workspace_context(session, c.q_workspace_scope(data))
             qp = build_query_model(schemas.UserCatalogQueryParams, data.get("query"))
             return await user_service.get_catalog(
                 session,
@@ -143,7 +140,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.get_profile")
     async def _get_profile(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ws = await resolve_workspace_context(session, _ws_id(data))
+            ws = await resolve_workspace_context(session, c.q_workspace_scope(data))
             return await user_service.get_profile(session, c.require_id(data), workspace_id=ws.id, grid=ws.grid)
 
         return await c.envelope(logger, "users.get_profile", op, session_factory=_SF)
@@ -151,14 +148,19 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.users.draft_card")
     async def _draft_card(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            return await user_service.get_draft_card(session, c.require_id(data), workspace_id=_ws_id(data))
+            # Draft card is a workspace tool (roster drafting), not a public
+            # cross-workspace read: ``workspace_id=all`` has no meaning here.
+            workspace_id = _ws_id(data)
+            if workspace_id is None:
+                raise HTTPException(status_code=400, detail="workspace_id=all is not supported for the draft card")
+            return await user_service.get_draft_card(session, c.require_id(data), workspace_id=workspace_id)
 
         return await c.envelope(logger, "users.draft_card", op, session_factory=_SF)
 
     @broker.subscriber("rpc.app.users.tournaments")
     async def _tournaments(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ws = await resolve_workspace_context(session, _ws_id(data))
+            ws = await resolve_workspace_context(session, c.q_workspace_scope(data))
             return await user_service.get_tournaments(session, c.require_id(data), workspace_id=ws.id, grid=ws.grid)
 
         return await c.envelope(logger, "users.tournaments", op, session_factory=_SF)

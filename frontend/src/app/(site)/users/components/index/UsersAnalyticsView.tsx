@@ -11,10 +11,12 @@ import { cn, initials } from "@/lib/utils";
 import { getPlayerSlug } from "@/lib/player";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserOverviewRow } from "@/types/user.types";
+import type { DivisionGridVersion } from "@/types/workspace.types";
+import { scopeHref, type StatsScope } from "@/lib/site/stats-scope";
 
 import { DivisionHex } from "./DivisionHex";
 import { UserDetailsRow } from "./UserDetailsRow";
-import { placementWidth, primaryRoleLabel, splitTag } from "./users-index.model";
+import { gridForRole, placementWidth, primaryRoleLabel, splitTag } from "./users-index.model";
 import type { UsersIndexData } from "./useUsersIndexData";
 import type { UsersIndexParamControls } from "./useUsersIndexParams";
 import styles from "./Users.module.css";
@@ -31,7 +33,7 @@ export function UsersAnalyticsView({
 }>) {
   const t = useTranslations();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(() => new Set());
-  const { page, perPage, order } = controls.params;
+  const { page, perPage, order, scope } = controls.params;
   const { overviewQuery, maxPage, range } = data;
   const rows = overviewQuery.data;
   // `isPending`, not `isLoading`: the server never fetches, so there `isLoading`
@@ -99,6 +101,8 @@ export function UsersAnalyticsView({
                     <React.Fragment key={user.id}>
                       <PlayerRow
                         user={user}
+                        grids={rows.division_grids}
+                        scope={scope}
                         globalRank={(rows.page - 1) * rows.per_page + index + 1}
                         expanded={expandedRows.has(user.id)}
                         onToggle={() => toggleRow(user.id)}
@@ -147,11 +151,15 @@ export function UsersAnalyticsView({
 
 function PlayerRow({
   user,
+  grids,
+  scope,
   globalRank,
   expanded,
   onToggle
 }: Readonly<{
   user: UserOverviewRow;
+  grids: DivisionGridVersion[] | undefined;
+  scope: StatsScope;
   globalRank: number;
   expanded: boolean;
   onToggle: () => void;
@@ -172,7 +180,7 @@ function PlayerRow({
           <div className={styles.playerInfo}>
             <HoverPrefetchLink
               className={styles.playerName}
-              href={`/users/${getPlayerSlug(user.name)}`}
+              href={scopeHref(`/users/${getPlayerSlug(user.name)}`, scope)}
               title={user.name}
             >
               {handle}
@@ -193,6 +201,7 @@ function PlayerRow({
                 key={`${user.id}-${roleRow.role}-${roleRow.division}`}
                 role={roleRow.role}
                 division={roleRow.division}
+                roleGrid={gridForRole(roleRow, grids)}
               />
             ))}
           </div>

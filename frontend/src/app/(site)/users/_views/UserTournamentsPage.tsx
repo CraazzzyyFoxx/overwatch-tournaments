@@ -1,4 +1,5 @@
 import { User } from "@/types/user.types";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import { Skeleton } from "@/components/ui/skeleton";
 import userService from "@/services/user.service";
 import TournamentsHistory from "@/app/(site)/users/components/tournaments/TournamentsHistory";
@@ -13,13 +14,13 @@ export const UserTournamentsPageSkeleton = () => {
   );
 };
 
-export const UserTournamentsPage = async ({ user }: { user: User }) => {
-  // Both reads are workspace-scoped and cached (Next Data Cache); fetched in
-  // parallel. The profile powers the KPI strip (Played / Titles / Avg placement);
-  // the tournaments list drives the master-detail Event dossier explorer.
+export const UserTournamentsPage = async ({ user, scope }: { user: User; scope: StatsScope }) => {
+  // Both reads are scoped and cached (Next Data Cache); fetched in parallel.
+  // The profile powers the KPI strip (Played / Titles / Avg placement); the
+  // tournaments list drives the master-detail Event dossier explorer.
   const [tournaments, profile] = await Promise.all([
-    userService.getUserTournaments(user.id),
-    userService.getUserProfile(user.id).catch(() => null)
+    userService.getUserTournaments(user.id, scope === "all" ? "all" : undefined),
+    userService.getUserProfile(user.id, scope).catch(() => null)
   ]);
 
   return (

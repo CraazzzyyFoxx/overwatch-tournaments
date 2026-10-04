@@ -36,18 +36,27 @@ def resolve_workspace_tier(
     source_version_id: int | None,
     fallback_grid: DivisionGrid,
     normalizer: DivisionGridNormalizer | None = None,
+    source_grid: DivisionGrid | None = None,
 ) -> DivisionTier:
+    """Tier for ``rank`` as the reader should see it.
+
+    With a ``normalizer`` (workspace-scoped read) every rank is mapped onto the
+    workspace's target grid. Without one, ``source_grid`` -- the grid the rank
+    was actually played on -- wins when the caller could resolve it (the
+    all-workspaces read, where there is no single target grid to normalize to),
+    and ``fallback_grid`` is the last resort.
+    """
     if normalizer is not None and source_version_id is not None:
         try:
             return normalizer.normalize_division(source_version_id, rank)
         except DivisionGridNormalizationError:
-            source_grid = normalizer.source_grids_by_version_id.get(source_version_id)
-            return (source_grid or fallback_grid).resolve_division(rank)
+            normalizer_source_grid = normalizer.source_grids_by_version_id.get(source_version_id)
+            return (normalizer_source_grid or fallback_grid).resolve_division(rank)
 
     if normalizer is not None:
         return normalizer.target_grid.resolve_division(rank)
 
-    return fallback_grid.resolve_division(rank)
+    return (source_grid or fallback_grid).resolve_division(rank)
 
 
 def resolve_workspace_division(
@@ -56,10 +65,12 @@ def resolve_workspace_division(
     source_version_id: int | None,
     fallback_grid: DivisionGrid,
     normalizer: DivisionGridNormalizer | None = None,
+    source_grid: DivisionGrid | None = None,
 ) -> int:
     return resolve_workspace_tier(
         rank,
         source_version_id=source_version_id,
         fallback_grid=fallback_grid,
         normalizer=normalizer,
+        source_grid=source_grid,
     ).number

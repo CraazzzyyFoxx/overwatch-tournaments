@@ -76,6 +76,7 @@
     "analytics",
     "auth",
     "bracket",
+    "collectors",
     "common",
     "discord",
     "draft",

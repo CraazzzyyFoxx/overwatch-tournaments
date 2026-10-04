@@ -127,7 +127,7 @@ async def _achievement_get(session: AsyncSession, obj_id: int, data: dict[str, A
 async def _achievement_list(session: AsyncSession, data: dict[str, Any]) -> Any:
     qp = build_query_model(pagination.PaginationSortQueryParams[_ACH_SORT], data.get("query"))
     params = pagination.PaginationSortParams.from_query_params(qp)
-    result = await achievement_service.get_all(session, params, workspace_id=c.q1(data, "workspace_id", int))
+    result = await achievement_service.get_all(session, params, workspace_id=c.q_workspace_id(data))
     return result.model_dump(mode="json")
 
 

@@ -14,22 +14,26 @@ import OverviewTopHeroesTable from "@/app/(site)/users/components/overview/Overv
 import OverviewAchievementsPreview from "@/app/(site)/users/components/overview/OverviewAchievementsPreview";
 import { tournamentMapPips } from "@/app/(site)/users/components/overview/map-results";
 import { getPlayerSlug } from "@/lib/player";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 interface OverviewPageProps {
   profile: UserProfile;
   user: User;
   tournamentId?: number;
+  scope: StatsScope;
 }
 
 // Reads shared by more than one section. `cache()` collapses them to a single
 // request per render even though each section awaits them from its own
 // Suspense boundary.
-const getTournaments = cache((userId: number) =>
-  userService.getUserTournaments(userId).catch(() => [])
+const getTournaments = cache((userId: number, scope: StatsScope) =>
+  userService.getUserTournaments(userId, scope === "all" ? "all" : undefined).catch(() => [])
 );
-const getHeroes = cache((userId: number) => userService.getUserHeroes(userId).catch(() => null));
-const getMaps = cache((userId: number) =>
-  userService.getUserMaps(userId, { perPage: -1, minCount: 1 }).catch(() => null)
+const getHeroes = cache((userId: number, scope: StatsScope) =>
+  userService.getUserHeroes(userId, undefined, undefined, scope).catch(() => null)
+);
+const getMaps = cache((userId: number, scope: StatsScope) =>
+  userService.getUserMaps(userId, { perPage: -1, minCount: 1, scope }).catch(() => null)
 );
 
 export const UserOverviewPageSkeleton = () => {
@@ -80,16 +84,33 @@ const LastTournamentSection = async ({
   );
 };
 
-const CareerListSection = async ({ user, profile }: { user: User; profile: UserProfile }) => (
-  <OverviewCareerList profile={profile} tournaments={await getTournaments(user.id)} />
+const CareerListSection = async ({
+  user,
+  profile,
+  scope
+}: {
+  user: User;
+  profile: UserProfile;
+  scope: StatsScope;
+}) => <OverviewCareerList profile={profile} tournaments={await getTournaments(user.id, scope)} />;
+
+const PlacementSparkSection = async ({ user, scope }: { user: User; scope: StatsScope }) => (
+  <OverviewPlacementSpark tournaments={await getTournaments(user.id, scope)} />
 );
 
-const PlacementSparkSection = async ({ user }: { user: User }) => (
-  <OverviewPlacementSpark tournaments={await getTournaments(user.id)} />
-);
-
-const TopHeroesSection = async ({ user, userSlug }: { user: User; userSlug: string }) => {
-  const [heroesRes, mapsRes] = await Promise.all([getHeroes(user.id), getMaps(user.id)]);
+const TopHeroesSection = async ({
+  user,
+  userSlug,
+  scope
+}: {
+  user: User;
+  userSlug: string;
+  scope: StatsScope;
+}) => {
+  const [heroesRes, mapsRes] = await Promise.all([
+    getHeroes(user.id, scope),
+    getMaps(user.id, scope)
+  ]);
   return (
     <OverviewTopHeroesTable
       heroes={heroesRes?.results ?? []}
@@ -99,19 +120,21 @@ const TopHeroesSection = async ({ user, userSlug }: { user: User; userSlug: stri
   );
 };
 
-const RecentEncountersSection = async ({ user }: { user: User }) => {
+const RecentEncountersSection = async ({ user, scope }: { user: User; scope: StatsScope }) => {
   const [encounters, tournaments] = await Promise.all([
     userService
-      .getUserEncounters(user.id, 1, 5, "played_at", "desc", [
-        "tournament",
-        "stage",
-        "stage_item",
-        "home_team",
-        "away_team",
-        "matches.map"
-      ])
+      .getUserEncounters(
+        user.id,
+        1,
+        5,
+        "played_at",
+        "desc",
+        ["tournament", "stage", "stage_item", "home_team", "away_team", "matches.map"],
+        undefined,
+        scope
+      )
       .catch(() => ({ results: [], total: 0 })),
-    getTournaments(user.id)
+    getTournaments(user.id, scope)
   ]);
   return (
     <OverviewRecentEncounters
@@ -122,8 +145,19 @@ const RecentEncountersSection = async ({ user }: { user: User }) => {
   );
 };
 
-const RoleSplitSection = async ({ user, profile }: { user: User; profile: UserProfile }) => {
-  const [heroesRes, mapsRes] = await Promise.all([getHeroes(user.id), getMaps(user.id)]);
+const RoleSplitSection = async ({
+  user,
+  profile,
+  scope
+}: {
+  user: User;
+  profile: UserProfile;
+  scope: StatsScope;
+}) => {
+  const [heroesRes, mapsRes] = await Promise.all([
+    getHeroes(user.id, scope),
+    getMaps(user.id, scope)
+  ]);
   return (
     <OverviewRoleSplit
       profile={profile}
@@ -133,16 +167,24 @@ const RoleSplitSection = async ({ user, profile }: { user: User; profile: UserPr
   );
 };
 
-const AchievementsSection = async ({ user, userSlug }: { user: User; userSlug: string }) => {
+const AchievementsSection = async ({
+  user,
+  userSlug,
+  scope
+}: {
+  user: User;
+  userSlug: string;
+  scope: StatsScope;
+}) => {
   const achievements = await userService
-    .getUserAchievements(user.id)
+    .getUserAchievements(user.id, { scope })
     .catch(() => [] as AchievementRarity[]);
   return <OverviewAchievementsPreview achievements={achievements} userSlug={userSlug} />;
 };
 
-const TeammatesSection = async ({ user }: { user: User }) => {
+const TeammatesSection = async ({ user, scope }: { user: User; scope: StatsScope }) => {
   const teammates = await userService
-    .getUserBestTeammates(user.id, -1)
+    .getUserBestTeammates(user.id, -1, scope)
     .catch(() => ({ results: [], total: 0 }));
   if (teammates.results.length === 0) return null;
 
@@ -161,7 +203,7 @@ const TeammatesSection = async ({ user }: { user: User }) => {
  * career-wide teammates and maps reads are unbounded and used to gate the
  * whole grid.
  */
-const UserOverviewPage = ({ profile, tournamentId, user }: OverviewPageProps) => {
+const UserOverviewPage = ({ profile, tournamentId, user, scope }: OverviewPageProps) => {
   const userSlug = getPlayerSlug(user.name);
 
   return (
@@ -171,22 +213,22 @@ const UserOverviewPage = ({ profile, tournamentId, user }: OverviewPageProps) =>
           <LastTournamentSection user={user} profile={profile} tournamentId={tournamentId} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-80 w-full rounded-xl" />}>
-          <CareerListSection user={user} profile={profile} />
+          <CareerListSection user={user} profile={profile} scope={scope} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
-          <PlacementSparkSection user={user} />
+          <PlacementSparkSection user={user} scope={scope} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
-          <TopHeroesSection user={user} userSlug={userSlug} />
+          <TopHeroesSection user={user} userSlug={userSlug} scope={scope} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-80 w-full rounded-xl" />}>
-          <RecentEncountersSection user={user} />
+          <RecentEncountersSection user={user} scope={scope} />
         </Suspense>
       </div>
       {/* Below the tab strip's z-40 so it scrolls under the bar, not through it. */}
       <aside className="z-30 flex min-w-0 flex-col gap-3.5 xl:sticky xl:top-[var(--aqt-sticky-top)]">
         <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
-          <RoleSplitSection user={user} profile={profile} />
+          <RoleSplitSection user={user} profile={profile} scope={scope} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-72 w-full rounded-xl" />}>
           <OverviewMostPlayedHeroes
@@ -196,10 +238,10 @@ const UserOverviewPage = ({ profile, tournamentId, user }: OverviewPageProps) =>
           />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
-          <AchievementsSection user={user} userSlug={userSlug} />
+          <AchievementsSection user={user} userSlug={userSlug} scope={scope} />
         </Suspense>
         <Suspense fallback={<Skeleton className="h-80 w-full rounded-xl" />}>
-          <TeammatesSection user={user} />
+          <TeammatesSection user={user} scope={scope} />
         </Suspense>
       </aside>
     </div>

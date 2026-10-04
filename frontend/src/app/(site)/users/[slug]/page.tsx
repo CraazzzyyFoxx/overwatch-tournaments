@@ -26,6 +26,8 @@ import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";
 import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
 import { ProfileJsonLd } from "@/app/(site)/users/components/shared/profile-jsonld";
 import UserProfileEmpty from "@/app/(site)/users/components/shared/UserProfileEmpty";
+import { resolveStatsScope } from "@/lib/site/tenant-host";
+import type { StatsScope, StatsScopeState } from "@/lib/site/stats-scope";
 
 // The route still renders dynamically (api-fetch reads the workspace cookie),
 // but we no longer force `fetchCache: force-no-store` — public, workspace-scoped
@@ -41,6 +43,8 @@ type UserPageSearchParams = {
   page?: string;
   selectedTournamentId?: string;
   achievementTournamentId?: string;
+  /** `all` reads every workspace; ignored on a tenant host. */
+  scope?: string;
   // Matches-tab server-side filters
   mResult?: string;
   mStage?: string;
@@ -105,10 +109,10 @@ export async function generateMetadata(props: {
   }
 }
 
-const getUserAndProfile = cache(async (slug: string) => {
+const getUserAndProfile = cache(async (slug: string, scope: StatsScope) => {
   try {
     const user = await userService.getUserByName(decodePlayerSlug(slug));
-    const profile = await userService.getUserProfile(user.id);
+    const profile = await userService.getUserProfile(user.id, scope);
     return { user, profile };
   } catch (error) {
     if (isNotFoundError(error)) {
@@ -122,69 +126,97 @@ type UserAndProfile = Awaited<ReturnType<typeof getUserAndProfile>>;
 
 const UserHeaderSection = async ({
   userAndProfile,
-  slug
+  slug,
+  scopeState
 }: {
   userAndProfile: Promise<UserAndProfile>;
   slug: string;
+  scopeState: StatsScopeState;
 }) => {
   const { user, profile } = await userAndProfile;
   const canonical = new URL(`/users/${slug}`, SITE_URL_OBJ).toString();
   return (
     <>
       <ProfileJsonLd user={user} profile={profile} url={canonical} />
-      <UserHeader user={user} profile={profile} />
+      <UserHeader user={user} profile={profile} scopeState={scopeState} />
     </>
   );
 };
 
 const UserOverviewTab = async ({
   userAndProfile,
-  tournamentId
+  tournamentId,
+  scope
 }: {
   userAndProfile: Promise<UserAndProfile>;
   tournamentId?: number;
+  scope: StatsScope;
 }) => {
   const { user, profile } = await userAndProfile;
-  return <UserOverviewPage user={user} profile={profile} tournamentId={tournamentId} />;
+  return <UserOverviewPage user={user} profile={profile} tournamentId={tournamentId} scope={scope} />;
 };
 
-const UserTournamentsTab = async ({ userAndProfile }: { userAndProfile: Promise<UserAndProfile> }) => {
+const UserTournamentsTab = async ({
+  userAndProfile,
+  scope
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  scope: StatsScope;
+}) => {
   const { user } = await userAndProfile;
-  return <UserTournamentsPage user={user} />;
+  return <UserTournamentsPage user={user} scope={scope} />;
 };
 
 const UserMatchesTab = async ({
   userAndProfile,
   page,
-  filters
+  filters,
+  scope
 }: {
   userAndProfile: Promise<UserAndProfile>;
   page: number;
   filters?: MatchesFilters;
+  scope: StatsScope;
 }) => {
   const { user } = await userAndProfile;
-  return <UserEncountersPage user={user} page={page} filters={filters} />;
+  return <UserEncountersPage user={user} page={page} filters={filters} scope={scope} />;
 };
 
-const UserMapsTab = async ({ userAndProfile }: { userAndProfile: Promise<UserAndProfile> }) => {
+const UserMapsTab = async ({
+  userAndProfile,
+  scope
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  scope: StatsScope;
+}) => {
   const { user } = await userAndProfile;
-  return <UserMapsPage user={user} />;
+  return <UserMapsPage user={user} scope={scope} />;
 };
 
-const UserHeroesTab = async ({ userAndProfile }: { userAndProfile: Promise<UserAndProfile> }) => {
+const UserHeroesTab = async ({
+  userAndProfile,
+  scope
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  scope: StatsScope;
+}) => {
   const { user } = await userAndProfile;
-  return <UserHeroesPage user={user} />;
+  return <UserHeroesPage user={user} scope={scope} />;
 };
 
 const UserAchievementsTab = async ({
   userAndProfile,
-  selectedTournamentId
+  selectedTournamentId,
+  scope
 }: {
   userAndProfile: Promise<UserAndProfile>;
   selectedTournamentId?: string;
+  scope: StatsScope;
 }) => {
   const { user } = await userAndProfile;
-  return <UserAchievementPage user={user} selectedTournamentId={selectedTournamentId} />;
+  return (
+    <UserAchievementPage user={user} selectedTournamentId={selectedTournamentId} scope={scope} />
+  );
 };
 
 const resolveTabContent = ({
@@ -193,7 +225,8 @@ const resolveTabContent = ({
   tournamentId,
   pageNumber,
   achievementTournamentId,
-  matchFilters
+  matchFilters,
+  scope
 }: {
   activeTab: UserTab;
   userAndProfile: Promise<UserAndProfile>;
@@ -201,37 +234,51 @@ const resolveTabContent = ({
   pageNumber: number;
   achievementTournamentId?: string;
   matchFilters?: MatchesFilters;
+  scope: StatsScope;
 }) => {
   switch (activeTab) {
     case "overview":
       return {
         value: "overview",
         fallback: <UserOverviewPageSkeleton />,
-        content: <UserOverviewTab userAndProfile={userAndProfile} tournamentId={tournamentId} />
+        content: (
+          <UserOverviewTab
+            userAndProfile={userAndProfile}
+            tournamentId={tournamentId}
+            scope={scope}
+          />
+        )
       };
     case "tournaments":
       return {
         value: "tournaments",
         fallback: <UserTournamentsPageSkeleton />,
-        content: <UserTournamentsTab userAndProfile={userAndProfile} />
+        content: <UserTournamentsTab userAndProfile={userAndProfile} scope={scope} />
       };
     case "matches":
       return {
         value: "matches",
         fallback: <UserEncountersPageSkeleton />,
-        content: <UserMatchesTab userAndProfile={userAndProfile} page={pageNumber} filters={matchFilters} />
+        content: (
+          <UserMatchesTab
+            userAndProfile={userAndProfile}
+            page={pageNumber}
+            filters={matchFilters}
+            scope={scope}
+          />
+        )
       };
     case "maps":
       return {
         value: "maps",
         fallback: <Skeleton className="min-h-150 w-full rounded-xl" />,
-        content: <UserMapsTab userAndProfile={userAndProfile} />
+        content: <UserMapsTab userAndProfile={userAndProfile} scope={scope} />
       };
     case "heroes":
       return {
         value: "heroes",
         fallback: <Skeleton className="min-h-150 w-full rounded-xl" />,
-        content: <UserHeroesTab userAndProfile={userAndProfile} />
+        content: <UserHeroesTab userAndProfile={userAndProfile} scope={scope} />
       };
     case "achievements":
       return {
@@ -241,6 +288,7 @@ const resolveTabContent = ({
           <UserAchievementsTab
             userAndProfile={userAndProfile}
             selectedTournamentId={achievementTournamentId}
+            scope={scope}
           />
         )
       };
@@ -297,7 +345,8 @@ export default async function UserPage({
 }>) {
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
-  const userAndProfile = getUserAndProfile(resolvedParams.slug);
+  const scopeState = await resolveStatsScope(resolvedSearchParams.scope);
+  const userAndProfile = getUserAndProfile(resolvedParams.slug, scopeState.scope);
 
   const requestedTab = resolvedSearchParams.tab ?? "overview";
   const activeTab: UserTab = isUserTab(requestedTab) ? requestedTab : "overview";
@@ -319,13 +368,18 @@ export default async function UserPage({
     tournamentId,
     pageNumber,
     achievementTournamentId,
-    matchFilters
+    matchFilters,
+    scope: scopeState.scope
   });
 
   return (
     <>
       <Suspense fallback={<UserHeaderSkeleton />}>
-        <UserHeaderSection userAndProfile={userAndProfile} slug={resolvedParams.slug} />
+        <UserHeaderSection
+          userAndProfile={userAndProfile}
+          slug={resolvedParams.slug}
+          scopeState={scopeState}
+        />
       </Suspense>
       <Suspense
         fallback={

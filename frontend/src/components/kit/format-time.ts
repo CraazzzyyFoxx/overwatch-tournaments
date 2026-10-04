@@ -41,9 +41,19 @@ export function formatRelative(
   return format.relativeTime(date, { now, style: "short" });
 }
 
-/** Compact "60s" / "5m" / "2h" rendering of a seconds-based interval setting. */
-export function formatInterval(seconds: number): string {
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
-  if (seconds % 60 === 0) return `${seconds / 60}m`;
-  return `${seconds}s`;
+/**
+ * An interval setting in the UI language: "15 min" / "15 мин", "2 hr" / "2 ч".
+ *
+ * The largest unit that divides evenly, rendered through `Intl` rather than a
+ * hardcoded `s`/`m`/`h` suffix — the suffixes were the last English left in the
+ * collector pacing lines.
+ */
+export function formatInterval(format: Pick<Formatter, "number">, seconds: number): string {
+  const [value, unit]: [number, string] =
+    seconds % 3600 === 0
+      ? [seconds / 3600, "hour"]
+      : seconds % 60 === 0
+        ? [seconds / 60, "minute"]
+        : [seconds, "second"];
+  return format.number(value, { style: "unit", unit, unitDisplay: "short" });
 }

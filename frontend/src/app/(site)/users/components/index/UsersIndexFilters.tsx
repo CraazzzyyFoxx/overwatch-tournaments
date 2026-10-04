@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { getDivisionLabel, getDivisionOptions } from "@/lib/divisions/grid";
+import { getDefaultDivisionGrid, getDivisionLabel, getDivisionOptions } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import type { UserOverviewStats } from "@/types/user.types";
 
@@ -32,9 +32,15 @@ export function UsersIndexFilters({
   stats: UserOverviewStats | undefined;
 }>) {
   const t = useTranslations();
-  const divisionGrid = useDivisionGrid();
+  const workspaceGrid = useDivisionGrid();
+  const { role, divMin, divMax, sort, order, view, scope } = controls.params;
+  // Across workspaces a division number belongs to no single grid, so the
+  // filter offers the reference grid's tier numbers under neutral labels.
+  const divisionGrid = scope === "all" ? getDefaultDivisionGrid() : workspaceGrid;
   const divisionOptions = getDivisionOptions(divisionGrid);
-  const { role, divMin, divMax, sort, order, view } = controls.params;
+  const divisionLabel = (division: number) =>
+    (scope === "all" ? null : getDivisionLabel(divisionGrid, division)) ??
+    t("common.divisionWithId", { id: String(division) });
   const sortLabel = t(
     SORT_OPTIONS.find((option) => option.value === sort)?.labelKey ?? "users.list.sort.name"
   );
@@ -70,29 +76,25 @@ export function UsersIndexFilters({
 
         <DivisionBoundMenu
           label={t("users.list.filters.divMin", {
-            value:
-              divMin != null
-                ? (getDivisionLabel(divisionGrid, divMin) ?? t("common.any"))
-                : t("common.any")
+            value: divMin != null ? divisionLabel(divMin) : t("common.any")
           })}
           menuLabel={t("users.list.filters.minDivision")}
           idPrefix="min"
           value={divMin}
           options={divisionOptions}
+          labelOf={divisionLabel}
           onChange={controls.setDivMin}
         />
 
         <DivisionBoundMenu
           label={t("users.list.filters.divMax", {
-            value:
-              divMax != null
-                ? (getDivisionLabel(divisionGrid, divMax) ?? t("common.any"))
-                : t("common.any")
+            value: divMax != null ? divisionLabel(divMax) : t("common.any")
           })}
           menuLabel={t("users.list.filters.maxDivision")}
           idPrefix="max"
           value={divMax}
           options={divisionOptions}
+          labelOf={divisionLabel}
           onChange={controls.setDivMax}
         />
 
@@ -160,6 +162,7 @@ function DivisionBoundMenu({
   idPrefix,
   value,
   options,
+  labelOf,
   onChange
 }: Readonly<{
   label: string;
@@ -167,10 +170,10 @@ function DivisionBoundMenu({
   idPrefix: string;
   value: number | undefined;
   options: number[];
+  labelOf: (division: number) => string;
   onChange: (value: string) => void;
 }>) {
   const t = useTranslations();
-  const divisionGrid = useDivisionGrid();
 
   return (
     <DropdownMenu>
@@ -191,7 +194,7 @@ function DivisionBoundMenu({
           </DropdownMenuRadioItem>
           {options.map((division) => (
             <DropdownMenuRadioItem key={`${idPrefix}-${division}`} value={String(division)}>
-              {getDivisionLabel(divisionGrid, division)}
+              {labelOf(division)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

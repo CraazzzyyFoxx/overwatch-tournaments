@@ -8,9 +8,11 @@ import { cn, initials } from "@/lib/utils";
 import { getPlayerSlug } from "@/lib/player";
 import { formatOptional } from "@/app/(site)/users/components/shared/list-utils";
 import type { UserCatalogEntry } from "@/types/user.types";
+import type { DivisionGridVersion } from "@/types/workspace.types";
+import { scopeHref, type StatsScope } from "@/lib/site/stats-scope";
 
 import { DivisionHex } from "./DivisionHex";
-import { ALPHABET, primaryRoleLabel, splitTag } from "./users-index.model";
+import { ALPHABET, gridForRole, primaryRoleLabel, splitTag } from "./users-index.model";
 import type { UsersIndexData } from "./useUsersIndexData";
 import type { UsersIndexParamControls } from "./useUsersIndexParams";
 import styles from "./Users.module.css";
@@ -24,7 +26,7 @@ export function UsersCatalogView({
   data: UsersIndexData;
 }>) {
   const t = useTranslations();
-  const { letter } = controls.params;
+  const { letter, scope } = controls.params;
   const { catalogQuery, availableLetters } = data;
 
   return (
@@ -69,7 +71,12 @@ export function UsersCatalogView({
               <h3 className={styles.catLetter}>{bucket.letter}</h3>
               <div className={styles.catGrid}>
                 {bucket.users.map((cardUser) => (
-                  <CatalogCard key={cardUser.id} user={cardUser} />
+                  <CatalogCard
+                    key={cardUser.id}
+                    user={cardUser}
+                    grids={catalogQuery.data?.division_grids}
+                    scope={scope}
+                  />
                 ))}
               </div>
             </div>
@@ -113,13 +120,24 @@ export function UsersCatalogView({
   );
 }
 
-function CatalogCard({ user }: Readonly<{ user: UserCatalogEntry }>) {
+function CatalogCard({
+  user,
+  grids,
+  scope
+}: Readonly<{
+  user: UserCatalogEntry;
+  grids: DivisionGridVersion[] | undefined;
+  scope: StatsScope;
+}>) {
   const t = useTranslations();
   const { handle, tag } = splitTag(user.name);
   const topHeroes = user.top_heroes.slice(0, 3);
 
   return (
-    <HoverPrefetchLink href={`/users/${getPlayerSlug(user.name)}`} className={styles.catCard}>
+    <HoverPrefetchLink
+      href={scopeHref(`/users/${getPlayerSlug(user.name)}`, scope)}
+      className={styles.catCard}
+    >
       <div className={styles.catCardTop}>
         <div className={styles.catCardAvatar} aria-hidden>
           {initials(user.name)}
@@ -137,6 +155,7 @@ function CatalogCard({ user }: Readonly<{ user: UserCatalogEntry }>) {
               key={`${user.id}-cat-${roleRow.role}-${roleRow.division}`}
               role={roleRow.role}
               division={roleRow.division}
+              roleGrid={gridForRole(roleRow, grids)}
               size={28}
             />
           ))}
