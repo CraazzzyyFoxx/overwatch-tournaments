@@ -141,11 +141,6 @@ export function EncounterReportsBrowser({
         />
       </StatTileGrid>
 
-      <p className="text-sm text-muted-foreground">
-        Both captains report independently. Matching scores confirm the encounter; a disagreement
-        marks it disputed.
-      </p>
-
       <div
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >

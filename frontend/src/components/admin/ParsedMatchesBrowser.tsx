@@ -229,11 +229,6 @@ export function ParsedMatchesBrowser({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        One row per played map, as the log parser produced it. Provenance is the ingestion record the
-        map came from.
-      </p>
-
       <div
         className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
       >

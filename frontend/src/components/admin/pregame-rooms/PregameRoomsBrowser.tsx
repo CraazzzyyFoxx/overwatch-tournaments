@@ -129,10 +129,6 @@ export function PregameRoomsBrowser({ tournamentId }: Readonly<{ tournamentId: n
         />
       </StatTileGrid>
 
-      <p className="text-sm text-muted-foreground">
-        Refreshes every {PREGAME_ROOMS_REFETCH_MS / 1000} seconds while this tab is open.
-      </p>
-
       <DataTable<PregameRoomRow>
         rows={visible}
         isLoading={roomsQuery.isLoading}
