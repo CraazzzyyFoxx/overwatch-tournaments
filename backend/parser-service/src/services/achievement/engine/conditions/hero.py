@@ -84,17 +84,45 @@ async def execute_hero_kd_best(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Best K/D for a hero in tournament. Grain: user_tournament."""
+    """Best K/D for a hero in tournament. Grain: user_tournament.
+
+    One query answers every hero: the catalog seeds a rule per hero, and running
+    this per rule was an N+1 of identical scans (Sentry OWT-TOURNAMENTS-2BX).
+    The per-hero winners are memoized on the run's ``leaf_cache`` and the rule's
+    ``hero_slug`` is applied afterwards. Equivalent to filtering in SQL: the
+    window already partitions by hero, so other heroes never change a rank.
+    """
     hero_slug = params.get("hero_slug")
     min_time = params.get("min_time", 600)
     min_matches = params.get("min_matches", 3)
     min_match_time = params.get("min_match_time", 60)  # per-match minimum playtime
 
-    # Base: per-user-per-match stats for hero
-    hero_filter = []
-    if hero_slug:
-        hero_filter.append(models.Hero.slug == hero_slug)
+    cache_key = (
+        "hero_kd_best",
+        context.workspace_id,
+        context.tournament.id if context.tournament else None,
+        min_time,
+        min_matches,
+        min_match_time,
+    )
+    by_hero = context.leaf_cache.get(cache_key)
+    if by_hero is None:
+        by_hero = await _hero_kd_best_by_slug(session, context, min_time, min_matches, min_match_time)
+        context.leaf_cache[cache_key] = by_hero
 
+    if hero_slug:
+        return set(by_hero.get(hero_slug, ()))
+    return set().union(*by_hero.values())
+
+
+async def _hero_kd_best_by_slug(
+    session: AsyncSession,
+    context: EvalContext,
+    min_time: float,
+    min_matches: int,
+    min_match_time: float,
+) -> dict[str, set[tuple[int, int]]]:
+    """``{hero_slug: {(user_id, tournament_id)}}`` — each hero's best K/D per tournament."""
     base = (
         sa.select(
             models.MatchStatistics.user_id,
@@ -107,7 +135,6 @@ async def execute_hero_kd_best(
         .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-        .join(models.Hero, models.Hero.id == models.MatchStatistics.hero_id)
         .where(
             models.MatchStatistics.round == 0,
             models.MatchStatistics.hero_id.isnot(None),
@@ -119,7 +146,6 @@ async def execute_hero_kd_best(
                 ]
             ),
             models.Tournament.workspace_id == context.workspace_id,
-            *hero_filter,
         )
         .group_by(
             models.MatchStatistics.user_id,
@@ -212,7 +238,13 @@ async def execute_hero_kd_best(
         )
     ).subquery("best")
 
-    final = sa.select(best.c.user_id, best.c.tournament_id).where(best.c.rn == 1)
+    final = (
+        sa.select(best.c.user_id, best.c.tournament_id, models.Hero.slug)
+        .join(models.Hero, models.Hero.id == best.c.hero_id)
+        .where(best.c.rn == 1)
+    )
 
-    result = await session.execute(final)
-    return {(row[0], row[1]) for row in result}
+    by_hero: dict[str, set[tuple[int, int]]] = {}
+    for user_id, tournament_id, slug in await session.execute(final):
+        by_hero.setdefault(slug, set()).add((user_id, tournament_id))
+    return by_hero

@@ -229,6 +229,9 @@ class AchievementEvaluationRunnerService:
                 for rule in rules
             }
             existing_results = await load_existing_results(session, persist_slices)
+            # One memo for the whole run: per-hero rules share one query each
+            # instead of one per rule (Sentry OWT-TOURNAMENTS-2BX / -2BZ).
+            leaf_cache: dict[tuple, object] = {}
 
             for rule in rules:
                 persist_slice = persist_slices[rule.id]
@@ -292,6 +295,7 @@ class AchievementEvaluationRunnerService:
                             tournament=eval_tournament,
                             grid=workspace_grid if eval_tournament is None else grid,
                             normalizer=normalizer if rule_needs_normalized_divisions else None,
+                            leaf_cache=leaf_cache,
                         )
 
                         logger.info(f"Evaluating rule '{rule.slug}' (id={rule.id})")

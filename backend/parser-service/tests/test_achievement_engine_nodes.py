@@ -512,6 +512,65 @@ class ClosenessMatchProjectionTests(_NodeCase):
         )
 
 
+class HeroKdBestTests(_NodeCase):
+    def _hero(self, slug: str) -> int:
+        hero_id = self.db._id()
+        self.db.insert(
+            models.Hero.__table__,
+            id=hero_id,
+            slug=slug,
+            name=slug.title(),
+            image_path=f"{slug}.png",
+            type=HeroClass.damage,
+            color="#ffffff",
+            aliases=[],
+        )
+        return hero_id
+
+    async def test_per_hero_rules_share_one_query_and_keep_their_own_winner(self) -> None:
+        self.db.tournament(REAL_TOURNAMENT_ID, name="KD", is_hidden=False, start=datetime(2026, 1, 1, tzinfo=UTC))
+        home = self.db.team(REAL_TOURNAMENT_ID, "home", captain_id=REAL_HOME_USER)
+        away = self.db.team(REAL_TOURNAMENT_ID, "away", captain_id=REAL_AWAY_USER)
+        self.db.player(REAL_TOURNAMENT_ID, home, self.db.member(REAL_HOME_USER), name="home")
+        self.db.player(REAL_TOURNAMENT_ID, away, self.db.member(REAL_AWAY_USER), name="away")
+        match_id = self.db.match(self.db.encounter(REAL_TOURNAMENT_ID, home, away), home, away)
+        tracer, ana = self._hero("tracer"), self._hero("ana")
+        # Home tops tracer (5.0 vs 2.0); away tops ana (6.0 vs 1.0).
+        for user, team, hero, kills, deaths in (
+            (REAL_HOME_USER, home, tracer, 10, 2),
+            (REAL_AWAY_USER, away, tracer, 4, 2),
+            (REAL_AWAY_USER, away, ana, 6, 1),
+            (REAL_HOME_USER, home, ana, 3, 3),
+        ):
+            self.db.statistics(match_id, user, team, LogStatsName.Eliminations, kills, hero_id=hero)
+            self.db.statistics(match_id, user, team, LogStatsName.Deaths, deaths, hero_id=hero)
+            self.db.statistics(match_id, user, team, LogStatsName.HeroTimePlayed, 300, hero_id=hero)
+        self.db.session.commit()
+
+        context = await self.context(REAL_TOURNAMENT_ID)
+        executed = 0
+        execute = self.db.shim.execute
+
+        async def counting_execute(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+            nonlocal executed
+            executed += 1
+            return await execute(*args, **kwargs)
+
+        self.db.shim.execute = counting_execute
+        params = {"min_time": 60, "min_matches": 1}
+
+        async def best(**extra: str) -> set:
+            return await evaluator.evaluate(
+                self.db.shim, {"type": "hero_kd_best", "params": {**params, **extra}}, context
+            )
+
+        self.assertEqual({(REAL_HOME_USER, REAL_TOURNAMENT_ID)}, await best(hero_slug="tracer"))
+        self.assertEqual({(REAL_AWAY_USER, REAL_TOURNAMENT_ID)}, await best(hero_slug="ana"))
+        self.assertEqual(set(), await best(hero_slug="mercy"))
+        self.assertEqual({(REAL_HOME_USER, REAL_TOURNAMENT_ID), (REAL_AWAY_USER, REAL_TOURNAMENT_ID)}, await best())
+        self.assertEqual(1, executed)
+
+
 class DivisionNormalizerFlagTests(TestCase):
     def test_div_span_requires_normalized_divisions(self) -> None:
         self.assertTrue(_rule_requires_normalized_divisions({"type": "div_span", "params": {"op": ">=", "value": 10}}))
