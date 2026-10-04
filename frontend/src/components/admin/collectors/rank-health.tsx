@@ -172,7 +172,7 @@ export function RankHealthDashboard() {
         </Alert>
       )}
 
-      <StatTileGrid>
+      <StatTileGrid className="xl:grid-cols-5">
         {/* Not a StatTile: the tile owns a stacked distribution bar below the value. */}
         <div className="space-y-3 rounded-xl border border-border/60 bg-card/70 p-4">
           <div className="flex items-baseline justify-between gap-3">
