@@ -11,10 +11,11 @@ channel post is the delivery ledger in app-service, not the producer), so a
 repeated transition is asserted on the notification rows: those must not
 double.
 
-The pick-ban team-change sync is patched in the advancement test alone. It is
-not the subject there, and its real implementation would need the map pool,
-settings and readiness fixtures of a whole veto engine to say "no session to
-sync".
+The pick-ban team-change sync is patched in the advancement test alone (on
+``lifecycle``'s own handle to the service, which is where the hook reaches
+it). It is not the subject there, and its real implementation would need the
+map pool, settings and readiness fixtures of a whole veto engine to say "no
+session to sync".
 """
 
 from __future__ import annotations
@@ -39,9 +40,12 @@ from shared.core import enums  # noqa: E402
 from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.models.platform.notification import Notification  # noqa: E402
 from shared.models.platform.outbox import EventOutbox  # noqa: E402
+from shared.models.tournament.pick_ban import PickBanConfig, PickBanConfigItem  # noqa: E402
 from shared.testing import install_postgres_type_shims  # noqa: E402
 from src import models  # noqa: E402
+from src.services.admin.stage import stage_service  # noqa: E402
 from src.services.encounter import finalize as finalize_module  # noqa: E402
+from src.services.notifications import lifecycle as lifecycle_module  # noqa: E402
 from src.services.notifications.lifecycle import lifecycle_notifier  # noqa: E402
 
 install_postgres_type_shims()
@@ -58,8 +62,13 @@ TABLE_NAMES = (
     "tournament.tournament_phase_schedule",
     "tournament.team",
     "tournament.player",
+    "tournament.stage",
     "tournament.encounter",
     "tournament.encounter_link",
+    "tournament.pick_ban_config",
+    "tournament.pick_ban_config_item",
+    "tournament.pick_ban_config_slot",
+    "tournament.pick_ban_config_slot_item",
 )
 
 WORKSPACE_ID = 1
@@ -234,6 +243,33 @@ class _Fixture:
         self.session.flush()
         return team
 
+    def stage(self) -> models.Stage:
+        """A Draft stage: generated, published by nothing yet."""
+        stage = models.Stage(
+            tournament_id=TOURNAMENT_ID,
+            name="Playoffs",
+            stage_type=enums.StageType.SINGLE_ELIMINATION,
+            order=1,
+            items=[],
+        )
+        self.session.add(stage)
+        self.session.flush()
+        return stage
+
+    def pick_ban_config(self, kind: enums.PickBanKind, *item_ids: int) -> None:
+        """A tournament-wide config. No ids = a pool-less rules template, which
+        opens no room."""
+        self.session.add(
+            PickBanConfig(
+                tournament_id=TOURNAMENT_ID,
+                kind=kind,
+                mode=enums.MapVetoMode.POOL,
+                ruleset_json={},
+                items=[PickBanConfigItem(item_id=item_id) for item_id in item_ids],
+            )
+        )
+        self.session.flush()
+
     def encounter(
         self,
         *,
@@ -241,17 +277,22 @@ class _Fixture:
         away_team_id: int | None,
         scheduled_at: datetime | None,
         round_number: int = 1,
+        stage_id: int | None = None,
+        status: enums.EncounterStatus = enums.EncounterStatus.OPEN,
+        started_at: datetime | None = None,
     ) -> models.Encounter:
         encounter = models.Encounter(
             name="match",
             tournament_id=TOURNAMENT_ID,
+            stage_id=stage_id,
             home_team_id=home_team_id,
             away_team_id=away_team_id,
             home_score=0,
             away_score=0,
             round=round_number,
             scheduled_at=scheduled_at,
-            status=enums.EncounterStatus.OPEN,
+            started_at=started_at,
+            status=status,
             result_status=enums.EncounterResultStatus.NONE,
         )
         self.session.add(encounter)
@@ -450,14 +491,16 @@ class CheckInOpenedTests(_LifecycleTestCase):
 
 
 class EncounterScheduledTests(_LifecycleTestCase):
+    """Both slots filled = a match to prepare for, with or without a time."""
+
     def setUp(self) -> None:
         super().setUp()
         self.home = self.fx.team("Home", self.fx.member("HomePlayer", auth_user_id=701))
         self.away = self.fx.team("Away", self.fx.member("AwayPlayer", auth_user_id=702))
         self.later = datetime.now(UTC) + timedelta(days=1)
 
-    async def _changed(self, encounter: models.Encounter) -> None:
-        await lifecycle_notifier.on_encounter_changed(self.fx.shim, encounter)
+    async def _changed(self, encounter: models.Encounter, *, channel: bool = True) -> None:
+        await lifecycle_notifier.on_encounter_changed(self.fx.shim, encounter, channel=channel)
 
     async def test_a_future_time_tells_both_rosters_and_the_channel(self) -> None:
         encounter = self.fx.encounter(
@@ -474,7 +517,47 @@ class EncounterScheduledTests(_LifecycleTestCase):
         self.assertEqual("Home", payload["home_team_name"])
         self.assertEqual("Away", payload["away_team_name"])
         self.assertEqual(self.later, _instant(payload["scheduled_at"]))
+        self.assertFalse(payload["pick_ban"])
         self.assertEqual(1, len(self.fx.broadcasts()))
+
+    async def test_a_match_with_no_time_yet_still_tells_both_rosters(self) -> None:
+        """Knowing the opponent is the news; the organizer schedules later."""
+        encounter = self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=None,
+        )
+
+        await self._changed(encounter)
+
+        self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
+        self.assertNotIn("scheduled_at", self.fx.notifications("encounter.scheduled")[0].payload_json)
+        self.assertEqual(1, len(self.fx.broadcasts()))
+
+    async def test_a_configured_pick_ban_pool_is_flagged(self) -> None:
+        self.fx.pick_ban_config(enums.PickBanKind.HERO, 11, 12)
+        encounter = self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=self.later,
+        )
+
+        await self._changed(encounter)
+
+        self.assertTrue(self.fx.notifications("encounter.scheduled")[0].payload_json["pick_ban"])
+
+    async def test_a_pool_less_pick_ban_template_is_not_flagged(self) -> None:
+        """A config with no pool plays nothing, so the room has nothing to open."""
+        self.fx.pick_ban_config(enums.PickBanKind.MAP)
+        encounter = self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=self.later,
+        )
+
+        await self._changed(encounter)
+
+        self.assertFalse(self.fx.notifications("encounter.scheduled")[0].payload_json["pick_ban"])
 
     async def test_muted_discord_still_tells_both_rosters_but_posts_nothing(self) -> None:
         self.fx.tournament.discord_broadcasts_enabled = False
@@ -486,6 +569,19 @@ class EncounterScheduledTests(_LifecycleTestCase):
         )
 
         await self._changed(encounter)
+
+        self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
+        self.assertEqual([], self.fx.broadcasts())
+
+    async def test_a_bulk_producer_writes_the_rows_but_posts_nothing(self) -> None:
+        """``channel=False``: one Swiss round fills a dozen encounters at once."""
+        encounter = self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=self.later,
+        )
+
+        await self._changed(encounter, channel=False)
 
         self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
         self.assertEqual([], self.fx.broadcasts())
@@ -520,17 +616,21 @@ class EncounterScheduledTests(_LifecycleTestCase):
         self.assertEqual(4, len(self.fx.notifications("encounter.scheduled")))
         self.assertEqual(2, len(self.fx.broadcasts()))
 
-    async def test_a_time_in_the_past_is_silent(self) -> None:
-        """Backfilled brackets and Challonge imports carry played-match times."""
+    async def test_a_new_opponent_is_a_new_notification(self) -> None:
+        """An admin re-assigning a slot is a different match to prepare for."""
         encounter = self.fx.encounter(
             home_team_id=self.home.id,
             away_team_id=self.away.id,
-            scheduled_at=datetime.now(UTC) - timedelta(hours=1),
+            scheduled_at=self.later,
         )
-
         await self._changed(encounter)
 
-        self.assertEqual([], self.fx.notifications())
+        encounter.away_team_id = self.fx.team("Other", self.fx.member("OtherPlayer", auth_user_id=704)).id
+        await self._changed(encounter)
+
+        # The home roster is told twice: a different opponent, a different match.
+        self.assertEqual([701, 701, 702, 704], self.fx.recipients("encounter.scheduled"))
+        self.assertEqual(2, len(self.fx.broadcasts()))
 
     async def test_an_empty_slot_is_silent(self) -> None:
         encounter = self.fx.encounter(
@@ -543,11 +643,25 @@ class EncounterScheduledTests(_LifecycleTestCase):
 
         self.assertEqual([], self.fx.notifications())
 
-    async def test_an_unscheduled_encounter_is_silent(self) -> None:
+    async def test_an_encounter_already_under_way_is_silent(self) -> None:
         encounter = self.fx.encounter(
             home_team_id=self.home.id,
             away_team_id=self.away.id,
-            scheduled_at=None,
+            scheduled_at=self.later,
+            started_at=datetime.now(UTC),
+        )
+
+        await self._changed(encounter)
+
+        self.assertEqual([], self.fx.notifications())
+
+    async def test_a_completed_encounter_is_silent(self) -> None:
+        """Backfilled brackets and Challonge imports land played matches."""
+        encounter = self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=self.later,
+            status=enums.EncounterStatus.COMPLETED,
         )
 
         await self._changed(encounter)
@@ -566,6 +680,43 @@ class EncounterScheduledTests(_LifecycleTestCase):
         await self._changed(encounter)
 
         self.assertEqual([], self.fx.notifications())
+
+    async def test_a_preview_bracket_stays_silent_until_the_stage_is_activated(self) -> None:
+        stage = self.fx.stage()
+        self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=None,
+            stage_id=stage.id,
+        )
+
+        self.assertEqual([], self.fx.notifications())
+
+        await stage_service.activate_stage(self.fx.shim, stage.id, notify=False, commit=False, stage=stage)
+
+        self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
+        # Bulk event: a whole bracket going live posts nothing to the channel.
+        self.assertEqual([], self.fx.broadcasts())
+
+    async def test_seeds_written_into_a_live_playoff_tell_both_rosters(self) -> None:
+        """The playoff went live with TBD slots while the groups ran; generation
+        later writes the group winners into it (``_fill_bracket_seeds``)."""
+        stage = self.fx.stage()
+        stage.is_published = True
+        encounter = self.fx.encounter(home_team_id=None, away_team_id=None, scheduled_at=None, stage_id=stage.id)
+
+        async def fill_seeds(session: Any, stage: models.Stage, existing_by_item: Any) -> list[models.Encounter]:
+            encounter.home_team_id, encounter.away_team_id = self.home.id, self.away.id
+            self.fx.session.flush()
+            return [encounter]
+
+        with patch.object(stage_service, "_generate_bracket_encounters", fill_seeds):
+            await stage_service.generate_encounters(
+                self.fx.shim, stage.id, notify=False, commit=False, schedule_standings=False, stage=stage
+            )
+
+        self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
+        self.assertEqual([], self.fx.broadcasts())
 
     async def test_bracket_advancement_tells_the_team_that_just_arrived(self) -> None:
         """The scheduled slot whose opponent was still TBD: the time was set
@@ -592,7 +743,7 @@ class EncounterScheduledTests(_LifecycleTestCase):
         self.fx.session.flush()
 
         with patch.object(
-            finalize_module.pick_ban_session_service,
+            lifecycle_module.pick_ban_session_service,
             "sync_all_pick_ban_sessions_after_team_change",
             AsyncMock(),
         ):

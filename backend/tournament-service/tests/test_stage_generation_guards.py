@@ -88,7 +88,12 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
         item_a, item_b = _item(1, "Group A"), _item(2, "Group B")
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(1, 10)])), flush=AsyncMock())
         stage = SimpleNamespace(
-            id=77, tournament_id=1, stage_type=enums.StageType.SWISS, items=[item_a, item_b], **stage_regulation()
+            id=77,
+            tournament_id=1,
+            stage_type=enums.StageType.SWISS,
+            items=[item_a, item_b],
+            is_published=False,
+            **stage_regulation(),
         )
         new_encounter = SimpleNamespace(id=901)
 
@@ -153,6 +158,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[item],
+            is_published=False,
             **stage_regulation(),
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])), flush=AsyncMock())
@@ -181,6 +187,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[item],
+            is_published=False,
             **stage_regulation(seed_ranking="avg_sr"),
         )
         session = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([])), flush=AsyncMock())
@@ -215,6 +222,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
+            is_published=False,
             **stage_regulation(),
         )
         source = SimpleNamespace(
@@ -248,6 +256,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
+            is_published=False,
             **stage_regulation(),
         )
         source = SimpleNamespace(
@@ -276,6 +285,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             tournament_id=1,
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
+            is_published=False,
             **stage_regulation(),
         )
         # The TBD bracket generated earlier: two semifinals and a final.
@@ -363,10 +373,13 @@ class ActivateStageParallelPhaseTests(IsolatedAsyncioTestCase):
     async def test_activation_leaves_the_phase_siblings_active(self) -> None:
         stage = SimpleNamespace(id=5, tournament_id=1, order=2, items=[], is_active=False, is_published=False)
         statements: list = []
-        session = SimpleNamespace(
-            execute=AsyncMock(side_effect=lambda statement, *_a, **_kw: statements.append(statement)),
-            flush=AsyncMock(),
-        )
+
+        def _record(statement, *_a, **_kw):  # noqa: ANN001, ANN002, ANN003, ANN202
+            statements.append(statement)
+            # The stage has no encounters to notify about.
+            return SimpleNamespace(scalars=lambda: iter(()))
+
+        session = SimpleNamespace(execute=AsyncMock(side_effect=_record), flush=AsyncMock())
 
         with patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()):
             await stage_service.stage_service.activate_stage(session, 5, commit=False, stage=stage)

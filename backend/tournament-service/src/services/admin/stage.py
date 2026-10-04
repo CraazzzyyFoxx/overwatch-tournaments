@@ -81,8 +81,8 @@ from src.services.admin.stage_common import (
     _pick_ban_config_signature,
 )
 from src.services.encounter.ffa import ffa_encounter_service
-from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.room_reconcile import request_stage_reconcile
+from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
@@ -1299,8 +1299,32 @@ class AdminStageService:
                     inp.team_id = standings[inp.source_position - 1].team_id
                     inp.input_type = enums.StageItemInputType.FINAL
 
+        await self._notify_published_encounters(session, stage)
         await self._finish_structure_write(session, stage, notify=notify, commit=commit, schedule_standings=False)
         return stage
+
+    async def _notify_published_encounters(self, session: AsyncSession, stage: models.Stage) -> None:
+        """Tell the rosters of every complete pairing in a live stage.
+
+        Two callers make pairings playable in bulk: activation (``is_published``
+        is what the room gates on, so until then they were a preview nobody
+        could enter) and generation into an already-published stage -- above
+        all ``_fill_bracket_seeds`` writing the group winners into a playoff
+        that went live with TBD slots. Already-told pairings are deduped by the
+        notifier's key.
+
+        DMs only (``channel=False``): a bracket going live readies a dozen
+        encounters at once, and a dozen channel posts is spam.
+        """
+        result = await session.execute(
+            self.encounter_repo.select().where(
+                models.Encounter.stage_id == stage.id,
+                models.Encounter.home_team_id.is_not(None),
+                models.Encounter.away_team_id.is_not(None),
+            )
+        )
+        for encounter in result.scalars():
+            await lifecycle_notifier.on_encounter_changed(session, encounter, channel=False)
 
     async def deactivate_stage(
         self,
@@ -2139,7 +2163,8 @@ class AdminStageService:
                 encounter.away_team_id,
                 names,
             )
-            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+            # No channel post: requalification rewrites a whole stage item.
+            await after_encounter_teams_changed(session, encounter, channel=False)
 
     async def _preceding_phase_group_stages(self, session: AsyncSession, stage: models.Stage) -> list[models.Stage]:
         result = await session.execute(
@@ -2375,6 +2400,9 @@ class AdminStageService:
             encounters = await self._generate_grouped_encounters(session, stage, existing_by_item)
         else:
             encounters = await self._generate_bracket_encounters(session, stage, existing_by_item)
+
+        if stage.is_published:
+            await self._notify_published_encounters(session, stage)
 
         await self._finish_structure_write(
             session,

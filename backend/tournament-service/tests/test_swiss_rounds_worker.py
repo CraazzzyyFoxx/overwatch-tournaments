@@ -57,6 +57,7 @@ class SwissRoundWorkerTests(IsolatedAsyncioTestCase):
                 "_create_encounters_from_skeleton",
                 AsyncMock(return_value=generated),
             ),
+            patch.object(swiss_rounds, "lifecycle_notifier", AsyncMock()),
         ):
             result = await swiss_rounds.swiss_rounds_service.generate_next_swiss_round(
                 session,

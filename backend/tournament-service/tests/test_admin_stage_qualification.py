@@ -119,8 +119,9 @@ class QualificationBoundaryTieTests(IsolatedAsyncioTestCase):
 
     async def _activate(self, standings: list) -> SimpleNamespace:
         stage = _playoff([_tentative(slot=1, source_position=1)])
-        # 1: the sibling-stage deactivation UPDATE, 2: the standings SELECT.
-        session = _session([[], standings])
+        # 1: the sibling-stage deactivation UPDATE, 2: the standings SELECT,
+        # 3: the published stage's ready encounters.
+        session = _session([[], standings, []])
         with patch.object(service, "_publish_structure_changed", AsyncMock()):
             await service.activate_stage(session, stage.id, stage=stage)
         return stage
@@ -157,7 +158,7 @@ class QualificationBoundaryTieTests(IsolatedAsyncioTestCase):
             _standing(stage_item_id=100, position=2, team_id=6, tie_group=3),
         ]
         stage = _playoff([_tentative(slot=1, source_position=2)])
-        session = _session([[], standings])
+        session = _session([[], standings, []])
         with patch.object(service, "_publish_structure_changed", AsyncMock()):
             await service.activate_stage(session, stage.id, stage=stage)
 
@@ -186,11 +187,7 @@ class DownstreamRequalificationTests(IsolatedAsyncioTestCase):
         sync = AsyncMock()
         with (
             patch.object(service, "get_stages_by_tournament", AsyncMock(return_value=[stage])),
-            patch.object(
-                stage_service.pick_ban_session_service,
-                "sync_all_pick_ban_sessions_after_team_change",
-                sync,
-            ),
+            patch.object(stage_service, "after_encounter_teams_changed", sync),
         ):
             applied = await service.requalify_downstream_inputs(session, 99)
 
@@ -221,11 +218,7 @@ class DownstreamRequalificationTests(IsolatedAsyncioTestCase):
         )
         with (
             patch.object(service, "get_stages_by_tournament", AsyncMock(return_value=[stage])),
-            patch.object(
-                stage_service.pick_ban_session_service,
-                "sync_all_pick_ban_sessions_after_team_change",
-                AsyncMock(),
-            ),
+            patch.object(stage_service, "after_encounter_teams_changed", AsyncMock()),
         ):
             applied = await service.requalify_downstream_inputs(session, 99)
 

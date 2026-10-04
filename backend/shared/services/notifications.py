@@ -194,12 +194,18 @@ class TournamentPhaseOpenedPayload(_Payload):
 
 
 class EncounterScheduledPayload(_Payload):
+    """A match both rosters can now prepare for. ``scheduled_at`` is absent
+    while the organizer has not given the match a time -- "you play X, time
+    TBD" is still the news -- and ``pick_ban`` says whether the room the
+    message links to runs a pick-ban."""
+
     encounter_id: int
     tournament_id: int
     tournament_name: str
     home_team_name: str
     away_team_name: str
-    scheduled_at: datetime
+    scheduled_at: datetime | None = None
+    pick_ban: bool = False
 
 
 class AnnouncementText(_Payload):

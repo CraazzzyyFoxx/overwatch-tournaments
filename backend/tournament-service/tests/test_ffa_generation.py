@@ -55,6 +55,7 @@ def _ffa_stage(items: list[SimpleNamespace], **regulation) -> SimpleNamespace:
         tournament_id=1,
         stage_type=enums.StageType.FFA_LEAGUE,
         items=items,
+        is_published=False,
     )
 
 

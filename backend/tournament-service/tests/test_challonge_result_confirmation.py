@@ -237,11 +237,7 @@ class CompletingAnExistingOpenMatch(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=sync.StageRefs(stage_id=None, stage_item_id=None)),
             ),
             patch.object(sync.sync_service.mapping, "_ensure_match_mapping", AsyncMock()),
-            patch.object(
-                sync.pick_ban_session_service,
-                "sync_all_pick_ban_sessions_after_team_change",
-                AsyncMock(),
-            ),
+            patch.object(sync, "after_encounter_teams_changed", AsyncMock()),
             patch.object(sync.finalize_service, "finalize_encounter_score", AsyncMock()) as finalize,
             patch.object(sync, "record_result_transition"),
         ):
