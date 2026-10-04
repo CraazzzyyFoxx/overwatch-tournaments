@@ -671,6 +671,12 @@ services:
   # 1.50 per replica rather than the old 3.00: a single event loop cannot spend
   # three cores, and three replicas at the old ceiling would have oversubscribed
   # this 8-core box badly enough to starve nginx and the gateway under load.
+  #
+  # 1G per replica rather than 2GB. Normal working set is 100-400 MB; the
+  # 2026-09-30 flood took a replica to 1.23 GB and the host (12.5 GB, ~27 GB of
+  # container limits) into full swap before any limit was near. A replica that
+  # passes 1G now restarts on its own instead of swapping the host. Node 22 sizes
+  # its heap to half the cgroup limit (549 MB at 1G), the rest is native memory.
   frontend:
     image: ghcr.io/craazzzyyfoxx/owt-frontend:${IMAGE_TAG:-latest}
     logging: *log-rotate
@@ -679,7 +685,7 @@ services:
       resources:
         limits:
           cpus: '1.50'
-          memory: 2GB
+          memory: 1G
         reservations:
           cpus: '0.25'
           memory: 256M
