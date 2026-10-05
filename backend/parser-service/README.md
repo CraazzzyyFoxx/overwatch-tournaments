@@ -75,7 +75,7 @@ The full method list with request/response schemas is published at `/api/docs`, 
 | `process_tournament_logs` | `ProcessTournamentLogsEvent` | List a tournament's stored logs in S3 and fan out one `ProcessMatchLogEvent` per file |
 | `achievement_evaluate` | `AchievementEvaluateEvent` | Run the achievement engine for a workspace |
 | `achievement_evaluate.deferred` | `AchievementEvaluateEvent` | Resumes a `queued` run an unverified workspace's manual/`rule_version_bump` recompute was parked as; own channel, prefetch 1 |
-| `tournament_encounter_completed` | `EncounterCompletedEvent` | Bound to the `tournament.events` exchange; enqueues an achievement evaluation |
+| `tournament_encounter_completed` | `EncounterCompletedEvent` | Bound to the `tournament.events` exchange; fills in the encounter's Push/Clash map scores (`match_logs/objectiveless.py`), then enqueues an achievement evaluation |
 | `tournament_registration_approved` | — | Bound to the same exchange; prioritises and enqueues a rank check for the approved player |
 | `tournament_registration_rank_check` | `RegistrationRankCheckRequestedEvent` | Same rank check, asked for by the registrant from their own card |
 | `rank_fetch`, `rank_fetch_priority` | `FetchRankEvent` | One OverFast call per battle tag; shared channel with prefetch `RANK_FETCH_WORKER_PREFETCH` |

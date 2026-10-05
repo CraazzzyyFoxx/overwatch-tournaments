@@ -84,6 +84,7 @@ from src.services.match_logs import reaper as logs_reaper
 from src.services.match_logs import retention as logs_retention
 from src.services.match_logs import uploads as upload_service
 from src.services.match_logs.binary import binary_match_logs
+from src.services.match_logs.objectiveless import resolve_encounter_maps
 from src.services.match_logs.result_events import publish_match_log_result
 from src.services.overwatch_rank import scheduler as rank_scheduler
 from src.services.overwatch_rank import tasks as rank_tasks
@@ -410,6 +411,11 @@ async def process_tournament_encounter_completed(data: dict, msg: RabbitMessage)
             )
             if workspace_id is None:
                 raise RuntimeError(f"Tournament {event.tournament_id} not found")
+            # Before the achievement run below: it reads per-map winners, and a
+            # completed series is what decides a Push/Clash map by exclusion.
+            if await resolve_encounter_maps(session, event.encounter_id):
+                await logs_flows.enqueue_match_scores_changed(session, event.tournament_id, event.encounter_id)
+                await session.commit()
 
         achievement_event = AchievementEvaluateEvent(
             workspace_id=workspace_id,
