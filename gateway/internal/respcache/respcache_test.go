@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 )
 
 func testCache(t *testing.T) *Cache {
@@ -108,6 +110,42 @@ func TestAuthorizedRequestsBypassCache(t *testing.T) {
 	hit := doGet(h, "/api/v1/tournaments/72", "")
 	if hit.Body.String() != `{"n":1}` {
 		t.Fatalf("anonymous entry overwritten by authed pass: %q", hit.Body.String())
+	}
+}
+
+// stubBuilder stands in for edge.Dispatcher: every spec gets the counting
+// upstream.
+type stubBuilder struct{ calls *atomic.Int64 }
+
+func (b stubBuilder) Handler(edge.RouteSpec) http.HandlerFunc { return upstream(b.calls).ServeHTTP }
+
+// An AuthNone route never forwards identity, so RegisterCached grants it
+// AuthedRead: signed-in viewers of public aggregates share the anonymous
+// entry. An AuthOptional route with the same Rule keeps the full bypass.
+func TestRegisterCachedGrantsAuthedReadOnlyToAuthNone(t *testing.T) {
+	cases := []struct {
+		auth      edge.AuthMode
+		wantCache string
+		wantCalls int64
+	}{
+		{edge.AuthNone, "HIT", 1},
+		{edge.AuthOptional, "", 2},
+	}
+	for _, tc := range cases {
+		var calls atomic.Int64
+		mux := http.NewServeMux()
+		spec := edge.RouteSpec{Method: http.MethodGet, Pattern: "/api/v1/statistics/champion", Auth: tc.auth}
+		RegisterCached(mux, stubBuilder{&calls}, []edge.RouteSpec{spec},
+			map[string]Rule{spec.Pattern: {Extract: TTLOnly()}}, testCache(t))
+
+		doGet(mux, "/api/v1/statistics/champion", "") // anonymous seeds the entry
+		authed := doGet(mux, "/api/v1/statistics/champion", "Bearer tok")
+		if got := authed.Header().Get("X-Cache"); got != tc.wantCache {
+			t.Fatalf("auth=%v: X-Cache = %q, want %q", tc.auth, got, tc.wantCache)
+		}
+		if calls.Load() != tc.wantCalls {
+			t.Fatalf("auth=%v: upstream calls = %d, want %d", tc.auth, calls.Load(), tc.wantCalls)
+		}
 	}
 }
 

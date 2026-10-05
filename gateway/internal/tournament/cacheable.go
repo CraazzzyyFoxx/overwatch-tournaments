@@ -74,9 +74,12 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	// with its facet counters: cross-tournament aggregates with no invalidation
 	// handle — TTL-bounded staleness is the accepted trade (a tournament
 	// flipping live may take up to one TTL to surface on the home page). NO
-	// AuthedRead: the tournament list is visibility-filtered per viewer (hidden
-	// tournaments appear for eligible viewers), so the anonymous body is not
-	// universal — and the counters must agree with the list the same viewer sees.
+	// AuthedRead on the list and facets: the tournament list is
+	// visibility-filtered per viewer (hidden tournaments appear for eligible
+	// viewers), so the anonymous body is not universal — and the counters must
+	// agree with the list the same viewer sees. The statistics routes are
+	// AuthNone, so RegisterCached grants them AuthedRead (no identity reaches
+	// the handler).
 	"/api/v1/tournaments":                     {Extract: respcache.TTLOnly()},
 	"/api/v1/tournaments/facets":              {Extract: respcache.TTLOnly()},
 	"/api/v1/tournaments/statistics/history":  {Extract: respcache.TTLOnly()},

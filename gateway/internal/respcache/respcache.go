@@ -9,7 +9,10 @@
 // are one equivalence class — they all see exactly the public surface — so for
 // requests WITHOUT an Authorization header the same URL always means the same
 // response. Authenticated requests bypass the cache entirely, in both
-// directions. This mirrors ratelimit.WrapAnon's bearer-presence convention.
+// directions, unless the route grants Rule.AuthedRead — which every
+// edge.AuthNone route gets implicitly (RegisterCached): the dispatcher never
+// resolves or forwards an identity there, so the bearer cannot change the
+// body. This mirrors ratelimit.WrapAnon's bearer-presence convention.
 //
 // Why per-tournament invalidation works without new backend code: every
 // public-data-changing write in tournament-service lands (via the
@@ -256,10 +259,19 @@ type Rule struct {
 // RegisterCached wires specs onto the mux like edge.Dispatcher.Register, but
 // wraps every GET route that has a Rule in rules with the cache. With a nil
 // cache (disabled) it degrades to plain registration.
+//
+// An edge.AuthNone route always gets AuthedRead: the dispatcher forwards no
+// identity for it, so a bearer-carrying request reaches exactly the same
+// handler input as an anonymous one. Without the grant, every signed-in page
+// view of a public aggregate (home/statistics/workspace stats) bypassed the
+// cache and cost a full RPC.
 func RegisterCached(mux *http.ServeMux, b HandlerBuilder, specs []edge.RouteSpec, rules map[string]Rule, c *Cache) {
 	for _, s := range specs {
 		var h http.Handler = b.Handler(s)
 		if rule, ok := rules[s.Pattern]; ok && s.Method == http.MethodGet {
+			if s.Auth == edge.AuthNone {
+				rule.AuthedRead = true
+			}
 			h = c.Wrap(h, rule)
 		}
 		mux.Handle(s.Method+" "+s.Pattern, h)
