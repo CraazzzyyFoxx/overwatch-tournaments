@@ -41,6 +41,7 @@ from src.services.map import flows as map_flows
 from src.services.match_logs.binary import binary_match_logs
 from src.services.match_logs.event_models import KillEvent, MatchEventRow, PlayerStatRow
 from src.services.match_logs.limits import match_log_oversize_message
+from src.services.match_logs.objectiveless import resolve_encounter_maps
 from src.services.match_logs.realtime import emit_logs_updated
 from src.services.team import service as team_service
 from src.services.tournament import flows as tournament_flows
@@ -137,10 +138,7 @@ def _encounter_is_completed(encounter: models.Encounter) -> bool:
     return encounter.status == enums.EncounterStatus.COMPLETED
 
 
-async def _enqueue_match_log_tournament_events(
-    session: AsyncSession,
-    encounter: models.Encounter,
-) -> None:
+async def enqueue_match_scores_changed(session: AsyncSession, tournament_id: int, encounter_id: int) -> None:
     # A parsed log adds or replaces one map's observation under the encounter
     # (``has_logs``, the per-map reads). It does not move the encounter's score:
     # EncounterGame and finalize own that since encgame01. Both halves of the
@@ -148,19 +146,26 @@ async def _enqueue_match_log_tournament_events(
     # outbox row for tournament-service and app-service, which cache the same
     # reads and cannot rely on Redis pub/sub's at-most-once delivery.
     invalidated = (Resource.TOURNAMENT_ENCOUNTERS, Resource.TOURNAMENT_STANDINGS)
-    scope = Scope.tournament(encounter.tournament_id)
-    await emit(session, scope=scope, invalidates=list(invalidated), entity_ids={"encounter_ids": [encounter.id]})
+    scope = Scope.tournament(tournament_id)
+    await emit(session, scope=scope, invalidates=list(invalidated), entity_ids={"encounter_ids": [encounter_id]})
     await enqueue_invalidation_outbox(session, scope=scope, resources=invalidated)
 
     await enqueue_outbox_event(
         session,
         TournamentStandingsInvalidatedEvent(
-            tournament_id=encounter.tournament_id,
+            tournament_id=tournament_id,
             source_service="parser-service",
         ),
         exchange=TOURNAMENT_EVENTS_EXCHANGE,
         routing_key="tournament.standings.invalidated",
     )
+
+
+async def _enqueue_match_log_tournament_events(
+    session: AsyncSession,
+    encounter: models.Encounter,
+) -> None:
+    await enqueue_match_scores_changed(session, encounter.tournament_id, encounter.id)
 
     if not _encounter_is_completed(encounter):
         return
@@ -1145,6 +1150,10 @@ class MatchLogProcessor:
                 match_model.log_record_id = self.log_record_id
             await _match_repo.create(session, match_model)
             logger.info(f"Match updated [id={match_model.id}] for log {self.filename}")
+
+        # The log just written is either a Push/Clash map with no result of its
+        # own, or the last map that lets one be decided by exclusion.
+        await resolve_encounter_maps(session, encounter.id)
 
         logger.info(f"Clearing existing stats/events/kills for match {match_model.id}")
         await _stats_repo.delete_for_match(session, match_model.id)

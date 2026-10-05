@@ -183,6 +183,7 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
                 flows.encounter_service, "get_match_by_encounter_and_map", AsyncMock(return_value=match_model)
             ),
             patch.object(flows, "_enqueue_match_log_tournament_events", AsyncMock()),
+            patch.object(flows, "resolve_encounter_maps", AsyncMock(return_value=False)),
             patch.object(flows.catalog_aliases, "record_misses", fake_record),
         ):
             await processor.start(session)
@@ -231,6 +232,7 @@ class HeroMissFlushTests(IsolatedAsyncioTestCase):
                 flows.encounter_service, "get_match_by_encounter_and_map", AsyncMock(return_value=match_model)
             ),
             patch.object(flows, "_enqueue_match_log_tournament_events", AsyncMock()),
+            patch.object(flows, "resolve_encounter_maps", AsyncMock(return_value=False)),
             patch.object(flows.catalog_aliases, "record_misses", record_misses),
         ):
             await processor.start(session)

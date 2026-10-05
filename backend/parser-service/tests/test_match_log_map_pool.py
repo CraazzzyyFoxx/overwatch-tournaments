@@ -96,6 +96,7 @@ class MatchLogMapPoolTests(IsolatedAsyncioTestCase):
                     patch.object(repo, "delete_for_match", AsyncMock(side_effect=lambda *args: writes.append("delete")))
                 )
             stack.enter_context(patch.object(flows, "_bulk_insert", AsyncMock()))
+            stack.enter_context(patch.object(flows, "resolve_encounter_maps", AsyncMock(return_value=False)))
             stack.enter_context(patch.object(flows, "_enqueue_match_log_tournament_events", AsyncMock()))
             try:
                 result = await processor.start(session)
