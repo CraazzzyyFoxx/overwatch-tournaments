@@ -819,6 +819,12 @@ services:
     environment:
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      # Ties events and OTel spans (service.version) to the deployed image.
+      - SENTRY_RELEASE=gateway@${IMAGE_TAG:-latest}
+      # Go's GC does not see the cgroup memory limit (GOMAXPROCS does track the
+      # CPU limit since Go 1.25): without this the heap grows unchecked to the
+      # 768M limit under a flood and the container is OOM-killed. ~85% of it.
+      - GOMEMLIMIT=640MiB
       # OpenTelemetry tracing into Alloy (same block as the Python services),
       # so gateway spans join the distributed traces in Tempo and Sentry.
       - TRACING_ENABLED=${TRACING_ENABLED:-true}
