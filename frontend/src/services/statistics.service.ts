@@ -11,9 +11,12 @@ import { PaginatedResponse } from "@/types/pagination.types";
 // move when a tournament or a parsed log lands, not per request. Server-side
 // reads are held in the Next Data Cache for this long (seconds), so a homepage
 // or /statistics render that misses the nginx cache costs a React render, not
-// six gateway round-trips. The Data Cache key includes the URL (workspace_id)
-// and the request headers (Authorization), so tenants and signed-in viewers
-// never share an entry. Client (react-query) fetches ignore the `next` option.
+// a gateway round-trip per section. Every route here is edge.AuthNone (the
+// gateway forwards no identity), so the body is the same for every viewer:
+// skipAuth keeps Authorization out of the request and out of the Data Cache
+// key, leaving one entry per URL (workspace_id). With the bearer in the key, a
+// forged session cookie minted a fresh entry on every render. Client
+// (react-query) fetches ignore the `next` option.
 const STATS_TTL_SECONDS = 60;
 
 interface StatsOpts {
@@ -24,6 +27,7 @@ interface StatsOpts {
 function buildWorkspaceOpts(opts?: StatsOpts) {
   return {
     skipWorkspace: opts?.skipWorkspace,
+    skipAuth: true,
     query: opts?.workspaceId != null ? { workspace_id: opts.workspaceId } : undefined,
     next: { revalidate: STATS_TTL_SECONDS },
   };
