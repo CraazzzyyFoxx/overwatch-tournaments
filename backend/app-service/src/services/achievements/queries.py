@@ -153,9 +153,7 @@ class AchievementQueries:
         catalogue does for the same rule.
         """
         rarity_subq = (
-            get_rarity_subq(merge_slugs=True)
-            if merge_slugs
-            else get_rarity_subq(workspace_id=workspace_id, rule_id=id)
+            get_rarity_subq(merge_slugs=True) if merge_slugs else get_rarity_subq(workspace_id=workspace_id, rule_id=id)
         )
 
         query = (
@@ -320,7 +318,9 @@ class AchievementQueries:
         rule_ids = [rule_id]
         if merge_slugs:
             slug = sa.select(AchievementRule.slug).where(AchievementRule.id == rule_id).scalar_subquery()
-            copies = sa.select(AchievementRule.id).where(AchievementRule.slug == slug, AchievementRule.enabled.is_(True))
+            copies = sa.select(AchievementRule.id).where(
+                AchievementRule.slug == slug, AchievementRule.enabled.is_(True)
+            )
             # Never empty: an empty id list would read as "no rule filter".
             rule_ids = list((await session.execute(copies)).scalars()) or rule_ids
         effective_rows = _effective_rows_subq(rule_ids=rule_ids, name="rule_users_effective_rows")
