@@ -25,27 +25,6 @@ class AchievementService:
     def __init__(self, *, queries: AchievementQueries = achievement_queries) -> None:
         self.queries = queries
 
-    async def to_achievement_read(
-        self,
-        session: AsyncSession,
-        rule: AchievementRule,
-        rarity: float,
-        entities: list[str],
-    ) -> schemas.AchievementRead:
-        hero = None
-        count = None
-        if "hero" in entities and rule.hero:
-            hero = hero_service.to_read(rule.hero)
-        if "count" in entities:
-            count = await self.queries.get_count_users(session, [rule.id])
-
-        return schemas.AchievementRead(
-            **rule.to_dict(),
-            rarity=rarity or 0.0,
-            hero=hero,
-            count=count.get(rule.id) if count else None,
-        )
-
     async def bulk_to_achievement_read(
         self,
         session: AsyncSession,
@@ -87,8 +66,12 @@ class AchievementService:
         achievement_id: int,
         entities: list[str],
         workspace_id: int | None = None,
+        *,
+        merge_slugs: bool = False,
     ) -> schemas.AchievementRead:
-        result = await self.queries.get(session, achievement_id, entities, workspace_id=workspace_id)
+        result = await self.queries.get(
+            session, achievement_id, entities, workspace_id=workspace_id, merge_slugs=merge_slugs
+        )
 
         if not result:
             raise errors.ApiHTTPException(
@@ -101,7 +84,7 @@ class AchievementService:
                 ],
             )
 
-        return await self.to_achievement_read(session, result[0], result[1], entities)
+        return (await self.bulk_to_achievement_read(session, [result], entities, merge_slugs=merge_slugs))[0]
 
     async def get_all(
         self,
@@ -214,8 +197,10 @@ class AchievementService:
         session: AsyncSession,
         rule_id: int,
         params: pagination.PaginationParams,
+        *,
+        merge_slugs: bool = False,
     ) -> pagination.Paginated[schemas.AchievementEarned]:
-        users, total = await self.queries.get_users_for_rule(session, rule_id, params)
+        users, total = await self.queries.get_users_for_rule(session, rule_id, params, merge_slugs=merge_slugs)
         results: list[schemas.AchievementEarned] = []
         tournament_to_fetch: list[int] = []
         matches_to_fetch: list[int] = []

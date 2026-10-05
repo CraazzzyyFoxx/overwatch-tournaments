@@ -20,7 +20,7 @@ import { PaginatedResponse } from "@/types/pagination.types";
 const STATS_TTL_SECONDS = 60;
 
 interface StatsOpts {
-  workspaceId?: number;
+  workspaceId?: number | "all";
   skipWorkspace?: boolean;
 }
 

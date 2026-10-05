@@ -14,5 +14,5 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 var AchievementsSubtreeRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/achievements/user/{user_id}", Queue: "rpc.app.achievements.user", IDParam: "user_id", AllQuery: true, Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/achievements/{id}/users", Queue: "rpc.app.achievements.users", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},
-	{Method: "GET", Pattern: "/api/v1/achievements/{id}", Queue: "rpc.app.read.get", Entity: "achievement", Action: "get", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/achievements/{id}", Queue: "rpc.app.read.get", Entity: "achievement", Action: "get", IDParam: "id", Query: []string{"entities", "workspace_id"}, Auth: edge.AuthNone},
 }

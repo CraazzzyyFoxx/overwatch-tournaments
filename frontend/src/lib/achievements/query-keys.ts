@@ -7,8 +7,8 @@ import type { KeyPart } from "@/lib/query-keys";
  * stales the public list, and a key spelled twice is a list that never updates.
  */
 export const achievementQueryKeys = {
-  users: (achievementId: KeyPart, page: KeyPart) =>
-    ["achievement", "users", achievementId, page] as const,
+  users: (achievementId: KeyPart, scope: KeyPart, page: KeyPart) =>
+    ["achievement", "users", achievementId, scope, page] as const,
   all: (workspaceId: KeyPart) => ["achievements", "all", workspaceId] as const,
   conditionTypes: (workspaceId: KeyPart) =>
     ["admin", "achievement-condition-types", workspaceId] as const,

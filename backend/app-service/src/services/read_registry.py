@@ -21,6 +21,7 @@ from shared.models.achievements.achievement import AchievementRule
 from shared.repository import GamemodeRepository
 from shared.rpc.crud import CrudDispatcher, EntityConfig
 from shared.rpc.query import build_query_model
+from shared.services.workspace_scope import ALL_WORKSPACES
 from src import models, schemas
 from src.core import db, errors, pagination
 from src.rpc import _common as c
@@ -121,7 +122,11 @@ async def gamemode_lookup(session: AsyncSession) -> list[schemas.LookupItem]:
 
 # --- achievement -------------------------------------------------------------
 async def _achievement_get(session: AsyncSession, obj_id: int, data: dict[str, Any]) -> Any:
-    return await achievement_service.get(session, obj_id, _entities(data))
+    # `workspace_id=all` is the catalogue's cross-workspace view, which lists one
+    # representative per slug with pooled numbers; the detail has to agree.
+    return await achievement_service.get(
+        session, obj_id, _entities(data), merge_slugs=c.q_workspace_scope(data) is ALL_WORKSPACES
+    )
 
 
 async def _achievement_list(session: AsyncSession, data: dict[str, Any]) -> Any:

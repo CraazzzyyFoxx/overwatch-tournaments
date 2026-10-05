@@ -21,10 +21,10 @@ export const encounterQueryKeys = {
     ["encounter", encounterId, "pick-ban-state", "map"] as const,
   captainReports: (encounterId: KeyPart) => ["encounter", encounterId, "reports"] as const,
   detailRoot: () => ["encounter"] as const,
-  list: (page: KeyPart, filters: unknown, query: KeyPart) =>
-    ["encounters-list", page, filters, query] as const,
-  overview: (filters: unknown, query: KeyPart) =>
-    ["encounters-overview", filters, query] as const,
+  list: (workspaceId: KeyPart, page: KeyPart, filters: unknown, query: KeyPart) =>
+    ["encounters-list", workspaceId, page, filters, query] as const,
+  overview: (workspaceId: KeyPart, filters: unknown, query: KeyPart) =>
+    ["encounters-overview", workspaceId, filters, query] as const,
   savedViews: (workspaceId: KeyPart, userKey: KeyPart) =>
     ["encounters-saved-views", workspaceId, userKey] as const,
   tournamentsLookup: (workspaceId: KeyPart) =>

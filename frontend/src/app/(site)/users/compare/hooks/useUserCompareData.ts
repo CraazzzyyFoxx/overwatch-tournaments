@@ -20,6 +20,8 @@ import {
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
 import { useMapsCatalog } from "@/hooks/useMapsCatalog";
+import { useWorkspaceStore } from "@/stores/workspace.store";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 interface UseUserCompareDataParams {
   isHeroScope: boolean;
@@ -33,6 +35,7 @@ interface UseUserCompareDataParams {
   leftHeroId?: number;
   rightHeroId?: number;
   mapId?: number;
+  scope: StatsScope;
 }
 
 export const useUserCompareData = ({
@@ -46,7 +49,8 @@ export const useUserCompareData = ({
   tournamentId,
   leftHeroId,
   rightHeroId,
-  mapId
+  mapId,
+  scope
 }: UseUserCompareDataParams) => {
   const t = useTranslations();
 
@@ -67,9 +71,11 @@ export const useUserCompareData = ({
   const heroesQuery = useHeroesCatalog({ enabled: shouldLoadHeroCatalogs(isHeroScope) });
   const mapsQuery = useMapsCatalog({ enabled: shouldLoadHeroCatalogs(isHeroScope) });
 
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const pickerWorkspaceId = scope === "all" ? "all" : currentWorkspaceId;
   const tournamentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.selectOptions(),
-    queryFn: () => tournamentService.getAll(),
+    queryKey: tournamentQueryKeys.selectOptions(pickerWorkspaceId),
+    queryFn: () => tournamentService.getAll(null, pickerWorkspaceId),
     staleTime: 5 * 60 * 1000
   });
 

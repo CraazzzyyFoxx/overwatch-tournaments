@@ -144,9 +144,19 @@ class AchievementQueries:
         id: int,
         entities: list[str],
         workspace_id: int | None = None,
+        *,
+        merge_slugs: bool = False,
     ) -> tuple[AchievementRule, float] | None:
-        """Retrieve a single achievement rule by ID with rarity."""
-        rarity_subq = get_rarity_subq(workspace_id=workspace_id, rule_id=id)
+        """Retrieve a single achievement rule by ID with rarity.
+
+        ``merge_slugs`` reports the slug's pooled rarity, as the cross-workspace
+        catalogue does for the same rule.
+        """
+        rarity_subq = (
+            get_rarity_subq(merge_slugs=True)
+            if merge_slugs
+            else get_rarity_subq(workspace_id=workspace_id, rule_id=id)
+        )
 
         query = (
             sa.select(AchievementRule, rarity_subq.c.rarity)
@@ -300,12 +310,20 @@ class AchievementQueries:
         session: AsyncSession,
         rule_id: int,
         params: pagination.PaginationParams,
+        *,
+        merge_slugs: bool = False,
     ) -> tuple[list[tuple[models.User, int, int | None, int | None]], int]:
-        """Paginated list of users who earned a specific achievement."""
-        effective_rows = _effective_rows_subq(
-            rule_ids=[rule_id],
-            name="rule_users_effective_rows",
-        )
+        """Paginated list of users who earned a specific achievement.
+
+        ``merge_slugs`` pools the earners of every enabled copy of the rule's slug.
+        """
+        rule_ids = [rule_id]
+        if merge_slugs:
+            slug = sa.select(AchievementRule.slug).where(AchievementRule.id == rule_id).scalar_subquery()
+            copies = sa.select(AchievementRule.id).where(AchievementRule.slug == slug, AchievementRule.enabled.is_(True))
+            # Never empty: an empty id list would read as "no rule filter".
+            rule_ids = list((await session.execute(copies)).scalars()) or rule_ids
+        effective_rows = _effective_rows_subq(rule_ids=rule_ids, name="rule_users_effective_rows")
 
         total_query = sa.select(sa.func.count(sa.distinct(effective_rows.c.user_id)))
 

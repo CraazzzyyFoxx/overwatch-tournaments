@@ -38,7 +38,7 @@ function tournamentFilterQuery(params: TournamentFilterParams): Record<string, u
 
 export default class tournamentService {
   static async lookup(
-    workspaceId?: number | null,
+    workspaceId?: number | "all" | null,
     isLeague?: boolean | null
   ): Promise<LookupItem[]> {
     return apiFetch("/api/v1/tournaments/lookup", {
@@ -51,7 +51,7 @@ export default class tournamentService {
 
   static async getAll(
     isLeague: boolean | null = null,
-    workspaceId?: number | null
+    workspaceId?: number | "all" | null
   ): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
       query: {
@@ -78,7 +78,7 @@ export default class tournamentService {
    * value and would match nothing.
    */
   static async listTournaments(params: {
-    workspaceId?: number | null;
+    workspaceId?: number | "all" | null;
     status?: TournamentStatus | null;
     isLeague?: boolean | null;
     query?: string;
@@ -104,7 +104,7 @@ export default class tournamentService {
 
   /** Counts for the filter chips of the list above, under the same filters. */
   static async getFacets(params: {
-    workspaceId?: number | null;
+    workspaceId?: number | "all" | null;
     status?: TournamentStatus | null;
     isLeague?: boolean | null;
     query?: string;

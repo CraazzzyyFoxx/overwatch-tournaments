@@ -8,6 +8,7 @@ import tournamentService from "@/services/tournament.service";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { LookupItem, PaginatedResponse } from "@/types/pagination.types";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import type { Encounter, EncounterOverview } from "@/types/encounter.types";
 
 import { ENCOUNTERS_PAGE_SIZE, filtersToApiFilters, type EncounterFilterState } from "./encounters.helpers";
@@ -19,6 +20,7 @@ export interface EncountersDataInput {
   initialPage: number;
   effectiveFilters: EncounterFilterState;
   page: number;
+  scope: StatsScope;
 }
 
 export interface EncountersData {
@@ -39,14 +41,17 @@ export function useEncountersData({
   initialFilters,
   initialPage,
   effectiveFilters,
-  page
+  page,
+  scope
 }: EncountersDataInput): EncountersData {
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+  // One value carries the workspace dimension of every read and its cache key.
+  const workspaceId = scope === "all" ? "all" : currentWorkspaceId;
   const apiFilters = useMemo(() => filtersToApiFilters(effectiveFilters), [effectiveFilters]);
   const matchesInitial = JSON.stringify(effectiveFilters) === JSON.stringify(initialFilters);
 
   const listQuery = useQuery({
-    queryKey: encounterQueryKeys.list(page, apiFilters, effectiveFilters.query),
+    queryKey: encounterQueryKeys.list(workspaceId, page, apiFilters, effectiveFilters.query),
     queryFn: () =>
       encounterService.getAll(
         page,
@@ -55,7 +60,7 @@ export function useEncountersData({
         ENCOUNTERS_PAGE_SIZE,
         apiFilters.sort ?? "id",
         "desc",
-        currentWorkspaceId,
+        workspaceId,
         {
           ...apiFilters,
           entities: [
@@ -74,17 +79,16 @@ export function useEncountersData({
   });
 
   const overviewQuery = useQuery({
-    queryKey: encounterQueryKeys.overview(apiFilters, effectiveFilters.query),
-    queryFn: () =>
-      encounterService.getOverview(effectiveFilters.query, apiFilters, currentWorkspaceId),
+    queryKey: encounterQueryKeys.overview(workspaceId, apiFilters, effectiveFilters.query),
+    queryFn: () => encounterService.getOverview(effectiveFilters.query, apiFilters, workspaceId),
     initialData: matchesInitial ? initialOverview : undefined,
     placeholderData: (previous) => previous,
     retry: 1
   });
 
   const tournamentsLookupQuery = useQuery({
-    queryKey: encounterQueryKeys.tournamentsLookup(currentWorkspaceId),
-    queryFn: () => tournamentService.lookup(currentWorkspaceId),
+    queryKey: encounterQueryKeys.tournamentsLookup(workspaceId),
+    queryFn: () => tournamentService.lookup(workspaceId),
     staleTime: 5 * 60_000,
     retry: 1
   });
