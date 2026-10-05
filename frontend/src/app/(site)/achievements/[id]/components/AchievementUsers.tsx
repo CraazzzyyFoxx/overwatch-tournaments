@@ -13,16 +13,17 @@ import TeamName from "@/components/TeamName";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 const PER_PAGE = 30;
 
-const AchievementUsers = ({ achievement }: { achievement: Achievement }) => {
+const AchievementUsers = ({ achievement, scope }: { achievement: Achievement; scope: StatsScope }) => {
   const t = useTranslations();
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: achievementQueryKeys.users(achievement.id, page),
-    queryFn: () => achievementsService.getUsers(achievement.id, page, PER_PAGE),
+    queryKey: achievementQueryKeys.users(achievement.id, scope, page),
+    queryFn: () => achievementsService.getUsers(achievement.id, page, PER_PAGE, scope),
     placeholderData: keepPreviousData
   });
 

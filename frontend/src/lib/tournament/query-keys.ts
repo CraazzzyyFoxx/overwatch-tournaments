@@ -53,11 +53,11 @@ export const tournamentQueryKeys = {
     ["ffa", tournamentId, "stage", stageId, "admin"] as const,
   /** That shared prefix, for the writes that move every lobby of a tournament. */
   ffaAll: (tournamentId: number) => ["ffa", tournamentId] as const,
-  encountersOverview: (workspaceId?: number | null) =>
+  encountersOverview: (workspaceId?: number | "all" | null) =>
     workspaceId == null
       ? (["encounters", "overview"] as const)
       : (["encounters", "overview", workspaceId] as const),
-  overallStatistics: (workspaceId?: number | null) =>
+  overallStatistics: (workspaceId?: number | "all" | null) =>
     workspaceId == null
       ? (["statistics", "overall"] as const)
       : (["statistics", "overall", workspaceId] as const),
@@ -147,8 +147,8 @@ export const tournamentQueryKeys = {
   /** The workspace's own slice, or the platform-wide one under `"global"`. */
   byWorkspace: (workspaceScope: KeyPart) => ["tournaments", workspaceScope] as const,
   allActive: () => ["tournaments", "all-active"] as const,
-  /** The picker feed: every tournament, name-sorted, no paging. */
-  selectOptions: () => ["tournaments-select-options"] as const,
+  /** The picker feed: every tournament of the workspace (or of all, `"all"`), no paging. */
+  selectOptions: (workspaceId: KeyPart) => ["tournaments-select-options", workspaceId] as const,
   overview: (tournamentId: KeyPart) => ["tournament-overview", tournamentId] as const,
   /** The bare `detail` prefix: every tournament's overview at once. */
   detailRoot: () => ["tournament"] as const,

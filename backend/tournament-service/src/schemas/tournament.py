@@ -2,7 +2,9 @@ import typing
 from dataclasses import dataclass
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator
+
+from shared.services.workspace_scope import ALL_WORKSPACES
 
 from src.core import enums, pagination
 from src.schemas.admin.tournament_link import TournamentLinkRead
@@ -19,6 +21,16 @@ __all__ = (
     "TournamentFacets",
     "TournamentFacetsQueryParams",
 )
+
+
+def _every_workspace_is_unfiltered(value: typing.Any) -> typing.Any:
+    return None if value == ALL_WORKSPACES.value else value
+
+
+#: ``workspace_id`` filter of the public list reads: an id narrows, while absent
+#: and ``all`` (the cross-workspace opt-in the other reads accept) mean every
+#: workspace.
+WorkspaceFilter = typing.Annotated[int | None, BeforeValidator(_every_workspace_is_unfiltered)]
 
 
 class TournamentPhaseScheduleRead(BaseModel):
@@ -98,7 +110,7 @@ class TournamentPaginationSortSearchQueryParams(
     ]
 ):
     is_league: bool | None = None
-    workspace_id: int | None = None
+    workspace_id: WorkspaceFilter = None
     status: enums.TournamentStatus | None = None
 
 
@@ -132,7 +144,7 @@ class TournamentFacetsQueryParams(BaseModel):
     minus pagination and sorting: counting a facet consumes no page.
     """
 
-    workspace_id: int | None = None
+    workspace_id: WorkspaceFilter = None
     status: enums.TournamentStatus | None = None
     is_league: bool | None = None
     query: str = ""

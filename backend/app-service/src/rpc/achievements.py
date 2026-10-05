@@ -12,6 +12,7 @@ from typing import Any
 from faststream.rabbit import RabbitMessage
 
 from shared.rpc.query import build_query_model
+from shared.services.workspace_scope import ALL_WORKSPACES
 from src.core import db, errors, pagination
 from src.rpc import _common as c
 from src.services.achievements.service import achievements as achievement_service
@@ -25,7 +26,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             qp = build_query_model(pagination.PaginationQueryParams, data.get("query"))
             return await achievement_service.get_achievement_users(
-                session, c.require_id(data), pagination.PaginationParams.from_query_params(qp)
+                session,
+                c.require_id(data),
+                pagination.PaginationParams.from_query_params(qp),
+                merge_slugs=c.q_workspace_scope(data) is ALL_WORKSPACES,
             )
 
         return await c.envelope(logger, "achievements.users", op, session_factory=_SF)

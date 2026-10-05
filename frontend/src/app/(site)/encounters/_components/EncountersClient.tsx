@@ -7,6 +7,7 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { EncountersDataTable, FULL_ENCOUNTER_COLUMNS } from "@/components/EncountersTable";
 import type { PaginatedResponse } from "@/types/pagination.types";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import type { Encounter, EncounterOverview } from "@/types/encounter.types";
 
 import { ENCOUNTERS_PAGE_SIZE, type EncounterFilterState } from "./encounters.helpers";
@@ -27,6 +28,7 @@ type EncountersClientProps = {
   initialFilters: EncounterFilterState;
   initialPage: number;
   initialError?: string | null;
+  scope: StatsScope;
 };
 
 /**
@@ -39,7 +41,8 @@ export default function EncountersClient({
   initialOverview,
   initialFilters,
   initialPage,
-  initialError
+  initialError,
+  scope
 }: Readonly<EncountersClientProps>) {
   const t = useTranslations();
   const format = useFormatter();
@@ -51,7 +54,8 @@ export default function EncountersClient({
     initialFilters,
     initialPage,
     effectiveFilters,
-    page
+    page,
+    scope
   });
 
   const overview = overviewQuery.data ?? initialOverview;

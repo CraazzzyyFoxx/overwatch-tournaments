@@ -163,8 +163,6 @@
       "registrationBlocked": "You cannot sign up yet: an active subscription is required ({rule}). Subscribe with the account linked to your profile, then reload this form."
     },
     "scope": {
-      "toggle": "Stats across all workspaces",
-      "hint": "Players, heroes, achievements",
       "all": "All workspaces"
     },
     "divisionWithId": "Division {id}",

@@ -24,10 +24,13 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/respcache"
 //   - /workspaces/by-host — feeds tenant-origin resolution (middleware/SSO
 //     paths); correctness there must never lag an admin domain change.
 var PublicCacheableReads = map[string]respcache.Rule{
-	// Home page: communities section + champions / top-winrate cards.
+	// Home page: communities section + champions / top-winrate cards, plus the
+	// /statistics won-maps table. The statistics routes are AuthNone, so
+	// RegisterCached also serves signed-in viewers from these entries.
 	"/api/v1/workspaces":          {Extract: respcache.TTLOnly()},
 	"/api/v1/statistics/champion": {Extract: respcache.TTLOnly()},
 	"/api/v1/statistics/winrate":  {Extract: respcache.TTLOnly()},
+	"/api/v1/statistics/won-maps": {Extract: respcache.TTLOnly()},
 	// /users/[slug] page: slug resolution + every profile tab. NO AuthedRead:
 	// several reads are AuthOptional (heroes, maps, tournaments) — the viewer
 	// reaches the handler, so viewer-agnostic bodies are not guaranteed.

@@ -62,7 +62,7 @@ export default class encounterService {
     perPage: number = 15,
     sort: string | null = null,
     order: "asc" | "desc" = "desc",
-    workspaceId?: number | null,
+    workspaceId?: number | "all" | null,
     filters: EncounterFilters & { entities?: string[] } = {}
   ): Promise<PaginatedResponse<Encounter>> {
     const { entities, ...restFilters } = filters;
@@ -85,7 +85,7 @@ export default class encounterService {
   static async getOverview(
     query: string,
     filters: EncounterFilters = {},
-    workspaceId?: number | null
+    workspaceId?: number | "all" | null
   ): Promise<EncounterOverview> {
     return apiFetch(`/api/v1/encounters/overview`, {
       query: {

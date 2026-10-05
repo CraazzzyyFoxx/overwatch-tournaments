@@ -181,9 +181,8 @@ export default function WorkspaceSwitcher() {
           <div className="my-1 h-px bg-border" />
           <div className="flex items-center gap-2.5 px-2 py-1.5">
             <Globe2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <label htmlFor={statsScopeId} className="min-w-0 flex-1 cursor-pointer">
-              <span className="block text-sm">{t("common.scope.toggle")}</span>
-              <span className="block text-xs text-muted-foreground">{t("common.scope.hint")}</span>
+            <label htmlFor={statsScopeId} className="min-w-0 flex-1 cursor-pointer truncate text-sm">
+              {t("common.scope.all")}
             </label>
             <Switch
               id={statsScopeId}

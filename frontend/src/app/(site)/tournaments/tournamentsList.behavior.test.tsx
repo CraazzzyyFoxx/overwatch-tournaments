@@ -82,7 +82,8 @@ vi.mock("next/link", () => ({
   )
 }));
 
-import TournamentsPage from "./page";
+import TournamentsClient from "./components/TournamentsClient";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 /**
  * Every field spelled out rather than cast into place: `tsconfig.json` excludes
@@ -164,17 +165,17 @@ async function settle(turns = 6, delayMs = 0) {
   }
 }
 
-function Harness() {
+function Harness({ scope }: Readonly<{ scope: StatsScope }>) {
   const [, force] = useState(0);
   // Published from an effect, not during render: writing a module-scope binding
   // while rendering is a side effect the react-compiler rules reject.
   useEffect(() => {
     rerender = () => force((value) => value + 1);
   }, []);
-  return <TournamentsPage />;
+  return <TournamentsClient scope={scope} />;
 }
 
-async function mount(search = "") {
+async function mount(search = "", scope: StatsScope = "workspace") {
   window.history.replaceState(null, "", `/tournaments${search}`);
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -185,7 +186,7 @@ async function mount(search = "") {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en}>
-          <Harness />
+          <Harness scope={scope} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -415,5 +416,15 @@ describe("tournaments list", () => {
       node.textContent?.trim().startsWith(en.tournamentsList.hero.liveNow)
     );
     expect(liveStat?.textContent).toContain("3");
+  });
+
+  it("reads every workspace when the visitor chose all workspaces", async () => {
+    const container = await mount("", "all");
+
+    expect(listCalls()).toEqual([expect.objectContaining({ workspaceId: "all" })]);
+    expect(getFacets).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "all" }));
+    expect(getOverview).toHaveBeenCalledWith("", {}, "all");
+    expect(getOverallStatistics).toHaveBeenCalledWith({ workspaceId: "all" });
+    expect(container.textContent).toContain(en.common.scope.all);
   });
 });

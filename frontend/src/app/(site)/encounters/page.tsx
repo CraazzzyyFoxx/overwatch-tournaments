@@ -2,11 +2,14 @@ import { getTranslations } from "next-intl/server";
 import encounterService from "@/services/encounter.service";
 import type { Encounter, EncounterOverview } from "@/types/encounter.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
+import { resolveStatsScope } from "@/lib/site/tenant-host";
+import type { StatsScope } from "@/lib/site/stats-scope";
 import EncountersClient from "./_components/EncountersClient";
 import {
   ENCOUNTERS_PAGE_SIZE,
   filtersToApiFilters,
   normalizeEncounterFilters,
+  type EncounterFilterState,
 } from "./_components/encounters.helpers";
 
 const DEFAULT_PAGE = 1;
@@ -83,8 +86,10 @@ type EncountersPageProps = {
 
 type ParsedSearchParams = {
   page: number;
-  filters: ReturnType<typeof normalizeEncounterFilters>;
+  filters: EncounterFilterState;
 };
+
+type EncountersContentProps = ParsedSearchParams & { scope: StatsScope };
 
 function parseSearchParams(params: Record<string, string | undefined>): ParsedSearchParams {
   const parsedPage = Number.parseInt(params.page ?? String(DEFAULT_PAGE), 10);
@@ -96,10 +101,12 @@ function parseSearchParams(params: Record<string, string | undefined>): ParsedSe
   };
 }
 
-async function EncountersContent({ page, filters }: Readonly<ParsedSearchParams>) {
+async function EncountersContent({ page, filters, scope }: Readonly<EncountersContentProps>) {
   const t = await getTranslations();
   const apiFilters = filtersToApiFilters(filters);
   let initialError: string | null = null;
+  // Workspace scope leaves the ambient workspace to `apiFetch`.
+  const workspaceId = scope === "all" ? "all" : undefined;
   let data = emptyEncounters(page);
   let overview = EMPTY_OVERVIEW;
 
@@ -112,7 +119,7 @@ async function EncountersContent({ page, filters }: Readonly<ParsedSearchParams>
         ENCOUNTERS_PAGE_SIZE,
         apiFilters.sort ?? "id",
         "desc",
-        undefined,
+        workspaceId,
         {
           ...apiFilters,
           entities: [
@@ -126,7 +133,7 @@ async function EncountersContent({ page, filters }: Readonly<ParsedSearchParams>
           ],
         },
       ),
-      encounterService.getOverview(filters.query, apiFilters),
+      encounterService.getOverview(filters.query, apiFilters, workspaceId),
     ]);
   } catch {
     initialError = t("encounters.dataUnavailable");
@@ -139,6 +146,7 @@ async function EncountersContent({ page, filters }: Readonly<ParsedSearchParams>
       initialFilters={filters}
       initialPage={page}
       initialError={initialError}
+      scope={scope}
     />
   );
 }
@@ -146,5 +154,7 @@ async function EncountersContent({ page, filters }: Readonly<ParsedSearchParams>
 export default async function EncountersPage({ searchParams }: Readonly<EncountersPageProps>) {
   const params = parseSearchParams(await searchParams);
 
-  return <EncountersContent page={params.page} filters={params.filters} />;
+  return (
+    <EncountersContent page={params.page} filters={params.filters} scope={await resolveStatsScope()} />
+  );
 }

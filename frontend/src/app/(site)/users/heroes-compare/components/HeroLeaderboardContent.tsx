@@ -23,6 +23,7 @@ import { heroQueryKeys } from "@/lib/heroes/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useHeroesCatalog } from "@/hooks/useHeroesCatalog";
 import type { StatsScope } from "@/lib/site/stats-scope";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 
 const HeroLeaderboardContent = ({ scope }: Readonly<{ scope: StatsScope }>) => {
   const t = useTranslations();
@@ -49,9 +50,11 @@ const HeroLeaderboardContent = ({ scope }: Readonly<{ scope: StatsScope }>) => {
 
   const heroesQuery = useHeroesCatalog();
 
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const pickerWorkspaceId = scope === "all" ? "all" : currentWorkspaceId;
   const tournamentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.selectOptions(),
-    queryFn: () => tournamentService.getAll(),
+    queryKey: tournamentQueryKeys.selectOptions(pickerWorkspaceId),
+    queryFn: () => tournamentService.getAll(null, pickerWorkspaceId),
     staleTime: 5 * 60 * 1000,
   });
 
