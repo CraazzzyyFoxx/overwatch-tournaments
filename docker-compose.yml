@@ -434,6 +434,15 @@ services:
       - ./logs/discord-worker:/logs
     networks:
       - app-network
+    # Same probe as production: the heartbeat file GatewayWatchdog touches while
+    # the gateway session is alive. watchfiles restarts the inner process on
+    # every edit, so the window has to outlast a reload.
+    healthcheck:
+      test: ["CMD", "python", "-m", "src.tools.healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     deploy:
       resources:
         limits:

@@ -13,6 +13,7 @@ import httpx
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from shared.domain.discord_ui import EMOJI
 from shared.messaging.config import UPLOAD_MATCH_LOG_QUEUE
 from shared.observability import publish_message
 from shared.repository import LogProcessingRepository
@@ -23,10 +24,19 @@ from src.feedback import (
     AttachmentFeedbackState,
     build_message_feedback,
 )
+from src.interactions.emoji import registry
 from src.result_waiter import ResultWaiter
 from src.services.parser_client import ParserClientFactory
 
 _LOG_FILE_SUFFIXES = (".txt", ".log", ".json")
+
+#: The three verdicts a log message can carry, as emoji names.
+_FEEDBACK_STATES = ("ok", "warn", "error")
+
+#: What the bot reacted with before any of this: ``❌`` is not the current
+#: Unicode fallback for ``error`` (``⛔`` is), but it still sits on every
+#: message processed by the older bot.
+_LEGACY_REACTIONS = frozenset({"✅", "⚠️", "❌"})
 
 
 class AttachmentProcessor:
@@ -163,13 +173,27 @@ class AttachmentProcessor:
                 error_message=str(e),
             )
 
-    async def _apply_message_reactions(self, message: discord.Message, reactions: tuple[str, ...]) -> None:
-        target_reactions = set(reactions)
+    def _resolved_reaction(self, name: str) -> discord.Emoji | str:
+        """The uploaded emoji for ``name``, its Unicode fallback until there is one."""
+        return registry.component(name) or EMOJI[name]
 
-        async def _reconcile(emoji: str) -> None:
-            if emoji in target_reactions:
-                await message.add_reaction(emoji)
-                return
+    async def _apply_message_reactions(self, message: discord.Message, reactions: tuple[str, ...]) -> None:
+        """Reconcile the bot's own reactions on ``message`` to exactly ``reactions`` (emoji names)."""
+        wanted = [self._resolved_reaction(name) for name in reactions]
+        keep = {str(item) for item in wanted}
+        # Everything this message could be carrying from the bot: today's emoji
+        # for each state, plus every character it reacted with before -- a
+        # re-processed message still shows the Unicode ✅/⚠️/❌ of the old bot,
+        # and leaving those beside the uploaded ones reads as two verdicts.
+        ours = {str(self._resolved_reaction(name)) for name in _FEEDBACK_STATES}
+        ours |= {EMOJI[name] for name in _FEEDBACK_STATES} | _LEGACY_REACTIONS
+        stale = [
+            reaction.emoji
+            for reaction in message.reactions
+            if reaction.me and str(reaction.emoji) in ours and str(reaction.emoji) not in keep
+        ]
+
+        async def _remove(emoji: discord.Emoji | discord.PartialEmoji | str) -> None:
             try:
                 await message.remove_reaction(emoji, self._client.user)
             except discord.NotFound:
@@ -177,11 +201,14 @@ class AttachmentProcessor:
 
         # Independent per-emoji REST calls: run them concurrently instead of
         # paying up to three sequential round trips before the reply goes out.
-        await asyncio.gather(*(_reconcile(emoji) for emoji in ("✅", "⚠️", "❌")))
+        await asyncio.gather(
+            *(message.add_reaction(item) for item in wanted),
+            *(_remove(item) for item in stale),
+        )
 
     @staticmethod
     async def _send_feedback_reply(message: discord.Message, reply_text: str) -> None:
-        await message.reply(reply_text, mention_author=False)
+        await message.reply(registry.render(reply_text), mention_author=False)
 
     async def process_message(
         self, message: discord.Message, tournament_id: int, *, wait_for_result: bool = True

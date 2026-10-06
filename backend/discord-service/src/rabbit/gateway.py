@@ -1,16 +1,21 @@
 """Wires the bot's Discord-facing services onto RabbitMQ: match-log uploads,
 Discord-triggered commands, and read-only guild/member RPC lookups consumed by
 other services.
+
+Every command that sends, edits or deletes a message the platform owns names a
+``discord_message`` row (``message_ref``); the bot is the only process that
+hears Discord answer, so it reads that row to decide what to do and writes back
+what happened. The row -- not the command -- is what makes a redelivery
+harmless and what a later edit or delete is resolved from.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
-import hashlib
 import io
-import json
-import time
+from collections.abc import Awaitable
 from typing import Any
 
 import discord
@@ -18,7 +23,9 @@ from faststream.rabbit import RabbitBroker, RabbitQueue
 from faststream.rabbit.annotations import RabbitMessage
 from loguru import logger
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from shared import models
 from shared.messaging.config import (
     DISCORD_COMMANDS_QUEUE,
     DISCORD_GUILD_CHANNELS_QUEUE,
@@ -28,8 +35,10 @@ from shared.messaging.config import (
     MATCH_LOG_RESULT_EXCHANGE,
 )
 from shared.observability import make_rabbit_broker, observe_message_processing
-from shared.schemas.events import DiscordCommandEvent, MatchLogProcessedEvent
+from shared.repository.discord_message import DiscordMessageRepository
+from shared.schemas.events import DiscordCard, DiscordCommandEvent, MatchLogProcessedEvent
 from shared.schemas.rpc import rpc_error, rpc_ok
+from shared.services.discord_messages import emit_changed
 from src.core.broker import set_worker_broker
 from src.core.config import Settings
 from src.interactions.cards import card_view
@@ -44,53 +53,17 @@ _DIRECTORY_CODES = {
     "error": "internal",
 }
 
-#: How long a repeat of the same message to the same place is dropped. Every
-#: duplicate the pipeline can produce -- a redelivered command, an outbox row
-#: published twice, two racing notification rows for one event -- lands within
-#: seconds; a minute is still short enough not to refuse a deliberate re-post.
-DEBOUNCE_SECONDS = 60.0
+#: How long an edit of one message waits for a newer one to replace it. The
+#: live signup post is re-rendered on every join/leave click, so a burst of
+#: clicks becomes one Discord call instead of one per click -- and the card
+#: that lands is the last one, never a stale earlier render.
+EDIT_COALESCE_SECONDS = 2.0
 
-_DEBOUNCED_ACTIONS = frozenset({"post_message", "send_dm"})
-
-#: Where it goes and what it says. Not ``event_id``: a second notification row
-#: for the same event renders the same card under a fresh event id.
-_MESSAGE_FIELDS = {"action", "channel_id", "discord_user_id", "content", "embed", "image_b64", "card"}
-
-
-def _message_key(event: DiscordCommandEvent) -> str:
-    body = event.model_dump(mode="json", include=_MESSAGE_FIELDS)
-    return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
-
-
-class _Debounce:
-    """Message keys sent within the last ``window`` seconds.
-
-    ``ponytail:`` process memory: discord-worker runs as one replica (one
-    gateway session), and a restart forgets the window. Move it to Redis
-    ``SET NX EX`` if the worker is ever scaled out.
-    """
-
-    def __init__(self, window: float) -> None:
-        self._window = window
-        # Insertion order is expiry order: every entry gets the same window.
-        self._until: dict[str, float] = {}
-
-    def claim(self, key: str) -> bool:
-        """True when ``key`` was not sent within the window -- and now it is."""
-        now = time.monotonic()
-        while self._until:
-            oldest = next(iter(self._until))
-            if self._until[oldest] > now:
-                break
-            del self._until[oldest]
-        if key in self._until:
-            return False
-        self._until[key] = now + self._window
-        return True
-
-    def release(self, key: str) -> None:
-        """The send failed and is requeued: its retry must not count as a repeat."""
-        self._until.pop(key, None)
+#: How many of those windows an edit waits out while its message is still
+#: ``pending``: the post it edits is a command of its own, and an edit
+#: published right behind it can reach the bot first. After that the edit is
+#: dropped -- the next change to the object re-renders the whole card anyway.
+EDIT_PENDING_ATTEMPTS = 5
 
 
 def _directory_reply(outcome: DirectoryOutcome) -> dict[str, Any]:
@@ -116,32 +89,21 @@ def _attachment(event: DiscordCommandEvent) -> discord.File | None:
     return discord.File(io.BytesIO(raw), filename=event.image_filename)
 
 
-def _message_kwargs(event: DiscordCommandEvent) -> dict[str, Any]:
-    """``send`` kwargs for the message body, shared by channel posts and DMs.
-
-    The event's own validation keeps a card apart from content and embed, which
-    Discord refuses to mix with a Components V2 layout.
-    """
-    return {
-        "content": event.content,
-        "embed": discord.Embed.from_dict(event.embed) if event.embed else None,
-        "view": card_view(event.card) if event.card else None,
-    }
-
-
 def _discord_error(exc: discord.HTTPException) -> str:
     return f"HTTP {exc.status} (code {exc.code}): {exc.text}"
 
 
-def _mention_policy(event: DiscordCommandEvent) -> dict[str, Any]:
-    """``channel.send`` kwargs that keep user-written text from pinging anyone.
+def _mentions(event: DiscordCommandEvent) -> discord.AllowedMentions:
+    """Who the message may ping.
 
-    Empty when the publisher allows mentions, so the balancer's mix posts keep
-    discord.py's default behaviour.
+    ``allow_mentions`` is the publisher saying "the ``<@id>`` mentions in this
+    card are mine, let them ring" -- a mix lineup calling its players in. Even
+    then ``@everyone`` and roles stay off: card text can quote a user-written
+    team name, and no publisher is allowed to ring a whole guild.
     """
     if event.allow_mentions:
-        return {}
-    return {"allowed_mentions": discord.AllowedMentions.none()}
+        return discord.AllowedMentions(everyone=False, roles=False, users=True, replied_user=False)
+    return discord.AllowedMentions.none()
 
 
 class DiscordRabbitGateway:
@@ -156,6 +118,8 @@ class DiscordRabbitGateway:
         directory: DiscordDirectoryService,
         result_waiter: ResultWaiter,
         bot: discord.Client,
+        session_maker: async_sessionmaker[AsyncSession],
+        messages: DiscordMessageRepository = DiscordMessageRepository(),
     ) -> None:
         self._settings = settings
         self._processor = processor
@@ -163,8 +127,16 @@ class DiscordRabbitGateway:
         self._directory = directory
         self._result_waiter = result_waiter
         self._bot = bot
+        self._session_maker = session_maker
+        self._messages = messages
         self._broker: RabbitBroker | None = None
-        self._debounce = _Debounce(DEBOUNCE_SECONDS)
+        # discord_message.id -> the newest card for it, and the task that will
+        # write it. ponytail: process memory, like every other window in this
+        # service. A crash between the click and the flush loses that one edit;
+        # the next mutation re-renders the whole card, so nothing drifts
+        # permanently.
+        self._pending_edits: dict[int, DiscordCard] = {}
+        self._edit_tasks: dict[int, asyncio.Task[None]] = {}
 
     async def start(self) -> None:
         if not self._settings.broker_url:
@@ -184,6 +156,8 @@ class DiscordRabbitGateway:
         logger.success(f"✅ RabbitMQ listener started (queue='{DISCORD_COMMANDS_QUEUE}')")
 
     async def close(self) -> None:
+        for task in list(self._edit_tasks.values()):
+            task.cancel()
         if self._broker is None:
             return
         try:
@@ -191,6 +165,168 @@ class DiscordRabbitGateway:
         finally:
             self._broker = None
             set_worker_broker(None)
+
+    def _partial_message(self, row: models.DiscordMessage) -> discord.PartialMessage:
+        """The message this row stands for, without fetching it.
+
+        ``get_partial_messageable`` builds a channel handle out of an id alone,
+        and a DM channel answers edits and deletes exactly like a guild one --
+        which is why the row stores ``discord_channel_id`` rather than where
+        the message was addressed. One path edits and deletes both.
+        """
+        return self._bot.get_partial_messageable(row.discord_channel_id).get_partial_message(row.message_id)
+
+    async def _settle(self, session: AsyncSession, row: models.DiscordMessage, change: Awaitable[Any]) -> Any:
+        """Commit one status change and tell the page that shows this subject.
+
+        A database failure here is logged, never raised: by the time it runs
+        Discord has already acted, and nacking the command would send or delete
+        the message a second time. The row keeps its old status -- a ``pending``
+        that reads ``lost`` once the command's TTL passes, which is visible and
+        fixable, unlike a card posted twice.
+        """
+        try:
+            applied = await change
+            await emit_changed(session, row)
+            await session.commit()
+            return applied
+        except Exception as exc:
+            await session.rollback()
+            logger.error(f"❌ Could not record the new state of discord_message {row.id}: {exc}")
+            return None
+
+    async def _row_to_send(
+        self,
+        session: AsyncSession,
+        event: DiscordCommandEvent,
+        msg: RabbitMessage,
+        observation: Any,
+    ) -> models.DiscordMessage | None:
+        """The row this send still has to produce, or ``None`` when it is settled here.
+
+        The row, not the command, decides whether Discord is touched at all.
+        Nothing de-duplicates ``discord_commands`` any more, so a redelivery is
+        caught here: a row past ``pending`` has already been sent (or refused)
+        and the repeat is acked without a second message. A row a delete got to
+        first is closed without ever being sent -- that delete acked on the
+        promise that this handler would finish its job.
+        """
+        row = await self._messages.get(session, event.message_ref)
+        if row is None:
+            observation.set_status("not_found")
+            logger.error(f"❌ discord_message {event.message_ref} is gone; dropping its {event.action}")
+            await msg.reject()
+            return None
+
+        if row.status == "deleting":
+            observation.set_status("deleted")
+            logger.info(f"🗑️ discord_message {row.id} was deleted before it was sent; sending nothing")
+            await self._settle(session, row, self._messages.mark_deleted(session, row.id))
+            await msg.ack()
+            return None
+
+        if row.status != "pending":
+            observation.set_status("already_sent")
+            logger.warning(f"⚠️ discord_message {row.id} is {row.status}; dropping a repeated {event.action}")
+            await msg.ack()
+            return None
+
+        return row
+
+    async def _record_posted(self, session: AsyncSession, row: models.DiscordMessage, sent: discord.Message) -> None:
+        """The row learns where the message landed -- or the message is taken back.
+
+        ``mark_posted`` applies only while the row is still ``pending``, and it
+        is not when a delete arrived mid-``send``: that delete found no message
+        id, left the row ``deleting`` and removed nothing, trusting this
+        handler. The bot is the only process holding the message it has just
+        created, so it removes it here rather than leaving a card everyone
+        believes is gone. ``None`` back from :meth:`_settle` is a database
+        failure, not a refusal -- nothing is undone for it.
+        """
+        posted = await self._settle(
+            session,
+            row,
+            self._messages.mark_posted(session, row.id, discord_channel_id=sent.channel.id, discord_message_id=sent.id),
+        )
+        if posted is not False:
+            return
+
+        logger.info(f"🗑️ discord_message {row.id} was deleted while it was being sent; taking the message back")
+        try:
+            await sent.delete()
+        except discord.NotFound:
+            pass
+        except discord.HTTPException as exc:
+            # Left ``deleting``, like every other delete Discord refuses.
+            logger.error(f"❌ Could not take back message {sent.id}: {_discord_error(exc)}")
+            return
+        await self._settle(session, row, self._messages.mark_deleted(session, row.id))
+
+    async def _fail(self, session: AsyncSession, row: models.DiscordMessage, reason: str) -> None:
+        """Discord refused this message for good; whoever asked for it reads why."""
+        await self._settle(session, row, self._messages.mark_failed(session, row.id, error=reason))
+
+    def _schedule_edit(self, ref: int, card: DiscordCard) -> None:
+        """Hold ``card`` as this message's next state; the running flush writes the last one."""
+        self._pending_edits[ref] = card
+        if ref not in self._edit_tasks:
+            self._edit_tasks[ref] = asyncio.create_task(self._flush_edit(ref))
+
+    async def _flush_edit(self, ref: int) -> None:
+        """After the coalescing window, write whatever card is pending by then.
+
+        The row says where the message is -- and whether it exists yet. An edit
+        published right behind the post that creates it can be handled first,
+        so a ``pending`` row is waited out for a few more windows instead of
+        being dropped. Any other status means the card will never be shown
+        again (refused, being deleted, gone), and the edit is discarded.
+        """
+        try:
+            for _attempt in range(EDIT_PENDING_ATTEMPTS):
+                await asyncio.sleep(EDIT_COALESCE_SECONDS)
+                card = self._pending_edits.get(ref)
+                if card is None:
+                    return  # a delete dropped it while the window ran
+                async with self._session_maker() as session:
+                    row = await self._messages.get(session, ref)
+                    if row is not None and row.status == "pending":
+                        continue
+                    self._pending_edits.pop(ref, None)
+                    if row is None:
+                        logger.error(f"❌ discord_message {ref} is gone; dropping its edit")
+                        return
+                    if row.status != "posted":
+                        logger.warning(f"⚠️ discord_message {ref} is {row.status}; dropping its edit")
+                        return
+                    await self._apply_edit(session, row, card)
+                    return
+            self._pending_edits.pop(ref, None)
+            logger.warning(f"⚠️ discord_message {ref} is still not posted; dropping its edit")
+        finally:
+            self._edit_tasks.pop(ref, None)
+            if ref in self._pending_edits:
+                # A click landed while this flush was writing the previous
+                # card: nothing else would pick it up, and the live post would
+                # stay a seat behind until the next one.
+                self._schedule_edit(ref, self._pending_edits[ref])
+
+    async def _apply_edit(self, session: AsyncSession, row: models.DiscordMessage, card: DiscordCard) -> None:
+        """Replace the card of a posted message; a message that is gone closes its row."""
+        try:
+            # No fetch: the ids are enough to edit, and the card is rebuilt
+            # from the command anyway.
+            await self._partial_message(row).edit(
+                view=card_view(card),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except discord.NotFound:
+            logger.warning(f"⚠️ Message {row.message_id} is gone; closing discord_message {row.id}")
+            await self._settle(session, row, self._messages.mark_deleted(session, row.id))
+        except discord.Forbidden:
+            logger.error(f"❌ No permission to edit message {row.message_id} in channel {row.discord_channel_id}")
+        except discord.HTTPException as exc:
+            logger.error(f"❌ Discord refused edit of message {row.message_id}: {_discord_error(exc)}")
 
     def _register(self, broker: RabbitBroker) -> None:
         @broker.subscriber(DISCORD_COMMANDS_QUEUE)
@@ -208,15 +344,6 @@ class DiscordRabbitGateway:
                     observation.set_status("invalid")
                     logger.error(f"❌ Invalid discord command payload: {e}")
                     await msg.reject()  # Send to DLQ
-                    return
-
-                debounce_key = _message_key(event) if event.action in _DEBOUNCED_ACTIONS else None
-                if debounce_key is not None and not self._debounce.claim(debounce_key):
-                    observation.set_status("debounced")
-                    logger.warning(
-                        f"⚠️ Dropped a repeated {event.action}: same target and content within {DEBOUNCE_SECONDS:.0f}s"
-                    )
-                    await msg.ack()
                     return
 
                 try:
@@ -239,76 +366,156 @@ class DiscordRabbitGateway:
                         return
 
                     if event.action == "post_message":
-                        channel = await self._processor.get_text_channel(event.channel_id)
-                        if channel is None:
-                            observation.set_status("not_found")
-                            logger.error(f"❌ Channel {event.channel_id} not found for post_message")
-                            await msg.reject()
-                            return
-
                         logger.info(f"📩 RabbitMQ command: post_message channel={event.channel_id}")
-                        try:
-                            attachment = _attachment(event)
-                        except ValueError as exc:
-                            observation.set_status("invalid")
-                            logger.error(f"❌ Undecodable image for channel {event.channel_id}: {exc}")
-                            await msg.reject()
-                            return
+                        async with self._session_maker() as session:
+                            row = await self._row_to_send(session, event, msg, observation)
+                            if row is None:
+                                return
 
-                        try:
-                            await channel.send(
-                                **_message_kwargs(event),
-                                file=attachment,
-                                **_mention_policy(event),
-                            )
-                        except discord.Forbidden:
-                            observation.set_status("forbidden")
-                            logger.error(f"❌ No permission to post in channel {event.channel_id}")
-                            await msg.reject()
-                            return
-                        except discord.HTTPException as exc:
-                            # discord.py already retried 429s and 5xx; what is left
-                            # (a 400 on the payload, an outage outlasting its
-                            # retries) fails the same way on every requeue.
-                            observation.set_status("discord_error")
-                            logger.error(
-                                f"❌ Discord refused post to channel {event.channel_id}: {_discord_error(exc)}"
-                            )
-                            await msg.reject()
-                            return
+                            channel = await self._processor.get_text_channel(event.channel_id)
+                            if channel is None:
+                                observation.set_status("not_found")
+                                logger.error(f"❌ Channel {event.channel_id} not found for post_message")
+                                await self._fail(session, row, "the channel does not exist or the bot cannot see it")
+                                await msg.reject()
+                                return
+
+                            try:
+                                attachment = _attachment(event)
+                            except ValueError as exc:
+                                observation.set_status("invalid")
+                                logger.error(f"❌ Undecodable image for channel {event.channel_id}: {exc}")
+                                await self._fail(session, row, f"the picture of the post could not be decoded: {exc}")
+                                await msg.reject()
+                                return
+
+                            try:
+                                sent = await channel.send(
+                                    view=card_view(event.card),
+                                    file=attachment,
+                                    allowed_mentions=_mentions(event),
+                                )
+                            except discord.Forbidden:
+                                observation.set_status("forbidden")
+                                logger.error(f"❌ No permission to post in channel {event.channel_id}")
+                                await self._fail(session, row, "no permission to post in the channel")
+                                await msg.reject()
+                                return
+                            except discord.HTTPException as exc:
+                                # discord.py already retried 429s and 5xx; what is left
+                                # (a 400 on the payload, an outage outlasting its
+                                # retries) fails the same way on every requeue.
+                                observation.set_status("discord_error")
+                                logger.error(
+                                    f"❌ Discord refused post to channel {event.channel_id}: {_discord_error(exc)}"
+                                )
+                                await self._fail(session, row, f"Discord refused the post: {_discord_error(exc)}")
+                                await msg.reject()
+                                return
+
+                            await self._record_posted(session, row, sent)
 
                         await msg.ack()
                         return
 
                     if event.action == "send_dm":
                         logger.info(f"📩 RabbitMQ command: send_dm user={event.discord_user_id}")
-                        try:
-                            user = self._bot.get_user(event.discord_user_id) or await self._bot.fetch_user(
-                                event.discord_user_id
-                            )
-                            await user.send(
-                                **_message_kwargs(event),
-                                allowed_mentions=discord.AllowedMentions.none(),
-                            )
-                        except discord.Forbidden:
-                            # DMs closed or no mutual guild: a retry cannot fix either,
-                            # and the notification is already in the in-app inbox.
-                            observation.set_status("dm_closed")
-                            logger.warning(f"⚠️ Cannot DM user {event.discord_user_id}: DMs closed")
-                            await msg.ack()
-                            return
-                        except discord.NotFound:
-                            observation.set_status("not_found")
-                            logger.warning(f"⚠️ Discord user {event.discord_user_id} not found for send_dm")
-                            await msg.ack()
-                            return
-                        except discord.HTTPException as exc:
-                            observation.set_status("discord_error")
-                            logger.error(
-                                f"❌ Discord refused DM to user {event.discord_user_id}: {_discord_error(exc)}"
-                            )
-                            await msg.reject()
-                            return
+                        async with self._session_maker() as session:
+                            row = await self._row_to_send(session, event, msg, observation)
+                            if row is None:
+                                return
+
+                            try:
+                                user = self._bot.get_user(event.discord_user_id) or await self._bot.fetch_user(
+                                    event.discord_user_id
+                                )
+                                sent = await user.send(
+                                    view=card_view(event.card),
+                                    allowed_mentions=discord.AllowedMentions.none(),
+                                )
+                            except discord.Forbidden:
+                                # DMs closed or no mutual guild: a retry cannot fix either,
+                                # and the notification is already in the in-app inbox.
+                                observation.set_status("dm_closed")
+                                logger.warning(f"⚠️ Cannot DM user {event.discord_user_id}: DMs closed")
+                                await self._fail(session, row, "the user does not accept DMs from the bot")
+                                await msg.ack()
+                                return
+                            except discord.NotFound:
+                                observation.set_status("not_found")
+                                logger.warning(f"⚠️ Discord user {event.discord_user_id} not found for send_dm")
+                                await self._fail(session, row, "the Discord user no longer exists")
+                                await msg.ack()
+                                return
+                            except discord.HTTPException as exc:
+                                observation.set_status("discord_error")
+                                logger.error(
+                                    f"❌ Discord refused DM to user {event.discord_user_id}: {_discord_error(exc)}"
+                                )
+                                await self._fail(session, row, f"Discord refused the DM: {_discord_error(exc)}")
+                                await msg.reject()
+                                return
+
+                            await self._record_posted(session, row, sent)
+
+                        await msg.ack()
+                        return
+
+                    if event.action == "edit_message":
+                        logger.info(f"📩 RabbitMQ command: edit_message message_ref={event.message_ref}")
+                        # Acked on scheduling, not on delivery: the edit is
+                        # deliberately deferred, and a redelivery would only
+                        # re-send a card the pending one already supersedes.
+                        self._schedule_edit(event.message_ref, event.card)
+                        await msg.ack()
+                        return
+
+                    if event.action == "delete_message":
+                        logger.info(f"📩 RabbitMQ command: delete_message message_ref={event.message_ref}")
+                        # Nothing is edited on the way out: a card queued for
+                        # this message would otherwise be written to a message
+                        # that is about to stop existing.
+                        self._pending_edits.pop(event.message_ref, None)
+                        async with self._session_maker() as session:
+                            row = await self._messages.get(session, event.message_ref)
+                            if row is None:
+                                observation.set_status("not_found")
+                                logger.error(f"❌ discord_message {event.message_ref} is gone; cannot delete it")
+                                await msg.reject()
+                                return
+
+                            if row.message_id is None:
+                                # Its own post is still queued (``delete_commands``
+                                # already set the row to ``deleting``). Left alone:
+                                # that status is exactly what the post handler
+                                # reads before it sends anything, so the message is
+                                # deleted by never being sent.
+                                observation.set_status("not_posted")
+                                logger.info(f"⏳ discord_message {row.id} is not posted yet; its post will close it")
+                                await msg.ack()
+                                return
+
+                            if row.status not in ("deleting", "posted"):
+                                observation.set_status("already_settled")
+                                logger.info(f"ℹ️ discord_message {row.id} is {row.status}; nothing to delete")
+                                await msg.ack()
+                                return
+
+                            try:
+                                await self._partial_message(row).delete()
+                            except discord.NotFound:
+                                logger.info(f"ℹ️ Message {row.message_id} was already gone; closing its row")
+                            except discord.HTTPException as exc:
+                                # Left ``deleting`` on purpose: a requeue would
+                                # hammer the same refusal, and the page shows
+                                # the message as still on its way out, which is
+                                # the truth until someone fixes the permission.
+                                observation.set_status("discord_error")
+                                logger.error(f"❌ Could not delete message {row.message_id}: {_discord_error(exc)}")
+                                await msg.ack()
+                                return
+
+                            await self._settle(session, row, self._messages.mark_deleted(session, row.id))
 
                         await msg.ack()
                         return
@@ -349,8 +556,6 @@ class DiscordRabbitGateway:
                     await msg.ack()
 
                 except Exception as e:
-                    if debounce_key is not None:
-                        self._debounce.release(debounce_key)
                     logger.error(f"❌ Error handling discord command: {e}")
                     await msg.nack()  # Requeue for retry
                     raise

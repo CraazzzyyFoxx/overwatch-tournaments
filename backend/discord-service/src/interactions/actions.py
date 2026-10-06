@@ -16,31 +16,41 @@ here plus a button in the card renderer (``app-service`` ``notification_render``
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.services.notifications import NOTIFICATION_GROUPS
 
-__all__ = ("ACTIONS", "Action", "custom_id", "is_ours", "parse_custom_id")
+__all__ = (
+    "ACTIONS",
+    "ALL_ROLES",
+    "Action",
+    "NO_ROLE",
+    "custom_id",
+    "is_ours",
+    "parse_custom_id",
+    "parse_setup_target",
+    "setup_target",
+)
 
 _PREFIX = "owt"
 _CUSTOM_ID = re.compile(rf"^{_PREFIX}:(?P<action>[a-z_.]+):(?P<target>[A-Za-z0-9_-]{{1,40}})$")
 
 
-def _invite(target: str, values: Sequence[str]) -> dict[str, Any]:
+def _invite(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
     # A body field, not a path parameter: the site sends it the same way
     # (``POST /registration-teams/invites/accept``), so the handler cannot tell.
     return {"payload": {"invite_id": int(target)}}
 
 
-def _tournament(target: str, values: Sequence[str]) -> dict[str, Any]:
+def _tournament(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
     # ``{tournament_id}`` is a path parameter, which the gateway copies to the body by name.
     return {"tournament_id": int(target)}
 
 
-def _nothing(target: str, values: Sequence[str]) -> dict[str, Any]:
+def _nothing(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
     return {}
 
 
@@ -48,42 +58,83 @@ def _everything(target: str) -> bool:
     return target == "all"
 
 
-def _parse_roles(values: Sequence[str]) -> list[str] | None:
-    """The role order a select carried; ``None`` for "every role I have a rank in".
+#: The seat modal's own vocabulary, shared with the panel that opens it
+#: (``cards.seat_modal``): "every role I have a rank in" and "this slot is empty".
+ALL_ROLES = "all"
+NO_ROLE = "none"
 
-    Discord does not keep the order the options were clicked in, so the order
-    rides the value itself (``tank,support``). A value naming something that is
-    not one of the three roles, or naming one twice, is not one the bot minted:
-    it is refused here rather than sent on to be answered with a 422.
+#: ``tank`` -> ``t``: the three codes start with three different letters, so the
+#: role order fits a ``mix.setup`` target as plain letters (``42-ts-1``).
+_ROLE_LETTER: dict[str, str] = {role: role[0] for role in REGISTRATION_ROLE_CODES}
+_LETTER_ROLE: dict[str, str] = {letter: role for role, letter in _ROLE_LETTER.items()}
+_SETUP_TARGET = re.compile(r"^(?P<game>\d+)-(?P<order>[a-z]{1,3})-(?P<flex>[01])$")
+
+
+def setup_target(game_id: Any, roles: Sequence[str] | None, is_flex: bool) -> str:
+    """``<game id>-<order>-<flex>``: what the seat modal must open pre-filled with.
+
+    ``mix.setup`` is answered by the bot alone, so the target is the whole
+    state the modal needs -- no lookup between the click and the form, which
+    matters because a modal must be the *first* answer to a click.
+    ``a`` is "every role I have a rank in" (``roles`` is ``None``) and ``x`` is
+    "none picked yet"; neither is a letter any role owns.
     """
-    value = (values[0] if values else "").strip()
-    if value == "all":
-        return None
-    roles = [item.strip().lower() for item in value.split(",") if item.strip()]
-    if not roles or len(set(roles)) != len(roles) or any(role not in REGISTRATION_ROLE_CODES for role in roles):
-        raise ValueError(f"not a role order this bot minted: {value!r}")
-    return roles
+    if roles is None:
+        order = "a"
+    else:
+        order = "".join(_ROLE_LETTER[role] for role in roles if role in _ROLE_LETTER) or "x"
+    return f"{game_id}-{order}-{'1' if is_flex else '0'}"
 
 
-def _mix(target: str, values: Sequence[str]) -> dict[str, Any]:
+def parse_setup_target(target: str) -> tuple[int, list[str] | None, bool]:
+    """``(game id, roles, is_flex)`` from a ``mix.setup`` target; raises on anything else."""
+    match = _SETUP_TARGET.match(target)
+    if match is None or not _setup_order(match["order"]):
+        raise ValueError(f"not a seat setup target: {target!r}")
+    order = match["order"]
+    roles = None if order == "a" else [] if order == "x" else [_LETTER_ROLE[letter] for letter in order]
+    return int(match["game"]), roles, match["flex"] == "1"
+
+
+def _setup_order(order: str) -> bool:
+    if order in ("a", "x"):
+        return True
+    return len(set(order)) == len(order) and all(letter in _LETTER_ROLE for letter in order)
+
+
+def _setup(target: str) -> bool:
+    match = _SETUP_TARGET.match(target)
+    return match is not None and _setup_order(match["order"])
+
+
+def _mix(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
     # ``{game_id}`` is a path parameter, which the gateway copies to the body
     # by name; the bot knows no workspace, so the mix row supplies it.
     return {"custom_game_id": int(target)}
 
 
-def _mix_roles(target: str, values: Sequence[str]) -> dict[str, Any]:
-    return {"custom_game_id": int(target), "payload": {"roles": _parse_roles(values)}}
+def _mix_seat_set(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
+    """The seat modal's answer as a ``self_update`` body.
 
-
-def _mix_flex(target: str, values: Sequence[str]) -> dict[str, Any]:
-    # A button carries no values, so the wanted state rides the target: ``42-on``.
-    game_id, _, wanted = target.rpartition("-")
-    return {"custom_game_id": int(game_id), "payload": {"is_flex": wanted == "on"}}
-
-
-def _flex_target(target: str) -> bool:
-    game_id, _, wanted = target.rpartition("-")
-    return wanted in ("on", "off") and game_id.isdigit()
+    The three role slots are an ordered pick, so the order *is* the priority;
+    a role named twice (two slots, same radio) is kept once, at its first
+    place. ``all`` in the first slot means "every role I have a rank in" and
+    the rest of the form stops mattering. Anything else in a slot is a value
+    this bot never minted: refused here, before any platform call.
+    """
+    picks = [fields.get(f"role{slot}", "").strip() for slot in (1, 2, 3)]
+    if picks[0] == ALL_ROLES:
+        roles: list[str] | None = None
+    else:
+        roles = []
+        for pick in picks:
+            if pick in ("", NO_ROLE):
+                continue
+            if pick not in REGISTRATION_ROLE_CODES:
+                raise ValueError(f"not a role this bot minted: {pick!r}")
+            if pick not in roles:
+                roles.append(pick)
+    return {"custom_game_id": int(target), "payload": {"roles": roles, "is_flex": fields.get("flex") == "1"}}
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,19 +142,20 @@ class Action:
     """One button's platform call.
 
     ``subject`` is ``None`` for a button the bot answers alone (it only shows
-    the next button, so it needs neither an account nor a call). ``request``
-    turns the target -- and, for a select, the values Discord sent with the
-    click -- into the RPC body next to ``identity``; ``accepts`` is checked
-    before anything is called, so a malformed target is refused here rather
-    than as a 422 from the service. A value the bot never minted is refused
-    the same way: ``request`` raises ``ValueError`` and no RPC is made.
+    the next form or button, so it needs neither an account nor a call).
+    ``request`` turns the target -- and, for a modal, the fields Discord sent
+    with the submit, keyed by their component ``custom_id`` -- into the RPC
+    body next to ``identity``; ``accepts`` is checked before anything is
+    called, so a malformed target is refused here rather than as a 422 from
+    the service. A field value the bot never minted is refused the same way:
+    ``request`` raises ``ValueError`` and no RPC is made.
     ``settles`` names the card buttons that stop making sense once this
     succeeded -- they are taken off the DM it was clicked in (never off a
     channel post, which is everyone's).
     """
 
     subject: str | None
-    request: Callable[[str, Sequence[str]], dict[str, Any]] = _nothing
+    request: Callable[[str, Mapping[str, str]], dict[str, Any]] = _nothing
     accepts: Callable[[str], bool] = str.isdigit
     settles: frozenset[str] = field(default_factory=frozenset)
 
@@ -125,7 +177,7 @@ ACTIONS: dict[str, Action] = {
         "rpc.app.notification_preferences_update",
         # Every group, not the card's: the reader asked for Discord to go quiet.
         # In-app notifications are not affected, and settings turn DMs back on.
-        lambda _all, _values: {"payload": {"discord_dm": dict.fromkeys(NOTIFICATION_GROUPS, False)}},
+        lambda _all, _fields: {"payload": {"discord_dm": dict.fromkeys(NOTIFICATION_GROUPS, False)}},
         accepts=_everything,
     ),
     # Self-signup for a pickup mix. The gate is the mix's own policy, so a
@@ -133,8 +185,10 @@ ACTIONS: dict[str, Action] = {
     "mix.join": Action("rpc.balancer.custom.self_join", _mix),
     "mix.leave": Action("rpc.balancer.custom.self_leave", _mix),
     "mix.roles": Action("rpc.balancer.custom.self_get", _mix),
-    "mix.roles_set": Action("rpc.balancer.custom.self_update", _mix_roles),
-    "mix.flex": Action("rpc.balancer.custom.self_update", _mix_flex, accepts=_flex_target),
+    # Answered by the bot alone: the click opens the seat modal, and the modal
+    # it opens is spelled out by the target (``cards.seat_modal``).
+    "mix.setup": Action(None, accepts=_setup),
+    "mix.seat_set": Action("rpc.balancer.custom.self_update", _mix_seat_set),
 }
 
 

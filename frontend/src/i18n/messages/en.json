@@ -6777,6 +6777,26 @@
       "roleEdit": "Players edit their own roles",
       "openInDiscord": "Open signup in Discord",
       "noChannel": "This community has no mix channel in Discord",
+      "post": {
+        "pending": "Posting…",
+        "posted": "In Discord",
+        "failed": "Not posted",
+        "failedHint": "Check the bot's permissions in the mix channel and post again.",
+        "deleting": "Deleting…",
+        "lost": "Never reached Discord",
+        "lostHint": "The bot never picked this post up. Post it again."
+      },
+      "posts": {
+        "menu": "Discord",
+        "signup": "Signup post",
+        "lineup": "Lineup · Game {match}",
+        "lineupLobby": "Lineup · Lobby {lobby} · Game {match}",
+        "open": "Open",
+        "delete": "Delete “{label}” from Discord",
+        "deleteTitle": "Delete this Discord post?",
+        "deleteDescription": "“{label}” is removed from the Discord channel for everyone. The mix itself is untouched.",
+        "deleteConfirm": "Delete post"
+      },
       "title": "Your seat",
       "join": "Join this mix",
       "leave": "Leave",

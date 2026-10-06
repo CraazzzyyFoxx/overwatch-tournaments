@@ -34,9 +34,9 @@ from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.oauth import OAuthConnection  # noqa: E402
 from shared.models.identity.rbac import Permission, Role, UserPermissionDeny, role_permissions, user_roles  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
+from shared.models.platform.discord_message import DiscordMessage  # noqa: E402
 from shared.models.platform.notification import (  # noqa: E402
     Notification,
-    NotificationDelivery,
     NotificationPreference,
     NotificationRead,
     NotificationWorkspaceConfig,
@@ -59,13 +59,13 @@ TABLES = (
     NotificationWorkspaceConfig.__table__,
     OAuthConnection.__table__,
     Workspace.__table__,
-    # The admin inspector's half: the account it names, the ledger of what was
-    # actually DM'd, and the four tables the unread count's audience resolves
-    # through.
+    # The admin inspector's half: the account it names, the Discord messages
+    # actually sent to it, and the four tables the unread count's audience
+    # resolves through.
     AuthUser.__table__,
     Notification.__table__,
     NotificationRead.__table__,
-    NotificationDelivery.__table__,
+    DiscordMessage.__table__,
     WorkspaceMember.__table__,
     User.__table__,
     Role.__table__,
@@ -328,7 +328,7 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
 
     Everything here is about the target rather than the caller: the switches
     read and written are the path id's, the badge count is the one that account
-    sees, and the delivery ledger is filtered to *their* Discord ids -- a
+    sees, and what was sent is filtered to *their* Discord ids -- a
     missing filter would show an operator strangers' messages.
     """
 
@@ -368,11 +368,14 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         return row.id
 
     def delivered(self, target: str, *, channel: str = "discord_dm", created_at: datetime = PAST) -> int:
-        row = NotificationDelivery(
+        row = DiscordMessage(
             channel=channel,
             target=target,
             dedupe_key=f"{channel}:{target}:{created_at.isoformat()}",
+            subject="notification:1",
+            slot="dm" if channel == "discord_dm" else "channel",
             kind="match.scheduled",
+            status="posted",
             created_at=created_at,
         )
         self.session.add(row)
@@ -454,9 +457,9 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         self.assertEqual(answer["data"]["unread_count"], 2, answer)
 
     async def test_deliveries_are_this_accounts_discord_dms_newest_first_capped_at_ten(self) -> None:
-        """Three different ways the ledger could leak or mislead, in one pin.
+        """Three different ways ``discord_message`` could leak or mislead, in one pin.
 
-        The ledger is keyed by Discord snowflake, so a target filter that let a
+        The table is keyed by Discord snowflake, so a target filter that let a
         stranger's id through, a channel filter that let a workspace broadcast
         through, or an unordered read would each put the wrong rows in front of
         an operator.
@@ -472,9 +475,10 @@ class AdminUserNotificationsRpcTests(_SettingsCase):
         rows = answer["data"]["recent_deliveries"]
         self.assertEqual([row["id"] for row in rows], list(reversed(mine[2:])))
         self.assertEqual({row["channel"] for row in rows}, {"discord_dm"})
+        self.assertEqual({row["status"] for row in rows}, {"posted"})
 
-    async def test_an_account_with_no_discord_has_an_empty_ledger(self) -> None:
-        """An unfiltered IN () would hand over every delivery on the platform."""
+    async def test_an_account_with_no_discord_has_nothing_sent_to_it(self) -> None:
+        """An unfiltered IN () would hand over every message on the platform."""
         self.account()
         self.delivered(DISCORD_STRANGER)
 

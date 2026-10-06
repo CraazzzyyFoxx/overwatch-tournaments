@@ -22,10 +22,11 @@ import discord  # noqa: E402
 from shared.schemas.events import DiscordAction, DiscordCard  # noqa: E402
 from shared.schemas.rpc import parse_rpc, rpc_error, rpc_ok  # noqa: E402
 from src.cogs.interactions import InteractionsCog  # noqa: E402
+from src.interactions import copy  # noqa: E402
 from src.interactions import dispatcher as dispatcher_module  # noqa: E402
-from src.interactions.actions import ACTIONS, parse_custom_id  # noqa: E402
-from src.interactions.cards import card_view, select_row, settle  # noqa: E402
-from src.interactions.dispatcher import IDENTITY_SUBJECT, ActionDispatcher, Outcome  # noqa: E402
+from src.interactions.actions import ACTIONS, parse_custom_id, parse_setup_target, setup_target  # noqa: E402
+from src.interactions.cards import card_view, settle  # noqa: E402
+from src.interactions.dispatcher import IDENTITY_SUBJECT, MIX_CURRENT_SUBJECT, ActionDispatcher, Outcome  # noqa: E402
 
 SITE = "https://owt.example"
 IDENTITY = {"sub": 77, "username": "kira", "credential_type": "discord", "workspaces": []}
@@ -49,8 +50,21 @@ class _Rpc:
         return [queue for queue, _ in self.calls]
 
 
-def _dispatcher() -> ActionDispatcher:
-    return ActionDispatcher(site_url=SITE, broker=lambda: object())
+def _session_maker() -> MagicMock:
+    """``async with session_maker() as session`` over a session nothing reads."""
+    maker = MagicMock()
+    maker.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+    maker.return_value.__aexit__ = AsyncMock(return_value=False)
+    return maker
+
+
+def _dispatcher(workspaces: Any = None) -> ActionDispatcher:
+    return ActionDispatcher(
+        site_url=SITE,
+        broker=lambda: object(),
+        session_maker=_session_maker() if workspaces is not None else None,
+        workspaces=workspaces if workspaces is not None else MagicMock(),
+    )
 
 
 def _invite_card() -> DiscordCard:
@@ -82,6 +96,7 @@ def _mix_state(**overrides: Any) -> dict[str, Any]:
             "roles": ["tank", "support"],
             "is_flex": False,
             "ranks": {"tank": 3100, "damage": None, "support": None},
+            "divisions": {"tank": {"name": "Gold 3", "slug": "gold-3"}, "damage": None, "support": None},
         },
         "unranked_roles": ["support"],
         "policy": {
@@ -102,15 +117,16 @@ def _interaction(*, guild_id: int | None = None, locale: str = "ru", ephemeral: 
         locale=locale,
         guild_id=guild_id,
         message=MagicMock(flags=MagicMock(ephemeral=ephemeral)),
-        response=MagicMock(defer=AsyncMock(), send_message=AsyncMock()),
+        response=MagicMock(defer=AsyncMock(), send_message=AsyncMock(), send_modal=AsyncMock()),
         followup=MagicMock(send=AsyncMock()),
         edit_original_response=AsyncMock(),
     )
 
 
 def _reply_text(view: discord.ui.LayoutView) -> str:
+    """Every line the coloured container holds: the heading and, past the divider, the details."""
     container, *_rows = view.to_components()
-    return container["components"][0]["content"]
+    return "\n".join(child["content"] for child in container["components"] if child["type"] == 10)
 
 
 class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
@@ -151,6 +167,29 @@ class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
             outcome = await _dispatcher().perform(4242, "check_in", "3")
 
         self.assertEqual(outcome.status, "unavailable")
+
+    async def test_a_second_click_inside_the_window_reuses_the_identity(self) -> None:
+        """A mix panel is a chain of clicks; asking who the clicker is once covers the lot."""
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.tournament.reg_pub_check_in": rpc_ok({"id": 1})})
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await dispatcher.perform(4242, "check_in", "3")
+            await dispatcher.perform(4242, "check_in", "3")
+
+        self.assertEqual(rpc.subjects().count(IDENTITY_SUBJECT), 1)
+        self.assertEqual(rpc.subjects().count("rpc.tournament.reg_pub_check_in"), 2)
+
+    async def test_an_unlinked_account_is_asked_again_on_the_next_click(self) -> None:
+        """Caching a "not linked" would hide the link the clicker just made."""
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_error("not_found", "Discord account is not linked")})
+        dispatcher = _dispatcher()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await dispatcher.perform(4242, "check_in", "3")
+            await dispatcher.perform(4242, "check_in", "3")
+
+        self.assertEqual(rpc.subjects(), [IDENTITY_SUBJECT, IDENTITY_SUBJECT])
 
 
 class ButtonContractTests(IsolatedAsyncioTestCase):
@@ -286,105 +325,123 @@ class MuteEverythingTests(IsolatedAsyncioTestCase):
         self.assertIn("отключены", _reply_text(prompt.edit_original_response.await_args.kwargs["view"]))
 
 
-class SelectComponentTests(IsolatedAsyncioTestCase):
-    """A select is routed by the same ``custom_id`` as a button, and Discord gives it a row of its own."""
+class SeatFormTests(IsolatedAsyncioTestCase):
+    """The seat form: what the button carries into it, and what the submit becomes on the wire."""
 
-    async def test_a_select_routes_like_a_button_and_sits_alone_in_its_row(self) -> None:
-        row = select_row(
-            action="registration.view",
-            target="3",
-            placeholder="Roles",
-            options=[
-                discord.SelectOption(label="Tank", value="tank", description="Tank 3100", default=True),
-                discord.SelectOption(label="Support", value="support"),
-            ],
-        )
+    def test_the_setup_target_carries_the_whole_form_both_ways(self) -> None:
+        """A modal must be the first answer to a click, so the form is opened
+        from the target alone -- it has to survive the round trip exactly."""
+        for roles, is_flex in (
+            (["tank", "support"], True),
+            (["damage"], False),
+            (["support", "damage", "tank"], True),
+            (None, False),  # every ranked role
+            ([], True),  # nothing picked yet
+        ):
+            target = setup_target(42, roles, is_flex)
+            self.assertEqual(parse_setup_target(target), (42, roles, is_flex), target)
+            self.assertEqual(parse_custom_id(f"owt:mix.setup:{target}"), ("mix.setup", target))
+        self.assertEqual(setup_target(42, ["tank", "support"], True), "42-ts-1")
+        self.assertEqual(setup_target(42, None, False), "42-a-0")
+        self.assertEqual(setup_target(42, [], False), "42-x-0")
 
-        view = card_view(DiscordCard(text="### Roles"), extra_rows=[row])
+    def test_a_forged_setup_target_never_reaches_an_action(self) -> None:
+        for refused in ("owt:mix.setup:42-tt-1", "owt:mix.setup:42-tz-1", "owt:mix.setup:42", "owt:mix.setup:42-ts-2"):
+            self.assertIsNone(parse_custom_id(refused), refused)
 
-        container, rendered = view.to_components()
-        self.assertEqual(container["type"], 17)
-        (select,) = rendered["components"]
-        self.assertEqual(select["type"], 3)
-        self.assertEqual(parse_custom_id(select["custom_id"]), ("registration.view", "3"))
-        self.assertEqual(
-            [(option["value"], option["default"]) for option in select["options"]],
-            [("tank", True), ("support", False)],
-        )
-
-
-class MixSelfSignupTests(IsolatedAsyncioTestCase):
-    """The five mix buttons: what the pick becomes on the wire, and what the clicker gets back."""
-
-    async def test_a_chosen_role_order_reaches_the_platform_in_that_order(self) -> None:
-        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
+    async def test_the_form_opens_on_the_click_itself_and_calls_nothing(self) -> None:
+        rpc = _Rpc({})
         cog = InteractionsCog(MagicMock(action_dispatcher=_dispatcher()))
         click = _interaction(ephemeral=True)
         click.type = discord.InteractionType.component
-        click.data = {"custom_id": "owt:mix.roles_set:42", "values": ["tank,support"]}
+        click.data = {"custom_id": "owt:mix.setup:42-ts-1"}
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
             await cog.on_interaction(click)
 
+        self.assertEqual(rpc.calls, [])
+        # Discord takes a modal only as the *first* response: a defer would lose it.
+        click.response.defer.assert_not_awaited()
+        (modal,) = click.response.send_modal.await_args.args
+        form = modal.to_dict()
+        self.assertEqual(form["custom_id"], "owt:mix.seat_set:42")
+        self.assertEqual(form["title"], "Моё место")
+        fields = {label["component"]["custom_id"]: label["component"] for label in form["components"]}
+        self.assertEqual(list(fields), ["role1", "role2", "role3", "flex"])
+        # Opened filled in: tank first, support second, nothing third, flex on.
+        picked = {
+            name: [option["value"] for option in field["options"] if option["default"]]
+            for name, field in fields.items()
+            if field["type"] == 21
+        }
+        self.assertEqual(picked, {"role1": ["tank"], "role2": ["support"], "role3": ["none"]})
+        self.assertTrue(fields["flex"]["default"])
+
+    async def test_the_submitted_form_becomes_one_self_update(self) -> None:
+        """The three slots are a priority order, so it is kept; a role ticked
+        twice is one role, and the empty slots simply do not appear."""
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
+        cog = InteractionsCog(MagicMock(action_dispatcher=_dispatcher()))
+        submit = _interaction(ephemeral=True)
+        submit.type = discord.InteractionType.modal_submit
+        submit.data = {
+            "custom_id": "owt:mix.seat_set:42",
+            "components": [
+                {"type": 18, "component": {"type": 21, "custom_id": "role1", "value": "support"}},
+                {"type": 18, "component": {"type": 21, "custom_id": "role2", "value": "tank"}},
+                {"type": 18, "component": {"type": 21, "custom_id": "role3", "value": "support"}},
+                {"type": 18, "component": {"type": 23, "custom_id": "flex", "value": True}},
+            ],
+        }
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await cog.on_interaction(submit)
+
         subject, body = rpc.calls[-1]
         self.assertEqual(subject, "rpc.balancer.custom.self_update")
         self.assertEqual(body["custom_game_id"], 42)
-        self.assertEqual(body["payload"], {"roles": ["tank", "support"]})
+        self.assertEqual(body["payload"], {"roles": ["support", "tank"], "is_flex": True})
+        # The form was opened from a panel only the clicker sees: the answer
+        # replaces that panel instead of stacking another reply under it.
+        submit.followup.send.assert_not_awaited()
+        self.assertIn("Пятничный микс", _reply_text(submit.edit_original_response.await_args.kwargs["view"]))
 
-    async def test_the_all_option_asks_for_every_ranked_role(self) -> None:
+    async def test_every_ranked_role_clears_the_order(self) -> None:
         rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await _dispatcher().perform(4242, "mix.roles_set", "42", ("all",))
+            outcome = await _dispatcher().perform(
+                4242, "mix.seat_set", "42", {"role1": "all", "role2": "none", "role3": "none", "flex": "0"}
+            )
 
         self.assertEqual(outcome.status, "ok")
-        self.assertEqual(rpc.calls[-1][1]["payload"], {"roles": None})
+        self.assertEqual(rpc.calls[-1][1]["payload"], {"roles": None, "is_flex": False})
 
     async def test_a_value_the_bot_never_minted_is_refused_before_any_call(self) -> None:
         rpc = _Rpc({})
         dispatcher = _dispatcher()
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await dispatcher.perform(4242, "mix.roles_set", "42", ("tank,healer",))
+            outcome = await dispatcher.perform(4242, "mix.seat_set", "42", {"role1": "healer", "flex": "1"})
 
         self.assertEqual((outcome.status, outcome.code), ("failed", "bad_values"))
         self.assertEqual(rpc.calls, [])
-        self.assertIn("разобрать выбор ролей", _reply_text(dispatcher.reply(outcome, "mix.roles_set", "ru")))
+        self.assertIn("разобрать выбор ролей", _reply_text(dispatcher.reply(outcome, "mix.seat_set", "ru")))
 
-    async def test_the_flex_button_carries_the_value_it_sets(self) -> None:
-        self.assertEqual(parse_custom_id("owt:mix.flex:42-off"), ("mix.flex", "42-off"))
-        self.assertIsNone(parse_custom_id("owt:mix.flex:42"))
-        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.self_update": rpc_ok(_mix_state())})
 
-        with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await _dispatcher().perform(4242, "mix.flex", "42-off")
+class MixSelfSignupTests(IsolatedAsyncioTestCase):
+    """The seat panel: which controls the policy allows, and what the card says."""
 
-        self.assertEqual(outcome.status, "ok")
-        body = rpc.calls[-1][1]
-        self.assertEqual((body["custom_game_id"], body["payload"]), (42, {"is_flex": False}))
-
-    async def test_the_reply_offers_the_role_select_only_while_roles_are_editable(self) -> None:
+    async def test_the_panel_offers_the_form_only_while_roles_are_editable(self) -> None:
         dispatcher = _dispatcher()
 
         editable = dispatcher.reply(Outcome("ok", _mix_state()), "mix.roles", "ru")
 
-        container, selects, buttons = editable.to_components()
-        (select,) = selects["components"]
-        options = select["options"]
-        self.assertEqual(select["custom_id"], "owt:mix.roles_set:42")
-        self.assertEqual(len(options), 16)
-        self.assertEqual([option["value"] for option in options if option["default"]], ["tank,support"])
-        by_value = {option["value"]: option for option in options}
-        self.assertEqual(by_value["tank,support"]["label"], "Танк → Саппорт")
-        self.assertEqual(by_value["tank,support"]["description"], "Танк 3100 · Саппорт без ранга")
-        self.assertEqual(by_value["all"]["label"], "Все роли с рангом")
+        _container, buttons = editable.to_components()
         self.assertEqual(
             [button["custom_id"] for button in buttons["components"]],
-            ["owt:mix.flex:42-on", "owt:mix.leave:42"],
+            ["owt:mix.setup:42-ts-0", "owt:mix.leave:42"],
         )
-        text = container["components"][0]["content"]
-        self.assertIn("Роли:** Танк → Саппорт", text)
-        self.assertIn("Нет ранга: Саппорт", text)
 
         locked = dispatcher.reply(
             Outcome(
@@ -405,9 +462,33 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         )
 
         _container, only_row = locked.to_components()
-        self.assertEqual([item["type"] for item in only_row["components"]], [2])
-        self.assertIn("Танк → Саппорт", _reply_text(locked))
+        self.assertEqual([button["custom_id"] for button in only_row["components"]], ["owt:mix.leave:42"])
         self.assertIn("не разрешил игрокам менять роли", _reply_text(locked))
+
+    def test_the_panel_names_every_role_once_with_its_division(self) -> None:
+        """Read against ``copy`` rather than the view: a shortcode is swapped
+        for the uploaded emoji on the way out, and there is none in a test."""
+        head, details = copy.mix_text("ru", _mix_state())
+
+        self.assertIn("Пятничный микс", head)
+        self.assertIn(":owt_ok: Вы в пуле", head)
+        self.assertIn("① :owt_tank: Танк — :owt_div_gold_3: Gold 3 · 3100", details)
+        self.assertIn("② :owt_support: Саппорт — без ранга", details)
+        # The role they did *not* pick is still on the card, so the panel
+        # answers "and the others?" without a second click.
+        self.assertIn("   :owt_damage: Дамаг — не играете", details)
+        self.assertIn(":owt_flex: Флекс: выкл", details)
+        self.assertIn("-# :owt_warn: Нет ранга: Саппорт", details)
+
+        every_ranked = _mix_state()
+        every_ranked["seat"]["roles"] = None
+        _head, all_details = copy.mix_text("ru", every_ranked)
+        self.assertIn("все роли с рангом", all_details)
+        self.assertIn(":owt_tank: Танк — :owt_div_gold_3: Gold 3 · 3100", all_details)
+        self.assertNotIn("①", all_details)
+
+        no_seat_head, _details = copy.mix_text("ru", _mix_state(seat=None))
+        self.assertIn("Вы не записаны на этот микс.", no_seat_head)
 
     async def test_the_card_names_the_lobby_only_when_the_mix_runs_two(self) -> None:
         """With two lobbies "you are signed up" is not enough: a player has to
@@ -415,11 +496,11 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         dispatcher = _dispatcher()
 
         one_lobby = _reply_text(dispatcher.reply(Outcome("ok", _mix_state()), "mix.roles", "ru"))
-        self.assertNotIn("лобби", one_lobby)
+        self.assertNotIn("Лобби", one_lobby)
 
         seated = _mix_state(lobby_count=2)
         seated["seat"]["current_lobby"] = 1
-        self.assertIn("Вы в лобби B", _reply_text(dispatcher.reply(Outcome("ok", seated), "mix.roles", "ru")))
+        self.assertIn("Лобби B", _reply_text(dispatcher.reply(Outcome("ok", seated), "mix.roles", "ru")))
 
         waiting = _mix_state(lobby_count=2)
         waiting["seat"]["current_lobby"] = None
@@ -427,7 +508,7 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
 
         english = _mix_state(lobby_count=2)
         english["seat"]["current_lobby"] = 0
-        self.assertIn("You are in lobby A", _reply_text(dispatcher.reply(Outcome("ok", english), "mix.roles", "en")))
+        self.assertIn("Lobby A", _reply_text(dispatcher.reply(Outcome("ok", english), "mix.roles", "en")))
 
     async def test_a_missing_battlenet_link_is_named_and_points_at_the_profile(self) -> None:
         rpc = _Rpc(
@@ -462,3 +543,45 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         view = dispatcher.reply(outcome, "mix.join", "ru")
         self.assertEqual(len(view.to_components()), 1)
         self.assertIn("Запись на этот микс закрыта", _reply_text(view))
+
+
+class CurrentMixCommandTests(IsolatedAsyncioTestCase):
+    """``/mix``: the same seat panel, found from the guild instead of from a button."""
+
+    async def test_the_command_reads_the_workspace_off_the_guild_and_shows_the_seat(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), MIX_CURRENT_SUBJECT: rpc_ok(_mix_state())})
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[7]))
+        command = _interaction(guild_id=555)
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher(workspaces=workspaces).show_current_mix(command)
+
+        command.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+        self.assertEqual(workspaces.list_ids_by_discord_guild.await_args.args[1], "555")
+        subject, body = rpc.calls[-1]
+        self.assertEqual(subject, MIX_CURRENT_SUBJECT)
+        self.assertEqual(body, {"identity": IDENTITY, "workspace_id": 7})
+        sent = command.followup.send.await_args.kwargs
+        self.assertTrue(sent["ephemeral"])
+        self.assertIn("Пятничный микс", _reply_text(sent["view"]))
+
+    async def test_no_open_mix_is_said_plainly_instead_of_as_a_failure(self) -> None:
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), MIX_CURRENT_SUBJECT: rpc_error("not_found", "no mix")})
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[7]))
+        command = _interaction(guild_id=555)
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher(workspaces=workspaces).show_current_mix(command)
+
+        self.assertIn("Сейчас нет открытого микса", _reply_text(command.followup.send.await_args.kwargs["view"]))
+
+    async def test_a_guild_wired_to_no_workspace_asks_the_platform_nothing(self) -> None:
+        rpc = _Rpc({})
+        workspaces = MagicMock(list_ids_by_discord_guild=AsyncMock(return_value=[]))
+        command = _interaction(guild_id=555)
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher(workspaces=workspaces).show_current_mix(command)
+
+        self.assertEqual(rpc.calls, [])
+        self.assertIn("Сейчас нет открытого микса", _reply_text(command.followup.send.await_args.kwargs["view"]))

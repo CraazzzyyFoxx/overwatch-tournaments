@@ -15,7 +15,32 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from shared.services import discord_messages  # noqa: E402
 from src.rpc import custom  # noqa: E402
+
+
+def _message(**fields) -> SimpleNamespace:
+    """One ``discord_message`` row of a mix, as the detail read finds it."""
+    return SimpleNamespace(
+        **{
+            "id": 30,
+            "channel": "discord_channel",
+            "subject": "mix:3",
+            "slot": "signup",
+            "kind": "mix.signup",
+            "status": "posted",
+            "discord_channel_id": 555,
+            "message_id": 777,
+            "error": None,
+            "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+            **fields,
+        }
+    )
+
+
+def _no_messages():
+    """No mix in these tests has posted anything to Discord."""
+    return patch.object(discord_messages.repository, "for_subject", AsyncMock(return_value=[]))
 
 
 class _Broker:
@@ -52,6 +77,9 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.broker = _Broker()
         custom.register(self.broker, MagicMock())
+        messages = _no_messages()
+        messages.start()
+        self.addCleanup(messages.stop)
 
     async def _call(self, subject: str, data: dict[str, Any]) -> dict[str, Any]:
         with patch.object(custom, "_SF", _Session):
@@ -188,7 +216,7 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         service.roster.list_for_game = AsyncMock(return_value=rows)
         service.lobbies.list_for_game = AsyncMock(return_value=lobbies)
         service.team_names.mapping_for_game = AsyncMock(return_value={})
-        service.workspace_discord_channel_id = AsyncMock(return_value=None)
+        service.workspace_discord_target = AsyncMock(return_value=(None, "42"))
         service.host_points_per_win = AsyncMock(return_value=0)
         service.roster_shape = AsyncMock(
             return_value=SimpleNamespace(model_dump=lambda: {"slots": {"tank": 1}, "source": "default"})
@@ -236,3 +264,121 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         self.assertFalse(closed["ok"], closed)
         self.assertEqual("unauthorized", closed["error"]["code"])
         service.close.assert_not_awaited()
+
+
+class DiscordPostsPayloadTests(IsolatedAsyncioTestCase):
+    """What the mix page learns about the Discord messages it has out there.
+
+    Posting is asynchronous, so the page has to render four distinct things:
+    waiting for the bot, a command the broker dropped, Discord's refusal, and a
+    link to the message that exists. The link needs all three snowflakes, and
+    the guild is the workspace's -- without a verified one there is no address
+    to build, however live the post.
+    """
+
+    def setUp(self) -> None:
+        self.broker = _Broker()
+        custom.register(self.broker, MagicMock())
+
+    async def _detail(self, rows: list[SimpleNamespace], *, guild_id: str | None = "42") -> dict:
+        game = SimpleNamespace(
+            id=3,
+            workspace_id=7,
+            host_user_id=5,
+            name="Friday mix",
+            status="draft",
+            lobby_count=1,
+            self_signup="pool",
+            self_role_edit=False,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        service = MagicMock()
+        service.get = AsyncMock(return_value=game)
+        service.roster.list_for_game = AsyncMock(return_value=[])
+        service.lobbies.list_for_game = AsyncMock(return_value=[])
+        service.team_names.mapping_for_game = AsyncMock(return_value={})
+        service.workspace_discord_target = AsyncMock(return_value=(None, guild_id))
+        service.host_points_per_win = AsyncMock(return_value=0)
+        service.roster_shape = AsyncMock(return_value=SimpleNamespace(model_dump=lambda: {"slots": {}}))
+        service.co_hosts.user_ids_for_game = AsyncMock(return_value=[])
+        service.hosts = AsyncMock(return_value={5: "Host"})
+        service.casual_matches.activity_for_games = AsyncMock(return_value={})
+        service.casual_matches.activity_for_lobbies = AsyncMock(return_value={})
+        self.for_subject = AsyncMock(
+            # The query filters ``deleted`` out in SQL; everything else comes back.
+            return_value=[row for row in rows if row.status != "deleted"]
+        )
+
+        with (
+            patch.object(custom, "custom_game_service", service),
+            patch.object(custom, "_SF", _Session),
+            patch.object(discord_messages.repository, "for_subject", self.for_subject),
+        ):
+            read = await self.broker.ops["rpc.balancer.custom.get"]({"workspace_id": 7, "custom_game_id": 3}, None)
+
+        self.assertTrue(read["ok"], read)
+        return read["data"]
+
+    async def test_a_posted_message_in_a_known_guild_is_addressable(self) -> None:
+        data = await self._detail([_message()])
+
+        [post] = data["discord_posts"]
+        self.assertEqual(30, post["id"])
+        self.assertEqual(("signup", "mix.signup", "posted"), (post["slot"], post["kind"], post["status"]))
+        self.assertEqual("https://discord.com/channels/42/555/777", post["url"])
+        self.assertIsNone(post["error"])
+        self.assertEqual("2026-01-01T00:00:00+00:00", post["created_at"])
+
+    async def test_without_a_verified_guild_there_is_no_link_to_give(self) -> None:
+        data = await self._detail([_message()], guild_id=None)
+
+        [post] = data["discord_posts"]
+        self.assertEqual("posted", post["status"])
+        self.assertIsNone(post["url"])
+
+    async def test_a_pending_post_has_nothing_to_link_to_yet(self) -> None:
+        data = await self._detail(
+            [_message(status="pending", discord_channel_id=None, message_id=None, created_at=datetime.now(UTC))]
+        )
+
+        [post] = data["discord_posts"]
+        self.assertEqual("pending", post["status"])
+        self.assertIsNone(post["url"])
+
+    async def test_a_command_the_broker_dropped_reads_lost(self) -> None:
+        """A ``pending`` older than the command queue's own TTL is never going
+        to be posted, and saying "posting..." forever would be a lie."""
+        stale = _message(
+            status="pending",
+            discord_channel_id=None,
+            message_id=None,
+            created_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+
+        data = await self._detail([stale])
+
+        [post] = data["discord_posts"]
+        self.assertEqual("lost", post["status"])
+
+    async def test_a_refusal_travels_as_text_and_not_as_a_link(self) -> None:
+        data = await self._detail(
+            [_message(status="failed", discord_channel_id=None, message_id=None, error="Missing Access")]
+        )
+
+        [post] = data["discord_posts"]
+        self.assertEqual("failed", post["status"])
+        self.assertEqual("Missing Access", post["error"])
+        self.assertIsNone(post["url"])
+
+    async def test_a_deleted_message_is_not_asked_for_at_all(self) -> None:
+        """The message is gone from the channel: the row only survives as the
+        bot's receipt, and the page has nothing to show for it."""
+        data = await self._detail([_message(status="deleted")])
+
+        self.assertEqual([], data["discord_posts"])
+        self.assertEqual(("pending", "posted", "failed", "deleting"), self.for_subject.await_args.kwargs["statuses"])
+
+    async def test_a_mix_nobody_announced_carries_an_empty_list(self) -> None:
+        data = await self._detail([])
+
+        self.assertEqual([], data["discord_posts"])

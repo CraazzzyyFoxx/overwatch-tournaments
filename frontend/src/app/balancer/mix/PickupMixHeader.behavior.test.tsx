@@ -14,7 +14,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CustomGame } from "@/services/custom-game.service";
+import type { CustomGame, CustomGameDiscordPost } from "@/services/custom-game.service";
 
 import { PickupMixHeader } from "./PickupMixHeader";
 
@@ -23,7 +23,12 @@ declare global {
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+// Echoes the key, plus any interpolated values -- so a label built from a
+// slot (`posts.lineupLobby`) is checkable without the real messages.
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string, values?: Record<string, unknown>) =>
+    values ? `${key}(${Object.values(values).join(",")})` : key,
+}));
 
 const onOpenPool = vi.fn();
 const onOpenAccess = vi.fn();
@@ -31,6 +36,7 @@ const onSetSelfService = vi.fn();
 const onPostSignup = vi.fn();
 const onLobbyCountChange = vi.fn();
 const onShuffleAll = vi.fn();
+const onDeleteDiscordPost = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -106,6 +112,7 @@ async function mount(
         onLobbyCountChange={onLobbyCountChange}
         shufflingAll={false}
         onShuffleAll={onShuffleAll}
+        onDeleteDiscordPost={onDeleteDiscordPost}
       />,
     );
   });
@@ -140,6 +147,7 @@ beforeEach(() => {
   onPostSignup.mockReset();
   onLobbyCountChange.mockReset();
   onShuffleAll.mockReset();
+  onDeleteDiscordPost.mockReset();
 });
 
 describe("PickupMixHeader", () => {
@@ -326,5 +334,139 @@ describe("PickupMixHeader self-service", () => {
     expect(byName(scope, "signup.pool")).toBeNull();
     expect(byName(scope, "openInDiscord")).toBeNull();
     expect(scope.querySelector('[aria-label="roleEdit"]')).toBeNull();
+  });
+});
+
+// The Discord posts, next to the button that posts the signup card. The bot
+// answers asynchronously, so this is the only way a host learns a post
+// landed -- or why it did not -- and the only way to take one down.
+function post(overrides: Partial<CustomGameDiscordPost> = {}): CustomGameDiscordPost {
+  return {
+    id: 1,
+    slot: "signup",
+    kind: "mix.signup",
+    status: "posted",
+    url: null,
+    error: null,
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("PickupMixHeader signup post status", () => {
+  function status(scope: ParentNode) {
+    return scope.querySelector('[role="status"]');
+  }
+
+  it("says nothing about a post that was never made", async () => {
+    const scope = await mount(game({ discord_posts: [] }));
+
+    expect(status(scope)?.textContent).toBe("");
+    expect(status(scope)?.querySelector("a")).toBeNull();
+  });
+
+  it("reads the newest signup post, not an older one or a lineup card", async () => {
+    const url = "https://discord.com/channels/1/2/3";
+    const scope = await mount(
+      game({
+        discord_posts: [
+          post({ id: 1, status: "failed", error: "Missing Permissions" }),
+          post({ id: 2, status: "posted", url }),
+          post({ id: 3, slot: "lineup:0:1", kind: "mix.lineup", status: "pending" }),
+        ],
+      }),
+    );
+
+    const link = status(scope)?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe(url);
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.textContent).toBe("post.posted");
+  });
+
+  it("exposes Discord's refusal on a failed post", async () => {
+    const scope = await mount(
+      game({ discord_posts: [post({ status: "failed", error: "Missing Permissions" })] }),
+    );
+
+    const failed = status(scope)?.querySelector("[title]");
+    expect(failed?.getAttribute("title")).toBe("Missing Permissions. post.failedHint");
+    expect(status(scope)?.textContent).toContain("Missing Permissions");
+  });
+
+  it("tells the host a lost post never reached Discord", async () => {
+    const scope = await mount(game({ discord_posts: [post({ status: "lost" })] }));
+
+    expect(status(scope)?.textContent).toContain("post.lost");
+    expect(status(scope)?.textContent).toContain("post.lostHint");
+  });
+});
+
+describe("PickupMixHeader Discord posts menu", () => {
+  const twoLobbies = { lobby_count: 2 as const, lobbies: [lobbyRow(0), lobbyRow(1)] };
+
+  it("is not offered while the mix has no posts", async () => {
+    const scope = await mount(game({ discord_posts: [] }));
+
+    expect(byName(scope, "posts.menu0")).toBeNull();
+  });
+
+  it("lists every post, lineup cards by lobby and game", async () => {
+    const url = "https://discord.com/channels/1/2/3";
+    const scope = await mount(
+      game({
+        ...twoLobbies,
+        discord_posts: [
+          post({ id: 1, url }),
+          post({ id: 2, slot: "lineup:1:3", kind: "mix.lineup", status: "pending" }),
+        ],
+      }),
+    );
+
+    await click(byName(scope, "posts.menu2"));
+
+    const rows = [...document.querySelectorAll('[aria-label="posts.menu"] li')];
+    expect(rows.map((row) => row.firstElementChild?.firstElementChild?.textContent)).toEqual([
+      "posts.signup",
+      "posts.lineupLobby(B,3)",
+    ]);
+    expect(rows[0].querySelector("a")?.getAttribute("href")).toBe(url);
+    expect(rows[1].querySelector("a")).toBeNull();
+    expect(rows[1].textContent).toContain("post.pending");
+  });
+
+  it("drops the lobby letter when the mix runs one lobby", async () => {
+    const scope = await mount(
+      game({ discord_posts: [post({ slot: "lineup:0:2", kind: "mix.lineup" })] }),
+    );
+
+    await click(byName(scope, "posts.menu1"));
+
+    expect(document.querySelector('[aria-label="posts.menu"]')?.textContent).toContain("posts.lineup(2)");
+  });
+
+  it("deletes a post only after the host confirms", async () => {
+    const scope = await mount(
+      game({ discord_posts: [post({ id: 41 }), post({ id: 42, slot: "lineup:0:1", kind: "mix.lineup" })] }),
+    );
+
+    await click(byName(scope, "posts.menu2"));
+    await click(document.querySelector('[aria-label="posts.delete(posts.lineup(1))"]'));
+    expect(onDeleteDiscordPost).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "posts.deleteDescription(posts.lineup(1))",
+    );
+
+    await click(byName(document, "posts.deleteConfirm"));
+    expect(onDeleteDiscordPost).toHaveBeenCalledWith(42);
+  });
+
+  it("cannot delete a post that is already being deleted", async () => {
+    const scope = await mount(game({ discord_posts: [post({ status: "deleting" })] }));
+
+    await click(byName(scope, "posts.menu1"));
+
+    expect(
+      document.querySelector('[aria-label="posts.delete(posts.signup)"]')?.hasAttribute("disabled"),
+    ).toBe(true);
   });
 });

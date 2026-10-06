@@ -40,11 +40,11 @@ from shared.models.identity.auth_user import AuthUser
 from shared.repository.notification import (
     DEFAULT_PAGE_LIMIT,
     InvalidCursorError,
-    NotificationDeliveryRepository,
     NotificationPreferenceRepository,
     NotificationRepository,
 )
 from shared.repository.notification_recipients import NotificationRecipientRepository
+from shared.services import discord_messages
 from shared.services.notifications import (
     STAFF_PERMISSION,
     STAFF_WORKSPACES_KEY,
@@ -73,11 +73,11 @@ logger = logging.getLogger(__name__)
 
 repository = NotificationRepository()
 preference_repository = NotificationPreferenceRepository()
-delivery_repository = NotificationDeliveryRepository()
 recipient_repository = NotificationRecipientRepository()
 
-#: How much of the delivery ledger the admin inspector shows. Ten is a glance at
-#: "did anything go out lately", not an audit trail -- the ledger itself is.
+#: How many of this account's Discord messages the admin inspector shows. Ten is
+#: a glance at "did anything go out lately", not an audit trail -- the
+#: ``discord_message`` table itself is.
 ADMIN_RECENT_DELIVERIES = 10
 
 # 60 s: the set changes when somebody joins a workspace or is granted a role,
@@ -293,10 +293,10 @@ async def _admin_summary(session: Any, *, auth_user_id: int) -> schemas.AdminUse
     prefs = await preferences(session, auth_user_id=auth_user_id)
     workspace_ids = await workspace_ids_for(session, auth_user_id=auth_user_id)
     unread = await repository.unread_count(session, auth_user_id=auth_user_id, workspace_ids=workspace_ids)
-    # The ledger is keyed by Discord snowflake, not by account: an operator
-    # looking at somebody who linked twice has to see both accounts' sends.
+    # ``discord_message`` is keyed by Discord snowflake, not by account: an
+    # operator looking at somebody who linked twice has to see both accounts' sends.
     linked = await load_provider_user_ids(session, auth_user_ids=[auth_user_id], oauth_provider="discord")
-    deliveries = await delivery_repository.recent_for_targets(
+    deliveries = await discord_messages.repository.recent_for_targets(
         session,
         channel="discord_dm",
         targets=linked.get(auth_user_id) or (),
@@ -307,7 +307,15 @@ async def _admin_summary(session: Any, *, auth_user_id: int) -> schemas.AdminUse
         discord_linked=prefs.discord_linked,
         staff_workspaces=prefs.staff_workspaces,
         unread_count=unread,
-        recent_deliveries=[schemas.NotificationDeliveryItem.model_validate(row) for row in deliveries],
+        # ``effective_status`` rather than the stored one: a DM the broker
+        # dropped reads ``lost``, which is exactly the diagnosis the inspector
+        # is opened for -- "pending" forever says nothing.
+        recent_deliveries=[
+            schemas.NotificationDeliveryItem.model_validate(row).model_copy(
+                update={"status": discord_messages.effective_status(row)}
+            )
+            for row in deliveries
+        ],
     )
 
 

@@ -6777,6 +6777,26 @@
       "roleEdit": "Игроки меняют свои роли",
       "openInDiscord": "Открыть запись в Discord",
       "noChannel": "У сообщества не настроен канал миксов в Discord",
+      "post": {
+        "pending": "Публикуется…",
+        "posted": "В Discord",
+        "failed": "Не опубликовано",
+        "failedHint": "Проверьте права бота в канале миксов и опубликуйте снова.",
+        "deleting": "Удаляется…",
+        "lost": "Не дошло до Discord",
+        "lostHint": "Бот так и не получил эту публикацию. Опубликуйте снова."
+      },
+      "posts": {
+        "menu": "Discord",
+        "signup": "Анонс записи",
+        "lineup": "Состав · Игра {match}",
+        "lineupLobby": "Состав · Лобби {lobby} · Игра {match}",
+        "open": "Открыть",
+        "delete": "Удалить «{label}» из Discord",
+        "deleteTitle": "Удалить публикацию в Discord?",
+        "deleteDescription": "Сообщение «{label}» будет удалено из канала Discord для всех. Сам микс не изменится.",
+        "deleteConfirm": "Удалить публикацию"
+      },
       "title": "Ваше место",
       "join": "Записаться",
       "leave": "Выписаться",

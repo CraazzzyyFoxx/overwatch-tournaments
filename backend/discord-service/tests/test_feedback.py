@@ -26,11 +26,14 @@ def test_build_message_feedback_replies_for_live_multi_log_results() -> None:
         wait_for_result=True,
     )
 
-    assert summary.reactions == ("✅", "⚠️")
+    assert summary.reactions == ("ok", "warn")
     assert summary.reply_text is not None
     assert "match-1.log" in summary.reply_text
     assert "match-2.log" in summary.reply_text
     assert "missing MatchEnd" in summary.reply_text
+    # Shortcodes, not characters: the bot swaps them for its own emoji when it sends.
+    assert ":owt_ok: match-1.log" in summary.reply_text
+    assert ":owt_warn: match-2.log" in summary.reply_text
 
 
 def test_build_message_feedback_skips_reply_for_already_processed_logs() -> None:
@@ -48,7 +51,7 @@ def test_build_message_feedback_skips_reply_for_already_processed_logs() -> None
         wait_for_result=True,
     )
 
-    assert summary.reactions == ("✅",)
+    assert summary.reactions == ("ok",)
     assert summary.reply_text is None
 
 
@@ -87,7 +90,7 @@ def test_build_message_feedback_reacts_on_history_rescan_when_mixed() -> None:
         wait_for_result=False,
     )
 
-    assert summary.reactions == ("✅", "⚠️")
+    assert summary.reactions == ("ok", "warn")
 
 
 def test_build_message_feedback_reacts_on_history_rescan_for_new_queued_log() -> None:
@@ -101,7 +104,7 @@ def test_build_message_feedback_reacts_on_history_rescan_for_new_queued_log() ->
         wait_for_result=False,
     )
 
-    assert summary.reactions == ("✅",)
+    assert summary.reactions == ("ok",)
 
 
 def test_build_message_feedback_skips_reply_for_single_live_result() -> None:
@@ -115,5 +118,5 @@ def test_build_message_feedback_skips_reply_for_single_live_result() -> None:
         wait_for_result=True,
     )
 
-    assert summary.reactions == ("✅",)
+    assert summary.reactions == ("ok",)
     assert summary.reply_text is None

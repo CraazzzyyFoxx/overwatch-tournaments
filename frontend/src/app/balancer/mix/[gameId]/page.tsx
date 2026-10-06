@@ -119,6 +119,7 @@ export default function BalancerPickupMixPage() {
     updateMySeat,
     setSelfService,
     postSignup,
+    deleteDiscordPost,
   } = usePickupMix(workspaceId ?? 0, pickedGameId, { seatEnabled: isSignedIn });
 
   const game = gameQuery.data;
@@ -238,6 +239,8 @@ export default function BalancerPickupMixPage() {
               savingSelfService={setSelfService.isPending}
               onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
               postingSignup={postSignup.isPending}
+              onDeleteDiscordPost={(postId) => deleteDiscordPost.mutate(postId)}
+              deletingDiscordPost={deleteDiscordPost.isPending}
               settingLobbyCount={setLobbyCount.isPending}
               onLobbyCountChange={(lobbyCount) => setLobbyCount.mutate(lobbyCount)}
               shufflingAll={balance.isPending && balance.variables?.scope === "all"}

@@ -514,6 +514,21 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * Deletes one of the mix's Discord posts. The server answers with the mix,
+   * the post already `deleting`; the bot removes the message asynchronously
+   * and the realtime refetch then drops the row.
+   */
+  const deleteDiscordPost = useMutation({
+    mutationFn: (postId: number) =>
+      customGameService.deleteDiscordPost(workspaceId, selectedGameId as number, postId),
+    onSuccess: (game) => {
+      applyGame(game);
+      notify.success("Removing the post from Discord");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
   return {
     selectedGameId,
     activeLobby,
@@ -547,5 +562,6 @@ export function usePickupMix(
     updateMySeat,
     setSelfService,
     postSignup,
+    deleteDiscordPost,
   };
 }

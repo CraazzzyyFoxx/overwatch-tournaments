@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,7 +11,6 @@ from shared.core import db
 
 __all__ = (
     "Notification",
-    "NotificationDelivery",
     "NotificationPreference",
     "NotificationRead",
     "NotificationWorkspaceConfig",
@@ -189,38 +188,6 @@ class NotificationRead(db.Base):
     # funnels through ``NotificationRepository.audience_clause``, which drops
     # the row for this identity alone.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class NotificationDelivery(db.Base):
-    """One row per message actually handed to an outside channel.
-
-    The ledger that makes delivery idempotent: the consumer inserts
-    ``ON CONFLICT DO NOTHING`` on ``(channel, target, dedupe_key)`` in the same
-    transaction as the outbox command to the bot, so a redelivered event finds
-    its row and sends nothing. Skips (preference off, no Discord linked) are
-    not recorded -- only sends.
-
-    No foreign keys, like ``Notification``: a journal outlives its referents.
-    ``ponytail:`` no retention; add it to the purge tick when the table gets big.
-    """
-
-    __tablename__ = "notification_delivery"
-    __table_args__ = (UniqueConstraint("channel", "target", "dedupe_key", name="uq_notification_delivery_target"),)
-
-    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, autoincrement=True)
-    # ``discord_dm`` | ``discord_channel``.
-    channel: Mapped[str] = mapped_column(String(32), nullable=False)
-    # The Discord user id (DM) or channel id, as text: snowflakes, not keys.
-    target: Mapped[str] = mapped_column(String(64), nullable=False)
-    dedupe_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    notification_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
-    workspace_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
-    kind: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
 
 
 class NotificationPreference(db.Base):

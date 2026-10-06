@@ -260,12 +260,15 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - app-network
+    # Reads the heartbeat file GatewayWatchdog touches while the Discord gateway
+    # session is alive: the bot serves no port, and a session can die without
+    # the process dying. start_period covers login + the first connect.
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD", "python", "-m", "src.tools.healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 90s
     restart: always
 
 #  twitch:

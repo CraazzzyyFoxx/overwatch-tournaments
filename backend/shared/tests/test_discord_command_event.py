@@ -1,10 +1,10 @@
 """Per-action validation of ``DiscordCommandEvent``.
 
 The model is the contract between three publishers (parser-service's
-``process_all`` backfill, balancer-service's ``post_message``) and the single
-discord-service consumer, so ``tournament_id`` had to stop being an
-unconditionally required field. These tests pin that the relaxation did not
-also relax the per-action requirements.
+``process_all`` backfill, balancer-service's mix posts, app-service's
+notifications) and the single discord-service consumer. Every message the bot
+sends is one Components V2 card, so the per-action rules are about which ids
+and which card a command needs, and about the one picture a card may carry.
 """
 
 from __future__ import annotations
@@ -14,6 +14,9 @@ from unittest import TestCase
 from pydantic import ValidationError
 
 from shared.schemas.events import DiscordCard, DiscordCommandEvent
+
+CARD = DiscordCard(text="### Mix")
+SHOWN = DiscordCard(text="### Lineup", image_url="attachment://lineup.png")
 
 
 class DiscordCommandEventTests(TestCase):
@@ -33,56 +36,44 @@ class DiscordCommandEventTests(TestCase):
             DiscordCommandEvent(action="process_message", tournament_id=7, channel_id=1)
         self.assertIn("channel_id and message_id are required for action='process_message'", str(ctx.exception))
 
-    def test_post_message_accepts_embed_without_tournament(self) -> None:
-        event = DiscordCommandEvent(action="post_message", channel_id=123, embed={"title": "Mix — Match 1"})
+    def test_every_message_names_its_row_and_carries_a_card(self) -> None:
+        """A message the platform cannot address later is a message it cannot delete."""
+        self.assertEqual(DiscordCommandEvent(action="post_message", channel_id=1, card=CARD, message_ref=3).card, CARD)
+        self.assertEqual(DiscordCommandEvent(action="send_dm", discord_user_id=42, card=CARD, message_ref=3).card, CARD)
+        self.assertEqual(DiscordCommandEvent(action="edit_message", message_ref=3, card=CARD).message_ref, 3)
+        self.assertEqual(DiscordCommandEvent(action="delete_message", message_ref=3).message_ref, 3)
 
-        self.assertIsNone(event.tournament_id)
-        self.assertIsNone(event.content)
-        self.assertEqual(event.embed, {"title": "Mix — Match 1"})
+        for missing in (
+            {"action": "post_message", "card": CARD, "message_ref": 3},
+            {"action": "post_message", "channel_id": 1, "message_ref": 3},
+            {"action": "post_message", "channel_id": 1, "card": CARD},
+            {"action": "send_dm", "card": CARD, "message_ref": 3},
+            {"action": "send_dm", "discord_user_id": 42, "card": CARD},
+            {"action": "edit_message", "card": CARD},
+            {"action": "edit_message", "message_ref": 3},
+            {"action": "delete_message"},
+        ):
+            with self.assertRaises(ValidationError, msg=missing):
+                DiscordCommandEvent(**missing)
 
-    def test_post_message_accepts_content_only(self) -> None:
-        event = DiscordCommandEvent(action="post_message", channel_id=123, content="hello")
-
-        self.assertEqual(event.content, "hello")
-        self.assertIsNone(event.embed)
-
-    def test_post_message_accepts_an_image_as_the_only_payload(self) -> None:
-        """The mix posts a screenshot of its matchup and no text at all."""
-        event = DiscordCommandEvent(action="post_message", channel_id=123, image_b64="iVBORw0KGgo=")
-
-        self.assertEqual(event.image_b64, "iVBORw0KGgo=")
-        self.assertEqual(event.image_filename, "lineup.png")
-        self.assertIsNone(event.embed)
-
-    def test_post_message_requires_content_embed_or_image(self) -> None:
-        with self.assertRaises(ValidationError):
-            DiscordCommandEvent(action="post_message", channel_id=123)
-
-    def test_post_message_requires_channel(self) -> None:
-        with self.assertRaises(ValidationError) as ctx:
-            DiscordCommandEvent(action="post_message", content="hello")
-        self.assertIn("channel_id is required for action='post_message'", str(ctx.exception))
-
-    def test_send_dm_requires_a_user_and_something_to_say(self) -> None:
-        event = DiscordCommandEvent(action="send_dm", discord_user_id=42, embed={"title": "Check-in"})
-        self.assertEqual(event.discord_user_id, 42)
-
-        with self.assertRaises(ValidationError) as ctx:
-            DiscordCommandEvent(action="send_dm", content="hello")
-        self.assertIn("discord_user_id is required for action='send_dm'", str(ctx.exception))
+    def test_an_image_travels_only_inside_the_card_that_shows_it(self) -> None:
+        """A stray attachment beside a Components V2 layout, or a gallery pointing at
+        a file that is not there, is a 400 from Discord -- a DLQ entry, not a post."""
+        post = {"action": "post_message", "channel_id": 1, "message_ref": 3}
+        event = DiscordCommandEvent(**post, card=SHOWN, image_b64="iVBORw0KGgo=")
+        self.assertEqual(event.card.attachment_name, "lineup.png")
 
         with self.assertRaises(ValidationError):
-            DiscordCommandEvent(action="send_dm", discord_user_id=42)
+            DiscordCommandEvent(**post, card=CARD, image_b64="iVBORw0KGgo=")
+        with self.assertRaises(ValidationError):
+            DiscordCommandEvent(**post, card=SHOWN)
+        with self.assertRaises(ValidationError):
+            DiscordCommandEvent(**post, card=SHOWN, image_b64="iVBORw0KGgo=", image_filename="other.png")
+        with self.assertRaises(ValidationError):
+            DiscordCommandEvent(
+                action="send_dm", discord_user_id=42, message_ref=3, card=SHOWN, image_b64="iVBORw0KGgo="
+            )
 
-    def test_a_card_travels_alone(self) -> None:
-        """Discord answers 400 to a Components V2 message that also has content or embeds."""
-        card = DiscordCard(text="### Check-in opened")
-        self.assertEqual(DiscordCommandEvent(action="send_dm", discord_user_id=42, card=card).card, card)
-
-        for extra in ({"content": "hi"}, {"embed": {"title": "x"}}, {"image_b64": "iVBORw0KGgo="}):
-            with self.assertRaises(ValidationError, msg=extra):
-                DiscordCommandEvent(action="post_message", channel_id=1, card=card, **extra)
-
-    def test_mentions_stay_allowed_unless_the_publisher_opts_out(self) -> None:
-        # The balancer's mix posts predate the flag and keep their behaviour.
-        self.assertTrue(DiscordCommandEvent(action="post_message", channel_id=1, content="x").allow_mentions)
+    def test_nobody_is_pinged_unless_the_publisher_asks(self) -> None:
+        event = DiscordCommandEvent(action="post_message", channel_id=1, card=CARD, message_ref=3)
+        self.assertFalse(event.allow_mentions)

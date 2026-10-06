@@ -1,161 +1,40 @@
-"""The text fallback for the Discord message a host posts for a pickup mix.
+"""What the Discord messages of a pickup mix say: the signup card and the lineup card.
 
-A host normally posts the matchup card itself: the mix page rasterises what is
-on screen and the bot attaches that PNG (see ``rpc/custom.py``'s
-``post_discord``). This embed is what goes out when there is no image -- a
-capture that failed, or a caller with nothing to capture.
+Pure domain: no I/O, no ORM, no async. The caller (custom game service) resolves
+the mix name, its roster, the next map with its gamemode, the team-name
+overrides and the Discord ids to ping, then hands them here; discord-service
+owns the transport and this owns the words.
 
-Pure domain: no I/O, no ORM, no async. It builds the plain ``dict`` shape
-Discord itself takes (``discord.Embed.from_dict`` on the bot side) rather than a
-``discord.Embed`` object, because balancer-service has no discord dependency and
-must not grow one just to describe a lineup -- the bot owns the transport, this
-owns what the message says. The caller (custom game service) resolves the mix
-name, how many matches it has recorded, the next map with its gamemode and the
-team-name overrides from the database, then hands them here.
+Both cards are Components V2 ``DiscordCard``s and both are Russian: a channel
+has no per-reader locale, unlike the ephemeral replies the bot renders per user.
+Emoji are written as ``:owt_<name>:`` shortcodes (``shared.domain.discord_ui``)
+which the bot swaps for its uploaded application emoji.
 
-Discord's own limits are part of the contract, not a detail the bot can fix
-afterwards: a field value over 1024 characters is rejected outright, so a
-lineup that long is cut short with a trailing marker instead of failing to post.
-
-The same module also builds the signup card a host posts to open the mix
-(:func:`signup_card`) -- that one is a Components V2 ``DiscordCard`` rather than
-an embed, because it carries buttons the bot answers, but it is the same kind of
-thing: what the message says, with the transport left to discord-service.
+The signup card is LIVE: the message the platform posted it as is a
+``discord_message`` row (``subject='mix:<id>'``, ``slot='signup'``) and every
+mutation that changes one of the numbers below re-renders this card into that
+same message, so it is built from current state every time rather than once at
+post time.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any
 
+from shared.domain.discord_ui import BLUE, ROLE_EMOJI, TEAL, emoji
 from shared.schemas.events import DiscordActionButton, DiscordCard, DiscordLinkButton
 from src.domain.balancer.result_serializer import seat_rating
 from src.services.balancer.role_naming import role_slot_code
 
-__all__ = ("build_lineup_embed", "signup_card")
+__all__ = ("lineup_card", "signup_card")
 
-#: Teal, matching the accent the pickup-mix screens already use.
-_COLOR = 0x14B8A6
-#: Discord's hard cap on one embed field's value.
-_MAX_FIELD_VALUE = 1024
-_TRUNCATED = "…"
-#: Human labels for the slot codes a roster bucket resolves to -- the mix
-#: rosters are keyed by the solver's spelling (``Tank``/``Damage``/...), which
-#: is not what a host reads.
-_ROLE_LABELS = {"tank": "Tank", "damage": "DPS", "support": "Support", "flex": "Flex"}
-
-
-def _role_label(bucket: str) -> str:
-    """Tank/DPS/Support for a roster bucket, the raw key for anything else."""
-    return _ROLE_LABELS.get(role_slot_code(bucket), bucket)
-
-
-def _rating(value: Any) -> str:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return str(value)
-    return str(int(value))
-
-
-def _seat_line(bucket: str, uuid: str, player: Mapping[str, Any]) -> str:
-    name = player.get("name") or f"#{uuid}"
-    return f"{_role_label(bucket)} · {name} · {_rating(seat_rating(player, bucket))}"
-
-
-def _field_value(lines: list[str]) -> str:
-    """The seat lines as one field value, cut short of Discord's 1024 cap.
-
-    An empty team still needs a non-empty value (Discord rejects a blank one),
-    hence the dash.
-    """
-    if not lines:
-        return "—"
-    value = "\n".join(lines)
-    if len(value) <= _MAX_FIELD_VALUE:
-        return value
-    # Room for the trailing marker and the newline joining it to the last line
-    # that fits.
-    budget = _MAX_FIELD_VALUE - len(_TRUNCATED) - 1
-    kept: list[str] = []
-    used = 0
-    for line in lines:
-        cost = len(line) + (1 if kept else 0)
-        if used + cost > budget:
-            break
-        kept.append(line)
-        used += cost
-    return "\n".join([*kept, _TRUNCATED])
-
-
-def _seat_lines(team: Mapping[str, Any], players: Mapping[str, Any]) -> list[str]:
-    """One line per seat, in the order the roster stores its buckets."""
-    roster = team.get("roster")
-    if not isinstance(roster, Mapping):
-        return []
-    return [
-        _seat_line(bucket, str(uuid), players.get(str(uuid)) or {})
-        for bucket, seats in roster.items()
-        if isinstance(seats, list)
-        for uuid in seats
-    ]
-
-
-def build_lineup_embed(
-    *,
-    mix_name: str,
-    match_number: int,
-    variant: Mapping[str, Any],
-    players: Mapping[str, Any],
-    team_names: Mapping[int, str],
-    next_map: tuple[str, str | None] | None,
-    points_per_win: int | None,
-    lobby_label: str | None = None,
-) -> dict[str, Any]:
-    """One embed dict describing the teams of ``variant`` and the map they play.
-
-    ``variant`` is one option of a stored ``lobby_document`` and ``players`` that
-    document's player map, which its seat uuids resolve against.
-
-    ``next_map`` is ``(map name, gamemode name)`` or ``None`` when nobody has
-    rolled one yet -- a mix that posts its lineup before the roll is normal, so
-    that reads as "not rolled yet" rather than omitting the line. Teams keep the
-    variant's own order, and a team without a name override is numbered from it.
-
-    ``lobby_label`` names the lobby when the mix runs two of them: both post
-    into the same channel, and "game 3" of one is not "game 3" of the other. A
-    single-lobby mix passes ``None`` and reads exactly as it always did.
-    """
-    if next_map is None:
-        description = "Map: not rolled yet"
-    else:
-        map_name, gamemode = next_map
-        description = f"Map: {map_name} · {gamemode}" if gamemode else f"Map: {map_name}"
-
-    teams = variant.get("teams")
-    fields = [
-        {
-            "name": team_names.get(index) or f"Team {index + 1}",
-            "value": _field_value(_seat_lines(team, players)),
-            "inline": True,
-        }
-        for index, team in enumerate(teams if isinstance(teams, list) else [])
-        if isinstance(team, Mapping)
-    ]
-
-    embed: dict[str, Any] = {
-        "title": (
-            f"{mix_name} — Match {match_number}"
-            if lobby_label is None
-            else f"{mix_name} — Лобби {lobby_label} · игра {match_number}"
-        ),
-        "description": description,
-        "color": _COLOR,
-        "fields": fields,
-    }
-    if points_per_win is not None:
-        embed["footer"] = {"text": f"Points per win: {points_per_win}"}
-    return embed
-
+#: Mix statuses nobody can sign up for any more.
+_TERMINAL = {"completed": "завершён", "cancelled": "отменён"}
+#: The roles a signup counter breaks down by; everything else is "any role".
+_COUNTED_ROLES = ("tank", "damage", "support")
 
 #: Everything Discord markdown gives a meaning to; a backslash before ASCII
 #: punctuation is always consumed, so over-escaping is invisible to the reader.
@@ -167,28 +46,197 @@ def _escape(text: str) -> str:
     return _MARKDOWN.sub(r"\\\1", text)
 
 
-def signup_card(*, mix_name: str, host_name: str | None, board_url: str, custom_game_id: int) -> DiscordCard:
-    """The channel post that opens a mix for self-signup.
+def _board_button(board_url: str) -> DiscordLinkButton:
+    return DiscordLinkButton(label="Доска микса", url=board_url, emoji="link")
 
-    Static by design: the bot does not edit channel posts, so a live counter of
-    who signed up would need a stored ``message_id`` and an ``edit_message``
-    path. The buttons therefore carry no state at all -- only the mix id -- and
-    every answer is re-derived from the database at click time, which is also why
-    a card outlives its mix gracefully (a closed mix answers ``mix_closed``).
 
-    Russian, like every other channel-wide post: a channel has no per-reader
-    locale, unlike the ephemeral replies the bot renders per user.
+def _timestamp(moment: datetime) -> str:
+    """Discord's own relative clock, so "2 minutes ago" is rendered per reader."""
+    return f"<t:{int(moment.timestamp())}:R>"
+
+
+def _signup_counts(roles: Sequence[Sequence[str] | None]) -> dict[str, int]:
+    """How many rows want each role, keyed by the FIRST role each one named.
+
+    A row in ``all_ranked`` mode (``None``) named no role at all and is counted
+    as "any role": it plays whatever it has a number for, which is not a claim
+    on tank the way an explicit first choice is.
     """
-    host = _escape(host_name) if host_name else "—"
+    counts = dict.fromkeys((*_COUNTED_ROLES, "any"), 0)
+    for entry in roles:
+        first = entry[0] if entry else None
+        counts[first if first in counts else "any"] += 1
+    return counts
+
+
+def signup_card(
+    *,
+    mix_name: str,
+    host_name: str | None,
+    board_url: str,
+    custom_game_id: int,
+    self_signup: str,
+    status: str,
+    lobby_count: int,
+    roles: Sequence[Sequence[str] | None],
+    updated_at: datetime,
+) -> DiscordCard:
+    """The live channel post that opens a mix for self-signup.
+
+    Three states, because a reader has to see the difference from across the
+    room: open (green dot, every button live), closed by the host (lock, Join
+    greyed out -- the card stays readable, and whoever is already in can still
+    check their seat or leave), and over (lock, no buttons at all; a finished
+    mix answers nothing).
+
+    ``roles`` is one entry per roster row: the row's explicit role order, or
+    ``None`` for "every role I have a rank for". That is the whole input to the
+    counters -- the card says how the lobby is shaping up, which is the reason
+    to glance at it again.
+    """
+    name = _escape(mix_name)
+    terminal = _TERMINAL.get(str(status))
+    closed = self_signup == "closed"
+    if terminal is not None:
+        headline = f"## {emoji('lock')} Микс «{name}» {terminal}"
+    elif closed:
+        headline = f"## {emoji('lock')} Запись на микс «{name}» закрыта"
+    else:
+        headline = f"## {emoji('live')} Запись на микс «{name}»"
+
+    facts = [f"{emoji('host')} {_escape(host_name) if host_name else '—'}"]
+    if lobby_count == 2:
+        facts.append(f"{emoji('lobby_a')}{emoji('lobby_b')} 2 лобби")
+    if terminal is None and self_signup == "pool":
+        facts.append(f"{emoji('pool')} сразу в пул")
+    elif terminal is None and self_signup == "benched":
+        facts.append(f"{emoji('bench')} сначала на скамейку")
+
+    counts = _signup_counts(roles)
+    details = [
+        f"{emoji('players')} **{len(roles)}** записано"
+        f" · {emoji('tank')} {counts['tank']}"
+        f" · {emoji('damage')} {counts['damage']}"
+        f" · {emoji('support')} {counts['support']}"
+        f" · любая роль {counts['any']}"
+    ]
+    if terminal is None and not closed:
+        details.append("1. Нажмите «Записаться»  2. Настройте роли в ответе бота")
+        details.append(f"-# Нужны привязанные Discord и Battle.net · обновлено {_timestamp(updated_at)}")
+    else:
+        details.append(f"-# обновлено {_timestamp(updated_at)}")
+
     target = str(custom_game_id)
+    answers: list[DiscordActionButton] = (
+        []
+        if terminal is not None
+        else [
+            DiscordActionButton(
+                label="Записаться", action="mix.join", target=target, style="success", emoji="join", disabled=closed
+            ),
+            DiscordActionButton(label="Моё место", action="mix.roles", target=target, emoji="edit"),
+            DiscordActionButton(label="Выписаться", action="mix.leave", target=target, style="danger", emoji="leave"),
+        ]
+    )
     return DiscordCard(
-        accent_color=_COLOR,
-        text=f"**Запись на микс «{_escape(mix_name)}»** · хост {host}",
-        details="Нужны привязанные к аккаунту Discord и Battle.net.",
-        answers=[
-            DiscordActionButton(label="Записаться", action="mix.join", target=target, style="success"),
-            DiscordActionButton(label="Мои роли", action="mix.roles", target=target),
-            DiscordActionButton(label="Выписаться", action="mix.leave", target=target, style="danger"),
-        ],
-        rows=[[DiscordLinkButton(label="Доска микса", url=board_url)]],
+        accent_color=BLUE if terminal is not None else TEAL,
+        text="\n".join([headline, " · ".join(facts)]),
+        details="\n".join(details),
+        answers=answers,
+        rows=[[_board_button(board_url)]],
+    )
+
+
+def _seat_line(bucket: str, uuid: str, player: Mapping[str, Any]) -> str:
+    """One seat: its role emoji, the player's name and the rating they sit at.
+
+    A bucket the role vocabulary does not know (a custom roster shape) keeps its
+    own key as the label instead of borrowing another role's badge.
+    """
+    code = role_slot_code(bucket)
+    badge = emoji(ROLE_EMOJI[code]) if code in ROLE_EMOJI else _escape(bucket)
+    name = player.get("name") or f"#{uuid}"
+    rating = seat_rating(player, bucket)
+    return f"{badge} {_escape(str(name))} · {int(rating) if isinstance(rating, int | float) else rating}"
+
+
+def _team_block(name: str, team: Mapping[str, Any], players: Mapping[str, Any]) -> str:
+    roster = team.get("roster")
+    lines = (
+        [
+            _seat_line(bucket, str(uuid), players.get(str(uuid)) or {})
+            for bucket, seats in roster.items()
+            if isinstance(seats, list)
+            for uuid in seats
+        ]
+        if isinstance(roster, Mapping)
+        else []
+    )
+    return "\n".join([f"**{_escape(name)}**", *(lines or ["—"])])
+
+
+def lineup_card(
+    *,
+    mix_name: str,
+    match_number: int,
+    variant: Mapping[str, Any],
+    players: Mapping[str, Any],
+    team_names: Mapping[int, str],
+    next_map: tuple[str, str | None] | None,
+    points_per_win: int | None,
+    board_url: str,
+    lobby_label: str | None = None,
+    image_filename: str | None = None,
+    mentions: Sequence[str] = (),
+) -> DiscordCard:
+    """The matchup one lobby is about to play.
+
+    ``variant`` is one option of a stored ``lobby_document`` and ``players``
+    that document's player map, which its seat uuids resolve against.
+
+    A host normally posts the matchup card itself: the mix page rasterises what
+    is on screen and the bot attaches that PNG (``image_filename``), which beats
+    any text rendering -- crests and all. The per-team seat lists are what goes
+    out when there is no image: a capture that failed, or a caller with nothing
+    to capture.
+
+    ``next_map`` is ``(map name, gamemode name)`` or ``None`` when nobody has
+    rolled one yet -- posting a lineup before the roll is normal, so that reads
+    as "not chosen yet" rather than omitting the line. ``lobby_label`` names the
+    lobby when the mix runs two of them: both post into the same channel, and
+    "game 3" of one is not "game 3" of the other.
+
+    ``mentions`` are the Discord ids of seated players whose account is linked;
+    they ping, which is the point of posting a lineup at all.
+    """
+    title = " · ".join(
+        part
+        for part in (_escape(mix_name), f"Лобби {lobby_label}" if lobby_label else None, f"Игра {match_number}")
+        if part
+    )
+    if next_map is None:
+        where = f"{emoji('map')} Карта ещё не выбрана"
+    else:
+        map_name, gamemode = next_map
+        where = f"{emoji('map')} {_escape(map_name)}" + (f" · {_escape(gamemode)}" if gamemode else "")
+    if points_per_win:
+        where += f" · {emoji('points')} +{points_per_win} за победу"
+
+    blocks: list[str] = []
+    if image_filename is None:
+        teams = variant.get("teams")
+        blocks = [
+            _team_block(team_names.get(index) or f"Команда {index + 1}", team, players)
+            for index, team in enumerate(teams if isinstance(teams, list) else [])
+            if isinstance(team, Mapping)
+        ]
+    if mentions:
+        blocks.append(f"-# {emoji('players')} " + " ".join(f"<@{discord_id}>" for discord_id in mentions))
+
+    return DiscordCard(
+        accent_color=TEAL,
+        text="\n".join([f"## {emoji('vs')} {title}", where]),
+        details="\n\n".join(blocks) or None,
+        image_url=None if image_filename is None else f"attachment://{image_filename}",
+        rows=[[_board_button(board_url)]],
     )

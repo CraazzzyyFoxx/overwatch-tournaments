@@ -26,6 +26,7 @@ from shared.core.enums import (  # noqa: E402
 )
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
+from shared.services import discord_messages  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
@@ -190,6 +191,59 @@ def _auth(user_id: int = 42, *, denied: bool = False) -> SimpleNamespace:
     )
 
 
+class _MessageRepo:
+    """``discord_message`` as a list, standing in for the real repository.
+
+    Only what a mix does with it: claim a row, read a subject's rows back and
+    move one through the ``mark_*`` states. Everything above it -- which rows
+    get a delete command, what a command carries -- is the real
+    ``shared.services.discord_messages``, which is the half worth testing.
+    """
+
+    def __init__(self) -> None:
+        self.rows: list[SimpleNamespace] = []
+        self._next_id = 100
+
+    def add(self, **fields) -> SimpleNamespace:
+        """A message this mix already sent, as the database would have it."""
+        self._next_id += 1
+        row = _row(
+            **{
+                "id": self._next_id,
+                "channel": "discord_channel",
+                "target": "555",
+                "kind": "mix.signup",
+                "workspace_id": 1,
+                "notification_id": None,
+                "error": None,
+                **fields,
+            }
+        )
+        self.rows.append(row)
+        return row
+
+    async def claim(self, _session, *, dedupe_key=None, **fields) -> int:
+        return self.add(status="pending", **fields).id
+
+    async def for_subject(self, _session, subject, *, slot=None, statuses=None) -> list[SimpleNamespace]:
+        return [
+            row
+            for row in self.rows
+            if row.subject == subject
+            and (slot is None or row.slot == slot)
+            and (statuses is None or row.status in statuses)
+        ]
+
+    async def get(self, _session, row_id) -> SimpleNamespace | None:
+        return next((row for row in self.rows if row.id == row_id), None)
+
+    async def mark_deleting(self, _session, row_id) -> None:
+        (await self.get(_session, row_id)).status = "deleting"
+
+    async def mark_deleted(self, _session, row_id) -> None:
+        (await self.get(_session, row_id)).status = "deleted"
+
+
 class CustomGameServiceTests(IsolatedAsyncioTestCase):
     if sys.platform == "win32":
         loop_factory = asyncio.SelectorEventLoop
@@ -274,6 +328,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self._emit_patch = patch("src.services.custom_game.emit_pickup_mix_updated", new=self.emit)
         self._emit_patch.start()
         self.addCleanup(self._emit_patch.stop)
+        # The one table every Discord message of this mix lives in. Empty by
+        # default: the mix has never posted anything.
+        self.messages = _MessageRepo()
+        self._messages_patch = patch.object(discord_messages, "repository", self.messages)
+        self._messages_patch.start()
+        self.addCleanup(self._messages_patch.stop)
         # Every requested member exists in this workspace unless a test says otherwise.
         self.load_roster = AsyncMock(side_effect=lambda _s, *, workspace_id, member_ids: _members(*member_ids))
         # No workspace member resolves to a host name unless a test says
@@ -286,7 +346,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.load_member_user_ids = AsyncMock(return_value=set())
         self.ranks.resolve = AsyncMock(return_value={})
         self.ranks.set_ranks = AsyncMock(return_value={})
-        self.grid = object()
+        # Every rank lands in the same tier here: the seat dump only has to
+        # carry what the grid answered, not re-derive a division itself.
+        self.grid = SimpleNamespace(resolve_division=lambda _rank: _row(name="Золото 3", slug="gold-3"))
         self._grid_patch = patch(
             "src.services.custom_game.get_effective_division_grid",
             new=AsyncMock(return_value=self.grid),
@@ -327,6 +389,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             grant_player_role=self.grant_player_role,
         )
         self.session = _session()
+
+    def _discord_links(self, by_member: dict[int, str]) -> None:
+        """The one batched read behind ``discord_mentions``: member id -> snowflake."""
+        rows = MagicMock()
+        rows.all = MagicMock(return_value=list(by_member.items()))
+        self.session.execute = AsyncMock(return_value=rows)
 
     @staticmethod
     async def _assign_id(_session, row):
@@ -1065,6 +1133,20 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(state["self_signup"], "pool")
         self.assertIs(state["self_role_edit"], True)
 
+    async def test_self_state_badges_each_ranked_role_with_its_division(self) -> None:
+        """The bot shows a division badge per role and holds no copy of the grid."""
+        self.games.get.return_value = _game(self_signup="pool")
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
+        self.ranks.resolve.return_value = {(7, "tank"): ResolvedRank(3100, "author")}
+
+        state = await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
+
+        self.assertEqual(
+            state["seat"]["divisions"],
+            {"tank": {"name": "Золото 3", "slug": "gold-3"}, "damage": None, "support": None},
+        )
+
     async def test_self_state_says_which_lobby_this_player_sits_in(self) -> None:
         """Where a player sits is the same derivation the board shows -- the
         seats of each lobby's selected option -- so the panel and the bot read
@@ -1109,6 +1191,27 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             await self.service.self_state(self.session, custom_game_id=11, auth_user=_auth(), workspace_id=1)
         self.assertEqual(ctx.exception.status_code, 404)
 
+    async def test_self_current_answers_for_the_newest_mix_still_running(self) -> None:
+        """``/mix`` names no id: the newest mix that is not over is the one meant."""
+        self.games.list_for_workspace = AsyncMock(
+            return_value=[_game(id=13, status="cancelled"), _game(id=12), _game(id=11)]
+        )
+        self.games.get.return_value = _game(id=12)
+
+        state = await self.service.self_current(self.session, workspace_id=1, auth_user=_auth())
+
+        self.assertEqual(state["custom_game_id"], 12)
+        self.games.get.assert_awaited_with(self.session, 12)
+
+    async def test_self_current_without_an_open_mix_404(self) -> None:
+        self.games.list_for_workspace = AsyncMock(
+            return_value=[_game(id=13, status="completed"), _game(id=12, status="cancelled")]
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.self_current(self.session, workspace_id=1, auth_user=_auth())
+        self.assertEqual(ctx.exception.status_code, 404)
+
     async def test_set_self_service_writes_both_switches(self) -> None:
         game = _game()
         self.games.get.return_value = game
@@ -1139,7 +1242,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
         self.load_hosts.return_value = {9: "Foxx"}
 
-        channel_id, card = await self.service.signup_post(
+        channel_id, commands = await self.service.signup_post(
             self.session,
             workspace_id=1,
             custom_game_id=11,
@@ -1150,9 +1253,61 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(channel_id, 555)
         self.assertEqual(game.self_signup, "benched")
-        self.assertIn("Friday mix", card.text)
-        [[link]] = card.rows
+        [post] = commands
+        self.assertEqual(post.action, "post_message")
+        self.assertIn("Friday mix", post.card.text)
+        [[link]] = post.card.rows
         self.assertEqual(link.url, "https://owt.example/balancer/mix/11")
+
+    async def test_signup_post_claims_the_row_the_command_names(self) -> None:
+        """The message exists as a row before the bot hears about it: without
+        one there is nothing for the outcome -- or a later delete -- to land on."""
+        self.games.get.return_value = _game()
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+
+        _channel_id, [post] = await self.service.signup_post(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            self_signup="pool",
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        [row] = self.messages.rows
+        self.assertEqual(post.message_ref, row.id)
+        self.assertEqual((row.subject, row.slot, row.kind), ("mix:11", "signup", "mix.signup"))
+        self.assertEqual((row.channel, row.target, row.status), ("discord_channel", "555", "pending"))
+        self.assertEqual(row.workspace_id, 1)
+
+    async def test_posting_again_deletes_the_previous_card_first(self) -> None:
+        """Two live cards counting two rosters is the outcome to avoid, and the
+        delete leads so the channel never shows both at once."""
+        self.games.get.return_value = _game()
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        previous = self.messages.add(subject="mix:11", slot="signup", status="posted")
+        refused = self.messages.add(subject="mix:11", slot="signup", status="failed")
+        other_mix = self.messages.add(subject="mix:12", slot="signup", status="posted")
+
+        _channel_id, commands = await self.service.signup_post(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            self_signup="pool",
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertEqual(
+            [("delete_message", previous.id), ("post_message", self.messages.rows[-1].id)],
+            [(command.action, command.message_ref) for command in commands],
+        )
+        self.assertEqual(previous.status, "deleting")
+        # A refusal is no message in the channel, so it is left alone: it stays
+        # on the page as the receipt of what Discord said. Another mix's card is
+        # not ours either.
+        self.assertEqual(refused.status, "failed")
+        self.assertEqual(other_mix.status, "posted")
 
     async def test_signup_post_without_a_workspace_channel_409(self) -> None:
         """Same refusal as posting a lineup: there is nowhere to post to."""
@@ -1172,6 +1327,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(ctx.exception.detail, "Discord channel not configured")
         self.assertEqual(game.self_signup, "closed")
+        self.assertEqual([], self.messages.rows)
 
     async def test_signup_post_requires_the_host_403(self) -> None:
         self.games.get.return_value = _game()
@@ -1186,6 +1342,113 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 board_url_base="https://owt.example",
             )
         self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_the_signup_card_counts_the_roster_as_it_stands(self) -> None:
+        """Live, not a snapshot: the card is built from the roster every time."""
+        self.games.get.return_value = _game(name="Friday mix", self_signup="pool")
+        self.roster.list_for_game.return_value = [
+            _roster_row(1, 7, 0, roles=["tank"]),
+            _roster_row(2, 8, 1, roles=["damage", "support"]),
+            _roster_row(3, 9, 2),
+        ]
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        self.load_hosts.return_value = {9: "Foxx"}
+
+        _channel_id, [post] = await self.service.signup_post(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            self_signup="pool",
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+        )
+
+        self.assertIn(":owt_players: **3** записано", post.card.details)
+        self.assertIn(":owt_tank: 1 · :owt_damage: 1 · :owt_support: 0 · любая роль 1", post.card.details)
+        self.assertIn(":owt_host: Foxx", post.card.text)
+
+    async def test_a_mix_with_no_live_post_refreshes_nothing(self) -> None:
+        self.games.get.return_value = _game()
+
+        self.assertIsNone(
+            await self.service.signup_refresh(self.session, custom_game_id=11, board_url_base="https://owt.example")
+        )
+
+    async def test_refreshing_edits_the_newest_live_card_only(self) -> None:
+        """An older row is on its way out, a deleted one is gone and a lineup is
+        not the signup card: editing any of them re-renders the wrong message."""
+        self.games.get.return_value = _game()
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.load_hosts.return_value = {9: "Foxx"}
+        self.messages.add(subject="mix:11", slot="signup", status="deleted")
+        self.messages.add(subject="mix:11", slot="signup", status="posted")
+        newest = self.messages.add(subject="mix:11", slot="signup", status="pending")
+        self.messages.add(subject="mix:11", slot="lineup:0:1", status="posted")
+
+        event = await self.service.signup_refresh(self.session, custom_game_id=11, board_url_base="https://owt.example")
+
+        self.assertEqual(event.action, "edit_message")
+        self.assertEqual(event.message_ref, newest.id)
+        self.assertIn(":owt_players: **1** записано", event.card.details)
+
+    async def test_deleting_one_post_marks_only_that_one(self) -> None:
+        self.games.get.return_value = _game()
+        signup = self.messages.add(subject="mix:11", slot="signup", status="posted")
+        lineup = self.messages.add(subject="mix:11", slot="lineup:0:1", status="posted")
+
+        _game_row, commands = await self.service.delete_discord_post(
+            self.session, workspace_id=1, custom_game_id=11, post_id=lineup.id, actor_user_id=9
+        )
+
+        self.assertEqual(
+            [("delete_message", lineup.id)], [(command.action, command.message_ref) for command in commands]
+        )
+        self.assertEqual(lineup.status, "deleting")
+        self.assertEqual(signup.status, "posted")
+
+    async def test_deleting_another_mixs_post_404(self) -> None:
+        """One table for the whole platform: an id this mix does not own is not
+        a message its host gets to delete."""
+        self.games.get.return_value = _game()
+        stranger = self.messages.add(subject="mix:12", slot="signup", status="posted")
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.delete_discord_post(
+                self.session, workspace_id=1, custom_game_id=11, post_id=stranger.id, actor_user_id=9
+            )
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertEqual(stranger.status, "posted")
+
+    async def test_deleting_a_post_requires_the_host_403(self) -> None:
+        self.games.get.return_value = _game()
+        row = self.messages.add(subject="mix:11", slot="signup", status="posted")
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.delete_discord_post(
+                self.session, workspace_id=1, custom_game_id=11, post_id=row.id, actor_user_id=8
+            )
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_hard_delete_takes_every_post_of_the_mix_down(self) -> None:
+        """The messages do not cascade off the game row, and a card advertising
+        a mix that no longer exists is worse than no card."""
+        self.games.get.return_value = _game()
+        self.games.delete = AsyncMock()
+        signup = self.messages.add(subject="mix:11", slot="signup", status="posted")
+        lineup = self.messages.add(subject="mix:11", slot="lineup:0:1", status="pending")
+        refused = self.messages.add(subject="mix:11", slot="lineup:0:2", status="failed")
+        other_mix = self.messages.add(subject="mix:12", slot="signup", status="posted")
+
+        commands = await self.service.hard_delete(self.session, workspace_id=1, custom_game_id=11)
+
+        self.assertEqual(
+            [("delete_message", signup.id), ("delete_message", lineup.id)],
+            [(command.action, command.message_ref) for command in commands],
+        )
+        # Discord never saw the refused one, so it is closed without a command.
+        self.assertEqual(refused.status, "deleted")
+        self.assertEqual(other_mix.status, "posted")
+        self.games.delete.assert_awaited_once()
 
     async def test_balance_sends_must_play_to_the_solver(self) -> None:
         game = _game()
@@ -2155,7 +2418,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.discord_lineup(
-                self.session, workspace_id=1, custom_game_id=11, variant_index=0, actor_user_id=9
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                variant_index=0,
+                actor_user_id=9,
+                board_url_base="https://owt.example",
             )
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(ctx.exception.detail, "Discord channel not configured")
@@ -2170,8 +2438,13 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.casual_matches.activity_for_lobbies = AsyncMock(return_value={})
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
 
-        channel_id, _embed = await self.service.discord_lineup(
-            self.session, workspace_id=1, custom_game_id=11, variant_index=0, actor_user_id=9
+        channel_id, _commands = await self.service.discord_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            variant_index=0,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
         )
 
         self.assertEqual(channel_id, 555)
@@ -2183,7 +2456,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.discord_lineup(
-                self.session, workspace_id=1, custom_game_id=11, variant_index=1, actor_user_id=9
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                variant_index=1,
+                actor_user_id=9,
+                board_url_base="https://owt.example",
             )
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "Balance option not found")
@@ -2191,7 +2469,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_discord_lineup_describes_the_next_match_of_this_mix(self) -> None:
         """The match number continues the mix's history, the map is read with
         its gamemode eagerly -- an async session cannot walk that lazily -- and
-        the footer promises the HOST's points, the ones recording will move."""
+        the card promises the HOST's points, the ones recording will move."""
         result = {
             "variants": [
                 {"teams": []},
@@ -2215,17 +2493,57 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 _row(id=42, name="Busan", gamemode=_row(name="Control")),
             ]
         )
+        # Only the first seat's account linked a Discord.
+        self._discord_links({1: "111"})
 
-        channel_id, embed = await self.service.discord_lineup(
-            self.session, workspace_id=1, custom_game_id=11, variant_index=1, actor_user_id=9
+        channel_id, [command] = await self.service.discord_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            variant_index=1,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
         )
 
         self.assertEqual(channel_id, 777)
-        self.assertEqual(embed["title"], "Scrim — Match 4")
-        self.assertEqual(embed["description"], "Map: Busan · Control")
-        self.assertEqual([field["name"] for field in embed["fields"]], ["Blue", "Team 2"])
-        self.assertEqual(embed["fields"][0]["value"], "Tank · Ana · 3000")
-        self.assertEqual(embed["footer"], {"text": "Points per win: 25"})
+        card = command.card
+        self.assertIn("Scrim · Игра 4", card.text)
+        self.assertIn(":owt_map: Busan · Control", card.text)
+        self.assertIn(":owt_points: +25 за победу", card.text)
+        self.assertIn("**Blue**\n:owt_tank: Ana · 3000", card.details)
+        self.assertIn("**Команда 2**\n:owt_tank: Bob · 2900", card.details)
+        self.assertIn("-# :owt_players: <@111>", card.details)
+        self.assertEqual(card.rows[0][0].url, "https://owt.example/balancer/mix/11")
+        # The lineup is a message of this mix like the signup card, filed by the
+        # lobby it belongs to and the match it announces.
+        [row] = self.messages.rows
+        self.assertEqual(command.message_ref, row.id)
+        self.assertEqual((row.subject, row.slot, row.kind), ("mix:11", "lineup:0:4", "mix.lineup"))
+        self.assertTrue(command.allow_mentions)
+
+    async def test_discord_lineup_with_the_hosts_capture_shows_the_png_instead_of_the_seats(self) -> None:
+        result = {"variants": [{"teams": [{"roster": {"Tank": [{"uuid": "1", "name": "Ana"}]}}]}]}
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(result["variants"]))
+        self.team_names.mapping_for_game.return_value = {}
+        self.casual_matches.activity_for_lobbies = AsyncMock(return_value={})
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        self._discord_links({})
+
+        _channel_id, [command] = await self.service.discord_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            variant_index=0,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
+            image_b64="iVBORw0KGgo=",
+        )
+
+        self.assertEqual(command.card.image_url, "attachment://lineup.png")
+        self.assertEqual((command.image_b64, command.image_filename), ("iVBORw0KGgo=", "lineup.png"))
+        # Nobody linked a Discord, so there is no mention line either.
+        self.assertIsNone(command.card.details)
 
     async def test_balance_feeds_the_hosts_stored_preferences_to_the_solver(self) -> None:
         """The solver knobs are the HOST's, not the presser's.
@@ -3211,12 +3529,21 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             return_value={0: (5, datetime(2026, 1, 1, 20, 0)), 1: (2, datetime(2026, 1, 1, 20, 5))}
         )
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+        self._discord_links({})
 
-        _channel_id, embed = await self.service.discord_lineup(
-            self.session, workspace_id=1, custom_game_id=11, lobby_index=1, variant_index=0, actor_user_id=9
+        _channel_id, [command] = await self.service.discord_lineup(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            lobby_index=1,
+            variant_index=0,
+            actor_user_id=9,
+            board_url_base="https://owt.example",
         )
 
-        self.assertEqual(embed["title"], "Scrim — Лобби B · игра 3")
+        self.assertIn("## :owt_vs: Scrim · Лобби B · Игра 3", command.card.text)
+        # Lobby B's own slot: its game 3, not the mix's eighth match.
+        self.assertEqual("lineup:1:3", self.messages.rows[-1].slot)
 
     async def test_rotation_of_one_lobby_ignores_whoever_is_playing_the_other(self) -> None:
         from src.domain.mix_rotation import RotationStatus

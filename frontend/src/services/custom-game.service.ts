@@ -136,6 +136,25 @@ export type CustomGameLobby = {
   matches_count?: number;
 };
 
+/**
+ * One Discord message the platform posted on a mix's behalf -- a
+ * `discord_message` row of subject `mix:<id>`. `slot` says which post it is:
+ * `signup`, or `lineup:<lobby_index>:<game number>` for a lineup card.
+ * `lost` is server-derived: still `pending` past the bot queue's TTL, so the
+ * command expired before the bot ever saw it.
+ */
+export type CustomGameDiscordPost = {
+  id: number;
+  slot: string;
+  kind: "mix.signup" | "mix.lineup";
+  status: "pending" | "posted" | "failed" | "deleting" | "lost";
+  /** Jump link once posted; `null` before that or while the workspace has no guild id. */
+  url: string | null;
+  /** Discord's refusal text when the post failed (usually missing channel permissions). */
+  error: string | null;
+  created_at: string;
+};
+
 export type CustomGame = {
   id: number;
   workspace_id: number;
@@ -168,6 +187,13 @@ export type CustomGame = {
   self_signup: MixSelfSignup;
   /** Whether a player on the roster may reorder their own roles and flex. */
   self_role_edit: boolean;
+  /**
+   * Every Discord message the platform posted for this mix (signup card,
+   * lineup cards), oldest first, minus the ones already deleted. Optional
+   * only so fixtures predating the posts can omit it -- the server always
+   * sends the list.
+   */
+  discord_posts?: CustomGameDiscordPost[];
   players?: CustomGamePlayer[];
 };
 
@@ -745,6 +771,17 @@ export const customGameService = {
     return apiFetch(
       `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/signup`,
       { method: "POST", body: { self_signup: selfSignup } },
+    ).then((r) => r.json());
+  },
+
+  /**
+   * Removes one of the mix's Discord posts. The row flips to `deleting` and
+   * the bot deletes the message asynchronously; the updated mix comes back.
+   */
+  deleteDiscordPost(workspaceId: number, gameId: number, postId: number): Promise<CustomGame> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/posts/${postId}`,
+      { method: "DELETE" },
     ).then((r) => r.json());
   },
 };

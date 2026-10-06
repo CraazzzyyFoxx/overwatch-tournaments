@@ -8,12 +8,12 @@ client answers in English. Russian for ``ru``, English for everything else.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from itertools import permutations
 from typing import Any, Literal
 
 import discord
 from discord.utils import escape_markdown
 
+from shared.domain.discord_ui import ROLE_EMOJI, division_emoji, emoji
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
@@ -23,9 +23,10 @@ __all__ = (
     "error_text",
     "locale_of",
     "mix_blocker_text",
-    "mix_role_options",
     "mix_text",
     "registration_text",
+    "role_label",
+    "seat_modal_text",
     "settle_note",
     "success_text",
     "text",
@@ -40,7 +41,7 @@ def locale_of(locale: discord.Locale | str | None) -> Locale:
 
 _TEXT: dict[Locale, dict[str, str]] = {
     "ru": {
-        "not_linked": ("Этот Discord не привязан к аккаунту OWT. Привяжите его в профиле — и кнопки заработают."),
+        "not_linked": "### Discord не привязан\n1. Откройте профиль на сайте\n2. Привяжите Discord",
         "inactive": "Ваш аккаунт OWT отключён.",
         "unavailable": "Сервис сейчас недоступен. Попробуйте ещё раз через минуту.",
         "failed": "Не получилось: {message}",
@@ -56,13 +57,12 @@ _TEXT: dict[Locale, dict[str, str]] = {
         "mute_all": "Отключить все",
         "mix_join": "Записаться",
         "mix_leave": "Выписаться",
-        "mix_flex_on": "Флекс: включить",
-        "mix_flex_off": "Флекс: выключить",
-        "mix_roles_placeholder": "Порядок ролей",
+        "mix_setup": "Настроить роли",
+        "mix_none": "Сейчас нет открытого микса.",
         "open_profile": "Открыть профиль",
     },
     "en": {
-        "not_linked": "This Discord account isn't linked to an OWT account. Link it in your profile and the buttons will work.",
+        "not_linked": "### Discord isn't linked\n1. Open your profile on the site\n2. Link Discord",
         "inactive": "Your OWT account is deactivated.",
         "unavailable": "The service is unavailable right now. Try again in a minute.",
         "failed": "That didn't work: {message}",
@@ -78,9 +78,8 @@ _TEXT: dict[Locale, dict[str, str]] = {
         "mute_all": "Turn all off",
         "mix_join": "Join",
         "mix_leave": "Leave",
-        "mix_flex_on": "Flex: turn on",
-        "mix_flex_off": "Flex: turn off",
-        "mix_roles_placeholder": "Role order",
+        "mix_setup": "Edit roles",
+        "mix_none": "No mix is open right now.",
         "open_profile": "Open profile",
     },
 }
@@ -109,14 +108,14 @@ _SUCCESS: dict[Locale, dict[str, str]] = {
 #: The line a DM card gains when its buttons are taken off.
 _SETTLED: dict[Locale, dict[str, str]] = {
     "ru": {
-        "invite.accept": "✅ Вы приняли приглашение",
+        "invite.accept": f"{emoji('ok')} Вы приняли приглашение",
         "invite.decline": "Вы отклонили приглашение",
-        "check_in": "✅ Чек-ин пройден",
+        "check_in": f"{emoji('ok')} Чек-ин пройден",
     },
     "en": {
-        "invite.accept": "✅ You accepted this invite",
+        "invite.accept": f"{emoji('ok')} You accepted this invite",
         "invite.decline": "You declined this invite",
-        "check_in": "✅ Checked in",
+        "check_in": f"{emoji('ok')} Checked in",
     },
 }
 
@@ -179,7 +178,7 @@ _CARD: dict[Locale, dict[str, str]] = {
         "team": "Команда",
         "substitute": "замена",
         "check_in": "Чек-ин",
-        "checked_in": "✅ пройден",
+        "checked_in": f"{emoji('ok')} пройден",
         "not_checked_in": "не пройден",
         "queue": "Место в очереди",
         "of": "из",
@@ -192,7 +191,7 @@ _CARD: dict[Locale, dict[str, str]] = {
         "team": "Team",
         "substitute": "substitute",
         "check_in": "Check-in",
-        "checked_in": "✅ done",
+        "checked_in": f"{emoji('ok')} done",
         "not_checked_in": "not yet",
         "queue": "Queue position",
         "of": "of",
@@ -203,44 +202,69 @@ _CARD: dict[Locale, dict[str, str]] = {
 _MIX: dict[Locale, dict[str, str]] = {
     "ru": {
         "heading": "Микс «{name}»",
-        "seat_pool": "Вы записаны — в пуле.",
-        "seat_benched": "Вы на скамейке — хост переведёт в пул.",
-        "seat_must_play": "Вы в составе — хост поставил вас играть.",
+        "seat_pool": "Вы в пуле",
+        "seat_benched": "Вы на скамейке",
+        "seat_must_play": "Вы в составе",
         "no_seat": "Вы не записаны на этот микс.",
-        "roles": "Роли",
-        "all_ranked": "все, по которым есть ранг",
-        "all_ranked_option": "Все роли с рангом",
-        "no_roles": "не выбраны",
+        "all_ranked": "все роли с рангом",
         "no_rank": "без ранга",
+        "not_playing": "не играете",
         "flex": "Флекс",
         "flex_on": "вкл",
         "flex_off": "выкл",
         "unranked": "Нет ранга: {roles} — хост проставит",
-        "in_lobby": "Вы в лобби {letter}",
+        "in_lobby": "Лобби {letter}",
         "waiting_seat": "Ждёте места",
     },
     "en": {
         "heading": "Mix “{name}”",
-        "seat_pool": "You're signed up — in the pool.",
-        "seat_benched": "You're on the bench — the host moves people into the pool.",
-        "seat_must_play": "You're in — the host put you on the floor.",
+        "seat_pool": "You're in the pool",
+        "seat_benched": "You're on the bench",
+        "seat_must_play": "You're on the floor",
         "no_seat": "You're not signed up for this mix.",
-        "roles": "Roles",
         "all_ranked": "every role you have a rank in",
-        "all_ranked_option": "Every ranked role",
-        "no_roles": "none picked",
         "no_rank": "no rank",
+        "not_playing": "not playing",
         "flex": "Flex",
         "flex_on": "on",
         "flex_off": "off",
         "unranked": "No rank yet: {roles} — the host will fill it in",
-        "in_lobby": "You are in lobby {letter}",
+        "in_lobby": "Lobby {letter}",
         "waiting_seat": "Waiting for a seat",
     },
 }
 
+#: The seat form itself: a modal shows plain labels, so no shortcode may ride
+#: along here -- Discord renders none of them outside message content.
+_MODAL: dict[Locale, dict[str, str]] = {
+    "ru": {
+        "title": "Моё место",
+        "role1": "1-я роль",
+        "role2": "2-я роль",
+        "role3": "3-я роль",
+        "role1_hint": "Главная роль — её хост ставит первой",
+        "role_hint": "Необязательно",
+        "any_ranked": "Любая с рангом",
+        "none": "—",
+        "flex": "Флекс",
+        "flex_hint": "Готов играть не за свою роль, если так лучше для баланса",
+    },
+    "en": {
+        "title": "My seat",
+        "role1": "1st role",
+        "role2": "2nd role",
+        "role3": "3rd role",
+        "role1_hint": "Your main role — the host seats you there first",
+        "role_hint": "Optional",
+        "any_ranked": "Any ranked role",
+        "none": "—",
+        "flex": "Flex",
+        "flex_hint": "Happy to play off-role when it balances the lobby better",
+    },
+}
+
 #: Why a mix refused, by the code ``mix_self_policy`` named. ``bad_values`` is
-#: the bot's own: a select value it never minted, refused before any call.
+#: the bot's own: a seat form value it never minted, refused before any call.
 _MIX_BLOCKERS: dict[Locale, dict[str, str]] = {
     "ru": {
         "mix_closed": "Микс уже завершён или отменён.",
@@ -275,16 +299,6 @@ MIX_BLOCKERS: frozenset[str] = frozenset(_MIX_BLOCKERS["ru"])
 #: The refusals a profile link can actually fix.
 LINK_BLOCKERS: frozenset[str] = frozenset({"discord_not_linked", "battlenet_not_linked", "player_not_linked"})
 
-#: Every ordered, non-empty pick of the three roles: 3 + 6 + 6 = 15, and with
-#: "every ranked role" that is 16 options against Discord's limit of 25.
-#: Discord does not report the order options were clicked in, so the order is
-#: the option.
-ROLE_ORDERS: tuple[tuple[str, ...], ...] = tuple(
-    order
-    for size in range(1, len(REGISTRATION_ROLE_CODES) + 1)
-    for order in permutations(REGISTRATION_ROLE_CODES, size)
-)
-
 
 def text(locale: Locale, key: str, **values: str) -> str:
     return _TEXT[locale][key].format(**values)
@@ -304,8 +318,8 @@ def error_text(locale: Locale, code: str | None, message: str) -> str:
 
 
 def _role(locale: Locale, code: Any) -> str:
-    # ``.get(default)`` would escape every known code too, for nothing: the
-    # select alone names roles some fifty times per reply.
+    # ``.get(default)`` would escape every known code too, for nothing: a seat
+    # panel names each of the three roles on a line of its own.
     known = _ROLES[locale].get(str(code))
     return known if known is not None else escape_markdown(str(code))
 
@@ -354,66 +368,121 @@ def mix_blocker_text(locale: Locale, code: str) -> str:
     return _MIX_BLOCKERS[locale][code]
 
 
-def mix_text(locale: Locale, state: Mapping[str, Any]) -> str:
-    """The caller's own seat in a mix (the ``self_*`` answer) as a short card."""
+#: One per role slot of the seat form: the host reads the pick as a priority,
+#: so the panel numbers it rather than spelling "first, then".
+_SLOT_NUMBERS = ("①", "②", "③")
+
+
+def _role_emoji(code: Any) -> str:
+    name = ROLE_EMOJI.get(str(code))
+    return f"{emoji(name)} " if name else ""
+
+
+def _rank_text(locale: Locale, seat: Mapping[str, Any], role: str) -> str:
+    """``:owt_div_gold_3: Gold 3 · 3200`` -- the division badge, its name and the SR.
+
+    ``divisions`` is the workspace grid's answer and may be missing entirely
+    (an older balancer, or a workspace with no grid); then the SR alone is the
+    rank, and a role with neither is simply unranked.
+    """
+    ranks = seat.get("ranks")
+    rank = ranks.get(role) if isinstance(ranks, Mapping) else None
+    divisions = seat.get("divisions")
+    division = divisions.get(role) if isinstance(divisions, Mapping) else None
+
+    parts: list[str] = []
+    if isinstance(division, Mapping) and division.get("name"):
+        badge = division_emoji(division.get("slug"))
+        parts.append(f"{badge} {escape_markdown(str(division['name']))}".strip())
+    if rank is not None:
+        parts.append(escape_markdown(str(rank)))
+    return " · ".join(parts) or _MIX[locale]["no_rank"]
+
+
+def _has_rank(seat: Mapping[str, Any], role: str) -> bool:
+    ranks = seat.get("ranks")
+    divisions = seat.get("divisions")
+    return (isinstance(ranks, Mapping) and ranks.get(role) is not None) or (
+        isinstance(divisions, Mapping) and divisions.get(role) is not None
+    )
+
+
+def _roles_block(locale: Locale, seat: Mapping[str, Any]) -> list[str]:
+    """The seat's roles, one line each: the picked ones in order, the rest greyed out."""
     words = _MIX[locale]
-    lines = [f"### {words['heading'].format(name=escape_markdown(str(state.get('name') or '')))}"]
-    seat = state.get("seat")
-    if not isinstance(seat, Mapping):
-        lines.append(words["no_seat"])
+    roles = seat.get("roles")
+    if not isinstance(roles, list):
+        # "Every role I have a rank in": no order to show, so no numbers --
+        # just which roles that turns out to be right now.
+        ranked = [role for role in REGISTRATION_ROLE_CODES if _has_rank(seat, role)]
+        lines = [f"{emoji('ok')} {words['all_ranked']}"]
+        lines += [f"{_role_emoji(role)}{_role(locale, role)} — {_rank_text(locale, seat, role)}" for role in ranked]
+        return lines
+
+    picked = [str(role) for role in roles]
+    lines = [
+        f"{_SLOT_NUMBERS[index]} {_role_emoji(role)}{_role(locale, role)} — {_rank_text(locale, seat, role)}"
+        for index, role in enumerate(picked[: len(_SLOT_NUMBERS)])
+    ]
+    # Three indent spaces, not a number: these are the roles the host must not
+    # seat them in, and they are here so the panel answers "and the others?".
+    lines += [
+        f"   {_role_emoji(role)}{_role(locale, role)} — {words['not_playing']}"
+        for role in REGISTRATION_ROLE_CODES
+        if role not in picked
+    ]
+    return lines
+
+
+def mix_text(locale: Locale, state: Mapping[str, Any]) -> tuple[str, str]:
+    """The caller's own seat in a mix (the ``self_*`` answer): ``(heading, details)``.
+
+    Two halves because the card draws a divider between them: above it the one
+    line that answers "am I in?", below it the roles the host will seat by.
+    """
+    words = _MIX[locale]
+    head = [f"### {words['heading'].format(name=escape_markdown(str(state.get('name') or '')))}"]
+    raw_seat = state.get("seat")
+    seat: Mapping[str, Any] | None = raw_seat if isinstance(raw_seat, Mapping) else None
+
+    details: list[str] = []
+    if seat is None:
+        head.append(words["no_seat"])
     else:
         participation = str(seat.get("participation") or "pool")
-        lines.append(words.get(f"seat_{participation}", words["seat_pool"]))
-        roles = seat.get("roles")
-        if roles is None:
-            order = words["all_ranked"]
-        elif not roles:
-            order = words["no_roles"]
-        else:
-            order = " → ".join(_role(locale, role) for role in roles)
-        lines.append(f"**{words['roles']}:** {order}")
-        lines.append(f"**{words['flex']}:** {words['flex_on'] if seat.get('is_flex') else words['flex_off']}")
+        badge = {"benched": "bench", "must_play": "starter"}.get(participation, "ok")
+        status = [f"{emoji(badge)} {words.get(f'seat_{participation}', words['seat_pool'])}"]
         # Only a two-lobby mix has a question here: which of the two games is
         # theirs, and whether a balance has seated them in one at all.
         if int(state.get("lobby_count") or 1) > 1:
             lobby = seat.get("current_lobby")
-            lines.append(words["in_lobby"].format(letter="AB"[lobby]) if lobby in (0, 1) else words["waiting_seat"])
+            status.append(
+                f"{emoji('lobby_a' if lobby == 0 else 'lobby_b')} {words['in_lobby'].format(letter='AB'[lobby])}"
+                if lobby in (0, 1)
+                else f"{emoji('clock')} {words['waiting_seat']}"
+            )
+        head.append(" · ".join(status))
+        details += _roles_block(locale, seat)
+        details.append(
+            f"{emoji('flex')} {words['flex']}: {words['flex_on'] if seat.get('is_flex') else words['flex_off']}"
+        )
 
     unranked = list(state.get("unranked_roles") or [])
     if unranked:
         named = ", ".join(_role(locale, role) for role in unranked)
-        lines.append("-# " + words["unranked"].format(roles=named))
+        details.append(f"-# {emoji('warn')} " + words["unranked"].format(roles=named))
 
     policy = state.get("policy")
     blocker = policy.get("edit_blocker") if isinstance(policy, Mapping) else None
     if blocker == "role_edit_off":
-        lines.append("-# " + _MIX_BLOCKERS[locale]["role_edit_off"])
-    return "\n".join(lines)
+        details.append(f"-# {emoji('lock')} " + _MIX_BLOCKERS[locale]["role_edit_off"])
+    return "\n".join(head), "\n".join(details)
 
 
-def mix_role_options(locale: Locale, state: Mapping[str, Any]) -> list[discord.SelectOption]:
-    """The role select: every order, captioned with the host's ranks, current one marked."""
-    words = _MIX[locale]
-    raw_seat = state.get("seat")
-    seat: Mapping[str, Any] = raw_seat if isinstance(raw_seat, Mapping) else {}
-    raw_ranks = seat.get("ranks")
-    ranks: Mapping[str, Any] = raw_ranks if isinstance(raw_ranks, Mapping) else {}
-    chosen = seat.get("roles")
-    current = ",".join(str(role) for role in chosen) if isinstance(chosen, list) else "all"
+def seat_modal_text(locale: Locale) -> Mapping[str, str]:
+    """The seat form's own words (``cards.seat_modal``); role names come from :func:`role_label`."""
+    return _MODAL[locale]
 
-    options: list[discord.SelectOption] = []
-    for order in ROLE_ORDERS:
-        value = ",".join(order)
-        options.append(
-            discord.SelectOption(
-                label=" → ".join(_role(locale, role) for role in order),
-                value=value,
-                description=" · ".join(
-                    f"{_role(locale, role)} {ranks[role] if ranks.get(role) is not None else words['no_rank']}"
-                    for role in order
-                ),
-                default=value == current,
-            )
-        )
-    options.append(discord.SelectOption(label=words["all_ranked_option"], value="all", default=current == "all"))
-    return options
+
+def role_label(locale: Locale, code: Any) -> str:
+    return _role(locale, code)

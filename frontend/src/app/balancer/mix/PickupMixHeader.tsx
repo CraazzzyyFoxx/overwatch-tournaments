@@ -3,16 +3,28 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, Send, Shuffle, Trash2, UserCog, UserPlus } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ExternalLink,
+  Send,
+  Shuffle,
+  Trash2,
+  UserCog,
+  UserPlus,
+} from "lucide-react";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { CustomGame, MixSelfSignup } from "@/services/custom-game.service";
+import type { CustomGame, CustomGameDiscordPost, MixSelfSignup } from "@/services/custom-game.service";
 
 /** The three signup modes, in the order a host widens access. */
 const SELF_SIGNUP_OPTIONS: readonly MixSelfSignup[] = ["closed", "pool", "benched"];
@@ -35,6 +47,9 @@ type PickupMixHeaderProps = {
   /** Omitted -- no "open signup in Discord" button. */
   onPostSignup?: (selfSignup: "pool" | "benched") => void;
   postingSignup?: boolean;
+  /** Omitted -- no Discord posts menu (and so no way to delete a post). */
+  onDeleteDiscordPost?: (postId: number) => void;
+  deletingDiscordPost?: boolean;
   settingLobbyCount?: boolean;
   /** Omitted -- the lobby-count switch is not rendered. */
   onLobbyCountChange?: (lobbyCount: 1 | 2) => void;
@@ -74,6 +89,8 @@ export function PickupMixHeader({
   savingSelfService = false,
   onPostSignup,
   postingSignup = false,
+  onDeleteDiscordPost,
+  deletingDiscordPost = false,
   settingLobbyCount = false,
   onLobbyCountChange,
   shufflingAll = false,
@@ -94,6 +111,7 @@ export function PickupMixHeader({
   // A lineup that was balanced and never played into the log: a shared
   // reshuffle would replace it with nothing left to record it from.
   const unrecorded = (game?.lobbies ?? []).some((lobby) => lobby.lineup_recorded === false);
+  const discordPosts = game?.discord_posts ?? [];
 
   return (
     <div className={cn(PANEL_CLASS, "flex flex-wrap items-center gap-3 px-4 py-3")}>
@@ -303,23 +321,225 @@ export function PickupMixHeader({
           </div>
 
           {onPostSignup ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="ml-auto h-9 shrink-0"
-              disabled={!hasChannel || postingSignup}
-              title={hasChannel ? undefined : t("noChannel")}
-              // A closed mix has no mode to post yet, and the card's whole point
-              // is to open signup -- so posting it from `closed` opens the pool,
-              // the mode a host picks in every other case.
-              onClick={() => onPostSignup(game.self_signup === "benched" ? "benched" : "pool")}
-            >
-              <Send className="mr-1.5 size-3.5" aria-hidden="true" />
-              {t("openInDiscord")}
-            </Button>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+              <SignupPostStatus posts={discordPosts} />
+              {onDeleteDiscordPost && discordPosts.length > 0 ? (
+                <DiscordPostsMenu
+                  posts={discordPosts}
+                  lobbyCount={lobbyCount}
+                  deleting={deletingDiscordPost}
+                  onDelete={onDeleteDiscordPost}
+                />
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 shrink-0"
+                disabled={!hasChannel || postingSignup}
+                title={hasChannel ? undefined : t("noChannel")}
+                // A closed mix has no mode to post yet, and the card's whole point
+                // is to open signup -- so posting it from `closed` opens the pool,
+                // the mode a host picks in every other case.
+                onClick={() => onPostSignup(game.self_signup === "benched" ? "benched" : "pool")}
+              >
+                <Send className="mr-1.5 size-3.5" aria-hidden="true" />
+                {t("openInDiscord")}
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Where the live signup post stands, next to the button that (re)posts it --
+ * read off the NEWEST `mix.signup` row, the one a re-post just created. The
+ * bot answers asynchronously, so the press alone tells the host nothing:
+ * `pending` until the bot writes the row, then a link to the message, or the
+ * reason Discord refused -- almost always the bot's permissions in the mix
+ * channel, which the host fixes and then simply presses the button again.
+ * `lost` is the command that expired in the queue before the bot ever saw
+ * it: nothing reached Discord, and posting again is the whole remedy.
+ *
+ * The `role="status"` region stays mounted even while there is nothing to
+ * say (never posted): screen readers only announce changes to a live region
+ * that already existed, so mounting it together with `pending` would swallow
+ * the first update. It is empty then, so nothing is seen or read.
+ *
+ * ponytail: the error rides on `title` (+ sr-only text) -- this header has no
+ * tooltip; a Popover if hosts need to copy a long refusal.
+ */
+function SignupPostStatus({ posts }: Readonly<{ posts: readonly CustomGameDiscordPost[] }>) {
+  const t = useTranslations("mixes.self");
+  const post = posts.findLast((row) => row.kind === "mix.signup");
+  const status = post?.status ?? null;
+  const error = post?.error?.trim().replace(/\.$/, "");
+  const failedReason = error ? `${error}. ${t("post.failedHint")}` : t("post.failedHint");
+  const posted = (
+    <>
+      <CheckCircle2 className="size-3.5" aria-hidden="true" />
+      {t("post.posted")}
+    </>
+  );
+
+  return (
+    <span role="status" className="flex items-center text-caption">
+      {status === "pending" || status === "deleting" ? (
+        <span className="flex items-center gap-1.5 text-[color:var(--aqt-fg-dim)]">
+          <Spinner className="size-3.5" />
+          {t(`post.${status}`)}
+        </span>
+      ) : null}
+      {status === "posted" && post?.url ? (
+        <a
+          href={post.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 text-[color:var(--aqt-teal)] hover:underline"
+        >
+          {posted}
+          <ExternalLink className="size-3" aria-hidden="true" />
+        </a>
+      ) : null}
+      {status === "posted" && !post?.url ? (
+        <span className="flex items-center gap-1.5 text-[color:var(--aqt-teal)]">{posted}</span>
+      ) : null}
+      {status === "failed" ? (
+        <span className="flex items-center gap-1.5 text-[color:var(--aqt-rose)]" title={failedReason}>
+          <AlertTriangle className="size-3.5" aria-hidden="true" />
+          {t("post.failed")}
+          <span className="sr-only">{failedReason}</span>
+        </span>
+      ) : null}
+      {status === "lost" ? (
+        <span className="flex items-center gap-1.5 text-[color:var(--aqt-rose)]" title={t("post.lostHint")}>
+          <AlertTriangle className="size-3.5" aria-hidden="true" />
+          {t("post.lost")}
+          <span className="sr-only">{t("post.lostHint")}</span>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+const POST_STATUS_TONE: Record<CustomGameDiscordPost["status"], string> = {
+  pending: "text-[color:var(--aqt-fg-dim)]",
+  deleting: "text-[color:var(--aqt-fg-dim)]",
+  posted: "text-[color:var(--aqt-teal)]",
+  failed: "text-[color:var(--aqt-rose)]",
+  lost: "text-[color:var(--aqt-rose)]",
+};
+
+/**
+ * Every message the platform posted for this mix, one row each: what it is,
+ * where it stands, a link to it, and the host's way to take it down. Delete
+ * asks first -- the message disappears from the channel for everyone -- and
+ * the confirm lives outside the popover, which closes as the dialog takes
+ * focus. A row already `deleting` cannot be deleted twice.
+ */
+function DiscordPostsMenu({
+  posts,
+  lobbyCount,
+  deleting,
+  onDelete,
+}: Readonly<{
+  posts: readonly CustomGameDiscordPost[];
+  lobbyCount: number;
+  deleting: boolean;
+  onDelete: (postId: number) => void;
+}>) {
+  const t = useTranslations("mixes.self");
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState<CustomGameDiscordPost | null>(null);
+  // What a post is, from its slot: the signup card, or one lineup card -- the
+  // lobby letter only when the mix runs two lobbies, since with one it says
+  // nothing. The slot is `lineup:<lobby_index>:<game number>`.
+  const postLabel = (post: CustomGameDiscordPost) => {
+    if (post.slot === "signup") return t("posts.signup");
+    const [prefix, lobby, match] = post.slot.split(":");
+    if (prefix !== "lineup") return post.slot;
+    return lobbyCount === 2
+      ? t("posts.lineupLobby", { lobby: String.fromCharCode(65 + Number(lobby)), match })
+      : t("posts.lineup", { match });
+  };
+
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" className="h-9 shrink-0">
+            {t("posts.menu")}
+            <span className="ml-1.5 text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">{posts.length}</span>
+            <ChevronDown className="ml-1 size-3.5" aria-hidden="true" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 p-1">
+          <ul aria-label={t("posts.menu")} className="max-h-72 space-y-0.5 overflow-y-auto">
+            {posts.map((post) => {
+              const label = postLabel(post);
+              return (
+                <li key={post.id} className="flex items-center gap-2 rounded-md px-2 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-caption text-[color:var(--aqt-fg)]">{label}</div>
+                    <div
+                      className={cn("truncate text-label", POST_STATUS_TONE[post.status])}
+                      title={post.status === "failed" ? (post.error ?? undefined) : undefined}
+                    >
+                      {t(`post.${post.status}`)}
+                    </div>
+                  </div>
+                  {post.url ? (
+                    <a
+                      href={post.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex shrink-0 items-center gap-1 text-caption text-[color:var(--aqt-teal)] hover:underline"
+                    >
+                      {t("posts.open")}
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 shrink-0 text-[color:var(--aqt-fg-muted)] hover:text-rose-200"
+                    disabled={post.status === "deleting"}
+                    aria-label={t("posts.delete", { label })}
+                    onClick={() => {
+                      setOpen(false);
+                      setConfirming(post);
+                    }}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </PopoverContent>
+      </Popover>
+      <ConfirmDialog
+        open={confirming != null}
+        onOpenChange={(next) => {
+          if (!next) setConfirming(null);
+        }}
+        intent={{
+          title: t("posts.deleteTitle"),
+          description: t("posts.deleteDescription", {
+            label: confirming ? postLabel(confirming) : "",
+          }),
+          confirmLabel: t("posts.deleteConfirm"),
+          tone: "danger",
+        }}
+        pending={deleting}
+        onConfirm={() => {
+          if (confirming) onDelete(confirming.id);
+          setConfirming(null);
+        }}
+      />
+    </>
   );
 }

@@ -3925,12 +3925,16 @@
       },
       "summary": "Create custom game"
     },
+    "rpc.balancer.custom.delete_discord_post": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Asks the bot to delete one message this mix posted, named by its id from the mix's `discord_posts`, and returns the refreshed mix. 404 when the id belongs to another mix's message. Clicking twice is harmless; closing or cancelling a mix deletes nothing, its posts stay as history.",
+      "summary": "Delete one custom game Discord post"
+    },
     "rpc.balancer.custom.get": {
       "description": "Permission: public; no authentication required. Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. 404 when the mix belongs to another workspace.",
       "summary": "Get custom game"
     },
     "rpc.balancer.custom.hard_delete": {
-      "description": "Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster and every match it recorded, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.",
+      "description": "Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster, every match it recorded and every Discord message it posted, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.",
       "summary": "Delete custom game"
     },
     "rpc.balancer.custom.list": {
@@ -3950,7 +3954,7 @@
       "summary": "Post custom game lineup to Discord"
     },
     "rpc.balancer.custom.post_signup": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. 409 when the workspace has no mix channel configured.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. A mix has one signup card: posting again deletes the previous one from the channel first. 409 when the workspace has no mix channel configured.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePostSignup"
@@ -3982,6 +3986,10 @@
         }
       ],
       "summary": "Get custom game rotation hints"
+    },
+    "rpc.balancer.custom.self_current": {
+      "description": "Permission: any authenticated account; workspace membership is NOT required. Same answer as `self_get`, for the workspace's newest mix that is neither completed nor cancelled -- what `/mix` in Discord asks, where the player names no id. 404 when the workspace is running nothing.",
+      "summary": "Get my seat in the current mix"
     },
     "rpc.balancer.custom.self_get": {
       "description": "Permission: any authenticated account; workspace membership is NOT required. Returns the caller's own seat in the mix (participation, role order, the ranks the host's book resolves for them) plus what they may do next: join, leave, edit roles, and the blocker code for each. `seat` is null when the caller is not on the roster.",

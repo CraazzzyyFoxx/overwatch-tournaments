@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 149
+-- Tables: 150
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -1890,6 +1890,29 @@ CREATE TABLE chat_room_settings (
 	PRIMARY KEY (room_kind, room_ref_id)
 );
 
+CREATE TABLE discord_message (
+	id BIGSERIAL NOT NULL, 
+	channel VARCHAR(32) NOT NULL, 
+	target VARCHAR(64) NOT NULL, 
+	dedupe_key VARCHAR(128), 
+	subject VARCHAR(160) NOT NULL, 
+	slot VARCHAR(64) NOT NULL, 
+	kind VARCHAR(64) NOT NULL, 
+	notification_id BIGINT, 
+	workspace_id BIGINT, 
+	status VARCHAR(16) DEFAULT 'pending' NOT NULL, 
+	discord_channel_id BIGINT, 
+	message_id BIGINT, 
+	error TEXT, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_discord_message_target UNIQUE (channel, target, dedupe_key), 
+	CONSTRAINT ck_discord_message_status CHECK (status IN ('pending', 'posted', 'failed', 'deleting', 'deleted'))
+);
+
+CREATE INDEX ix_discord_message_subject ON discord_message (subject);
+
 CREATE TABLE division_grid (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -2076,19 +2099,6 @@ CREATE INDEX ix_notification_dedupe ON notification (kind, dedupe_key) WHERE ded
 CREATE INDEX ix_notification_recipient_published ON notification (recipient_auth_user_id, published_at DESC);
 
 CREATE INDEX ix_notification_source_workspace_published ON notification (source_workspace_id, published_at DESC) WHERE source_workspace_id IS NOT NULL;
-
-CREATE TABLE notification_delivery (
-	id BIGSERIAL NOT NULL, 
-	channel VARCHAR(32) NOT NULL, 
-	target VARCHAR(64) NOT NULL, 
-	dedupe_key VARCHAR(128) NOT NULL, 
-	notification_id BIGINT, 
-	workspace_id BIGINT, 
-	kind VARCHAR(64) NOT NULL, 
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	PRIMARY KEY (id), 
-	CONSTRAINT uq_notification_delivery_target UNIQUE (channel, target, dedupe_key)
-);
 
 CREATE TABLE notification_preference (
 	auth_user_id BIGINT NOT NULL, 
@@ -2763,6 +2773,25 @@ CREATE INDEX ix_encounter_result_audit_encounter_created ON tournament.encounter
 
 CREATE INDEX ix_tournament_encounter_result_audit_game_id ON tournament.encounter_result_audit (game_id);
 
+CREATE TABLE tournament.encounter_room_event (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	encounter_id BIGINT NOT NULL, 
+	kind VARCHAR(8), 
+	action VARCHAR(64) NOT NULL, 
+	source VARCHAR(16) NOT NULL, 
+	side VARCHAR(8), 
+	actor_auth_user_id BIGINT, 
+	reason TEXT, 
+	data JSON DEFAULT '{}' NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
+	FOREIGN KEY(actor_auth_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_encounter_room_event_encounter_created ON tournament.encounter_room_event (encounter_id, created_at);
+
 CREATE TABLE tournament.encounter_saved_view (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -2899,6 +2928,7 @@ CREATE TABLE tournament.pick_ban_session (
 	undo_target_index INTEGER, 
 	started_at TIMESTAMP WITH TIME ZONE, 
 	current_step_started_at TIMESTAMP WITH TIME ZONE, 
+	paused_at TIMESTAMP WITH TIME ZONE, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_pick_ban_session_encounter_kind UNIQUE (encounter_id, kind), 
 	CONSTRAINT ck_pick_ban_session_first_side CHECK (first_side IS NULL OR first_side IN ('home', 'away')), 
