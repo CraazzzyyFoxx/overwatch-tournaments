@@ -682,9 +682,10 @@ DOCS: dict[str, dict] = {
             " the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults"
             " filled in, whether a Discord account"
             " is connected at all, the unread count that account's own bell shows (same audience rules as their inbox,"
-            " not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first."
+            " not a platform-wide total) and the ten most recent Discord DMs handed to the bot for them, newest first,"
+            " each with how far it got (`pending`, `posted`, `failed`, or `lost` when the broker dropped it)."
             " Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in"
-            " the ledger. Unlike the self-service preferences read this acts on another account, which the global"
+            " the record. Unlike the self-service preferences read this acts on another account, which the global"
             " grant is what authorizes. 404 when the account does not exist."
         ),
     },

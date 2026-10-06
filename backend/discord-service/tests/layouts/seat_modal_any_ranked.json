@@ -1,0 +1,54 @@
+{
+  "custom_id": "owt:mix.seat_set:42",
+  "components": [
+    {
+      "type": 18,
+      "component": {
+        "type": 21,
+        "custom_id": "role1",
+        "required": true,
+        "options": [
+          "tank",
+          "damage",
+          "support",
+          "all"
+        ]
+      }
+    },
+    {
+      "type": 18,
+      "component": {
+        "type": 21,
+        "custom_id": "role2",
+        "required": false,
+        "options": [
+          "tank",
+          "damage",
+          "support",
+          "none"
+        ]
+      }
+    },
+    {
+      "type": 18,
+      "component": {
+        "type": 21,
+        "custom_id": "role3",
+        "required": false,
+        "options": [
+          "tank",
+          "damage",
+          "support",
+          "none"
+        ]
+      }
+    },
+    {
+      "type": 18,
+      "component": {
+        "type": 23,
+        "custom_id": "flex"
+      }
+    }
+  ]
+}

@@ -209,18 +209,21 @@ class NotificationPreferencesUpdate(BaseModel):
 
 
 class NotificationDeliveryItem(BaseRead):
-    """One row of the delivery ledger -- a message actually handed to Discord.
+    """One Discord DM the platform handed to the bot for this account.
 
     Skips are not recorded upstream (preference off, nothing linked), so an
     empty list here means "we sent nothing", never "we sent something and did
     not write it down" -- which is the whole question the account inspector is
-    opened to answer.
+    opened to answer. ``status`` says how far it got: ``posted`` reached
+    Discord, ``failed`` was refused (the user blocked DMs), ``pending`` is on
+    its way and ``lost`` never will be -- the broker dropped the command.
     """
 
     model_config = ConfigDict(from_attributes=True)
 
     channel: str
     kind: str
+    status: str
     workspace_id: int | None = None
     notification_id: int | None = None
     created_at: datetime
@@ -232,7 +235,7 @@ class AdminUserNotificationsRead(BaseModel):
     A superset of ``NotificationPreferencesRead`` rather than a sibling of it:
     the operator's question is "why has this person not heard from us", and the
     switches alone cannot answer it -- an unlinked Discord, a badge nobody
-    clears and an empty delivery ledger are three different diagnoses.
+    clears and nothing ever sent are three different diagnoses.
     """
 
     discord_dm: NotificationDmGroups

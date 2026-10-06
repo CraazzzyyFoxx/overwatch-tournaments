@@ -39,9 +39,13 @@ DiscordAction = Literal[
     "mix.join",
     "mix.leave",
     "mix.roles",
-    "mix.roles_set",
-    "mix.flex",
+    "mix.setup",
+    "mix.seat_set",
 ]
+
+#: An emoji by name, as ``shared.domain.discord_ui.EMOJI`` spells it (``tank``,
+#: ``div_gold_3``); discord-service resolves it to the uploaded application emoji.
+_EMOJI_NAME = r"^[a-z0-9_]{1,28}$"
 
 
 class DiscordLinkButton(BaseModel):
@@ -50,6 +54,7 @@ class DiscordLinkButton(BaseModel):
     type: Literal["link"] = "link"
     label: str = Field(min_length=1, max_length=80)
     url: str = Field(max_length=512, pattern=r"^https?://")
+    emoji: str | None = Field(default=None, pattern=_EMOJI_NAME)
 
 
 class DiscordActionButton(BaseModel):
@@ -67,6 +72,9 @@ class DiscordActionButton(BaseModel):
     #: The object acted on: an invite id, a tournament id, a preference group.
     target: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
     style: Literal["primary", "secondary", "success", "danger"] = "secondary"
+    emoji: str | None = Field(default=None, pattern=_EMOJI_NAME)
+    #: Shown greyed out: the card says the action exists but is not open now.
+    disabled: bool = False
 
 
 DiscordButton = Annotated[DiscordLinkButton | DiscordActionButton, Field(discriminator="type")]
@@ -80,8 +88,9 @@ class DiscordCard(BaseModel):
     action row per entry of ``rows`` under the container rather than in it.
     ``answers`` holds the card's one-click answers, ``rows`` where to read more
     and how to stop hearing it.
-    Both texts are Discord markdown, already escaped by the publisher. The
-    layout lives in discord-service; this is only what fills it.
+    Both texts are Discord markdown, already escaped by the publisher, and may
+    carry ``:owt_<name>:`` emoji shortcodes (``shared.domain.discord_ui``).
+    The layout lives in discord-service; this is only what fills it.
     """
 
     accent_color: int | None = Field(default=None, ge=0, le=0xFFFFFF)
@@ -90,7 +99,8 @@ class DiscordCard(BaseModel):
     thumbnail_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://")
     #: A picture the card is *about* (an encounter's OpenGraph image), not its
     #: icon: Discord shows it full width, fetching the URL itself.
-    image_url: str | None = Field(default=None, max_length=2048, pattern=r"^https?://")
+    #: ``attachment://<image_filename>`` shows the PNG the command carries.
+    image_url: str | None = Field(default=None, max_length=2048, pattern=r"^(https?|attachment)://")
     answers: list[DiscordButton] = Field(default_factory=list, max_length=5)
     # Discord's own caps: five buttons to a row, five rows to a message.
     rows: list[Annotated[list[DiscordButton], Field(min_length=1, max_length=5)]] = Field(
@@ -104,46 +114,53 @@ class DiscordCard(BaseModel):
             raise ValueError(f"card text exceeds Discord's {DISCORD_CARD_TEXT_LIMIT}-character limit")
         return self
 
+    @property
+    def attachment_name(self) -> str | None:
+        """The file the card shows from its own message, ``None`` for a URL or no picture."""
+        prefix = "attachment://"
+        return self.image_url[len(prefix) :] if self.image_url and self.image_url.startswith(prefix) else None
+
 
 class DiscordCommandEvent(BaseEvent):
     """Event for triggering Discord bot commands.
 
-    Published by: parser-service (``process_all``), balancer-service (``post_message``),
-    app-service notification delivery (``post_message``, ``send_dm``)
+    Published by: parser-service (``process_all``), balancer-service and
+    app-service notification delivery (everything that sends, through
+    ``shared.services.discord_messages``)
     Consumed by: discord-service
 
     Actions:
     - ``process_all``: re-scan every registered channel of a tournament.
     - ``process_message``: re-process one known message.
-    - ``post_message``: send a message (content, embed and/or PNG attachment, or one card) to a channel.
-    - ``send_dm``: send a direct message (content and/or embed, or one card) to one Discord user.
+    - ``post_message``: post one card to a channel, with the PNG it shows when
+      ``card.image_url`` is ``attachment://<image_filename>``.
+    - ``send_dm``: send one card to one Discord user.
+    - ``edit_message``: show the card the ``discord_message`` row now holds
+      (``card_json``); the command carries no card of its own. Edits of one
+      message arriving close together collapse into one read of the row.
+    - ``delete_message``: delete a message the bot sent.
+
+    Every message the platform sends is a ``discord_message`` row, and the four
+    message actions name it by ``message_ref`` (its id): the bot records the
+    Discord ids there once the message exists, and an edit or a delete is
+    resolved from that row -- a publisher never handles a Discord message id.
     """
 
     event_type: str = Field(default="discord_command", frozen=True)
-    action: str = Field(
-        ..., description="Action to perform: 'process_all', 'process_message', 'post_message' or 'send_dm'"
-    )
+    action: Literal["process_all", "process_message", "post_message", "send_dm", "edit_message", "delete_message"]
     tournament_id: int | None = Field(default=None, description="Tournament ID to process (for 'process_all')")
-    channel_id: int | None = Field(
-        default=None, description="Discord channel ID (required for 'process_message' and 'post_message')"
-    )
-    message_id: int | None = Field(default=None, description="Discord message ID (required for 'process_message')")
+    channel_id: int | None = Field(default=None, description="Discord channel ID (process_message, post_message)")
+    message_id: int | None = Field(default=None, description="Discord message ID (process_message)")
     discord_user_id: int | None = Field(default=None, description="Discord user ID (required for 'send_dm')")
-    content: str | None = Field(default=None, description="Plain message text (for 'post_message' and 'send_dm')")
-    embed: dict[str, Any] | None = Field(
-        default=None,
-        description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message' and 'send_dm')",
-    )
-    image_b64: str | None = Field(default=None, description="Base64 PNG sent as an attachment (for 'post_message')")
-    image_filename: str = Field(default="lineup.png", description="Filename for ``image_b64``")
-    card: DiscordCard | None = Field(
-        default=None,
-        description="Components V2 card (for 'post_message' and 'send_dm'); excludes content, embed and image_b64",
-    )
-    # Defaults to True so the balancer's existing mix posts keep their behaviour;
-    # notifications carry user-written team/tournament names and pass False, so
-    # an ``@everyone`` in a team name pings nobody.
-    allow_mentions: bool = Field(default=True, description="False = the bot sends with AllowedMentions.none()")
+    #: ``discord_message.id`` -- the platform's own handle on the message.
+    message_ref: int | None = Field(default=None, description="discord_message row (post/send/edit/delete)")
+    image_b64: str | None = Field(default=None, description="Base64 PNG the card shows (for 'post_message')")
+    image_filename: str = Field(default="lineup.png", pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    card: DiscordCard | None = Field(default=None, description="Components V2 card (post_message, send_dm)")
+    #: Who may be pinged. ``False`` pings nobody (notifications carry
+    #: user-written names). ``True`` pings the users the card mentions -- never
+    #: ``@everyone`` or a role, whatever the text says.
+    allow_mentions: bool = Field(default=False, description="True = the card's user mentions ping")
 
     def model_post_init(self, __context) -> None:
         """Validate that required fields are present for specific actions."""
@@ -154,18 +171,30 @@ class DiscordCommandEvent(BaseEvent):
             if self.channel_id is None or self.message_id is None:
                 raise ValueError("channel_id and message_id are required for action='process_message'")
         elif self.action == "post_message":
-            if self.channel_id is None:
-                raise ValueError("channel_id is required for action='post_message'")
-            if self.content is None and self.embed is None and self.image_b64 is None and self.card is None:
-                raise ValueError("content, embed, image_b64 or card is required for action='post_message'")
+            if self.channel_id is None or self.card is None or self.message_ref is None:
+                raise ValueError("channel_id, card and message_ref are required for action='post_message'")
         elif self.action == "send_dm":
-            if self.discord_user_id is None:
-                raise ValueError("discord_user_id is required for action='send_dm'")
-            if self.content is None and self.embed is None and self.card is None:
-                raise ValueError("content, embed or card is required for action='send_dm'")
-        # A Components V2 message carries no content or embeds: Discord refuses the mix.
-        if self.card is not None and (self.content is not None or self.embed is not None or self.image_b64 is not None):
-            raise ValueError("card cannot be combined with content, embed or image_b64")
+            if self.discord_user_id is None or self.card is None or self.message_ref is None:
+                raise ValueError("discord_user_id, card and message_ref are required for action='send_dm'")
+        elif self.action == "edit_message":
+            # The card is the row's: one carried here would be a second,
+            # possibly older, copy that the bot would have to pick between.
+            if self.message_ref is None or self.card is not None:
+                raise ValueError("edit_message takes message_ref and no card")
+        elif self.action == "delete_message":
+            if self.message_ref is None:
+                raise ValueError("message_ref is required for action='delete_message'")
+        # The PNG and the card that shows it travel together or not at all:
+        # Discord renders neither a gallery pointing at a missing file nor a
+        # stray attachment beside a Components V2 layout.
+        shown = self.card.attachment_name if self.card is not None else None
+        if self.image_b64 is not None:
+            if self.action != "post_message":
+                raise ValueError("image_b64 is only sent with action='post_message'")
+            if shown != self.image_filename:
+                raise ValueError("image_b64 needs a card whose image_url is attachment://<image_filename>")
+        elif shown is not None:
+            raise ValueError("card.image_url names an attachment the command does not carry")
 
 
 class NotificationCreatedEvent(BaseEvent):
@@ -193,6 +222,25 @@ class NotificationBroadcastEvent(BaseEvent):
     kind: str = Field(..., description="Notification kind, one of BROADCASTABLE_KINDS")
     payload: dict[str, Any] = Field(..., description="Validated snapshot, same schema as the kind's inbox payload")
     dedupe_key: str = Field(..., description="Producer identity of the event, the ledger key")
+
+
+class PickupMixChangedEvent(BaseEvent):
+    """Something about a workspace's pickup mixes changed; re-project what shows it.
+
+    A fact, not a command: it carries no state, only where to look. Consumers
+    read the current state and render from it, so a redelivered, late or
+    out-of-order event is harmless. ``custom_game_id`` is ``None`` for a change
+    that is not about one mix (a player renamed, a rank corrected), which
+    concerns every mix of the workspace.
+
+    Published by: balancer-service ``emit_pickup_mix_changed`` (outbox, same transaction)
+    Consumed by: balancer-service signup-card projector
+    """
+
+    event_type: str = Field(default="pickup_mix.changed", frozen=True)
+    workspace_id: int = Field(..., description="Workspace whose mixes changed")
+    custom_game_id: int | None = Field(default=None, description="The mix, or None for workspace-wide")
+    change: str = Field(..., description="What changed (roster, member, rank, close...), diagnostic only")
 
 
 class ProcessMatchLogEvent(BaseEvent):

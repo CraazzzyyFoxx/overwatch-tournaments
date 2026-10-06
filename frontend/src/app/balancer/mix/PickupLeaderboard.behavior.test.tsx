@@ -155,7 +155,7 @@ describe("PickupLeaderboard", () => {
     expect(row.textContent).toContain("10");
     expect(row.textContent).toContain("63%");
     expect(row.textContent).toContain("W3");
-    expect(row.textContent).toContain("3 consecutive wins");
+    expect(row.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe("3 consecutive wins");
 
     const broken = await mount([member({ streak: 0 })]);
     expect(rows(broken.container)[0].textContent).not.toContain("W");

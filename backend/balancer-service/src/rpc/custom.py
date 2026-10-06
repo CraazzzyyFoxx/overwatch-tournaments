@@ -2,9 +2,9 @@
 
 ``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,set_lobby_count,
 balance,set_team_names,set_next_map,set_variant_index,
-post_discord,post_signup,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
-undo_match,rotation,stats,close,delete,hard_delete,
-self_get,self_join,self_leave,self_update,set_self_service}``.
+post_discord,post_signup,delete_discord_post,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
+match_history,undo_match,rotation,stats,close,delete,hard_delete,
+self_get,self_current,self_join,self_leave,self_update,set_self_service}``.
 
 Writes require ``actor`` to be the host, a co-host or a superuser; the per-mix check lives in
 ``CustomGameService._writable``. The reads (``list``, ``get``, ``stats``,
@@ -16,11 +16,26 @@ read out to a lobby, whose players need no account here.
 Pydantic model in ``src.schemas.custom_game`` before it reaches a use case --
 nothing here hand-parses a dict.
 
-The five ``self_*`` subjects are the PLAYER's own surface: they are gated by
+The six ``self_*`` subjects are the PLAYER's own surface: they are gated by
 ``mix_self_policy`` inside the service rather than by ``_require_mix``, because
 whoever is joining may not be a workspace member yet. ``workspace_id`` is
 optional on them -- the bot knows only a ``custom_game_id`` -- and when present
-must match the mix's own.
+must match the mix's own. ``self_current`` is the exception that requires it:
+it answers for the workspace's newest open mix, which is the only input it has.
+
+Every Discord message this service sends is a ``discord_message`` row
+(``shared.services.discord_messages``) filed under the mix's subject
+(``mix:<id>``): the signup card in slot ``signup``, one row per lineup in slot
+``lineup:<lobby>:<match>``. The mix page reads them back as ``discord_posts``,
+the host takes one down with ``delete_discord_post``, and deleting the mix
+deletes all of them. Commands for the bot are queued through the outbox
+(``discord_messages.enqueue``) INSIDE the handler's transaction, so a rolled
+back write queues nothing. Keeping the live signup card in step with a
+mutation is nobody's job here: every write emits ``emit_pickup_mix_changed``
+and ``src.services.mix_signup_projector`` re-renders the card from the
+committed state. The bot answers nothing back here -- it writes the row's
+outcome itself -- so this module subscribes to no queue but its own RPC
+subjects.
 """
 
 from __future__ import annotations
@@ -37,9 +52,7 @@ from shared.core import http_status as status
 from shared.core.enums import CasualTeamSide, MixRoleSelectionMode
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
-from shared.messaging.config import DISCORD_COMMANDS_QUEUE
-from shared.observability import publish_message
-from shared.schemas.events import DiscordCommandEvent
+from shared.services import discord_messages
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER
 from src.core import db
@@ -48,8 +61,8 @@ from src.domain.balancer.result_serializer import as_lobby_document
 from src.domain.mix_lobbies import seated_member_ids
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
-from src.services.custom_game import custom_game_service
-from src.services.pickup_mix_realtime import emit_pickup_mix_updated
+from src.services.custom_game import custom_game_service, mix_subject
+from src.services.pickup_mix_realtime import emit_pickup_mix_changed
 
 _SF = db.async_session_maker
 
@@ -234,6 +247,36 @@ def _dump_lobby(lobby: Any, *, balance_result: bool, activity: tuple[int, Any] |
     return out
 
 
+async def _discord_posts(session: Any, game: Any, discord_guild_id: str | None) -> list[dict[str, Any]]:
+    """Every Discord message this mix still has out there, oldest first.
+
+    One read of ``discord_message`` by subject. ``deleted`` rows are left out --
+    the message is gone and the row only survives as the bot's receipt -- while
+    a ``deleting`` one stays visible until the bot confirms, so the button the
+    host just pressed does not make the post flicker out and back.
+
+    ``status`` is the effective one: a ``pending`` older than the command
+    queue's TTL reads ``lost``, because nothing is going to post it now. The
+    jump link needs the workspace's verified guild, so without one a posted
+    message is still a post -- just not an addressable one.
+    """
+    rows = await discord_messages.repository.for_subject(
+        session, mix_subject(game.id), statuses=("pending", "posted", "failed", "deleting")
+    )
+    return [
+        {
+            "id": row.id,
+            "slot": row.slot,
+            "kind": row.kind,
+            "status": discord_messages.effective_status(row),
+            "url": discord_messages.jump_url(row, guild_id=discord_guild_id),
+            "error": row.error,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+
 def _dump_game(
     game: Any,
     settings: dict[str, Any],
@@ -250,6 +293,7 @@ def _dump_game(
     lobbies: list[Any] | None = None,
     lobby_activity: dict[int, tuple[int, Any]] | None = None,
     current_lobby: dict[int, int] | None = None,
+    discord_posts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     matches_count, last_match_at = activity if activity is not None else (0, None)
     out: dict[str, Any] = {
@@ -279,6 +323,11 @@ def _dump_game(
         # board's host controls and by the player's own panel.
         "self_signup": game.self_signup,
         "self_role_edit": game.self_role_edit,
+        # Every Discord message this mix has out there -- the signup card and
+        # every lineup -- oldest first. Only the single-mix read pays for the
+        # query; a list row carries the empty list rather than a missing key,
+        # so one client type covers both reads.
+        "discord_posts": discord_posts or [],
         # How busy this mix has been, so the list can say "3 matches, 20m ago"
         # without fetching every mix's history.
         "matches_count": matches_count,
@@ -324,10 +373,14 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     an Overwatch snapshot, and the sheet could not say which it is about to
     overwrite.
     """
+    # One read for both halves of the workspace's Discord binding: the channel
+    # the settings carry, and the guild the posts' jump links need.
+    channel_id, guild_id = await custom_game_service.workspace_discord_target(session, game.workspace_id)
+    discord_posts = await _discord_posts(session, game, guild_id)
     settings = await _game_settings(
         session,
         game,
-        await custom_game_service.workspace_discord_channel_id(session, game.workspace_id),
+        channel_id,
         await custom_game_service.host_points_per_win(session, game.host_user_id),
     )
     roster_shape = (
@@ -363,6 +416,7 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
             lobbies=lobbies,
             lobby_activity=lobby_activity,
             current_lobby=current_lobby,
+            discord_posts=discord_posts,
         )
     member_ids = [row.workspace_member_id for row in roster]
     members = await custom_game_service.members(session, game.workspace_id, member_ids)
@@ -405,6 +459,7 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
         lobbies=lobbies,
         lobby_activity=lobby_activity,
         current_lobby=current_lobby,
+        discord_posts=discord_posts,
     )
 
 
@@ -502,7 +557,9 @@ def register(broker: Any, logger: Any) -> None:
                 member_ids=body.member_ids,
                 clone_from_game_id=body.clone_from_game_id,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="create", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="create", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -520,6 +577,9 @@ def register(broker: Any, logger: Any) -> None:
             activity = await custom_game_service.casual_matches.activity_for_games(session, game_ids)
             team_names = await custom_game_service.team_names.mapping_for_games(session, game_ids)
             lobbies_by_game = await custom_game_service.lobbies.list_for_games(session, game_ids)
+            # One query for the workspace's channel, for every row: the setting
+            # is workspace-wide, so the list pays nothing per mix for carrying
+            # it. No guild here -- a list row shows no Discord posts.
             workspace_channel_id = await custom_game_service.workspace_discord_channel_id(session, workspace_id)
             # A workspace's mixes are typically run by a handful of people, so one
             # grouped read beats a per-row lookup of the same few account rows.
@@ -566,7 +626,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="roster", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -588,7 +650,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="roster", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -617,7 +681,10 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
+            # The card lists the bench apart, so the projector re-renders it.
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="roster", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -636,6 +703,22 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "custom.self_get", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.balancer.custom.self_current")
+    async def _self_current(data: dict, msg: RabbitMessage) -> dict:
+        """The caller's seat in whatever mix the workspace is running NOW.
+
+        What ``/mix`` in Discord asks: the player names no id, so the newest
+        mix that is not over answers for them. ``not_found`` when there is none.
+        """
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            return await custom_game_service.self_current(
+                session, workspace_id=_int(data, "workspace_id"), auth_user=user
+            )
+
+        return await c.envelope(logger, "custom.self_current", op, session_factory=_SF)
+
     @broker.subscriber("rpc.balancer.custom.self_join")
     async def _self_join(data: dict, msg: RabbitMessage) -> dict:
         """Seat the caller. Not gated by ``_require_mix``: somebody joining a
@@ -644,9 +727,10 @@ def register(broker: Any, logger: Any) -> None:
 
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
+            custom_game_id = _game_id(data)
             state = await custom_game_service.self_join(
                 session,
-                custom_game_id=_game_id(data),
+                custom_game_id=custom_game_id,
                 auth_user=user,
                 workspace_id=_opt_int(data, "workspace_id"),
             )
@@ -659,9 +743,10 @@ def register(broker: Any, logger: Any) -> None:
     async def _self_leave(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
+            custom_game_id = _game_id(data)
             state = await custom_game_service.self_leave(
                 session,
-                custom_game_id=_game_id(data),
+                custom_game_id=custom_game_id,
                 auth_user=user,
                 workspace_id=_opt_int(data, "workspace_id"),
             )
@@ -675,9 +760,10 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
             body = _body(schemas.CustomGameSelfUpdate, data)
+            custom_game_id = _game_id(data)
             state = await custom_game_service.self_update(
                 session,
-                custom_game_id=_game_id(data),
+                custom_game_id=custom_game_id,
                 auth_user=user,
                 # exclude_unset keeps "don't touch my roles" apart from
                 # "roles: null" (= every ranked role).
@@ -707,7 +793,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="member", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -731,7 +819,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="lobby", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="lobby", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -753,7 +843,10 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="balance", actor_user_id=user.id)
+            # A one-lobby balance benches the overflow, which the card shows.
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="balance", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -774,7 +867,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="team_names", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="team_names", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -796,7 +891,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="next_map", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="next_map", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -821,7 +918,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="variant_index", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="variant_index", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -834,7 +933,7 @@ def register(broker: Any, logger: Any) -> None:
             workspace_id = _int(data, "workspace_id")
             _require_mix(data, user, workspace_id, "update")
             body = _body(schemas.CustomGamePostDiscord, data)
-            channel_id, embed = await custom_game_service.discord_lineup(
+            channel_id, commands = await custom_game_service.discord_lineup(
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
@@ -842,22 +941,21 @@ def register(broker: Any, logger: Any) -> None:
                 variant_index=body.variant_index,
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
-            )
-            # Fire and forget: the bot owns delivery, and nothing about the mix
-            # changed, so there is no realtime signal and nothing to commit.
-            #
-            # The host's screenshot wins when there is one: it is the matchup
-            # card they were looking at, crests and all, which no embed can be.
-            # ``discord_lineup`` still runs for it -- that is what resolves the
-            # channel and rejects an unknown variant -- and its embed is the
-            # fallback for a client whose capture failed.
-            event = DiscordCommandEvent(
-                action="post_message",
-                channel_id=channel_id,
-                embed=None if body.image_b64 else embed,
+                board_url_base=config.public_site_url,
+                # The host's screenshot wins when there is one: it is the
+                # matchup card they were looking at, crests and all, which no
+                # rendered text can be. The card then shows the attachment
+                # instead of listing the seats.
                 image_b64=body.image_b64,
             )
-            await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
+            # Nothing about the mix itself changed, but the post it is about to
+            # make is a row of its own, so the commit is real and the board
+            # hears about the new entry in ``discord_posts``.
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=_game_id(data), change="discord", actor_user_id=user.id
+            )
+            await discord_messages.enqueue(session, commands)
+            await session.commit()
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
@@ -871,7 +969,7 @@ def register(broker: Any, logger: Any) -> None:
             workspace_id = _int(data, "workspace_id")
             _require_mix(data, user, workspace_id, "update")
             body = _body(schemas.CustomGamePostSignup, data)
-            channel_id, card = await custom_game_service.signup_post(
+            channel_id, commands = await custom_game_service.signup_post(
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
@@ -882,17 +980,50 @@ def register(broker: Any, logger: Any) -> None:
             )
             # The signup mode is a fact about the mix, so the board refreshes;
             # delivery of the card itself is the bot's problem.
-            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=_game_id(data), change="member", actor_user_id=user.id
+            )
+            # Queued in THIS transaction: the outbox ties delivery to the
+            # commit, so a failed write announces nothing. The previous card's
+            # delete leads, so the channel never holds two cards counting two
+            # different rosters.
+            await discord_messages.enqueue(session, commands)
             await session.commit()
-            # Published only once the open window is durable. A queued card is
-            # unrecallable, so publishing first would let a failed commit leave
-            # a post in the channel whose buttons all answer ``signup_closed``
-            # -- same commit-then-publish order the achievement runner uses.
-            event = DiscordCommandEvent(action="post_message", channel_id=channel_id, card=card)
-            await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_signup", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.delete_discord_post")
+    async def _delete_discord_post(data: dict, msg: RabbitMessage) -> dict:
+        """Take one of this mix's Discord messages down, by its ``discord_posts`` id.
+
+        The host's own undo for a post they did not mean to make. Same grant as
+        making one (host, co-host or superuser), and the refreshed mix comes
+        back so the page re-renders the list it just changed.
+        """
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            game, commands = await custom_game_service.delete_discord_post(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                # Path parameter, not a body: the route is
+                # DELETE .../discord/posts/{post_id}.
+                post_id=_int(data, "post_id"),
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="discord", actor_user_id=user.id
+            )
+            await discord_messages.enqueue(session, commands)
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.delete_discord_post", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.transfer_host")
     async def _transfer_host(data: dict, msg: RabbitMessage) -> dict:
@@ -909,7 +1040,10 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="host", actor_user_id=user.id)
+            # The card names the host, so handing the mix over re-renders it.
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="host", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -930,7 +1064,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="co_hosts", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="co_hosts", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -952,7 +1088,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="co_hosts", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="co_hosts", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -976,7 +1114,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="teams", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="teams", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -1000,7 +1140,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="outcome", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="outcome", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -1031,7 +1173,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="outcome", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="outcome", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -1078,7 +1222,9 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="close", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="close", actor_user_id=user.id
+            )
             await session.commit()
             return await _with_roster(session, game)
 
@@ -1097,18 +1243,22 @@ def register(broker: Any, logger: Any) -> None:
                 actor_user_id=user.id,
                 actor_is_superuser=user.is_superuser,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="delete", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="delete", actor_user_id=user.id
+            )
             await session.commit()
+            channel_id, guild_id = await custom_game_service.workspace_discord_target(session, workspace_id)
             return _dump_game(
                 game,
                 await _game_settings(
                     session,
                     game,
-                    await custom_game_service.workspace_discord_channel_id(session, workspace_id),
+                    channel_id,
                     await custom_game_service.host_points_per_win(session, game.host_user_id),
                 ),
                 lobbies=(await custom_game_service.lobbies.list_for_games(session, [game.id])).get(game.id, []),
                 activity=(await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id),
+                discord_posts=await _discord_posts(session, game, guild_id),
             )
 
         return await c.envelope(logger, "custom.delete", op, session_factory=_SF)
@@ -1118,6 +1268,10 @@ def register(broker: Any, logger: Any) -> None:
         """Permanently deletes a mix. Workspace admin only -- unlike ``delete``
         (a status flip a host can trigger on their own game) this destroys the
         row and every match it recorded, so it needs more than host-or-co-host.
+
+        Its Discord messages go with it: a card advertising a mix that no longer
+        exists is worse than no card, so every live one is deleted from the
+        channel once the deletion itself has committed.
         """
 
         async def op(session: Any) -> Any:
@@ -1126,8 +1280,13 @@ def register(broker: Any, logger: Any) -> None:
             c.require_member(user, workspace_id)
             _require_workspace_admin(user, workspace_id)
             custom_game_id = _game_id(data)
-            await custom_game_service.hard_delete(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
-            await emit_pickup_mix_updated(session, workspace_id, change="hard_delete", actor_user_id=user.id)
+            commands = await custom_game_service.hard_delete(
+                session, workspace_id=workspace_id, custom_game_id=custom_game_id
+            )
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=custom_game_id, change="hard_delete", actor_user_id=user.id
+            )
+            await discord_messages.enqueue(session, commands)
             await session.commit()
             return {"id": custom_game_id}
 

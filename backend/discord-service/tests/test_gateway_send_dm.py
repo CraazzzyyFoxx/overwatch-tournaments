@@ -1,9 +1,12 @@
 """The ``send_dm`` branch of the discord command consumer.
 
 app-service publishes one command per personal notification whose owner opted
-into Discord DMs. What matters here is the ack/reject decision: a user with
-DMs closed or a deleted account can never receive the message, so requeueing
-it only fills the queue -- the notification is already in the in-app inbox.
+into Discord DMs, each naming its ``discord_message`` row. Two things matter:
+the ack/reject decision (a user with DMs closed or a deleted account can never
+receive the message, so requeueing it only fills the queue -- the notification
+is already in the in-app inbox), and what the row says afterwards, including
+the *DM channel* id, which is what a later edit or delete needs and is not the
+user id the command carried.
 """
 
 import sys
@@ -17,33 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import discord  # noqa: E402
 
-from src.rabbit.gateway import DiscordRabbitGateway  # noqa: E402
+from tests.gateway_fakes import FakeMessages, gateway, message, row  # noqa: E402
 
 
-def _command_handler(bot: MagicMock):
-    """Run the real registration and hand back the discord-commands handler."""
-    gateway = DiscordRabbitGateway(
-        settings=MagicMock(),
-        processor=MagicMock(),
-        registry=MagicMock(),
-        directory=MagicMock(),
-        result_waiter=MagicMock(),
-        bot=bot,
-    )
-
-    handlers: dict[str, object] = {}
-
-    def fake_subscriber(queue, *extra):
-        def decorator(fn):
-            handlers[fn.__name__] = fn
-            return fn
-
-        return decorator
-
-    fake_broker = MagicMock()
-    fake_broker.subscriber = fake_subscriber
-    gateway._register(fake_broker)
-    return handlers["handle_discord_command"]
+def _dm_row(**overrides):
+    return row(channel="discord_dm", target="4242", subject="notification:7", slot="dm", kind="dm", **overrides)
 
 
 def _bot(*, user=None, fetched=None, fetch_error: Exception | None = None) -> MagicMock:
@@ -54,16 +35,14 @@ def _bot(*, user=None, fetched=None, fetch_error: Exception | None = None) -> Ma
     )
 
 
-def _message() -> MagicMock:
-    return MagicMock(
-        headers={},
-        correlation_id=None,
-        message_id=None,
-        raw_message=None,
-        ack=AsyncMock(),
-        reject=AsyncMock(),
-        nack=AsyncMock(),
-    )
+def _user(send: AsyncMock | None = None) -> MagicMock:
+    sent = MagicMock(id=9001, channel=MagicMock(id=777))
+    return MagicMock(send=send or AsyncMock(return_value=sent))
+
+
+def _handler(bot: MagicMock, rows: FakeMessages):
+    handle, _ = gateway(bot=bot, messages=rows)
+    return handle
 
 
 def _body(**overrides) -> dict:
@@ -71,7 +50,8 @@ def _body(**overrides) -> dict:
         "event_type": "discord_command",
         "action": "send_dm",
         "discord_user_id": 4242,
-        "embed": {"title": "Registration is open", "color": 0x14B8A6},
+        "message_ref": 1,
+        "card": {"accent_color": 0x14B8A6, "text": "### Registration is open"},
     }
     body.update(overrides)
     return body
@@ -82,54 +62,61 @@ def _http_error(cls, status: int):
 
 
 class SendDmCommandTests(IsolatedAsyncioTestCase):
-    async def test_sends_embed_without_pinging_and_acks(self) -> None:
+    async def test_sends_the_card_without_pinging_and_records_the_dm_channel(self) -> None:
         """Notification text carries user-written team names; none of them may ping."""
-        user = MagicMock(send=AsyncMock())
+        user = _user()
         bot = _bot(user=user)
-        msg = _message()
+        rows = FakeMessages(_dm_row())
+        msg = message()
 
-        await _command_handler(bot)(_body(content="mix is live"), msg)
+        await _handler(bot, rows)(_body(), msg)
 
         bot.get_user.assert_called_once_with(4242)
         bot.fetch_user.assert_not_awaited()
         kwargs = user.send.await_args.kwargs
-        self.assertEqual(kwargs["content"], "mix is live")
-        self.assertIsInstance(kwargs["embed"], discord.Embed)
-        self.assertEqual(kwargs["embed"].to_dict()["title"], "Registration is open")
+        (container,) = kwargs["view"].to_components()
+        self.assertEqual(container["components"][0]["content"], "### Registration is open")
         self.assertEqual(kwargs["allowed_mentions"].to_dict(), discord.AllowedMentions.none().to_dict())
+        stored = rows.rows[1]
+        self.assertEqual((stored.status, stored.discord_channel_id, stored.message_id), ("posted", 777, 9001))
         msg.ack.assert_awaited_once()
         msg.reject.assert_not_awaited()
 
     async def test_uncached_user_is_fetched(self) -> None:
         """A recipient the bot never saw is not in its user cache."""
-        user = MagicMock(send=AsyncMock())
+        user = _user()
         bot = _bot(user=None, fetched=user)
-        msg = _message()
+        msg = message()
 
-        await _command_handler(bot)(_body(), msg)
+        await _handler(bot, FakeMessages(_dm_row()))(_body(), msg)
 
         bot.fetch_user.assert_awaited_once_with(4242)
         user.send.assert_awaited_once()
         msg.ack.assert_awaited_once()
 
-    async def test_closed_dms_are_acked_not_requeued(self) -> None:
+    async def test_closed_dms_fail_the_row_and_are_acked(self) -> None:
         """403 means the user refuses DMs -- every retry gets the same 403."""
-        user = MagicMock(send=AsyncMock(side_effect=_http_error(discord.Forbidden, 403)))
-        msg = _message()
+        user = _user(send=AsyncMock(side_effect=_http_error(discord.Forbidden, 403)))
+        rows = FakeMessages(_dm_row())
+        msg = message()
 
-        await _command_handler(_bot(user=user))(_body(), msg)
+        await _handler(_bot(user=user), rows)(_body(), msg)
 
+        self.assertEqual(rows.rows[1].status, "failed")
+        self.assertIn("DM", rows.rows[1].error)
         msg.ack.assert_awaited_once()
         msg.reject.assert_not_awaited()
         msg.nack.assert_not_awaited()
 
-    async def test_unknown_user_is_acked(self) -> None:
+    async def test_unknown_user_fails_the_row_and_is_acked(self) -> None:
         """A deleted account never resolves; dropping it is the only outcome."""
         bot = _bot(user=None, fetch_error=_http_error(discord.NotFound, 404))
-        msg = _message()
+        rows = FakeMessages(_dm_row())
+        msg = message()
 
-        await _command_handler(bot)(_body(), msg)
+        await _handler(bot, rows)(_body(), msg)
 
+        self.assertEqual(rows.rows[1].status, "failed")
         msg.ack.assert_awaited_once()
         msg.reject.assert_not_awaited()
         msg.nack.assert_not_awaited()
@@ -137,8 +124,8 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
     async def test_a_card_is_sent_as_a_components_v2_layout(self) -> None:
         """Notifications arrive as one card: text beside the logo, details and the
         row of actions the bot answers, then under it one row of links Discord opens."""
-        user = MagicMock(send=AsyncMock())
-        msg = _message()
+        user = _user()
+        msg = message()
         card = {
             "accent_color": 0x10B981,
             "text": "### Check-in opened",
@@ -150,11 +137,9 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
             "rows": [[{"type": "link", "label": "Open tournament", "url": "https://owt.example/tournaments/3"}]],
         }
 
-        await _command_handler(_bot(user=user))(_body(embed=None, card=card), msg)
+        await _handler(_bot(user=user), FakeMessages(_dm_row()))(_body(card=card), msg)
 
         kwargs = user.send.await_args.kwargs
-        self.assertIsNone(kwargs["content"])
-        self.assertIsNone(kwargs["embed"])
         view = kwargs["view"]
         self.assertTrue(view.has_components_v2())
         # Stopped, so discord.py keeps no per-message view: the cog answers by custom_id.
@@ -174,45 +159,29 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
 
     async def test_a_payload_discord_refuses_is_rejected_not_requeued(self) -> None:
         """A 400 fails the same way on every retry; requeueing it loops forever."""
-        user = MagicMock(send=AsyncMock(side_effect=_http_error(discord.HTTPException, 400)))
-        msg = _message()
+        user = _user(send=AsyncMock(side_effect=_http_error(discord.HTTPException, 400)))
+        rows = FakeMessages(_dm_row())
+        msg = message()
 
-        await _command_handler(_bot(user=user))(_body(), msg)
+        await _handler(_bot(user=user), rows)(_body(), msg)
 
+        self.assertEqual(rows.rows[1].status, "failed")
         msg.reject.assert_awaited_once()
         msg.ack.assert_not_awaited()
         msg.nack.assert_not_awaited()
 
-    async def test_a_repeat_of_the_same_dm_is_dropped(self) -> None:
-        """A command published twice (or two rows for one event) must reach the user once.
-
-        Each validation mints a fresh ``event_id``, so the two copies differ in
-        everything but where they go and what they say -- which is the point.
-        """
-        user = MagicMock(send=AsyncMock())
+    async def test_a_redelivered_command_dms_nobody_twice(self) -> None:
+        """A command published twice, or requeued after an ack was lost, reaches the user once."""
+        user = _user()
         bot = _bot(user=user)
-        handle = _command_handler(bot)
-        first, repeat, other_user = _message(), _message(), _message()
+        rows = FakeMessages(_dm_row())
+        handle = _handler(bot, rows)
+        first, repeat = message(), message()
 
         await handle(_body(), first)
         await handle(_body(), repeat)
-        await handle(_body(discord_user_id=4343), other_user)
 
-        self.assertEqual(user.send.await_count, 2)
-        self.assertEqual([call.args for call in bot.get_user.call_args_list], [(4242,), (4343,)])
-        for msg in (first, repeat, other_user):
-            msg.ack.assert_awaited_once()
-
-    async def test_a_requeued_failure_is_not_a_repeat(self) -> None:
-        """A send that crashed is nacked for a retry, and that retry has to go out."""
-        user = MagicMock(send=AsyncMock(side_effect=[RuntimeError("gateway hiccup"), None]))
-        handle = _command_handler(_bot(user=user))
-        failed, retry = _message(), _message()
-
-        with self.assertRaises(RuntimeError):
-            await handle(_body(), failed)
-        await handle(_body(), retry)
-
-        failed.nack.assert_awaited_once()
-        self.assertEqual(user.send.await_count, 2)
-        retry.ack.assert_awaited_once()
+        self.assertEqual(user.send.await_count, 1)
+        self.assertEqual(rows.rows[1].status, "posted")
+        first.ack.assert_awaited_once()
+        repeat.ack.assert_awaited_once()

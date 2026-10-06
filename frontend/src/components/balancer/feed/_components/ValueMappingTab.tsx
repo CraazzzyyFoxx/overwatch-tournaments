@@ -108,7 +108,7 @@ export function ValueMappingTab({
         <div className="xl:col-span-2">
           <ValueMapEditor
             title="Role + Sub-role combined"
-            description={`Map a single cell value to one or more roles (e.g. "Хитскан ДПС" → DPS/Hitscan, or "Флекс, Танк или Сап" → Tank + Support). Use "Add role" to expand a value into multiple roles.`}
+            description={`Map a single cell value to one or more roles (e.g. "Хитскан ДПС" → Damage/Hitscan, or "Флекс, Танк или Сап" → Tank + Support). Use "Add role" to expand a value into multiple roles.`}
             kind="role_subrole"
             rows={valueState.role_subroles}
             canSeed={Object.keys(roleSubroleDefaults).length > 0}

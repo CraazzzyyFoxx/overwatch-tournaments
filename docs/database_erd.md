@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`objmap01`** (99 revisions in `backend/migrations/versions/`).
+Alembic head: **`discordmsg02`** (101 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2820,6 +2820,24 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at "nullable"
     }
+    PUBLIC_DISCORD_MESSAGE {
+        bigint id PK
+        varchar(32) channel
+        varchar(64) target
+        varchar(128) dedupe_key "nullable"
+        varchar(160) subject
+        varchar(64) slot
+        varchar(64) kind
+        bigint notification_id "nullable"
+        bigint workspace_id "nullable"
+        varchar(16) status
+        bigint discord_channel_id "nullable"
+        bigint message_id "nullable"
+        text error "nullable"
+        json card_json "nullable"
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+    }
     PUBLIC_EVENT_OUTBOX {
         bigint id PK
         varchar(64) event_id UK
@@ -2846,16 +2864,6 @@ erDiagram
         bigint actor_auth_user_id "nullable"
         timestamptz published_at
         timestamptz expires_at "nullable"
-        timestamptz created_at
-    }
-    PUBLIC_NOTIFICATION_DELIVERY {
-        bigint id PK
-        varchar(32) channel
-        varchar(64) target
-        varchar(128) dedupe_key
-        bigint notification_id "nullable"
-        bigint workspace_id "nullable"
-        varchar(64) kind
         timestamptz created_at
     }
     PUBLIC_NOTIFICATION_PREFERENCE {
@@ -2894,7 +2902,7 @@ erDiagram
 
 Composite unique keys:
 
-- `PUBLIC_NOTIFICATION_DELIVERY` unique on (`channel`, `target`, `dedupe_key`)
+- `PUBLIC_DISCORD_MESSAGE` unique on (`channel`, `target`, `dedupe_key`)
 <!-- /ERD:auto -->
 
 ## quota — `quota`

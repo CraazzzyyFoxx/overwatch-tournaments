@@ -1,11 +1,11 @@
 """Turn a delivery event into one Discord message -- or into a recorded skip.
 
 Two flows, one shape: decide whether this event still deserves a message, claim
-the right to send it in the ledger, then enqueue the bot command in the *same*
-transaction as the claim. That order is the whole design: the ledger row and
-the outbox command commit together, so there is no state where the platform
+a ``discord_message`` row for it, then enqueue the bot command naming that row
+in the *same* transaction as the claim. That order is the whole design: the row
+and the outbox command commit together, so there is no state where the platform
 believes it sent something it did not, and a redelivered event (the outbox is
-at-least-once) finds the claim taken and sends nothing.
+at-least-once) finds the ``dedupe_key`` taken and sends nothing.
 
 Both methods answer with a status string rather than a bool or an exception.
 Skips are normal -- no Discord linked, the group switched off, no channel
@@ -23,15 +23,13 @@ from typing import Any
 import sqlalchemy as sa
 
 from shared import models
-from shared.messaging.config import DISCORD_COMMANDS_QUEUE
-from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository.notification import (
-    NotificationDeliveryRepository,
     NotificationPreferenceRepository,
     NotificationRepository,
     NotificationWorkspaceConfigRepository,
 )
-from shared.schemas.events import DiscordCommandEvent, NotificationBroadcastEvent, NotificationCreatedEvent
+from shared.schemas.events import NotificationBroadcastEvent, NotificationCreatedEvent
+from shared.services import discord_messages
 from shared.services.notifications import NOTIFICATION_KIND_GROUPS, wants_discord_dm
 from shared.services.subscriptions.strategies import load_provider_user_ids
 from src.core import config
@@ -49,7 +47,6 @@ _DM_LOCALE = "ru"
 class NotificationDeliveryService:
     def __init__(self) -> None:
         self._notifications = NotificationRepository()
-        self._deliveries = NotificationDeliveryRepository()
         self._preferences = NotificationPreferenceRepository()
         self._configs = NotificationWorkspaceConfigRepository()
 
@@ -94,18 +91,6 @@ class NotificationDeliveryService:
             return "skipped_no_discord"
         target = targets[0]
 
-        claimed = await self._deliveries.claim(
-            session,
-            channel="discord_dm",
-            target=target,
-            dedupe_key=f"notification:{row.id}",
-            kind=row.kind,
-            notification_id=row.id,
-            workspace_id=row.source_workspace_id,
-        )
-        if not claimed:
-            return "duplicate"
-
         workspace_name, image_url = await _branding(session, row.source_workspace_id, payload)
         card = render_discord(
             row.kind,
@@ -116,17 +101,26 @@ class NotificationDeliveryService:
             image_url=image_url,
             personal=True,
         )
-        await enqueue_outbox_event(
+        # No allow_mentions: it defaults to False, and a notification card
+        # carries user-written names -- an ``@everyone`` in one pings nobody.
+        command = await discord_messages.send_command(
             session,
-            DiscordCommandEvent(
-                action="send_dm",
-                discord_user_id=int(target),
-                card=card,
-                allow_mentions=False,
-            ),
-            exchange="",
-            routing_key=DISCORD_COMMANDS_QUEUE.name,
+            subject=f"notification:{row.id}",
+            slot="dm",
+            kind=row.kind,
+            card=card,
+            workspace_id=row.source_workspace_id,
+            discord_user_id=int(target),
+            # Unchanged from the ledger this table took over: rows written
+            # before the rename still guard their notification against a
+            # redelivery.
+            dedupe_key=f"notification:{row.id}",
+            notification_id=row.id,
         )
+        if command is None:
+            return "duplicate"
+
+        await discord_messages.enqueue(session, [command])
         await session.commit()
         return "sent"
 
@@ -143,16 +137,9 @@ class NotificationDeliveryService:
             return "skipped_no_config"
 
         channel_id = int(stored.discord_channel_id)
-        claimed = await self._deliveries.claim(
-            session,
-            channel="discord_channel",
-            target=str(channel_id),
-            dedupe_key=f"{event.kind}:{event.dedupe_key}",
-            kind=event.kind,
-            workspace_id=event.workspace_id,
-        )
-        if not claimed:
-            return "duplicate"
+        # Unchanged from the ledger this table took over, so a broadcast
+        # already claimed before the rename is not posted a second time.
+        dedupe_key = f"{event.kind}:{event.dedupe_key}"
 
         workspace_name, image_url = await _branding(session, event.workspace_id, event.payload)
         card = render_discord(
@@ -163,17 +150,20 @@ class NotificationDeliveryService:
             workspace_name=workspace_name,
             image_url=image_url,
         )
-        await enqueue_outbox_event(
+        command = await discord_messages.send_command(
             session,
-            DiscordCommandEvent(
-                action="post_message",
-                channel_id=channel_id,
-                card=card,
-                allow_mentions=False,
-            ),
-            exchange="",
-            routing_key=DISCORD_COMMANDS_QUEUE.name,
+            subject=f"broadcast:{dedupe_key}",
+            slot="channel",
+            kind=event.kind,
+            card=card,
+            workspace_id=event.workspace_id,
+            channel_id=channel_id,
+            dedupe_key=dedupe_key,
         )
+        if command is None:
+            return "duplicate"
+
+        await discord_messages.enqueue(session, [command])
         await session.commit()
         return "sent"
 

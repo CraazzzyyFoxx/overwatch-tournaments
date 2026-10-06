@@ -434,6 +434,15 @@ services:
       - ./logs/discord-worker:/logs
     networks:
       - app-network
+    # Same probe as production: the heartbeat file GatewayWatchdog touches while
+    # the gateway session is alive. watchfiles restarts the inner process on
+    # every edit, so the window has to outlast a reload.
+    healthcheck:
+      test: ["CMD", "python", "-m", "src.tools.healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     deploy:
       resources:
         limits:
@@ -442,6 +451,33 @@ services:
         reservations:
           cpus: '0.05'
           memory: 64M
+
+  # One-shot job: uploads the dev bot's missing application emoji, then exits
+  # (`make discord-emoji`). Same as production's; the bot re-reads its emoji
+  # every 10 minutes, so nothing restarts after it.
+  discord-emoji:
+    image: registry.craazzzyyfoxx.me/owt-discord:dev
+    profiles: ["tools"]
+    build:
+      context: ./backend
+      args:
+        APP_PATH: discord
+    command: python -m src.tools.emoji_sync
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/discord.env
+    depends_on:
+      proxy:
+        condition: service_healthy
+    volumes:
+      - ./backend/discord-service:/app/discord-service
+      - ./backend/shared:/app/shared
+      - ./static/divisions:/static/divisions:ro
+    networks:
+      - app-network
+    healthcheck:
+      disable: true
+    restart: "no"
 
   frontend:
     image: registry.craazzzyyfoxx.me/frontend:dev

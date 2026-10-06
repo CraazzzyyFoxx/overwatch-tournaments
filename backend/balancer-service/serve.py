@@ -9,7 +9,8 @@ from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from redis.asyncio import Redis
 
-from shared.messaging.config import BALANCER_JOBS_QUEUE
+from shared.messaging.config import BALANCER_JOBS_QUEUE, PICKUP_MIX_CHANGED_DLQ
+from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
     make_rabbit_broker,
     setup_logging,
@@ -35,6 +36,7 @@ from src.rpc import players as rpc_players
 from src.rpc import prefs as rpc_prefs
 from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_service
+from src.services.mix_signup_projector import register as register_signup_projector
 
 logger = setup_logging(
     service_name="balancer-svc",
@@ -79,6 +81,10 @@ rpc_custom.register(broker, logger)
 rpc_players.register(broker, logger)
 # The host's own solver knobs, which every mix they host balances with.
 rpc_prefs.register(broker, logger)
+# The signup card as a projection: every mix mutation emits
+# ``pickup_mix_changed`` through the outbox and this consumer re-renders the
+# live card from the committed state.
+register_signup_projector(broker, logger)
 
 
 # Balance jobs run for minutes (MOO solver); isolate them from the RPC channel.
@@ -99,6 +105,10 @@ def _decode_balancer_message(message: Any) -> Any:
 
 @app.on_startup
 async def setup_worker_observability() -> None:
+    await broker.connect()
+    # The projection queue dead-letters here; without the declaration a poison
+    # message routes to a non-existent queue and vanishes.
+    await declare_dead_letter_queue(broker, PICKUP_MIX_CHANGED_DLQ)
     setup_sentry(
         dsn=config.sentry_dsn,
         traces_sample_rate=config.sentry_traces_sample_rate,

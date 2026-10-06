@@ -27,7 +27,7 @@ export const ROLES: readonly RoleDef[] = [
 
 export const ROLE_LABELS: Record<string, string> = {
   tank: "Tank",
-  damage: "DPS",
+  damage: "Damage",
   support: "Support",
 };
 

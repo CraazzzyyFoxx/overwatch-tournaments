@@ -2,7 +2,8 @@ import { Check, CornerDownLeft, Plus } from "lucide-react";
 
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import DivisionIcon from "@/components/DivisionIcon";
-import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { OW_REFERENCE_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { ROLES, ROLE_LABELS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 
@@ -94,25 +95,33 @@ export function RosterRowItem({
             // (`workspace_id=None`), so a workspace's tiers here would show
             // the wrong crest for the same number.
             const division = resolveDivisionFromRank(OW_REFERENCE_GRID, own ?? inherited);
+            const rank = own ?? inherited;
             return (
-              <span
+              <IconTooltip
                 key={role.code}
-                title={
+                label={
                   inherited == null
                     ? `${ROLE_LABELS[role.code]} rank for ${label}`
                     : `${ROLE_LABELS[role.code]} rank for ${label}, inherited ${inherited} from the workspace`
+                }
+                hint={
+                  rank == null
+                    ? "No rank"
+                    : `${getDivisionLabel(OW_REFERENCE_GRID, division) ?? ""} \u00B7 ${rank}`
                 }
                 // Dimmed means "not yours": painting an inherited number the
                 // same as the host's own made "set" and "leave alone" look
                 // identical, which is the exact mistake layered ranks exist
                 // to make visible.
                 className={cn(
-                  "flex size-8 items-center justify-center rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)]",
+                  "size-8 items-center justify-center rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)]",
                   inherited != null && "opacity-45"
                 )}
               >
                 {division == null ? (
-                  <span className="text-label text-[color:var(--aqt-fg-dim)]">{"\u2014"}</span>
+                  <span aria-hidden="true" className="text-label text-[color:var(--aqt-fg-dim)]">
+                    {"\u2014"}
+                  </span>
                 ) : (
                   <DivisionIcon
                     division={division}
@@ -121,7 +130,7 @@ export function RosterRowItem({
                     height={22}
                   />
                 )}
-              </span>
+              </IconTooltip>
             );
           })}
         </span>

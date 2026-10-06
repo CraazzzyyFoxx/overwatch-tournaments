@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -17,6 +17,7 @@ import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNodeCapture } from "@/hooks/useNodeCapture";
@@ -89,6 +90,8 @@ type PickupTeamsPanelProps = {
   postingToDiscord?: boolean;
   /** Omitted -- no Post to Discord button, matching a page that offers no post. */
   onPostToDiscord?: (variantIndex: number, image: Blob | null) => void;
+  /** Replaces the "No teams yet" card while this lobby has no balance. */
+  emptyState?: ReactNode;
 };
 
 /**
@@ -131,7 +134,8 @@ export function PickupTeamsPanel({
   onSwapSeats,
   onCopyBattleTags,
   postingToDiscord = false,
-  onPostToDiscord
+  onPostToDiscord,
+  emptyState
 }: Readonly<PickupTeamsPanelProps>) {
   const t = useTranslations("mixes.lobbies");
   const variants = parseVariants(
@@ -202,16 +206,18 @@ export function PickupTeamsPanel({
               />
             ) : null}
             {variant == null ? (
-              <PageStateCard
-                state="empty"
-                title="No teams yet"
-                description={
-                  canWrite
-                    ? "Fill the lineup, then press Balance teams to see the matchup."
-                    : "This mix has not been balanced yet."
-                }
-                className={cn(PANEL_CLASS, "px-4 py-16")}
-              />
+              (emptyState ?? (
+                <PageStateCard
+                  state="empty"
+                  title="No teams yet"
+                  description={
+                    canWrite
+                      ? "Fill the lineup, then press Balance teams to see the matchup."
+                      : "This mix has not been balanced yet."
+                  }
+                  className={cn(PANEL_CLASS, "px-4 py-16")}
+                />
+              ))
             ) : (
               <VariantView
                 variant={variant}
@@ -296,17 +302,19 @@ export function PickupTeamsPanel({
 
           {canWrite && variants.length > 1 ? (
             <div className="flex h-9 items-center gap-0.5 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                disabled={index === 0}
-                onClick={() => onVariantIndexChange(index - 1)}
-              >
-                <ChevronLeft className="size-4" aria-hidden="true" />
-                <span className="sr-only">Previous balance option</span>
-              </Button>
+              <IconTooltip control label="Previous balance option">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={index === 0}
+                  onClick={() => onVariantIndexChange(index - 1)}
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                  <span className="sr-only">Previous balance option</span>
+                </Button>
+              </IconTooltip>
               <span
                 role="status"
                 aria-live="polite"
@@ -314,17 +322,19 @@ export function PickupTeamsPanel({
               >
                 {`${index + 1} / ${variants.length}`}
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                disabled={index >= variants.length - 1}
-                onClick={() => onVariantIndexChange(index + 1)}
-              >
-                <ChevronRight className="size-4" aria-hidden="true" />
-                <span className="sr-only">Next balance option</span>
-              </Button>
+              <IconTooltip control label="Next balance option">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={index >= variants.length - 1}
+                  onClick={() => onVariantIndexChange(index + 1)}
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                  <span className="sr-only">Next balance option</span>
+                </Button>
+              </IconTooltip>
             </div>
           ) : null}
 
@@ -337,63 +347,79 @@ export function PickupTeamsPanel({
           {variant ? (
             // Icon-only: these are recognisable glyphs and each is used once a
             // night at most, so their labels were spending a third of the row
-            // on words nobody reads twice. The name lives in `aria-label`/`title`.
+            // on words nobody reads twice. The name lives in `aria-label` and
+            // the tooltip.
             <div className="ml-auto flex items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={TOOL_ICON_CLASS}
-                disabled={capturing}
-                aria-label="Copy image"
-                title="Copy image"
-                onClick={() => void capture()}
+              <IconTooltip
+                control
+                label="Copy image"
+                hint="The matchup card as a picture, ready to paste"
               >
-                {capturing ? (
-                  <Spinner />
-                ) : (
-                  <Copy className="size-4" aria-hidden="true" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={TOOL_ICON_CLASS}
-                aria-label="Copy battletags"
-                title="Copy battletags"
-                onClick={onCopyBattleTags}
-              >
-                <ClipboardCopy className="size-4" aria-hidden="true" />
-              </Button>
-              {/* The workspace's channel is the only target a mix has; without
-                  one there is nowhere to post, so the button stays off. */}
-              {canWrite && onPostToDiscord && game?.settings.workspace_discord_channel_id ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className={TOOL_ICON_CLASS}
-                  disabled={postingToDiscord || capturing}
-                  aria-label="Post to Discord"
-                  title="Post to Discord"
-                  onClick={() => {
-                    // The same rasterised card "Copy image" produces, sent as
-                    // the attachment: the bot has no renderer, and a host who
-                    // shares the matchup means the card, not a transcript of
-                    // it. A failed capture posts without one -- the server
-                    // falls back to the text embed rather than to nothing.
-                    void rasterize()
-                      .catch(() => null)
-                      .then((image) => onPostToDiscord(index, image));
-                  }}
+                  disabled={capturing}
+                  aria-label="Copy image"
+                  onClick={() => void capture()}
                 >
-                  {postingToDiscord ? (
+                  {capturing ? (
                     <Spinner />
                   ) : (
-                    <Send className="size-4" aria-hidden="true" />
+                    <Copy className="size-4" aria-hidden="true" />
                   )}
                 </Button>
+              </IconTooltip>
+              <IconTooltip
+                control
+                label="Copy battletags"
+                hint="Everyone in the balance, one per line"
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={TOOL_ICON_CLASS}
+                  aria-label="Copy battletags"
+                  onClick={onCopyBattleTags}
+                >
+                  <ClipboardCopy className="size-4" aria-hidden="true" />
+                </Button>
+              </IconTooltip>
+              {/* The workspace's channel is the only target a mix has; without
+                  one there is nowhere to post, so the button stays off. */}
+              {canWrite && onPostToDiscord && game?.settings.workspace_discord_channel_id ? (
+                <IconTooltip
+                  control
+                  label="Post to Discord"
+                  hint="Sends this matchup card to the mix channel"
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={TOOL_ICON_CLASS}
+                    disabled={postingToDiscord || capturing}
+                    aria-label="Post to Discord"
+                    onClick={() => {
+                      // The same rasterised card "Copy image" produces, sent as
+                      // the attachment: the bot has no renderer, and a host who
+                      // shares the matchup means the card, not a transcript of
+                      // it. A failed capture posts without one -- the server
+                      // falls back to the text embed rather than to nothing.
+                      void rasterize()
+                        .catch(() => null)
+                        .then((image) => onPostToDiscord(index, image));
+                    }}
+                  >
+                    {postingToDiscord ? (
+                      <Spinner />
+                    ) : (
+                      <Send className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </IconTooltip>
               ) : null}
               {canWrite ? (
                 <>
@@ -401,22 +427,27 @@ export function PickupTeamsPanel({
                   {/* Once a night, irreversible from here: an icon that only
                       turns red on hover, behind the same confirm as before,
                       instead of the loudest pill in the row. */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(TOOL_ICON_CLASS, "hover:text-[color:var(--aqt-rose)]")}
-                    disabled={closingMix}
-                    aria-label="Close mix"
-                    title="Close mix"
-                    onClick={() => setCloseOpen(true)}
+                  <IconTooltip
+                    control
+                    label="Close mix"
+                    hint="Stops balancing and results; recorded matches stay"
                   >
-                    {closingMix ? (
-                      <Spinner />
-                    ) : (
-                      <Archive className="size-4" aria-hidden="true" />
-                    )}
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={cn(TOOL_ICON_CLASS, "hover:text-[color:var(--aqt-rose)]")}
+                      disabled={closingMix}
+                      aria-label="Close mix"
+                      onClick={() => setCloseOpen(true)}
+                    >
+                      {closingMix ? (
+                        <Spinner />
+                      ) : (
+                        <Archive className="size-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                  </IconTooltip>
                   <ConfirmDialog
                     open={closeOpen}
                     onOpenChange={setCloseOpen}

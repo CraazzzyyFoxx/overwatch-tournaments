@@ -37,7 +37,6 @@ __all__ = (
     "DEFAULT_PAGE_LIMIT",
     "MAX_PAGE_LIMIT",
     "InvalidCursorError",
-    "NotificationDeliveryRepository",
     "NotificationPage",
     "NotificationPreferenceRepository",
     "NotificationRepository",
@@ -364,80 +363,6 @@ class NotificationRepository(BaseRepository[models.Notification]):
 
         result = await session.execute(
             query.order_by(self.model.published_at.desc(), self.model.id.desc()),
-        )
-        return list(result.scalars().all())
-
-
-class NotificationDeliveryRepository(BaseRepository[models.NotificationDelivery]):
-    """The ledger that makes an outside send happen once.
-
-    ``claim`` is the write half and the reason the table exists: asking "am I
-    the one who gets to send this?" and answering it in a single statement is
-    the point -- a SELECT-then-INSERT would let a redelivered event slip
-    between the two. :meth:`recent_for_targets` is the read half, for the admin
-    account inspector.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(models.NotificationDelivery)
-
-    async def claim(
-        self,
-        session: AsyncSession,
-        *,
-        channel: str,
-        target: str,
-        dedupe_key: str,
-        kind: str,
-        notification_id: int | None = None,
-        workspace_id: int | None = None,
-    ) -> bool:
-        """Record the send, or report that somebody already did.
-
-        ``True`` means this call owns the delivery and must enqueue it in the
-        same transaction; ``False`` means the row was already there (the event
-        was redelivered) and nothing more should be sent.
-        """
-        statement = (
-            pg_insert(models.NotificationDelivery.__table__)
-            .values(
-                channel=channel,
-                target=target,
-                dedupe_key=dedupe_key,
-                kind=kind,
-                notification_id=notification_id,
-                workspace_id=workspace_id,
-            )
-            # Named by columns rather than by the constraint: the same clause
-            # then compiles on SQLite, which the delivery tests run on.
-            .on_conflict_do_nothing(index_elements=["channel", "target", "dedupe_key"])
-            .returning(models.NotificationDelivery.__table__.c.id)
-        )
-        result = await session.execute(statement)
-        return result.scalar_one_or_none() is not None
-
-    async def recent_for_targets(
-        self,
-        session: AsyncSession,
-        *,
-        channel: str,
-        targets: Sequence[str],
-        limit: int,
-    ) -> list[models.NotificationDelivery]:
-        """The newest sends on one channel to any of these targets, newest first.
-
-        ``targets`` empty means the account has nothing connected on that
-        channel, which is an empty answer rather than an unfiltered one: an
-        ``IN ()`` that degraded into "every delivery on the platform" would put
-        strangers' sends in an operator's account inspector.
-        """
-        if not targets:
-            return []
-        result = await session.execute(
-            self.select()
-            .where(self.model.channel == channel, self.model.target.in_(tuple(targets)))
-            .order_by(self.model.created_at.desc(), self.model.id.desc())
-            .limit(limit),
         )
         return list(result.scalars().all())
 

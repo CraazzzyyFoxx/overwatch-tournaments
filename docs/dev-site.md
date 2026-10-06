@@ -102,11 +102,14 @@ git fetch origin <branch>:<branch> && git checkout <branch>   # or `git am` a pa
 docker compose -f docker-compose.production.yml build
 docker compose -f docker-compose.production.yml run --rm --no-deps -T app-svc \
     alembic upgrade head </dev/null
+make prod-discord-emoji    # the dev bot's own application emoji; skips what is already there
 make prod-up PROD_SCALE='app-svc=1 identity-svc=1 tournament-svc=1 frontend=1'
 ```
 
 `discord-worker` runs with its own bot token, not production's. Reusing production's token
-would double-handle every Discord event. `stream-svc` gets no Twitch credentials — polling
+would double-handle every Discord event. That also means its own application emoji: the dev
+bot shows Unicode stand-ins until `make prod-discord-emoji` has uploaded them, and picks them up
+within 10 minutes without a restart. `stream-svc` gets no Twitch credentials — polling
 would share production's Helix rate-limit bucket.
 
 Tear down with `make prod-down`; the database survives it.

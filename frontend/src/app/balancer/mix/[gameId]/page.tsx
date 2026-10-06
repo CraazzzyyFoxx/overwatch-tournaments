@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialog";
+import { PickupGettingStarted } from "@/app/balancer/mix/PickupGettingStarted";
 import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
 import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
@@ -119,6 +120,7 @@ export default function BalancerPickupMixPage() {
     updateMySeat,
     setSelfService,
     postSignup,
+    deleteDiscordPost,
   } = usePickupMix(workspaceId ?? 0, pickedGameId, { seatEnabled: isSignedIn });
 
   const game = gameQuery.data;
@@ -214,7 +216,6 @@ export default function BalancerPickupMixPage() {
               onClear={() => setRoster.mutate([])}
               onRemovePlayer={togglePoolMember}
               onOpenPlayer={setOpenPlayerId}
-              onOpenPool={() => setIsPoolOpen(true)}
               onApplyRotationHints={() => applyRotationHints.mutate()}
               applyingHints={applyRotationHints.isPending}
             />
@@ -238,6 +239,8 @@ export default function BalancerPickupMixPage() {
               savingSelfService={setSelfService.isPending}
               onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
               postingSignup={postSignup.isPending}
+              onDeleteDiscordPost={(postId) => deleteDiscordPost.mutate(postId)}
+              deletingDiscordPost={deleteDiscordPost.isPending}
               settingLobbyCount={setLobbyCount.isPending}
               onLobbyCountChange={(lobbyCount) => setLobbyCount.mutate(lobbyCount)}
               shufflingAll={balance.isPending && balance.variables?.scope === "all"}
@@ -289,6 +292,16 @@ export default function BalancerPickupMixPage() {
               postingToDiscord={postToDiscord.isPending}
               onPostToDiscord={(idx, image) =>
                 postToDiscord.mutate({ lobbyIndex: activeLobby, variantIndex: idx, image })
+              }
+              emptyState={
+                canWrite && game != null && game.matches_count === 0 ? (
+                  <PickupGettingStarted
+                    game={game}
+                    onOpenPool={() => setIsPoolOpen(true)}
+                    onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
+                    posting={postSignup.isPending}
+                  />
+                ) : undefined
               }
             />
             {/* Visible when the mix invites signups, or when this viewer is

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { LogIn, LogOut, Save } from "lucide-react";
+import { LogIn, LogOut } from "lucide-react";
 
 import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor";
 import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
@@ -74,6 +74,12 @@ function signatureOf(seat: MixSelfSeat | null): string {
  * read and its three writes live in `usePickupMix`, so the realtime echo that
  * refreshes the board refreshes this with it.
  *
+ * Every role edit is written the moment it is made -- a toggle, a drop, the
+ * flex switch are each one deliberate action, so there is nothing to batch
+ * behind a Save button. The draft shows the edit while it is in flight and is
+ * re-read from the server when the write settles, so a refused write snaps
+ * back instead of leaving the screen claiming an order the balancer never got.
+ *
  * Ranks are printed, never edited. A mix resolves ranks against the HOST's own
  * book (`author_user_id = game.host_user_id`), so a field here would write a
  * number the balance never reads -- the spec's "игрок правит только `roles` и
@@ -100,6 +106,13 @@ export function PickupMySeatPanel({
     setSeenSignature(signature);
     setDraft(buildDraft(state.seat));
   }
+  // A write that just settled: success already seeded the new seat, failure
+  // left the old one -- either way the server's seat is the truth again.
+  const [wasSaving, setWasSaving] = useState(saving);
+  if (saving !== wasSaving) {
+    setWasSaving(saving);
+    if (!saving) setDraft(buildDraft(state.seat));
+  }
 
   const { policy, seat } = state;
   // Off the roster the only question is joining; on it, the edit gate is the
@@ -110,11 +123,10 @@ export function PickupMySeatPanel({
   const shownBlocker = blocker === "already_joined" ? null : blocker;
   const canLink = shownBlocker != null && LINKABLE_BLOCKERS[shownBlocker] === true;
   const editable = policy.can_edit_roles && seat != null;
-  const dirty =
-    seat != null &&
-    (draft.isFlex !== seat.is_flex ||
-      draft.order.join(",") !==
-        resolveRoleOrder({ roles: seat.roles, ranks: rankedRoles(seat) }).join(","));
+  const commit = (next: SeatDraft) => {
+    setDraft(next);
+    onSave({ roles: next.order, is_flex: next.isFlex });
+  };
 
   return (
     <div className={cn(PANEL_CLASS, "flex flex-col gap-3 px-4 py-3.5")}>
@@ -189,11 +201,10 @@ export function PickupMySeatPanel({
             isFlex={draft.isFlex}
             disabled={!editable || saving}
             label="you"
-            onReorder={(order) => setDraft((current) => ({ ...current, order }))}
-            onToggle={(role) =>
-              setDraft((current) => ({ ...current, order: toggleRole(current.order, role) }))
-            }
-            onFlexChange={(isFlex) => setDraft((current) => ({ ...current, isFlex }))}
+            layout="grid"
+            onReorder={(order) => commit({ ...draft, order })}
+            onToggle={(role) => commit({ ...draft, order: toggleRole(draft.order, role) })}
+            onFlexChange={(isFlex) => commit({ ...draft, isFlex })}
             rankFor={(role) => ({
               rankValue: seat.ranks[role] ?? null,
               sourceLabel: null,
@@ -201,17 +212,6 @@ export function PickupMySeatPanel({
               onClear: null,
             })}
           />
-          {editable ? (
-            <Button
-              type="button"
-              className="h-9"
-              disabled={saving || !dirty}
-              onClick={() => onSave({ roles: draft.order, is_flex: draft.isFlex })}
-            >
-              <Save className="mr-1.5 size-3.5" aria-hidden="true" />
-              {t("saveRoles")}
-            </Button>
-          ) : null}
         </div>
       )}
     </div>

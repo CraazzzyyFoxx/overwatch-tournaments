@@ -141,10 +141,10 @@ describe("WorkspaceSubRolesSettingsPage", () => {
     const scope = await mount();
     const cards = [...scope.querySelectorAll("h2")].map((node) => node.textContent);
 
-    expect(cards).toEqual(["Tank", "DPS", "Support"]);
-    // "DPS" is the display label the `damage` role code renders under.
+    expect(cards).toEqual(["Tank", "Damage", "Support"]);
+    // "Damage" is the display label the `damage` role code renders under.
     const damageCard = [...scope.querySelectorAll("[data-ui='card']")].find(
-      (card) => card.querySelector("h2")?.textContent === "DPS"
+      (card) => card.querySelector("h2")?.textContent === "Damage"
     );
     expect(damageCard?.textContent).toContain("Hitscan");
   });

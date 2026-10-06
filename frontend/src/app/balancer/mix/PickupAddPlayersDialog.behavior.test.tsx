@@ -328,10 +328,9 @@ describe("PickupAddPlayersDialog", () => {
   it("renders ranks read-only -- there is no control to write them from here", async () => {
     await mount();
 
-    // No picker, no button: the crest is a plain span with a title, and the
+    // No picker, no button: the crest is an image with a tooltip, and the
     // dialog's only writes are `setRanks` (none) versus membership (still live).
-    expect(byLabel("Tank rank for Aria#1111")).toBeNull();
-    expect(document.body.querySelector('[title="Tank rank for Aria#1111"]')).not.toBeNull();
+    expect(byLabel("Tank rank for Aria#1111")?.getAttribute("role")).toBe("img");
     expect(byLabel("Add Aria#1111 to this mix")?.hasAttribute("disabled")).toBe(false);
     expect(setRanks).not.toHaveBeenCalled();
   });
@@ -355,14 +354,12 @@ describe("PickupAddPlayersDialog", () => {
     });
     await mount();
 
-    // Inherited: the title says where the value came from, and it renders dimmed.
-    const inherited = document.body.querySelector(
-      '[title="Tank rank for Aria#1111, inherited 2400 from the workspace"]',
-    );
+    // Inherited: the label says where the value came from, and it renders dimmed.
+    const inherited = byLabel("Tank rank for Aria#1111, inherited 2400 from the workspace");
     expect(inherited).not.toBeNull();
     expect(inherited?.className).toContain("opacity-45");
-    // The host's own entry keeps the plain title and full opacity.
-    const own = document.body.querySelector('[title="DPS rank for Aria#1111"]');
+    // The host's own entry keeps the plain label and full opacity.
+    const own = byLabel("Damage rank for Aria#1111");
     expect(own).not.toBeNull();
     expect(own?.className).not.toContain("opacity-45");
   });

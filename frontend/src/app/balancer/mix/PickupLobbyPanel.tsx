@@ -11,14 +11,11 @@ import {
 import { AlertTriangle, Trash2, Wand2 } from "lucide-react";
 
 import { ICON_BUTTON_CLASS, PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
-import {
-  CAPTION_CLASS,
-  CARD_TITLE_CLASS,
-  EYEBROW_CLASS
-} from "@/app/balancer/mix/pickup-chrome";
+import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useDragSensors } from "@/hooks/useDragSensors";
 import { ROLE_LABELS, ROLES } from "@/lib/roster/roles";
@@ -57,7 +54,6 @@ type PickupLobbyPanelProps = {
   onClear: () => void;
   onRemovePlayer: (workspaceMemberId: number) => void;
   onOpenPlayer: (workspaceMemberId: number) => void;
-  onOpenPool: () => void;
   /** Fires every actionable rotation hint at once (see `computeRotationHintPatches`). */
   onApplyRotationHints: () => void;
   applyingHints: boolean;
@@ -119,7 +115,6 @@ export function PickupLobbyPanel({
   onClear,
   onRemovePlayer,
   onOpenPlayer,
-  onOpenPool,
   onApplyRotationHints,
   applyingHints,
 }: Readonly<PickupLobbyPanelProps>) {
@@ -168,56 +163,49 @@ export function PickupLobbyPanel({
           {summary.benched > 0 ? ` \u00B7 ${summary.benched} benched` : ""}
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {canWrite ? (
-            <button
-              type="button"
-              onClick={onOpenPool}
-              className={cn(
-                EYEBROW_CLASS,
-                "rounded px-1 tracking-label text-[color:var(--aqt-teal)] transition-colors hover:text-[color:color-mix(in_srgb,var(--aqt-teal)_80%,white)]",
-              )}
-            >
-              Add players &rarr;
-            </button>
-          ) : null}
           {canWrite && rotation.length > 0 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                ICON_BUTTON_CLASS,
-                "size-7 shrink-0",
-                pendingHintCount > 0 && "text-[color:var(--aqt-amber)] hover:text-[color:var(--aqt-amber)]",
-              )}
-              title={
+            <IconTooltip
+              control
+              label={
                 pendingHintCount > 0
                   ? `Apply ${pendingHintCount} rotation hint${pendingHintCount === 1 ? "" : "s"}`
                   : "Lineup already matches the rotation hints"
               }
-              disabled={applyingHints || pendingHintCount === 0}
-              onClick={onApplyRotationHints}
             >
-              <Wand2 className="size-3.5" aria-hidden="true" />
-              <span className="sr-only">Apply rotation hints</span>
-            </Button>
-          ) : null}
-          {canWrite && rows.length > 0 ? (
-            <>
-              {/* Icon-only: the confirm dialog already spells the action out in
-                  full, and a text button here competed with Add players. */}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={cn(ICON_BUTTON_CLASS, "size-7 shrink-0 hover:text-rose-200")}
-                title="Empty the lobby"
-                disabled={clearing}
-                onClick={() => setClearOpen(true)}
+                className={cn(
+                  ICON_BUTTON_CLASS,
+                  "size-7 shrink-0",
+                  pendingHintCount > 0 && "text-[color:var(--aqt-amber)] hover:text-[color:var(--aqt-amber)]",
+                )}
+                disabled={applyingHints || pendingHintCount === 0}
+                onClick={onApplyRotationHints}
               >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Empty the lobby</span>
+                <Wand2 className="size-3.5" aria-hidden="true" />
+                <span className="sr-only">Apply rotation hints</span>
               </Button>
+            </IconTooltip>
+          ) : null}
+          {canWrite && rows.length > 0 ? (
+            <>
+              {/* Icon-only: the confirm dialog already spells the action out in
+                  full. */}
+              <IconTooltip control label="Empty the lobby">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(ICON_BUTTON_CLASS, "size-7 shrink-0 hover:text-rose-200")}
+                  disabled={clearing}
+                  onClick={() => setClearOpen(true)}
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  <span className="sr-only">Empty the lobby</span>
+                </Button>
+              </IconTooltip>
               <ConfirmDialog
                 open={clearOpen}
                 onOpenChange={setClearOpen}

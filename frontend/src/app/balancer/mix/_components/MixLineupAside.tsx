@@ -4,6 +4,7 @@ import { EYEBROW_CLASS, ROLE_ICON_COLOR } from "@/app/balancer/mix/pickup-chrome
 import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { ROLES, ROLE_LABELS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { CustomGamePlayer } from "@/services/custom-game.service";
@@ -72,15 +73,18 @@ export function MixLineupAside({
           return (
             <div
               key={entry.role}
-              title={
-                short
-                  ? `${ROLE_LABELS[entry.role]}: ${entry.supply} of ${entry.need} — short ${entry.short}`
-                  : `${ROLE_LABELS[entry.role]}: ${entry.supply} of ${entry.need}`
-              }
               className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 pb-1.5 pt-1.5"
             >
               <div className="flex items-center gap-1">
-                <PlayerRoleIcon role={icon} size={13} decorative />
+                <IconTooltip
+                  label={
+                    short
+                      ? `${ROLE_LABELS[entry.role]}: ${entry.supply} of ${entry.need} — short ${entry.short}`
+                      : `${ROLE_LABELS[entry.role]}: ${entry.supply} of ${entry.need}`
+                  }
+                >
+                  <PlayerRoleIcon role={icon} size={13} decorative />
+                </IconTooltip>
                 <span
                   className={cn(
                     "ml-auto text-label font-semibold tabular-nums",
@@ -184,9 +188,12 @@ function LineupChip({
           const position = order.indexOf(role.code);
           const isOn = position !== -1;
           return (
-            <span
+            <IconTooltip
               key={role.code}
-              className={cn("flex size-5 items-center justify-center rounded", !isOn && "opacity-20")}
+              label={`${ROLE_LABELS[role.code]}: ${
+                isOn ? (position === 0 ? "first choice" : "also plays") : "off"
+              }`}
+              className={cn("size-5 items-center justify-center rounded", !isOn && "opacity-20")}
             >
               <PlayerRoleIcon
                 role={role.icon}
@@ -194,7 +201,7 @@ function LineupChip({
                 decorative
                 color={isOn ? ROLE_ICON_COLOR[role.code] : undefined}
               />
-            </span>
+            </IconTooltip>
           );
         })}
       </span>
@@ -204,15 +211,16 @@ function LineupChip({
       </span>
 
       {canWrite ? (
-        <button
-          type="button"
-          onClick={onRemove}
-          title="Remove from this mix"
-          className="flex size-5 shrink-0 items-center justify-center rounded text-[color:var(--aqt-fg-faint)] opacity-0 transition-opacity hover:text-[color:var(--aqt-rose)] focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          <X className="size-3.5" aria-hidden="true" />
-          <span className="sr-only">{`Remove ${label} from this mix`}</span>
-        </button>
+        <IconTooltip control label="Remove from this mix" className="shrink-0">
+          <button
+            type="button"
+            onClick={onRemove}
+            className="flex size-5 items-center justify-center rounded text-[color:var(--aqt-fg-faint)] opacity-0 transition-opacity hover:text-[color:var(--aqt-rose)] focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">{`Remove ${label} from this mix`}</span>
+          </button>
+        </IconTooltip>
       ) : (
         <span aria-hidden="true" className="size-5 shrink-0" />
       )}

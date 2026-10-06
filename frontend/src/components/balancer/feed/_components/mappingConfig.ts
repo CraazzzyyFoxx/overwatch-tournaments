@@ -102,7 +102,7 @@ export interface RoleSubgroup {
 const ROLE_SUBGROUP_LABELS: Record<string, string> = {
   source_roles: "Declared roles",
   tank: "Tank",
-  damage: "DPS",
+  damage: "Damage",
   support: "Support",
 };
 

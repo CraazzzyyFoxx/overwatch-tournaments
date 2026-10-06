@@ -6,8 +6,9 @@
 //     player cannot discover "go link Battle.net" from a refusal alone;
 //  2. `can_edit_roles=false` shows the roles and edits nothing -- the host's
 //     mix is the host's, and a disabled editor must not be a lie;
-//  3. Save writes the drag order and the flex flag, and nothing else: ranks are
-//     the host's book (`MIX_ORDER`), participation is the host's decision;
+//  3. each role edit writes at once -- the drag order and the flex flag, and
+//     nothing else: ranks are the host's book (`MIX_ORDER`), participation is
+//     the host's decision -- and a settled write puts the server's seat back;
 //  4. leaving is always offered to somebody on the roster, even while every
 //     other action is blocked -- an unlinked account must still be able to go.
 //
@@ -100,22 +101,31 @@ function tick() {
 }
 
 const roots: { unmount: () => void }[] = [];
+let rerender: (saving: boolean) => Promise<void> = async () => {};
 
 async function mount(value: MixSelfState) {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  await act(async () => {
-    const root = createRoot(container);
-    roots.push(root);
+  const root = createRoot(container);
+  roots.push(root);
+  const render = (saving: boolean) =>
     root.render(
       <PickupMySeatPanel
         state={value}
-        saving={false}
+        saving={saving}
         onJoin={onJoin}
         onLeave={onLeave}
         onSave={onSave}
       />,
     );
+  rerender = async (saving) => {
+    await act(async () => {
+      render(saving);
+      await tick();
+    });
+  };
+  await act(async () => {
+    render(false);
   });
   await act(async () => {
     await tick();
@@ -245,20 +255,33 @@ describe("PickupMySeatPanel roles", () => {
     // The roles are still readable -- the mix is theirs to read either way.
     expect(scope.textContent).toContain("Tank");
     expect(scope.textContent).toContain("blocker.role_edit_off");
-    expect(byName(scope, "saveRoles")).toBeNull();
+    expect(onSave).not.toHaveBeenCalled();
     expect([...scope.querySelectorAll('[role="switch"]')].every((node) => node.hasAttribute("disabled"))).toBe(
       true,
     );
   });
 
-  it("writes only the role order and the flex flag", async () => {
+  it("writes each edit as it is made: the role order and the flex flag", async () => {
     const scope = await mount(state());
 
     await click(scope.querySelector('[aria-label="Support for you"]'));
-    await click(scope.querySelector('[aria-label="Full flex for you"]'));
-    await click(byName(scope, "saveRoles"));
+    expect(onSave).toHaveBeenLastCalledWith({ roles: ["tank", "damage", "support"], is_flex: false });
 
-    expect(onSave).toHaveBeenCalledWith({ roles: ["tank", "damage", "support"], is_flex: true });
+    await click(scope.querySelector('[aria-label="Full flex for you"]'));
+    expect(onSave).toHaveBeenLastCalledWith({ roles: ["tank", "damage", "support"], is_flex: true });
+  });
+
+  it("puts the server's seat back once a write settles without it", async () => {
+    const scope = await mount(state());
+    const support = () => scope.querySelector('[aria-label="Support for you"]');
+
+    await click(support());
+    await rerender(true);
+    expect(support()?.getAttribute("aria-checked")).toBe("true");
+
+    // The write was refused: the seat the server still holds has no Support.
+    await rerender(false);
+    expect(support()?.getAttribute("aria-checked")).toBe("false");
   });
 
   it("never edits a rank", async () => {

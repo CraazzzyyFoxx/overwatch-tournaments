@@ -8,9 +8,10 @@ the inbox does not.
 
 The delivery half runs against a real (in-memory) SQLite engine behind the
 sync-``Session`` shim the sibling notification suites established, because every
-assertion here is about *rows*: the ledger row that makes a redelivered event
-send nothing, and the outbox row that is the message. A mock session would
-happily agree with a flow that inserts nothing.
+assertion here is about *rows*: the ``discord_message`` row that makes a
+redelivered event send nothing and that every later edit or delete names, and
+the outbox row that is the message. A mock session would happily agree with a
+flow that inserts nothing.
 """
 
 from __future__ import annotations
@@ -30,10 +31,11 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from shared import models  # noqa: E402
+from shared.domain.discord_ui import EMOJI, SHORTCODE, emoji  # noqa: E402
 from shared.models.identity.oauth import OAuthConnection  # noqa: E402
+from shared.models.platform.discord_message import DiscordMessage  # noqa: E402
 from shared.models.platform.notification import (  # noqa: E402
     Notification,
-    NotificationDelivery,
     NotificationPreference,
     NotificationWorkspaceConfig,
 )
@@ -42,7 +44,12 @@ from shared.schemas.events import NotificationBroadcastEvent, NotificationCreate
 from shared.services.notifications import NOTIFICATION_KINDS  # noqa: E402
 from shared.testing import install_postgres_type_shims  # noqa: E402
 from src.core import db  # noqa: E402
-from src.domain.notification_render import TEMPLATES, deep_link_path, render_discord  # noqa: E402
+from src.domain.notification_render import (  # noqa: E402
+    DELIVERABLE_KINDS,
+    TEMPLATES,
+    deep_link_path,
+    render_discord,
+)
 from src.services.notification_delivery import consumer  # noqa: E402
 from src.services.notification_delivery.service import NotificationDeliveryService  # noqa: E402
 
@@ -50,7 +57,7 @@ install_postgres_type_shims()
 
 TABLES = (
     Notification.__table__,
-    NotificationDelivery.__table__,
+    DiscordMessage.__table__,
     NotificationPreference.__table__,
     NotificationWorkspaceConfig.__table__,
     EventOutbox.__table__,
@@ -93,6 +100,50 @@ class RenderTests(IsolatedAsyncioTestCase):
 
         for locale in ("ru", "en"):
             self.assertEqual(set(TEMPLATES[locale]), deliverable, locale)
+
+    def test_every_card_names_emoji_the_bot_knows(self) -> None:
+        """A heading and every button name an emoji out of ``EMOJI``.
+
+        discord-service swaps a ``:owt_<name>:`` shortcode for the uploaded
+        application emoji; a name that is not in the set reaches the reader as
+        that literal text, inside a message nobody can edit afterwards. The
+        words have to stand on their own too -- a button needs a label even when
+        the emoji resolves, and a heading stripped of its badge is still the
+        sentence the inbox shows.
+        """
+        payload = {
+            "tournament_id": 3,
+            "tournament_name": "Cup",
+            "team_id": 1,
+            "team_name": "T",
+            "invite_id": 42,
+            "responder_name": "R",
+            "answer": "accepted",
+            "slot_code": "tank",
+            "is_substitute": False,
+            "encounter_id": 5,
+            "position": 1,
+            "reason": "no show",
+            "closes_at": DEADLINE,
+            "scheduled_at": DEADLINE,
+            "home_team_name": "A",
+            "away_team_name": "B",
+        }
+
+        for locale in ("ru", "en"):
+            for kind in sorted(DELIVERABLE_KINDS):
+                # ``personal`` is the widest card: every button this kind has.
+                card = render_discord(kind, payload, locale=locale, site_url=SITE, personal=True)
+                badge, *rest = SHORTCODE.findall(card.text)
+                heading = card.text.splitlines()[0]
+
+                self.assertEqual(rest, [], (kind, locale))
+                self.assertIn(badge, EMOJI, (kind, locale))
+                self.assertTrue(heading.startswith(f"### {emoji(badge)} "), (kind, locale))
+                self.assertTrue(heading.removeprefix(f"### {emoji(badge)} ").strip(), (kind, locale))
+                for button in [*card.answers, *(b for row in card.rows for b in row)]:
+                    self.assertIn(button.emoji, EMOJI, (kind, locale, button.label))
+                    self.assertTrue(button.label.strip(), (kind, locale, button.emoji))
 
     def test_user_written_text_cannot_style_the_message(self) -> None:
         """Team, tournament and workspace names and rejection reasons are typed
@@ -279,9 +330,9 @@ class RenderTests(IsolatedAsyncioTestCase):
             "encounter.scheduled", {**SCHEDULED, "scheduled_at": DEADLINE}, locale="ru", site_url=SITE
         )
 
-        self.assertIn("### Следующий матч", tbd.text)
+        self.assertIn(f"### {emoji('vs')} Следующий матч", tbd.text)
         self.assertIsNone(tbd.details)
-        self.assertIn("### Матч назначен", timed.text)
+        self.assertIn(f"### {emoji('vs')} Матч назначен", timed.text)
         self.assertIn(f"<t:{DEADLINE_UNIX}:F>", timed.details)
 
     def test_the_match_card_leads_with_what_its_reader_can_do(self) -> None:
@@ -298,11 +349,11 @@ class RenderTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(
             [(b.label, getattr(b, "url", b.type)) for b in dm.rows[-1]],
-            [("Комната матча", room), ("Матч", match), ("🔕", "action")],
+            [("Комната матча", room), ("Матч", match), ("Уведомления", "action")],
         )
         self.assertEqual(
             [(b.label, getattr(b, "url", b.type)) for b in dm_pick_ban.rows[-1]],
-            [("Pick-ban", room), ("Match", match), ("🔕", "action")],
+            [("Pick-ban", room), ("Match", match), ("Notifications", "action")],
         )
         self.assertEqual([(b.label, b.url) for b in post.rows[-1]], [("Матч", match)])
         self.assertEqual([(b.label, b.url) for b in post_pick_ban.rows[-1]], [("Match", match), ("Pick-ban", room)])
@@ -431,16 +482,18 @@ class DeliveryTests(IsolatedAsyncioTestCase):
             row.payload_json if isinstance(row.payload_json, dict) else json.loads(row.payload_json) for row in rows
         ]
 
-    def ledger(self) -> list[NotificationDelivery]:
-        return list(self.session.scalars(sa.select(NotificationDelivery).order_by(NotificationDelivery.id)).all())
+    def messages(self) -> list[DiscordMessage]:
+        return list(self.session.scalars(sa.select(DiscordMessage).order_by(DiscordMessage.id)).all())
 
     # -- personal ---------------------------------------------------------
 
-    async def test_a_dm_is_one_outbox_command_and_one_ledger_row(self) -> None:
+    async def test_a_dm_is_one_outbox_command_and_one_discord_message_row(self) -> None:
         """The happy path, and the shape the bot is asked for.
 
         ``allow_mentions=False`` is the security half: team names are user
-        text, and ``@everyone`` inside one must ping nobody.
+        text, and ``@everyone`` inside one must ping nobody. The command names
+        the claimed row (``message_ref``): that is how the bot writes back what
+        Discord answered, and how anything later edits or deletes the DM.
         """
         row = self.personal()
         self.link_discord()
@@ -453,11 +506,13 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         self.assertEqual(command["discord_user_id"], int(DISCORD_ID))
         self.assertFalse(command["allow_mentions"])
         self.assertIn("Cup", command["card"]["text"])
-        (entry,) = self.ledger()
+        (entry,) = self.messages()
+        self.assertEqual(command["message_ref"], entry.id)
         self.assertEqual(
             (entry.channel, entry.target, entry.dedupe_key), ("discord_dm", DISCORD_ID, f"notification:{row.id}")
         )
-        self.assertEqual(entry.workspace_id, WORKSPACE)
+        self.assertEqual((entry.subject, entry.slot, entry.status), (f"notification:{row.id}", "dm", "pending"))
+        self.assertEqual((entry.kind, entry.notification_id, entry.workspace_id), (row.kind, row.id, WORKSPACE))
 
     async def test_the_card_carries_the_organizers_current_branding(self) -> None:
         """Read at delivery, not from the snapshot: the workspace name above the
@@ -496,7 +551,7 @@ class DeliveryTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(status, "skipped_pref_off")
         self.assertEqual(self.commands(), [])
-        self.assertEqual(self.ledger(), [])
+        self.assertEqual(self.messages(), [])
 
     async def test_a_tournament_with_dms_muted_sends_nothing(self) -> None:
         """The organizer's switch bites at delivery, so a DM already queued stays unsent."""
@@ -512,7 +567,7 @@ class DeliveryTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(status, "skipped_tournament_muted")
         self.assertEqual(self.commands(), [])
-        self.assertEqual(self.ledger(), [])
+        self.assertEqual(self.messages(), [])
 
     def dispute_review(self) -> Notification:
         row = self.personal(kind="encounter.dispute_review")
@@ -584,10 +639,10 @@ class DeliveryTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(status, "skipped_no_discord")
         self.assertEqual(self.commands(), [])
-        self.assertEqual(self.ledger(), [])
+        self.assertEqual(self.messages(), [])
 
     async def test_a_redelivered_event_sends_once(self) -> None:
-        """The outbox is at-least-once; the ledger is what makes delivery once."""
+        """The outbox is at-least-once; the claimed ``dedupe_key`` is what makes delivery once."""
         row = self.personal()
         self.link_discord()
         event = NotificationCreatedEvent(notification_id=row.id)
@@ -596,7 +651,7 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         second = await self.service.deliver_personal(self.shim, event)
 
         self.assertEqual((first, second), ("sent", "duplicate"))
-        self.assertEqual(len(self.ledger()), 1)
+        self.assertEqual(len(self.messages()), 1)
         self.assertEqual(len(self.commands()), 1)
 
     async def test_a_retired_notification_is_not_delivered(self) -> None:
@@ -635,10 +690,15 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         self.assertEqual(command["channel_id"], CHANNEL_ID)
         self.assertFalse(command["allow_mentions"])
         self.assertIn("Registration for **Cup** is open.", command["card"]["text"])
-        (entry,) = self.ledger()
+        (entry,) = self.messages()
+        self.assertEqual(command["message_ref"], entry.id)
         self.assertEqual(
             (entry.channel, entry.target, entry.dedupe_key),
             ("discord_channel", str(CHANNEL_ID), "registration.opened:tournament:3"),
+        )
+        self.assertEqual(
+            (entry.subject, entry.slot, entry.status),
+            ("broadcast:registration.opened:tournament:3", "channel", "pending"),
         )
 
     async def test_a_workspace_without_a_config_posts_nothing(self) -> None:

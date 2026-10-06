@@ -301,6 +301,15 @@ DOCS: dict[str, dict] = {
             "and the blocker code for each. `seat` is null when the caller is not on the roster."
         ),
     },
+    "rpc.balancer.custom.self_current": {
+        "summary": "Get my seat in the current mix",
+        "description": (
+            "Permission: any authenticated account; workspace membership is NOT required. "
+            "Same answer as `self_get`, for the workspace's newest mix that is neither completed "
+            "nor cancelled -- what `/mix` in Discord asks, where the player names no id. "
+            "404 when the workspace is running nothing."
+        ),
+    },
     "rpc.balancer.custom.self_join": {
         "summary": "Join a mix myself",
         "description": (
@@ -396,7 +405,18 @@ DOCS: dict[str, dict] = {
             "Opens self-signup in the given mode (into the pool or onto the bench) and queues a card "
             "with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is "
             "static: every click re-reads the mix, so it refuses correctly once signup closes or the "
-            "mix ends. 409 when the workspace has no mix channel configured."
+            "mix ends. A mix has one signup card: posting again deletes the previous one from the "
+            "channel first. 409 when the workspace has no mix channel configured."
+        ),
+    },
+    "rpc.balancer.custom.delete_discord_post": {
+        "summary": "Delete one custom game Discord post",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Asks the bot to delete one message this mix posted, named by its id from the mix's "
+            "`discord_posts`, and returns the refreshed mix. 404 when the id belongs to another "
+            "mix's message. Clicking twice is harmless; closing or cancelling a mix deletes nothing, "
+            "its posts stay as history."
         ),
     },
     "rpc.balancer.custom.transfer_host": {
@@ -497,9 +517,9 @@ DOCS: dict[str, dict] = {
         "summary": "Delete custom game",
         "description": (
             "Permission: workspace membership plus the workspace `admin` or `owner` role (superuser "
-            "counts). Permanently erases the mix together with its roster and every match it "
-            "recorded, and returns the deleted id. Irreversible, and unlike close it is not open to "
-            "the mix's own host and co-hosts."
+            "counts). Permanently erases the mix together with its roster, every match it "
+            "recorded and every Discord message it posted, and returns the deleted id. "
+            "Irreversible, and unlike close it is not open to the mix's own host and co-hosts."
         ),
     },
     "rpc.balancer.players.list": {

@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DraggableAttributes,
+  type DraggableAttributes
 } from "@dnd-kit/core";
 import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import {
@@ -18,6 +18,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
+  type SortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
@@ -50,6 +51,8 @@ type SortableRowsProps<T> = {
   /** `moved` is the dragged item — an adjacent swap cannot tell it apart otherwise. */
   onReorder: (nextItems: T[], moved: T) => void;
   className?: string;
+  /** dnd-kit's layout strategy; `rectSortingStrategy` for a grid. */
+  strategy?: SortingStrategy;
   children: (item: T, index: number) => ReactNode;
 };
 
@@ -58,7 +61,8 @@ export function SortableRows<T>({
   getId,
   onReorder,
   className,
-  children,
+  strategy = verticalListSortingStrategy,
+  children
 }: Readonly<SortableRowsProps<T>>) {
   // An explicit `id`: without one dnd-kit numbers its keyboard instructions
   // from a module counter that server and client disagree on, so every grip's
@@ -68,7 +72,7 @@ export function SortableRows<T>({
     // 5px before a drag starts, so a click on a control inside a row is still a
     // click and not a one-pixel drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const ids = items.map(getId);
@@ -91,7 +95,7 @@ export function SortableRows<T>({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+      <SortableContext items={ids} strategy={strategy}>
         <div className={className}>{items.map((item, index) => children(item, index))}</div>
       </SortableContext>
     </DndContext>
@@ -117,7 +121,7 @@ export interface SortableRowHandle {
 export function useSortableRow(id: string, disabled = false): SortableRowHandle {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
-    disabled,
+    disabled
   });
 
   const style: CSSProperties = {
@@ -127,14 +131,14 @@ export function useSortableRow(id: string, disabled = false): SortableRowHandle 
     // of being clipped by the next row's background.
     zIndex: isDragging ? 50 : undefined,
     position: isDragging ? "relative" : undefined,
-    boxShadow: isDragging ? "0 22px 56px rgba(0,0,0,0.34)" : undefined,
+    boxShadow: isDragging ? "0 22px 56px rgba(0,0,0,0.34)" : undefined
   };
 
   return {
     ref: setNodeRef,
     style,
     handleProps: { ...attributes, ...listeners } as SortableHandleProps,
-    isDragging,
+    isDragging
   };
 }
 
@@ -155,7 +159,7 @@ export function SortableGrip({
   handleProps,
   label,
   disabled = false,
-  className,
+  className
 }: Readonly<SortableGripProps>) {
   return (
     <button
@@ -167,7 +171,7 @@ export function SortableGrip({
         "border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)]",
         "hover:text-[color:var(--aqt-fg)] active:cursor-grabbing",
         "disabled:cursor-default disabled:opacity-40",
-        className,
+        className
       )}
       {...handleProps}
     >
@@ -190,7 +194,7 @@ export function SortableRow({
   children,
   className,
   handleLabel,
-  disabled = false,
+  disabled = false
 }: Readonly<SortableRowProps>) {
   const { ref, style, handleProps } = useSortableRow(id, disabled);
 

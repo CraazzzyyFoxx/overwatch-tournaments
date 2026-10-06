@@ -85,7 +85,6 @@ const onPatchPlayer = vi.fn();
 const onClear = vi.fn();
 const onRemovePlayer = vi.fn();
 const onOpenPlayer = vi.fn();
-const onOpenPool = vi.fn();
 const onApplyRotationHints = vi.fn();
 
 function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
@@ -136,7 +135,6 @@ async function mount(
         onClear={onClear}
         onRemovePlayer={onRemovePlayer}
         onOpenPlayer={onOpenPlayer}
-        onOpenPool={onOpenPool}
         onApplyRotationHints={onApplyRotationHints}
         applyingHints={props.applyingHints ?? false}
       />,
@@ -190,7 +188,6 @@ beforeEach(() => {
   onClear.mockReset();
   onRemovePlayer.mockReset();
   onOpenPlayer.mockReset();
-  onOpenPool.mockReset();
   onApplyRotationHints.mockReset();
   dndSpies.useDraggable.mockClear();
   dndSpies.useDroppable.mockClear();
@@ -294,9 +291,8 @@ describe("PickupLobbyPanel rotation hints", () => {
       ],
     });
 
-    const badge = scope.querySelector('[title="Sat 1 map(s) in a row \u2014 owed a seat"]');
-    expect(badge).not.toBeNull();
-    expect(badge?.textContent).toContain("Sat 1 map(s) in a row \u2014 owed a seat");
+    const badge = scope.querySelector('[aria-label="Sat 1 map(s) in a row \u2014 owed a seat"]');
+    expect(badge?.getAttribute("role")).toBe("img");
   });
 
   it("marks a member who has played the most in a row with a should-rest hint", async () => {
@@ -313,7 +309,7 @@ describe("PickupLobbyPanel rotation hints", () => {
       ],
     });
 
-    expect(scope.querySelector('[title="Played 3 map(s) in a row"]')).not.toBeNull();
+    expect(scope.querySelector('[aria-label="Played 3 map(s) in a row"]')).not.toBeNull();
   });
 
   it("renders no hint for a row already pinned must_play -- the Pin already says it", async () => {
@@ -330,7 +326,7 @@ describe("PickupLobbyPanel rotation hints", () => {
       ],
     });
 
-    expect(scope.querySelector('[title="Закреплён хостом (must_play)"]')).toBeNull();
+    expect(scope.querySelector('[aria-label="Закреплён хостом (must_play)"]')).toBeNull();
   });
 
   it("renders no hint for a neutral verdict or when no rotation data has loaded", async () => {
@@ -349,7 +345,7 @@ describe("PickupLobbyPanel rotation hints", () => {
     expect(neutral.textContent).not.toContain("Seats cover the whole pool");
 
     const noData = await mount([row()]);
-    expect(noData.querySelector('[title*="owed a seat"]')).toBeNull();
+    expect(noData.querySelector('[aria-label*="owed a seat"]')).toBeNull();
   });
 });
 
@@ -434,7 +430,7 @@ describe("PickupLobbyPanel", () => {
     const scope = await mount([row({ roles: ["tank", "damage", "support"] })]);
 
     expect(byLabel(scope, "Tank for Aria#1111, first choice, 2400 points")).not.toBeNull();
-    expect(byLabel(scope, "DPS for Aria#1111, also plays, 2600 points")).not.toBeNull();
+    expect(byLabel(scope, "Damage for Aria#1111, also plays, 2600 points")).not.toBeNull();
     expect(byLabel(scope, "Support for Aria#1111, also plays, 2500 points")).not.toBeNull();
   });
 
@@ -496,14 +492,6 @@ describe("PickupLobbyPanel", () => {
     expect(byName(scope, "Advanced settings for Aria#1111")).not.toBeNull();
   });
 
-  it("hands adding players back to the pool", async () => {
-    const scope = await mount([row()]);
-
-    await click(byName(scope, "Add players →"));
-
-    expect(onOpenPool).toHaveBeenCalledTimes(1);
-  });
-
   it("confirms before emptying the lobby", async () => {
     const scope = await mount([
       row(),
@@ -534,7 +522,6 @@ describe("PickupLobbyPanel", () => {
     const scope = await mount([row()], { canWrite: false });
 
     expect(byName(scope, "Empty the lobby")).toBeNull();
-    expect(byName(scope, "Add players →")).toBeNull();
     expect(byName(scope, "Remove Aria#1111 from this mix")).toBeNull();
     expect(
       byLabel(scope, "Tank for Aria#1111, first choice, 2400 points")?.hasAttribute("disabled"),

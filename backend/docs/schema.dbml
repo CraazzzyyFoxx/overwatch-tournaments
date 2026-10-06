@@ -1,6 +1,6 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
-// Tables: 149
+// Tables: 150
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -1149,8 +1149,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
+    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1858,6 +1858,29 @@ Table chat_room_settings {
   updated_at timestamptz
 }
 
+Table discord_message {
+  id bigint [pk, increment]
+  channel VARCHAR(32) [not null]
+  target VARCHAR(64) [not null]
+  dedupe_key VARCHAR(128)
+  subject VARCHAR(160) [not null]
+  slot VARCHAR(64) [not null]
+  kind VARCHAR(64) [not null]
+  notification_id bigint
+  workspace_id bigint
+  status VARCHAR(16) [not null, default: `pending`]
+  discord_channel_id bigint
+  message_id bigint
+  error text
+  card_json json
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  indexes {
+    (channel, target, dedupe_key) [unique, name: "uq_discord_message_target"]
+    (subject) [name: "ix_discord_message_subject"]
+  }
+}
+
 Table division_grid {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -2013,20 +2036,6 @@ Table notification {
   }
 }
 
-Table notification_delivery {
-  id bigint [pk, increment]
-  channel VARCHAR(32) [not null]
-  target VARCHAR(64) [not null]
-  dedupe_key VARCHAR(128) [not null]
-  notification_id bigint
-  workspace_id bigint
-  kind VARCHAR(64) [not null]
-  created_at timestamptz [not null, default: `now()`]
-  indexes {
-    (channel, target, dedupe_key) [unique, name: "uq_notification_delivery_target"]
-  }
-}
-
 Table notification_preference {
   auth_user_id bigint [pk]
   discord_dm jsonb [not null, default: `'{}'`]
@@ -2128,6 +2137,7 @@ TableGroup public {
   chat_message
   chat_mute
   chat_room_settings
+  discord_message
   division_grid
   division_grid_import_job
   division_grid_mapping
@@ -2136,7 +2146,6 @@ TableGroup public {
   division_grid_version
   event_outbox
   notification
-  notification_delivery
   notification_preference
   notification_read
   notification_workspace_config
@@ -2566,8 +2575,8 @@ Table tournament.encounter_participant {
   team_id bigint [not null]
   slot int [not null]
   indexes {
-    (encounter_id, team_id) [unique, name: "uq_encounter_participant_encounter_team"]
     (encounter_id, slot) [unique, name: "uq_encounter_participant_encounter_slot"]
+    (encounter_id, team_id) [unique, name: "uq_encounter_participant_encounter_team"]
     (team_id) [name: "ix_encounter_participant_team_id"]
   }
 }
@@ -2619,6 +2628,23 @@ Table tournament.encounter_result_audit {
   indexes {
     (encounter_id, created_at) [name: "ix_encounter_result_audit_encounter_created"]
     (game_id) [name: "ix_tournament_encounter_result_audit_game_id"]
+  }
+}
+
+Table tournament.encounter_room_event {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  encounter_id bigint [not null]
+  kind VARCHAR(8)
+  action VARCHAR(64) [not null]
+  source VARCHAR(16) [not null]
+  side VARCHAR(8)
+  actor_auth_user_id bigint
+  reason text
+  data json [not null, default: `{}`]
+  indexes {
+    (encounter_id, created_at) [name: "ix_encounter_room_event_encounter_created"]
   }
 }
 
@@ -2740,6 +2766,7 @@ Table tournament.pick_ban_session {
   undo_target_index int
   started_at timestamptz
   current_step_started_at timestamptz
+  paused_at timestamptz
   indexes {
     (encounter_id, kind) [unique, name: "uq_pick_ban_session_encounter_kind"]
     (encounter_id) [name: "ix_tournament_pick_ban_session_encounter_id"]
@@ -3109,6 +3136,7 @@ TableGroup tournament {
   tournament.encounter_readiness
   tournament.encounter_report_form
   tournament.encounter_result_audit
+  tournament.encounter_room_event
   tournament.encounter_saved_view
   tournament.pick_ban_config
   tournament.pick_ban_config_item
@@ -3397,6 +3425,8 @@ Ref: tournament.encounter_result_audit.encounter_id > tournament.encounter.id [d
 Ref: tournament.encounter_result_audit.actor_user_id > players.user.id [delete: set null]
 Ref: tournament.encounter_result_audit.adopted_team_id > tournament.team.id [delete: set null]
 Ref: tournament.encounter_result_audit.game_id > tournament.encounter_game.id [delete: cascade]
+Ref: tournament.encounter_room_event.encounter_id > tournament.encounter.id [delete: cascade]
+Ref: tournament.encounter_room_event.actor_auth_user_id > auth.user.id [delete: set null]
 Ref: tournament.encounter_saved_view.workspace_id > workspace.id [delete: cascade]
 Ref: tournament.encounter_saved_view.auth_user_id > auth.user.id [delete: cascade]
 Ref: tournament.pick_ban_config.tournament_id > tournament.tournament.id [delete: cascade]

@@ -104,6 +104,10 @@ var RosterRoutes = []edge.RouteSpec{
 	// One click: open signup AND post the card that announces it. A separate
 	// "open" write would let a host post a card whose buttons refuse everybody.
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/signup", Queue: "rpc.balancer.custom.post_signup", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// The host's undo: one of the mix's own Discord messages, by the id the
+	// board got in `discord_posts`. The worker checks the row really is this
+	// mix's before the bot is asked to delete anything.
+	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/posts/{post_id}", Queue: "rpc.balancer.custom.delete_discord_post", IDParam: "game_id", Path: []string{"workspace_id", "post_id"}, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/host", Queue: "rpc.balancer.custom.transfer_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts", Queue: "rpc.balancer.custom.add_co_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts/{co_host_user_id}", Queue: "rpc.balancer.custom.remove_co_host", IDParam: "game_id", Path: []string{"workspace_id", "co_host_user_id"}, Auth: edge.AuthRequired},

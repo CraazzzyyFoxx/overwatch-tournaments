@@ -417,6 +417,27 @@ NOTIFICATION_DELIVERY_DLQ = RabbitQueue(
 )
 
 # ============================================================================
+# Pickup mix changes (balancer-service -> balancer-service)
+# ============================================================================
+# ``PickupMixChangedEvent`` through the outbox, straight onto the queue (default
+# exchange): the one consumer re-projects the mix's Discord signup card. No
+# exchange until a second consumer needs the fact.
+
+PICKUP_MIX_CHANGED_QUEUE = RabbitQueue(
+    "pickup_mix_changed",
+    durable=True,
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "pickup_mix_changed.dlq",
+    },
+)
+
+PICKUP_MIX_CHANGED_DLQ = RabbitQueue(
+    "pickup_mix_changed.dlq",
+    durable=True,
+)
+
+# ============================================================================
 # Analytics v2 ML Queues
 # ============================================================================
 

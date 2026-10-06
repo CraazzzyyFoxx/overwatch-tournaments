@@ -260,13 +260,38 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - app-network
+    # Reads the heartbeat file GatewayWatchdog touches while the Discord gateway
+    # session is alive: the bot serves no port, and a session can die without
+    # the process dying. start_period covers login + the first connect.
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD", "python", "-m", "src.tools.healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 90s
     restart: always
+
+  # One-shot job: uploads the bot's missing application emoji, then exits. The
+  # `tools` profile keeps `up` from starting it; ops/deploy/remote-deploy.sh runs
+  # it on every release (and `make prod-discord-emoji` by hand). Idempotent --
+  # names already uploaded are skipped -- and the bot re-reads its emoji every
+  # 10 minutes, so nothing has to restart after it. The Overwatch rank badges
+  # come from the checkout's static/divisions (the bot image does not carry them).
+  discord-emoji:
+    image: ghcr.io/craazzzyyfoxx/owt-discord:${IMAGE_TAG:-latest}
+    profiles: ["tools"]
+    logging: *log-rotate
+    command: python -m src.tools.emoji_sync
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/discord.env
+    volumes:
+      - ./static/divisions:/static/divisions:ro
+    networks:
+      - app-network
+    healthcheck:
+      disable: true
+    restart: "no"
 
 #  twitch:
 #    image: ghcr.io/craazzzyyfoxx/owt-twitch:${IMAGE_TAG:-latest}

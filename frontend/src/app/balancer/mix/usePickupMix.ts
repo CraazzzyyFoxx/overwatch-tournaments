@@ -482,10 +482,8 @@ export function usePickupMix(
   const updateMySeat = useMutation({
     mutationFn: (input: PickupMySeatInput) =>
       customGameService.updateMySeat(workspaceId, selectedGameId as number, input),
-    onSuccess: (state) => {
-      applySeat(state);
-      notify.success("Roles saved");
-    },
+    // Every toggle writes, so success is silent: the cards already show it.
+    onSuccess: applySeat,
     onError: (error) => notify.apiError(error),
   });
 
@@ -510,6 +508,21 @@ export function usePickupMix(
         queryKey: customGameKeys.one(workspaceId, selectedGameId ?? 0),
       });
       notify.success("Signup opened in Discord");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
+  /**
+   * Deletes one of the mix's Discord posts. The server answers with the mix,
+   * the post already `deleting`; the bot removes the message asynchronously
+   * and the realtime refetch then drops the row.
+   */
+  const deleteDiscordPost = useMutation({
+    mutationFn: (postId: number) =>
+      customGameService.deleteDiscordPost(workspaceId, selectedGameId as number, postId),
+    onSuccess: (game) => {
+      applyGame(game);
+      notify.success("Removing the post from Discord");
     },
     onError: (error) => notify.apiError(error),
   });
@@ -547,5 +560,6 @@ export function usePickupMix(
     updateMySeat,
     setSelfService,
     postSignup,
+    deleteDiscordPost,
   };
 }

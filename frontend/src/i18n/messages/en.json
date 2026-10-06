@@ -201,7 +201,7 @@
     },
     "roles": {
       "tank": "Tank",
-      "damage": "DPS",
+      "damage": "Damage",
       "support": "Support",
       "flex": "Flex"
     },
@@ -6769,18 +6769,59 @@
     },
     "self": {
       "signupLabel": "Signup",
-      "signup": {
+      "signupOpen": "Open",
+      "signupState": {
         "closed": "Closed",
-        "pool": "To the pool",
-        "benched": "To the bench"
+        "pool": "Open · to the pool",
+        "benched": "Open · to the bench"
+      },
+      "signup": {
+        "pool": "Pool",
+        "benched": "Bench"
+      },
+      "signupTrigger": "Signup settings: {mode}",
+      "signupWhere": "Where new players land",
+      "signupHint": {
+        "closed": "Players cannot join on their own — only the host adds them.",
+        "pool": "Players join the pool and can be seated at the next balance.",
+        "benched": "Players join the bench; the host moves them into the pool."
       },
       "roleEdit": "Players edit their own roles",
-      "openInDiscord": "Open signup in Discord",
-      "noChannel": "This community has no mix channel in Discord",
+      "noChannel": "This community has no mix channel in Discord, so there is nowhere to post.",
+      "discord": {
+        "label": "Discord",
+        "trigger": "Discord: {status}",
+        "hint": "A card in the mix channel with Join, My seat and Leave buttons. It updates itself as players join.",
+        "post": "Post signup",
+        "repost": "Re-post signup",
+        "openAndPost": "Open signup & post",
+        "openHint": "Signup is closed — posting opens it into the pool.",
+        "repostHint": "The current post is deleted and a fresh one goes to the bottom of the channel.",
+        "allPosts": "All posts"
+      },
+      "post": {
+        "none": "Not posted",
+        "pending": "Posting…",
+        "posted": "Posted",
+        "failed": "Post failed",
+        "failedHint": "Check the bot's permissions in the mix channel and post again.",
+        "deleting": "Deleting…",
+        "lost": "Never reached Discord",
+        "lostHint": "The bot never picked this post up. Post it again."
+      },
+      "posts": {
+        "signup": "Signup post",
+        "lineup": "Lineup · Game {match}",
+        "lineupLobby": "Lineup · Lobby {lobby} · Game {match}",
+        "open": "Open",
+        "delete": "Delete “{label}” from Discord",
+        "deleteTitle": "Delete this Discord post?",
+        "deleteDescription": "“{label}” is removed from the Discord channel for everyone. The mix itself is untouched.",
+        "deleteConfirm": "Delete post"
+      },
       "title": "Your seat",
       "join": "Join this mix",
       "leave": "Leave",
-      "saveRoles": "Save roles",
       "seat": {
         "pool": "You are in the pool",
         "benched": "You are on the bench — the host moves you into the pool",
@@ -6833,6 +6874,23 @@
       "pinA": "Lobby A",
       "pinB": "Lobby B",
       "pinHint": "Takes effect at the next balance: a pinned player is never a candidate for the other lobby."
+    },
+    "header": {
+      "more": "More mix actions",
+      "access": "Manage access",
+      "delete": "Delete mix"
+    },
+    "start": {
+      "title": "Get this mix going",
+      "players": "Gather players",
+      "playersHint": "Add them from the community pool, or open signup so they join on their own.",
+      "playersDone": "{count, plural, one {# player} other {# players}} in the lineup",
+      "addPlayers": "Add players",
+      "discord": "Announce in Discord",
+      "discordHint": "Optional. Posts a signup card players join from, and opens signup if it is closed.",
+      "discordDone": "Signup card posted",
+      "balance": "Balance teams",
+      "balanceHint": "When the lineup is ready, press Balance teams below."
     }
   },
   "quota": {

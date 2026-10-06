@@ -22,6 +22,8 @@ from shared.core.enums import (
     MixStatus,
 )
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider
+from shared.division_grid import DEFAULT_GRID
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.roster_shape import resolve_roster_shape
 from shared.rbac import assign_workspace_system_role
@@ -40,9 +42,11 @@ from shared.repository import (
     UserRepository,
     WorkspaceMemberRepository,
 )
+from shared.repository.discord_message import LIVE_STATUSES
 from shared.repository.workspace import get_or_create_workspace_member
-from shared.schemas.events import DiscordCard
+from shared.schemas.events import DiscordCard, DiscordCommandEvent
 from shared.schemas.roster_slots import RosterShapeRead
+from shared.services import discord_messages
 from shared.services.account_links import missing_account_links
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER, MemberRankService, member_rank_service
@@ -54,7 +58,7 @@ from shared.services.workspace_roster import (
     workspace_member_user_ids,
 )
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
-from src.domain.mix_discord import build_lineup_embed, signup_card
+from src.domain.mix_discord import SignupPlayer, lineup_card, signup_card
 from src.domain.mix_lobbies import seated_member_ids
 from src.domain.mix_lobby_split import LobbySplitError, SplitCandidate, split_into_lobbies
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
@@ -62,9 +66,9 @@ from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
-from src.services.pickup_mix_realtime import emit_pickup_mix_updated
+from src.services.pickup_mix_realtime import emit_pickup_mix_changed
 
-__all__ = ("CustomGameService", "custom_game_service")
+__all__ = ("SIGNUP_SLOT", "CustomGameService", "custom_game_service", "mix_subject")
 
 _TERMINAL = frozenset({MixStatus.COMPLETED, MixStatus.CANCELLED})
 #: Plenty for any pickup mix (2-3 teams in practice); guards against a
@@ -76,6 +80,13 @@ _MAX_CO_HOSTS = 16
 _MAX_TEAM_NAME_LEN = 60
 #: Board-facing name of a lobby; the wire and the database speak indexes.
 LOBBY_LABELS = ("A", "B")
+#: Every Discord message a mix sends is filed under this subject, and the slot
+#: says which of the mix's messages it is: one ``signup`` card plus one row per
+#: lineup posted. Deleting a mix is then one read of ``discord_message``.
+#: Public: the signup-card projector reads the same slot back.
+SIGNUP_SLOT = "signup"
+#: The file name a lineup PNG travels under, on both the card and the command.
+_LINEUP_IMAGE = "lineup.png"
 #: A roster row owns only its lineup state. A rank correction goes into the
 #: host's own layer of ``member_rank``, so it outlives the game it was made in.
 _PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex", "lobby_pin"})
@@ -103,6 +114,15 @@ def _blocker(code: str) -> HTTPException:
     """The refusal for one admission code; ``detail`` IS the code, so a client
     (site or bot) translates it instead of parsing English."""
     return HTTPException(status_code=_BLOCKER_STATUS[code], detail=code)
+
+
+def mix_subject(custom_game_id: int) -> str:
+    """The ``discord_message.subject`` every message of one mix is filed under.
+
+    Read by the RPC layer too: the mix page lists its own Discord messages, and
+    neither side should spell the string itself.
+    """
+    return f"mix:{custom_game_id}"
 
 
 def _reject_unknown(patch: Mapping[str, Any], allowed: frozenset[str]) -> None:
@@ -158,6 +178,21 @@ def _uniq(ids: Sequence[int]) -> list[int]:
         seen.add(item)
         out.append(item)
     return out
+
+
+def _mix_channel_id(config_json: Any) -> int | None:
+    """The mix channel out of a workspace balancer config blob.
+
+    Stored as digits in a string -- JSON has one number type and a snowflake
+    does not survive a float64 round-trip. A hand-edited blob is not worth a
+    500 on every mix read: the workspace simply has no default until an admin
+    re-saves it.
+    """
+    value = config_json.get("mix_discord_channel_id") if isinstance(config_json, dict) else None
+    try:
+        return int(value) if value else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalize_roles(raw: Any) -> list[str] | None:
@@ -902,8 +937,13 @@ class CustomGameService:
 
         ``ranks`` carries all three roles, ``None`` included: the Discord role
         select labels every option with a number or "no rank", and a sparse dict
-        would make the bot guess. ``unranked_roles`` is the narrower list the
-        warning is built from -- the roles this player actually plays.
+        would make the bot guess. ``divisions`` is the same three roles read off
+        the Overwatch ladder (``DEFAULT_GRID``: Bronze 5 .. Champion 1), the
+        name and slug of the rank each value lands in -- the badges the bot
+        ships as emoji. Not the platform grid: its tiers are bare numbers
+        ("Division 1") that say nothing to a player reading Discord.
+        ``unranked_roles`` is the narrower list the warning is built from -- the
+        roles this player actually plays.
 
         ``current_lobby`` is the same derivation the board shows -- the seats of
         each lobby's selected option -- so nobody downstream re-parses a solver
@@ -915,6 +955,7 @@ class CustomGameService:
         if ctx.row is not None:
             stored = (await self.player_roles.roles_for_players(session, [ctx.row.id])).get(ctx.row.id, [])
             explicit = ctx.row.role_selection_mode == MixRoleSelectionMode.EXPLICIT
+            grid = await get_effective_division_grid(session, None)
             resolved = await self.ranks.resolve(
                 session,
                 workspace_id=ctx.game.workspace_id,
@@ -922,12 +963,15 @@ class CustomGameService:
                 roles=list(REGISTRATION_ROLE_CODES),
                 order=MIX_ORDER,
                 author_user_id=ctx.game.host_user_id,
-                grid=await get_effective_division_grid(session, None),
+                grid=grid,
             )
             ranks: dict[str, int | None] = {}
+            divisions: dict[str, dict[str, str | None] | None] = {}
             for role in REGISTRATION_ROLE_CODES:
                 rank = resolved.get((ctx.row.workspace_member_id, role))
                 ranks[role] = rank.value if rank is not None else None
+                tier = None if ranks[role] is None else DEFAULT_GRID.resolve_division(ranks[role])
+                divisions[role] = None if tier is None else {"name": tier.name, "slug": tier.slug}
             considered = list(stored) if explicit else list(REGISTRATION_ROLE_CODES)
             unranked = [role for role in considered if ranks.get(role) is None]
             seat = {
@@ -937,6 +981,8 @@ class CustomGameService:
                 "roles": list(stored) if explicit else None,
                 "is_flex": ctx.row.is_flex,
                 "ranks": ranks,
+                # The Overwatch rank each of those values lands in.
+                "divisions": divisions,
                 # 0 | 1 while a balance seats them, ``null`` while it does not.
                 "current_lobby": next(
                     (
@@ -984,6 +1030,32 @@ class CustomGameService:
             ),
         )
 
+    async def self_current(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        auth_user: Any,
+    ) -> dict[str, Any]:
+        """The same answer as :meth:`self_state`, for whichever mix is live now.
+
+        ``/mix`` in Discord names no id: a player typing it means "the mix we
+        are running", which is the newest one that is neither completed nor
+        cancelled. A workspace with nothing open is a 404, same as asking for a
+        mix that does not exist -- the bot translates it into "no mix right now".
+
+        ponytail: filters the workspace's mixes in Python (the list read the
+        board already uses). A workspace with thousands of archived mixes would
+        want the status in the WHERE clause.
+        """
+        game = next(
+            (row for row in await self.games.list_for_workspace(session, workspace_id) if row.status not in _TERMINAL),
+            None,
+        )
+        if game is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
+        return await self.self_state(session, custom_game_id=game.id, auth_user=auth_user, workspace_id=workspace_id)
+
     async def self_join(
         self,
         session: AsyncSession,
@@ -1028,7 +1100,13 @@ class CustomGameService:
             )
         await self._seed_host_ranks(session, ctx.game, await self.members(session, ctx.game.workspace_id, [member.id]))
         await session.flush()
-        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        await emit_pickup_mix_changed(
+            session,
+            ctx.game.workspace_id,
+            custom_game_id=ctx.game.id,
+            change="roster",
+            actor_user_id=auth_user.id,
+        )
         return await self.self_state(
             session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
         )
@@ -1055,7 +1133,13 @@ class CustomGameService:
             raise _blocker("mix_closed" if ctx.policy.join_blocker == "mix_closed" else "not_on_roster")
         await self.roster.delete(session, ctx.row)
         await session.flush()
-        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        await emit_pickup_mix_changed(
+            session,
+            ctx.game.workspace_id,
+            custom_game_id=ctx.game.id,
+            change="roster",
+            actor_user_id=auth_user.id,
+        )
         return await self.self_state(
             session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
         )
@@ -1082,7 +1166,13 @@ class CustomGameService:
             raise _blocker(ctx.policy.edit_blocker or "not_on_roster")
         await self._apply_player_patch(session, ctx.row, patch, _SELF_PATCH_FIELDS)
         await session.flush()
-        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        await emit_pickup_mix_changed(
+            session,
+            ctx.game.workspace_id,
+            custom_game_id=ctx.game.id,
+            change="roster",
+            actor_user_id=auth_user.id,
+        )
         return await self.self_state(
             session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
         )
@@ -1124,6 +1214,75 @@ class CustomGameService:
         await session.flush()
         return game
 
+    @staticmethod
+    def _board_url(board_url_base: str, custom_game_id: int) -> str:
+        return f"{board_url_base.rstrip('/')}/balancer/mix/{custom_game_id}"
+
+    async def signup_card_for(
+        self, session: AsyncSession, game: models.CustomGame, *, board_url_base: str
+    ) -> DiscordCard:
+        """The signup card as the mix stands right now.
+
+        Rebuilt from current state on every publish rather than kept anywhere:
+        the card is the mix's roster seen from a channel, and the roster is the
+        only copy of it. Names resolve exactly as the balancer resolves them.
+        Public because the projector (:mod:`src.services.mix_signup_projector`)
+        renders the same card for the same mix on every change event.
+        """
+        roster = list(await self.roster.list_for_game(session, game.id))
+        stored = await self.player_roles.roles_for_players(session, [row.id for row in roster])
+        members = await self.load_roster(
+            session, workspace_id=game.workspace_id, member_ids=[row.workspace_member_id for row in roster]
+        )
+        host_names = await self.hosts(session, game.workspace_id, [game.host_user_id])
+        # The numbers the balancer will balance them at: the host's own book
+        # above the workspace canon (``MIX_ORDER``), as in ``balance``.
+        resolved = await self.ranks.resolve(
+            session,
+            workspace_id=game.workspace_id,
+            members={member.member_id: member.player_id for member in members.values()},
+            roles=list(REGISTRATION_ROLE_CODES),
+            order=MIX_ORDER,
+            author_user_id=game.host_user_id,
+            grid=await get_effective_division_grid(session, None),
+        )
+        players = []
+        for row in roster:
+            member_id = row.workspace_member_id
+            member = members.get(member_id)
+            name = (member.display_name or member.battle_tag) if member else None
+            roles = stored.get(row.id, []) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None
+            ranks = {
+                role: found.value
+                for role in REGISTRATION_ROLE_CODES
+                if (found := resolved.get((member_id, role))) is not None and found.value is not None
+            }
+            # The first role they named, or -- playing anything -- their best.
+            # An explicit empty order plays nothing, so it shows no rank.
+            if roles is None:
+                rank = max(ranks.values(), default=None)
+            else:
+                rank = ranks.get(roles[0]) if roles else None
+            players.append(
+                SignupPlayer(
+                    name=name or f"player-{member_id}",
+                    roles=roles,
+                    benched=row.participation == MixParticipation.BENCHED,
+                    rank=rank,
+                )
+            )
+        return signup_card(
+            mix_name=game.name,
+            host_name=host_names.get(game.host_user_id),
+            board_url=self._board_url(board_url_base, game.id),
+            custom_game_id=game.id,
+            self_signup=game.self_signup,
+            status=game.status,
+            lobby_count=game.lobby_count,
+            players=players,
+            updated_at=datetime.now(UTC),
+        )
+
     async def signup_post(
         self,
         session: AsyncSession,
@@ -1134,15 +1293,19 @@ class CustomGameService:
         actor_user_id: int,
         actor_is_superuser: bool = False,
         board_url_base: str,
-    ) -> tuple[int, DiscordCard]:
-        """Open signup and build the card that announces it.
+    ) -> tuple[int, list[DiscordCommandEvent]]:
+        """Open signup, retire the previous card and claim the one that replaces it.
 
         The mode is written HERE rather than left to a separate call: a card in
         the channel whose buttons answer ``signup_closed`` is the one outcome
         nobody wants, and the column -- not the card -- is what admits a player.
 
-        Publishing is the RPC layer's job (that is where the broker is), so this
-        returns the channel and the payload, exactly like :meth:`discord_lineup`.
+        A mix has ONE signup card: a second one would count a roster nobody
+        updates any more, so every live ``signup`` message of this mix is marked
+        for deletion in the same transaction that claims the new one. Queueing
+        is the RPC layer's job (it owns the transaction), so this returns the
+        commands in the order they must reach the outbox -- the deletes first,
+        so the channel never holds two cards at once.
         """
         game = await self._writable(
             session,
@@ -1160,15 +1323,57 @@ class CustomGameService:
             game.self_signup = MixSelfSignup(self_signup).value
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid self_signup") from exc
-        host_names = await self.hosts(session, workspace_id, [game.host_user_id])
-        card = signup_card(
-            mix_name=game.name,
-            host_name=host_names.get(game.host_user_id),
-            board_url=f"{board_url_base.rstrip('/')}/balancer/mix/{game.id}",
-            custom_game_id=game.id,
-        )
+        card = await self.signup_card_for(session, game, board_url_base=board_url_base)
         await session.flush()
-        return channel_id, card
+        subject = mix_subject(game.id)
+        commands = await discord_messages.delete_commands(
+            session,
+            await discord_messages.repository.for_subject(session, subject, slot=SIGNUP_SLOT, statuses=LIVE_STATUSES),
+        )
+        posted = await discord_messages.send_command(
+            session,
+            subject=subject,
+            slot=SIGNUP_SLOT,
+            kind="mix.signup",
+            card=card,
+            workspace_id=workspace_id,
+            channel_id=channel_id,
+        )
+        if posted is not None:
+            commands.append(posted)
+        return channel_id, commands
+
+    async def delete_discord_post(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        post_id: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> tuple[models.CustomGame, list[DiscordCommandEvent]]:
+        """Take one of this mix's Discord messages down, by its row.
+
+        ``discord_message`` is one table for the whole platform, so the row has
+        to carry this mix's subject: an id belonging to another mix -- or to a
+        notification -- is a 404 here rather than a message this host gets to
+        delete. Clicking twice is harmless: a row already on its way out yields
+        no command.
+        """
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        row = await discord_messages.repository.get(session, post_id)
+        if row is None or row.subject != mix_subject(game.id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discord post not found")
+        commands = await discord_messages.delete_commands(session, [row])
+        await session.flush()
+        return game, commands
 
     async def _host_config(self, session: AsyncSession, host_user_id: int | None) -> Any:
         """The host's ``balancer.user_config`` row, or ``None`` if they never saved one.
@@ -1524,6 +1729,31 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def workspace_discord_target(self, session: AsyncSession, workspace_id: int) -> tuple[int | None, str | None]:
+        """Where this workspace posts, and in which guild: ``(channel_id, guild_id)``.
+
+        The guild is the workspace's own verified binding and is read here, in
+        the same statement as the channel, rather than in a second round trip:
+        the mix page needs the channel for its settings and the guild for the
+        jump links of its Discord posts (Discord addresses a message by all
+        three ids), so the single-mix read would otherwise ask twice.
+        """
+        row = (
+            await session.execute(
+                sa.select(models.WorkspaceBalancerConfig.config_json, models.Workspace.discord_guild_id)
+                .select_from(models.Workspace)
+                .outerjoin(
+                    models.WorkspaceBalancerConfig,
+                    models.WorkspaceBalancerConfig.workspace_id == models.Workspace.id,
+                )
+                .where(models.Workspace.id == workspace_id)
+            )
+        ).first()
+        if row is None:
+            return None, None
+        raw, guild_id = row
+        return _mix_channel_id(raw), guild_id
+
     async def workspace_discord_channel_id(self, session: AsyncSession, workspace_id: int) -> int | None:
         """The workspace-wide mix channel: the ONLY channel a mix ever posts to.
 
@@ -1532,18 +1762,40 @@ class CustomGameService:
         workspace-scoped mix knobs, as digits in a string -- JSON has one
         number type and a snowflake does not survive a float64 round-trip.
         """
-        raw = await session.scalar(
-            sa.select(models.WorkspaceBalancerConfig.config_json).where(
-                models.WorkspaceBalancerConfig.workspace_id == workspace_id
+        return _mix_channel_id(
+            await session.scalar(
+                sa.select(models.WorkspaceBalancerConfig.config_json).where(
+                    models.WorkspaceBalancerConfig.workspace_id == workspace_id
+                )
             )
         )
-        value = raw.get("mix_discord_channel_id") if isinstance(raw, dict) else None
-        try:
-            return int(value) if value else None
-        except (TypeError, ValueError):
-            # A hand-edited config blob is not worth a 500 on every mix read;
-            # the workspace simply has no default until an admin re-saves it.
-            return None
+
+    async def discord_mentions(self, session: AsyncSession, member_ids: Sequence[int]) -> list[str]:
+        """The Discord ids of those workspace members who linked an account.
+
+        One batched read down the identity chain -- workspace member -> player
+        -> auth user -> ``auth.oauth_connections`` -- rather than a lookup per
+        seat. A member with no linked Discord simply does not ping; the lineup
+        is not worth failing over somebody's unlinked account.
+        """
+        ids = _uniq(member_ids)
+        if not ids:
+            return []
+        rows = (
+            await session.execute(
+                sa.select(models.WorkspaceMember.id, models.OAuthConnection.provider_user_id)
+                .select_from(models.WorkspaceMember)
+                .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+                .join(models.OAuthConnection, models.OAuthConnection.auth_user_id == models.User.auth_user_id)
+                .where(
+                    models.WorkspaceMember.id.in_(ids),
+                    models.OAuthConnection.provider == SocialProvider.DISCORD,
+                    models.OAuthConnection.provider_user_id.is_not(None),
+                )
+            )
+        ).all()
+        by_member = {member_id: str(discord_id) for member_id, discord_id in rows if discord_id}
+        return [by_member[member_id] for member_id in ids if member_id in by_member]
 
     async def discord_lineup(
         self,
@@ -1555,13 +1807,21 @@ class CustomGameService:
         variant_index: int,
         actor_user_id: int,
         actor_is_superuser: bool = False,
-    ) -> tuple[int, dict[str, Any]]:
-        """The channel to post to plus the embed describing one balance option.
+        board_url_base: str,
+        image_b64: str | None = None,
+    ) -> tuple[int, list[DiscordCommandEvent]]:
+        """The channel to post to plus the command that posts one balance option.
 
         The message is built here rather than by the bot: team names, seat names
         and balance-time ratings all live in this service's tables and the bot
-        has no database of its own. Publishing is the RPC layer's job -- that is
-        where the broker is -- so this returns the payload instead of sending it.
+        has no database of its own. The row it will become is claimed here too
+        (``slot='lineup:<lobby>:<match>'``), so the mix page can show the post
+        and the host can take it down again; publishing is the RPC layer's job
+        -- that is where the broker is -- so this returns the command.
+
+        ``image_b64`` is the host's own capture of the matchup card: the picture
+        then IS the lineup and the card drops the per-team seat lists it would
+        otherwise print.
 
         Whichever option is on screen (``variant_index``), same as
         :meth:`swap_seats`: a host who paged to option 2 is posting that one.
@@ -1598,7 +1858,7 @@ class CustomGameService:
         next_map: tuple[str, str | None] | None = None
         if lobby.next_map_id is not None:
             # The gamemode is eager-loaded: an async session raises on an
-            # unawaited lazy load, and the embed names the mode next to the map.
+            # unawaited lazy load, and the card names the mode next to the map.
             row = await session.scalar(
                 sa.select(models.Map)
                 .options(selectinload(models.Map.gamemode))
@@ -1607,21 +1867,43 @@ class CustomGameService:
             if row is not None:
                 next_map = (row.name, row.gamemode.name if row.gamemode is not None else None)
 
-        embed = build_lineup_embed(
+        card = lineup_card(
             mix_name=game.name,
             match_number=matches_count + 1,
             variant=variant,
             players=_lobby_players(result),
             team_names=team_names,
             next_map=next_map,
-            # The host's knob, resolved: the footer promises what recording this
+            # The host's knob, resolved: the card promises what recording this
             # match will actually move. ``0`` is "off", and off prints nothing.
             points_per_win=await self.host_points_per_win(session, game.host_user_id) or None,
+            board_url=self._board_url(board_url_base, game.id),
             # Both lobbies post into the same channel, so a two-lobby mix says
             # which one this lineup is; a one-lobby mix has nothing to qualify.
             lobby_label=LOBBY_LABELS[lobby_index] if game.lobby_count == 2 else None,
+            image_filename=_LINEUP_IMAGE if image_b64 else None,
+            # Everyone this matchup seats, so the lobby hears about it.
+            mentions=await self.discord_mentions(
+                session, sorted(seated_member_ids(lobby.balance_result_json, variant_index))
+            ),
         )
-        return channel_id, embed
+        command = await discord_messages.send_command(
+            session,
+            subject=mix_subject(game.id),
+            # One row per lineup the mix posts: the lobby it belongs to and the
+            # match it announces, which is what the page labels the post with.
+            slot=f"lineup:{lobby_index}:{matches_count + 1}",
+            kind="mix.lineup",
+            card=card,
+            workspace_id=workspace_id,
+            channel_id=channel_id,
+            image_b64=image_b64,
+            image_filename=_LINEUP_IMAGE,
+            # The card mentions the players it seats; a lineup nobody is pinged
+            # by is a lineup half the lobby misses.
+            allow_mentions=True,
+        )
+        return channel_id, [] if command is None else [command]
 
     async def transfer_host(
         self,
@@ -2231,17 +2513,27 @@ class CustomGameService:
         *,
         workspace_id: int,
         custom_game_id: int,
-    ) -> None:
-        """Permanently removes the mix and every row it owns.
+    ) -> list[DiscordCommandEvent]:
+        """Permanently removes the mix, every row it owns and every post it made.
 
         Unlike :meth:`cancel` (a status flip a host can undo by starting over)
         this is irreversible, so the RPC layer gates it on workspace admin
         rather than host-or-co-host -- see ``rpc.balancer.custom.hard_delete``.
         ``custom_game_player`` and ``casual_match`` both cascade on
         ``custom_game_id`` at the DB level, so deleting the game row is enough.
+
+        Its Discord messages do not cascade -- ``discord_message`` is filed by
+        subject, not by a foreign key -- and a mix that no longer exists has no
+        business leaving cards in the channel, so they are all marked for
+        deletion here. The caller publishes the returned commands after the
+        commit that destroys the mix.
         """
         game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
+        commands = await discord_messages.delete_commands(
+            session, await discord_messages.repository.for_subject(session, mix_subject(custom_game_id))
+        )
         await self.games.delete(session, game)
+        return commands
 
 
 custom_game_service = CustomGameService()

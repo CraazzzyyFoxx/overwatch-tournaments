@@ -1,6 +1,15 @@
+"""What the bot puts back on a log-upload message: reactions and a reply.
+
+Reactions are emoji *names* (``shared.domain.discord_ui``) and reply lines
+carry shortcodes: discord-service resolves both to the uploaded application
+emoji, or to the Unicode fallback while none is uploaded.
+"""
+
 import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from shared.domain.discord_ui import emoji
 
 
 class AttachmentFeedbackState(str, enum.Enum):
@@ -22,7 +31,8 @@ class AttachmentFeedbackResult:
 @dataclass(frozen=True, slots=True)
 class MessageFeedbackSummary:
     # ``None`` means "leave the message's reactions untouched"; an empty/filled
-    # tuple means "reconcile the bot's reactions to exactly these".
+    # tuple means "reconcile the bot's reactions to exactly these" -- by emoji
+    # name, not by the character the reader ends up seeing.
     reactions: tuple[str, ...] | None
     reply_text: str | None
 
@@ -45,16 +55,16 @@ def _format_result_line(result: AttachmentFeedbackResult) -> str | None:
     if result.state is AttachmentFeedbackState.ALREADY_PROCESSED:
         return None
     if result.state is AttachmentFeedbackState.PROCESSED_OK:
-        return f"✅ {result.filename} — загружен и обработан"
+        return f"{emoji('ok')} {result.filename} — загружен и обработан"
     if result.state is AttachmentFeedbackState.UPLOADED_QUEUED:
-        return f"✅ {result.filename} — загружен и поставлен в обработку"
+        return f"{emoji('ok')} {result.filename} — загружен и поставлен в обработку"
     if result.state is AttachmentFeedbackState.PROCESSED_FAILED:
         suffix = f": {result.error_message}" if result.error_message else ""
-        return f"⚠️ {result.filename} — загружен, но обработка завершилась ошибкой{suffix}"
+        return f"{emoji('warn')} {result.filename} — загружен, но обработка завершилась ошибкой{suffix}"
     if result.state is AttachmentFeedbackState.TIMED_OUT:
-        return f"⚠️ {result.filename} — загружен, но итог обработки еще не подтвердился"
+        return f"{emoji('warn')} {result.filename} — загружен, но итог обработки еще не подтвердился"
     suffix = f": {result.error_message}" if result.error_message else ""
-    return f"❌ {result.filename} — не удалось загрузить или поставить в обработку{suffix}"
+    return f"{emoji('error')} {result.filename} — не удалось загрузить или поставить в обработку{suffix}"
 
 
 def build_message_feedback(
@@ -78,11 +88,11 @@ def build_message_feedback(
 
     reactions: list[str] = []
     if has_uploaded:
-        reactions.append("✅")
+        reactions.append("ok")
     if has_problem and has_uploaded:
-        reactions.append("⚠️")
+        reactions.append("warn")
     elif has_problem:
-        reactions.append("❌")
+        reactions.append("error")
 
     reply_lines = [line for result in results if (line := _format_result_line(result)) is not None]
     reply_text = None

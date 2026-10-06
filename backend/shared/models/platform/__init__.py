@@ -3,6 +3,7 @@
 
 from .audit import *
 from .chat import *
+from .discord_message import *
 from .notification import *
 from .outbox import *
 from .realtime import *

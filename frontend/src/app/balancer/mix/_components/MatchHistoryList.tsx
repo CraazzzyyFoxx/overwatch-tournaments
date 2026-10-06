@@ -12,6 +12,7 @@ import { EYEBROW_CLASS, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { formatRelative } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusDot } from "@/components/ui/status-dot";
 import { useFormatter } from "@/lib/datetime/client";
@@ -104,17 +105,19 @@ function MatchHistoryRow({
   return (
     <li className="flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-2.5 py-2">
       {showLobby ? (
-        <span
-          data-testid="match-lobby"
-          title={t("tab", { letter: lobbyLetter })}
-          className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded font-display text-label font-extrabold",
-            lobbyAccent.bar,
-            "text-[color:var(--aqt-bg)]"
-          )}
-        >
-          {lobbyLetter}
-        </span>
+        <IconTooltip label={t("tab", { letter: lobbyLetter })} className="shrink-0">
+          <span
+            data-testid="match-lobby"
+            aria-hidden="true"
+            className={cn(
+              "flex size-5 items-center justify-center rounded font-display text-label font-extrabold",
+              lobbyAccent.bar,
+              "text-[color:var(--aqt-bg)]"
+            )}
+          >
+            {lobbyLetter}
+          </span>
+        </IconTooltip>
       ) : null}
       <div className="relative h-8 w-14 shrink-0 overflow-hidden rounded-md border border-[color:var(--aqt-border-2)] bg-[linear-gradient(135deg,var(--aqt-card-2),var(--aqt-bg-2))]">
         {match.map_image_path ? (
@@ -157,16 +160,18 @@ function MatchHistoryRow({
       </div>
       {canUndo ? (
         <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Undo this match"
-            disabled={undoing}
-            onClick={() => setUndoOpen(true)}
-          >
-            {undoing ? <Spinner /> : <Undo2 className="size-4" aria-hidden="true" />}
-          </Button>
+          <IconTooltip control label="Undo this match" hint="Removes it from the history">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Undo this match"
+              disabled={undoing}
+              onClick={() => setUndoOpen(true)}
+            >
+              {undoing ? <Spinner /> : <Undo2 className="size-4" aria-hidden="true" />}
+            </Button>
+          </IconTooltip>
           <ConfirmDialog
             open={undoOpen}
             onOpenChange={setUndoOpen}
