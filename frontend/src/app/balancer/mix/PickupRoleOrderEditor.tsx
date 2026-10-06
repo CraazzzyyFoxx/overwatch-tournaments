@@ -10,7 +10,8 @@ import { rectSortingStrategy } from "@dnd-kit/sortable";
 import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Switch } from "@/components/ui/switch";
-import { OW_REFERENCE_GRID } from "@/lib/divisions/grid";
+import DivisionIcon from "@/components/DivisionIcon";
+import { OW_REFERENCE_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { ROLE_LABELS, getRoleIconName, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 
@@ -182,7 +183,7 @@ function SortableRoleCard({
         ROLE_RANK_ACCENTS[role]?.row
       )}
     >
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-1">
         <SortableGrip
           handleProps={handleProps}
           label={`Reorder ${ROLE_LABELS[role]} for ${label}`}
@@ -209,9 +210,9 @@ function SortableRoleCard({
  * Where the rank is editable (`rank.onChange`), the field edits the *effective*
  * rank — what balance will actually use — rather than only this host's own
  * entry, because a host reads the number they see and expects to be able to
- * correct it. Where it is not, the same number is printed with its layer: a
- * player must be able to see why the balancer seats them where it does without
- * being handed a control that would 422.
+ * correct it. Where it is not, the same number is printed as a crest beside
+ * the role name: a player must see why the balancer seats them where it does,
+ * and a boxed number under it read as a field they were expected to fill in.
  */
 function RoleCardBody({
   role,
@@ -233,8 +234,10 @@ function RoleCardBody({
 }>) {
   const accent = ROLE_RANK_ACCENTS[role] ?? NEUTRAL_RANK_ACCENT;
 
+  const readOnly = rank.onChange == null;
+
   return (
-    <div className="min-w-0 flex-1 space-y-2">
+    <div className={cn("min-w-0 flex-1", !readOnly && "space-y-2")}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <PlayerRoleIcon role={getRoleIconName(role)} size={15} decorative />
@@ -258,42 +261,29 @@ function RoleCardBody({
           ) : null}
         </div>
 
-        <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2">
-          <Switch
-            checked={isOn}
-            disabled={disabled}
-            aria-label={`${ROLE_LABELS[role]} for ${label}`}
-            onCheckedChange={onToggle}
-            className="h-4 w-7 [&>span]:size-3 [&>span]:data-[state=checked]:translate-x-3"
-          />
-          <span
-            className={cn(
-              "text-label font-semibold uppercase tracking-label",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]"
-            )}
-          >
-            {isOn ? "Active" : "Off"}
-          </span>
+        <div className="flex items-center gap-2">
+          {readOnly ? <RankChip rank={rank} active={isOn} accentText={accent.text} /> : null}
+          <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2">
+            <Switch
+              checked={isOn}
+              disabled={disabled}
+              aria-label={`${ROLE_LABELS[role]} for ${label}`}
+              onCheckedChange={onToggle}
+              className="h-4 w-7 [&>span]:size-3 [&>span]:data-[state=checked]:translate-x-3"
+            />
+            <span
+              className={cn(
+                "text-label font-semibold uppercase tracking-label",
+                isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]"
+              )}
+            >
+              {isOn ? "Active" : "Off"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {rank.onChange == null ? (
-        <div className="flex h-8 items-center gap-2 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5">
-          <span
-            className={cn(
-              "text-xs font-semibold tabular-nums",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]"
-            )}
-          >
-            {rank.rankValue ?? "—"}
-          </span>
-          {rank.sourceLabel ? (
-            <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-              {rank.sourceLabel}
-            </span>
-          ) : null}
-        </div>
-      ) : (
+      {rank.onChange == null ? null : (
         <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
           <RoleRankControls
             rankValue={rank.rankValue}
@@ -311,5 +301,39 @@ function RoleCardBody({
         </div>
       )}
     </div>
+  );
+}
+
+/** A rank nobody here may change: the OW crest and the number, no field around them. */
+function RankChip({
+  rank,
+  active,
+  accentText
+}: Readonly<{ rank: PickupRoleRank; active: boolean; accentText: string }>) {
+  // The global OW grid: a mix's ranks resolve against it (`workspace_id=None`).
+  const division = resolveDivisionFromRank(OW_REFERENCE_GRID, rank.rankValue);
+  const divisionLabel = getDivisionLabel(OW_REFERENCE_GRID, division);
+  const title = [divisionLabel, rank.sourceLabel].filter(Boolean).join(" · ");
+
+  return (
+    <span className="flex items-center gap-1.5" title={title || undefined}>
+      {division != null ? (
+        <DivisionIcon
+          division={division}
+          tournamentGrid={OW_REFERENCE_GRID}
+          width={20}
+          height={20}
+          className={cn("size-5 object-contain", !active && "opacity-50")}
+        />
+      ) : null}
+      <span
+        className={cn(
+          "text-xs font-semibold tabular-nums",
+          active ? accentText : "text-[color:var(--aqt-fg-dim)]"
+        )}
+      >
+        {rank.rankValue ?? "—"}
+      </span>
+    </span>
   );
 }

@@ -6822,7 +6822,6 @@
       "title": "Your seat",
       "join": "Join this mix",
       "leave": "Leave",
-      "saveRoles": "Save roles",
       "seat": {
         "pool": "You are in the pool",
         "benched": "You are on the bench — the host moves you into the pool",

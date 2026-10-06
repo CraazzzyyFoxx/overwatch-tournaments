@@ -85,7 +85,6 @@ const onPatchPlayer = vi.fn();
 const onClear = vi.fn();
 const onRemovePlayer = vi.fn();
 const onOpenPlayer = vi.fn();
-const onOpenPool = vi.fn();
 const onApplyRotationHints = vi.fn();
 
 function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
@@ -136,7 +135,6 @@ async function mount(
         onClear={onClear}
         onRemovePlayer={onRemovePlayer}
         onOpenPlayer={onOpenPlayer}
-        onOpenPool={onOpenPool}
         onApplyRotationHints={onApplyRotationHints}
         applyingHints={props.applyingHints ?? false}
       />,
@@ -190,7 +188,6 @@ beforeEach(() => {
   onClear.mockReset();
   onRemovePlayer.mockReset();
   onOpenPlayer.mockReset();
-  onOpenPool.mockReset();
   onApplyRotationHints.mockReset();
   dndSpies.useDraggable.mockClear();
   dndSpies.useDroppable.mockClear();
@@ -496,14 +493,6 @@ describe("PickupLobbyPanel", () => {
     expect(byName(scope, "Advanced settings for Aria#1111")).not.toBeNull();
   });
 
-  it("hands adding players back to the pool", async () => {
-    const scope = await mount([row()]);
-
-    await click(byName(scope, "Add players →"));
-
-    expect(onOpenPool).toHaveBeenCalledTimes(1);
-  });
-
   it("confirms before emptying the lobby", async () => {
     const scope = await mount([
       row(),
@@ -534,7 +523,6 @@ describe("PickupLobbyPanel", () => {
     const scope = await mount([row()], { canWrite: false });
 
     expect(byName(scope, "Empty the lobby")).toBeNull();
-    expect(byName(scope, "Add players →")).toBeNull();
     expect(byName(scope, "Remove Aria#1111 from this mix")).toBeNull();
     expect(
       byLabel(scope, "Tank for Aria#1111, first choice, 2400 points")?.hasAttribute("disabled"),

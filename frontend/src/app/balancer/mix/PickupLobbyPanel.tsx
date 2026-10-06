@@ -11,11 +11,7 @@ import {
 import { AlertTriangle, Trash2, Wand2 } from "lucide-react";
 
 import { ICON_BUTTON_CLASS, PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
-import {
-  CAPTION_CLASS,
-  CARD_TITLE_CLASS,
-  EYEBROW_CLASS
-} from "@/app/balancer/mix/pickup-chrome";
+import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -57,7 +53,6 @@ type PickupLobbyPanelProps = {
   onClear: () => void;
   onRemovePlayer: (workspaceMemberId: number) => void;
   onOpenPlayer: (workspaceMemberId: number) => void;
-  onOpenPool: () => void;
   /** Fires every actionable rotation hint at once (see `computeRotationHintPatches`). */
   onApplyRotationHints: () => void;
   applyingHints: boolean;
@@ -119,7 +114,6 @@ export function PickupLobbyPanel({
   onClear,
   onRemovePlayer,
   onOpenPlayer,
-  onOpenPool,
   onApplyRotationHints,
   applyingHints,
 }: Readonly<PickupLobbyPanelProps>) {
@@ -168,18 +162,6 @@ export function PickupLobbyPanel({
           {summary.benched > 0 ? ` \u00B7 ${summary.benched} benched` : ""}
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {canWrite ? (
-            <button
-              type="button"
-              onClick={onOpenPool}
-              className={cn(
-                EYEBROW_CLASS,
-                "rounded px-1 tracking-label text-[color:var(--aqt-teal)] transition-colors hover:text-[color:color-mix(in_srgb,var(--aqt-teal)_80%,white)]",
-              )}
-            >
-              Add players &rarr;
-            </button>
-          ) : null}
           {canWrite && rotation.length > 0 ? (
             <Button
               type="button"
@@ -205,7 +187,7 @@ export function PickupLobbyPanel({
           {canWrite && rows.length > 0 ? (
             <>
               {/* Icon-only: the confirm dialog already spells the action out in
-                  full, and a text button here competed with Add players. */}
+                  full. */}
               <Button
                 type="button"
                 variant="ghost"

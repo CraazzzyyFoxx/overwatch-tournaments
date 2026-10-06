@@ -482,10 +482,8 @@ export function usePickupMix(
   const updateMySeat = useMutation({
     mutationFn: (input: PickupMySeatInput) =>
       customGameService.updateMySeat(workspaceId, selectedGameId as number, input),
-    onSuccess: (state) => {
-      applySeat(state);
-      notify.success("Roles saved");
-    },
+    // Every toggle writes, so success is silent: the cards already show it.
+    onSuccess: applySeat,
     onError: (error) => notify.apiError(error),
   });
 

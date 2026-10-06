@@ -216,7 +216,6 @@ export default function BalancerPickupMixPage() {
               onClear={() => setRoster.mutate([])}
               onRemovePlayer={togglePoolMember}
               onOpenPlayer={setOpenPlayerId}
-              onOpenPool={() => setIsPoolOpen(true)}
               onApplyRotationHints={() => applyRotationHints.mutate()}
               applyingHints={applyRotationHints.isPending}
             />
