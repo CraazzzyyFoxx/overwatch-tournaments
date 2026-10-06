@@ -201,6 +201,7 @@ export function PickupMySeatPanel({
             isFlex={draft.isFlex}
             disabled={!editable || saving}
             label="you"
+            layout="grid"
             onReorder={(order) => commit({ ...draft, order })}
             onToggle={(role) => commit({ ...draft, order: toggleRole(draft.order, role) })}
             onFlexChange={(isFlex) => commit({ ...draft, isFlex })}

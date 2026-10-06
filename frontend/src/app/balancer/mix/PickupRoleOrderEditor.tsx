@@ -46,6 +46,9 @@ type PickupRoleOrderEditorProps = {
   onToggle: (role: RoleCode) => void;
   onFlexChange: (next: boolean) => void;
   rankFor: (role: RoleCode) => PickupRoleRank;
+  /** `grid`: 2x2 once the container fits two cards (the player's seat panel).
+   * `list`: one column at any width (the host's sheet, where the rank fields need the room). */
+  layout?: "grid" | "list";
 };
 
 /**
@@ -67,15 +70,15 @@ export function PickupRoleOrderEditor({
   onReorder,
   onToggle,
   onFlexChange,
-  rankFor
+  rankFor,
+  layout = "list"
 }: Readonly<PickupRoleOrderEditorProps>) {
   const offRoles = LINEUP_ROLES.filter((role) => !order.includes(role));
 
   return (
-    // 2x2 once the container fits two cards (the mix panel); a narrow sheet stays one column.
     // `contents` on the lists lets their cards sit in this grid directly.
     <div className="@container">
-      <div className="grid gap-2 @xl:grid-cols-2">
+      <div className={cn("grid gap-2", layout === "grid" && "@xl:grid-cols-2")}>
         <div
           className={cn(
             "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
@@ -108,7 +111,7 @@ export function PickupRoleOrderEditor({
           items={order}
           getId={(role) => role}
           onReorder={onReorder}
-          strategy={rectSortingStrategy}
+          strategy={layout === "grid" ? rectSortingStrategy : undefined}
           className="contents"
         >
           {(role, index) => (
