@@ -7,8 +7,9 @@ discord-service swaps both for the application emoji uploaded under
 prod bots are different applications with different emoji ids, so no id ever
 leaves the bot; the name is the whole contract.
 
-A division badge is ``div_<tier slug>`` (``div_gold_3``) and has no Unicode
-fallback: a workspace grid with custom tier slugs simply shows no badge.
+A rank badge is ``div_<tier slug>`` of the Overwatch ladder (``div_gold_3``,
+pictures in the repo's ``static/divisions``) and has no Unicode fallback: until
+it is uploaded the rank shows as its name alone.
 """
 
 from __future__ import annotations

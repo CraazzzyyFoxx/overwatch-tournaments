@@ -462,7 +462,7 @@ services:
       context: ./backend
       args:
         APP_PATH: discord
-    command: python -m src.tools.emoji_sync --grids
+    command: python -m src.tools.emoji_sync
     env_file:
       - ./backend/env/common.env
       - ./backend/env/discord.env
@@ -472,7 +472,7 @@ services:
     volumes:
       - ./backend/discord-service:/app/discord-service
       - ./backend/shared:/app/shared
-      - ./frontend/public/divisions:/frontend/public/divisions:ro
+      - ./static/divisions:/static/divisions:ro
     networks:
       - app-network
     healthcheck:

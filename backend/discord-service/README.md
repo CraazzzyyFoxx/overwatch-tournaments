@@ -177,27 +177,21 @@ reaction matching its current state — the legacy ✅ / ⚠️ / ❌ included.
 
 Run from `backend/discord-service` with the service env (REST only, safe beside the live bot):
 
-- `python -m src.tools.emoji_sync [--dry-run] [--dir PATH] [--grids]` — uploads every missing
+- `python -m src.tools.emoji_sync [--dry-run] [--dir PATH]` — uploads every missing
   `owt_<name>` application emoji: the set in `assets/emoji/<name>.png|gif|webp` (rendered by
   `node frontend/scripts/gen-discord-emoji.mjs`: the site's role icons tinted with the role colours,
-  everything else lucide icons in the `--aqt-*` palette), plus the division badges from
-  `frontend/public/divisions/<slug>.png` (names from `shared/domain/discord_ui.py`; ≤ 256 KiB). An
-  existing name is never replaced — delete it in the portal first, which blanks it in messages
-  already posted. Once per application. Exits non-zero when Discord refused an upload; the Discord
-  calls go through the egress proxy, like the bot's.
+  everything else lucide icons in the `--aqt-*` palette), plus the Overwatch rank badges from the
+  repo's `static/divisions/<slug>.png` as `div_<slug>` (names from `shared/domain/discord_ui.py`;
+  ≤ 256 KiB). The seat panel badges a rank with the Overwatch ladder (`DEFAULT_GRID`: Bronze 5 ..
+  Champion 1), never with a workspace's own grid, whose tiers are bare numbers — so these 45 are the
+  only badges it needs. An existing name is never replaced — delete it in the portal first, which
+  blanks it in messages already posted. Once per application. Exits non-zero when Discord refused an
+  upload; the Discord calls go through the egress proxy, like the bot's.
   **Normally it runs as the one-shot `discord-emoji` compose service** (profile `tools`, so `up`
   never starts it): `ops/deploy/remote-deploy.sh` runs it on every release right after the
   migrations — non-fatal, a missing emoji only falls back to Unicode — and `make prod-discord-emoji`
-  / `make discord-emoji` run it by hand. It mounts the checkout's `frontend/public/divisions`, since
-  the bot image carries no frontend, and passes `--grids`.
-  `--grids` adds the badges no file in the repo carries: every tier of every **division grid** in the
-  database, uploaded as `div_<slug>` (the name `division_emoji` builds) from the tier's `icon_url`,
-  relative URLs resolved against `PUBLIC_SITE_URL` over plain HTTP — the site is ours, so the Discord
-  egress proxy is not used. A slug claimed by two different grids is uploaded once (first grid wins)
-  and warns with both grid ids; two versions of one grid repeating a slug is normal and silent. A
-  response over 256 KiB or without an `image/*` content type is skipped by name, and the plan warns
-  up front if the application would pass Discord's 2000-emoji cap. Needs database access; rerun it
-  after a workspace publishes a grid.
+  / `make discord-emoji` run it by hand. It mounts the checkout's `static/divisions`, which the bot
+  image does not carry.
 - `python -m src.tools.sync_commands [--guild ID]` — syncs `/mix`; `--guild` for an instant dev sync.
 - `python -m src.tools.preview --channel ID card.json ...` — posts `DiscordCard` JSON files through
   the real layout, to judge a design with the uploaded emoji.
@@ -291,8 +285,7 @@ actually changes behaviour:
 - `PARSER_URL` — base URL for the parser HTTP client. Retained by `ParserClientFactory`; see the
   operational note on the unexercised internal path.
 - `PUBLIC_SITE_URL` — from `common.env`; where button replies link back to (link Discord, notification
-  settings), and the base `emoji_sync --grids` resolves a tier's relative `icon_url` against. The same
-  value app-service renders the cards' own links from.
+  settings). The same value app-service renders the cards' own links from.
 - `GATEWAY_HEARTBEAT_PATH` — where the watchdog records a live gateway session and where the
   healthcheck reads it back (default `/tmp/discord-worker.alive`). Both ends read this one variable;
   override it only if `/tmp` is not writable.

@@ -23,6 +23,7 @@ from shared.core.enums import (
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
+from shared.division_grid import DEFAULT_GRID
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.roster_shape import resolve_roster_shape
 from shared.rbac import assign_workspace_system_role
@@ -936,8 +937,10 @@ class CustomGameService:
         ``ranks`` carries all three roles, ``None`` included: the Discord role
         select labels every option with a number or "no rank", and a sparse dict
         would make the bot guess. ``divisions`` is the same three roles read off
-        the workspace's grid -- the name and slug of the tier each rank lands
-        in, so the bot can badge a role without carrying a copy of the grid.
+        the Overwatch ladder (``DEFAULT_GRID``: Bronze 5 .. Champion 1), the
+        name and slug of the rank each value lands in -- the badges the bot
+        ships as emoji. Not the platform grid: its tiers are bare numbers
+        ("Division 1") that say nothing to a player reading Discord.
         ``unranked_roles`` is the narrower list the warning is built from -- the
         roles this player actually plays.
 
@@ -966,7 +969,7 @@ class CustomGameService:
             for role in REGISTRATION_ROLE_CODES:
                 rank = resolved.get((ctx.row.workspace_member_id, role))
                 ranks[role] = rank.value if rank is not None else None
-                tier = None if ranks[role] is None else grid.resolve_division(ranks[role])
+                tier = None if ranks[role] is None else DEFAULT_GRID.resolve_division(ranks[role])
                 divisions[role] = None if tier is None else {"name": tier.name, "slug": tier.slug}
             considered = list(stored) if explicit else list(REGISTRATION_ROLE_CODES)
             unranked = [role for role in considered if ranks.get(role) is None]
@@ -977,7 +980,7 @@ class CustomGameService:
                 "roles": list(stored) if explicit else None,
                 "is_flex": ctx.row.is_flex,
                 "ranks": ranks,
-                # The tier each of those ranks lands in on the workspace's grid.
+                # The Overwatch rank each of those values lands in.
                 "divisions": divisions,
                 # 0 | 1 while a balance seats them, ``null`` while it does not.
                 "current_lobby": next(

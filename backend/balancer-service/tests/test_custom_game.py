@@ -346,9 +346,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.load_member_user_ids = AsyncMock(return_value=set())
         self.ranks.resolve = AsyncMock(return_value={})
         self.ranks.set_ranks = AsyncMock(return_value={})
-        # Every rank lands in the same tier here: the seat dump only has to
-        # carry what the grid answered, not re-derive a division itself.
-        self.grid = SimpleNamespace(resolve_division=lambda _rank: _row(name="Золото 3", slug="gold-3"))
+        # The workspace grid only feeds the rank resolution, which is mocked
+        # above; its tiers are bare numbers, which is why the seat badge does
+        # not come from it (see test_self_state_badges_...).
+        self.grid = SimpleNamespace(resolve_division=lambda _rank: _row(name="Division 1", slug="division-1"))
         self._grid_patch = patch(
             "src.services.custom_game.get_effective_division_grid",
             new=AsyncMock(return_value=self.grid),
@@ -1133,8 +1134,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(state["self_signup"], "pool")
         self.assertIs(state["self_role_edit"], True)
 
-    async def test_self_state_badges_each_ranked_role_with_its_division(self) -> None:
-        """The bot shows a division badge per role and holds no copy of the grid."""
+    async def test_self_state_badges_each_ranked_role_with_its_overwatch_rank(self) -> None:
+        """The badge is the Overwatch rank the value lands in, not the platform
+        grid's numbered tier: "Diamond 4" means something in Discord, "Division 1" does not."""
         self.games.get.return_value = _game(self_signup="pool")
         self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
         self.workspace_members.get_by_player.return_value = _row(id=7, player_id=70)
@@ -1144,7 +1146,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(
             state["seat"]["divisions"],
-            {"tank": {"name": "Золото 3", "slug": "gold-3"}, "damage": None, "support": None},
+            {"tank": {"name": "Diamond 4", "slug": "diamond-4"}, "damage": None, "support": None},
         )
 
     async def test_self_state_says_which_lobby_this_player_sits_in(self) -> None:
