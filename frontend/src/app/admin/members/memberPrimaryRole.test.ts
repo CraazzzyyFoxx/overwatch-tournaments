@@ -18,7 +18,7 @@ describe("memberPrimaryRole", () => {
       memberPrimaryRole(
         member([
           { name: "caster", is_system: false },
-          { name: "member", is_system: true },
+          { name: "player", is_system: true },
           { name: "owner", is_system: true }
         ])
       )

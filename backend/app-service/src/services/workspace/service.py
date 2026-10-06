@@ -632,7 +632,7 @@ class WorkspaceService:
         await ensure_workspace_system_roles(session, workspace_id)
         if role_ids is not None:
             return role_ids
-        role = await get_workspace_system_role(session, workspace_id, role_name or "member")
+        role = await get_workspace_system_role(session, workspace_id, role_name or "player")
         if role is None:
             raise HTTPException(status_code=500, detail="Workspace system role is not configured")
         return [role.id]

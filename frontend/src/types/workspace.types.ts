@@ -303,7 +303,7 @@ export interface WorkspaceBranding {
   brand_destructive?: string | null;
 }
 
-export type WorkspaceSystemRole = "owner" | "admin" | "referee" | "host" | "member" | "player";
+export type WorkspaceSystemRole = "owner" | "admin" | "referee" | "host" | "player";
 
 export interface WorkspaceMember {
   id: number;

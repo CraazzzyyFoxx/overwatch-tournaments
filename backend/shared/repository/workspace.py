@@ -385,7 +385,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
     @staticmethod
     def _primary_role_rank(workspace_id: int) -> sa.ScalarSelect[typing.Any]:
         """Correlated scalar: the highest system-role rank the member's
-        ``auth.user`` holds in ``workspace_id`` (owner=0 … player=3, custom or
+        ``auth.user`` holds in ``workspace_id`` (owner=0 … player=4, custom or
         none -> ``ROLELESS_RANK``)."""
         rank_case = sa.case(
             *[(models.Role.name == name, idx) for idx, name in enumerate(WORKSPACE_SYSTEM_ROLE_NAMES)],

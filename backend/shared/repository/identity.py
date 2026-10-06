@@ -1025,7 +1025,7 @@ class UserRoleRepository:
         )
 
     async def grant_missing_workspace_member_role(self, session: AsyncSession, workspace_id: int) -> int:
-        """Grant the baseline ``member`` role to every auth-linked member of
+        """Grant the baseline ``player`` role to every auth-linked member of
         ``workspace_id`` whose auth user currently holds no role there.
 
         One set-based statement, and idempotent: the ``NOT EXISTS`` guard only
@@ -1043,7 +1043,7 @@ class UserRoleRepository:
             SELECT DISTINCT pu.auth_user_id, r.id
             FROM workspace_member wm
             JOIN players."user" pu ON pu.id = wm.player_id AND pu.auth_user_id IS NOT NULL
-            JOIN auth.roles r ON r.workspace_id = wm.workspace_id AND r.name = 'member'
+            JOIN auth.roles r ON r.workspace_id = wm.workspace_id AND r.name = 'player'
             WHERE wm.workspace_id = :workspace_id
               AND NOT EXISTS (
                 SELECT 1 FROM auth.user_roles ur

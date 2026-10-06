@@ -303,7 +303,7 @@ class AuthMergeTests(IsolatedAsyncioTestCase):
         self.assertIsNotNone(member)
 
     async def test_keep_transfers_or_merges_operational_workspace_membership(self):
-        role = models.Role(name="member", workspace_id=self.workspace.id)
+        role = models.Role(name="host", workspace_id=self.workspace.id)
         self.session.add(role)
         await self.session.flush()
         grants = models.AuthUser.__table__.metadata.tables["auth.user_roles"]
@@ -341,7 +341,7 @@ class AuthMergeTests(IsolatedAsyncioTestCase):
         self.assertIsNotNone(member)
 
     async def test_keep_merges_role_into_existing_workspace_membership(self):
-        role = models.Role(name="member", workspace_id=self.workspace.id)
+        role = models.Role(name="host", workspace_id=self.workspace.id)
         self.session.add_all(
             [
                 role,

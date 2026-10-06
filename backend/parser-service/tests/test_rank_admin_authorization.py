@@ -64,8 +64,8 @@ class CatalogTests(TestCase):
         self.assertIn("rank.read", granted)
         self.assertIn("rank.update", granted)
 
-    def test_plain_member_does_not_get_collection_health(self) -> None:
-        self.assertNotIn("rank.read", permission_names_for_workspace_role("member"))
+    def test_plain_player_does_not_get_collection_health(self) -> None:
+        self.assertNotIn("rank.read", permission_names_for_workspace_role("player"))
 
 
 class AuthorizeTests(TestCase):

@@ -79,7 +79,7 @@ vi.mock("@/lib/notify", () => ({
 // five system names the row editor offers.
 const ROLES = [
   { id: 3, name: "admin", is_system: true, description: null },
-  { id: 4, name: "member", is_system: true, description: null },
+  { id: 4, name: "player", is_system: true, description: null },
   { id: 9, name: "caster", is_system: false, description: "Streams matches" }
 ];
 
@@ -90,7 +90,7 @@ const MEMBER: WorkspaceMember = {
   username: "vitorio",
   email: "vitorio@example.com",
   rbac_roles: [
-    { id: 4, name: "member", is_system: true },
+    { id: 4, name: "player", is_system: true },
     { id: 9, name: "caster", is_system: false }
   ]
 };
@@ -188,7 +188,7 @@ describe("admin Members", () => {
     permitted = false;
     const container = await mount();
 
-    expect(container.textContent).toContain("member");
+    expect(container.textContent).toContain("player");
     expect(
       container.querySelector('[aria-label="Workspace role for vitorio"]')
     ).toBeNull();

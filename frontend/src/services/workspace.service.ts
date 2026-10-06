@@ -167,7 +167,7 @@ export default class workspaceService {
     return page.results;
   }
 
-  /** Grant the baseline "member" role to every member currently without a role. */
+  /** Grant the baseline "player" role to every member currently without a role. */
   static async autofillMemberRoles(workspaceId: number): Promise<{ assigned: number }> {
     return apiFetch(`/api/v1/workspaces/${workspaceId}/members/autofill-roles`, {
       method: "POST"

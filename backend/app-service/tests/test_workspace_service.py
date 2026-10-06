@@ -236,7 +236,7 @@ class WorkspaceServiceTests(IsolatedAsyncioTestCase):
             patch.object(workspace_service, "get_workspace_system_role", AsyncMock(return_value=role)) as get_role,
         ):
             result = await workspaces.resolve_member_role_ids(session, 2, role_ids=None, role_name=None)
-        get_role.assert_awaited_once_with(session, 2, "member")
+        get_role.assert_awaited_once_with(session, 2, "player")
         self.assertEqual([4], result)
 
 

@@ -24,4 +24,4 @@ def test_self_create_is_a_separate_permission_from_the_workspace_scoped_create()
 def test_the_workspace_member_role_confers_no_creation_right():
     """A plain member holds read-only grants; creation is allow-by-default for
     every account and gated only by the deny overlay, never by a role."""
-    assert "workspace.self_create" not in permission_names_for_workspace_role("member")
+    assert "workspace.self_create" not in permission_names_for_workspace_role("player")

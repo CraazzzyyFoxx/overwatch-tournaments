@@ -3627,7 +3627,7 @@
       "summary": "Update workspace member"
     },
     "rpc.app.workspaces.members_autofill_roles": {
-      "description": "Permission: workspace `workspace_member.update`. Grants the baseline 'member' role to every auth-linked member of the workspace that currently has no role; idempotent, returns the count assigned.",
+      "description": "Permission: workspace `workspace_member.update`. Grants the baseline 'player' role to every auth-linked member of the workspace that currently has no role; idempotent, returns the count assigned.",
       "response": {
         "array": false,
         "ref": "app.WorkspaceMemberAutofillResult"
