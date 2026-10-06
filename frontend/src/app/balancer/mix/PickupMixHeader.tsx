@@ -279,7 +279,7 @@ export function PickupMixHeader({
               ) : null}
               {canWrite ? (
                 <DropdownMenuItem onSelect={onOpenAccess}>
-                  <UserCog className="mr-2 size-3.5" aria-hidden="true" />
+                  <UserCog aria-hidden="true" />
                   {th("access")}
                 </DropdownMenuItem>
               ) : null}
@@ -287,11 +287,11 @@ export function PickupMixHeader({
                 <>
                   {canWrite ? <DropdownMenuSeparator /> : null}
                   <DropdownMenuItem
-                    className="text-rose-300 focus:text-rose-200"
+                    className="text-danger focus:text-danger"
                     disabled={deleting}
                     onSelect={() => setDeleteOpen(true)}
                   >
-                    <Trash2 className="mr-2 size-3.5" aria-hidden="true" />
+                    <Trash2 aria-hidden="true" />
                     {th("delete")}
                   </DropdownMenuItem>
                 </>

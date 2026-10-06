@@ -670,16 +670,20 @@
   }
 }
 
-/* ── Popover surface (design request) ──────────────────────────────────────
-   The shadcn <Popover> inherited the brand-tinted --popover / --border tokens,
-   which read teal ("бирюзовый") on branded workspaces. Repaint it from global
-   tokens only: fill = page background, white text, and a contrasting neutral
-   (non-teal) rim so the panel stays distinct against the page. Scoped to the
-   Popover via its unique transform-origin utility, so dropdown / select /
-   context-menu surfaces keep their own styling. No component-code
-   changes. Unlayered → wins over the @layer base/utilities token defaults and
-   over any inherited (.dark or .site-theme brand) --popover value. */
-.origin-\[--radix-popover-content-transform-origin\] {
+/* ── Overlay surface (design request) ──────────────────────────────────────
+   The shadcn overlays inherited the brand-tinted --popover / --border tokens,
+   which read teal ("бирюзовый") on branded workspaces. Repaint them from
+   global tokens only: fill = page background, white text, and a contrasting
+   neutral (non-teal) rim so the panel stays distinct against the page.
+   Every floating panel shares it -- a popover and a menu opened side by side
+   in one toolbar must not read as two design systems. Scoped via each
+   primitive's unique transform-origin utility, so no component-code changes.
+   Unlayered → wins over the @layer base/utilities token defaults and over any
+   inherited (.dark or .site-theme brand) --popover value. */
+.origin-\[--radix-popover-content-transform-origin\],
+.origin-\[--radix-dropdown-menu-content-transform-origin\],
+.origin-\[--radix-context-menu-content-transform-origin\],
+.origin-\[--radix-select-content-transform-origin\] {
   --popover: var(--background);
   --popover-foreground: 0 0% 100%;
   border-color: hsl(0 0% 100% / 0.16);
