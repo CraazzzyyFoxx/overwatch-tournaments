@@ -359,7 +359,7 @@ describe("PickupAddPlayersDialog", () => {
     expect(inherited).not.toBeNull();
     expect(inherited?.className).toContain("opacity-45");
     // The host's own entry keeps the plain label and full opacity.
-    const own = byLabel("DPS rank for Aria#1111");
+    const own = byLabel("Damage rank for Aria#1111");
     expect(own).not.toBeNull();
     expect(own?.className).not.toContain("opacity-45");
   });

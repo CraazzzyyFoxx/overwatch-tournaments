@@ -395,7 +395,7 @@ describe("participants pool", () => {
     const marked = damage?.querySelector<HTMLElement>("[data-flex-mark]");
     const link = marked?.querySelector("a");
     expect(link?.getAttribute("title")).toContain("Plays several roles");
-    expect(link?.getAttribute("title")).toContain("DPS");
+    expect(link?.getAttribute("title")).toContain("Damage");
     expect(link?.getAttribute("title")).toContain("Support");
     const supportLink = support?.querySelector<HTMLElement>("[data-flex-mark] a");
     const [primaryLink, secondaryLink] = link?.className.includes("font-medium")

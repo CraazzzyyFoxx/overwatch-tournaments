@@ -201,7 +201,7 @@
     },
     "roles": {
       "tank": "Tank",
-      "damage": "DPS",
+      "damage": "Damage",
       "support": "Support",
       "flex": "Flex"
     },

@@ -430,7 +430,7 @@ describe("PickupLobbyPanel", () => {
     const scope = await mount([row({ roles: ["tank", "damage", "support"] })]);
 
     expect(byLabel(scope, "Tank for Aria#1111, first choice, 2400 points")).not.toBeNull();
-    expect(byLabel(scope, "DPS for Aria#1111, also plays, 2600 points")).not.toBeNull();
+    expect(byLabel(scope, "Damage for Aria#1111, also plays, 2600 points")).not.toBeNull();
     expect(byLabel(scope, "Support for Aria#1111, also plays, 2500 points")).not.toBeNull();
   });
 
