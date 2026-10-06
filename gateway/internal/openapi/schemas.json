@@ -554,7 +554,7 @@
       "summary": "Update one account's Discord DM preferences"
     },
     "rpc.app.admin_user_notifications_get": {
-      "description": "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent \u2014 it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.",
+      "description": "Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs handed to the bot for them, newest first, each with how far it got (`pending`, `posted`, `failed`, or `lost` when the broker dropped it). Skips are never recorded, so an empty `recent_deliveries` means nothing was sent \u2014 it is not a gap in the record. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.",
       "response": {
         "array": false,
         "ref": "app.AdminUserNotificationsRead"
@@ -12303,7 +12303,7 @@
       "type": "object"
     },
     "app.AdminUserNotificationsRead": {
-      "description": "One *other* account's notification state, for the admin inspector.\n\nA superset of ``NotificationPreferencesRead`` rather than a sibling of it:\nthe operator's question is \"why has this person not heard from us\", and the\nswitches alone cannot answer it -- an unlinked Discord, a badge nobody\nclears and an empty delivery ledger are three different diagnoses.",
+      "description": "One *other* account's notification state, for the admin inspector.\n\nA superset of ``NotificationPreferencesRead`` rather than a sibling of it:\nthe operator's question is \"why has this person not heard from us\", and the\nswitches alone cannot answer it -- an unlinked Discord, a badge nobody\nclears and nothing ever sent are three different diagnoses.",
       "properties": {
         "discord_dm": {
           "$ref": "#/components/schemas/app.NotificationDmGroups"
@@ -15125,7 +15125,7 @@
       "type": "object"
     },
     "app.NotificationDeliveryItem": {
-      "description": "One row of the delivery ledger -- a message actually handed to Discord.\n\nSkips are not recorded upstream (preference off, nothing linked), so an\nempty list here means \"we sent nothing\", never \"we sent something and did\nnot write it down\" -- which is the whole question the account inspector is\nopened to answer.",
+      "description": "One Discord DM the platform handed to the bot for this account.\n\nSkips are not recorded upstream (preference off, nothing linked), so an\nempty list here means \"we sent nothing\", never \"we sent something and did\nnot write it down\" -- which is the whole question the account inspector is\nopened to answer. ``status`` says how far it got: ``posted`` reached\nDiscord, ``failed`` was refused (the user blocked DMs), ``pending`` is on\nits way and ``lost`` never will be -- the broker dropped the command.",
       "properties": {
         "channel": {
           "title": "Channel",
@@ -15156,6 +15156,10 @@
           "default": null,
           "title": "Notification Id"
         },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
         "workspace_id": {
           "anyOf": [
             {
@@ -15173,6 +15177,7 @@
         "id",
         "channel",
         "kind",
+        "status",
         "created_at"
       ],
       "title": "NotificationDeliveryItem",

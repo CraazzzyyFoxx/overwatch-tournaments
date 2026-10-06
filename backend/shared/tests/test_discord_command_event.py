@@ -40,7 +40,7 @@ class DiscordCommandEventTests(TestCase):
         """A message the platform cannot address later is a message it cannot delete."""
         self.assertEqual(DiscordCommandEvent(action="post_message", channel_id=1, card=CARD, message_ref=3).card, CARD)
         self.assertEqual(DiscordCommandEvent(action="send_dm", discord_user_id=42, card=CARD, message_ref=3).card, CARD)
-        self.assertEqual(DiscordCommandEvent(action="edit_message", message_ref=3, card=CARD).message_ref, 3)
+        self.assertEqual(DiscordCommandEvent(action="edit_message", message_ref=3).message_ref, 3)
         self.assertEqual(DiscordCommandEvent(action="delete_message", message_ref=3).message_ref, 3)
 
         for missing in (
@@ -50,7 +50,7 @@ class DiscordCommandEventTests(TestCase):
             {"action": "send_dm", "card": CARD, "message_ref": 3},
             {"action": "send_dm", "discord_user_id": 42, "card": CARD},
             {"action": "edit_message", "card": CARD},
-            {"action": "edit_message", "message_ref": 3},
+            {"action": "edit_message", "message_ref": 3, "card": CARD},
             {"action": "delete_message"},
         ):
             with self.assertRaises(ValidationError, msg=missing):

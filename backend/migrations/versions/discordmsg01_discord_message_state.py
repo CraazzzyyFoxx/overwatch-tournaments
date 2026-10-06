@@ -44,9 +44,7 @@ def upgrade() -> None:
 
     op.add_column("discord_message", sa.Column("subject", sa.String(length=160), nullable=True))
     op.add_column("discord_message", sa.Column("slot", sa.String(length=64), nullable=True))
-    op.add_column(
-        "discord_message", sa.Column("status", sa.String(length=16), nullable=False, server_default="posted")
-    )
+    op.add_column("discord_message", sa.Column("status", sa.String(length=16), nullable=False, server_default="posted"))
     op.add_column("discord_message", sa.Column("discord_channel_id", sa.BigInteger(), nullable=True))
     op.add_column("discord_message", sa.Column("message_id", sa.BigInteger(), nullable=True))
     op.add_column("discord_message", sa.Column("error", sa.Text(), nullable=True))
