@@ -39,12 +39,12 @@ describe("interpolated message keys", () => {
     }
   });
 
-  it("every mix self-signup mode has a mixes.self.signup label in both locales", () => {
+  it("every mix self-signup mode has a mixes.self.signupState label in both locales", () => {
     // The `custom_game.self_signup` CHECK constraint is the contract; the header
-    // renders each mode as `t(`signup.${mode}`)`.
+    // renders each mode as `t(`signupState.${mode}`)`.
     const modes = ["closed", "pool", "benched"];
     for (const dict of [en, ru]) {
-      const labels: Record<string, unknown> = dict.mixes.self.signup;
+      const labels: Record<string, unknown> = dict.mixes.self.signupState;
       expect(modes.filter((value) => !(value in labels))).toEqual([]);
     }
   });

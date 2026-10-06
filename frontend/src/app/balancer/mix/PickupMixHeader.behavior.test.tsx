@@ -37,6 +37,7 @@ const onPostSignup = vi.fn();
 const onLobbyCountChange = vi.fn();
 const onShuffleAll = vi.fn();
 const onDeleteDiscordPost = vi.fn();
+const onDeleteMix = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -92,7 +93,7 @@ const roots: { unmount: () => void }[] = [];
 
 async function mount(
   currentGame: CustomGame | undefined,
-  props: { canWrite?: boolean; gameLoading?: boolean } = {}
+  props: { canWrite?: boolean; gameLoading?: boolean; canDelete?: boolean } = {}
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -106,6 +107,8 @@ async function mount(
         gameLoading={props.gameLoading ?? false}
         onOpenPool={onOpenPool}
         onOpenAccess={onOpenAccess}
+        canDelete={props.canDelete ?? false}
+        onDeleteMix={onDeleteMix}
         onSetSelfService={onSetSelfService}
         onPostSignup={onPostSignup}
         settingLobbyCount={false}
@@ -150,7 +153,27 @@ beforeEach(() => {
   onLobbyCountChange.mockReset();
   onShuffleAll.mockReset();
   onDeleteDiscordPost.mockReset();
+  onDeleteMix.mockReset();
 });
+
+// The `⋯` menu: what a host sets once per mix, and the irreversible delete.
+// Radix portals it to `document.body`.
+function moreTrigger(scope: ParentNode) {
+  return scope.querySelector('[aria-label="more"]');
+}
+
+function menuItem(text: string) {
+  return (
+    [...document.querySelectorAll('[role="menuitem"], [role="menuitemradio"]')].find(
+      (node) => node.textContent?.trim() === text
+    ) ?? null
+  );
+}
+
+async function chooseMore(scope: ParentNode, item: string) {
+  await click(moreTrigger(scope));
+  await click(menuItem(item));
+}
 
 describe("PickupMixHeader", () => {
   it("names the open mix with its id", async () => {
@@ -169,9 +192,13 @@ describe("PickupMixHeader", () => {
   });
 
   it("gives a viewer who cannot write no way to write", async () => {
-    const scope = await mount(game(), { canWrite: false });
+    const scope = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }), {
+      canWrite: false
+    });
 
     expect(byName(scope, "Add players")).toBeNull();
+    expect(byName(scope, "shuffleAll")).toBeNull();
+    expect(moreTrigger(scope)).toBeNull();
     // Reading which mix is open is not a write.
     expect(scope.textContent).toContain("Thursday scrim");
   });
@@ -190,42 +217,30 @@ describe("PickupMixHeader", () => {
     expect(onOpenPool).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the access dialog on request", async () => {
-    const scope = await mount(game());
-
-    await click(scope.querySelector('[aria-label="Manage access"]'));
+  it("opens the access dialog from the more menu", async () => {
+    await chooseMore(await mount(game()), "access");
 
     expect(onOpenAccess).toHaveBeenCalledTimes(1);
   });
 
-  it("hides the access control from a viewer who cannot write", async () => {
-    const scope = await mount(game(), { canWrite: false });
-
-    expect(scope.querySelector('[aria-label="Manage access"]')).toBeNull();
-  });
-
-  // The lobby controls. `next-intl` is mocked to echo the key, so every label
-  // below is the message key rather than the rendered sentence.
-  it("opens a second lobby on request", async () => {
-    const scope = await mount(game());
-
-    await click(byName(scope, "2"));
+  it("opens a second lobby from the more menu", async () => {
+    await chooseMore(await mount(game()), "count(2)");
 
     expect(onLobbyCountChange).toHaveBeenCalledWith(2);
   });
 
   it("does not re-send the lobby count the mix already runs", async () => {
-    const scope = await mount(game());
-
-    await click(byName(scope, "1"));
+    await chooseMore(await mount(game()), "count(1)");
 
     expect(onLobbyCountChange).not.toHaveBeenCalled();
   });
 
   it("asks before dropping a lobby, because its balance goes with it", async () => {
-    const scope = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }));
+    await chooseMore(
+      await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] })),
+      "count(1)"
+    );
 
-    await click(byName(scope, "1"));
     expect(onLobbyCountChange).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
       "dropDescription"
@@ -233,6 +248,17 @@ describe("PickupMixHeader", () => {
 
     await click(byName(document, "dropConfirm"));
     expect(onLobbyCountChange).toHaveBeenCalledWith(1);
+  });
+
+  it("offers delete only to an admin, and only after confirming", async () => {
+    await click(moreTrigger(await mount(game())));
+    expect(menuItem("delete")).toBeNull();
+
+    await chooseMore(await mount(game(), { canDelete: true }), "delete");
+    expect(onDeleteMix).not.toHaveBeenCalled();
+
+    await click(byName(document, "Delete permanently"));
+    expect(onDeleteMix).toHaveBeenCalledTimes(1);
   });
 
   it("offers the shared reshuffle only once the mix runs two lobbies", async () => {
@@ -262,20 +288,11 @@ describe("PickupMixHeader", () => {
     await click(byName(document, "shuffleConfirm"));
     expect(onShuffleAll).toHaveBeenCalledTimes(1);
   });
-
-  it("gives a viewer no lobby controls at all", async () => {
-    const scope = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }), {
-      canWrite: false
-    });
-
-    expect(byName(scope, "shuffleAll")).toBeNull();
-    expect(byName(scope, "2")).toBeNull();
-  });
 });
 
-// The host's self-service switches, behind the Signup trigger. `next-intl` is
-// mocked to echo the key, so every label below is the message key rather than
-// the rendered sentence. The popover portals to `document.body`.
+// Who may sign up, behind the Signup trigger: open or closed first, then where
+// an open signup lands. `next-intl` is mocked to echo the key, so every label
+// below is the message key rather than the rendered sentence.
 function signupTrigger(scope: ParentNode) {
   return scope.querySelector('[aria-label^="signupTrigger"]');
 }
@@ -285,27 +302,60 @@ async function openSignup(scope: ParentNode) {
   return document;
 }
 
-describe("PickupMixHeader self-service", () => {
-  it("writes the signup mode the host picked", async () => {
+function radio(scope: ParentNode, name: string) {
+  return (
+    [...scope.querySelectorAll('[role="radio"]')].find(
+      (node) => node.textContent?.trim() === name
+    ) ?? null
+  );
+}
+
+describe("PickupMixHeader signup settings", () => {
+  it("reads the mix's state on the trigger", async () => {
+    const scope = await mount(game({ self_signup: "benched" }));
+
+    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe(
+      "signupTrigger(signupState.benched)"
+    );
+  });
+
+  it("opens a closed mix into the pool", async () => {
     const popover = await openSignup(await mount(game({ self_signup: "closed" })));
 
-    await click(byName(popover, "signup.pool"));
+    // Where an open signup lands means nothing while it is closed.
+    expect(radio(popover, "signup.pool")).toBeNull();
+
+    await click(radio(popover, "signupOpen"));
 
     expect(onSetSelfService).toHaveBeenCalledWith({ self_signup: "pool" });
   });
 
-  it("shows the mode the mix is actually in, on the trigger and in the popover", async () => {
-    const scope = await mount(game({ self_signup: "benched" }));
+  it("moves an open signup between the pool and the bench", async () => {
+    const popover = await openSignup(await mount(game({ self_signup: "pool" })));
 
-    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe("signupTrigger(signup.benched)");
+    expect(radio(popover, "signupOpen")?.getAttribute("aria-checked")).toBe("true");
+    expect(radio(popover, "signup.pool")?.getAttribute("aria-checked")).toBe("true");
+    expect(popover.body.textContent).toContain("signupHint.pool");
 
-    const popover = await openSignup(scope);
-    const checked = [...popover.querySelectorAll('[role="radio"]')]
-      .filter((node) => node.getAttribute("aria-checked") === "true")
-      .map((node) => node.textContent?.trim());
+    await click(radio(popover, "signup.benched"));
 
-    expect(checked).toEqual(["signup.benched"]);
-    expect(popover.body.textContent).toContain("signupHint.benched");
+    expect(onSetSelfService).toHaveBeenCalledWith({ self_signup: "benched" });
+  });
+
+  it("closes an open signup, wherever it was landing", async () => {
+    const popover = await openSignup(await mount(game({ self_signup: "benched" })));
+
+    await click(radio(popover, "signupState.closed"));
+
+    expect(onSetSelfService).toHaveBeenCalledWith({ self_signup: "closed" });
+  });
+
+  it("does not re-send the state the mix is already in", async () => {
+    const popover = await openSignup(await mount(game({ self_signup: "benched" })));
+
+    await click(radio(popover, "signupOpen"));
+
+    expect(onSetSelfService).not.toHaveBeenCalled();
   });
 
   it("writes the role-edit switch on its own", async () => {
@@ -316,46 +366,18 @@ describe("PickupMixHeader self-service", () => {
     expect(onSetSelfService).toHaveBeenCalledWith({ self_role_edit: true });
   });
 
-  it("posts the signup card in the mode the mix is in", async () => {
-    const popover = await openSignup(await mount(game({ self_signup: "benched" })));
-
-    await click(byName(popover, "openInDiscord"));
-
-    expect(onPostSignup).toHaveBeenCalledWith("benched");
-  });
-
-  it("falls a closed mix back to the pool when posting", async () => {
-    const popover = await openSignup(await mount(game({ self_signup: "closed" })));
-
-    await click(byName(popover, "openInDiscord"));
-
-    expect(onPostSignup).toHaveBeenCalledWith("pool");
-  });
-
-  it("cannot post a signup card with no mix channel", async () => {
-    const popover = await openSignup(
-      await mount(
-        game({
-          settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: null }
-        })
-      )
-    );
-
-    const button = byName(popover, "openInDiscord");
-    expect(button?.hasAttribute("disabled")).toBe(true);
-    expect(button?.getAttribute("title")).toBe("noChannel");
-  });
-
   it("shows a viewer who cannot write none of it", async () => {
     const scope = await mount(game(), { canWrite: false });
 
     expect(signupTrigger(scope)).toBeNull();
+    expect(discordTrigger(scope)).toBeNull();
   });
 });
 
-// The signup post's state, on the trigger and inside the popover. The bot
-// answers asynchronously, so this is the only way a host learns a post
-// landed -- or why it did not -- and the only way to take one down.
+// Everything the mix has in Discord, behind one trigger that carries the
+// signup post's state. The bot answers asynchronously, so this is the only way
+// a host learns a post landed -- or why it did not -- and the only way to take
+// one down.
 function post(overrides: Partial<CustomGameDiscordPost> = {}): CustomGameDiscordPost {
   return {
     id: 1,
@@ -369,15 +391,77 @@ function post(overrides: Partial<CustomGameDiscordPost> = {}): CustomGameDiscord
   };
 }
 
-describe("PickupMixHeader signup post status", () => {
+function discordTrigger(scope: ParentNode) {
+  return scope.querySelector('[aria-label^="discord.trigger"]');
+}
+
+async function openDiscord(scope: ParentNode) {
+  await click(discordTrigger(scope));
+  return document;
+}
+
+describe("PickupMixHeader Discord signup post", () => {
+  it("names the button after what it does: a closed mix is opened into the pool", async () => {
+    const menu = await openDiscord(await mount(game({ self_signup: "closed" })));
+
+    expect(menu.body.textContent).toContain("discord.openHint");
+    await click(byName(menu, "discord.openAndPost"));
+
+    expect(onPostSignup).toHaveBeenCalledWith("pool");
+  });
+
+  it("posts in the mode the mix is in", async () => {
+    const menu = await openDiscord(await mount(game({ self_signup: "benched" })));
+
+    await click(byName(menu, "discord.post"));
+
+    expect(onPostSignup).toHaveBeenCalledWith("benched");
+  });
+
+  it("calls a post over a live one a re-post, and says it replaces it", async () => {
+    const menu = await openDiscord(
+      await mount(game({ self_signup: "pool", discord_posts: [post({ status: "posted" })] }))
+    );
+
+    expect(byName(menu, "discord.post")).toBeNull();
+    expect(menu.body.textContent).toContain("discord.repostHint");
+    await click(byName(menu, "discord.repost"));
+
+    expect(onPostSignup).toHaveBeenCalledWith("pool");
+  });
+
+  it("offers a plain post again once the last one failed", async () => {
+    const menu = await openDiscord(
+      await mount(game({ self_signup: "pool", discord_posts: [post({ status: "failed" })] }))
+    );
+
+    expect(byName(menu, "discord.post")).not.toBeNull();
+  });
+
+  it("says why there is no post button without a mix channel", async () => {
+    const menu = await openDiscord(
+      await mount(
+        game({
+          self_signup: "pool",
+          settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: null }
+        })
+      )
+    );
+
+    expect(byName(menu, "discord.post")).toBeNull();
+    expect(menu.body.textContent).toContain("noChannel");
+  });
+});
+
+describe("PickupMixHeader Discord post status", () => {
   async function status(scope: ParentNode) {
-    return (await openSignup(scope)).querySelector('[role="status"]');
+    return (await openDiscord(scope)).querySelector('[role="status"]');
   }
 
-  it("says nothing about a post that was never made", async () => {
+  it("says there is no post yet", async () => {
     const scope = await mount(game({ discord_posts: [] }));
 
-    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe("signupTrigger(signup.closed)");
+    expect(discordTrigger(scope)?.getAttribute("aria-label")).toBe("discord.trigger(post.none)");
     const region = await status(scope);
     expect(region?.textContent).toBe("");
     expect(region?.querySelector("a")).toBeNull();
@@ -395,9 +479,7 @@ describe("PickupMixHeader signup post status", () => {
       })
     );
 
-    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe(
-      "signupTriggerPost(signup.closed,post.posted)"
-    );
+    expect(discordTrigger(scope)?.getAttribute("aria-label")).toBe("discord.trigger(post.posted)");
     const link = (await status(scope))?.querySelector("a");
     expect(link?.getAttribute("href")).toBe(url);
     expect(link?.getAttribute("target")).toBe("_blank");
@@ -409,9 +491,7 @@ describe("PickupMixHeader signup post status", () => {
       game({ discord_posts: [post({ status: "failed", error: "Missing Permissions" })] })
     );
 
-    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe(
-      "signupTriggerPost(signup.closed,post.failed)"
-    );
+    expect(discordTrigger(scope)?.getAttribute("aria-label")).toBe("discord.trigger(post.failed)");
     expect((await status(scope))?.textContent).toContain("Missing Permissions. post.failedHint");
   });
 
@@ -423,30 +503,31 @@ describe("PickupMixHeader signup post status", () => {
   });
 });
 
-describe("PickupMixHeader Discord posts menu", () => {
+describe("PickupMixHeader Discord posts list", () => {
   const twoLobbies = { lobby_count: 2 as const, lobbies: [lobbyRow(0), lobbyRow(1)] };
+  const list = () => document.querySelector('[aria-label="discord.allPosts"]');
 
   it("is not offered while the mix has no posts", async () => {
-    const scope = await mount(game({ discord_posts: [] }));
+    await openDiscord(await mount(game({ discord_posts: [] })));
 
-    expect(byName(scope, "posts.menu0")).toBeNull();
+    expect(list()).toBeNull();
   });
 
   it("lists every post, lineup cards by lobby and game", async () => {
     const url = "https://discord.com/channels/1/2/3";
-    const scope = await mount(
-      game({
-        ...twoLobbies,
-        discord_posts: [
-          post({ id: 1, url }),
-          post({ id: 2, slot: "lineup:1:3", kind: "mix.lineup", status: "pending" })
-        ]
-      })
+    await openDiscord(
+      await mount(
+        game({
+          ...twoLobbies,
+          discord_posts: [
+            post({ id: 1, url }),
+            post({ id: 2, slot: "lineup:1:3", kind: "mix.lineup", status: "pending" })
+          ]
+        })
+      )
     );
 
-    await click(byName(scope, "posts.menu2"));
-
-    const rows = [...document.querySelectorAll('[aria-label="posts.menu"] li')];
+    const rows = [...(list()?.querySelectorAll("li") ?? [])];
     expect(rows.map((row) => row.firstElementChild?.firstElementChild?.textContent)).toEqual([
       "posts.signup",
       "posts.lineupLobby(B,3)"
@@ -457,25 +538,22 @@ describe("PickupMixHeader Discord posts menu", () => {
   });
 
   it("drops the lobby letter when the mix runs one lobby", async () => {
-    const scope = await mount(
-      game({ discord_posts: [post({ slot: "lineup:0:2", kind: "mix.lineup" })] })
+    await openDiscord(
+      await mount(game({ discord_posts: [post({ slot: "lineup:0:2", kind: "mix.lineup" })] }))
     );
 
-    await click(byName(scope, "posts.menu1"));
-
-    expect(document.querySelector('[aria-label="posts.menu"]')?.textContent).toContain(
-      "posts.lineup(2)"
-    );
+    expect(list()?.textContent).toContain("posts.lineup(2)");
   });
 
   it("deletes a post only after the host confirms", async () => {
-    const scope = await mount(
-      game({
-        discord_posts: [post({ id: 41 }), post({ id: 42, slot: "lineup:0:1", kind: "mix.lineup" })]
-      })
+    await openDiscord(
+      await mount(
+        game({
+          discord_posts: [post({ id: 41 }), post({ id: 42, slot: "lineup:0:1", kind: "mix.lineup" })]
+        })
+      )
     );
 
-    await click(byName(scope, "posts.menu2"));
     await click(document.querySelector('[aria-label="posts.delete(posts.lineup(1))"]'));
     expect(onDeleteDiscordPost).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
@@ -487,9 +565,7 @@ describe("PickupMixHeader Discord posts menu", () => {
   });
 
   it("cannot delete a post that is already being deleted", async () => {
-    const scope = await mount(game({ discord_posts: [post({ status: "deleting" })] }));
-
-    await click(byName(scope, "posts.menu1"));
+    await openDiscord(await mount(game({ discord_posts: [post({ status: "deleting" })] })));
 
     expect(
       document.querySelector('[aria-label="posts.delete(posts.signup)"]')?.hasAttribute("disabled")

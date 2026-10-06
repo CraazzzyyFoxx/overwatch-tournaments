@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -89,6 +89,8 @@ type PickupTeamsPanelProps = {
   postingToDiscord?: boolean;
   /** Omitted -- no Post to Discord button, matching a page that offers no post. */
   onPostToDiscord?: (variantIndex: number, image: Blob | null) => void;
+  /** Replaces the "No teams yet" card while this lobby has no balance. */
+  emptyState?: ReactNode;
 };
 
 /**
@@ -131,7 +133,8 @@ export function PickupTeamsPanel({
   onSwapSeats,
   onCopyBattleTags,
   postingToDiscord = false,
-  onPostToDiscord
+  onPostToDiscord,
+  emptyState
 }: Readonly<PickupTeamsPanelProps>) {
   const t = useTranslations("mixes.lobbies");
   const variants = parseVariants(
@@ -202,16 +205,18 @@ export function PickupTeamsPanel({
               />
             ) : null}
             {variant == null ? (
-              <PageStateCard
-                state="empty"
-                title="No teams yet"
-                description={
-                  canWrite
-                    ? "Fill the lineup, then press Balance teams to see the matchup."
-                    : "This mix has not been balanced yet."
-                }
-                className={cn(PANEL_CLASS, "px-4 py-16")}
-              />
+              (emptyState ?? (
+                <PageStateCard
+                  state="empty"
+                  title="No teams yet"
+                  description={
+                    canWrite
+                      ? "Fill the lineup, then press Balance teams to see the matchup."
+                      : "This mix has not been balanced yet."
+                  }
+                  className={cn(PANEL_CLASS, "px-4 py-16")}
+                />
+              ))
             ) : (
               <VariantView
                 variant={variant}

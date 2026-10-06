@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialog";
+import { PickupGettingStarted } from "@/app/balancer/mix/PickupGettingStarted";
 import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
 import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
@@ -292,6 +293,16 @@ export default function BalancerPickupMixPage() {
               postingToDiscord={postToDiscord.isPending}
               onPostToDiscord={(idx, image) =>
                 postToDiscord.mutate({ lobbyIndex: activeLobby, variantIndex: idx, image })
+              }
+              emptyState={
+                canWrite && game != null && game.matches_count === 0 ? (
+                  <PickupGettingStarted
+                    game={game}
+                    onOpenPool={() => setIsPoolOpen(true)}
+                    onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}
+                    posting={postSignup.isPending}
+                  />
+                ) : undefined
               }
             />
             {/* Visible when the mix invites signups, or when this viewer is
