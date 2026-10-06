@@ -35,7 +35,6 @@ const onOpenAccess = vi.fn();
 const onSetSelfService = vi.fn();
 const onPostSignup = vi.fn();
 const onLobbyCountChange = vi.fn();
-const onShuffleAll = vi.fn();
 const onDeleteDiscordPost = vi.fn();
 const onDeleteMix = vi.fn();
 
@@ -113,8 +112,6 @@ async function mount(
         onPostSignup={onPostSignup}
         settingLobbyCount={false}
         onLobbyCountChange={onLobbyCountChange}
-        shufflingAll={false}
-        onShuffleAll={onShuffleAll}
         onDeleteDiscordPost={onDeleteDiscordPost}
       />
     );
@@ -151,7 +148,6 @@ beforeEach(() => {
   onSetSelfService.mockReset();
   onPostSignup.mockReset();
   onLobbyCountChange.mockReset();
-  onShuffleAll.mockReset();
   onDeleteDiscordPost.mockReset();
   onDeleteMix.mockReset();
 });
@@ -197,7 +193,6 @@ describe("PickupMixHeader", () => {
     });
 
     expect(byName(scope, "Add players")).toBeNull();
-    expect(byName(scope, "shuffleAll")).toBeNull();
     expect(moreTrigger(scope)).toBeNull();
     // Reading which mix is open is not a write.
     expect(scope.textContent).toContain("Thursday scrim");
@@ -259,34 +254,6 @@ describe("PickupMixHeader", () => {
 
     await click(byName(document, "Delete permanently"));
     expect(onDeleteMix).toHaveBeenCalledTimes(1);
-  });
-
-  it("offers the shared reshuffle only once the mix runs two lobbies", async () => {
-    const one = await mount(game());
-    expect(byName(one, "shuffleAll")).toBeNull();
-
-    const two = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }));
-    await click(byName(two, "shuffleAll"));
-
-    expect(onShuffleAll).toHaveBeenCalledTimes(1);
-  });
-
-  it("asks before a shared reshuffle while some lobby's lineup is unrecorded", async () => {
-    const scope = await mount(
-      game({
-        lobby_count: 2,
-        lobbies: [lobbyRow(0), lobbyRow(1, { lineup_recorded: false })]
-      })
-    );
-
-    await click(byName(scope, "shuffleAll"));
-    expect(onShuffleAll).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "shuffleDescription"
-    );
-
-    await click(byName(document, "shuffleConfirm"));
-    expect(onShuffleAll).toHaveBeenCalledTimes(1);
   });
 });
 

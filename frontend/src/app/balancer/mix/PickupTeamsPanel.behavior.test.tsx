@@ -100,6 +100,7 @@ const onRenameTeam = vi.fn();
 const onSwapSeats = vi.fn();
 const onUndoMatch = vi.fn();
 const onPostToDiscord = vi.fn();
+const onShuffleAll = vi.fn();
 
 // One lobby, rated once: an option only says who sits where.
 const PLAYERS = {
@@ -248,6 +249,7 @@ async function mount(
         balancing={false}
         activeCount={props.activeCount ?? 10}
         onBalance={onBalance}
+        onShuffleAll={onShuffleAll}
         variantIndex={props.variantIndex ?? 0}
         onVariantIndexChange={onVariantIndexChange}
         recordingOutcome={false}
@@ -324,6 +326,7 @@ beforeEach(() => {
   onSwapSeats.mockReset();
   onUndoMatch.mockReset();
   onPostToDiscord.mockReset();
+  onShuffleAll.mockReset();
   captureSpies.rasterize.mockReset();
   captureSpies.rasterize.mockResolvedValue(LINEUP_PNG);
   captureSpies.capture.mockReset();
@@ -861,6 +864,46 @@ describe("PickupTeamsPanel", () => {
 
     expect(onBalance).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it("offers the shared reshuffle only once the mix runs two lobbies", async () => {
+    const one = await mount(game());
+    expect(byName(one, "shuffleAll")).toBeNull();
+
+    const two = await mount(
+      game({ lobby_count: 2, lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })] }),
+    );
+    await click(byName(two, "shuffleAll"));
+
+    expect(onShuffleAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before a shared reshuffle while either lobby's lineup is unrecorded", async () => {
+    // Lobby A is on screen and recorded; B is not -- the reshuffle replaces both.
+    const scope = await mount(
+      game({
+        lobby_count: 2,
+        lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1, lineup_recorded: false })],
+      }),
+    );
+
+    await click(byName(scope, "shuffleAll"));
+    expect(onShuffleAll).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "shuffleDescription",
+    );
+
+    await click(byName(document, "shuffleConfirm"));
+    expect(onShuffleAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives a viewer no shared reshuffle", async () => {
+    const scope = await mount(
+      game({ lobby_count: 2, lobbies: [lobbyRow(), lobbyRow({ lobby_index: 1 })] }),
+      { canWrite: false },
+    );
+
+    expect(byName(scope, "shuffleAll")).toBeNull();
   });
 
   it("offers an undo on the newest match of each lobby, not only on the newest of the mix", async () => {

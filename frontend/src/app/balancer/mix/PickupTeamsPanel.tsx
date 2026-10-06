@@ -55,6 +55,9 @@ type PickupTeamsPanelProps = {
   activeCount: number;
   /** Re-runs the solver for THIS lobby. The confirm for an unrecorded lineup is this panel's. */
   onBalance: () => void;
+  shufflingAll?: boolean;
+  /** Re-splits the whole pool across both lobbies. Offered only while two run. */
+  onShuffleAll?: () => void;
   /**
    * Which of the solver's options is on screen — the lobby's own
    * `selected_variant_index`, so the host's pager moves every viewer with it.
@@ -118,6 +121,8 @@ export function PickupTeamsPanel({
   balancing,
   activeCount,
   onBalance,
+  shufflingAll = false,
+  onShuffleAll,
   variantIndex,
   onVariantIndexChange,
   recordingOutcome,
@@ -157,6 +162,10 @@ export function PickupTeamsPanel({
   // case the button asks first.
   const [balanceOpen, setBalanceOpen] = useState(false);
   const lineupAtRisk = lobby?.lineup_recorded === false;
+  // The shared reshuffle replaces BOTH lobbies, so it asks if either one's
+  // lineup is still unrecorded, not just the lobby on screen.
+  const [shuffleOpen, setShuffleOpen] = useState(false);
+  const anyLineupUnrecorded = (game?.lobbies ?? []).some((row) => row.lineup_recorded === false);
 
   return (
     // Width-capped by the caller now, alongside the mix header that sits
@@ -297,6 +306,39 @@ export function PickupTeamsPanel({
                   onBalance();
                 }}
               />
+              {onShuffleAll && lobbyCount === 2 ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9"
+                    disabled={balancing || shufflingAll}
+                    onClick={() => (anyLineupUnrecorded ? setShuffleOpen(true) : onShuffleAll())}
+                  >
+                    {shufflingAll ? (
+                      <Spinner className="mr-1.5 size-3.5" />
+                    ) : (
+                      <Shuffle className="mr-1.5 size-3.5" aria-hidden="true" />
+                    )}
+                    {t("shuffleAll")}
+                  </Button>
+                  <ConfirmDialog
+                    open={shuffleOpen}
+                    onOpenChange={setShuffleOpen}
+                    intent={{
+                      title: t("shuffleTitle"),
+                      description: t("shuffleDescription"),
+                      confirmLabel: t("shuffleConfirm"),
+                      tone: "danger"
+                    }}
+                    pending={shufflingAll}
+                    onConfirm={() => {
+                      setShuffleOpen(false);
+                      onShuffleAll();
+                    }}
+                  />
+                </>
+              ) : null}
             </>
           ) : null}
 

@@ -243,8 +243,6 @@ export default function BalancerPickupMixPage() {
               deletingDiscordPost={deleteDiscordPost.isPending}
               settingLobbyCount={setLobbyCount.isPending}
               onLobbyCountChange={(lobbyCount) => setLobbyCount.mutate(lobbyCount)}
-              shufflingAll={balance.isPending && balance.variables?.scope === "all"}
-              onShuffleAll={() => balance.mutate({ scope: "all" })}
             />
             <PickupLobbyTabs
               lobbies={lobbies}
@@ -265,6 +263,8 @@ export default function BalancerPickupMixPage() {
               balancing={balance.isPending}
               activeCount={summarizeLineup(rows).active}
               onBalance={() => balance.mutate({ scope: "lobby", lobbyIndex: activeLobby })}
+              shufflingAll={balance.isPending && balance.variables?.scope === "all"}
+              onShuffleAll={() => balance.mutate({ scope: "all" })}
               variantIndex={lobby?.selected_variant_index ?? 0}
               onVariantIndexChange={(index) =>
                 setVariantIndex.mutate({ lobbyIndex: activeLobby, variantIndex: index })

@@ -11,7 +11,6 @@ import {
   ExternalLink,
   MoreHorizontal,
   Send,
-  Shuffle,
   Trash2,
   UserCog,
   UserPlus
@@ -96,19 +95,16 @@ type PickupMixHeaderProps = {
   settingLobbyCount?: boolean;
   /** Omitted -- the lobby-count choice is not offered. */
   onLobbyCountChange?: (lobbyCount: 1 | 2) => void;
-  shufflingAll?: boolean;
-  /** Omitted -- no shared reshuffle, matching a page that offers none. */
-  onShuffleAll?: () => void;
 };
 
 /**
  * The mix this screen is open on: the way back to the list, its name and id,
  * and what a host does with it, by how often they do it.
  *
- * Visible: who may sign up, what Discord shows, the shared reshuffle while two
- * lobbies run, and Add players -- the one solid action. Behind `⋯`: what is set
- * once per mix (lobby count, co-hosts) and the irreversible delete. A flat row
- * of nine equal outline buttons truncated the mix's own name to five letters.
+ * Visible: who may sign up, what Discord shows, and Add players -- the one
+ * solid action. Behind `⋯`: what is set once per mix (lobby count, co-hosts)
+ * and the irreversible delete. The shared two-lobby reshuffle is a lineup
+ * action, so it sits with Balance teams under the matchup, not up here.
  *
  * Which mix this is comes from the route, not from state this header owns --
  * switching to another one, or starting a new one, happens on the list at
@@ -130,19 +126,13 @@ export function PickupMixHeader({
   onDeleteDiscordPost,
   deletingDiscordPost = false,
   settingLobbyCount = false,
-  onLobbyCountChange,
-  shufflingAll = false,
-  onShuffleAll
+  onLobbyCountChange
 }: Readonly<PickupMixHeaderProps>) {
   const tl = useTranslations("mixes.lobbies");
   const th = useTranslations("mixes.header");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
-  const [shuffleOpen, setShuffleOpen] = useState(false);
   const lobbyCount = game?.lobby_count ?? 1;
-  // A lineup that was balanced and never played into the log: a shared
-  // reshuffle would replace it with nothing left to record it from.
-  const unrecorded = (game?.lobbies ?? []).some((lobby) => lobby.lineup_recorded === false);
   const offerDelete = canDelete && onDeleteMix != null;
 
   return (
@@ -187,40 +177,6 @@ export function PickupMixHeader({
             deleting={deletingDiscordPost}
             onDelete={onDeleteDiscordPost}
           />
-        ) : null}
-
-        {canWrite && onShuffleAll && lobbyCount === 2 ? (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 shrink-0"
-              disabled={game == null || shufflingAll}
-              onClick={() => (unrecorded ? setShuffleOpen(true) : onShuffleAll())}
-            >
-              {shufflingAll ? (
-                <Spinner className="mr-1.5 size-3.5" />
-              ) : (
-                <Shuffle className="mr-1.5 size-3.5" aria-hidden="true" />
-              )}
-              {tl("shuffleAll")}
-            </Button>
-            <ConfirmDialog
-              open={shuffleOpen}
-              onOpenChange={setShuffleOpen}
-              intent={{
-                title: tl("shuffleTitle"),
-                description: tl("shuffleDescription"),
-                confirmLabel: tl("shuffleConfirm"),
-                tone: "danger"
-              }}
-              pending={shufflingAll}
-              onConfirm={() => {
-                setShuffleOpen(false);
-                onShuffleAll();
-              }}
-            />
-          </>
         ) : null}
 
         {canWrite ? (
