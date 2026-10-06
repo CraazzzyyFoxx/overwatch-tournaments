@@ -40,7 +40,7 @@ VIEWER = SimpleNamespace(id=99, username="viewer", has_admin_panel_access=lambda
 ROSTER = SimpleNamespace(
     id=100,
     username="player",
-    # Read-only workspace ``member``/``player`` role: on the roster, no
+    # Read-only workspace ``player`` role: on the roster, no
     # non-read grant anywhere.
     has_admin_panel_access=lambda _ws: False,
     is_workspace_member=lambda ws: ws == WORKSPACE_ID,

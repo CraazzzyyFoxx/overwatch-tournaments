@@ -199,7 +199,7 @@ def test_add_member_provisions_player_for_authuser_without_one(db_session) -> No
 
 
 def test_assign_default_member_role_if_roleless_is_idempotent(db_session) -> None:
-    """Role-less auth user gets ``member``; a second call is a no-op."""
+    """Role-less auth user gets ``player``; a second call is a no-op."""
     from shared.rbac import assign_default_member_role_if_roleless
 
     async def _run():
@@ -217,7 +217,7 @@ def test_assign_default_member_role_if_roleless_is_idempotent(db_session) -> Non
 
     first, again, has = asyncio.run(_run())
 
-    assert first is True  # assigned member
+    assert first is True  # assigned player
     assert again is False  # already has a role -> no-op
     assert has is True
 
@@ -265,7 +265,7 @@ def test_list_members_page_role_filter_and_sort(db_session) -> None:
         p_member = await _make_player(db_session, auth_user_id=au_member.id)
         for player in (p_admin, p_member):
             await get_or_create_workspace_member(db_session, workspace_id=workspace.id, player_id=player.id)
-        # Both got 'member' via the anchor trigger; promote one to admin.
+        # Both got 'player' via the anchor trigger; promote one to admin.
         await assign_workspace_system_role(
             db_session, user_id=au_admin.id, workspace_id=workspace.id, role_name="admin"
         )
@@ -274,7 +274,7 @@ def test_list_members_page_role_filter_and_sort(db_session) -> None:
         _f_total, f_rows = await workspace_service.list_members_page(
             db_session, workspace.id, page=1, per_page=50, search=None, role_id=admin_role.id
         )
-        member_role = await get_workspace_system_role(db_session, workspace.id, "member")
+        member_role = await get_workspace_system_role(db_session, workspace.id, "player")
         ex_total, ex_rows = await workspace_service.list_members_page(
             db_session,
             workspace.id,

@@ -236,7 +236,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.app.workspaces.members_autofill_roles": {
         "summary": "Autofill member roles",
-        "description": "Permission: workspace `workspace_member.update`. Grants the baseline 'member' role to every auth-linked member of the workspace that currently has no role; idempotent, returns the count assigned.",
+        "description": "Permission: workspace `workspace_member.update`. Grants the baseline 'player' role to every auth-linked member of the workspace that currently has no role; idempotent, returns the count assigned.",
     },
     "rpc.app.workspaces.member_add": {
         "summary": "Add workspace member",

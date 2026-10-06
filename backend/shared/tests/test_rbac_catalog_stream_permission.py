@@ -20,16 +20,15 @@ def test_workspace_admin_role_grants_tournament_link_and_stream():
     assert permission_names_for_workspace_role("owner") == ("admin.*",)
 
 
-def test_member_reads_links_only_and_player_gets_nothing():
-    # Links are part of the public tournament page, so `member` reads them like any
+def test_player_reads_links_only():
+    # Links are part of the public tournament page, so `player` reads them like any
     # other tournament child. Writes stay admin-only, and stream.read is poller
     # health -- an operational signal, not tournament content (same call as rank /
-    # subscription / audit, which are also absent from _MEMBER_READ_RESOURCES).
-    member = permission_names_for_workspace_role("member")
-    assert "tournament_link.read" in member
-    assert "tournament_link.create" not in member
-    assert "tournament_link.update" not in member
-    assert "tournament_link.delete" not in member
-    assert "stream.read" not in member
-    assert "stream.update" not in member
-    assert permission_names_for_workspace_role("player") == ()
+    # subscription / audit, which are also absent from _PLAYER_READ_RESOURCES).
+    player = permission_names_for_workspace_role("player")
+    assert "tournament_link.read" in player
+    assert "tournament_link.create" not in player
+    assert "tournament_link.update" not in player
+    assert "tournament_link.delete" not in player
+    assert "stream.read" not in player
+    assert "stream.update" not in player

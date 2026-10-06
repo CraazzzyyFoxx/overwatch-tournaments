@@ -47,20 +47,12 @@ import type { RbacRole } from "@/types/rbac.types";
 import type { WorkspaceMember, WorkspaceSystemRole } from "@/types/workspace.types";
 import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
 
-const SYSTEM_ROLES: WorkspaceSystemRole[] = [
-  "owner",
-  "admin",
-  "referee",
-  "host",
-  "member",
-  "player"
-];
+const SYSTEM_ROLES: WorkspaceSystemRole[] = ["owner", "admin", "referee", "host", "player"];
 const SYSTEM_ROLE_LABEL: Record<WorkspaceSystemRole, string> = {
   owner: "Owner",
   admin: "Admin",
   referee: "Referee",
   host: "Host",
-  member: "Member",
   player: "Player"
 };
 
@@ -176,7 +168,7 @@ export default function WorkspaceMembersPage() {
       invalidateMembers();
       notify.success(
         assigned > 0
-          ? `Assigned "member" to ${assigned} member${assigned === 1 ? "" : "s"} without a role`
+          ? `Assigned "player" to ${assigned} member${assigned === 1 ? "" : "s"} without a role`
           : "Everyone already has a role"
       );
     },
@@ -489,7 +481,7 @@ function AddMemberDialog({
   const roleFieldId = useId();
   const [userId, setUserId] = useState<string>("");
   // One system role, same as the row's role select; custom roles are added from the row.
-  const [role, setRole] = useState<WorkspaceSystemRole>("member");
+  const [role, setRole] = useState<WorkspaceSystemRole>("player");
   const [userComboOpen, setUserComboOpen] = useState(false);
 
   const { data: allUsers } = useQuery({
@@ -502,7 +494,7 @@ function AddMemberDialog({
     mutationFn: (roleId: number) => workspaceService.addMember(workspaceId, Number(userId), roleId),
     onSuccess: () => {
       setUserId("");
-      setRole("member");
+      setRole("player");
       notify.success("Member added");
       onAdded();
     },

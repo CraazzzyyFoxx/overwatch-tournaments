@@ -133,5 +133,4 @@ class TestPermissionCatalog:
         is an enumerated list, so a new catalog entry has to be attached."""
         assert permission_names_for_workspace_role("owner") == ("admin.*",)
         assert "audit.read" in permission_names_for_workspace_role("admin")
-        assert "audit.read" not in permission_names_for_workspace_role("member")
         assert "audit.read" not in permission_names_for_workspace_role("player")

@@ -75,8 +75,8 @@ class CatalogTests(TestCase):
         for action in ("read", "create", "update", "delete"):
             self.assertIn(("user", action), pairs)
 
-    def test_a_plain_member_already_holds_the_read(self) -> None:
-        self.assertIn("user.read", permission_names_for_workspace_role("member"))
+    def test_a_plain_player_already_holds_the_read(self) -> None:
+        self.assertIn("user.read", permission_names_for_workspace_role("player"))
 
 
 class ScopeTests(TestCase):

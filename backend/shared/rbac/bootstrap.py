@@ -129,26 +129,26 @@ async def assign_default_member_role_if_roleless(
     user_id: int,
     workspace_id: int,
 ) -> bool:
-    """Grant the workspace ``member`` system role to ``user_id`` iff they hold
+    """Grant the workspace ``player`` system role to ``user_id`` iff they hold
     no role in ``workspace_id`` yet. Returns True when a role was assigned.
 
     The members screen treats every auth-linked ``workspace_member`` as an RBAC
     member; a row whose auth user has zero workspace roles is the "role-less
     member" this autofill closes. Idempotent and additive — it never touches an
-    existing role, so a ``player`` / ``admin`` / custom assignment is preserved
-    and never downgraded.
+    existing role, so an ``admin`` / custom assignment is preserved and never
+    downgraded.
 
     Kept cheap for the hot anchor path (``get_or_create_workspace_member``):
-    resolves the existing ``member`` role directly and only falls back to the
+    resolves the existing ``player`` role directly and only falls back to the
     full ``ensure_workspace_system_roles`` upsert when the workspace has no
     system roles yet, rather than upserting the whole catalog on every call.
     """
     if await user_has_any_workspace_role(session, user_id=user_id, workspace_id=workspace_id):
         return False
 
-    member_role = await get_workspace_system_role(session, workspace_id, "member")
+    member_role = await get_workspace_system_role(session, workspace_id, "player")
     if member_role is None:
-        member_role = (await ensure_workspace_system_roles(session, workspace_id))["member"]
+        member_role = (await ensure_workspace_system_roles(session, workspace_id))["player"]
 
     await session.execute(
         sa.insert(user_roles).from_select(
@@ -191,7 +191,7 @@ async def replace_user_workspace_roles(
 ) -> list[Role]:
     if role_ids is None:
         roles = [
-            await assign_workspace_system_role(session, user_id=user_id, workspace_id=workspace_id, role_name="member")
+            await assign_workspace_system_role(session, user_id=user_id, workspace_id=workspace_id, role_name="player")
         ]
         return roles
 
@@ -239,8 +239,8 @@ async def workspace_names_blocking_player_unlink(
     user_id: int,
 ) -> list[str]:
     """Distinct names of the workspaces where ``user_id`` holds a role beyond
-    the baseline ``player`` participation role — i.e. real RBAC memberships
-    (``member`` / ``admin`` / ``owner`` or a custom workspace role). Empty list
+    the baseline ``player`` role — i.e. staff RBAC memberships (``admin`` /
+    ``owner`` / ``referee`` / ``host`` or a custom workspace role). Empty list
     means unlinking the user's player is allowed.
 
     Used to guard player-unlink. ``workspace_member`` is anchored on
@@ -251,9 +251,9 @@ async def workspace_names_blocking_player_unlink(
     unmanageable via the auth-keyed ``get_member`` join. The caller refuses the
     unlink and names these workspaces so the user knows which to leave first.
 
-    The baseline ``player`` role (auto-granted on self-registration) is
-    intentionally excluded: a pure tournament participant is not a workspace
-    member, so unlinking their public player must stay allowed.
+    The baseline ``player`` role (auto-granted on enrollment and
+    self-registration) is intentionally excluded: a plain participant holds no
+    staff role, so unlinking their public player must stay allowed.
     """
     result = await session.execute(
         sa.select(Workspace.name)

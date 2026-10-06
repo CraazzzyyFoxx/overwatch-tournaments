@@ -57,9 +57,8 @@ Grant-only catalog + workspace system roles + a **deny overlay** that beats ever
 | --- | --- |
 | `owner` | `admin.*` |
 | `admin` | Everything except governance (`role` / `permission`) and `workspace.delete` / `workspace_member.delete` |
-| `host` | Member reads + full `custom_game` CRUD (this **is** the right to run a mix) |
-| `member` | `*.read` on `_MEMBER_READ_RESOURCES` |
-| `player` | Empty |
+| `host` | Player reads + full `custom_game` CRUD (this **is** the right to run a mix) |
+| `player` | `*.read` on `_PLAYER_READ_RESOURCES` |
 
 Allow-by-default capabilities exist only so a deny row can revoke them: `account.avatar`, `account.social`, `registration.self_register`, `workspace.self_create`.
 

@@ -197,7 +197,7 @@ There are **no** `auth_user_id` and `role` columns. The role lives in `auth.user
 
 Created **idempotently** through `get_or_create_workspace_member` (`INSERT … ON CONFLICT DO NOTHING` on `uq_workspace_member_workspace_player`). Concurrent registrations do not catch `IntegrityError`.
 
-On a **real INSERT**, if the `player` already has an `auth_user_id`, the system role `member` is granted automatically — but only if the account has no role at all in that workspace yet (`assign_default_member_role_if_roleless`). This is additive: `player` / `admin` / custom roles are never downgraded.
+On a **real INSERT**, if the `player` already has an `auth_user_id`, the system role `player` is granted automatically — but only if the account has no role at all in that workspace yet (`assign_default_member_role_if_roleless`). This is additive: `admin` / custom roles are never downgraded.
 
 The admin member list (`list_by_workspace`) filters on `auth_user_id IS NOT NULL`. A virtual `workspace_member` exists but is **not visible** as an RBAC member and is not manageable through auth-keyed `get_member`.
 
@@ -209,7 +209,7 @@ There is no separate `workspace_player` table any more. The pool the balancer se
 
 1. Find a `players.user` by battlenet handle.
 2. Otherwise create a virtual `players.user(name=tag)` and an unverified battlenet social account.
-3. `get_or_create_workspace_member`. The RBAC role `member` is not granted — the new player has no `auth_user_id`.
+3. `get_or_create_workspace_member`. The RBAC role `player` is not granted — the new player has no `auth_user_id`.
 
 `display_name` on `workspace_member` is the workspace-local nickname; otherwise `players.user.name` is used.
 
@@ -295,7 +295,7 @@ OW is pulled in only where the cheaper layers left a hole. Snapshots collapse in
 | Identity collapse on registration ≠ full merge | Automatic `user_merge` on a tag collision | The virtual player's stats and achievements stay on the old id. A full transfer is a deliberate admin action. |
 | Pool = `workspace_member`, ranks in `member_rank` | `workspace_player` + host book + per-game pin | One anchor shared with registration; mix and tournament impose different layer orders |
 | An empty `registration_role.rank_value` inherits | An empty cell = unranked | Otherwise canon-ranked players fell out of the balancer pool |
-| Unlink is blocked by `member+` roles, not by `player` | Blocking on any membership | The `player` role means tournament participant, not operational member. Otherwise you could not unlink a profile while an old registration is still around. |
+| Unlink is blocked by staff roles, not by the baseline `player` role | Blocking on any membership | `player` is the role every participant gets. Otherwise you could not unlink a profile while an old registration is still around. |
 
 ---
 
@@ -348,13 +348,13 @@ One account may link **several** accounts of the same provider (two Battle.net a
 
 ### 5.3. RBAC next to identity
 
-Workspace system roles (`WORKSPACE_SYSTEM_ROLE_NAMES`): `owner`, `admin`, `host`, `member`, `player`.
+Workspace system roles (`WORKSPACE_SYSTEM_ROLE_NAMES`): `owner`, `admin`, `referee`, `host`, `player`.
 
 | Role | Permissions | How it appears | Blocks player unlink? |
 |---|---|---|---|
-| `player` | empty | self-service registration (`assign_workspace_system_role(..., "player")`) | no |
-| `member` | member catalog | `add_member` / autofill when an auth-linked `workspace_member` is created | yes |
-| `host` | member catalog + full `custom_game` CRUD | explicit assignment (mix creators: membership alone no longer opens mixes, see `_require_mix`) | yes |
+| `player` | player read catalog | self-service registration / mix self-join (`assign_workspace_system_role(..., "player")`), `add_member` default, autofill when an auth-linked `workspace_member` is created | no |
+| `host` | player catalog + full `custom_game` CRUD | explicit assignment (mix creators: membership alone no longer opens mixes, see `_require_mix`) | yes |
+| `referee` | player catalog + match results + registration queue | explicit assignment | yes |
 | `admin` / `owner` | catalog | explicit assignment | yes |
 | custom | its own | admin | yes |
 
@@ -423,7 +423,7 @@ Preconditions:
 
 After a successful `UPDATE players.user SET auth_user_id = …`:
 
-- `_autofill_member_roles`: in every workspace that already has a `workspace_member` for this player, grant `member` if there are no roles yet. Tournament participation that happened *before* the account becomes a visible RBAC member.
+- `_autofill_member_roles`: in every workspace that already has a `workspace_member` for this player, grant `player` if there are no roles yet. Tournament participation that happened *before* the account becomes a visible RBAC member.
 
 ### 6.3. Admin link / unlink
 
@@ -435,7 +435,7 @@ Idempotent if the column is already `NULL`.
 
 Blocked (409 plus a list of workspace names) if the account holds any role **other than** `player` (`workspace_names_blocking_player_unlink`). The reason: the `workspace_member` would stay, `list_by_workspace` would hide it (`auth_user_id IS NOT NULL`), and auth-keyed management would break.
 
-The `player` role does **not** block unlink: that is a tournament participant, not an operational member.
+The baseline `player` role does **not** block unlink: it is what every participant holds.
 
 After unlink the player is virtual again. History, roster slots, and registrations stay on `player_id`.
 
@@ -516,7 +516,7 @@ The signature still takes an `auth_user_id`. Internally:
 
 1. `ensure_for_auth_user` — in case of a legacy account with no player.
 2. `get_or_create_workspace_member`.
-3. On INSERT of an auth-linked player — the `member` role.
+3. On INSERT of an auth-linked player — the `player` role.
 
 `add_member_with_roles` then calls `replace_user_workspace_roles`. The last `owner` cannot be removed.
 
@@ -707,8 +707,8 @@ The access token still returns `linked_players` as an array of length 0 or 1 (`L
 | Symptom | Where to look |
 |---|---|
 | A second `/users/id` appeared after login while the old virtual player is still alive | The handle did not match (normalization, or a different tag) **or** the virtual player was already owned. This needs an admin merge, not another login attempt. |
-| The registration went through but the person is not in Members | Only the `player` role was granted. The Members screen shows auth-linked users with roles that make them RBAC members. Add through `add_member` or wait for the autofill on link. |
-| `Cannot unlink … member of workspace(s): X` | Remove `member`/`admin`/`owner` or leave X first. The `player` role is not in the way. |
+| The registration went through but the person is not in Members | The registration resolved no player (no battle_tag), so no `workspace_member` anchor exists. Add through `add_member`. |
+| `Cannot unlink … member of workspace(s): X` | Remove the staff role (`admin`/`owner`/`referee`/`host`/custom) or leave X first. The `player` role is not in the way. |
 | OAuth says "account linked" but the profile is empty | A stale verified subject sits on another player. An explicit link now calls `release_foreign_subject`; older login paths without `claim_subject` can swallow the conflict (`SocialHandleConflict` → rollback, the login itself survives). |
 | A sheet row without a `workspace_member_id` | Most likely main+smurf: two tags resolve to one player and the second live registration is in the same tournament. Check the `ensure_player_identity` warning in the log. |
 | A player with a canon rank dropped out of the tournament pool | An empty `rank_value` is supposed to inherit. Look at `MemberRankService.resolve` / `TOURNAMENT_ORDER`, not at the raw `registration_role`. |
@@ -767,8 +767,7 @@ Names that must not be mistaken for the model:
 | **Workspace member** | A `(workspace_id, player_id)` row. The mix pool and the anchor for ranks, registrations, and rosters. |
 | **Canon / workspace rank** | A `member_rank` with `author_user_id IS NULL`. Visible to everyone. |
 | **Author book / author rank** | A `member_rank` with a concrete `author_user_id`. Only that host's mixes. |
-| **`player` role** | The system RBAC role for "tournament participant". Empty permissions. Does not make the person a visible operational member. |
-| **`member` role** | The baseline operational member. Autofilled on INSERT of an auth-linked member and on a player link onto already existing anchors. |
+| **`player` role** | The baseline workspace role: read-only player catalog. Granted on self-registration and mix self-join, and autofilled on INSERT of an auth-linked member and on a player link onto already existing anchors. |
 | **Social account** | A handle on a `players.user`. Verified means proven by an OAuth subject. |
 | **OAuth connection** | A proven external account on an `auth.user`. Required to sign in and for a self-service link to pass the ownership check. |
 | **Identity collapse** | Moving the battlenet social account from a virtual player to an owned player during registration. Not a merge. |

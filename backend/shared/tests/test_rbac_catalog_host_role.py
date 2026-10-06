@@ -15,12 +15,12 @@ def test_host_role_exists_and_gets_full_mix_authorship():
         assert f"custom_game.{action}" in host
 
 
-def test_host_role_also_keeps_ordinary_member_read_access():
-    # A host is still a workspace participant: everything `member` reads
+def test_host_role_also_keeps_ordinary_player_read_access():
+    # A host is still a workspace participant: everything `player` reads
     # (rosters, standings, tournaments, ...) a host reads too.
-    member = set(permission_names_for_workspace_role("member"))
+    player = set(permission_names_for_workspace_role("player"))
     host = set(permission_names_for_workspace_role("host"))
-    assert member <= host
+    assert player <= host
     # ...but a host is not a backdoor admin: no write access outside mixes.
     assert "workspace_member.delete" not in host
     assert "tournament.create" not in host
