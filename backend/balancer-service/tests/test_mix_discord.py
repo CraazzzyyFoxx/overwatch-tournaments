@@ -12,6 +12,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from shared.domain.discord_ui import SHORTCODE  # noqa: E402
 from src.domain.mix_discord import SignupPlayer, lineup_card, signup_card  # noqa: E402
 
 BOARD_URL = "https://owt.example/balancer/mix/42"
@@ -62,8 +63,10 @@ def _signup(**overrides):
     return signup_card(**kwargs)
 
 
-def _player(roles: list[str] | None = None, name: str = "P", *, benched: bool = False) -> SignupPlayer:
-    return SignupPlayer(name=name, roles=roles, benched=benched)
+def _player(
+    roles: list[str] | None = None, name: str = "P", *, benched: bool = False, rank: int | None = None
+) -> SignupPlayer:
+    return SignupPlayer(name=name, roles=roles, benched=benched, rank=rank)
 
 
 # ── the signup card ────────────────────────────────────────────────────────
@@ -158,20 +161,26 @@ def test_the_card_survives_a_mix_name_at_the_length_cap() -> None:
     assert len(_signup(mix_name="*" * 255).text) < 4000
 
 
-def test_the_card_lists_the_roster_in_order_with_the_bench_apart() -> None:
-    """Who is in, as the balancer has them: pool and must-play together, the
-    bench on its own line -- and names are user input, so escaped."""
+def test_the_card_lists_one_player_a_line_with_role_badge_and_rank() -> None:
+    """Who is in, as the balancer has them: the role they come for (their first
+    explicit one, flex for "any role"), the rank badge and the number -- pool
+    and must-play together, the bench under its own heading. Names are user
+    input, so escaped."""
     card = _signup(
         players=[
-            _player(name="Ana"),
-            _player(name="Bob", benched=True),
-            _player(name="_Cid_"),
+            _player(["damage", "tank"], "Ana", rank=2450),
+            _player(None, "Bob", benched=True, rank=4950),
+            _player(["support"], "_Cid_"),
         ]
     )
 
-    details = card.details or ""
-    assert r"**Игроки**: Ana, \_Cid\_" in details
-    assert ":owt_bench: **Скамейка**: Bob" in details
+    assert (card.details or "").splitlines()[1:6] == [
+        "**Игроки**",
+        ":owt_damage: :owt_div_platinum_1: Ana · 2450",
+        r":owt_support: \_Cid\_ · без ранга",
+        ":owt_bench: **Скамейка**",
+        ":owt_flex: :owt_div_champion_1: Bob · 4950",
+    ]
 
 
 def test_an_empty_roster_lists_nobody() -> None:
@@ -180,18 +189,26 @@ def test_an_empty_roster_lists_nobody() -> None:
     assert "Игроки" not in details and "Скамейка" not in details
 
 
-def test_a_full_roster_of_long_names_is_cut_and_counted_not_refused() -> None:
-    """100 seats of escape-doubled names would blow Discord's 4000: the list
-    stops at its budget and says how many it left out, leaving room for the
-    emoji the bot expands after the card's own length check."""
-    card = _signup(players=[_player(name="*" * 32) for _ in range(90)] + [_player(name="x", benched=True)] * 10)
+def test_a_full_roster_is_cut_at_what_discord_renders_and_counted_not_refused() -> None:
+    """100 lines of emoji-heavy, escape-doubled names would blow Discord's 4000
+    once the bot expands every shortcode to ``<:owt_name:id>``: the lists stop
+    at their budget measured that way and say how many they left out."""
+    card = _signup(
+        players=[_player(["tank"], "*" * 32, rank=2500) for _ in range(90)]
+        + [_player(None, "x", benched=True, rank=2500) for _ in range(10)]
+    )
 
     details = card.details or ""
-    assert len(card.text) + len(details) < 3000
-    pool_line = next(line for line in details.splitlines() if line.startswith("**Игроки**"))
-    shown = pool_line.split(": ", 1)[1].split(" и ещё ")[0].count(", ") + 1
-    assert pool_line.endswith(f" и ещё {90 - shown}")
-    assert ":owt_bench: **Скамейка**: " + ", ".join(["x"] * 10) in details
+    shortcodes = len(SHORTCODE.findall(card.text + details))
+    assert len(card.text) + len(details) + 21 * shortcodes < 4000
+    lines = details.splitlines()
+    pool = lines[lines.index("**Игроки**") + 1 : lines.index(":owt_bench: **Скамейка**")]
+    assert pool[-1] == f"-# и ещё {90 - (len(pool) - 1)}"
+    # Whatever room the pool left, every benched player is shown or counted.
+    bench = lines[lines.index(":owt_bench: **Скамейка**") + 1 :]
+    shown = sum(1 for line in bench if line.startswith(":owt_flex:"))
+    hidden = next((int(line.rsplit(" ", 1)[1]) for line in bench if line.startswith("-# и ещё")), 0)
+    assert shown + hidden == 10
 
 
 # ── the lineup card ────────────────────────────────────────────────────────

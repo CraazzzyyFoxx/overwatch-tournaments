@@ -27,7 +27,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from shared.domain.discord_ui import BLUE, ROLE_EMOJI, TEAL, emoji
+from shared.division_grid import DEFAULT_GRID
+from shared.domain.discord_ui import BLUE, ROLE_EMOJI, SHORTCODE, TEAL, division_emoji, emoji
 from shared.schemas.events import DiscordActionButton, DiscordCard, DiscordLinkButton
 from src.domain.balancer.result_serializer import seat_rating
 from src.services.balancer.role_naming import role_slot_code
@@ -38,11 +39,12 @@ __all__ = ("SignupPlayer", "lineup_card", "signup_card")
 _TERMINAL = {"completed": "завершён", "cancelled": "отменён"}
 #: The roles a signup counter breaks down by; everything else is "any role".
 _COUNTED_ROLES = ("tank", "damage", "support")
-#: Room the name lists may take. Discord's 4000 is counted AFTER the bot swaps
-#: every ``:owt_*:`` shortcode for ``<:owt_name:id>``, which the card's own
-#: length check cannot see, so the lists leave the rest of the card headroom.
-_POOL_NAMES_BUDGET = 2000
-_BENCH_NAMES_BUDGET = 500
+#: Room the player lists may take, measured as Discord counts it: AFTER the bot
+#: swaps every ``:owt_*:`` shortcode for ``<:owt_name:id>``, which the card's
+#: own length check cannot see. Leaves the rest of the card its headroom.
+_LISTS_BUDGET = 3000
+#: What the bot's swap adds to one shortcode: ``<`` + a snowflake id + ``>``.
+_SHORTCODE_GROWTH = 21
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,12 +52,15 @@ class SignupPlayer:
     """One roster row as the signup card shows it, in roster order.
 
     ``roles`` is the row's explicit role order, or ``None`` for "every role I
-    have a rank for". ``name`` is the one the balancer shows for the row.
+    have a rank for". ``name`` is the one the balancer shows for the row, and
+    ``rank`` the number it balances them at on the role the line shows: their
+    first explicit role, or their best ranked role for "any role".
     """
 
     name: str
     roles: Sequence[str] | None
     benched: bool = False
+    rank: int | None = None
 
 
 #: Everything Discord markdown gives a meaning to; a backslash before ASCII
@@ -91,19 +96,45 @@ def _signup_counts(players: Sequence[SignupPlayer]) -> dict[str, int]:
     return counts
 
 
-def _names_line(label: str, names: Sequence[str], budget: int) -> str:
-    """``label: a, b, c``, cut to ``budget`` characters with the rest counted."""
-    shown: list[str] = []
-    used = len(label) + 2
-    for name in names:
-        cost = len(name) + 2
-        if used + cost > budget:
-            break
-        shown.append(name)
-        used += cost
-    hidden = len(names) - len(shown)
-    tail = f" и ещё {hidden}" if hidden else ""
-    return f"{label}: {', '.join(shown)}{tail}"
+def _rendered_len(text: str) -> int:
+    """``text``'s length once the bot has expanded its emoji shortcodes."""
+    return len(text) + _SHORTCODE_GROWTH * len(SHORTCODE.findall(text))
+
+
+def _player_line(player: SignupPlayer) -> str:
+    """``:role: :badge: Name · 2450``: the role they come for, and how good they are at it.
+
+    The badge is the Overwatch rank the number lands in (the seat panel's own
+    badges) and simply disappears until it is uploaded; the number stays.
+    """
+    role = emoji(ROLE_EMOJI.get(player.roles[0] if player.roles else "flex", "flex"))
+    if player.rank is None:
+        return f"{role} {_escape(player.name)} · без ранга"
+    badge = division_emoji(DEFAULT_GRID.resolve_division(player.rank).slug)
+    return " ".join(part for part in (role, badge, _escape(player.name)) if part) + f" · {player.rank}"
+
+
+def _player_lists(players: Sequence[SignupPlayer]) -> list[str]:
+    """The pool, then the bench, one player a line, cut at the budget with the rest counted."""
+    sections = [
+        ("**Игроки**", [player for player in players if not player.benched]),
+        (f"{emoji('bench')} **Скамейка**", [player for player in players if player.benched]),
+    ]
+    lines: list[str] = []
+    used = 0
+    for heading, members in sections:
+        if not members:
+            continue
+        lines.append(heading)
+        used += _rendered_len(heading) + 1
+        for index, player in enumerate(members):
+            line = _player_line(player)
+            if used + _rendered_len(line) + 1 > _LISTS_BUDGET:
+                lines.append(f"-# и ещё {len(members) - index}")
+                break
+            lines.append(line)
+            used += _rendered_len(line) + 1
+    return lines
 
 
 def signup_card(
@@ -127,8 +158,9 @@ def signup_card(
     mix answers nothing).
 
     ``players`` is the whole roster in balancer order: the counters say how the
-    lobby is shaping up, the name lists say who is in it -- the pool (must-play
-    included) and the bench apart, as the balancer splits them.
+    lobby is shaping up, the lists say who is in it with the role and rank they
+    come with -- the pool (must-play included) and the bench apart, as the
+    balancer splits them.
     """
     name = _escape(mix_name)
     terminal = _TERMINAL.get(str(status))
@@ -156,12 +188,7 @@ def signup_card(
         f" · {emoji('support')} {counts['support']}"
         f" · любая роль {counts['any']}"
     ]
-    pool = [_escape(player.name) for player in players if not player.benched]
-    bench = [_escape(player.name) for player in players if player.benched]
-    if pool:
-        details.append(_names_line("**Игроки**", pool, _POOL_NAMES_BUDGET))
-    if bench:
-        details.append(_names_line(f"{emoji('bench')} **Скамейка**", bench, _BENCH_NAMES_BUDGET))
+    details.extend(_player_lists(players))
     if terminal is None and not closed:
         details.append("1. Нажмите «Записаться»  2. Настройте роли в ответе бота")
         details.append(f"-# Нужны привязанные Discord и Battle.net · обновлено {_timestamp(updated_at)}")

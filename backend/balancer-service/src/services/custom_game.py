@@ -1235,15 +1235,40 @@ class CustomGameService:
             session, workspace_id=game.workspace_id, member_ids=[row.workspace_member_id for row in roster]
         )
         host_names = await self.hosts(session, game.workspace_id, [game.host_user_id])
+        # The numbers the balancer will balance them at: the host's own book
+        # above the workspace canon (``MIX_ORDER``), as in ``balance``.
+        resolved = await self.ranks.resolve(
+            session,
+            workspace_id=game.workspace_id,
+            members={member.member_id: member.player_id for member in members.values()},
+            roles=list(REGISTRATION_ROLE_CODES),
+            order=MIX_ORDER,
+            author_user_id=game.host_user_id,
+            grid=await get_effective_division_grid(session, None),
+        )
         players = []
         for row in roster:
-            member = members.get(row.workspace_member_id)
+            member_id = row.workspace_member_id
+            member = members.get(member_id)
             name = (member.display_name or member.battle_tag) if member else None
+            roles = stored.get(row.id, []) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None
+            ranks = {
+                role: found.value
+                for role in REGISTRATION_ROLE_CODES
+                if (found := resolved.get((member_id, role))) is not None and found.value is not None
+            }
+            # The first role they named, or -- playing anything -- their best.
+            # An explicit empty order plays nothing, so it shows no rank.
+            if roles is None:
+                rank = max(ranks.values(), default=None)
+            else:
+                rank = ranks.get(roles[0]) if roles else None
             players.append(
                 SignupPlayer(
-                    name=name or f"player-{row.workspace_member_id}",
-                    roles=stored.get(row.id) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None,
+                    name=name or f"player-{member_id}",
+                    roles=roles,
                     benched=row.participation == MixParticipation.BENCHED,
+                    rank=rank,
                 )
             )
         return signup_card(

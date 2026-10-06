@@ -1364,9 +1364,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(ctx.exception.status_code, 403)
 
-    async def test_the_signup_card_counts_and_names_the_roster_as_it_stands(self) -> None:
+    async def test_the_signup_card_lists_the_roster_at_the_ranks_the_balancer_uses(self) -> None:
         """Live, not a snapshot: the card is built from the roster every time,
-        under the names the balancer shows."""
+        under the names the balancer shows and at the numbers it balances with
+        -- the first named role's, or the best one for "any role"."""
         self.games.get.return_value = _game(name="Friday mix", self_signup="pool")
         self.roster.list_for_game.return_value = [
             _roster_row(1, 7, 0, roles=["tank"]),
@@ -1375,6 +1376,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         ]
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
         self.load_hosts.return_value = {9: "Foxx"}
+        self.ranks.resolve.return_value = {**_ranks(7, 9), (8, "damage"): ResolvedRank(2200, "author")}
 
         _channel_id, [post] = await self.service.signup_post(
             self.session,
@@ -1388,8 +1390,15 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertIn(":owt_players: **3** записано", post.card.details)
         self.assertIn(":owt_tank: 1 · :owt_damage: 1 · :owt_support: 0 · любая роль 1", post.card.details)
         self.assertIn(":owt_host: Foxx", post.card.text)
-        self.assertIn("**Игроки**: P7, P8", post.card.details)
-        self.assertIn("**Скамейка**: P9", post.card.details)
+        lines = post.card.details.splitlines()
+        pool = lines[lines.index("**Игроки**") + 1 : lines.index(":owt_bench: **Скамейка**")]
+        self.assertEqual(len(pool), 2)
+        self.assertTrue(pool[0].startswith(":owt_tank: ") and pool[0].endswith(" P7 · 2500"), pool[0])
+        self.assertTrue(pool[1].startswith(":owt_damage: ") and pool[1].endswith(" P8 · 2200"), pool[1])
+        bench = lines[lines.index(":owt_bench: **Скамейка**") + 1]
+        self.assertTrue(bench.startswith(":owt_flex: ") and bench.endswith(" P9 · 2500"), bench)
+        kwargs = self.ranks.resolve.await_args.kwargs
+        self.assertEqual((kwargs["order"], kwargs["author_user_id"]), (MIX_ORDER, 9))
 
     async def _project(self, custom_game_id: int | None) -> tuple[int, list]:
         """Run the projector against this test's fakes, returning what it
