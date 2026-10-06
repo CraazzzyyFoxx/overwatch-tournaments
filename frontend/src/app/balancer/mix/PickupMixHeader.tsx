@@ -13,7 +13,7 @@ import {
   Shuffle,
   Trash2,
   UserCog,
-  UserPlus,
+  UserPlus
 } from "lucide-react";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
@@ -21,13 +21,25 @@ import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { segmentedFrame, toggleVariants } from "@/components/ui/toggle";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { CustomGame, CustomGameDiscordPost, MixSelfSignup } from "@/services/custom-game.service";
+import type {
+  CustomGame,
+  CustomGameDiscordPost,
+  MixSelfSignup
+} from "@/services/custom-game.service";
 
 /** The three signup modes, in the order a host widens access. */
 const SELF_SIGNUP_OPTIONS: readonly MixSelfSignup[] = ["closed", "pool", "benched"];
+
+/** The trigger's dot: shut, open straight into the pool, or open onto the bench. */
+const SIGNUP_DOT: Record<MixSelfSignup, string> = {
+  closed: "bg-[color:var(--aqt-fg-faint)]",
+  pool: "bg-[color:var(--aqt-teal)]",
+  benched: "bg-[color:var(--aqt-amber)]"
+};
 
 type PickupMixHeaderProps = {
   /** Host or co-host, and not-terminal -- gates every write action in this header. */
@@ -94,19 +106,12 @@ export function PickupMixHeader({
   settingLobbyCount = false,
   onLobbyCountChange,
   shufflingAll = false,
-  onShuffleAll,
+  onShuffleAll
 }: Readonly<PickupMixHeaderProps>) {
-  const t = useTranslations("mixes.self");
   const tl = useTranslations("mixes.lobbies");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
   const [shuffleOpen, setShuffleOpen] = useState(false);
-  // The workspace's channel is the only target a mix has -- with none, the
-  // signup card has nowhere to go. Unlike the matchup post (which simply is
-  // not offered), this one stays visible and says why: a host who opens
-  // signup expects the Discord button to be there, and "missing" reads as a
-  // bug where "disabled, because there is no channel" reads as an answer.
-  const hasChannel = game?.settings.workspace_discord_channel_id != null;
   const lobbyCount = game?.lobby_count ?? 1;
   // A lineup that was balanced and never played into the log: a shared
   // reshuffle would replace it with nothing left to record it from.
@@ -136,6 +141,25 @@ export function PickupMixHeader({
           </span>
         ) : null}
       </div>
+
+      {canWrite && game != null && onSetSelfService ? (
+        <SignupSettings
+          game={game}
+          saving={savingSelfService}
+          onSetSelfService={onSetSelfService}
+          onPostSignup={onPostSignup}
+          posting={postingSignup}
+        />
+      ) : null}
+
+      {canWrite && onDeleteDiscordPost && discordPosts.length > 0 ? (
+        <DiscordPostsMenu
+          posts={discordPosts}
+          lobbyCount={lobbyCount}
+          deleting={deletingDiscordPost}
+          onDelete={onDeleteDiscordPost}
+        />
+      ) : null}
 
       {canWrite ? (
         <Button
@@ -278,28 +302,105 @@ export function PickupMixHeader({
           />
         </>
       ) : null}
+    </div>
+  );
+}
 
-      {canWrite && game != null && onSetSelfService ? (
-        <div className="flex w-full flex-wrap items-center gap-2.5 border-t border-[color:var(--aqt-border)] pt-3">
+/**
+ * How players get into this mix, behind one button: the signup mode, whether
+ * they edit their own roles, and the Discord card that announces it. These
+ * used to be a second header row that wrapped into a third on a laptop; they
+ * are set a few times per mix, so they cost a click and give the row back.
+ *
+ * The trigger carries what a host checks at a glance -- the mode, and whether
+ * the signup post landed -- so closing the popover hides no state. Every
+ * control writes on change, as before: there is nothing to save or cancel.
+ */
+function SignupSettings({
+  game,
+  saving,
+  onSetSelfService,
+  onPostSignup,
+  posting
+}: Readonly<{
+  game: CustomGame;
+  saving: boolean;
+  onSetSelfService: (patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean }) => void;
+  /** Omitted -- no Discord section. */
+  onPostSignup?: (selfSignup: "pool" | "benched") => void;
+  posting: boolean;
+}>) {
+  const t = useTranslations("mixes.self");
+  const mode = game.self_signup;
+  const modeLabel = t(`signup.${mode}`);
+  // The live signup post: the NEWEST `mix.signup` row, the one a re-post just created.
+  const signupPost =
+    (game.discord_posts ?? []).findLast((row) => row.kind === "mix.signup") ?? null;
+  const postStatus = onPostSignup ? (signupPost?.status ?? null) : null;
+  const postFailed = postStatus === "failed" || postStatus === "lost";
+  // The workspace's channel is the only target a mix has -- with none, the
+  // signup card has nowhere to go. Unlike the matchup post (which simply is
+  // not offered), this one stays visible and says why: a host who opens
+  // signup expects the Discord button to be there, and "missing" reads as a
+  // bug where "disabled, because there is no channel" reads as an answer.
+  const hasChannel = game.settings.workspace_discord_channel_id != null;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          aria-label={
+            postStatus
+              ? t("signupTriggerPost", { mode: modeLabel, post: t(`post.${postStatus}`) })
+              : t("signupTrigger", { mode: modeLabel })
+          }
+          className={cn(
+            "h-9 shrink-0 gap-2",
+            postFailed && "border-[color:color-mix(in_srgb,var(--aqt-rose)_40%,transparent)]"
+          )}
+        >
           <span className={EYEBROW_CLASS}>{t("signupLabel")}</span>
-
-          <div role="radiogroup" aria-label={t("signupLabel")} className="flex items-center gap-1">
+          <span
+            aria-hidden="true"
+            className={cn("size-1.5 shrink-0 rounded-full", SIGNUP_DOT[mode])}
+          />
+          {modeLabel}
+          {postStatus === "pending" || postStatus === "deleting" ? (
+            <Spinner className="size-3.5" />
+          ) : null}
+          {postStatus === "posted" ? (
+            <CheckCircle2 className="size-3.5 text-[color:var(--aqt-teal)]" aria-hidden="true" />
+          ) : null}
+          {postFailed ? (
+            <AlertTriangle className="size-3.5 text-[color:var(--aqt-rose)]" aria-hidden="true" />
+          ) : null}
+          <ChevronDown className="size-3.5 text-[color:var(--aqt-fg-dim)]" aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[22rem] space-y-3 p-3">
+        <div className="space-y-2">
+          <span className={EYEBROW_CLASS}>{t("signupWhere")}</span>
+          <div
+            role="radiogroup"
+            aria-label={t("signupLabel")}
+            className={cn(segmentedFrame, "flex w-full")}
+          >
             {SELF_SIGNUP_OPTIONS.map((option) => {
-              const selected = game.self_signup === option;
+              const selected = mode === option;
               return (
                 <button
                   key={option}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  disabled={savingSelfService}
+                  data-state={selected ? "on" : "off"}
+                  disabled={saving}
                   onClick={() => onSetSelfService({ self_signup: option })}
                   className={cn(
-                    "rounded-lg border px-2.5 py-1 text-caption font-semibold transition-colors",
-                    selected
-                      ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[color:var(--aqt-teal)]"
-                      : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-3)]",
-                    "disabled:cursor-default disabled:opacity-60",
+                    toggleVariants({ variant: "pill" }),
+                    "flex-1 whitespace-nowrap px-2"
                   )}
                 >
                   {t(`signup.${option}`)}
@@ -307,55 +408,46 @@ export function PickupMixHeader({
               );
             })}
           </div>
-
-          <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
-
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={game.self_role_edit}
-              disabled={savingSelfService}
-              aria-label={t("roleEdit")}
-              onCheckedChange={(checked) => onSetSelfService({ self_role_edit: checked })}
-            />
-            <span className="text-caption text-[color:var(--aqt-fg-muted)]">{t("roleEdit")}</span>
-          </div>
-
-          {onPostSignup ? (
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
-              <SignupPostStatus posts={discordPosts} />
-              {onDeleteDiscordPost && discordPosts.length > 0 ? (
-                <DiscordPostsMenu
-                  posts={discordPosts}
-                  lobbyCount={lobbyCount}
-                  deleting={deletingDiscordPost}
-                  onDelete={onDeleteDiscordPost}
-                />
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9 shrink-0"
-                disabled={!hasChannel || postingSignup}
-                title={hasChannel ? undefined : t("noChannel")}
-                // A closed mix has no mode to post yet, and the card's whole point
-                // is to open signup -- so posting it from `closed` opens the pool,
-                // the mode a host picks in every other case.
-                onClick={() => onPostSignup(game.self_signup === "benched" ? "benched" : "pool")}
-              >
-                <Send className="mr-1.5 size-3.5" aria-hidden="true" />
-                {t("openInDiscord")}
-              </Button>
-            </div>
-          ) : null}
+          <p className="text-label text-[color:var(--aqt-fg-dim)]">{t(`signupHint.${mode}`)}</p>
         </div>
-      ) : null}
-    </div>
+
+        <div className="flex items-center gap-2 border-t border-[color:var(--aqt-border)] pt-3">
+          <Switch
+            checked={game.self_role_edit}
+            disabled={saving}
+            aria-label={t("roleEdit")}
+            onCheckedChange={(checked) => onSetSelfService({ self_role_edit: checked })}
+          />
+          <span className="text-caption text-[color:var(--aqt-fg-muted)]">{t("roleEdit")}</span>
+        </div>
+
+        {onPostSignup ? (
+          <div className="space-y-2 border-t border-[color:var(--aqt-border)] pt-3">
+            <span className={EYEBROW_CLASS}>{t("posts.menu")}</span>
+            <SignupPostStatus post={signupPost} />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 w-full"
+              disabled={!hasChannel || posting}
+              title={hasChannel ? undefined : t("noChannel")}
+              // A closed mix has no mode to post yet, and the card's whole point
+              // is to open signup -- so posting it from `closed` opens the pool,
+              // the mode a host picks in every other case.
+              onClick={() => onPostSignup(mode === "benched" ? "benched" : "pool")}
+            >
+              <Send className="mr-1.5 size-3.5" aria-hidden="true" />
+              {t("openInDiscord")}
+            </Button>
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
 
 /**
- * Where the live signup post stands, next to the button that (re)posts it --
- * read off the NEWEST `mix.signup` row, the one a re-post just created. The
+ * Where the live signup post stands, above the button that (re)posts it. The
  * bot answers asynchronously, so the press alone tells the host nothing:
  * `pending` until the bot writes the row, then a link to the message, or the
  * reason Discord refused -- almost always the bot's permissions in the mix
@@ -363,17 +455,13 @@ export function PickupMixHeader({
  * `lost` is the command that expired in the queue before the bot ever saw
  * it: nothing reached Discord, and posting again is the whole remedy.
  *
- * The `role="status"` region stays mounted even while there is nothing to
- * say (never posted): screen readers only announce changes to a live region
- * that already existed, so mounting it together with `pending` would swallow
- * the first update. It is empty then, so nothing is seen or read.
- *
- * ponytail: the error rides on `title` (+ sr-only text) -- this header has no
- * tooltip; a Popover if hosts need to copy a long refusal.
+ * The `role="status"` region is mounted with the popover, before the host can
+ * press Post, and stays mounted while there is nothing to say: screen readers
+ * only announce changes to a live region that already existed, so mounting it
+ * together with `pending` would swallow the first update.
  */
-function SignupPostStatus({ posts }: Readonly<{ posts: readonly CustomGameDiscordPost[] }>) {
+function SignupPostStatus({ post }: Readonly<{ post: CustomGameDiscordPost | null }>) {
   const t = useTranslations("mixes.self");
-  const post = posts.findLast((row) => row.kind === "mix.signup");
   const status = post?.status ?? null;
   const error = post?.error?.trim().replace(/\.$/, "");
   const failedReason = error ? `${error}. ${t("post.failedHint")}` : t("post.failedHint");
@@ -385,7 +473,7 @@ function SignupPostStatus({ posts }: Readonly<{ posts: readonly CustomGameDiscor
   );
 
   return (
-    <span role="status" className="flex items-center text-caption">
+    <div role="status" className="text-caption">
       {status === "pending" || status === "deleting" ? (
         <span className="flex items-center gap-1.5 text-[color:var(--aqt-fg-dim)]">
           <Spinner className="size-3.5" />
@@ -397,7 +485,7 @@ function SignupPostStatus({ posts }: Readonly<{ posts: readonly CustomGameDiscor
           href={post.url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 text-[color:var(--aqt-teal)] hover:underline"
+          className="flex w-fit items-center gap-1.5 text-[color:var(--aqt-teal)] hover:underline"
         >
           {posted}
           <ExternalLink className="size-3" aria-hidden="true" />
@@ -406,21 +494,18 @@ function SignupPostStatus({ posts }: Readonly<{ posts: readonly CustomGameDiscor
       {status === "posted" && !post?.url ? (
         <span className="flex items-center gap-1.5 text-[color:var(--aqt-teal)]">{posted}</span>
       ) : null}
-      {status === "failed" ? (
-        <span className="flex items-center gap-1.5 text-[color:var(--aqt-rose)]" title={failedReason}>
-          <AlertTriangle className="size-3.5" aria-hidden="true" />
-          {t("post.failed")}
-          <span className="sr-only">{failedReason}</span>
-        </span>
+      {status === "failed" || status === "lost" ? (
+        <div className="space-y-0.5">
+          <span className="flex items-center gap-1.5 text-[color:var(--aqt-rose)]">
+            <AlertTriangle className="size-3.5" aria-hidden="true" />
+            {t(`post.${status}`)}
+          </span>
+          <p className="text-label text-[color:var(--aqt-fg-muted)]">
+            {status === "failed" ? failedReason : t("post.lostHint")}
+          </p>
+        </div>
       ) : null}
-      {status === "lost" ? (
-        <span className="flex items-center gap-1.5 text-[color:var(--aqt-rose)]" title={t("post.lostHint")}>
-          <AlertTriangle className="size-3.5" aria-hidden="true" />
-          {t("post.lost")}
-          <span className="sr-only">{t("post.lostHint")}</span>
-        </span>
-      ) : null}
-    </span>
+    </div>
   );
 }
 
@@ -429,7 +514,7 @@ const POST_STATUS_TONE: Record<CustomGameDiscordPost["status"], string> = {
   deleting: "text-[color:var(--aqt-fg-dim)]",
   posted: "text-[color:var(--aqt-teal)]",
   failed: "text-[color:var(--aqt-rose)]",
-  lost: "text-[color:var(--aqt-rose)]",
+  lost: "text-[color:var(--aqt-rose)]"
 };
 
 /**
@@ -443,7 +528,7 @@ function DiscordPostsMenu({
   posts,
   lobbyCount,
   deleting,
-  onDelete,
+  onDelete
 }: Readonly<{
   posts: readonly CustomGameDiscordPost[];
   lobbyCount: number;
@@ -471,7 +556,9 @@ function DiscordPostsMenu({
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" className="h-9 shrink-0">
             {t("posts.menu")}
-            <span className="ml-1.5 text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">{posts.length}</span>
+            <span className="ml-1.5 text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
+              {posts.length}
+            </span>
             <ChevronDown className="ml-1 size-3.5" aria-hidden="true" />
           </Button>
         </PopoverTrigger>
@@ -529,10 +616,10 @@ function DiscordPostsMenu({
         intent={{
           title: t("posts.deleteTitle"),
           description: t("posts.deleteDescription", {
-            label: confirming ? postLabel(confirming) : "",
+            label: confirming ? postLabel(confirming) : ""
           }),
           confirmLabel: t("posts.deleteConfirm"),
-          tone: "danger",
+          tone: "danger"
         }}
         pending={deleting}
         onConfirm={() => {

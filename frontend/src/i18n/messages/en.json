@@ -6774,6 +6774,14 @@
         "pool": "To the pool",
         "benched": "To the bench"
       },
+      "signupTrigger": "Signup settings: {mode}",
+      "signupTriggerPost": "Signup settings: {mode}. Discord: {post}",
+      "signupWhere": "Where new players land",
+      "signupHint": {
+        "closed": "Players cannot join on their own — only the host adds them.",
+        "pool": "Players join the pool and can be seated at the next balance.",
+        "benched": "Players join the bench; the host moves them into the pool."
+      },
       "roleEdit": "Players edit their own roles",
       "openInDiscord": "Open signup in Discord",
       "noChannel": "This community has no mix channel in Discord",

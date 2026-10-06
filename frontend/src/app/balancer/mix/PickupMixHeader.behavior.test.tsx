@@ -27,7 +27,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 // slot (`posts.lineupLobby`) is checkable without the real messages.
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
-    values ? `${key}(${Object.values(values).join(",")})` : key,
+    values ? `${key}(${Object.values(values).join(",")})` : key
 }));
 
 const onOpenPool = vi.fn();
@@ -57,15 +57,15 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
         next_map_id: null,
         balanced_at: null,
         lineup_recorded: true,
-        matches_count: 0,
-      },
+        matches_count: 0
+      }
     ],
     matches_count: 0,
     last_match_at: null,
     self_signup: "closed",
     self_role_edit: false,
     settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: "555" },
-    ...overrides,
+    ...overrides
   } as CustomGame;
 }
 
@@ -78,7 +78,7 @@ function lobbyRow(lobbyIndex: 0 | 1, overrides: Record<string, unknown> = {}) {
     balanced_at: "2026-01-01T00:00:00Z",
     lineup_recorded: true,
     matches_count: 0,
-    ...overrides,
+    ...overrides
   } as CustomGame["lobbies"][number];
 }
 
@@ -92,7 +92,7 @@ const roots: { unmount: () => void }[] = [];
 
 async function mount(
   currentGame: CustomGame | undefined,
-  props: { canWrite?: boolean; gameLoading?: boolean } = {},
+  props: { canWrite?: boolean; gameLoading?: boolean } = {}
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -113,7 +113,7 @@ async function mount(
         shufflingAll={false}
         onShuffleAll={onShuffleAll}
         onDeleteDiscordPost={onDeleteDiscordPost}
-      />,
+      />
     );
   });
   await act(async () => {
@@ -132,7 +132,9 @@ function click(node: Element | null | undefined) {
 }
 
 function byName(scope: ParentNode, name: string) {
-  return [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === name) ?? null;
+  return (
+    [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === name) ?? null
+  );
 }
 
 beforeEach(() => {
@@ -221,14 +223,12 @@ describe("PickupMixHeader", () => {
   });
 
   it("asks before dropping a lobby, because its balance goes with it", async () => {
-    const scope = await mount(
-      game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }),
-    );
+    const scope = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }));
 
     await click(byName(scope, "1"));
     expect(onLobbyCountChange).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "dropDescription",
+      "dropDescription"
     );
 
     await click(byName(document, "dropConfirm"));
@@ -249,14 +249,14 @@ describe("PickupMixHeader", () => {
     const scope = await mount(
       game({
         lobby_count: 2,
-        lobbies: [lobbyRow(0), lobbyRow(1, { lineup_recorded: false })],
-      }),
+        lobbies: [lobbyRow(0), lobbyRow(1, { lineup_recorded: false })]
+      })
     );
 
     await click(byName(scope, "shuffleAll"));
     expect(onShuffleAll).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "shuffleDescription",
+      "shuffleDescription"
     );
 
     await click(byName(document, "shuffleConfirm"));
@@ -265,7 +265,7 @@ describe("PickupMixHeader", () => {
 
   it("gives a viewer no lobby controls at all", async () => {
     const scope = await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] }), {
-      canWrite: false,
+      canWrite: false
     });
 
     expect(byName(scope, "shuffleAll")).toBeNull();
@@ -273,57 +273,75 @@ describe("PickupMixHeader", () => {
   });
 });
 
-// The host's self-service switches. `next-intl` is mocked to echo the key, so
-// every label below is the message key rather than the rendered sentence.
+// The host's self-service switches, behind the Signup trigger. `next-intl` is
+// mocked to echo the key, so every label below is the message key rather than
+// the rendered sentence. The popover portals to `document.body`.
+function signupTrigger(scope: ParentNode) {
+  return scope.querySelector('[aria-label^="signupTrigger"]');
+}
+
+async function openSignup(scope: ParentNode) {
+  await click(signupTrigger(scope));
+  return document;
+}
+
 describe("PickupMixHeader self-service", () => {
   it("writes the signup mode the host picked", async () => {
-    const scope = await mount(game({ self_signup: "closed" }));
+    const popover = await openSignup(await mount(game({ self_signup: "closed" })));
 
-    await click(byName(scope, "signup.pool"));
+    await click(byName(popover, "signup.pool"));
 
     expect(onSetSelfService).toHaveBeenCalledWith({ self_signup: "pool" });
   });
 
-  it("marks the mode the mix is actually in", async () => {
+  it("shows the mode the mix is actually in, on the trigger and in the popover", async () => {
     const scope = await mount(game({ self_signup: "benched" }));
 
-    const checked = [...scope.querySelectorAll('[role="radio"]')]
+    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe("signupTrigger(signup.benched)");
+
+    const popover = await openSignup(scope);
+    const checked = [...popover.querySelectorAll('[role="radio"]')]
       .filter((node) => node.getAttribute("aria-checked") === "true")
       .map((node) => node.textContent?.trim());
 
     expect(checked).toEqual(["signup.benched"]);
+    expect(popover.body.textContent).toContain("signupHint.benched");
   });
 
   it("writes the role-edit switch on its own", async () => {
-    const scope = await mount(game({ self_role_edit: false }));
+    const popover = await openSignup(await mount(game({ self_role_edit: false })));
 
-    await click(scope.querySelector('[aria-label="roleEdit"]'));
+    await click(popover.querySelector('[aria-label="roleEdit"]'));
 
     expect(onSetSelfService).toHaveBeenCalledWith({ self_role_edit: true });
   });
 
   it("posts the signup card in the mode the mix is in", async () => {
-    const scope = await mount(game({ self_signup: "benched" }));
+    const popover = await openSignup(await mount(game({ self_signup: "benched" })));
 
-    await click(byName(scope, "openInDiscord"));
+    await click(byName(popover, "openInDiscord"));
 
     expect(onPostSignup).toHaveBeenCalledWith("benched");
   });
 
   it("falls a closed mix back to the pool when posting", async () => {
-    const scope = await mount(game({ self_signup: "closed" }));
+    const popover = await openSignup(await mount(game({ self_signup: "closed" })));
 
-    await click(byName(scope, "openInDiscord"));
+    await click(byName(popover, "openInDiscord"));
 
     expect(onPostSignup).toHaveBeenCalledWith("pool");
   });
 
   it("cannot post a signup card with no mix channel", async () => {
-    const scope = await mount(
-      game({ settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: null } }),
+    const popover = await openSignup(
+      await mount(
+        game({
+          settings: { points_per_win: 0, team_names: {}, workspace_discord_channel_id: null }
+        })
+      )
     );
 
-    const button = byName(scope, "openInDiscord");
+    const button = byName(popover, "openInDiscord");
     expect(button?.hasAttribute("disabled")).toBe(true);
     expect(button?.getAttribute("title")).toBe("noChannel");
   });
@@ -331,13 +349,11 @@ describe("PickupMixHeader self-service", () => {
   it("shows a viewer who cannot write none of it", async () => {
     const scope = await mount(game(), { canWrite: false });
 
-    expect(byName(scope, "signup.pool")).toBeNull();
-    expect(byName(scope, "openInDiscord")).toBeNull();
-    expect(scope.querySelector('[aria-label="roleEdit"]')).toBeNull();
+    expect(signupTrigger(scope)).toBeNull();
   });
 });
 
-// The Discord posts, next to the button that posts the signup card. The bot
+// The signup post's state, on the trigger and inside the popover. The bot
 // answers asynchronously, so this is the only way a host learns a post
 // landed -- or why it did not -- and the only way to take one down.
 function post(overrides: Partial<CustomGameDiscordPost> = {}): CustomGameDiscordPost {
@@ -349,20 +365,22 @@ function post(overrides: Partial<CustomGameDiscordPost> = {}): CustomGameDiscord
     url: null,
     error: null,
     created_at: "2026-01-01T00:00:00Z",
-    ...overrides,
+    ...overrides
   };
 }
 
 describe("PickupMixHeader signup post status", () => {
-  function status(scope: ParentNode) {
-    return scope.querySelector('[role="status"]');
+  async function status(scope: ParentNode) {
+    return (await openSignup(scope)).querySelector('[role="status"]');
   }
 
   it("says nothing about a post that was never made", async () => {
     const scope = await mount(game({ discord_posts: [] }));
 
-    expect(status(scope)?.textContent).toBe("");
-    expect(status(scope)?.querySelector("a")).toBeNull();
+    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe("signupTrigger(signup.closed)");
+    const region = await status(scope);
+    expect(region?.textContent).toBe("");
+    expect(region?.querySelector("a")).toBeNull();
   });
 
   it("reads the newest signup post, not an older one or a lineup card", async () => {
@@ -372,12 +390,15 @@ describe("PickupMixHeader signup post status", () => {
         discord_posts: [
           post({ id: 1, status: "failed", error: "Missing Permissions" }),
           post({ id: 2, status: "posted", url }),
-          post({ id: 3, slot: "lineup:0:1", kind: "mix.lineup", status: "pending" }),
-        ],
-      }),
+          post({ id: 3, slot: "lineup:0:1", kind: "mix.lineup", status: "pending" })
+        ]
+      })
     );
 
-    const link = status(scope)?.querySelector("a");
+    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe(
+      "signupTriggerPost(signup.closed,post.posted)"
+    );
+    const link = (await status(scope))?.querySelector("a");
     expect(link?.getAttribute("href")).toBe(url);
     expect(link?.getAttribute("target")).toBe("_blank");
     expect(link?.textContent).toBe("post.posted");
@@ -385,19 +406,20 @@ describe("PickupMixHeader signup post status", () => {
 
   it("exposes Discord's refusal on a failed post", async () => {
     const scope = await mount(
-      game({ discord_posts: [post({ status: "failed", error: "Missing Permissions" })] }),
+      game({ discord_posts: [post({ status: "failed", error: "Missing Permissions" })] })
     );
 
-    const failed = status(scope)?.querySelector("[title]");
-    expect(failed?.getAttribute("title")).toBe("Missing Permissions. post.failedHint");
-    expect(status(scope)?.textContent).toContain("Missing Permissions");
+    expect(signupTrigger(scope)?.getAttribute("aria-label")).toBe(
+      "signupTriggerPost(signup.closed,post.failed)"
+    );
+    expect((await status(scope))?.textContent).toContain("Missing Permissions. post.failedHint");
   });
 
   it("tells the host a lost post never reached Discord", async () => {
-    const scope = await mount(game({ discord_posts: [post({ status: "lost" })] }));
+    const region = await status(await mount(game({ discord_posts: [post({ status: "lost" })] })));
 
-    expect(status(scope)?.textContent).toContain("post.lost");
-    expect(status(scope)?.textContent).toContain("post.lostHint");
+    expect(region?.textContent).toContain("post.lost");
+    expect(region?.textContent).toContain("post.lostHint");
   });
 });
 
@@ -417,9 +439,9 @@ describe("PickupMixHeader Discord posts menu", () => {
         ...twoLobbies,
         discord_posts: [
           post({ id: 1, url }),
-          post({ id: 2, slot: "lineup:1:3", kind: "mix.lineup", status: "pending" }),
-        ],
-      }),
+          post({ id: 2, slot: "lineup:1:3", kind: "mix.lineup", status: "pending" })
+        ]
+      })
     );
 
     await click(byName(scope, "posts.menu2"));
@@ -427,7 +449,7 @@ describe("PickupMixHeader Discord posts menu", () => {
     const rows = [...document.querySelectorAll('[aria-label="posts.menu"] li')];
     expect(rows.map((row) => row.firstElementChild?.firstElementChild?.textContent)).toEqual([
       "posts.signup",
-      "posts.lineupLobby(B,3)",
+      "posts.lineupLobby(B,3)"
     ]);
     expect(rows[0].querySelector("a")?.getAttribute("href")).toBe(url);
     expect(rows[1].querySelector("a")).toBeNull();
@@ -436,24 +458,28 @@ describe("PickupMixHeader Discord posts menu", () => {
 
   it("drops the lobby letter when the mix runs one lobby", async () => {
     const scope = await mount(
-      game({ discord_posts: [post({ slot: "lineup:0:2", kind: "mix.lineup" })] }),
+      game({ discord_posts: [post({ slot: "lineup:0:2", kind: "mix.lineup" })] })
     );
 
     await click(byName(scope, "posts.menu1"));
 
-    expect(document.querySelector('[aria-label="posts.menu"]')?.textContent).toContain("posts.lineup(2)");
+    expect(document.querySelector('[aria-label="posts.menu"]')?.textContent).toContain(
+      "posts.lineup(2)"
+    );
   });
 
   it("deletes a post only after the host confirms", async () => {
     const scope = await mount(
-      game({ discord_posts: [post({ id: 41 }), post({ id: 42, slot: "lineup:0:1", kind: "mix.lineup" })] }),
+      game({
+        discord_posts: [post({ id: 41 }), post({ id: 42, slot: "lineup:0:1", kind: "mix.lineup" })]
+      })
     );
 
     await click(byName(scope, "posts.menu2"));
     await click(document.querySelector('[aria-label="posts.delete(posts.lineup(1))"]'));
     expect(onDeleteDiscordPost).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "posts.deleteDescription(posts.lineup(1))",
+      "posts.deleteDescription(posts.lineup(1))"
     );
 
     await click(byName(document, "posts.deleteConfirm"));
@@ -466,7 +492,7 @@ describe("PickupMixHeader Discord posts menu", () => {
     await click(byName(scope, "posts.menu1"));
 
     expect(
-      document.querySelector('[aria-label="posts.delete(posts.signup)"]')?.hasAttribute("disabled"),
+      document.querySelector('[aria-label="posts.delete(posts.signup)"]')?.hasAttribute("disabled")
     ).toBe(true);
   });
 });
