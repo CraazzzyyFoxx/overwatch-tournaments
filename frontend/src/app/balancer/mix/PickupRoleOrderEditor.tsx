@@ -264,7 +264,7 @@ function RoleCardBody({
 
         <div className="flex items-center gap-2">
           {readOnly ? <RankChip rank={rank} active={isOn} accentText={accent.text} /> : null}
-          <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2">
+          <label className="flex items-center gap-1.5">
             <Switch
               checked={isOn}
               disabled={disabled}
@@ -280,7 +280,7 @@ function RoleCardBody({
             >
               {isOn ? "Active" : "Off"}
             </span>
-          </div>
+          </label>
         </div>
       </div>
 
