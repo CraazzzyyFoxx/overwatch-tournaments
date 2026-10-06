@@ -84,6 +84,13 @@ docker run --rm -v "${REPO_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" "${NG
 # the rest of it.
 docker compose -f "${COMPOSE_FILE}" run --rm --no-deps -T app-svc alembic upgrade head </dev/null
 
+# The bot's Discord emoji, from the NEW image: uploads whatever names this
+# release added, skips the rest. Not fatal -- a missing emoji only falls back to
+# Unicode, and Discord being unreachable must not stop a deploy. The running bot
+# re-reads its emoji every 10 minutes, so nothing restarts for it.
+docker compose -f "${COMPOSE_FILE}" --profile tools run --rm --no-deps -T discord-emoji </dev/null \
+    || echo "warning: discord-emoji did not finish cleanly; the bot keeps its Unicode fallbacks"
+
 make prod-up PROD_SIZE="${PROD_SIZE}"
 
 docker compose -f "${COMPOSE_FILE}" ps --format '{{.Service}}|{{.State}}|{{.Health}}' | sort

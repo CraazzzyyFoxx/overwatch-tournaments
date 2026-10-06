@@ -2,9 +2,9 @@
 
 Publishers name an emoji and the bot resolves it (``shared.domain.discord_ui``,
 ``src.interactions.emoji``); until one is uploaded every surface falls back to
-Unicode. This fills the application's emoji slots from pictures the repo
-already ships -- the role icons and the division badges the site renders -- plus
-anything dropped into ``assets/emoji/``.
+Unicode. This fills the application's emoji slots from ``assets/emoji/`` -- the
+set ``frontend/scripts/gen-discord-emoji.mjs`` renders (tinted role icons and
+lucide icons) -- plus the division badges the site already ships.
 
 ``--grids`` adds the badges that are *not* in the repo: a workspace that built
 its own division grid in the admin UI stores each tier's picture as a URL, and
@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,7 +45,6 @@ from src.core.db import async_session_maker
 _SERVICE = Path(__file__).resolve().parents[2]
 _REPO = _SERVICE.parents[1]
 
-_ROLES = _REPO / "frontend" / "public" / "roles"
 _DIVISIONS = _REPO / "frontend" / "public" / "divisions"
 _ASSETS = _SERVICE / "assets" / "emoji"
 
@@ -61,15 +61,12 @@ _MAX_EMOJI = 2000
 def _collect(extra_dirs: Sequence[Path]) -> dict[str, Path]:
     """Emoji name -> the picture to upload for it.
 
-    Later sources win: a file in ``assets/emoji`` (or a ``--dir``) named
-    ``tank.png`` replaces the site's role icon, which is the point of the
-    directory.
+    Later sources win: a file in ``assets/emoji`` (or a ``--dir``) named like a
+    division badge replaces the site's picture, which is the point of the
+    directory. The site's own role icons are not a source: they are white and
+    vanish on Discord's light theme; ``assets/emoji`` holds tinted ones.
     """
     found: dict[str, Path] = {}
-    for stem, name in (("Tank", "tank"), ("Damage", "damage"), ("Support", "support")):
-        path = _ROLES / f"{stem}.png"
-        if path.is_file():
-            found[name] = path
     for path in sorted(_DIVISIONS.glob("*.png")):
         # The numeric files are the same badges under their database ids; the
         # slug ones carry the name ``division_emoji`` builds.
@@ -185,11 +182,13 @@ async def _download(client: httpx.AsyncClient, badge: GridBadge, site_url: str) 
     return response.content
 
 
-async def _upload_badges(client: discord.Client, badges: Sequence[GridBadge], site_url: str, *, dry_run: bool) -> int:
-    """Download each badge from the site and hand it to Discord. Returns how many landed."""
+async def _upload_badges(
+    client: discord.Client, badges: Sequence[GridBadge], site_url: str, *, dry_run: bool
+) -> tuple[int, int]:
+    """Download each badge from the site and hand it to Discord: ``(uploaded, refused)``."""
     if not badges:
-        return 0
-    uploaded = 0
+        return 0, 0
+    uploaded = refused = 0
     async with httpx.AsyncClient(timeout=httpx.Timeout(30), follow_redirects=True) as http:
         for badge in badges:
             url = urljoin(site_url.rstrip("/") + "/", badge.url)
@@ -203,15 +202,19 @@ async def _upload_badges(client: discord.Client, badges: Sequence[GridBadge], si
                 await client.create_application_emoji(name=EMOJI_PREFIX + badge.name, image=image)
             except discord.HTTPException as exc:
                 print(f"failed {EMOJI_PREFIX}{badge.name}: HTTP {exc.status} {exc.text}")
+                refused += 1
                 continue
             uploaded += 1
             print(f"uploaded {EMOJI_PREFIX}{badge.name} from {url}")
-    return uploaded
+    return uploaded, refused
 
 
-async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> None:
+async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> int:
+    """Upload what is missing; the number of uploads Discord refused (0 = all good)."""
     settings = Settings()
-    client = discord.Client(intents=discord.Intents.none())
+    # Through the egress proxy, like the bot itself: the production host does not
+    # reach Discord directly.
+    client = discord.Client(intents=discord.Intents.none(), proxy=settings.proxy_url)
     # REST only: login fills in the application id, which is all the emoji
     # endpoints need. No gateway session, so running this next to the live bot
     # does not disturb it.
@@ -239,7 +242,7 @@ async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> Non
                 f"warning: {len(existing)} + {planned} is over Discord's {_MAX_EMOJI}-emoji cap for one "
                 f"application; the uploads past it will be refused"
             )
-        uploaded = 0
+        uploaded = refused = 0
         for name, path in uploads:
             if dry_run:
                 print(f"would upload {EMOJI_PREFIX}{name} from {path}")
@@ -248,17 +251,23 @@ async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> Non
                 await client.create_application_emoji(name=EMOJI_PREFIX + name, image=path.read_bytes())
             except discord.HTTPException as exc:
                 print(f"failed {EMOJI_PREFIX}{name}: HTTP {exc.status} {exc.text}")
+                refused += 1
                 continue
             uploaded += 1
             print(f"uploaded {EMOJI_PREFIX}{name} from {path}")
-        uploaded += await _upload_badges(client, badges, settings.public_site_url, dry_run=dry_run)
+        badge_uploads, badge_refusals = await _upload_badges(client, badges, settings.public_site_url, dry_run=dry_run)
+        uploaded += badge_uploads
+        refused += badge_refusals
         verb = "would upload" if dry_run else "uploaded"
-        print(f"{len(existing)} already in the application, {verb} {planned if dry_run else uploaded}")
+        print(
+            f"{len(existing)} already in the application, {verb} {planned if dry_run else uploaded}, refused {refused}"
+        )
+        return refused
     finally:
         await client.close()
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, upload nothing")
     parser.add_argument(
@@ -276,8 +285,10 @@ def main() -> None:
         help="also upload a badge per division-grid tier in the database (needs DB access)",
     )
     args = parser.parse_args()
-    asyncio.run(_run(dry_run=args.dry_run, extra_dirs=args.dirs, grids=args.grids))
+    # Non-zero when Discord refused an upload, so a one-shot container run of
+    # this tool shows up as failed instead of exiting clean over a half set.
+    return 1 if asyncio.run(_run(dry_run=args.dry_run, extra_dirs=args.dirs, grids=args.grids)) else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -178,11 +178,18 @@ reaction matching its current state — the legacy ✅ / ⚠️ / ❌ included.
 Run from `backend/discord-service` with the service env (REST only, safe beside the live bot):
 
 - `python -m src.tools.emoji_sync [--dry-run] [--dir PATH] [--grids]` — uploads every missing
-  `owt_<name>` application emoji: the role icons from `frontend/public/roles`, the division badges
-  from `frontend/public/divisions/<slug>.png`, and anything drawn into
-  `assets/emoji/<name>.png|gif|webp` (names from `shared/domain/discord_ui.py`; ≤ 256 KiB). An
+  `owt_<name>` application emoji: the set in `assets/emoji/<name>.png|gif|webp` (rendered by
+  `node frontend/scripts/gen-discord-emoji.mjs`: the site's role icons tinted with the role colours,
+  everything else lucide icons in the `--aqt-*` palette), plus the division badges from
+  `frontend/public/divisions/<slug>.png` (names from `shared/domain/discord_ui.py`; ≤ 256 KiB). An
   existing name is never replaced — delete it in the portal first, which blanks it in messages
-  already posted. Once per application.
+  already posted. Once per application. Exits non-zero when Discord refused an upload; the Discord
+  calls go through the egress proxy, like the bot's.
+  **Normally it runs as the one-shot `discord-emoji` compose service** (profile `tools`, so `up`
+  never starts it): `ops/deploy/remote-deploy.sh` runs it on every release right after the
+  migrations — non-fatal, a missing emoji only falls back to Unicode — and `make prod-discord-emoji`
+  / `make discord-emoji` run it by hand. It mounts the checkout's `frontend/public/divisions`, since
+  the bot image carries no frontend, and passes `--grids`.
   `--grids` adds the badges no file in the repo carries: every tier of every **division grid** in the
   database, uploaded as `div_<slug>` (the name `division_emoji` builds) from the tier's `icon_url`,
   relative URLs resolved against `PUBLIC_SITE_URL` over plain HTTP — the site is ours, so the Discord
@@ -200,6 +207,8 @@ Run from `backend/discord-service` with the service env (REST only, safe beside 
 - `channel_monitor` (`discord.ext.tasks.loop`, every 5 minutes) reloads the active
   `channel_id -> tournament_id` map, so adding or removing a tournament channel takes effect without a
   restart. A finished tournament stays watched for 24 hours so a late upload still lands.
+- Application emoji are re-read from Discord every 10 minutes (and once in `setup_hook`), so an
+  upload by the `discord-emoji` job shows up without a restart.
 - On `on_ready`, the last 500 messages of every monitored channel are rescanned concurrently and any
   unprocessed attachment is uploaded fire-and-forget (no result wait).
 - `GatewayWatchdog` (`discord.ext.tasks.loop`, every 30 s) proves the gateway session is alive — see

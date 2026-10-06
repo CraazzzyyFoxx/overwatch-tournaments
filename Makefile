@@ -1,5 +1,5 @@
 .PHONY: help dev-build dev-up dev-up-full dev-down dev-restart dev-logs dev-ps dev-health dev-rebuild \
-	prod-build prod-pull prod-migrate prod-up prod-down prod-logs prod-scale prod-small prod-medium prod-large migrate test clean \
+	prod-build prod-pull prod-migrate prod-discord-emoji prod-up prod-down prod-logs prod-scale prod-small prod-medium prod-large migrate discord-emoji test clean \
 	build up down restart logs ps health build-prod up-prod down-prod logs-prod \
 	app-logs identity-logs parser-logs frontend-logs discord-logs balancer-logs stream-logs \
 	app-restart identity-restart parser-restart frontend-restart \
@@ -64,6 +64,7 @@ help:
 	@echo "  make prod-build     - Build production images locally (CI normally builds them)"
 	@echo "  make prod-pull      - Pull the images CI built (IMAGE_TAG=<release> to pin)"
 	@echo "  make prod-migrate   - alembic upgrade head from the pulled image"
+	@echo "  make prod-discord-emoji - Upload the bot's missing Discord emoji (one-shot)"
 	@echo "  make prod-up        - Start production stack (PROD_SIZE=small|medium|large)"
 	@echo "  make prod-down      - Stop production stack"
 	@echo "  make prod-logs      - Follow production logs"
@@ -161,6 +162,14 @@ migrate:
 
 prod-migrate:
 	$(PROD_COMPOSE) run --rm --no-deps app-svc alembic upgrade head
+
+# One-shot: upload the bot's missing Discord emoji, then exit (see the
+# `discord-emoji` service). Safe to rerun: existing names are skipped.
+discord-emoji:
+	$(COMPOSE) run --rm discord-emoji
+
+prod-discord-emoji:
+	$(PROD_COMPOSE) run --rm --no-deps discord-emoji
 
 test:
 	$(COMPOSE) exec app-svc pytest

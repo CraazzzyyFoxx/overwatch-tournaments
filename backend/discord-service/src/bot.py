@@ -11,7 +11,7 @@ a deploy step, run by hand through ``python -m src.tools.sync_commands``.
 from __future__ import annotations
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from src.cogs.interactions import InteractionsCog
 from src.cogs.log_ingestion import LogIngestionCog
@@ -84,13 +84,24 @@ class LogCollectorBot(commands.Bot):
     async def setup_hook(self) -> None:
         # Before anything can send a card: the first post must already wear the emoji.
         await emoji_registry.load(self)
+        self._reload_emoji.start()
         await self.add_cog(LogIngestionCog(self))
         await self.add_cog(MembershipEventsCog(self))
         await self.add_cog(InteractionsCog(self))
         await self.rabbit_gateway.start()
         self.watchdog.start()
 
+    @tasks.loop(minutes=10)
+    async def _reload_emoji(self) -> None:
+        """Pick up emoji uploaded while the bot runs (``discord-emoji`` job, ``--grids``).
+
+        The registry is a name -> emoji map read from Discord; re-reading it is
+        one REST call, cheaper than making every upload restart the bot.
+        """
+        await emoji_registry.load(self)
+
     async def close(self) -> None:
+        self._reload_emoji.cancel()
         self.watchdog.stop()
         await self.rabbit_gateway.close()
         await super().close()

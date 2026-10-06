@@ -271,6 +271,29 @@ services:
       start_period: 90s
     restart: always
 
+  # One-shot job: uploads the bot's missing application emoji, then exits. The
+  # `tools` profile keeps `up` from starting it; ops/deploy/remote-deploy.sh runs
+  # it on every release (and `make prod-discord-emoji` by hand). Idempotent --
+  # names already uploaded are skipped -- and the bot re-reads its emoji every
+  # 10 minutes, so nothing has to restart after it. The division badges come
+  # from the checkout's frontend/public (the bot image has no frontend);
+  # --grids adds the tiers of workspace-made grids from the database.
+  discord-emoji:
+    image: ghcr.io/craazzzyyfoxx/owt-discord:${IMAGE_TAG:-latest}
+    profiles: ["tools"]
+    logging: *log-rotate
+    command: python -m src.tools.emoji_sync --grids
+    env_file:
+      - ./backend/env/common.env
+      - ./backend/env/discord.env
+    volumes:
+      - ./frontend/public/divisions:/frontend/public/divisions:ro
+    networks:
+      - app-network
+    healthcheck:
+      disable: true
+    restart: "no"
+
 #  twitch:
 #    image: ghcr.io/craazzzyyfoxx/owt-twitch:${IMAGE_TAG:-latest}
 #    build:
