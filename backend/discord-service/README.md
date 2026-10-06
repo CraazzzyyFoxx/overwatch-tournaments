@@ -45,7 +45,7 @@ the only outbound RPCs are the ones a card button makes (see *User-facing surfac
 
 | Queue / exchange | Direction | Purpose |
 | --- | --- | --- |
-| `discord_commands` | consumes | `DiscordCommandEvent` — `process_all` (rescan every channel of a tournament), `process_message` (re-ingest one message), `post_message` (one Components V2 `card` to a channel, with the PNG it shows when `card.image_url` is `attachment://<file>`), `send_dm` (one card to one user), `edit_message` (replace the card of a message the bot sent) and `delete_message` (remove it). The four message actions carry `message_ref`, the `discord_message` row the platform claimed for that message: the bot resolves *where* the message is from that row and writes back what Discord answered, so no publisher ever handles a Discord message id and one delete path serves DMs and channel posts alike. Every message is a card; there is no plain content or embed path. `allow_mentions=true` lets the users a card `<@id>`-mentions be pinged — never `@everyone` or a role; `false` (the default) and every DM ping nobody. A Discord refusal other than a missing channel/user or a closed DM (a 400 on the payload, an outage outlasting discord.py's own retries) is rejected to the DLQ with status `discord_error`, never requeued — and the row says `failed` with the reason either way. Published by parser-service's `rpc.discord_channel.backfill`, balancer-service's mix posts, live signup edits and post deletions, and app-service's notification delivery. |
+| `discord_commands` | consumes | `DiscordCommandEvent` — `process_all` (rescan every channel of a tournament), `process_message` (re-ingest one message), `post_message` (one Components V2 `card` to a channel, with the PNG it shows when `card.image_url` is `attachment://<file>`), `send_dm` (one card to one user), `edit_message` (show the row's card — the command names the row and carries none itself; one is rejected) and `delete_message` (remove the message). The four message actions carry `message_ref`, the `discord_message` row the platform claimed for that message: the bot resolves *where* the message is from that row and writes back what Discord answered, so no publisher ever handles a Discord message id and one delete path serves DMs and channel posts alike. Every message is a card; there is no plain content or embed path. `allow_mentions=true` lets the users a card `<@id>`-mentions be pinged — never `@everyone` or a role; `false` (the default) and every DM ping nobody. A Discord refusal other than a missing channel/user or a closed DM (a 400 on the payload, an outage outlasting discord.py's own retries) is rejected to the DLQ with status `discord_error`, never requeued — and the row says `failed` with the reason either way. Published by parser-service's `rpc.discord_channel.backfill`, balancer-service's mix posts, live signup edits and post deletions, and app-service's notification delivery. |
 | `rpc.identity.discord_identity` | requests | The linked account's identity payload for a clicking Discord user (`not_found` = not linked). A successful answer is cached for 30 s (see *Operational notes*). |
 | action subjects | requests | `rpc.tournament.regteam_accept` / `regteam_decline` / `reg_pub_check_in` / `reg_pub_get_me`, `rpc.app.notification_preferences_update`, `rpc.balancer.custom.self_*` — each called with that identity, exactly as the gateway would for the same person on the site. |
 | `discord_member_roles` | consumes, replies | Role ids held by a set of users in a guild. Called by the shared Discord-role subscription strategy (`shared/services/subscriptions/strategies.py`, 5 s timeout). |
@@ -134,11 +134,14 @@ ephemeral messages only as an answer to a click, hence the trigger rather than a
 
 **Mix self-signup.** A host opens signup for a pickup mix and balancer-service posts one **live**
 card into the workspace's channel: who hosts, how many lobbies, where a new player lands, how many
-signed up by first role, «Join» / «My seat» / «Leave». balancer-service edits it (`edit_message`)
-whenever something it shows changes; it locks with a disabled «Join» when signup closes and loses
-its buttons when the mix ends. Edits of one message within 2 s collapse into the last one here, and
-a host removing a post (or the whole mix) sends `delete_message` for its row, which is how the card
-leaves the channel.
+signed up by first role, «Join» / «My seat» / «Leave». Any mutation that changes what the card shows
+— a click here, an edit on the site, a host closing signup — emits `pickup_mix.changed`, and
+balancer-service re-projects the card from the database onto the `discord_message` row and pings the
+bot with a cardless `edit_message` (`../balancer-service/README.md`); the post locks with a
+disabled «Join» when signup closes and loses its buttons when the mix ends. Pings for one message
+within 2 s collapse into a single Discord edit showing the row's card at that moment, and a host
+removing a post (or the whole mix) sends `delete_message` for its row, which is how the card leaves
+the channel.
 
 Every `mix.*` action answers with the same self-state, rendered into the **seat panel**, an
 ephemeral card: participation and lobby, the role order with rank and division badge, the roles not
@@ -391,10 +394,13 @@ nothing outside the standard library, so it cannot report a configuration proble
   an `UPDATE … WHERE id = :id AND status = 'pending'` and reports whether it applied, so a row the
   delete already moved to `deleting` never becomes `posted`. The bot, holding the message it has
   just created, deletes it on the spot and marks the row `deleted`.
-- **Edit coalescing.** `edit_message` is deferred by 2 s per `message_ref`, last card wins, and is
-  `ack`ed on scheduling (A → B → A must end on A, so it is coalesced, never de-duplicated). A
-  `delete_message` drops the edit still waiting for its message. The window is process memory, which
-  the single-replica rule above makes enough; a crash loses one pending edit until the next change.
+- **Edit coalescing.** `edit_message` is deferred by 2 s per `message_ref` and `ack`ed on
+  scheduling; what the flush writes is the card the row holds at that moment, read fresh from the
+  database, so pings cannot land out of order and a ping is never de-duplicated away (A → B → A
+  ends on A). A ping arriving while the flush writes schedules the next one. A `delete_message`
+  drops the edit still owed by its message. The window is process memory, which the single-replica
+  rule above makes enough; a crash loses one ping until the next change re-projects the card. A row
+  whose `card_json` is empty (posted before the column existed) or unreadable is logged and skipped.
 - **Upload timeout.** A parse result that does not arrive within 120 s leaves the message marked as
   timed out even if the parse later succeeds. The upload itself is not retried.
 - **Idempotency is by `(tournament_id, filename)`**, checked against `log_processing.record` before

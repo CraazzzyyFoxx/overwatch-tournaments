@@ -26,7 +26,7 @@ from shared.services import workspace_roster
 from shared.services.member_rank import member_rank_service
 from src.core import db
 from src.rpc import _common as c
-from src.services.pickup_mix_realtime import emit_pickup_mix_updated
+from src.services.pickup_mix_realtime import emit_pickup_mix_changed
 
 _SF = db.async_session_maker
 
@@ -246,7 +246,11 @@ def register(broker: Any, logger: Any) -> None:
                 battle_tag=battle_tag,
                 display_name=display_name,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
+            # Workspace-wide: a renamed or newly enrolled member shows on every
+            # mix of the workspace, so no single mix id names the change.
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=None, change="member", actor_user_id=user.id
+            )
             await session.commit()
             # Re-read through the roster query so the answer carries the resolved
             # BattleTag and name, identically shaped to a ``players.list`` row.
@@ -285,7 +289,9 @@ def register(broker: Any, logger: Any) -> None:
                 clear=_clear_payload(data),
                 author_user_id=author_user_id,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="rank", actor_user_id=user.id)
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=None, change="rank", actor_user_id=user.id
+            )
             await session.commit()
             return {"ranks": ranks}
 

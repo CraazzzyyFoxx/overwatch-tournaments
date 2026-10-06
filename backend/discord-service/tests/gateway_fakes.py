@@ -37,6 +37,7 @@ def row(**overrides: Any) -> models.DiscordMessage:
         "kind": "mix.signup",
         "status": "pending",
         "workspace_id": None,
+        "card_json": {"accent_color": 0x14B8A6, "text": "4/10"},
     }
     fields.update(overrides)
     return models.DiscordMessage(**fields)

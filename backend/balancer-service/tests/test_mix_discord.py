@@ -12,7 +12,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
-from src.domain.mix_discord import lineup_card, signup_card  # noqa: E402
+from src.domain.mix_discord import SignupPlayer, lineup_card, signup_card  # noqa: E402
 
 BOARD_URL = "https://owt.example/balancer/mix/42"
 NOW = datetime(2026, 10, 6, 18, 0, tzinfo=UTC)
@@ -55,11 +55,15 @@ def _signup(**overrides):
         "self_signup": "pool",
         "status": "draft",
         "lobby_count": 1,
-        "roles": [],
+        "players": [],
         "updated_at": NOW,
     }
     kwargs.update(overrides)
     return signup_card(**kwargs)
+
+
+def _player(roles: list[str] | None = None, name: str = "P", *, benched: bool = False) -> SignupPlayer:
+    return SignupPlayer(name=name, roles=roles, benched=benched)
 
 
 # ── the signup card ────────────────────────────────────────────────────────
@@ -84,7 +88,9 @@ def test_a_benched_signup_says_the_bench_and_two_lobbies_say_so_too() -> None:
 
 def test_the_card_counts_the_roster_by_first_role_and_calls_the_rest_any_role() -> None:
     """A row in all_ranked mode named no role: it is not a claim on tank."""
-    card = _signup(roles=[["tank"], ["damage", "tank"], ["support"], ["damage"], None, None])
+    card = _signup(
+        players=[_player(roles) for roles in (["tank"], ["damage", "tank"], ["support"], ["damage"], None, None)]
+    )
 
     assert ":owt_players: **6** записано" in (card.details or "")
     assert ":owt_tank: 1 · :owt_damage: 2 · :owt_support: 1 · любая роль 2" in (card.details or "")
@@ -112,7 +118,7 @@ def test_an_open_card_carries_the_three_actions_with_their_emoji_and_the_board_l
 
 def test_a_closed_card_greys_out_joining_but_still_lets_the_seated_leave() -> None:
     """The mix is still live, so whoever is in can check their seat or get out."""
-    card = _signup(self_signup="closed", roles=[["tank"]])
+    card = _signup(self_signup="closed", players=[_player(["tank"])])
 
     assert card.text.startswith("## :owt_lock: Запись на микс «Friday Scrim» закрыта")
     join, seat, leave = card.answers
@@ -150,6 +156,42 @@ def test_the_card_survives_a_mix_name_at_the_length_cap() -> None:
     """DiscordCard refuses past 4000 characters, and escaping can double a
     name's length -- a 255-character mix name must still produce a card."""
     assert len(_signup(mix_name="*" * 255).text) < 4000
+
+
+def test_the_card_lists_the_roster_in_order_with_the_bench_apart() -> None:
+    """Who is in, as the balancer has them: pool and must-play together, the
+    bench on its own line -- and names are user input, so escaped."""
+    card = _signup(
+        players=[
+            _player(name="Ana"),
+            _player(name="Bob", benched=True),
+            _player(name="_Cid_"),
+        ]
+    )
+
+    details = card.details or ""
+    assert r"**Игроки**: Ana, \_Cid\_" in details
+    assert ":owt_bench: **Скамейка**: Bob" in details
+
+
+def test_an_empty_roster_lists_nobody() -> None:
+    details = _signup().details or ""
+
+    assert "Игроки" not in details and "Скамейка" not in details
+
+
+def test_a_full_roster_of_long_names_is_cut_and_counted_not_refused() -> None:
+    """100 seats of escape-doubled names would blow Discord's 4000: the list
+    stops at its budget and says how many it left out, leaving room for the
+    emoji the bot expands after the card's own length check."""
+    card = _signup(players=[_player(name="*" * 32) for _ in range(90)] + [_player(name="x", benched=True)] * 10)
+
+    details = card.details or ""
+    assert len(card.text) + len(details) < 3000
+    pool_line = next(line for line in details.splitlines() if line.startswith("**Игроки**"))
+    shown = pool_line.split(": ", 1)[1].split(" и ещё ")[0].count(", ") + 1
+    assert pool_line.endswith(f" и ещё {90 - shown}")
+    assert ":owt_bench: **Скамейка**: " + ", ".join(["x"] * 10) in details
 
 
 # ── the lineup card ────────────────────────────────────────────────────────

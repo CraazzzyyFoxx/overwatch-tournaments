@@ -106,7 +106,7 @@ class _GateTests(IsolatedAsyncioTestCase):
             patch.object(players.workspace_roster, "list_roster", AsyncMock(return_value={MEMBER_ID: row})),
             patch.object(players.member_rank_service, "list_layer", AsyncMock(return_value={})),
             patch.object(players.member_rank_service, "set_ranks", self.set_ranks),
-            patch.object(players, "emit_pickup_mix_updated", AsyncMock()),
+            patch.object(players, "emit_pickup_mix_changed", AsyncMock()),
         ):
             data = {"workspace_id": WORKSPACE_ID, "id": MEMBER_ID, "identity": identity, "payload": body}
             return await broker.handlers[subject](data, None)

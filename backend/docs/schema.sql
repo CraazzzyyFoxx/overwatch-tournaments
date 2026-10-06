@@ -1904,6 +1904,7 @@ CREATE TABLE discord_message (
 	discord_channel_id BIGINT, 
 	message_id BIGINT, 
 	error TEXT, 
+	card_json JSON, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE, 
 	PRIMARY KEY (id), 

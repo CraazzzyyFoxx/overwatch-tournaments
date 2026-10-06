@@ -135,8 +135,9 @@ class DiscordCommandEvent(BaseEvent):
     - ``post_message``: post one card to a channel, with the PNG it shows when
       ``card.image_url`` is ``attachment://<image_filename>``.
     - ``send_dm``: send one card to one Discord user.
-    - ``edit_message``: replace the card of a message the bot sent. Edits of
-      one message arriving close together collapse into the last one.
+    - ``edit_message``: show the card the ``discord_message`` row now holds
+      (``card_json``); the command carries no card of its own. Edits of one
+      message arriving close together collapse into one read of the row.
     - ``delete_message``: delete a message the bot sent.
 
     Every message the platform sends is a ``discord_message`` row, and the four
@@ -155,9 +156,7 @@ class DiscordCommandEvent(BaseEvent):
     message_ref: int | None = Field(default=None, description="discord_message row (post/send/edit/delete)")
     image_b64: str | None = Field(default=None, description="Base64 PNG the card shows (for 'post_message')")
     image_filename: str = Field(default="lineup.png", pattern=r"^[A-Za-z0-9_.-]{1,64}$")
-    card: DiscordCard | None = Field(
-        default=None, description="Components V2 card (post_message, send_dm, edit_message)"
-    )
+    card: DiscordCard | None = Field(default=None, description="Components V2 card (post_message, send_dm)")
     #: Who may be pinged. ``False`` pings nobody (notifications carry
     #: user-written names). ``True`` pings the users the card mentions -- never
     #: ``@everyone`` or a role, whatever the text says.
@@ -178,8 +177,10 @@ class DiscordCommandEvent(BaseEvent):
             if self.discord_user_id is None or self.card is None or self.message_ref is None:
                 raise ValueError("discord_user_id, card and message_ref are required for action='send_dm'")
         elif self.action == "edit_message":
-            if self.message_ref is None or self.card is None:
-                raise ValueError("message_ref and card are required for action='edit_message'")
+            # The card is the row's: one carried here would be a second,
+            # possibly older, copy that the bot would have to pick between.
+            if self.message_ref is None or self.card is not None:
+                raise ValueError("edit_message takes message_ref and no card")
         elif self.action == "delete_message":
             if self.message_ref is None:
                 raise ValueError("message_ref is required for action='delete_message'")
@@ -221,6 +222,25 @@ class NotificationBroadcastEvent(BaseEvent):
     kind: str = Field(..., description="Notification kind, one of BROADCASTABLE_KINDS")
     payload: dict[str, Any] = Field(..., description="Validated snapshot, same schema as the kind's inbox payload")
     dedupe_key: str = Field(..., description="Producer identity of the event, the ledger key")
+
+
+class PickupMixChangedEvent(BaseEvent):
+    """Something about a workspace's pickup mixes changed; re-project what shows it.
+
+    A fact, not a command: it carries no state, only where to look. Consumers
+    read the current state and render from it, so a redelivered, late or
+    out-of-order event is harmless. ``custom_game_id`` is ``None`` for a change
+    that is not about one mix (a player renamed, a rank corrected), which
+    concerns every mix of the workspace.
+
+    Published by: balancer-service ``emit_pickup_mix_changed`` (outbox, same transaction)
+    Consumed by: balancer-service signup-card projector
+    """
+
+    event_type: str = Field(default="pickup_mix.changed", frozen=True)
+    workspace_id: int = Field(..., description="Workspace whose mixes changed")
+    custom_game_id: int | None = Field(default=None, description="The mix, or None for workspace-wide")
+    change: str = Field(..., description="What changed (roster, member, rank, close...), diagnostic only")
 
 
 class ProcessMatchLogEvent(BaseEvent):

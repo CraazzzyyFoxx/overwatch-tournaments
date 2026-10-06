@@ -2,11 +2,17 @@
 
 Every message the platform sends is claimed here first, in the publisher's own
 transaction, and the command handed back names the row (``message_ref``). The
-caller publishes it the way it already publishes -- the outbox in the same
-transaction (app-service), or right after its commit (balancer-service) -- and
+caller hands the commands to :func:`enqueue` in that same transaction -- the
+outbox, so the row and the command commit or roll back together -- and
 discord-service records what Discord answered on the same row. Edits and
 deletes go through the row too, so "delete every Discord message of mix 42" is
 :func:`delete_commands` over :meth:`DiscordMessageRepository.for_subject`.
+
+The card lives on the row (``card_json``). An edit writes it there and sends a
+command that names only the row, and the bot reads the card back when it
+applies the edit: a publisher that re-renders under the row's lock
+(:meth:`DiscordMessageRepository.get_for_update`) can never have an older render
+land last, whatever order the commands are delivered in.
 
 Messages the bot sends from inside Discord (button replies, match-log feedback)
 never come through here: nobody outside Discord addresses them again.
@@ -20,6 +26,7 @@ from typing import Any
 
 from shared import models
 from shared.messaging.config import DISCORD_COMMANDS_QUEUE
+from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository.discord_message import DiscordMessageRepository
 from shared.schemas.events import DiscordCard, DiscordCommandEvent
 from shared.services.realtime import DomainEvent, Resource, Scope, emit
@@ -29,6 +36,7 @@ __all__ = (
     "edit_command",
     "effective_status",
     "emit_changed",
+    "enqueue",
     "jump_url",
     "repository",
     "send_command",
@@ -44,7 +52,7 @@ _PENDING_TTL = timedelta(milliseconds=int(DISCORD_COMMANDS_QUEUE.arguments["x-me
 #: How the page that shows a subject's messages hears that one changed, by
 #: subject prefix (``mix:42`` -> ``mix``): the resource it invalidates and the
 #: domain signal it already listens to -- for a mix, exactly what
-#: balancer-service's ``emit_pickup_mix_updated`` sends. A subject not listed
+#: balancer-service's ``emit_pickup_mix_changed`` sends. A subject not listed
 #: here has no page that shows its messages.
 _SUBJECT_SIGNALS: dict[str, tuple[Resource, str, str]] = {
     "mix": (Resource.WORKSPACE_PICKUP_MIX, "pickup_mix", "pickup_mix.updated"),
@@ -82,6 +90,7 @@ async def send_command(
         subject=subject,
         slot=slot,
         kind=kind,
+        card_json=card.model_dump(mode="json"),
         dedupe_key=dedupe_key,
         notification_id=notification_id,
         workspace_id=workspace_id,
@@ -100,11 +109,16 @@ async def send_command(
     )
 
 
-def edit_command(row: models.DiscordMessage, card: DiscordCard) -> DiscordCommandEvent | None:
-    """Replace the card of a live message; ``None`` for one that is gone or never was."""
+async def edit_command(session: Any, row: models.DiscordMessage, card: DiscordCard) -> DiscordCommandEvent | None:
+    """Write ``card`` onto a live message and return the command that shows it.
+
+    ``None`` for a message that is gone or never was. The command carries no
+    card: the bot reads the row's when it applies the edit.
+    """
     if row.status not in ("pending", "posted"):
         return None
-    return DiscordCommandEvent(action="edit_message", message_ref=row.id, card=card)
+    await repository.set_card(session, row.id, card.model_dump(mode="json"))
+    return DiscordCommandEvent(action="edit_message", message_ref=row.id)
 
 
 async def delete_commands(session: Any, rows: Sequence[models.DiscordMessage]) -> list[DiscordCommandEvent]:
@@ -123,6 +137,12 @@ async def delete_commands(session: Any, rows: Sequence[models.DiscordMessage]) -
             await repository.mark_deleting(session, row.id)
             commands.append(DiscordCommandEvent(action="delete_message", message_ref=row.id))
     return commands
+
+
+async def enqueue(session: Any, commands: Sequence[DiscordCommandEvent]) -> None:
+    """Queue commands for the bot through the outbox, in this transaction, in this order."""
+    for command in commands:
+        await enqueue_outbox_event(session, command, exchange="", routing_key=DISCORD_COMMANDS_QUEUE.name)
 
 
 def effective_status(row: models.DiscordMessage, *, now: datetime | None = None) -> str:

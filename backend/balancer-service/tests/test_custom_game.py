@@ -26,11 +26,13 @@ from shared.core.enums import (  # noqa: E402
 )
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
+from shared.schemas.events import PickupMixChangedEvent  # noqa: E402
 from shared.services import discord_messages  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
 from src.domain.mix_self_service import MAX_ROSTER  # noqa: E402
+from src.services import mix_signup_projector  # noqa: E402
 from src.services.custom_game import _MAX_CO_HOSTS, CustomGameService  # noqa: E402
 
 
@@ -215,6 +217,7 @@ class _MessageRepo:
                 "kind": "mix.signup",
                 "workspace_id": 1,
                 "notification_id": None,
+                "card_json": None,
                 "error": None,
                 **fields,
             }
@@ -236,6 +239,22 @@ class _MessageRepo:
 
     async def get(self, _session, row_id) -> SimpleNamespace | None:
         return next((row for row in self.rows if row.id == row_id), None)
+
+    async def get_for_update(self, _session, row_id) -> SimpleNamespace | None:
+        return await self.get(_session, row_id)
+
+    async def live_for_workspace(self, _session, workspace_id, *, subject_prefix, slot) -> list[SimpleNamespace]:
+        return [
+            row
+            for row in self.rows
+            if row.workspace_id == workspace_id
+            and row.subject.startswith(subject_prefix)
+            and row.slot == slot
+            and row.status in ("pending", "posted")
+        ]
+
+    async def set_card(self, _session, row_id, card_json) -> None:
+        (await self.get(_session, row_id)).card_json = card_json
 
     async def mark_deleting(self, _session, row_id) -> None:
         (await self.get(_session, row_id)).status = "deleting"
@@ -325,7 +344,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
         self.grant_player_role = AsyncMock()
         self.emit = AsyncMock()
-        self._emit_patch = patch("src.services.custom_game.emit_pickup_mix_updated", new=self.emit)
+        self._emit_patch = patch("src.services.custom_game.emit_pickup_mix_changed", new=self.emit)
         self._emit_patch.start()
         self.addCleanup(self._emit_patch.stop)
         # The one table every Discord message of this mix lives in. Empty by
@@ -1345,13 +1364,14 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(ctx.exception.status_code, 403)
 
-    async def test_the_signup_card_counts_the_roster_as_it_stands(self) -> None:
-        """Live, not a snapshot: the card is built from the roster every time."""
+    async def test_the_signup_card_counts_and_names_the_roster_as_it_stands(self) -> None:
+        """Live, not a snapshot: the card is built from the roster every time,
+        under the names the balancer shows."""
         self.games.get.return_value = _game(name="Friday mix", self_signup="pool")
         self.roster.list_for_game.return_value = [
             _roster_row(1, 7, 0, roles=["tank"]),
             _roster_row(2, 8, 1, roles=["damage", "support"]),
-            _roster_row(3, 9, 2),
+            _roster_row(3, 9, 2, participation=MixParticipation.BENCHED),
         ]
         self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
         self.load_hosts.return_value = {9: "Foxx"}
@@ -1368,30 +1388,76 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertIn(":owt_players: **3** записано", post.card.details)
         self.assertIn(":owt_tank: 1 · :owt_damage: 1 · :owt_support: 0 · любая роль 1", post.card.details)
         self.assertIn(":owt_host: Foxx", post.card.text)
+        self.assertIn("**Игроки**: P7, P8", post.card.details)
+        self.assertIn("**Скамейка**: P9", post.card.details)
 
-    async def test_a_mix_with_no_live_post_refreshes_nothing(self) -> None:
+    async def _project(self, custom_game_id: int | None) -> tuple[int, list]:
+        """Run the projector against this test's fakes, returning what it
+        rendered and the outbox rows it wrote."""
+        self.session.commit = AsyncMock()
+        self.session.add = MagicMock()
+        event = PickupMixChangedEvent(workspace_id=1, custom_game_id=custom_game_id, change="roster")
+        with patch.object(mix_signup_projector, "custom_game_service", self.service):
+            rendered = await mix_signup_projector.project(self.session, event)
+        return rendered, [call.args[0] for call in self.session.add.call_args_list]
+
+    async def test_a_mix_with_no_live_post_projects_nothing(self) -> None:
         self.games.get.return_value = _game()
 
-        self.assertIsNone(
-            await self.service.signup_refresh(self.session, custom_game_id=11, board_url_base="https://owt.example")
-        )
+        self.assertEqual((0, []), await self._project(11))
 
-    async def test_refreshing_edits_the_newest_live_card_only(self) -> None:
+    async def test_projecting_writes_the_card_onto_the_newest_live_row_only(self) -> None:
         """An older row is on its way out, a deleted one is gone and a lineup is
-        not the signup card: editing any of them re-renders the wrong message."""
+        not the signup card: editing any of them re-renders the wrong message.
+        The card travels on the row (``card_json``); the command only names it."""
         self.games.get.return_value = _game()
         self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
         self.load_hosts.return_value = {9: "Foxx"}
         self.messages.add(subject="mix:11", slot="signup", status="deleted")
-        self.messages.add(subject="mix:11", slot="signup", status="posted")
+        stale = self.messages.add(subject="mix:11", slot="signup", status="posted")
         newest = self.messages.add(subject="mix:11", slot="signup", status="pending")
-        self.messages.add(subject="mix:11", slot="lineup:0:1", status="posted")
+        lineup = self.messages.add(subject="mix:11", slot="lineup:0:1", status="posted")
 
-        event = await self.service.signup_refresh(self.session, custom_game_id=11, board_url_base="https://owt.example")
+        rendered, outbox = await self._project(11)
 
-        self.assertEqual(event.action, "edit_message")
-        self.assertEqual(event.message_ref, newest.id)
-        self.assertIn(":owt_players: **1** записано", event.card.details)
+        self.assertEqual(1, rendered)
+        self.assertIn(":owt_players: **1** записано", newest.card_json["details"])
+        self.assertIsNone(stale.card_json)
+        self.assertIsNone(lineup.card_json)
+        self.assertEqual(["discord_commands"], [row.routing_key for row in outbox])
+        self.assertEqual(
+            [("edit_message", newest.id)],
+            [(row.payload_json["action"], row.payload_json["message_ref"]) for row in outbox],
+        )
+        self.session.commit.assert_awaited_once()
+
+    async def test_a_workspace_wide_event_re_renders_every_mixs_card(self) -> None:
+        """A renamed player shows on every card of the workspace, so an event
+        that names no mix projects all of them."""
+        self.games.get = AsyncMock(side_effect=lambda _s, game_id: _game(id=game_id))
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.load_hosts.return_value = {9: "Foxx"}
+        first = self.messages.add(subject="mix:11", slot="signup", status="posted")
+        second = self.messages.add(subject="mix:12", slot="signup", status="pending")
+        self.messages.add(subject="mix:13", slot="signup", status="deleted", workspace_id=1)
+        self.messages.add(subject="mix:14", slot="signup", status="posted", workspace_id=2)
+
+        rendered, outbox = await self._project(None)
+
+        self.assertEqual(2, rendered)
+        self.assertEqual([first.id, second.id], [row.payload_json["message_ref"] for row in outbox])
+
+    async def test_a_row_that_stopped_being_live_under_the_lock_is_skipped(self) -> None:
+        """The lock is where the race is settled: a card the host deleted between
+        the read and the lock must not be edited back into existence."""
+        self.games.get.return_value = _game()
+        row = self.messages.add(subject="mix:11", slot="signup", status="posted")
+        self.messages.get_for_update = AsyncMock(
+            return_value=_row(**{**vars(row), "status": "deleting"}),
+        )
+
+        self.assertEqual((0, []), await self._project(11))
+        self.assertIsNone(row.card_json)
 
     async def test_deleting_one_post_marks_only_that_one(self) -> None:
         self.games.get.return_value = _game()

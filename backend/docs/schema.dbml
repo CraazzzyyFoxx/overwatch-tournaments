@@ -1872,6 +1872,7 @@ Table discord_message {
   discord_channel_id bigint
   message_id bigint
   error text
+  card_json json
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
   indexes {

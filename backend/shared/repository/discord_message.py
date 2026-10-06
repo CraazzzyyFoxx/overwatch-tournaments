@@ -37,6 +37,7 @@ class DiscordMessageRepository(BaseRepository[models.DiscordMessage]):
         subject: str,
         slot: str,
         kind: str,
+        card_json: dict | None = None,
         dedupe_key: str | None = None,
         notification_id: int | None = None,
         workspace_id: int | None = None,
@@ -56,6 +57,7 @@ class DiscordMessageRepository(BaseRepository[models.DiscordMessage]):
                 subject=subject,
                 slot=slot,
                 kind=kind,
+                card_json=card_json,
                 dedupe_key=dedupe_key,
                 notification_id=notification_id,
                 workspace_id=workspace_id,
@@ -86,6 +88,32 @@ class DiscordMessageRepository(BaseRepository[models.DiscordMessage]):
         result = await session.execute(query.order_by(self.model.id))
         return list(result.scalars().all())
 
+    async def live_for_workspace(
+        self, session: AsyncSession, workspace_id: int, *, subject_prefix: str, slot: str
+    ) -> list[models.DiscordMessage]:
+        """A workspace's live messages in one slot of one subject kind (``mix:``), oldest first."""
+        result = await session.execute(
+            self.select()
+            .where(
+                self.model.workspace_id == workspace_id,
+                self.model.subject.startswith(subject_prefix, autoescape=True),
+                self.model.slot == slot,
+                self.model.status.in_(LIVE_STATUSES),
+            )
+            .order_by(self.model.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_for_update(self, session: AsyncSession, row_id: int) -> models.DiscordMessage | None:
+        """Row-locked, freshly read: serializes everyone re-rendering this message.
+
+        ``populate_existing``: a row already in the session's identity map would
+        otherwise come back with the state it was first loaded with.
+        """
+        return await session.scalar(
+            self.select().where(self.model.id == row_id).with_for_update().execution_options(populate_existing=True)
+        )
+
     async def recent_for_targets(
         self,
         session: AsyncSession,
@@ -115,6 +143,9 @@ class DiscordMessageRepository(BaseRepository[models.DiscordMessage]):
         await session.execute(
             sa.update(self.model).where(self.model.id == message_id).values(**values, updated_at=datetime.now(UTC))
         )
+
+    async def set_card(self, session: AsyncSession, row_id: int, card_json: dict) -> None:
+        await self._set(session, row_id, card_json=card_json)
 
     async def mark_posted(
         self, session: AsyncSession, row_id: int, *, discord_channel_id: int, discord_message_id: int

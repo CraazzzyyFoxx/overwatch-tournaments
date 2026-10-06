@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, BigInteger, CheckConstraint, DateTime, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db
@@ -43,6 +43,12 @@ class DiscordMessage(db.Base):
 
     No foreign keys, like the rest of the platform journals: the row outlives
     its subject, which is exactly when a delete still has to find the message.
+
+    ``card_json`` is what the message shows, or should show once the bot gets
+    to it: written when the row is claimed and on every edit, while the
+    ``edit_message`` command carries only the row id. The bot reads the card
+    here when it applies the edit, so whatever order edits reach it in, the
+    message ends on the last card written.
     ``ponytail:`` no retention; add it to the purge tick when the table gets big.
     """
 
@@ -75,5 +81,6 @@ class DiscordMessage(db.Base):
     discord_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     message_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    card_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

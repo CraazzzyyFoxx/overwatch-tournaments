@@ -56,7 +56,7 @@ _DIRECTORY_CODES = {
 #: How long an edit of one message waits for a newer one to replace it. The
 #: live signup post is re-rendered on every join/leave click, so a burst of
 #: clicks becomes one Discord call instead of one per click -- and the card
-#: that lands is the last one, never a stale earlier render.
+#: that lands is the one its row holds at flush time, never a stale render.
 EDIT_COALESCE_SECONDS = 2.0
 
 #: How many of those windows an edit waits out while its message is still
@@ -130,12 +130,12 @@ class DiscordRabbitGateway:
         self._session_maker = session_maker
         self._messages = messages
         self._broker: RabbitBroker | None = None
-        # discord_message.id -> the newest card for it, and the task that will
-        # write it. ponytail: process memory, like every other window in this
+        # discord_message ids with an edit owed, and the task that will write
+        # it. ponytail: process memory, like every other window in this
         # service. A crash between the click and the flush loses that one edit;
         # the next mutation re-renders the whole card, so nothing drifts
         # permanently.
-        self._pending_edits: dict[int, DiscordCard] = {}
+        self._pending_edits: set[int] = set()
         self._edit_tasks: dict[int, asyncio.Task[None]] = {}
 
     async def start(self) -> None:
@@ -267,14 +267,14 @@ class DiscordRabbitGateway:
         """Discord refused this message for good; whoever asked for it reads why."""
         await self._settle(session, row, self._messages.mark_failed(session, row.id, error=reason))
 
-    def _schedule_edit(self, ref: int, card: DiscordCard) -> None:
-        """Hold ``card`` as this message's next state; the running flush writes the last one."""
-        self._pending_edits[ref] = card
+    def _schedule_edit(self, ref: int) -> None:
+        """Note that this message owes an edit; the flush shows the card its row holds by then."""
+        self._pending_edits.add(ref)
         if ref not in self._edit_tasks:
             self._edit_tasks[ref] = asyncio.create_task(self._flush_edit(ref))
 
     async def _flush_edit(self, ref: int) -> None:
-        """After the coalescing window, write whatever card is pending by then.
+        """After the coalescing window, show the card the row holds at flush time.
 
         The row says where the message is -- and whether it exists yet. An edit
         published right behind the post that creates it can be handled first,
@@ -285,37 +285,44 @@ class DiscordRabbitGateway:
         try:
             for _attempt in range(EDIT_PENDING_ATTEMPTS):
                 await asyncio.sleep(EDIT_COALESCE_SECONDS)
-                card = self._pending_edits.get(ref)
-                if card is None:
+                if ref not in self._pending_edits:
                     return  # a delete dropped it while the window ran
                 async with self._session_maker() as session:
                     row = await self._messages.get(session, ref)
                     if row is not None and row.status == "pending":
                         continue
-                    self._pending_edits.pop(ref, None)
+                    self._pending_edits.discard(ref)
                     if row is None:
                         logger.error(f"❌ discord_message {ref} is gone; dropping its edit")
                         return
                     if row.status != "posted":
                         logger.warning(f"⚠️ discord_message {ref} is {row.status}; dropping its edit")
                         return
+                    if row.card_json is None:
+                        logger.warning(f"⚠️ discord_message {ref} holds no card; dropping its edit")
+                        return
+                    try:
+                        card = DiscordCard.model_validate(row.card_json)
+                    except ValidationError as exc:
+                        logger.error(f"❌ discord_message {ref} holds an unusable card; dropping its edit: {exc}")
+                        return
                     await self._apply_edit(session, row, card)
                     return
-            self._pending_edits.pop(ref, None)
+            self._pending_edits.discard(ref)
             logger.warning(f"⚠️ discord_message {ref} is still not posted; dropping its edit")
         finally:
             self._edit_tasks.pop(ref, None)
             if ref in self._pending_edits:
-                # A click landed while this flush was writing the previous
+                # A ping landed while this flush was writing the previous
                 # card: nothing else would pick it up, and the live post would
                 # stay a seat behind until the next one.
-                self._schedule_edit(ref, self._pending_edits[ref])
+                self._schedule_edit(ref)
 
     async def _apply_edit(self, session: AsyncSession, row: models.DiscordMessage, card: DiscordCard) -> None:
         """Replace the card of a posted message; a message that is gone closes its row."""
         try:
-            # No fetch: the ids are enough to edit, and the card is rebuilt
-            # from the command anyway.
+            # No fetch: the ids are enough to edit, and the card comes from the
+            # row anyway.
             await self._partial_message(row).edit(
                 view=card_view(card),
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -465,17 +472,17 @@ class DiscordRabbitGateway:
                         logger.info(f"📩 RabbitMQ command: edit_message message_ref={event.message_ref}")
                         # Acked on scheduling, not on delivery: the edit is
                         # deliberately deferred, and a redelivery would only
-                        # re-send a card the pending one already supersedes.
-                        self._schedule_edit(event.message_ref, event.card)
+                        # ask for an edit the pending one already covers.
+                        self._schedule_edit(event.message_ref)
                         await msg.ack()
                         return
 
                     if event.action == "delete_message":
                         logger.info(f"📩 RabbitMQ command: delete_message message_ref={event.message_ref}")
-                        # Nothing is edited on the way out: a card queued for
+                        # Nothing is edited on the way out: an edit owed by
                         # this message would otherwise be written to a message
                         # that is about to stop existing.
-                        self._pending_edits.pop(event.message_ref, None)
+                        self._pending_edits.discard(event.message_ref)
                         async with self._session_maker() as session:
                             row = await self._messages.get(session, event.message_ref)
                             if row is None:

@@ -23,8 +23,6 @@ from typing import Any
 import sqlalchemy as sa
 
 from shared import models
-from shared.messaging.config import DISCORD_COMMANDS_QUEUE
-from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository.notification import (
     NotificationPreferenceRepository,
     NotificationRepository,
@@ -122,12 +120,7 @@ class NotificationDeliveryService:
         if command is None:
             return "duplicate"
 
-        await enqueue_outbox_event(
-            session,
-            command,
-            exchange="",
-            routing_key=DISCORD_COMMANDS_QUEUE.name,
-        )
+        await discord_messages.enqueue(session, [command])
         await session.commit()
         return "sent"
 
@@ -170,12 +163,7 @@ class NotificationDeliveryService:
         if command is None:
             return "duplicate"
 
-        await enqueue_outbox_event(
-            session,
-            command,
-            exchange="",
-            routing_key=DISCORD_COMMANDS_QUEUE.name,
-        )
+        await discord_messages.enqueue(session, [command])
         await session.commit()
         return "sent"
 

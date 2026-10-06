@@ -58,7 +58,7 @@ from shared.services.workspace_roster import (
     workspace_member_user_ids,
 )
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
-from src.domain.mix_discord import lineup_card, signup_card
+from src.domain.mix_discord import SignupPlayer, lineup_card, signup_card
 from src.domain.mix_lobbies import seated_member_ids
 from src.domain.mix_lobby_split import LobbySplitError, SplitCandidate, split_into_lobbies
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
@@ -66,9 +66,9 @@ from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
-from src.services.pickup_mix_realtime import emit_pickup_mix_updated
+from src.services.pickup_mix_realtime import emit_pickup_mix_changed
 
-__all__ = ("CustomGameService", "custom_game_service", "mix_subject")
+__all__ = ("SIGNUP_SLOT", "CustomGameService", "custom_game_service", "mix_subject")
 
 _TERMINAL = frozenset({MixStatus.COMPLETED, MixStatus.CANCELLED})
 #: Plenty for any pickup mix (2-3 teams in practice); guards against a
@@ -83,7 +83,8 @@ LOBBY_LABELS = ("A", "B")
 #: Every Discord message a mix sends is filed under this subject, and the slot
 #: says which of the mix's messages it is: one ``signup`` card plus one row per
 #: lineup posted. Deleting a mix is then one read of ``discord_message``.
-_SIGNUP_SLOT = "signup"
+#: Public: the signup-card projector reads the same slot back.
+SIGNUP_SLOT = "signup"
 #: The file name a lineup PNG travels under, on both the card and the command.
 _LINEUP_IMAGE = "lineup.png"
 #: A roster row owns only its lineup state. A rank correction goes into the
@@ -1099,7 +1100,13 @@ class CustomGameService:
             )
         await self._seed_host_ranks(session, ctx.game, await self.members(session, ctx.game.workspace_id, [member.id]))
         await session.flush()
-        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        await emit_pickup_mix_changed(
+            session,
+            ctx.game.workspace_id,
+            custom_game_id=ctx.game.id,
+            change="roster",
+            actor_user_id=auth_user.id,
+        )
         return await self.self_state(
             session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
         )
@@ -1126,7 +1133,13 @@ class CustomGameService:
             raise _blocker("mix_closed" if ctx.policy.join_blocker == "mix_closed" else "not_on_roster")
         await self.roster.delete(session, ctx.row)
         await session.flush()
-        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        await emit_pickup_mix_changed(
+            session,
+            ctx.game.workspace_id,
+            custom_game_id=ctx.game.id,
+            change="roster",
+            actor_user_id=auth_user.id,
+        )
         return await self.self_state(
             session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
         )
@@ -1153,7 +1166,13 @@ class CustomGameService:
             raise _blocker(ctx.policy.edit_blocker or "not_on_roster")
         await self._apply_player_patch(session, ctx.row, patch, _SELF_PATCH_FIELDS)
         await session.flush()
-        await emit_pickup_mix_updated(session, ctx.game.workspace_id, change="roster", actor_user_id=auth_user.id)
+        await emit_pickup_mix_changed(
+            session,
+            ctx.game.workspace_id,
+            custom_game_id=ctx.game.id,
+            change="roster",
+            actor_user_id=auth_user.id,
+        )
         return await self.self_state(
             session, custom_game_id=custom_game_id, auth_user=auth_user, workspace_id=workspace_id
         )
@@ -1199,16 +1218,34 @@ class CustomGameService:
     def _board_url(board_url_base: str, custom_game_id: int) -> str:
         return f"{board_url_base.rstrip('/')}/balancer/mix/{custom_game_id}"
 
-    async def _signup_card(self, session: AsyncSession, game: models.CustomGame, *, board_url_base: str) -> DiscordCard:
+    async def signup_card_for(
+        self, session: AsyncSession, game: models.CustomGame, *, board_url_base: str
+    ) -> DiscordCard:
         """The signup card as the mix stands right now.
 
         Rebuilt from current state on every publish rather than kept anywhere:
         the card is the mix's roster seen from a channel, and the roster is the
-        only copy of it.
+        only copy of it. Names resolve exactly as the balancer resolves them.
+        Public because the projector (:mod:`src.services.mix_signup_projector`)
+        renders the same card for the same mix on every change event.
         """
         roster = list(await self.roster.list_for_game(session, game.id))
         stored = await self.player_roles.roles_for_players(session, [row.id for row in roster])
+        members = await self.load_roster(
+            session, workspace_id=game.workspace_id, member_ids=[row.workspace_member_id for row in roster]
+        )
         host_names = await self.hosts(session, game.workspace_id, [game.host_user_id])
+        players = []
+        for row in roster:
+            member = members.get(row.workspace_member_id)
+            name = (member.display_name or member.battle_tag) if member else None
+            players.append(
+                SignupPlayer(
+                    name=name or f"player-{row.workspace_member_id}",
+                    roles=stored.get(row.id) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None,
+                    benched=row.participation == MixParticipation.BENCHED,
+                )
+            )
         return signup_card(
             mix_name=game.name,
             host_name=host_names.get(game.host_user_id),
@@ -1217,10 +1254,7 @@ class CustomGameService:
             self_signup=game.self_signup,
             status=game.status,
             lobby_count=game.lobby_count,
-            roles=[
-                stored.get(row.id) if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT else None
-                for row in roster
-            ],
+            players=players,
             updated_at=datetime.now(UTC),
         )
 
@@ -1243,10 +1277,10 @@ class CustomGameService:
 
         A mix has ONE signup card: a second one would count a roster nobody
         updates any more, so every live ``signup`` message of this mix is marked
-        for deletion in the same transaction that claims the new one. Publishing
-        is the RPC layer's job (that is where the broker is), so this returns the
-        commands in the order they must go out -- the deletes first, so the
-        channel never holds two cards at once.
+        for deletion in the same transaction that claims the new one. Queueing
+        is the RPC layer's job (it owns the transaction), so this returns the
+        commands in the order they must reach the outbox -- the deletes first,
+        so the channel never holds two cards at once.
         """
         game = await self._writable(
             session,
@@ -1264,17 +1298,17 @@ class CustomGameService:
             game.self_signup = MixSelfSignup(self_signup).value
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid self_signup") from exc
-        card = await self._signup_card(session, game, board_url_base=board_url_base)
+        card = await self.signup_card_for(session, game, board_url_base=board_url_base)
         await session.flush()
         subject = mix_subject(game.id)
         commands = await discord_messages.delete_commands(
             session,
-            await discord_messages.repository.for_subject(session, subject, slot=_SIGNUP_SLOT, statuses=LIVE_STATUSES),
+            await discord_messages.repository.for_subject(session, subject, slot=SIGNUP_SLOT, statuses=LIVE_STATUSES),
         )
         posted = await discord_messages.send_command(
             session,
             subject=subject,
-            slot=_SIGNUP_SLOT,
+            slot=SIGNUP_SLOT,
             kind="mix.signup",
             card=card,
             workspace_id=workspace_id,
@@ -1283,33 +1317,6 @@ class CustomGameService:
         if posted is not None:
             commands.append(posted)
         return channel_id, commands
-
-    async def signup_refresh(
-        self,
-        session: AsyncSession,
-        *,
-        custom_game_id: int,
-        board_url_base: str,
-    ) -> DiscordCommandEvent | None:
-        """The edit that brings this mix's live signup card up to date.
-
-        ``None`` when the mix has no live signup message -- it was never
-        announced, the host took the post down, or Discord refused it. Every
-        mutation that changes a number on the card calls this AFTER its commit,
-        so the channel never shows a count the database rolled back. The newest
-        live row is the card: an older one is only ever on its way out.
-        """
-        game = await self.games.get(session, custom_game_id)
-        if game is None:
-            return None
-        rows = await discord_messages.repository.for_subject(
-            session, mix_subject(custom_game_id), slot=_SIGNUP_SLOT, statuses=LIVE_STATUSES
-        )
-        if not rows:
-            return None
-        return discord_messages.edit_command(
-            rows[-1], await self._signup_card(session, game, board_url_base=board_url_base)
-        )
 
     async def delete_discord_post(
         self,

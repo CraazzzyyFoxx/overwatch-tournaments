@@ -12,15 +12,18 @@ which the bot swaps for its uploaded application emoji.
 
 The signup card is LIVE: the message the platform posted it as is a
 ``discord_message`` row (``subject='mix:<id>'``, ``slot='signup'``) and every
-mutation that changes one of the numbers below re-renders this card into that
-same message, so it is built from current state every time rather than once at
-post time.
+mutation that changes something it shows -- a count, a name, who is benched --
+announces itself, after which the projector
+(``src.services.mix_signup_projector``) re-renders this card into that same
+message. It is built from current state every time rather than once at post
+time.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -29,12 +32,31 @@ from shared.schemas.events import DiscordActionButton, DiscordCard, DiscordLinkB
 from src.domain.balancer.result_serializer import seat_rating
 from src.services.balancer.role_naming import role_slot_code
 
-__all__ = ("lineup_card", "signup_card")
+__all__ = ("SignupPlayer", "lineup_card", "signup_card")
 
 #: Mix statuses nobody can sign up for any more.
 _TERMINAL = {"completed": "завершён", "cancelled": "отменён"}
 #: The roles a signup counter breaks down by; everything else is "any role".
 _COUNTED_ROLES = ("tank", "damage", "support")
+#: Room the name lists may take. Discord's 4000 is counted AFTER the bot swaps
+#: every ``:owt_*:`` shortcode for ``<:owt_name:id>``, which the card's own
+#: length check cannot see, so the lists leave the rest of the card headroom.
+_POOL_NAMES_BUDGET = 2000
+_BENCH_NAMES_BUDGET = 500
+
+
+@dataclass(frozen=True, slots=True)
+class SignupPlayer:
+    """One roster row as the signup card shows it, in roster order.
+
+    ``roles`` is the row's explicit role order, or ``None`` for "every role I
+    have a rank for". ``name`` is the one the balancer shows for the row.
+    """
+
+    name: str
+    roles: Sequence[str] | None
+    benched: bool = False
+
 
 #: Everything Discord markdown gives a meaning to; a backslash before ASCII
 #: punctuation is always consumed, so over-escaping is invisible to the reader.
@@ -55,7 +77,7 @@ def _timestamp(moment: datetime) -> str:
     return f"<t:{int(moment.timestamp())}:R>"
 
 
-def _signup_counts(roles: Sequence[Sequence[str] | None]) -> dict[str, int]:
+def _signup_counts(players: Sequence[SignupPlayer]) -> dict[str, int]:
     """How many rows want each role, keyed by the FIRST role each one named.
 
     A row in ``all_ranked`` mode (``None``) named no role at all and is counted
@@ -63,10 +85,25 @@ def _signup_counts(roles: Sequence[Sequence[str] | None]) -> dict[str, int]:
     on tank the way an explicit first choice is.
     """
     counts = dict.fromkeys((*_COUNTED_ROLES, "any"), 0)
-    for entry in roles:
-        first = entry[0] if entry else None
+    for player in players:
+        first = player.roles[0] if player.roles else None
         counts[first if first in counts else "any"] += 1
     return counts
+
+
+def _names_line(label: str, names: Sequence[str], budget: int) -> str:
+    """``label: a, b, c``, cut to ``budget`` characters with the rest counted."""
+    shown: list[str] = []
+    used = len(label) + 2
+    for name in names:
+        cost = len(name) + 2
+        if used + cost > budget:
+            break
+        shown.append(name)
+        used += cost
+    hidden = len(names) - len(shown)
+    tail = f" и ещё {hidden}" if hidden else ""
+    return f"{label}: {', '.join(shown)}{tail}"
 
 
 def signup_card(
@@ -78,7 +115,7 @@ def signup_card(
     self_signup: str,
     status: str,
     lobby_count: int,
-    roles: Sequence[Sequence[str] | None],
+    players: Sequence[SignupPlayer],
     updated_at: datetime,
 ) -> DiscordCard:
     """The live channel post that opens a mix for self-signup.
@@ -89,10 +126,9 @@ def signup_card(
     check their seat or leave), and over (lock, no buttons at all; a finished
     mix answers nothing).
 
-    ``roles`` is one entry per roster row: the row's explicit role order, or
-    ``None`` for "every role I have a rank for". That is the whole input to the
-    counters -- the card says how the lobby is shaping up, which is the reason
-    to glance at it again.
+    ``players`` is the whole roster in balancer order: the counters say how the
+    lobby is shaping up, the name lists say who is in it -- the pool (must-play
+    included) and the bench apart, as the balancer splits them.
     """
     name = _escape(mix_name)
     terminal = _TERMINAL.get(str(status))
@@ -112,14 +148,20 @@ def signup_card(
     elif terminal is None and self_signup == "benched":
         facts.append(f"{emoji('bench')} сначала на скамейку")
 
-    counts = _signup_counts(roles)
+    counts = _signup_counts(players)
     details = [
-        f"{emoji('players')} **{len(roles)}** записано"
+        f"{emoji('players')} **{len(players)}** записано"
         f" · {emoji('tank')} {counts['tank']}"
         f" · {emoji('damage')} {counts['damage']}"
         f" · {emoji('support')} {counts['support']}"
         f" · любая роль {counts['any']}"
     ]
+    pool = [_escape(player.name) for player in players if not player.benched]
+    bench = [_escape(player.name) for player in players if player.benched]
+    if pool:
+        details.append(_names_line("**Игроки**", pool, _POOL_NAMES_BUDGET))
+    if bench:
+        details.append(_names_line(f"{emoji('bench')} **Скамейка**", bench, _BENCH_NAMES_BUDGET))
     if terminal is None and not closed:
         details.append("1. Нажмите «Записаться»  2. Настройте роли в ответе бота")
         details.append(f"-# Нужны привязанные Discord и Battle.net · обновлено {_timestamp(updated_at)}")

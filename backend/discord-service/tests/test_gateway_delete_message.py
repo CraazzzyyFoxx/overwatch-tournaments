@@ -38,12 +38,7 @@ def _body(*, ref: int = 1) -> dict:
 
 
 def _edit_body(ref: int = 1) -> dict:
-    return {
-        "event_type": "discord_command",
-        "action": "edit_message",
-        "message_ref": ref,
-        "card": {"accent_color": 1, "text": "5/10"},
-    }
+    return {"event_type": "discord_command", "action": "edit_message", "message_ref": ref}
 
 
 class DeleteMessageCommandTests(IsolatedAsyncioTestCase):
@@ -116,7 +111,7 @@ class DeleteMessageCommandTests(IsolatedAsyncioTestCase):
         with patch("src.rabbit.gateway.EDIT_COALESCE_SECONDS", 0):
             await handle(_edit_body(), message())
             await handle(_body(), message())
-            self.assertEqual(built._pending_edits, {})
+            self.assertEqual(built._pending_edits, set())
             await asyncio.gather(*list(built._edit_tasks.values()))
 
         partial.edit.assert_not_awaited()
