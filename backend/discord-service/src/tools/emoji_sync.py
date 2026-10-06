@@ -210,7 +210,7 @@ async def _upload_badges(
 
 
 async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> int:
-    """Upload what is missing; the number of uploads Discord refused (0 = all good)."""
+    """Upload what is missing; how many steps failed (refused uploads, an unreadable grid table)."""
     settings = Settings()
     # Through the egress proxy, like the bot itself: the production host does not
     # reach Discord directly.
@@ -229,11 +229,20 @@ async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> int
         }
         uploads, notes = _plan(extra_dirs, existing)
         badges: list[GridBadge] = []
+        failed_reads = 0
         if grids:
-            # Planned against the names the file pass already claims, so a tier
-            # whose badge ships in the repo is not fetched twice.
-            badges, badge_notes = plan_badges(await _grid_tiers(), existing | {name for name, _ in uploads})
-            notes += badge_notes
+            try:
+                tiers = await _grid_tiers()
+            except Exception as exc:  # noqa: BLE001 -- any DB fault: the file set still goes up
+                # The shipped set does not depend on the database; one unreachable
+                # Postgres must not leave the bot on Unicode. Still a failed run.
+                print(f"failed --grids: could not read the division grids ({exc!r}); custom-grid badges skipped")
+                failed_reads = 1
+            else:
+                # Planned against the names the file pass already claims, so a tier
+                # whose badge ships in the repo is not fetched twice.
+                badges, badge_notes = plan_badges(tiers, existing | {name for name, _ in uploads})
+                notes += badge_notes
         for note in notes:
             print(note)
         planned = len(uploads) + len(badges)
@@ -242,7 +251,7 @@ async def _run(*, dry_run: bool, extra_dirs: Sequence[Path], grids: bool) -> int
                 f"warning: {len(existing)} + {planned} is over Discord's {_MAX_EMOJI}-emoji cap for one "
                 f"application; the uploads past it will be refused"
             )
-        uploaded = refused = 0
+        uploaded, refused = 0, failed_reads
         for name, path in uploads:
             if dry_run:
                 print(f"would upload {EMOJI_PREFIX}{name} from {path}")

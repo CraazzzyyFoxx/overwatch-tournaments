@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest import TestCase
+from types import SimpleNamespace
+from unittest import IsolatedAsyncioTestCase, TestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # See test_member_roles_rpc.py: importing `src.*` pulls in the service Settings,
 # which needs the env block conftest.py installs.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from shared.domain.discord_ui import division_emoji  # noqa: E402
+from src.tools import emoji_sync  # noqa: E402
 from src.tools.emoji_sync import badge_name, plan_badges  # noqa: E402
 
 
@@ -63,3 +66,23 @@ class PlanBadgesTests(TestCase):
 
         self.assertEqual(uploads, [])
         self.assertEqual(len(notes), 2)
+
+
+class RunTests(IsolatedAsyncioTestCase):
+    async def test_an_unreachable_database_still_uploads_the_shipped_set_and_fails_the_run(self) -> None:
+        """The deploy job ran with a Postgres host it could not resolve: --grids must
+        cost the custom badges, not the bot's whole emoji set."""
+        client = MagicMock(login=AsyncMock(), close=AsyncMock(), fetch_application_emojis=AsyncMock(return_value=[]))
+        client.create_application_emoji = AsyncMock()
+        picture = MagicMock(read_bytes=MagicMock(return_value=b"png"))
+        settings = SimpleNamespace(discord_token="t", proxy_url=None, public_site_url="https://owt.example")
+        with (
+            patch.object(emoji_sync, "Settings", return_value=settings),
+            patch.object(emoji_sync.discord, "Client", return_value=client),
+            patch.object(emoji_sync, "_plan", return_value=([("ok", picture)], [])),
+            patch.object(emoji_sync, "_grid_tiers", AsyncMock(side_effect=OSError("Name or service not known"))),
+        ):
+            failures = await emoji_sync._run(dry_run=False, extra_dirs=[], grids=True)
+
+        client.create_application_emoji.assert_awaited_once_with(name="owt_ok", image=b"png")
+        self.assertEqual(failures, 1)

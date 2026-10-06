@@ -290,6 +290,9 @@ services:
       - ./frontend/public/divisions:/frontend/public/divisions:ro
     networks:
       - app-network
+    # Same as every service here: Postgres is reached as host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       disable: true
     restart: "no"
