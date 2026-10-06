@@ -127,6 +127,14 @@ def test_self_service_patch_takes_the_three_signup_modes_and_nothing_else() -> N
         _schemas().CustomGameSelfServicePatch.model_validate({"self_role_edit": "yes"})
 
 
+def test_rename_trims_the_name_and_refuses_a_blank_one() -> None:
+    assert _schemas().CustomGameRename.model_validate({"name": "  Friday scrim "}).name == "Friday scrim"
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameRename.model_validate({"name": "   "})
+    with pytest.raises(ValidationError):
+        _schemas().CustomGameRename.model_validate({"name": "x" * 256})
+
+
 def test_balance_request_defaults_to_the_first_lobby() -> None:
     """Пустое тело -- ровно то, что слали клиенты до появления лобби."""
     body = _schemas().CustomGameBalanceRequest.model_validate({})

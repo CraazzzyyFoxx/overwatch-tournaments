@@ -892,6 +892,28 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def rename(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        name: str,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """Give the mix a new name; nothing else about it changes."""
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        game.name = name
+        await session.flush()
+        return game
+
     async def _self_context(
         self,
         session: AsyncSession,

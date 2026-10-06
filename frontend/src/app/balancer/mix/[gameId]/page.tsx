@@ -110,6 +110,7 @@ export default function BalancerPickupMixPage() {
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
+    renameMix,
     postToDiscord,
     transferHost,
     addCoHost,
@@ -235,6 +236,7 @@ export default function BalancerPickupMixPage() {
                   onSuccess: () => router.push("/balancer/mix"),
                 })
               }
+              onRename={(name) => renameMix.mutateAsync(name)}
               onSetSelfService={(patch) => setSelfService.mutate(patch)}
               savingSelfService={setSelfService.isPending}
               onPostSignup={(selfSignup) => postSignup.mutate(selfSignup)}

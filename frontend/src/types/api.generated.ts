@@ -4013,7 +4013,7 @@ export interface paths {
         };
         /**
          * Users overview
-         * @description Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid.
+         * @description Permission: public; no authentication required. Returns a paginated, workspace-normalized player overview table built from the workspace grid. `workspace_id=all` reads across every workspace instead: divisions are then resolved on each row's own tournament grid and every referenced grid is returned in `division_grids`. A missing `workspace_id` is a 400.
          *
          *     RPC subject: `rpc.app.users.overview`
          */
@@ -4035,7 +4035,7 @@ export interface paths {
         };
         /**
          * Users overview catalog
-         * @description Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid.
+         * @description Permission: public; no authentication required. Returns the filter-catalog (facets) for the players-overview table from the workspace grid, or across every workspace with `workspace_id=all` (see `division_grids`).
          *
          *     RPC subject: `rpc.app.users.overview_catalog`
          */
@@ -4057,7 +4057,7 @@ export interface paths {
         };
         /**
          * Users overview stats
-         * @description Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid.
+         * @description Permission: public; no authentication required. Returns aggregate statistics for the players-overview table computed against the workspace grid, or across every workspace (each row on its own tournament grid) with `workspace_id=all`.
          *
          *     RPC subject: `rpc.app.users.overview_stats`
          */
@@ -4663,7 +4663,7 @@ export interface paths {
         };
         /**
          * Read one account's notification state
-         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs actually sent to them, newest first. Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the ledger. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
+         * @description Permission: global `auth_user.read`. Everything the account inspector shows about the account named by the path id: the effective Discord-DM group switches and per-workspace staff switches with defaults filled in, whether a Discord account is connected at all, the unread count that account's own bell shows (same audience rules as their inbox, not a platform-wide total) and the ten most recent Discord DMs handed to the bot for them, newest first, each with how far it got (`pending`, `posted`, `failed`, or `lost` when the broker dropped it). Skips are never recorded, so an empty `recent_deliveries` means nothing was sent — it is not a gap in the record. Unlike the self-service preferences read this acts on another account, which the global grant is what authorizes. 404 when the account does not exist.
          *
          *     RPC subject: `rpc.app.admin_user_notifications_get`
          */
@@ -9922,7 +9922,7 @@ export interface paths {
         post?: never;
         /**
          * Delete custom game
-         * @description Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster and every match it recorded, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.
+         * @description Permission: workspace membership plus the workspace `admin` or `owner` role (superuser counts). Permanently erases the mix together with its roster, every match it recorded and every Discord message it posted, and returns the deleted id. Irreversible, and unlike close it is not open to the mix's own host and co-hosts.
          *
          *     RPC subject: `rpc.balancer.custom.hard_delete`
          */
@@ -10042,6 +10042,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/posts/{post_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one custom game Discord post
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Asks the bot to delete one message this mix posted, named by its id from the mix's `discord_posts`, and returns the refreshed mix. 404 when the id belongs to another mix's message. Clicking twice is harmless; closing or cancelling a mix deletes nothing, its posts stay as history.
+         *
+         *     RPC subject: `rpc.balancer.custom.delete_discord_post`
+         */
+        delete: operations["delete__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_posts__post_id_"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/signup": {
         parameters: {
             query?: never;
@@ -10053,7 +10075,7 @@ export interface paths {
         put?: never;
         /**
          * Open custom game signup in Discord
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. 409 when the workspace has no mix channel configured.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Opens self-signup in the given mode (into the pool or onto the bench) and queues a card with Join / My roles / Leave buttons to the workspace-wide mix channel. The card is static: every click re-reads the mix, so it refuses correctly once signup closes or the mix ends. A mix has one signup card: posting again deletes the previous one from the channel first. 409 when the workspace has no mix channel configured.
          *
          *     RPC subject: `rpc.balancer.custom.post_signup`
          */
@@ -10190,6 +10212,28 @@ export interface paths {
          *     RPC subject: `rpc.balancer.custom.self_update`
          */
         patch: operations["patch__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__me"];
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rename custom game
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Replaces the mix's name (trimmed, 1-255 characters) and re-renders its live Discord signup card. Refused once the mix is closed.
+         *
+         *     RPC subject: `rpc.balancer.custom.rename`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__name"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map": {
@@ -12838,17 +12882,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** Paginated[UserOverviewRow] */
-        "app.Paginated_UserOverviewRow_": {
-            /** Page */
-            page: number;
-            /** Per Page */
-            per_page: number;
-            /** Results */
-            results: components["schemas"]["app.UserOverviewRow"][];
-            /** Total */
-            total: number;
-        };
         /** PlayerStatistics */
         "app.PlayerStatistics": {
             /** Id */
@@ -13002,6 +13035,8 @@ export interface components {
         "app.UserCatalogResponse": {
             /** Available Letters */
             available_letters: string[];
+            /** Division Grids */
+            division_grids?: components["schemas"]["app.DivisionGridVersionRead"][];
             /** Letters */
             letters: components["schemas"]["app.UserCatalogLetter"][];
             /** Total */
@@ -13389,10 +13424,31 @@ export interface components {
             avg_10: number;
             name: components["schemas"]["app.LogStatsName"];
         };
+        /**
+         * UserOverviewResponse
+         * @description Overview page plus every division grid its rows' divisions refer to.
+         */
+        "app.UserOverviewResponse": {
+            /** Division Grids */
+            division_grids?: components["schemas"]["app.DivisionGridVersionRead"][];
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: components["schemas"]["app.UserOverviewRow"][];
+            /** Total */
+            total: number;
+        };
         /** UserOverviewRoleDivision */
         "app.UserOverviewRoleDivision": {
             /** Division */
             division: number;
+            /**
+             * Division Grid Version Id
+             * @default null
+             */
+            division_grid_version_id: number | null;
             role: components["schemas"]["app.HeroClass"];
         };
         /** UserOverviewRow */
@@ -19093,7 +19149,7 @@ export interface components {
          *     A superset of ``NotificationPreferencesRead`` rather than a sibling of it:
          *     the operator's question is "why has this person not heard from us", and the
          *     switches alone cannot answer it -- an unlinked Discord, a badge nobody
-         *     clears and an empty delivery ledger are three different diagnoses.
+         *     clears and nothing ever sent are three different diagnoses.
          */
         "app.AdminUserNotificationsRead": {
             discord_dm: components["schemas"]["app.NotificationDmGroups"];
@@ -19677,12 +19733,14 @@ export interface components {
         };
         /**
          * NotificationDeliveryItem
-         * @description One row of the delivery ledger -- a message actually handed to Discord.
+         * @description One Discord DM the platform handed to the bot for this account.
          *
          *     Skips are not recorded upstream (preference off, nothing linked), so an
          *     empty list here means "we sent nothing", never "we sent something and did
          *     not write it down" -- which is the whole question the account inspector is
-         *     opened to answer.
+         *     opened to answer. ``status`` says how far it got: ``posted`` reached
+         *     Discord, ``failed`` was refused (the user blocked DMs), ``pending`` is on
+         *     its way and ``lost`` never will be -- the broker dropped the command.
          */
         "app.NotificationDeliveryItem": {
             /** Channel */
@@ -19701,6 +19759,8 @@ export interface components {
              * @default null
              */
             notification_id: number | null;
+            /** Status */
+            status: string;
             /**
              * Workspace Id
              * @default null
@@ -20335,6 +20395,11 @@ export interface components {
             outcome: components["schemas"]["balancer.CustomGameOutcome"];
             /** Variant Index */
             variant_index: number;
+        };
+        /** CustomGameRename */
+        "balancer.CustomGameRename": {
+            /** Name */
+            name: string;
         };
         /** CustomGameRosterUpdate */
         "balancer.CustomGameRosterUpdate": {
@@ -26981,6 +27046,7 @@ export interface operations {
         parameters: {
             query?: {
                 entities?: string;
+                workspace_id?: string;
             };
             header?: never;
             path: {
@@ -41297,7 +41363,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app.Paginated_UserOverviewRow_"];
+                    "application/json": components["schemas"]["app.UserOverviewResponse"];
                 };
             };
             /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
@@ -66409,6 +66475,86 @@ export interface operations {
             };
         };
     };
+    delete__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_posts__post_id_: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     post__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__discord_signup: {
         parameters: {
             query?: never;
@@ -67049,6 +67195,89 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["balancer.CustomGameSelfUpdate"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__custom_games__game_id__name: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.CustomGameRename"];
             };
         };
         responses: {

@@ -3973,6 +3973,14 @@
       "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Revokes a co-host grant, including a co-host removing themselves, and returns the refreshed mix. An account that has since left the workspace stays revocable.",
       "summary": "Remove custom game co-host"
     },
+    "rpc.balancer.custom.rename": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Replaces the mix's name (trimmed, 1-255 characters) and re-renders its live Discord signup card. Refused once the mix is closed.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameRename"
+      },
+      "summary": "Rename custom game"
+    },
     "rpc.balancer.custom.rotation": {
       "description": "Permission: public; no authentication required. Recommends who is owed the next seat and who should sit out, computed from this mix's own match history, read-only. The optional lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the other lobby or pinned to it is left out -- and splits at that lobby's seat count.",
       "query_params": [
@@ -23450,6 +23458,22 @@
         "variant_index"
       ],
       "title": "CustomGameRecordOutcome",
+      "type": "object"
+    },
+    "balancer.CustomGameRename": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CustomGameRename",
       "type": "object"
     },
     "balancer.CustomGameRosterUpdate": {

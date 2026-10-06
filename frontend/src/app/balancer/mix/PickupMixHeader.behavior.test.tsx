@@ -37,6 +37,7 @@ const onPostSignup = vi.fn();
 const onLobbyCountChange = vi.fn();
 const onDeleteDiscordPost = vi.fn();
 const onDeleteMix = vi.fn();
+const onRename = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -108,6 +109,7 @@ async function mount(
         onOpenAccess={onOpenAccess}
         canDelete={props.canDelete ?? false}
         onDeleteMix={onDeleteMix}
+        onRename={onRename}
         onSetSelfService={onSetSelfService}
         onPostSignup={onPostSignup}
         settingLobbyCount={false}
@@ -150,6 +152,7 @@ beforeEach(() => {
   onLobbyCountChange.mockReset();
   onDeleteDiscordPost.mockReset();
   onDeleteMix.mockReset();
+  onRename.mockReset();
 });
 
 // The `⋯` menu: what a host sets once per mix, and the irreversible delete.
@@ -196,6 +199,26 @@ describe("PickupMixHeader", () => {
     expect(moreTrigger(scope)).toBeNull();
     // Reading which mix is open is not a write.
     expect(scope.textContent).toContain("Thursday scrim");
+  });
+
+  it("lets a host rename the mix, trimmed, and a viewer not at all", async () => {
+    expect((await mount(game(), { canWrite: false })).querySelector('[aria-label="Edit mix name"]')).toBeNull();
+
+    onRename.mockResolvedValue(undefined);
+    const scope = await mount(game());
+    await click(scope.querySelector('[aria-label="Edit mix name"]'));
+    const input = scope.querySelector<HTMLInputElement>('input[aria-label="mix name"]');
+    if (!input) throw new Error("Expected the name input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "  Friday scrim ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await tick();
+    });
+
+    expect(onRename).toHaveBeenCalledWith("Friday scrim");
   });
 
   it("disables Add players until a mix has loaded", async () => {

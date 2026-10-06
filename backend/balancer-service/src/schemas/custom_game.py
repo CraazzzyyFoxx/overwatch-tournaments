@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import base64
 import binascii
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator, model_validator
 
 from shared.core.enums import MixParticipation, MixSelfSignup
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
@@ -25,6 +25,7 @@ __all__ = (
     "CustomGamePostDiscord",
     "CustomGamePostSignup",
     "CustomGameRecordOutcome",
+    "CustomGameRename",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
     "CustomGameSelfServicePatch",
@@ -38,20 +39,20 @@ class _Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+#: Trimmed before the length check, so a blank name is refused rather than stored.
+_MixName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+
+
 class CustomGameCreate(_Request):
-    name: str = Field(min_length=1, max_length=255)
+    name: _MixName
     member_ids: list[int] = Field(default_factory=list, max_length=100)
     #: Start from a previous mix of this workspace: its pool, role setup, role
     #: shape, points knob, team names and co-hosts, but none of its played state.
     clone_from_game_id: int | None = None
 
-    @field_validator("name")
-    @classmethod
-    def _trim_name(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("name is required")
-        return trimmed
+
+class CustomGameRename(_Request):
+    name: _MixName
 
 
 class CustomGameRosterUpdate(_Request):

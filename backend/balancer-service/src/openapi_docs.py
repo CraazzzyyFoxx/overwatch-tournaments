@@ -513,6 +513,14 @@ DOCS: dict[str, dict] = {
             "lobby stay in the history and in the statistics."
         ),
     },
+    "rpc.balancer.custom.rename": {
+        "summary": "Rename custom game",
+        "description": (
+            "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
+            "Replaces the mix's name (trimmed, 1-255 characters) and re-renders its live Discord "
+            "signup card. Refused once the mix is closed."
+        ),
+    },
     "rpc.balancer.custom.hard_delete": {
         "summary": "Delete custom game",
         "description": (

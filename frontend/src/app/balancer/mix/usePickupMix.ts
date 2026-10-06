@@ -235,6 +235,12 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  const renameMix = useMutation({
+    mutationFn: (name: string) => customGameService.rename(workspaceId, selectedGameId as number, name),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
   /**
    * Hands the matchup to the bot for the mix's Discord channel, as the PNG the
    * caller rasterised from the matchup card. Nothing about the mix changes, so
@@ -550,6 +556,7 @@ export function usePickupMix(
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
+    renameMix,
     postToDiscord,
     transferHost,
     addCoHost,

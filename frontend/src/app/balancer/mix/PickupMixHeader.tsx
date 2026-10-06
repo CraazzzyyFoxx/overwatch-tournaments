@@ -19,6 +19,7 @@ import {
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { InlineEditText } from "@/components/kit/InlineEditText";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
@@ -77,6 +78,8 @@ type PickupMixHeaderProps = {
   game: CustomGame | undefined;
   gameLoading: boolean;
   onOpenPool: () => void;
+  /** Omitted -- the name is read-only. Resolve/reject so the editor knows whether to close. */
+  onRename?: (name: string) => Promise<unknown>;
   onOpenAccess: () => void;
   /** Workspace admin (or superuser) -- gates the irreversible hard delete,
    * a stronger grant than the host-or-co-host `canWrite` above. */
@@ -119,6 +122,7 @@ export function PickupMixHeader({
   canDelete = false,
   deleting = false,
   onDeleteMix,
+  onRename,
   onSetSelfService,
   savingSelfService = false,
   onPostSignup,
@@ -148,9 +152,20 @@ export function PickupMixHeader({
       <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
 
       <div className="flex min-w-[12rem] flex-1 items-center gap-2.5">
-        <h1 className="min-w-0 truncate font-display text-xl font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
-          {game?.name ?? (gameLoading ? "\u2026" : "No mix yet")}
-        </h1>
+        {canWrite && game != null && onRename ? (
+          <InlineEditText
+            value={game.name}
+            label="mix name"
+            onSave={onRename}
+            className="min-w-0"
+            textClassName="font-display text-xl font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]"
+            inputClassName="h-8 max-w-sm"
+          />
+        ) : (
+          <h1 className="min-w-0 truncate font-display text-xl font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
+            {game?.name ?? (gameLoading ? "\u2026" : "No mix yet")}
+          </h1>
+        )}
         {game ? (
           <span className="shrink-0 text-caption font-semibold text-[color:var(--aqt-fg-dim)]">
             {`#${game.id}`}

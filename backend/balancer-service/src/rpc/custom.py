@@ -1,6 +1,6 @@
 """Pickup mixes over typed RPC.
 
-``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,set_lobby_count,
+``rpc.balancer.custom.{create,list,get,rename,update_roster,update_player,set_participation,set_lobby_count,
 balance,set_team_names,set_next_map,set_variant_index,
 post_discord,post_signup,delete_discord_post,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
 match_history,undo_match,rotation,stats,close,delete,hard_delete,
@@ -826,6 +826,30 @@ def register(broker: Any, logger: Any) -> None:
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_lobby_count", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.rename")
+    async def _rename(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameRename, data)
+            game = await custom_game_service.rename(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                name=body.name,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            # The signup card shows the name, so it re-renders like any other change.
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="name", actor_user_id=user.id
+            )
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.rename", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.balance")
     async def _balance(data: dict, msg: RabbitMessage) -> dict:

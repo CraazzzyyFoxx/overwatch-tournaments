@@ -704,6 +704,13 @@ export const customGameService = {
     }).then((r) => r.json());
   },
 
+  rename(workspaceId: number, gameId: number, name: string): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/name`, {
+      method: "PUT",
+      body: { name },
+    }).then((r) => r.json());
+  },
+
   /** The caller's own standing in this mix: seat, blockers, what they may do. */
   getMySeat(workspaceId: number, gameId: number): Promise<MixSelfState> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/me`).then((r) =>
