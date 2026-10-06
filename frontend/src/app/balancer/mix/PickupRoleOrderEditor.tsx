@@ -3,8 +3,10 @@
 import {
   NEUTRAL_RANK_ACCENT,
   ROLE_RANK_ACCENTS,
-  RoleRankControls,
+  RoleRankControls
 } from "@/app/balancer/components/RoleRankControls";
+import { rectSortingStrategy } from "@dnd-kit/sortable";
+
 import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Switch } from "@/components/ui/switch";
@@ -63,82 +65,87 @@ export function PickupRoleOrderEditor({
   onReorder,
   onToggle,
   onFlexChange,
-  rankFor,
+  rankFor
 }: Readonly<PickupRoleOrderEditorProps>) {
   const offRoles = LINEUP_ROLES.filter((role) => !order.includes(role));
 
   return (
-    <>
-      <div
-        className={cn(
-          "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
-          isFlex
-            ? "border-emerald-400/20 bg-emerald-500/[0.08]"
-            : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]",
-        )}
-      >
-        <div className="min-w-0">
-          <span className="text-xs font-medium text-[color:var(--aqt-fg)]">Full flex</span>
-          {isFlex ? (
-            <p className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">
-              Every role is equally preferred — priority order stops mattering.
-            </p>
-          ) : (
-            <p className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">
-              Drag below to set who the balancer seats first.
-            </p>
+    // 2x2 once the container fits two cards (the mix panel); a narrow sheet stays one column.
+    // `contents` on the lists lets their cards sit in this grid directly.
+    <div className="@container">
+      <div className="grid gap-2 @xl:grid-cols-2">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
+            isFlex
+              ? "border-emerald-400/20 bg-emerald-500/[0.08]"
+              : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]"
           )}
-        </div>
-        <Switch
-          checked={isFlex}
-          disabled={disabled}
-          aria-label={`Full flex for ${label}`}
-          onCheckedChange={onFlexChange}
-        />
-      </div>
-
-      <SortableRows
-        items={order}
-        getId={(role) => role}
-        onReorder={onReorder}
-        className="space-y-2"
-      >
-        {(role, index) => (
-          <SortableRoleCard
-            key={role}
-            id={role}
-            role={role}
-            label={label}
-            priority={index + 1}
-            isPrimary={index === 0}
+        >
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-[color:var(--aqt-fg)]">Full flex</span>
+            {isFlex ? (
+              <p className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">
+                Every role is equally preferred — priority order stops mattering.
+              </p>
+            ) : (
+              <p className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">
+                Drag below to set who the balancer seats first.
+              </p>
+            )}
+          </div>
+          <Switch
+            checked={isFlex}
             disabled={disabled}
-            onToggle={() => onToggle(role)}
-            rank={rankFor(role)}
+            aria-label={`Full flex for ${label}`}
+            onCheckedChange={onFlexChange}
           />
-        )}
-      </SortableRows>
+        </div>
 
-      {offRoles.length === 0 ? null : (
-        <ul className="space-y-2 pt-0.5">
-          {offRoles.map((role) => (
-            <li
+        <SortableRows
+          items={order}
+          getId={(role) => role}
+          onReorder={onReorder}
+          strategy={rectSortingStrategy}
+          className="contents"
+        >
+          {(role, index) => (
+            <SortableRoleCard
               key={role}
-              className="flex items-start gap-2.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-2.5 opacity-80"
-            >
-              <RoleCardBody
-                role={role}
-                label={label}
-                isOn={false}
-                isPrimary={false}
-                disabled={disabled}
-                onToggle={() => onToggle(role)}
-                rank={rankFor(role)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
+              id={role}
+              role={role}
+              label={label}
+              priority={index + 1}
+              isPrimary={index === 0}
+              disabled={disabled}
+              onToggle={() => onToggle(role)}
+              rank={rankFor(role)}
+            />
+          )}
+        </SortableRows>
+
+        {offRoles.length === 0 ? null : (
+          <ul className="contents">
+            {offRoles.map((role) => (
+              <li
+                key={role}
+                className="flex items-start gap-2.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-2.5 opacity-80"
+              >
+                <RoleCardBody
+                  role={role}
+                  label={label}
+                  isOn={false}
+                  isPrimary={false}
+                  disabled={disabled}
+                  onToggle={() => onToggle(role)}
+                  rank={rankFor(role)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -151,7 +158,7 @@ function SortableRoleCard({
   isPrimary,
   disabled,
   onToggle,
-  rank,
+  rank
 }: Readonly<{
   id: string;
   role: RoleCode;
@@ -172,7 +179,7 @@ function SortableRoleCard({
       className={cn(
         "flex items-start gap-2.5 rounded-xl border bg-[color:var(--aqt-overlay-2)] p-2.5 transition-colors",
         "border-[color:var(--aqt-border-2)]",
-        ROLE_RANK_ACCENTS[role]?.row,
+        ROLE_RANK_ACCENTS[role]?.row
       )}
     >
       <div className="flex flex-col items-center gap-1">
@@ -213,7 +220,7 @@ function RoleCardBody({
   isPrimary,
   disabled,
   onToggle,
-  rank,
+  rank
 }: Readonly<{
   role: RoleCode;
   label: string;
@@ -234,7 +241,7 @@ function RoleCardBody({
           <span
             className={cn(
               "text-xs font-semibold",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-muted)]",
+              isOn ? accent.text : "text-[color:var(--aqt-fg-muted)]"
             )}
           >
             {ROLE_LABELS[role]}
@@ -243,7 +250,7 @@ function RoleCardBody({
             <span
               className={cn(
                 "shrink-0 rounded px-1.5 py-px text-label font-bold uppercase tracking-label",
-                accent.chip,
+                accent.chip
               )}
             >
               First
@@ -262,7 +269,7 @@ function RoleCardBody({
           <span
             className={cn(
               "text-label font-semibold uppercase tracking-label",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]",
+              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             {isOn ? "Active" : "Off"}
@@ -275,7 +282,7 @@ function RoleCardBody({
           <span
             className={cn(
               "text-xs font-semibold tabular-nums",
-              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]",
+              isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             {rank.rankValue ?? "—"}
