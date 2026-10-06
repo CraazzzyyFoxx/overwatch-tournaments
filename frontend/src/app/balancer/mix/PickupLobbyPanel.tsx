@@ -15,6 +15,7 @@ import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrom
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useDragSensors } from "@/hooks/useDragSensors";
 import { ROLE_LABELS, ROLES } from "@/lib/roster/roles";
@@ -163,43 +164,48 @@ export function PickupLobbyPanel({
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {canWrite && rotation.length > 0 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                ICON_BUTTON_CLASS,
-                "size-7 shrink-0",
-                pendingHintCount > 0 && "text-[color:var(--aqt-amber)] hover:text-[color:var(--aqt-amber)]",
-              )}
-              title={
+            <IconTooltip
+              control
+              label={
                 pendingHintCount > 0
                   ? `Apply ${pendingHintCount} rotation hint${pendingHintCount === 1 ? "" : "s"}`
                   : "Lineup already matches the rotation hints"
               }
-              disabled={applyingHints || pendingHintCount === 0}
-              onClick={onApplyRotationHints}
             >
-              <Wand2 className="size-3.5" aria-hidden="true" />
-              <span className="sr-only">Apply rotation hints</span>
-            </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  ICON_BUTTON_CLASS,
+                  "size-7 shrink-0",
+                  pendingHintCount > 0 && "text-[color:var(--aqt-amber)] hover:text-[color:var(--aqt-amber)]",
+                )}
+                disabled={applyingHints || pendingHintCount === 0}
+                onClick={onApplyRotationHints}
+              >
+                <Wand2 className="size-3.5" aria-hidden="true" />
+                <span className="sr-only">Apply rotation hints</span>
+              </Button>
+            </IconTooltip>
           ) : null}
           {canWrite && rows.length > 0 ? (
             <>
               {/* Icon-only: the confirm dialog already spells the action out in
                   full. */}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(ICON_BUTTON_CLASS, "size-7 shrink-0 hover:text-rose-200")}
-                title="Empty the lobby"
-                disabled={clearing}
-                onClick={() => setClearOpen(true)}
-              >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">Empty the lobby</span>
-              </Button>
+              <IconTooltip control label="Empty the lobby">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(ICON_BUTTON_CLASS, "size-7 shrink-0 hover:text-rose-200")}
+                  disabled={clearing}
+                  onClick={() => setClearOpen(true)}
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  <span className="sr-only">Empty the lobby</span>
+                </Button>
+              </IconTooltip>
               <ConfirmDialog
                 open={clearOpen}
                 onOpenChange={setClearOpen}

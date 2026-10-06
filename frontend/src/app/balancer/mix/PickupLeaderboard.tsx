@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import {
   Select,
@@ -161,7 +162,10 @@ function LeaderboardRow({ rank, member }: Readonly<{ rank: number; member: MixMe
             <bdi>{name}</bdi>
           </span>
           {streak ? (
-            <span
+            <IconTooltip
+              label={t(member.streak > 0 ? "winStreak" : "lossStreak", {
+                count: Math.abs(member.streak)
+              })}
               className={cn(
                 "shrink-0 rounded px-1 text-label font-semibold tabular-nums",
                 member.streak > 0
@@ -169,13 +173,8 @@ function LeaderboardRow({ rank, member }: Readonly<{ rank: number; member: MixMe
                   : "bg-[color:color-mix(in_srgb,var(--aqt-rose)_14%,transparent)] text-[color:var(--aqt-rose)]"
               )}
             >
-              <span className="sr-only">
-                {t(member.streak > 0 ? "winStreak" : "lossStreak", {
-                  count: Math.abs(member.streak)
-                })}
-              </span>
               <span aria-hidden="true">{streak}</span>
-            </span>
+            </IconTooltip>
           ) : null}
         </span>
       </th>

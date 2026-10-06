@@ -6,6 +6,7 @@ import { CAPTION_CLASS, CARD_TITLE_CLASS, EYEBROW_CLASS } from "@/app/balancer/m
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Input } from "@/components/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -158,13 +159,14 @@ export function PickupAddPlayersDialog({
               <span className={cn(EYEBROW_CLASS, "min-w-0 flex-1")}>Player</span>
               <div aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
                 {ROLES.map((role) => (
-                  <span
+                  <IconTooltip
                     key={role.code}
-                    title={ROLE_LABELS[role.code]}
-                    className="flex size-8 items-center justify-center opacity-70"
+                    label={ROLE_LABELS[role.code]}
+                    hint="This host's rank for the role"
+                    className="size-8 items-center justify-center opacity-70"
                   >
                     <PlayerRoleIcon role={role.icon} size={14} decorative />
-                  </span>
+                  </IconTooltip>
                 ))}
               </div>
             </div>

@@ -6,7 +6,8 @@ import { AlertCircle } from "lucide-react";
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { OW_REFERENCE_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { ROLES, ROLE_LABELS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 
@@ -64,20 +65,19 @@ export function SeatRow({
             : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] hover:bg-[color:var(--aqt-overlay-3)]"
       )}
     >
-      <span
-        className="flex size-6 shrink-0 items-center justify-center opacity-90"
-        title={`${ROLE_LABELS[seat.role]}${seat.subRole ? ` \u00B7 ${seat.subRole}` : ""}`}
+      <IconTooltip
+        label={`${ROLE_LABELS[seat.role]}${seat.subRole ? ` \u00B7 ${seat.subRole}` : ""}`}
+        className="size-6 shrink-0 items-center justify-center opacity-90"
       >
-        <PlayerRoleIcon role={icon} size={24} label={ROLE_LABELS[seat.role]} />
-      </span>
+        <PlayerRoleIcon role={icon} size={24} decorative />
+      </IconTooltip>
       {division == null ? null : (
-        <DivisionIcon
-          division={division}
-          tournamentGrid={grid}
-          width={32}
-          height={32}
+        <IconTooltip
+          label={getDivisionLabel(grid, division) ?? String(division)}
           className="shrink-0"
-        />
+        >
+          <DivisionIcon division={division} tournamentGrid={grid} width={32} height={32} />
+        </IconTooltip>
       )}
       <span
         className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--aqt-fg)]"
@@ -86,13 +86,13 @@ export function SeatRow({
         {seat.name}
       </span>
       {seat.offRole ? (
-        <span
-          title="Assigned off their first-preference role"
-          className="flex size-4 shrink-0 items-center justify-center text-[color:var(--aqt-amber)]"
+        <IconTooltip
+          label="Off-role"
+          hint="Assigned off their first-preference role"
+          className="size-4 shrink-0 items-center justify-center text-[color:var(--aqt-amber)]"
         >
           <AlertCircle className="size-3.5" aria-hidden="true" />
-          <span className="sr-only">Off-role</span>
-        </span>
+        </IconTooltip>
       ) : null}
       <span className="shrink-0 text-lg font-bold tabular-nums text-[color:var(--aqt-fg)]">
         {seat.rating == null ? "\u2014" : Math.round(seat.rating)}

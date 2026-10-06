@@ -11,6 +11,7 @@ import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/Sor
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Switch } from "@/components/ui/switch";
 import DivisionIcon from "@/components/DivisionIcon";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { OW_REFERENCE_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { ROLE_LABELS, getRoleIconName, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
@@ -313,18 +314,22 @@ function RankChip({
   // The global OW grid: a mix's ranks resolve against it (`workspace_id=None`).
   const division = resolveDivisionFromRank(OW_REFERENCE_GRID, rank.rankValue);
   const divisionLabel = getDivisionLabel(OW_REFERENCE_GRID, division);
-  const title = [divisionLabel, rank.sourceLabel].filter(Boolean).join(" · ");
 
   return (
-    <span className="flex items-center gap-1.5" title={title || undefined}>
+    <span className="flex items-center gap-1.5">
       {division != null ? (
-        <DivisionIcon
-          division={division}
-          tournamentGrid={OW_REFERENCE_GRID}
-          width={20}
-          height={20}
-          className={cn("size-5 object-contain", !active && "opacity-50")}
-        />
+        <IconTooltip
+          label={divisionLabel ?? String(division)}
+          hint={rank.sourceLabel ?? "The rank the balancer uses for this role"}
+        >
+          <DivisionIcon
+            division={division}
+            tournamentGrid={OW_REFERENCE_GRID}
+            width={20}
+            height={20}
+            className={cn("size-5 object-contain", !active && "opacity-50")}
+          />
+        </IconTooltip>
       ) : null}
       <span
         className={cn(

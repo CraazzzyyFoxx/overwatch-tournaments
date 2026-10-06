@@ -6,6 +6,7 @@ import { UserCog, X } from "lucide-react";
 import { Combobox } from "@/components/kit/Combobox";
 import { useSearchComboboxQuery } from "@/components/kit/useSearchComboboxQuery";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import {
   Dialog,
@@ -171,17 +172,19 @@ export function PickupAccessDialog({
                   className="flex items-center justify-between gap-2 rounded-md border border-[color:var(--aqt-border)] px-2.5 py-1.5 text-sm"
                 >
                   <span className="truncate">{coHost.display_name || `#${coHost.user_id}`}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    disabled={removingCoHostId === coHost.user_id}
-                    onClick={() => onRemoveCoHost(coHost.user_id)}
-                    aria-label={`Remove ${coHost.display_name || `#${coHost.user_id}`} as co-host`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
+                  <IconTooltip control label="Remove co-host" className="shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={removingCoHostId === coHost.user_id}
+                      onClick={() => onRemoveCoHost(coHost.user_id)}
+                      aria-label={`Remove ${coHost.display_name || `#${coHost.user_id}`} as co-host`}
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </IconTooltip>
                 </li>
               ))}
             </ul>

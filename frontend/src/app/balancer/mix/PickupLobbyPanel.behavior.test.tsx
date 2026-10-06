@@ -291,9 +291,8 @@ describe("PickupLobbyPanel rotation hints", () => {
       ],
     });
 
-    const badge = scope.querySelector('[title="Sat 1 map(s) in a row \u2014 owed a seat"]');
-    expect(badge).not.toBeNull();
-    expect(badge?.textContent).toContain("Sat 1 map(s) in a row \u2014 owed a seat");
+    const badge = scope.querySelector('[aria-label="Sat 1 map(s) in a row \u2014 owed a seat"]');
+    expect(badge?.getAttribute("role")).toBe("img");
   });
 
   it("marks a member who has played the most in a row with a should-rest hint", async () => {
@@ -310,7 +309,7 @@ describe("PickupLobbyPanel rotation hints", () => {
       ],
     });
 
-    expect(scope.querySelector('[title="Played 3 map(s) in a row"]')).not.toBeNull();
+    expect(scope.querySelector('[aria-label="Played 3 map(s) in a row"]')).not.toBeNull();
   });
 
   it("renders no hint for a row already pinned must_play -- the Pin already says it", async () => {
@@ -327,7 +326,7 @@ describe("PickupLobbyPanel rotation hints", () => {
       ],
     });
 
-    expect(scope.querySelector('[title="Закреплён хостом (must_play)"]')).toBeNull();
+    expect(scope.querySelector('[aria-label="Закреплён хостом (must_play)"]')).toBeNull();
   });
 
   it("renders no hint for a neutral verdict or when no rotation data has loaded", async () => {
@@ -346,7 +345,7 @@ describe("PickupLobbyPanel rotation hints", () => {
     expect(neutral.textContent).not.toContain("Seats cover the whole pool");
 
     const noData = await mount([row()]);
-    expect(noData.querySelector('[title*="owed a seat"]')).toBeNull();
+    expect(noData.querySelector('[aria-label*="owed a seat"]')).toBeNull();
   });
 });
 

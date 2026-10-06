@@ -2,6 +2,7 @@
 
 import { ROLE_ICON_COLOR } from "@/app/balancer/mix/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { ROLE_LABELS, ROLES } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { CustomGamePlayer, CustomGamePlayerPatch } from "@/services/custom-game.service";
@@ -52,34 +53,40 @@ export function RolePriorityRail({
         const roleRank = row.ranks[role];
         const icon = ROLES.find((item) => item.code === role)?.icon ?? "Support";
         return (
-          <button
+          <IconTooltip
             key={role}
-            type="button"
-            disabled={!canWrite || saving}
-            aria-pressed={isOn}
-            aria-label={`${ROLE_LABELS[role]} for ${label}, ${
-              isOn ? (isPrimary ? "first choice" : "also plays") : "off"
-            }${roleRank == null ? ", no rank" : `, ${roleRank} points`}`}
-            title={
+            control
+            className="shrink-0"
+            label={
               roleRank == null
                 ? `${ROLE_LABELS[role]}: no rank`
                 : `${ROLE_LABELS[role]}: ${roleRank} pts`
             }
-            onClick={() => onPatch({ roles: toggleRole(order, role) })}
-            className={cn(
-              "relative flex size-[30px] shrink-0 items-center justify-center rounded-lg transition-opacity",
-              isOn ? "opacity-100" : "opacity-30",
-              isOn && roleRank == null && "ring-1 ring-amber-400/70",
-              "disabled:cursor-default"
-            )}
+            hint={isOn ? (isPrimary ? "First choice" : "Also plays") : "Off"}
           >
-            <PlayerRoleIcon
-              role={icon}
-              size={19}
-              decorative
-              color={isOn ? ROLE_ICON_COLOR[role] : undefined}
-            />
-          </button>
+            <button
+              type="button"
+              disabled={!canWrite || saving}
+              aria-pressed={isOn}
+              aria-label={`${ROLE_LABELS[role]} for ${label}, ${
+                isOn ? (isPrimary ? "first choice" : "also plays") : "off"
+              }${roleRank == null ? ", no rank" : `, ${roleRank} points`}`}
+              onClick={() => onPatch({ roles: toggleRole(order, role) })}
+              className={cn(
+                "relative flex size-[30px] items-center justify-center rounded-lg transition-opacity",
+                isOn ? "opacity-100" : "opacity-30",
+                isOn && roleRank == null && "ring-1 ring-amber-400/70",
+                "disabled:cursor-default"
+              )}
+            >
+              <PlayerRoleIcon
+                role={icon}
+                size={19}
+                decorative
+                color={isOn ? ROLE_ICON_COLOR[role] : undefined}
+              />
+            </button>
+          </IconTooltip>
         );
       })}
     </div>

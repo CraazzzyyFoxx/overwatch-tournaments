@@ -21,6 +21,7 @@ import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -236,18 +237,20 @@ export function PickupMixHeader({
 
         {canWrite || offerDelete ? (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                disabled={game == null}
-                aria-label={th("more")}
-              >
-                <MoreHorizontal className="size-4" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
+            <IconTooltip control label={th("more")} className="shrink-0">
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  disabled={game == null}
+                  aria-label={th("more")}
+                >
+                  <MoreHorizontal className="size-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+            </IconTooltip>
             <DropdownMenuContent align="end" className="w-56">
               {canWrite && onLobbyCountChange ? (
                 <>
@@ -628,20 +631,26 @@ function DiscordMenu({
                           <ExternalLink className="size-3" aria-hidden="true" />
                         </a>
                       ) : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0 text-[color:var(--aqt-fg-muted)] hover:text-rose-200"
-                        disabled={post.status === "deleting"}
-                        aria-label={t("posts.delete", { label })}
-                        onClick={() => {
-                          setOpen(false);
-                          setConfirming(post);
-                        }}
+                      <IconTooltip
+                        control
+                        label={t("posts.delete", { label })}
+                        className="shrink-0"
                       >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-[color:var(--aqt-fg-muted)] hover:text-rose-200"
+                          disabled={post.status === "deleting"}
+                          aria-label={t("posts.delete", { label })}
+                          onClick={() => {
+                            setOpen(false);
+                            setConfirming(post);
+                          }}
+                        >
+                          <Trash2 className="size-3.5" aria-hidden="true" />
+                        </Button>
+                      </IconTooltip>
                     </li>
                   );
                 })}

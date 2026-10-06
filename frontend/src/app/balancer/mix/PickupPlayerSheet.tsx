@@ -10,6 +10,7 @@ import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Label } from "@/components/ui/label";
 import {
   Sheet,
@@ -380,18 +381,19 @@ export function PickupPlayerSheet({
 
         {row != null && canEdit ? (
           <SheetFooter className="shrink-0 border-t border-[color:var(--aqt-border)] px-5 py-2.5 sm:justify-between sm:space-x-0">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled={saving}
-              onClick={onRemove}
-              title={`Remove ${label} from this mix`}
-              className="h-8 w-8 shrink-0 rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-rose)_35%,transparent)] bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:text-rose-100"
-            >
-              <UserMinus className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="sr-only">{`Remove ${label} from this mix`}</span>
-            </Button>
+            <IconTooltip control label="Remove from this mix" className="shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={saving}
+                onClick={onRemove}
+                className="h-8 w-8 rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-rose)_35%,transparent)] bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:text-rose-100"
+              >
+                <UserMinus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="sr-only">{`Remove ${label} from this mix`}</span>
+              </Button>
+            </IconTooltip>
             <div className="flex gap-2">
               <Button
                 variant="outline"

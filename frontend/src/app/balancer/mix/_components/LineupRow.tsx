@@ -9,7 +9,8 @@ import { Armchair, GripVertical, RotateCw, SlidersHorizontal, X } from "lucide-r
 import { PANEL_CLASS, splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import DivisionIcon from "@/components/DivisionIcon";
-import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { OW_REFERENCE_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import type {
   CustomGamePlayer,
@@ -60,16 +61,15 @@ function RotationHintBadge({
   const isOwed = hint.status === "must_play";
   const Icon = isOwed ? RotateCw : Armchair;
   return (
-    <span
-      title={hint.reason}
+    <IconTooltip
+      label={hint.reason}
       className={cn(
-        "flex size-[18px] shrink-0 items-center justify-center",
+        "size-[18px] shrink-0 items-center justify-center",
         isOwed ? "text-[color:var(--aqt-amber)]" : "text-[color:var(--aqt-fg-faint)]"
       )}
     >
       <Icon className="size-3.5" aria-hidden="true" />
-      <span className="sr-only">{hint.reason}</span>
-    </span>
+    </IconTooltip>
   );
 }
 
@@ -101,22 +101,27 @@ function LineupLobbyBadge({ currentLobby }: Readonly<{ currentLobby: 0 | 1 | nul
   const t = useTranslations("mixes.lobbies");
   const seated = currentLobby === 0 || currentLobby === 1;
   return (
-    <span
-      data-testid="lineup-lobby"
-      title={
+    <IconTooltip
+      label={
         seated
           ? t("seatedIn", { letter: LOBBY_LETTERS[currentLobby as number] })
           : t("waitingTitle")
       }
-      className={cn(
-        "flex h-[18px] shrink-0 items-center justify-center rounded px-1 text-label font-extrabold uppercase tracking-label",
-        seated
-          ? cn(teamAccent(currentLobby as number).bar, "text-[color:var(--aqt-bg)]")
-          : "text-[color:var(--aqt-fg-faint)]"
-      )}
+      className="shrink-0"
     >
-      {seated ? LOBBY_LETTERS[currentLobby as number] : t("waiting")}
-    </span>
+      <span
+        data-testid="lineup-lobby"
+        aria-hidden="true"
+        className={cn(
+          "flex h-[18px] items-center justify-center rounded px-1 text-label font-extrabold uppercase tracking-label",
+          seated
+            ? cn(teamAccent(currentLobby as number).bar, "text-[color:var(--aqt-bg)]")
+            : "text-[color:var(--aqt-fg-faint)]"
+        )}
+      >
+        {seated ? LOBBY_LETTERS[currentLobby as number] : t("waiting")}
+      </span>
+    </IconTooltip>
   );
 }
 
@@ -211,7 +216,9 @@ export function LineupRow({
 
       <div className="flex w-[92px] shrink-0 items-center justify-end gap-1.5">
         {division == null ? null : (
-          <DivisionIcon division={division} tournamentGrid={grid} width={22} height={22} />
+          <IconTooltip label={getDivisionLabel(grid, division) ?? String(division)}>
+            <DivisionIcon division={division} tournamentGrid={grid} width={22} height={22} />
+          </IconTooltip>
         )}
         {/* One number, one meaning: the mean of the effective ranks the balancer
             will use. The `*` that used to mark a per-mix pin is gone with the pin
@@ -224,27 +231,29 @@ export function LineupRow({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={onOpen}
-        title="Advanced settings"
-        className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)]"
-      >
-        <SlidersHorizontal className="size-[15px]" aria-hidden="true" />
-        <span className="sr-only">{`Advanced settings for ${label}`}</span>
-      </button>
+      <IconTooltip control label="Advanced settings" className="shrink-0">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex size-6 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)]"
+        >
+          <SlidersHorizontal className="size-[15px]" aria-hidden="true" />
+          <span className="sr-only">{`Advanced settings for ${label}`}</span>
+        </button>
+      </IconTooltip>
 
       {canWrite ? (
         <RowAction>
-          <button
-            type="button"
-            onClick={onRemove}
-            title="Remove from this mix"
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-rose)]"
-          >
-            <X className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">{`Remove ${label} from this mix`}</span>
-          </button>
+          <IconTooltip control label="Remove from this mix">
+            <button
+              type="button"
+              onClick={onRemove}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-rose)]"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+              <span className="sr-only">{`Remove ${label} from this mix`}</span>
+            </button>
+          </IconTooltip>
         </RowAction>
       ) : null}
     </li>
