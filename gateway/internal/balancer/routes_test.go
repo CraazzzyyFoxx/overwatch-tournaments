@@ -145,6 +145,7 @@ func TestRosterRoutes(t *testing.T) {
 		"GET /api/v1/balancer/workspaces/{workspace_id}/players/summary":           "rpc.balancer.players.summary",
 		"POST /api/v1/balancer/workspaces/{workspace_id}/players":                  "rpc.balancer.players.upsert",
 		"PUT /api/v1/balancer/workspaces/{workspace_id}/players/{member_id}/ranks": "rpc.balancer.players.set_ranks",
+		"GET /api/v1/balancer/workspaces/{workspace_id}/ranks":                     "rpc.balancer.ranks.list",
 	}
 	for _, route := range RosterRoutes {
 		key := route.Method + " " + route.Pattern

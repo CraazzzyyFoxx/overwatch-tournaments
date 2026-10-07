@@ -1239,6 +1239,58 @@
       "confirmTitle": "{count, plural, one {Overwrite # individual time?} other {Overwrite # individual times?}}",
       "confirmDescription": "{count, plural, one {# match in {round} was moved on its own} other {# matches in {round} were moved on their own}}. Overwriting replaces those times with the round time. Cancelling keeps them and still applies the round time to the rest.",
       "confirmLabel": "Overwrite all"
+    },
+    "rankOverview": {
+      "title": "Ranks",
+      "description": "Every rank value in this workspace — one row per value, read-only.",
+      "searchPlaceholder": "Search by battle tag or name…",
+      "empty": "No rank values yet. They appear once a member is rated, scraped or registered.",
+      "emptyFiltered": "No rank value matches these filters.",
+      "noWorkspace": "Pick a workspace to see its ranks.",
+      "lobby": "Lobby {letter}",
+      "unauthorized": {
+        "title": "Not available",
+        "description": "Reading the workspace rank table needs the team.update permission here."
+      },
+      "columns": {
+        "player": "Player",
+        "layer": "Layer",
+        "author": "Author",
+        "role": "Role",
+        "rankValue": "Rank",
+        "division": "Division",
+        "source": "Source",
+        "canonDiff": "Δ canon",
+        "delta": "Δ",
+        "sigma": "Sigma",
+        "context": "Context",
+        "at": "When"
+      },
+      "layers": {
+        "canon": "Canon",
+        "author": "Author",
+        "ow": "Overwatch",
+        "hidden": "Hidden",
+        "effective_tournament": "Effective (tournament)",
+        "effective_mix": "Effective (mix)",
+        "registration": "Registration",
+        "tournament": "Tournament roster",
+        "casual": "Mix seat"
+      },
+      "sources": {
+        "author": "Author",
+        "workspace": "Workspace",
+        "ow": "Overwatch"
+      },
+      "filters": {
+        "layer": "Layer",
+        "author": "Author",
+        "role": "Role",
+        "divisionMin": "Division from",
+        "divisionMax": "Division to",
+        "differsFromCanon": "Differs from canon",
+        "dateRange": "Any date"
+      }
     }
   },
   "matchEdit": {

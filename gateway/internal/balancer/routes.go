@@ -72,6 +72,10 @@ var RosterRoutes = []edge.RouteSpec{
 	// the caller's own book. A foreign author is never writable, so it is not a
 	// path segment -- reading somebody else's book is a query param on the list.
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/players/{member_id}/ranks", Queue: "rpc.balancer.players.set_ranks", IDParam: "member_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Read-only admin rank overview: every rank value of every workspace member,
+	// one flat row per value. AllQuery because the filter set is wide (repeated
+	// ?layer=/?role=/?author_user_id=) and entirely server-side.
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranks", Queue: "rpc.balancer.ranks.list", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/players/authors", Queue: "rpc.balancer.players.authors", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	// The five mix reads (list, stats, get, matches, rotation) are public:
 	// AuthNone, like the draft spectating reads. A mix screen is a lobby board

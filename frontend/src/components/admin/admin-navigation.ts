@@ -4,6 +4,7 @@ import {
   Bell,
   Building2,
   Gamepad2,
+  Gauge,
   History,
   LayoutDashboard,
   Megaphone,
@@ -142,6 +143,19 @@ export const adminNavigationGroups: AdminNavGroup[] = [
         // scope and the row filter (`users_admin._scope`), so an owner sees their
         // own roster's identities. Writes to the global identity still demand a
         // GLOBAL grant, which is why the page gates its actions on `hasPermission`.
+      },
+      {
+        title: "Ranks",
+        href: "/admin/ranks",
+        icon: Gauge,
+        description:
+          "Every rank value in the workspace — canon, author books, OW, hidden and the computed effective numbers.",
+        // "rank" belongs to Collectors; aliases are unique across the sidebar.
+        aliases: ["canon", "author ranks", "hidden rating", "effective", "sr", "mmr"],
+        // `team.update`, not `rank.read`: the table exposes each organiser's
+        // private book and the seeding weight of the roster, which is the
+        // roster owner's data. The endpoint gates on the same grant.
+        permissions: ["team.update"],
       },
       {
         title: "Teams",
@@ -368,6 +382,7 @@ const adminRoutePermissions: Array<{
 
   // ── Data browsers ──
   { prefix: "/admin/people", permissions: ["user.read"] },
+  { prefix: "/admin/ranks", permissions: ["team.update"] },
   { prefix: "/admin/tournaments", permissions: ["tournament.read"] },
   { prefix: "/admin/teams", permissions: ["team.read"] },
   { prefix: "/admin/matches", permissions: ["match.read"] },

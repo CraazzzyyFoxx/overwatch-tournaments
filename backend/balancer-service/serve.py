@@ -34,6 +34,7 @@ from src.rpc import draft as rpc_draft
 from src.rpc import jobs as rpc_jobs
 from src.rpc import players as rpc_players
 from src.rpc import prefs as rpc_prefs
+from src.rpc import ranks as rpc_ranks
 from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_service
 from src.services.mix_signup_projector import register as register_signup_projector
@@ -79,6 +80,8 @@ rpc_draft.register(broker, logger)
 rpc_jobs.register(broker, logger)
 rpc_custom.register(broker, logger)
 rpc_players.register(broker, logger)
+# Read-only admin view of every rank value in the workspace, all layers flat.
+rpc_ranks.register(broker, logger)
 # The host's own solver knobs, which every mix they host balances with.
 rpc_prefs.register(broker, logger)
 # The signup card as a projection: every mix mutation emits

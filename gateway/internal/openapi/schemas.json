@@ -4591,6 +4591,137 @@
       },
       "summary": "Set my pickup mix preferences"
     },
+    "rpc.balancer.ranks.list": {
+      "description": "Permission: workspace member holding `team.update` -- the same grant writing the canon needs, because this read puts every author's private book on one screen. Read-only. One flat row per rank value across nine layers (canon, author, ow, hidden, effective_tournament, effective_mix, registration, tournament, casual); the six current layers are the default. The two effective layers are computed in SQL and agree with the resolver the balancer runs on: effective_tournament is canon over OW on the workspace grid, effective_mix is the author's book over the canon over OW on the global grid. `division` is resolved on the workspace's effective grid for every row. Filtering, sorting, the exact total and the page all run in the database.",
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "description": "1-based page, default 1.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..200, default 50.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "player_id",
+          "required": false,
+          "schema": {
+            "description": "Only this players.user id.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "q",
+          "required": false,
+          "schema": {
+            "description": "Needle matched against battle_tag, display_name and name.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "layer",
+          "required": false,
+          "schema": {
+            "description": "Repeatable. One of ['canon', 'author', 'ow', 'hidden', 'effective_tournament', 'effective_mix', 'registration', 'tournament', 'casual']; defaults to the current layers ['canon', 'author', 'ow', 'hidden', 'effective_tournament', 'effective_mix'].",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "author_user_id",
+          "required": false,
+          "schema": {
+            "description": "Repeatable. Only these authors/hosts.",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "role",
+          "required": false,
+          "schema": {
+            "description": "Repeatable. tank/damage/support.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "name": "rank_min",
+          "required": false,
+          "schema": {
+            "description": "Lowest rank_value kept.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "rank_max",
+          "required": false,
+          "schema": {
+            "description": "Highest rank_value kept.",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "differs_from_canon",
+          "required": false,
+          "schema": {
+            "description": "Keep only author rows whose canon_diff IS DISTINCT FROM 0.",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "date_from",
+          "required": false,
+          "schema": {
+            "description": "ISO-8601 lower bound on `at`.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "date_to",
+          "required": false,
+          "schema": {
+            "description": "ISO-8601 upper bound on `at`.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "description": "One of ['at', 'rank_value', 'display_name', 'layer', 'role', 'canon_diff', 'delta']; default display_name.",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "description": "asc|desc, default asc.",
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "balancer.Paginated_RankOverviewRow_"
+      },
+      "summary": "List all rank values in the workspace"
+    },
     "rpc.balancer.teams.export_registered": {
       "description": "Permission: admin-panel access plus workspace `team.create`. Materializes the tournament's complete registered teams into balancer teams, optionally narrowed to given team ids, and returns removed/imported/created counts plus every team skipped and why, and emits a teams-changed realtime event when anything was imported.",
       "summary": "Export registered teams"
@@ -25568,6 +25699,37 @@
       "title": "MixSelfSignup",
       "type": "string"
     },
+    "balancer.Paginated_RankOverviewRow_": {
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.RankOverviewRow"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "Paginated[RankOverviewRow]",
+      "type": "object"
+    },
     "balancer.PlayerData": {
       "properties": {
         "all_discomforts": {
@@ -25639,6 +25801,293 @@
         "all_ratings"
       ],
       "title": "PlayerData",
+      "type": "object"
+    },
+    "balancer.RankContext": {
+      "description": "What the row belongs to, when it belongs to something.\n\n``tournament`` for registration/roster rows, ``mix`` for a recorded casual\nmatch, ``battle_tag`` for an Overwatch snapshot -- whose ``team`` carries the\nsnapshot's platform, the only thing a battle tag is further split by.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tournament or custom-game id; null for a battle tag.",
+          "title": "Id"
+        },
+        "kind": {
+          "enum": [
+            "tournament",
+            "mix",
+            "battle_tag"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "lobby_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which lobby of the mix played the match.",
+          "title": "Lobby Index"
+        },
+        "team": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Roster team name, or the platform on an ow row.",
+          "title": "Team"
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "title": "RankContext",
+      "type": "object"
+    },
+    "balancer.RankOverviewRow": {
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null on the computed effective layers.",
+          "title": "At"
+        },
+        "author_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author Name"
+        },
+        "author_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "auth.user id of the book's author, the mix's host, or null.",
+          "title": "Author User Id"
+        },
+        "battle_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Battle Tag"
+        },
+        "canon_diff": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "author only: rank_value minus the canon, null if none.",
+          "title": "Canon Diff"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.RankContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "casual only: how far the match moved this seat.",
+          "title": "Delta"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "division": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resolved on the workspace's effective grid.",
+          "title": "Division"
+        },
+        "layer": {
+          "enum": [
+            "canon",
+            "author",
+            "ow",
+            "hidden",
+            "effective_tournament",
+            "effective_mix",
+            "registration",
+            "tournament",
+            "casual"
+          ],
+          "title": "Layer",
+          "type": "string"
+        },
+        "member_id": {
+          "description": "workspace_member id.",
+          "title": "Member Id",
+          "type": "integer"
+        },
+        "ow_division": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ow only: the native OverFast division, e.g. 'gold'.",
+          "title": "Ow Division"
+        },
+        "ow_tier": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ow only: the native tier inside that division.",
+          "title": "Ow Tier"
+        },
+        "player_id": {
+          "description": "players.user id -- the identity /admin/people/[id] is keyed by.",
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "rank_value": {
+          "title": "Rank Value",
+          "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "tank/damage/support; casual rows may hold any HeroClass.",
+          "title": "Role"
+        },
+        "sigma": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "hidden only.",
+          "title": "Sigma"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "author",
+                "workspace",
+                "ow"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "effective_* only: which layer won.",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "layer",
+        "player_id",
+        "member_id",
+        "rank_value"
+      ],
+      "title": "RankOverviewRow",
       "type": "object"
     },
     "balancer.RanksExportResponse": {

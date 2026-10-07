@@ -594,6 +594,20 @@ DOCS: dict[str, dict] = {
         "summary": "List rank authors",
         "description": "Permission: workspace membership (any role); no resource grant is checked. Returns everyone who has personally rank-corrected a member in this workspace, busiest first, with their display name and correction count.",
     },
+    "rpc.balancer.ranks.list": {
+        "summary": "List all rank values in the workspace",
+        "description": (
+            "Permission: workspace member holding `team.update` -- the same grant writing the canon "
+            "needs, because this read puts every author's private book on one screen. Read-only. "
+            "One flat row per rank value across nine layers (canon, author, ow, hidden, "
+            "effective_tournament, effective_mix, registration, tournament, casual); the six current "
+            "layers are the default. The two effective layers are computed in SQL and agree with the "
+            "resolver the balancer runs on: effective_tournament is canon over OW on the workspace "
+            "grid, effective_mix is the author's book over the canon over OW on the global grid. "
+            "`division` is resolved on the workspace's effective grid for every row. Filtering, "
+            "sorting, the exact total and the page all run in the database."
+        ),
+    },
     "rpc.balancer.teams.export_registered": {
         "summary": "Export registered teams",
         "description": (

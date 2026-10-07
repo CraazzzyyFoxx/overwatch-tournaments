@@ -10600,6 +10600,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/balancer/workspaces/{workspace_id}/ranks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all rank values in the workspace
+         * @description Permission: workspace member holding `team.update` -- the same grant writing the canon needs, because this read puts every author's private book on one screen. Read-only. One flat row per rank value across nine layers (canon, author, ow, hidden, effective_tournament, effective_mix, registration, tournament, casual); the six current layers are the default. The two effective layers are computed in SQL and agree with the resolver the balancer runs on: effective_tournament is canon over OW on the workspace grid, effective_mix is the author's book over the canon over OW on the global grid. `division` is resolved on the workspace's effective grid for every row. Filtering, sorting, the exact total and the page all run in the database.
+         *
+         *     RPC subject: `rpc.balancer.ranks.list`
+         */
+        get: operations["get__api_v1_balancer_workspaces__workspace_id__ranks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/division-grids/by-workspace/{workspace_id}": {
         parameters: {
             query?: never;
@@ -20551,6 +20573,149 @@ export interface components {
          * @enum {string}
          */
         "balancer.MixSelfSignup": BalancerMixSelfSignup;
+        /** Paginated[RankOverviewRow] */
+        "balancer.Paginated_RankOverviewRow_": {
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Results */
+            results: components["schemas"]["balancer.RankOverviewRow"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * RankContext
+         * @description What the row belongs to, when it belongs to something.
+         *
+         *     ``tournament`` for registration/roster rows, ``mix`` for a recorded casual
+         *     match, ``battle_tag`` for an Overwatch snapshot -- whose ``team`` carries the
+         *     snapshot's platform, the only thing a battle tag is further split by.
+         */
+        "balancer.RankContext": {
+            /**
+             * Id
+             * @description Tournament or custom-game id; null for a battle tag.
+             * @default null
+             */
+            id: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: BalancerRankContextKind;
+            /** Label */
+            label: string;
+            /**
+             * Lobby Index
+             * @description Which lobby of the mix played the match.
+             * @default null
+             */
+            lobby_index: number | null;
+            /**
+             * Team
+             * @description Roster team name, or the platform on an ow row.
+             * @default null
+             */
+            team: string | null;
+        };
+        /** RankOverviewRow */
+        "balancer.RankOverviewRow": {
+            /**
+             * At
+             * @description Null on the computed effective layers.
+             * @default null
+             */
+            at: string | null;
+            /**
+             * Author Name
+             * @default null
+             */
+            author_name: string | null;
+            /**
+             * Author User Id
+             * @description auth.user id of the book's author, the mix's host, or null.
+             * @default null
+             */
+            author_user_id: number | null;
+            /**
+             * Battle Tag
+             * @default null
+             */
+            battle_tag: string | null;
+            /**
+             * Canon Diff
+             * @description author only: rank_value minus the canon, null if none.
+             * @default null
+             */
+            canon_diff: number | null;
+            /** @default null */
+            context: components["schemas"]["balancer.RankContext"] | null;
+            /**
+             * Delta
+             * @description casual only: how far the match moved this seat.
+             * @default null
+             */
+            delta: number | null;
+            /**
+             * Display Name
+             * @default null
+             */
+            display_name: string | null;
+            /**
+             * Division
+             * @description Resolved on the workspace's effective grid.
+             * @default null
+             */
+            division: number | null;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: BalancerRankOverviewRowLayer;
+            /**
+             * Member Id
+             * @description workspace_member id.
+             */
+            member_id: number;
+            /**
+             * Ow Division
+             * @description ow only: the native OverFast division, e.g. 'gold'.
+             * @default null
+             */
+            ow_division: string | null;
+            /**
+             * Ow Tier
+             * @description ow only: the native tier inside that division.
+             * @default null
+             */
+            ow_tier: number | null;
+            /**
+             * Player Id
+             * @description players.user id -- the identity /admin/people/[id] is keyed by.
+             */
+            player_id: number;
+            /** Rank Value */
+            rank_value: number;
+            /**
+             * Role
+             * @description tank/damage/support; casual rows may hold any HeroClass.
+             * @default null
+             */
+            role: string | null;
+            /**
+             * Sigma
+             * @description hidden only.
+             * @default null
+             */
+            sigma: number | null;
+            /**
+             * Source
+             * @description effective_* only: which layer won.
+             * @default null
+             */
+            source: BalancerRankOverviewRowSourceAnyOf0 | null;
+        };
         /**
          * UserMixPreferencesRead
          * @description What is stored, plus the shape it resolves to.
@@ -68988,6 +69153,99 @@ export interface operations {
             };
         };
     };
+    get__api_v1_balancer_workspaces__workspace_id__ranks: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+                player_id?: number;
+                q?: string;
+                layer?: string[];
+                author_user_id?: number[];
+                role?: string[];
+                rank_min?: number;
+                rank_max?: number;
+                differs_from_canon?: boolean;
+                date_from?: string;
+                date_to?: string;
+                sort?: string;
+                order?: string;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.Paginated_RankOverviewRow_"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_division_grids_by_workspace__workspace_id_: {
         parameters: {
             query?: never;
@@ -73248,6 +73506,27 @@ export enum BalancerMixSelfSignup {
     closed = "closed",
     pool = "pool",
     benched = "benched"
+}
+export enum BalancerRankContextKind {
+    tournament = "tournament",
+    mix = "mix",
+    battle_tag = "battle_tag"
+}
+export enum BalancerRankOverviewRowLayer {
+    canon = "canon",
+    author = "author",
+    ow = "ow",
+    hidden = "hidden",
+    effective_tournament = "effective_tournament",
+    effective_mix = "effective_mix",
+    registration = "registration",
+    tournament = "tournament",
+    casual = "casual"
+}
+export enum BalancerRankOverviewRowSourceAnyOf0 {
+    author = "author",
+    workspace = "workspace",
+    ow = "ow"
 }
 export enum BalancerUserMixPreferencesReadRating_mode {
     points = "points",

@@ -57,6 +57,97 @@ export type WorkspacePlayerListParams = {
   authorOnly?: boolean;
 };
 
+/**
+ * Every rank value a workspace member carries, as one flat (long-format) table:
+ * one row = one number, whatever produced it. The layer says which.
+ *
+ * The six "current" layers are what a member is rated at right now -- the two
+ * `effective_*` ones are computed server-side, which is why they have no `at`.
+ * The three history layers are what they were rated at in a past registration,
+ * roster or mix seat. Omitting the filter asks for the current six.
+ */
+export const CURRENT_RANK_LAYERS = [
+  "canon",
+  "author",
+  "ow",
+  "hidden",
+  "effective_tournament",
+  "effective_mix",
+] as const;
+
+export const HISTORY_RANK_LAYERS = ["registration", "tournament", "casual"] as const;
+
+export const RANK_LAYERS = [...CURRENT_RANK_LAYERS, ...HISTORY_RANK_LAYERS] as const;
+
+export type RankLayer = (typeof RANK_LAYERS)[number];
+
+/** The three roles a rank can be held for; a casual seat may carry another hero class. */
+export const RANK_OVERVIEW_ROLES = ["tank", "damage", "support"] as const;
+
+/**
+ * What a row is *about* beyond the member: the tournament it was registered
+ * for, the mix it was seated in, or the battle tag it was scraped from. For
+ * `battle_tag`, `team` carries the OW platform rather than a team name.
+ */
+export type RankOverviewContext = {
+  kind: "tournament" | "mix" | "battle_tag";
+  id: number | null;
+  label: string;
+  team: string | null;
+  lobby_index: number | null;
+};
+
+export type RankOverviewRow = {
+  layer: RankLayer;
+  /** `players.user` id -- what `/admin/people/{id}` takes. */
+  player_id: number;
+  member_id: number;
+  display_name: string | null;
+  battle_tag: string | null;
+  /** `auth.user` id of the author, mix book owner or casual host. */
+  author_user_id: number | null;
+  author_name: string | null;
+  role: string | null;
+  rank_value: number;
+  /** Resolved on the WORKSPACE effective grid, server-side, for every layer. */
+  division: number | null;
+  /** `effective_*` only: which layer the number was taken from. */
+  source: "author" | "workspace" | "ow" | null;
+  /** `hidden` only. */
+  sigma: number | null;
+  /** `casual` only: what the seat's result moved the rating by. */
+  delta: number | null;
+  /** `author` only: the author's number minus canon, or null when canon is unset. */
+  canon_diff: number | null;
+  /** `ow` only, native ladder naming (e.g. "gold" 3). */
+  ow_division: string | null;
+  ow_tier: number | null;
+  context: RankOverviewContext | null;
+  /** Null for the computed `effective_*` layers, which have no source timestamp. */
+  at: string | null;
+};
+
+export type RankOverviewListParams = {
+  page?: number;
+  perPage?: number;
+  /** `players.user` id -- the person tab's fixed filter. */
+  playerId?: number;
+  /** Free text over battle tag and display name. */
+  query?: string;
+  layer?: string[];
+  authorUserId?: number[];
+  role?: string[];
+  rankMin?: number;
+  rankMax?: number;
+  /** Author rows whose number is not exactly canon (including "no canon"). */
+  differsFromCanon?: boolean;
+  /** `YYYY-MM-DD`, on `at`. */
+  dateFrom?: string;
+  dateTo?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+};
+
 export const workspacePlayerKeys = {
   all: (workspaceId: number) => ["workspace-players", workspaceId] as const,
   list: (workspaceId: number, params: WorkspacePlayerListParams = {}) =>
@@ -95,6 +186,37 @@ export const workspacePlayerService = {
   /** Every author who has ever set a rank here, busiest first. */
   listAuthors(workspaceId: number): Promise<{ authors: RosterAuthor[] }> {
     return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/players/authors`).then((r) => r.json());
+  },
+
+  /**
+   * Every rank value in the workspace, one row each, read-only.
+   *
+   * Filtering, sorting and paging all run in the DB, so an omitted param means
+   * "do not narrow" rather than "narrow to nothing" -- in particular an empty
+   * `layer` leaves the server on its default of the six current layers.
+   */
+  listRanks(
+    workspaceId: number,
+    params: RankOverviewListParams = {},
+  ): Promise<PaginatedResponse<RankOverviewRow>> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/ranks`, {
+      query: {
+        page: params.page ?? 1,
+        per_page: params.perPage ?? 30,
+        ...(params.playerId == null ? {} : { player_id: params.playerId }),
+        ...(params.query ? { q: params.query } : {}),
+        ...(params.layer?.length ? { layer: params.layer } : {}),
+        ...(params.authorUserId?.length ? { author_user_id: params.authorUserId } : {}),
+        ...(params.role?.length ? { role: params.role } : {}),
+        ...(params.rankMin == null ? {} : { rank_min: params.rankMin }),
+        ...(params.rankMax == null ? {} : { rank_max: params.rankMax }),
+        ...(params.differsFromCanon ? { differs_from_canon: 1 } : {}),
+        ...(params.dateFrom ? { date_from: params.dateFrom } : {}),
+        ...(params.dateTo ? { date_to: params.dateTo } : {}),
+        ...(params.sort ? { sort: params.sort } : {}),
+        ...(params.order ? { order: params.order } : {}),
+      },
+    }).then((r) => r.json());
   },
 
   upsert(workspaceId: number, battleTag: string, displayName?: string): Promise<RosterMember> {

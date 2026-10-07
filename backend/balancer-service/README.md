@@ -89,6 +89,7 @@ The worker subscribes to `rpc.balancer.*` and consumes one durable job queue. Me
 | `rpc.balancer.draft.*` | Board and session reads, feasibility/suggestions/pick options, admin lifecycle, pick actions, export |
 | `rpc.balancer.custom.*` | Mix lifecycle, lineup, host/co-host grants, role mask, balance, seat swaps, outcomes, rotation, Discord posts (`post_signup`, `post_discord`, `delete_discord_post`), the player's own seat (`self_*`, including `self_current` — the newest open mix of a workspace, for the bot's `/mix`) |
 | `rpc.balancer.players.*` | Workspace roster page, rank writes per layer, ranking-author list |
+| `rpc.balancer.ranks.list` | Read-only admin overview: every rank value of every workspace member, one flat row per value |
 
 The full method list with request/response schemas is published at `/api/docs`, generated from
 `src/openapi_schemas.py` (`OPERATIONS`) and `src/openapi_docs.py` (`DOCS`). Neither table currently
@@ -202,6 +203,16 @@ disagree with it. `players.set_ranks` picks the layer from the request's `scope`
 layer is always the caller's own — a foreign book is readable by every workspace member and writable
 by nobody else. Deleting a role from a layer is how inheritance is restored. Reads return both
 dictionaries side by side so a client can tell an inherited number from an overridden one.
+
+Those two layers are what a *balance* consults. A member's rank value nonetheless exists in nine
+places — the two layers, the mix ranker's hidden rating, the latest Overwatch snapshot, the two
+effective values the resolver computes, and the three historical records (registration, tournament
+roster seat, recorded mix seat). `ranks.list` (`src/services/rank_overview.py`) puts all nine on one
+screen as a long-format table: one row per rank value, no grouping, a single `UNION ALL` so the
+filters, the sort, the exact total and the page all run in Postgres. The two effective layers are
+computed in SQL rather than read from a table, which is why `tests/test_rank_overview.py` pins them
+against `MemberRankService.resolve` for both orders on the same fixture. It is read-only and needs
+`team.update` — the same grant writing the canon needs, because it shows every author's book at once.
 
 ### Mix ranker
 

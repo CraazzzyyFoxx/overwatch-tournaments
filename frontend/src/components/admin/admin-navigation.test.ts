@@ -20,12 +20,13 @@ describe("admin navigation structure", () => {
     ]);
   });
 
-  it("is fifteen entries, not twenty-four", () => {
-    expect(allItems).toHaveLength(15);
+  it("is sixteen entries, not twenty-four", () => {
+    expect(allItems).toHaveLength(16);
     expect(allItems.map((item) => item.href)).toEqual([
       "/admin",
       "/admin/tournaments",
       "/admin/people",
+      "/admin/ranks",
       "/admin/teams",
       "/admin/matches",
       "/admin/achievements",
@@ -122,6 +123,7 @@ describe("route gates", () => {
   it.each([
     ["/admin/people", ["user.read"]],
     ["/admin/people/42", ["user.read"]],
+    ["/admin/ranks", ["team.update"]],
     ["/admin/teams", ["team.read"]],
     ["/admin/matches", ["match.read"]],
     ["/admin/matches/42", ["match.read"]],
@@ -206,6 +208,7 @@ describe("route gates", () => {
       "/admin/tournaments/14/settings/general",
       "/admin/people",
       "/admin/people/42",
+      "/admin/ranks",
       "/admin/teams",
       "/admin/teams/9",
       "/admin/matches",

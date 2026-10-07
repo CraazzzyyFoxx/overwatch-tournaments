@@ -8,6 +8,7 @@ balance_get) and bare-dict / 204 handlers are omitted.
 
 from __future__ import annotations
 
+from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
 from shared.services.chat import (
     HISTORY_DEFAULT,
@@ -22,6 +23,7 @@ from shared.services.chat import (
 )
 from src import schemas
 from src.schemas import custom_game
+from src.schemas.ranks import CURRENT_LAYERS, LAYERS, SORTS
 
 OPERATIONS: dict[str, Op] = {
     # ── config (public) ────────────────────────────────────────────────────
@@ -171,6 +173,34 @@ OPERATIONS: dict[str, Op] = {
                 description="Whose rank book author_total counts; defaults to the caller.",
             ),
         )
+    ),
+    # ── the flat rank overview (read-only, team.update) ────────────────────
+    "rpc.balancer.ranks.list": Op(
+        response=Paginated[schemas.RankOverviewRow],
+        query_params=(
+            QueryParam("page", "integer", description="1-based page, default 1."),
+            QueryParam("per_page", "integer", description="Page size, clamped to 1..200, default 50."),
+            QueryParam("player_id", "integer", description="Only this players.user id."),
+            QueryParam("q", description="Needle matched against battle_tag, display_name and name."),
+            QueryParam(
+                "layer",
+                array=True,
+                description=f"Repeatable. One of {list(LAYERS)}; defaults to the current layers {list(CURRENT_LAYERS)}.",
+            ),
+            QueryParam("author_user_id", "integer", array=True, description="Repeatable. Only these authors/hosts."),
+            QueryParam("role", array=True, description="Repeatable. tank/damage/support."),
+            QueryParam("rank_min", "integer", description="Lowest rank_value kept."),
+            QueryParam("rank_max", "integer", description="Highest rank_value kept."),
+            QueryParam(
+                "differs_from_canon",
+                "boolean",
+                description="Keep only author rows whose canon_diff IS DISTINCT FROM 0.",
+            ),
+            QueryParam("date_from", description="ISO-8601 lower bound on `at`."),
+            QueryParam("date_to", description="ISO-8601 upper bound on `at`."),
+            QueryParam("sort", description=f"One of {list(SORTS)}; default display_name."),
+            QueryParam("order", description="asc|desc, default asc."),
+        ),
     ),
     # ── the caller's own mix solver knobs ──────────────────────────────────
     "rpc.balancer.prefs.get": Op(response=schemas.UserMixPreferencesRead),
