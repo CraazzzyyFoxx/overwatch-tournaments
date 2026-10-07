@@ -258,6 +258,14 @@ already seated: 409 `seat_conflict`.
 member seated in the other lobby's selected variant. `undo_match` rolls back the newest match **of
 that match's lobby** (`newest_id_for_lobby`), not of the mix.
 
+Rank movement on `record_outcome` follows the **host's** `user_config.rating_mode`: `points` moves
+both teams by `points_per_win` (decided matches only, frozen in `points_per_win_applied`); `ranker`
+moves each seat by the mix ranker (draws included, never against the result, frozen per seat in
+`casual.player.rank_delta_applied`) and the host's mixes balance on the effective rating. Either way
+the workspace's hidden ratings (`member_hidden_rating`) advance. `undo_match` gives back what was
+frozen, then rebuilds the hidden ratings from the remaining history. The hidden book is derived data:
+saving a new `rating_min`/`rating_max`/`rating_avg`/`sigma_init` or the admin's rebuild replays it.
+
 Rotation (`mix_rotation.py`): longest sit-out streak → shortest played streak → fewest games → input
 order. `must_play` always seated. No history, or the whole pool fits → all `NEUTRAL` (do not invent
 fairness). **A match whose `match_busy_player` set contains the member is skipped entirely** — he was

@@ -1,5 +1,5 @@
 import type { RosterSlotCode, RosterSlotMap } from "@/lib/roster/shape";
-import type { MixBalancerPreferences } from "@/services/mix-preferences.service";
+import type { MixBalancerPreferences, MixRatingMode } from "@/services/mix-preferences.service";
 
 /**
  * What a stored mix preference means, as the settings panel edits it. Pure
@@ -114,6 +114,7 @@ export type MixPrefsDraft = {
   variants: number;
   roleMask: RosterSlotMap | null;
   pointsPerWin: number | null;
+  ratingMode: MixRatingMode;
 };
 
 /** The draft a stored row (or an empty one) opens as. */
@@ -124,6 +125,7 @@ export function draftOf(preferences: MixBalancerPreferences | null | undefined):
     variants: variantsOf(preferences),
     roleMask: roleMaskOf(preferences),
     pointsPerWin: pointsPerWinOf(preferences),
+    ratingMode: preferences?.rating_mode === "ranker" ? "ranker" : "points",
   };
 }
 
@@ -144,5 +146,7 @@ export function preferencesPayload(draft: MixPrefsDraft): MixBalancerPreferences
       draft.pointsPerWin == null || draft.pointsPerWin <= 0
         ? null
         : Math.min(MAX_POINTS_PER_WIN, Math.round(draft.pointsPerWin)),
+    // Not a knob with a default to clear: the server stores one of two modes.
+    rating_mode: draft.ratingMode,
   };
 }

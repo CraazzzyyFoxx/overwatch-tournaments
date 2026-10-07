@@ -160,6 +160,7 @@ from .custom_game import (
     CustomGameRepository,
     CustomGameTeamNameRepository,
 )
+from .member_hidden_rating import MemberHiddenRatingRepository
 from .member_rank import MemberRankRepository
 from .quota import (
     QuotaApiKeyLimitRepository,
@@ -241,6 +242,7 @@ __all__ = (
     "MatchKillFeedRepository",
     "MatchRepository",
     "MatchStatisticsRepository",
+    "MemberHiddenRatingRepository",
     "MemberRankRepository",
     "MLModelArtifactRepository",
     "OAuthConnectionRepository",

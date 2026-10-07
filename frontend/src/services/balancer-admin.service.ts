@@ -34,7 +34,10 @@ import {
   RegistrationRankAutofillResponse,
   SavedBalance,
   WorkspaceBalancerConfig,
-  WorkspaceBalancerConfigUpsert
+  WorkspaceBalancerConfigUpsert,
+  WorkspaceRankerRead,
+  WorkspaceRankerRebuildResponse,
+  WorkspaceRankerUpsert
 } from "@/types/balancer-admin.types";
 import type {
   StatusScope,
@@ -262,6 +265,34 @@ export default class balancerAdminService {
         method: "PUT",
         body: data
       }
+    );
+    return response.json();
+  }
+
+  static async getWorkspaceRanker(workspaceId: number): Promise<WorkspaceRankerRead> {
+    const response = await apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/ranker`);
+    return response.json();
+  }
+
+  static async upsertWorkspaceRanker(
+    workspaceId: number,
+    data: WorkspaceRankerUpsert
+  ): Promise<WorkspaceRankerRead> {
+    const response = await apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/ranker`,
+      {
+        method: "PUT",
+        body: data
+      }
+    );
+    return response.json();
+  }
+
+  /** Replays the workspace's whole mix history; seconds, not milliseconds. */
+  static async rebuildWorkspaceRanker(
+    workspaceId: number
+  ): Promise<WorkspaceRankerRebuildResponse> {
+    const response = await apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/ranker/rebuild`,
+      { method: "POST" }
     );
     return response.json();
   }

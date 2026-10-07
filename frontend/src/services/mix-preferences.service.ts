@@ -31,7 +31,16 @@ export type MixBalancerPreferences = {
   role_mask: RosterSlotMap | null;
   /** Rank points a recorded win moves, in the host's own book; `null`/`0` = off. */
   points_per_win: number | null;
+  /**
+   * How a recorded result moves the host's rank book. `"points"` is the flat
+   * `points_per_win` above; `"ranker"` ignores it and moves ranks by the
+   * ranker formula, balancing on the effective rating instead of the open one.
+   */
+  rating_mode: MixRatingMode;
 };
+
+/** The two ways a host's rank book reacts to a recorded match. */
+export type MixRatingMode = "points" | "ranker";
 
 /**
  * What a read adds on top: the stored shape already resolved, so the editor can

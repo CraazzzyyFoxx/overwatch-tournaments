@@ -62,6 +62,33 @@ DOCS: dict[str, dict] = {
             "workspace-wide Discord channel for mix matchups."
         ),
     },
+    "rpc.balancer.admin.workspace_ranker_get": {
+        "summary": "Get workspace mix ranker settings",
+        "description": (
+            "Permission: admin-panel access plus workspace `workspace.read`. "
+            "Returns the mix ranker's knobs in force for this workspace (the defaults when never saved) "
+            "and how many hidden ratings its members hold. The ranker implements mixtura-ranker by "
+            "Dmitriy (@dmelackov), https://github.com/mixtura-dev/mixtura-ranker."
+        ),
+    },
+    "rpc.balancer.admin.workspace_ranker_upsert": {
+        "summary": "Set workspace mix ranker settings",
+        "description": (
+            "Permission: admin-panel access plus workspace `team.update`. "
+            "Replaces all seven knobs at once. Changing rating_min, rating_max, rating_avg or sigma_init "
+            "reinterprets every stored hidden rating, so the call rebuilds them from the workspace's "
+            "recorded mix matches before answering. 422 unless rating_min < rating_avg < rating_max."
+        ),
+    },
+    "rpc.balancer.admin.workspace_ranker_rebuild": {
+        "summary": "Rebuild hidden mix ratings from history",
+        "description": (
+            "Permission: admin-panel access plus workspace `team.update`. "
+            "Replays every recorded mix match of the workspace in order and replaces all hidden ratings "
+            "with the result; open ranks are not touched. Returns how many matches were replayed and "
+            "how many hidden ratings came out."
+        ),
+    },
     "rpc.balancer.admin.teams_import": {
         "summary": "Import teams file",
         "description": "Permission: admin-panel access plus workspace `team.create`. Bulk-imports tournament teams from a multipart JSON upload (atravkovs or internal format, auto-detected) and emits a teams-changed realtime event.",
@@ -455,7 +482,9 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Freezes one played match of a balance option into the mix's history, moving both teams' "
-            "ranks in the host's book by points_per_win when a winner is given and redeeming every "
+            "ranks in the host's book -- by points_per_win when a winner is given, or seat by seat by the "
+            "mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden "
+            "ratings, and redeeming every "
             "seat's must_play pin back to the pool. The match is stamped with the lobby that played it "
             "and with whoever was playing the other lobby at that moment, whom rotation then counts as "
             "neither played nor sat out. Repeatable until the mix is closed."
@@ -470,7 +499,8 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Deletes the lobby's most recent match and gives back exactly the rank points it applied, "
-            "read from the match itself rather than the mix's current points_per_win. "
+            "read from the match and its seats rather than the host's current settings, then rebuilds "
+            "the workspace's hidden ratings from the remaining history. "
             "404 when the match belongs to another mix and 409 when a newer match of the SAME lobby "
             "exists, since the rank book compounds. must_play pins the recording redeemed are not "
             "restored."
@@ -581,9 +611,9 @@ DOCS: dict[str, dict] = {
             "preferences only. "
             "Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, "
             "the per-role weights, how many balance options to keep, the roster shape its mixes "
-            "field and how far a decided match moves its rank book -- plus roster_shape, the "
-            "read-only resolution of that shape. A null value means the setting was never saved and "
-            "the default applies."
+            "field, how far a decided match moves its rank book and whether the mix ranker moves it "
+            "instead (rating_mode) -- plus roster_shape, the read-only resolution of that shape. A null "
+            "value means the setting was never saved and the default applies."
         ),
     },
     "rpc.balancer.prefs.upsert": {
@@ -591,7 +621,7 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: self-service -- any authenticated (active) account writes its own "
             "preferences only. "
-            "Replaces all five of the caller's mix settings at once and returns the stored result "
+            "Replaces all six of the caller's mix settings at once and returns the stored result "
             "with the re-resolved roster_shape; a null clears one back to the default, and 0 points "
             "per win stores as unset. They apply to every mix this account hosts -- a mix runs on "
             "its host's preferences whoever presses the button. 422 on an impossible roster shape."

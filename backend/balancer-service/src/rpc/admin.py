@@ -9,6 +9,7 @@ commit), then emits the same realtime data events as the HTTP routes.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
@@ -23,6 +24,7 @@ from src.rpc import _common as c
 from src.services.admin._mappers import serialize_balance, serialize_tournament_config
 from src.services.admin.balancer import balancer_admin_service
 from src.services.balancer.realtime import EXPORT_RESOURCES, emit_balancer_data
+from src.services.mix_ranker import mix_ranker_service, settings_from_json
 
 _SF = db.async_session_maker
 
@@ -55,6 +57,15 @@ def _config_to_read(
         rank_delta_hide_from_pool=bool(payload.get("rank_delta_hide_from_pool", False)),
         mix_discord_channel_id=channel,
         updated_by=cfg.updated_by,
+    )
+
+
+async def _ranker_read(session: Any, workspace_id: int) -> schemas.WorkspaceRankerRead:
+    settings = await mix_ranker_service.settings(session, workspace_id)
+    return schemas.WorkspaceRankerRead(
+        workspace_id=workspace_id,
+        **dataclasses.asdict(settings),
+        hidden_ratings=await mix_ranker_service.count(session, workspace_id),
     )
 
 
@@ -241,3 +252,51 @@ def register(broker: Any, logger: Any) -> None:
             return _config_to_read(cfg, workspace_id)
 
         return await c.envelope(logger, "admin.workspace_config_upsert", op, session_factory=_SF)
+
+    # --- workspace mix ranker ----------------------------------------------
+    # Same gates as the workspace config above: reading needs workspace.read,
+    # anything that moves ratings needs team.update.
+    @broker.subscriber("rpc.balancer.admin.workspace_ranker_get")
+    async def _workspace_ranker_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            c.require_admin_panel(user)
+            workspace_id = c.require_id(data)
+            c.require_workspace_permission(data, user, workspace_id, "workspace", "read")
+            return await _ranker_read(session, workspace_id)
+
+        return await c.envelope(logger, "admin.workspace_ranker_get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.admin.workspace_ranker_upsert")
+    async def _workspace_ranker_upsert(data: dict, msg: RabbitMessage) -> dict:
+        """Saving a new hidden scale rebuilds every hidden rating before answering."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            c.require_admin_panel(user)
+            workspace_id = c.require_id(data)
+            c.require_workspace_permission(data, user, workspace_id, "team", "update")
+            body = schemas.WorkspaceRankerUpsert.model_validate(c.payload(data))
+            await mix_ranker_service.save_settings(
+                session,
+                workspace_id=workspace_id,
+                settings=settings_from_json(body.model_dump()),
+                updated_by=user.id,
+            )
+            await session.commit()
+            return await _ranker_read(session, workspace_id)
+
+        return await c.envelope(logger, "admin.workspace_ranker_upsert", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.admin.workspace_ranker_rebuild")
+    async def _workspace_ranker_rebuild(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            c.require_admin_panel(user)
+            workspace_id = c.require_id(data)
+            c.require_workspace_permission(data, user, workspace_id, "team", "update")
+            matches, hidden_ratings = await mix_ranker_service.rebuild(session, workspace_id)
+            await session.commit()
+            return schemas.WorkspaceRankerRebuildRead(matches=matches, hidden_ratings=hidden_ratings)
+
+        return await c.envelope(logger, "admin.workspace_ranker_rebuild", op, session_factory=_SF)

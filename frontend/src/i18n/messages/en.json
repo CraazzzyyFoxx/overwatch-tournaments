@@ -963,6 +963,12 @@
         "label": "Balance options per run",
         "hint": "How many alternative splits one balance hands back for the pager to walk, up to {max}. The first option is always the best one; the rest are there to pick from."
       },
+      "mode": {
+        "label": "How a result moves ranks",
+        "points": "Points per win",
+        "ranker": "Ranker",
+        "hint": "The ranker ignores the points below: after every recorded match it moves ranks by its own formula, and balances on the effective rating instead of the one you set."
+      },
       "points": {
         "label": "Points per win",
         "placeholder": "Off",

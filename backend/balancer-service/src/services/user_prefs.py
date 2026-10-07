@@ -43,6 +43,7 @@ class UserMixPrefsService:
         max_result_variants: int | None,
         role_mask: Mapping[str, int] | None,
         points_per_win: int | None,
+        rating_mode: str,
     ) -> UserBalancerConfig:
         """Replace the account's settings, splitting them the way the row stores them.
 
@@ -54,8 +55,9 @@ class UserMixPrefsService:
         validation a saved tournament config does, so no key the solver does not
         recognise can ever be persisted into its input.
 
-        The roster shape and the points knob are columns beside it, never keys
-        inside it: neither is a solver override (see ``UserBalancerConfig``).
+        The roster shape, the points knob and the rating mode are columns
+        beside it, never keys inside it: none is a solver override (see
+        ``UserBalancerConfig``).
         The mask is normalized here rather than at the wire so the column can
         never hold a zero count, and ``0`` points stores as NULL -- "off" has one
         spelling in the column, whichever of the two the client sent.
@@ -77,6 +79,7 @@ class UserMixPrefsService:
             "config_json": payload,
             "role_slots_json": slots or None,
             "points_per_win": points_per_win or None,
+            "rating_mode": rating_mode,
         }
         config = await self.get(session, user_id)
         if config is None:

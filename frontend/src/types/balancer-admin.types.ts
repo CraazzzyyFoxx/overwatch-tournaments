@@ -627,6 +627,31 @@ export interface WorkspaceBalancerConfigUpsert {
   mix_discord_channel_id: string | null;
 }
 
+/** The ranker's knobs, per workspace: the open-rating scale and how hard the hidden rating pulls. */
+export interface WorkspaceRankerUpsert {
+  rating_min: number;
+  rating_max: number;
+  rating_avg: number;
+  /** How strongly a rating is pulled back toward the average. */
+  gravity: number;
+  gate_steepness: number;
+  /** Starting uncertainty of a hidden rating. */
+  sigma_init: number;
+  /** `corrected` tracks the hidden rating faster; `reference` is the original spec. */
+  variant: "reference" | "corrected";
+}
+
+export interface WorkspaceRankerRead extends WorkspaceRankerUpsert {
+  workspace_id: number;
+  /** How many hidden ratings the workspace currently holds. */
+  hidden_ratings: number;
+}
+
+export interface WorkspaceRankerRebuildResponse {
+  matches: number;
+  hidden_ratings: number;
+}
+
 export interface AdminGoogleSheetMappingSuggestInput {
   source_url?: string | null;
 }

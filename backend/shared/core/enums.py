@@ -333,6 +333,18 @@ class MixRoleSelectionMode(StrEnum):
     EXPLICIT = "explicit"
 
 
+class MixRatingMode(StrEnum):
+    """How recording a mix match moves the host's rank book.
+
+    ``points`` is the flat ``points_per_win``; ``ranker`` moves each seat by the
+    mix ranker (``balancer-service/src/domain/mix_ranker.py``) and balances on
+    the effective rating. The hidden rating is kept up to date in both.
+    """
+
+    POINTS = "points"
+    RANKER = "ranker"
+
+
 class CasualTeamSide(StrEnum):
     HOME = "home"
     AWAY = "away"

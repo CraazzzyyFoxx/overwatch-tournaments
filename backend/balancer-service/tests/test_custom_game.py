@@ -31,9 +31,11 @@ from shared.services import discord_messages  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
+from src.domain.mix_ranker import Ranker  # noqa: E402
 from src.domain.mix_self_service import MAX_ROSTER  # noqa: E402
 from src.services import mix_signup_projector  # noqa: E402
 from src.services.custom_game import _MAX_CO_HOSTS, CustomGameService  # noqa: E402
+from tests.mix_ranker_fakes import in_memory_ranker  # noqa: E402
 
 
 def _session() -> MagicMock:
@@ -72,15 +74,15 @@ def _roster_row(row_id: int, member_id: int, sort_order: int, **overrides) -> Si
 
 
 def _seat_row(spec) -> SimpleNamespace:
-    """A frozen ``casual.player``: a bare member id, or ``(id, role, rank)``.
+    """A frozen ``casual.player``: a bare member id, or ``(id, role, rank[, rank_delta_applied])``.
 
     Undo reads back the role and the balance-time rank the recording wrote;
     the rotation reader only cares who played, hence the short form.
     """
     if isinstance(spec, tuple):
-        member_id, role, rank = spec
-        return _row(workspace_member_id=member_id, role=role, rank=rank)
-    return _row(workspace_member_id=spec, role=None, rank=0)
+        member_id, role, rank, *delta = spec
+        return _row(workspace_member_id=member_id, role=role, rank=rank, rank_delta_applied=delta[0] if delta else None)
+    return _row(workspace_member_id=spec, role=None, rank=0, rank_delta_applied=None)
 
 
 def _match(
@@ -153,11 +155,11 @@ def _lobby(lobby_index: int = 0, **overrides) -> SimpleNamespace:
 def _prefs(**overrides) -> SimpleNamespace:
     """One ``balancer.user_config`` row: everything the HOST configures.
 
-    The roster shape and the points knob are columns beside ``config_json``, not
-    keys inside it -- that blob is the solver's override input and neither of
-    them is an override.
+    The roster shape, the points knob and the rating mode are columns beside
+    ``config_json``, not keys inside it -- that blob is the solver's override
+    input and none of them is an override.
     """
-    fields = {"config_json": {}, "role_slots_json": None, "points_per_win": None}
+    fields = {"config_json": {}, "role_slots_json": None, "points_per_win": None, "rating_mode": "points"}
     fields.update(overrides)
     return _row(**fields)
 
@@ -385,6 +387,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
         self._workspace_slots_patch.start()
         self.addCleanup(self._workspace_slots_patch.stop)
+        # The real ranker over dicts: the hidden book advances on every recorded
+        # match and is empty unless a test seeds ``self.ranker.hidden.book``.
+        self.ranker = in_memory_ranker()
         self.service = CustomGameService(
             games=self.games,
             roster=self.roster,
@@ -407,6 +412,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             load_missing_links=self.load_missing_links,
             enroll_member=self.enroll_member,
             grant_player_role=self.grant_player_role,
+            ranker=self.ranker,
         )
         self.session = _session()
 
@@ -2293,6 +2299,113 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
         self.assertIsNone(self.casual_matches.create.await_args.args[1].points_per_win_applied)
+
+    def _one_v_one(self) -> dict[str, object]:
+        return {
+            "variants": [
+                {
+                    "teams": [
+                        {"roster": {"tank": [self._seat("7", "Alpha", 2400, "tank")]}},
+                        {"roster": {"tank": [self._seat("9", "Charlie", 2400, "tank")]}},
+                    ]
+                }
+            ]
+        }
+
+    async def test_record_outcome_by_ranker_moves_each_seat_and_freezes_its_delta(self) -> None:
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(self._one_v_one()["variants"]))
+        # The points knob is still stored; the ranker ignores it.
+        self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25, rating_mode="ranker")
+        self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2400, (9, "tank"): 2400})
+
+        await self.service.record_outcome(
+            self.session, workspace_id=1, custom_game_id=11, winner=1, variant_index=0, actor_user_id=9
+        )
+
+        moved = {
+            call.kwargs["workspace_member_id"]: call.kwargs["ranks"]["tank"]
+            for call in self.ranks.set_ranks.await_args_list
+        }
+        self.assertGreater(moved[7], 2400)
+        self.assertLess(moved[9], 2400)
+        seats = {call.args[1].workspace_member_id: call.args[1] for call in self.casual_players.create.await_args_list}
+        self.assertEqual(seats[7].rank_delta_applied, moved[7] - 2400)
+        self.assertEqual(seats[9].rank_delta_applied, moved[9] - 2400)
+        self.assertIsNone(self.casual_matches.create.await_args.args[1].points_per_win_applied)
+
+    async def test_record_outcome_in_points_mode_still_advances_the_hidden_ratings(self) -> None:
+        self.games.get.return_value = _game(status="balanced")
+        self.lobby_rows[0] = _lobby(0, balance_result_json=lobby_document(self._one_v_one()["variants"]))
+        self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
+        self.ranks.list_layer = AsyncMock(return_value={})
+
+        await self.service.record_outcome(
+            self.session, workspace_id=1, custom_game_id=11, winner=1, variant_index=0, actor_user_id=9
+        )
+
+        book = self.ranker.hidden.book
+        self.assertGreater(book[(7, "tank")][0], book[(9, "tank")][0])
+        seats = [call.args[1] for call in self.casual_players.create.await_args_list]
+        self.assertTrue(all(seat.rank_delta_applied is None for seat in seats))
+
+    async def test_undo_gives_back_each_ranker_delta_and_rebuilds_the_hidden_book(self) -> None:
+        match = _match(
+            501,
+            created_at=1,
+            home=[(7, HeroClass.tank, 2400, 31)],
+            away=[(9, HeroClass.tank, 2400, -28)],
+        )
+        self.games.get.return_value = _game()
+        # Switched back to points since: undo still gives back what was frozen.
+        self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
+        self.casual_matches.get_for_game.return_value = match
+        self.casual_matches.newest_id_for_lobby.return_value = 501
+        self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2431, (9, "tank"): 2372})
+        self.ranker.hidden.book = {(7, "tank"): (5.0, 24.0), (9, "tank"): (-5.0, 24.0)}
+
+        await self.service.undo_last_match(
+            self.session, workspace_id=1, custom_game_id=11, match_id=501, actor_user_id=9
+        )
+
+        calls = {
+            (call.kwargs["workspace_member_id"], tuple(call.kwargs["ranks"].items()))
+            for call in self.ranks.set_ranks.await_args_list
+        }
+        self.assertEqual(calls, {(7, (("tank", 2400),)), (9, (("tank", 2400),))})
+        # The undone match was the whole history, so the rebuilt book is empty.
+        self.assertEqual(self.ranker.hidden.book, {})
+
+    async def test_balance_by_ranker_feeds_effective_ratings_and_keeps_the_open_ones(self) -> None:
+        self.games.get.return_value = _game()
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.ranks.resolve.return_value = _ranks(7)
+        self.host_prefs.get_by_user.return_value = _prefs(rating_mode="ranker")
+        # A confident hidden tank rating far above the open 2500; nothing hidden for damage.
+        self.ranker.hidden.book = {(7, "tank"): (Ranker().initial(3500).mu, 3.0)}
+        self.run_balance.return_value = lobby_document(
+            [
+                {
+                    "teams": [
+                        {
+                            "roster": {
+                                "tank": [
+                                    self._seat("7", "P7", 3400, "tank", all_ratings={"tank": 3400, "damage": 2400})
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        )
+
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=9)
+
+        classes = self.run_balance.await_args.args[0]["players"]["7"]["stats"]["classes"]
+        self.assertGreater(classes["tank"]["rank"], 3000)
+        self.assertEqual(classes["damage"]["rank"], 2400)
+        stored = self.lobby_rows[0].balance_result_json["players"]["7"]
+        self.assertEqual(stored["open_ratings"], {"tank": 2500, "damage": 2400})
 
     async def test_undo_a_match_of_another_mix_404(self) -> None:
         self.games.get.return_value = _game()

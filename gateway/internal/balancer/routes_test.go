@@ -162,6 +162,34 @@ func TestRosterRoutes(t *testing.T) {
 	}
 }
 
+// TestWorkspaceRankerRoutes pins the mix ranker's admin endpoints: the workspace
+// id must reach the worker as data["id"] (IDParam) because that is what its
+// RBAC gate reads, and only the upsert carries a body.
+func TestWorkspaceRankerRoutes(t *testing.T) {
+	want := map[string]struct {
+		queue string
+		body  bool
+	}{
+		"GET /api/v1/balancer/workspaces/{workspace_id}/ranker":          {"rpc.balancer.admin.workspace_ranker_get", false},
+		"PUT /api/v1/balancer/workspaces/{workspace_id}/ranker":          {"rpc.balancer.admin.workspace_ranker_upsert", true},
+		"POST /api/v1/balancer/workspaces/{workspace_id}/ranker/rebuild": {"rpc.balancer.admin.workspace_ranker_rebuild", false},
+	}
+	for _, route := range AdminRoutes {
+		key := route.Method + " " + route.Pattern
+		w, ok := want[key]
+		if !ok {
+			continue
+		}
+		if route.Queue != w.queue || route.Body != w.body || route.IDParam != "workspace_id" || route.Auth != edge.AuthRequired {
+			t.Fatalf("unexpected %s: %#v", key, route)
+		}
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing ranker routes: %#v", want)
+	}
+}
+
 // TestMixReadsArePublic pins the five mix reads as AuthNone and every mix write
 // as AuthRequired. A mix board is read out to a lobby whose players need no
 // account here, so flipping a read back to AuthRequired 401s every signed-out

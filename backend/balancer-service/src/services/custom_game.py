@@ -17,6 +17,7 @@ from shared.core.enums import (
     CasualTeamSide,
     HeroClass,
     MixParticipation,
+    MixRatingMode,
     MixRoleSelectionMode,
     MixSelfSignup,
     MixStatus,
@@ -61,11 +62,13 @@ from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.mix_discord import SignupPlayer, lineup_card, signup_card
 from src.domain.mix_lobbies import seated_member_ids
 from src.domain.mix_lobby_split import LobbySplitError, SplitCandidate, split_into_lobbies
+from src.domain.mix_ranker import Ranker
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
+from src.services.mix_ranker import MixRankerService, RatedSeat, mix_ranker_service
 from src.services.pickup_mix_realtime import emit_pickup_mix_changed
 
 __all__ = ("SIGNUP_SLOT", "CustomGameService", "custom_game_service", "mix_subject")
@@ -267,6 +270,33 @@ def _lobby_players(result: Mapping[str, Any]) -> Mapping[str, Any]:
     return players if isinstance(players, Mapping) else {}
 
 
+def _uses_ranker(host_config: Any) -> bool:
+    """Whether the host's mixes balance on, and move ranks by, the mix ranker."""
+    return host_config is not None and host_config.rating_mode == MixRatingMode.RANKER
+
+
+def _points_per_win(host_config: Any) -> int:
+    """How far a decided match moves the host's book in points mode; 0 is "off" (and every ranker host)."""
+    if host_config is None or _uses_ranker(host_config):
+        return 0
+    return host_config.points_per_win or 0
+
+
+def _stamp_open_ratings(result: Mapping[str, Any], opens: Mapping[int, Mapping[str, int]]) -> None:
+    """Keep each player's open rank next to the effective one the solver saw.
+
+    Keyed by the same role buckets as ``ratings`` so a reader resolves both the
+    same way; the lineup shows the pair, ``record_outcome`` moves the open one.
+    """
+    for uuid, player in _lobby_players(result).items():
+        own = opens.get(int(uuid))
+        ratings = player.get("ratings") if isinstance(player, dict) else None
+        if own and isinstance(ratings, Mapping):
+            player["open_ratings"] = {
+                bucket: own[slot] for bucket in ratings if (slot := role_slot_code(bucket)) in own
+            }
+
+
 def _locate_seat(teams: Sequence[Mapping[str, Any]], uuid: str) -> tuple[int, str, int] | None:
     """Team index, role bucket and position of a seat by its player uuid."""
     for team_index, team in enumerate(teams):
@@ -385,6 +415,7 @@ class CustomGameService:
         load_missing_links=missing_account_links,
         enroll_member=get_or_create_workspace_member,
         grant_player_role=assign_workspace_system_role,
+        ranker: MixRankerService | None = None,
     ) -> None:
         self.games = games
         self.roster = roster
@@ -407,6 +438,7 @@ class CustomGameService:
         self.load_missing_links = load_missing_links
         self.enroll_member = enroll_member
         self.grant_player_role = grant_player_role
+        self.ranker = ranker if ranker is not None else mix_ranker_service
 
     async def members(
         self, session: AsyncSession, workspace_id: int, member_ids: Sequence[int]
@@ -1434,9 +1466,8 @@ class CustomGameService:
         return await self._shape_for(session, workspace_id, await self._host_config(session, host_user_id))
 
     async def host_points_per_win(self, session: AsyncSession, host_user_id: int | None) -> int:
-        """How far a decided match moves this host's rank book; 0 means "not at all"."""
-        config = await self._host_config(session, host_user_id)
-        return (config.points_per_win or 0) if config is not None else 0
+        """How far a decided match moves this host's rank book; 0 means "not at all" (or the ranker moves it)."""
+        return _points_per_win(await self._host_config(session, host_user_id))
 
     async def _lineup_nodes(
         self,
@@ -1444,7 +1475,8 @@ class CustomGameService:
         *,
         game: models.CustomGame,
         lineup: Sequence[models.CustomGamePlayer],
-    ) -> tuple[dict[str, Any], list[SplitCandidate]]:
+        host_config: Any,
+    ) -> tuple[dict[str, Any], list[SplitCandidate], dict[int, dict[str, int]]]:
         """The solver's input for these roster rows plus the same facts for the splitter.
 
         Split out of ``balance`` because one mix is now solved lobby by lobby:
@@ -1453,6 +1485,10 @@ class CustomGameService:
         the solver wants are exactly what the two-lobby splitter weighs, so the
         two cannot drift apart (and ``member_rank`` is not read twice for one
         lineup).
+
+        A ranker host's players are balanced on their effective rating (the
+        open rank corrected by the hidden one); their open ranks come back
+        keyed by member so the stored lineup can show both. Empty otherwise.
         """
         # If the lineup does not divide evenly into full teams, `run_balance`'s own
         # overflow trim (`domain.balancer.runtime._prepare_balance_context`) sorts the
@@ -1480,6 +1516,15 @@ class CustomGameService:
             author_user_id=game.host_user_id,
             grid=await get_effective_division_grid(session, None),
         )
+        open_ranks = {
+            key: ranked.value for key, ranked in resolved.items() if ranked is not None and ranked.value is not None
+        }
+        ranker = _uses_ranker(host_config)
+        ranks = (
+            await self.ranker.effective_ratings(session, workspace_id=game.workspace_id, open_ranks=open_ranks)
+            if ranker
+            else open_ranks
+        )
         explicit_roles = await self.player_roles.roles_for_players(
             session,
             [row.id for row in lineup if row.role_selection_mode == MixRoleSelectionMode.EXPLICIT],
@@ -1493,10 +1538,10 @@ class CustomGameService:
             role_order = explicit_roles.get(row.id, []) if explicit else REGISTRATION_ROLE_CODES
             # An explicit empty list means no playable role; it never falls back.
             for priority, role in enumerate(role_order, start=1):
-                ranked = resolved.get((member.member_id, role))
-                if ranked is None or ranked.value is None:
+                rank = ranks.get((member.member_id, role))
+                if rank is None:
                     continue
-                classes[role] = {"isActive": True, "rank": ranked.value, "priority": priority}
+                classes[role] = {"isActive": True, "rank": rank, "priority": priority}
             if not classes:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="missing_ranked_role")
             fairness = rotation_priority(histories_by_member[row.workspace_member_id])
@@ -1523,7 +1568,11 @@ class CustomGameService:
                     rotation_priority=fairness,
                 )
             )
-        return player_nodes, candidates
+        opens: dict[int, dict[str, int]] = {}
+        if ranker:
+            for (member_id, role), rank in open_ranks.items():
+                opens.setdefault(member_id, {})[role] = rank
+        return player_nodes, candidates, opens
 
     async def _solve_lobby(
         self,
@@ -1533,14 +1582,16 @@ class CustomGameService:
         lineup: Sequence[models.CustomGamePlayer],
     ) -> None:
         """Run the solver on exactly these players and store the run on this lobby."""
-        player_nodes, _candidates = await self._lineup_nodes(session, game=game, lineup=lineup)
         # The HOST's row, not the acting co-host's, and read exactly once: the
-        # ranks above are already resolved against the host's own book
+        # ranks below are resolved against the host's own book
         # (``MIX_ORDER`` + ``author_user_id=game.host_user_id``), so reading the
         # presser's preferences instead would make the same mix balance
-        # differently depending on who clicked. The same row carries both the
-        # solver overrides and the roster shape, so they come off one load.
+        # differently depending on who clicked. The same row carries the solver
+        # overrides, the roster shape and the rating mode, so they come off one load.
         host_config = await self._host_config(session, game.host_user_id)
+        player_nodes, _candidates, opens = await self._lineup_nodes(
+            session, game=game, lineup=lineup, host_config=host_config
+        )
         role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
         try:
             result = await self.run_balance(
@@ -1556,6 +1607,8 @@ class CustomGameService:
             # apart from a real bug and reports "internal error" -- hiding the
             # actual, actionable reason from the host.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        if opens:
+            _stamp_open_ratings(result, opens)
         lobby.balance_result_json = result
         # A fresh search renumbers every option, so whatever the host had paged
         # to describes nothing now -- back to the best one.
@@ -1626,8 +1679,10 @@ class CustomGameService:
         # ponytail: ranks, rotation histories and the host config are resolved once
         # per lobby on top of this run (``_solve_lobby`` builds its own nodes); pass
         # these nodes down instead if a reshuffle ever shows up as slow.
-        _player_nodes, candidates = await self._lineup_nodes(session, game=game, lineup=lineup)
         host_config = await self._host_config(session, game.host_user_id)
+        _player_nodes, candidates, _opens = await self._lineup_nodes(
+            session, game=game, lineup=lineup, host_config=host_config
+        )
         role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
         try:
             split = split_into_lobbies(candidates, mask=role_mask)
@@ -2088,31 +2143,34 @@ class CustomGameService:
         await session.flush()
         return game
 
-    async def _apply_points_delta(
+    async def _shift_host_ranks(
         self,
         session: AsyncSession,
         *,
         workspace_id: int,
         host_user_id: int,
-        team_players: Sequence[tuple[int, str, int]],
-        delta: int,
+        shifts: Sequence[tuple[int, str, int, int]],
     ) -> None:
-        """Bump the host's own rank book by ``delta`` for one team's seats.
+        """Move the host's own rank book by a per-seat delta.
 
-        Reads the *current* author-layer value rather than each seat's
-        balance-time ``rank`` snapshot, so a second match recorded the same
-        night compounds on top of the first instead of re-applying from a
-        stale baseline. A player with no author-layer entry yet (should not
-        normally happen -- ``_seed_host_ranks`` seeds one on join) falls back
-        to their balance-time rating instead of silently dropping the write.
+        ``shifts`` are ``(member_id, role, fallback, delta)``. Reads the
+        *current* author-layer value rather than each seat's balance-time
+        ``rank`` snapshot, so a second match recorded the same night compounds
+        on top of the first instead of re-applying from a stale baseline. A
+        player with no author-layer entry yet (should not normally happen --
+        ``_seed_host_ranks`` seeds one on join) falls back to ``fallback``
+        instead of silently dropping the write.
         """
-        if delta == 0 or not team_players:
+        shifts = [shift for shift in shifts if shift[3]]
+        if not shifts:
             return
-        member_ids = [member_id for member_id, _role, _fallback in team_players]
         current = await self.ranks.list_layer(
-            session, workspace_id=workspace_id, member_ids=member_ids, author_user_id=host_user_id
+            session,
+            workspace_id=workspace_id,
+            member_ids=[member_id for member_id, *_rest in shifts],
+            author_user_id=host_user_id,
         )
-        for member_id, role, fallback in team_players:
+        for member_id, role, fallback, delta in shifts:
             base = current.get((member_id, role), fallback)
             await self.ranks.set_ranks(
                 session,
@@ -2121,6 +2179,44 @@ class CustomGameService:
                 ranks={role: base + delta},
                 author_user_id=host_user_id,
             )
+
+    async def _move_by_ranker(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        host_user_id: int,
+        ranker: Ranker,
+        winner: int | None,
+        seats: Sequence[Sequence[tuple[int, str, int, models.CasualPlayer, RatedSeat]]],
+    ) -> None:
+        """Move each seat's open rank in the host's book by the ranker's formula.
+
+        ``seats`` per team: ``(member_id, role, open rank at balance time,
+        frozen seat row, hidden before/after)``. The base is the book's current
+        value, like the points path, and the applied delta is frozen on the seat
+        so undo gives back exactly it.
+        """
+        current = await self.ranks.list_layer(
+            session,
+            workspace_id=workspace_id,
+            member_ids=[seat[0] for team in seats for seat in team],
+            author_user_id=host_user_id,
+        )
+        for team_index, team in enumerate(seats):
+            outcome = 0 if winner is None else 1 if winner == team_index + 1 else -1
+            for member_id, role, open_rank, row, (old, new) in team:
+                base = current.get((member_id, role), open_rank)
+                moved = round(base + ranker.open_delta(base, old, new, outcome))
+                row.rank_delta_applied = moved - base
+                if moved != base:
+                    await self.ranks.set_ranks(
+                        session,
+                        workspace_id=workspace_id,
+                        workspace_member_id=member_id,
+                        ranks={role: moved},
+                        author_user_id=host_user_id,
+                    )
 
     async def record_outcome(
         self,
@@ -2141,10 +2237,12 @@ class CustomGameService:
         :meth:`close`, and the frozen snapshot is the only record of each: the
         mix itself keeps no mutable copy of "the last result".
 
-        The HOST's ``points_per_win`` (when set, and only for a decided match)
-        moves both teams' host-authored ranks, and every seat that actually
-        played redeems its ``MUST_PLAY`` pin back to ``POOL`` -- the pin promises
-        one guaranteed seat, not every seat forever.
+        The HOST's rating mode decides how both teams' host-authored ranks
+        move: ``points_per_win`` (when set, and only for a decided match) or
+        the mix ranker, seat by seat. The workspace's hidden ratings advance
+        either way. Every seat that actually played redeems its ``MUST_PLAY``
+        pin back to ``POOL`` -- the pin promises one guaranteed seat, not every
+        seat forever.
 
         ``map_id`` names the map explicitly; omitted, the match takes the lobby's
         ``next_map_id`` (see :meth:`set_next_map`), which is cleared either way
@@ -2179,9 +2277,10 @@ class CustomGameService:
 
         names = await self._lobby_team_names(session, game.id, lobby_index)
         scores = (1, 0) if winner == 1 else (0, 1) if winner == 2 else (0, 0)
-        # The host's knob, not the mix's and not the recording co-host's -- the
-        # book being moved is the host's own (see ``_apply_points_delta``).
-        points_per_win = await self.host_points_per_win(session, game.host_user_id)
+        # The host's knobs, not the mix's and not the recording co-host's -- the
+        # book being moved is the host's own (see ``_shift_host_ranks``).
+        host_config = await self._host_config(session, game.host_user_id)
+        points_per_win = _points_per_win(host_config)
         match = models.CasualMatch(
             custom_game_id=game.id,
             lobby_index=lobby_index,
@@ -2209,9 +2308,12 @@ class CustomGameService:
         await self.casual_teams.create_many(session, casual_teams)
 
         # Per-team (member_id, role_slot_code, balance-time rating) seats,
-        # collected alongside the frozen snapshot so the points delta reuses the
-        # exact same walk instead of re-parsing ``teams``.
+        # collected alongside the frozen snapshot so the rank moves reuse the
+        # exact same walk instead of re-parsing ``teams``. The open rank and the
+        # frozen row ride along for the ranker, which moves each seat on its own.
         team_players: list[list[tuple[int, str, int]]] = [[], []]
+        open_ranks: list[list[int]] = [[], []]
+        seat_rows: list[list[models.CasualPlayer]] = [[], []]
         players = _lobby_players(result)
         for team_index, (team, casual_team) in enumerate(zip(teams, casual_teams, strict=True)):
             roster = team.get("roster") if isinstance(team, dict) else None
@@ -2228,20 +2330,25 @@ class CustomGameService:
                         continue
                     member_id = int(uuid)
                     rating = int(seat_rating(player, bucket_name))
-                    await self.casual_players.create(
-                        session,
-                        models.CasualPlayer(
-                            team_id=casual_team.id,
-                            workspace_member_id=member_id,
-                            # The name as it stood when the match was played --
-                            # a later rename or a member leaving the workspace
-                            # must not rewrite history.
-                            display_name_snapshot=str(player.get("name") or f"#{member_id}"),
-                            role=role,
-                            rank=rating,
-                        ),
+                    row = models.CasualPlayer(
+                        team_id=casual_team.id,
+                        workspace_member_id=member_id,
+                        # The name as it stood when the match was played --
+                        # a later rename or a member leaving the workspace
+                        # must not rewrite history.
+                        display_name_snapshot=str(player.get("name") or f"#{member_id}"),
+                        role=role,
+                        rank=rating,
                     )
+                    await self.casual_players.create(session, row)
                     team_players[team_index].append((member_id, slot_code, rating))
+                    # A ranker lineup stored the open rank beside the effective
+                    # one it balanced on; a points lineup only has the one.
+                    opens = player.get("open_ratings")
+                    open_ranks[team_index].append(
+                        int(opens.get(bucket_name, rating)) if isinstance(opens, Mapping) else rating
+                    )
+                    seat_rows[team_index].append(row)
 
         participant_ids = {member_id for team in team_players for member_id, _, _ in team}
         if participant_ids:
@@ -2249,21 +2356,37 @@ class CustomGameService:
                 if row.participation == MixParticipation.MUST_PLAY and row.workspace_member_id in participant_ids:
                     row.participation = MixParticipation.POOL
 
-        if points_per_win and winner in (1, 2) and game.host_user_id is not None:
-            winning_index = 0 if winner == 1 else 1
-            await self._apply_points_delta(
+        ranker, rated = await self.ranker.rate_match(
+            session, workspace_id=workspace_id, teams=team_players, winner=winner
+        )
+        if game.host_user_id is not None and _uses_ranker(host_config):
+            await self._move_by_ranker(
                 session,
                 workspace_id=workspace_id,
                 host_user_id=game.host_user_id,
-                team_players=team_players[winning_index],
-                delta=points_per_win,
+                ranker=ranker,
+                winner=winner,
+                seats=[
+                    [
+                        (member_id, role, open_rank, row, hidden)
+                        for (member_id, role, _rating), open_rank, row, hidden in zip(
+                            team_players[index], open_ranks[index], seat_rows[index], rated[index], strict=True
+                        )
+                    ]
+                    for index in range(2)
+                ],
             )
-            await self._apply_points_delta(
+        elif points_per_win and winner in (1, 2) and game.host_user_id is not None:
+            winning_index = 0 if winner == 1 else 1
+            await self._shift_host_ranks(
                 session,
                 workspace_id=workspace_id,
                 host_user_id=game.host_user_id,
-                team_players=team_players[1 - winning_index],
-                delta=-points_per_win,
+                shifts=[
+                    (member_id, role, rating, points_per_win if index == winning_index else -points_per_win)
+                    for index in range(2)
+                    for member_id, role, rating in team_players[index]
+                ],
             )
 
         lobby.next_map_id = None
@@ -2284,17 +2407,20 @@ class CustomGameService:
         """Delete a lobby's most recent match and give back the ranks it moved.
 
         Newest-only on purpose: the rank book compounds match on match (see
-        :meth:`_apply_points_delta`), so undoing an older result would give back
+        :meth:`_shift_host_ranks`), so undoing an older result would give back
         a delta that later matches have already built on and leave every number
         after it wrong. Recording the correct result again is the way to fix an
         older mistake. Newest *of the match's own lobby*: two lobbies record at
         two paces, and a host looking at lobby A must be able to take back A's
         last result while B has already put down a newer one.
 
-        The rollback uses ``points_per_win_applied`` frozen on the match, never
-        the host's current ``points_per_win``: the host may have changed the knob
-        (or turned it off) since, and the point is to return the book to exactly
-        where it stood.
+        The rollback uses what was frozen at record time -- the match's
+        ``points_per_win_applied`` or each seat's ``rank_delta_applied`` --
+        never the host's current knobs: the host may have changed them (or the
+        rating mode) since, and the point is to return the book to exactly
+        where it stood. The workspace's hidden ratings are then rebuilt from the
+        history that is left, since later matches may already have built on
+        this one's.
 
         What is *not* reverted: the ``MUST_PLAY`` pins that recording redeemed
         back to ``POOL``. A pin promises one seat, that seat was played, and
@@ -2316,35 +2442,36 @@ class CustomGameService:
                 status_code=status.HTTP_409_CONFLICT, detail="Only the most recent match of this lobby can be undone"
             )
 
+        shifts: list[tuple[int, str, int, int]] = []
         applied = match.points_per_win_applied or 0
-        if applied and game.host_user_id is not None:
-            sides = {team.side: team for team in match.teams}
-            home = sides.get(CasualTeamSide.HOME)
-            away = sides.get(CasualTeamSide.AWAY)
-            home_score = home.score if home is not None else 0
-            away_score = away.score if away is not None else 0
+        sides = {team.side: team for team in match.teams}
+        home = sides.get(CasualTeamSide.HOME)
+        away = sides.get(CasualTeamSide.AWAY)
+        home_score = home.score if home is not None else 0
+        away_score = away.score if away is not None else 0
+        winner_team = home if home_score > away_score else away
+        for team in (home, away):
+            if team is None:
+                continue
+            points_back = (-applied if team is winner_team else applied) if applied else 0
             # The frozen seats carry the canonical role (``HeroClass``); the rank
             # book is keyed by its wire spelling, the same ``slot_code``
             # ``record_outcome`` mapped forward from.
-            winner_team, loser_team = (home, away) if home_score > away_score else (away, home)
-            for team, delta in ((winner_team, -applied), (loser_team, applied)):
-                if team is None:
-                    continue
-                await self._apply_points_delta(
-                    session,
-                    workspace_id=workspace_id,
-                    host_user_id=game.host_user_id,
-                    team_players=[
-                        (seat.workspace_member_id, seat.role.slot_code, seat.rank)
-                        for seat in team.players
-                        if seat.workspace_member_id is not None and seat.role is not None
-                    ],
-                    delta=delta,
-                )
+            shifts.extend(
+                (seat.workspace_member_id, seat.role.slot_code, seat.rank, points_back - (seat.rank_delta_applied or 0))
+                for seat in team.players
+                if seat.workspace_member_id is not None and seat.role is not None
+            )
+        if game.host_user_id is not None:
+            await self._shift_host_ranks(
+                session, workspace_id=workspace_id, host_user_id=game.host_user_id, shifts=shifts
+            )
 
         # Teams and seats go with it: both hang off the match by ``ON DELETE
         # CASCADE``, so there is nothing left to clean up by hand.
         await self.casual_matches.delete(session, match)
+        await session.flush()
+        await self.ranker.rebuild(session, game.workspace_id)
         return game
 
     async def list_matches(

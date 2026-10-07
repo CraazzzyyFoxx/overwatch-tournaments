@@ -150,6 +150,34 @@ class CasualMatchRepository(BaseRepository[models.CasualMatch]):
         result = await session.execute(stmt)
         return result.all()
 
+    async def replay_seats_for_workspace(
+        self, session: AsyncSession, workspace_id: int
+    ) -> Sequence[sa.Row[tuple[int, str, int, int | None, enums.HeroClass | None, int]]]:
+        """Every frozen seat of this workspace's mixes, in recording order.
+
+        ``(match_id, side, side's score, member, role, rank snapshot)`` -- what
+        the mix ranker folds its hidden ratings from. Unlike
+        :meth:`seats_for_workspace`, departed members (NULL FK) are kept: they
+        still weighed on their team's strength in that match.
+        """
+        result = await session.execute(
+            sa.select(
+                models.CasualMatch.id,
+                models.CasualTeam.side,
+                models.CasualTeam.score,
+                models.CasualPlayer.workspace_member_id,
+                models.CasualPlayer.role,
+                models.CasualPlayer.rank,
+            )
+            .select_from(models.CasualPlayer)
+            .join(models.CasualTeam, models.CasualPlayer.team_id == models.CasualTeam.id)
+            .join(models.CasualMatch, models.CasualTeam.match_id == models.CasualMatch.id)
+            .join(models.CustomGame, models.CasualMatch.custom_game_id == models.CustomGame.id)
+            .where(models.CustomGame.workspace_id == workspace_id)
+            .order_by(models.CasualMatch.id, models.CasualPlayer.id)
+        )
+        return result.all()
+
     async def set_busy_players(self, session: AsyncSession, match_id: int, workspace_member_ids: Sequence[int]) -> None:
         """Freeze who was playing the mix's other lobby when this match landed."""
         session.add_all(

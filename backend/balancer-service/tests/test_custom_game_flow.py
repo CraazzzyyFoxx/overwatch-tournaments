@@ -29,6 +29,7 @@ from shared.core.enums import CasualTeamSide, MixParticipation, MixRoleSelection
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.services.custom_game import CustomGameService  # noqa: E402
+from tests.mix_ranker_fakes import in_memory_ranker  # noqa: E402
 
 _MEMBERS = (7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
 
@@ -140,6 +141,7 @@ class _HostPrefs:
             config_json=fields.get("config_json", {}),
             role_slots_json=fields.get("role_slots_json"),
             points_per_win=fields.get("points_per_win"),
+            rating_mode=fields.get("rating_mode", "points"),
         )
 
     async def get_by_user(self, _session: Any, user_id: int) -> Any:
@@ -293,6 +295,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             load_hosts=AsyncMock(return_value={9: "Host"}),
             load_member_user_ids=AsyncMock(return_value=set()),
             run_balance=AsyncMock(),
+            ranker=in_memory_ranker(),
         )
 
     async def test_a_whole_mix_from_create_to_close(self) -> None:

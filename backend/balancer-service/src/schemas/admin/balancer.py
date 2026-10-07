@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.schemas.base import BaseRead
 
@@ -16,6 +16,9 @@ __all__ = (
     "RanksExportResponse",
     "WorkspaceBalancerConfigRead",
     "WorkspaceBalancerConfigUpsert",
+    "WorkspaceRankerRead",
+    "WorkspaceRankerRebuildRead",
+    "WorkspaceRankerUpsert",
 )
 
 
@@ -75,6 +78,64 @@ class WorkspaceBalancerConfigRead(BaseRead):
     rank_delta_hide_from_pool: bool
     mix_discord_channel_id: str | None = None
     updated_by: int | None = None
+
+
+_RANKER_DOCS = {
+    "rating_min": "Lowest open rating the ranker maps onto.",
+    "rating_max": "Highest open rating the ranker maps onto.",
+    "rating_avg": "The open rating an average player holds; the hidden scale is centred on it.",
+    "gravity": "How strongly an uncertain hidden rating is pulled towards the average (the specification's g).",
+    "gate_steepness": "How sharply the correction switches from 'ignore' to 'apply' (the specification's d).",
+    "sigma_init": "A newcomer's hidden uncertainty; also sets the hidden scale.",
+    "variant": (
+        "'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole "
+        "open range, as the original specification does."
+    ),
+}
+
+
+class WorkspaceRankerUpsert(BaseModel):
+    """A full replacement of the workspace's mix ranker knobs.
+
+    Changing ``rating_min``, ``rating_max``, ``rating_avg`` or ``sigma_init``
+    reinterprets every stored hidden rating, so the save rebuilds them from the
+    workspace's match history before it answers.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rating_min: float = Field(ge=0, le=100000, description=_RANKER_DOCS["rating_min"])
+    rating_max: float = Field(ge=0, le=100000, description=_RANKER_DOCS["rating_max"])
+    rating_avg: float = Field(ge=0, le=100000, description=_RANKER_DOCS["rating_avg"])
+    gravity: float = Field(ge=0, le=10, description=_RANKER_DOCS["gravity"])
+    gate_steepness: float = Field(gt=0, le=50, description=_RANKER_DOCS["gate_steepness"])
+    sigma_init: float = Field(gt=0, le=1000, description=_RANKER_DOCS["sigma_init"])
+    variant: Literal["reference", "corrected"] = Field(description=_RANKER_DOCS["variant"])
+
+    @model_validator(mode="after")
+    def _ordered(self) -> WorkspaceRankerUpsert:
+        if not self.rating_min < self.rating_avg < self.rating_max:
+            raise ValueError("rating_min < rating_avg < rating_max is required")
+        return self
+
+
+class WorkspaceRankerRead(BaseModel):
+    """The knobs in force (defaults when never saved) and how many hidden ratings exist."""
+
+    workspace_id: int
+    rating_min: float = Field(description=_RANKER_DOCS["rating_min"])
+    rating_max: float = Field(description=_RANKER_DOCS["rating_max"])
+    rating_avg: float = Field(description=_RANKER_DOCS["rating_avg"])
+    gravity: float = Field(description=_RANKER_DOCS["gravity"])
+    gate_steepness: float = Field(description=_RANKER_DOCS["gate_steepness"])
+    sigma_init: float = Field(description=_RANKER_DOCS["sigma_init"])
+    variant: Literal["reference", "corrected"] = Field(description=_RANKER_DOCS["variant"])
+    hidden_ratings: int = Field(description="Hidden ratings stored for this workspace's members, one per role.")
+
+
+class WorkspaceRankerRebuildRead(BaseModel):
+    matches: int = Field(description="Recorded mix matches replayed.")
+    hidden_ratings: int = Field(description="Hidden ratings the replay produced.")
 
 
 class BalanceRead(BaseRead):

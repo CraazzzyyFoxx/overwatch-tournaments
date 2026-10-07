@@ -189,6 +189,34 @@ layer is always the caller's own — a foreign book is readable by every workspa
 by nobody else. Deleting a role from a layer is how inheritance is restored. Reads return both
 dictionaries side by side so a client can tell an inherited number from an overridden one.
 
+### Mix ranker
+
+How a recorded mix match moves ranks is the **host's** choice (`user_config.rating_mode`): `points`
+adds/subtracts the flat `points_per_win`; `ranker` moves every seat by its own amount and the host's
+mixes balance on the **effective rating**. The idea and its specification are
+[mixtura-ranker](https://github.com/mixtura-dev/mixtura-ranker) by Dmitriy
+([@dmelackov](https://github.com/dmelackov)) — `docs/MathDescription.md` at commit `32f3f039`;
+`src/domain/mix_ranker.py` is an independent implementation of it, not a port of its code.
+
+- **Two ratings per member and role.** The open one is the rank in the host's book (the expert's
+  number, as before). The hidden one is an OpenSkill Thurstone-Mosteller `(mu, sigma)` in
+  `balancer.member_hidden_rating`, one per `workspace_member` and role — never per platform player, so
+  no host of another workspace can move it. It advances on **every** recorded match, in both modes.
+- **Effective rating** = open rating + gate × (hidden projected onto the open scale − open). In ranker
+  mode the solver gets it, `casual.player.rank` freezes it, and the lineup document keeps the open
+  rank beside it as `players[uuid].open_ratings`.
+- **After a match** the open rating moves by the match's impulse on the hidden projection plus a pull
+  towards the hidden rating, never against the result. The applied amount is frozen per seat in
+  `casual.player.rank_delta_applied`; undo gives back exactly that.
+- **The hidden book is derived** — a fold over the workspace's `casual.match` history. Undo, a change
+  of `rating_min`/`rating_max`/`rating_avg`/`sigma_init`, and the admin's *Rebuild from history*
+  (`admin.workspace_ranker_rebuild`) replay it from scratch; a workspace starts empty until the first
+  rebuild or recorded match.
+- **Knobs** live in `workspace_config.ranker_json` (`admin.workspace_ranker_get/upsert`); `variant`
+  picks `corrected` (default: gate and pull scaled by the hidden rating's own uncertainty) or
+  `reference` (the specification's whole-range scaling). Deviations from the specification and the
+  synthetic replay behind the default are listed in the module docstring.
+
 ## Data owned
 
 One PostgreSQL database, one SQLAlchemy metadata in `backend/shared/`; this service ships no
@@ -200,11 +228,12 @@ Writes, all in the `balancer` schema unless noted:
   result. `exported_team_id` is the boundary where balancer output becomes tournament truth.
 - `draft_session`, `draft_team`, `draft_player`, `draft_pick`, `draft_audit_event` — the live draft.
 - `workspace_config`, `tournament_config`, `user_config` — the three balancer config scopes: the
-  workspace's, one tournament's, and one account's own mix settings (solver knobs, roster shape,
-  points per win) that every mix it hosts runs with.
+  workspace's (including the mix ranker's knobs), one tournament's, and one account's own mix
+  settings (solver knobs, roster shape, points per win, rating mode) that every mix it hosts runs with.
 - `custom_game`, `custom_game_co_host`, `custom_game_player`, `custom_game_player_role`,
   `custom_game_team_name` — mixes.
 - `member_rank` — both rank layers.
+- `member_hidden_rating` — the mix ranker's hidden ratings (derived; rebuildable from `casual.*`).
 - `casual.match`, `casual.team`, `casual.player` — the frozen per-match record a mix writes on
   `record_outcome`; the only durable trace of a played mix game.
 

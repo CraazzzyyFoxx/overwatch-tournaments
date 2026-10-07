@@ -53,6 +53,7 @@ const UNSET: MixBalancerPreferencesRead = {
   max_result_variants: null,
   role_mask: null,
   points_per_win: null,
+  rating_mode: "points",
   roster_shape: {
     slots: { tank: 1, damage: 2, support: 2 },
     team_size: 5,
@@ -144,6 +145,7 @@ describe("MixBalancerSection", () => {
       max_result_variants: 40,
       role_mask: null,
       points_per_win: 50,
+      rating_mode: "points",
     });
   });
 
@@ -168,6 +170,19 @@ describe("MixBalancerSection", () => {
       max_result_variants: null,
       role_mask: null,
       points_per_win: null,
+      rating_mode: "points",
     });
+  });
+
+  it("locks the points field (without clearing it) while the ranker owns the ranks", async () => {
+    getPreferences.mockResolvedValue({ ...UNSET, points_per_win: 50, rating_mode: "ranker" });
+    const scope = await mount();
+
+    const points = field(scope, "mix-points-per-win");
+    expect(points.disabled).toBe(true);
+    expect(points.value).toBe("50");
+
+    await settle();
+    expect(updatePreferences).not.toHaveBeenCalled();
   });
 });

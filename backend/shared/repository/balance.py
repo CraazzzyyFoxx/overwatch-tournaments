@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
+from shared.core.enums import MixRatingMode
 from shared.repository.base import BaseRepository
 
 
@@ -55,15 +56,18 @@ class UserBalancerConfigRepository(BaseRepository[models.UserBalancerConfig]):
         The mix list dumps this number for every row it returns, and a workspace
         can easily run a dozen mixes off the same handful of hosts -- reading the
         host's row per row would be a query per mix for a value most of them
-        share. Hosts without a row, or with the knob off, are simply absent:
-        callers default to 0 ("recording a match touches no ranks").
+        share. Hosts without a row, with the knob off, or on the ranker (which
+        ignores the knob) are simply absent: callers default to 0 ("recording a
+        match touches no ranks" by points).
         """
         ids = [user_id for user_id in dict.fromkeys(user_ids) if user_id is not None]
         if not ids:
             return {}
         rows = await session.execute(
             sa.select(self.model.user_id, self.model.points_per_win).where(
-                self.model.user_id.in_(ids), self.model.points_per_win.is_not(None)
+                self.model.user_id.in_(ids),
+                self.model.points_per_win.is_not(None),
+                self.model.rating_mode == MixRatingMode.POINTS,
             )
         )
         return dict(rows.all())

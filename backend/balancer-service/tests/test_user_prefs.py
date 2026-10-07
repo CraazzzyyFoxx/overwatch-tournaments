@@ -45,6 +45,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             max_result_variants=None,
             role_mask=None,
             points_per_win=None,
+            rating_mode="points",
         )
 
         self.assertEqual(config.config_json, {"mix_comfort_tilt": 0.75})
@@ -58,6 +59,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             max_result_variants=None,
             role_mask=None,
             points_per_win=None,
+            rating_mode="points",
         )
 
         self.assertEqual(config.config_json, {})
@@ -75,6 +77,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             max_result_variants=None,
             role_mask={"tank": 1, "flex": 4},
             points_per_win=50,
+            rating_mode="points",
         )
 
         self.assertEqual(config.role_slots_json, {"tank": 1, "flex": 4})
@@ -91,6 +94,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             max_result_variants=None,
             role_mask=None,
             points_per_win=0,
+            rating_mode="points",
         )
 
         self.assertIsNone(config.points_per_win)
@@ -105,6 +109,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
                 max_result_variants=None,
                 role_mask={"healer": 2},
                 points_per_win=None,
+                rating_mode="points",
             )
 
         self.assertEqual(ctx.exception.status_code, 422)
@@ -122,6 +127,7 @@ class UserMixPreferencesBoundsTests(TestCase):
         "max_result_variants": None,
         "role_mask": None,
         "points_per_win": None,
+        "rating_mode": "points",
     }
 
     def _validate(self, **overrides: object) -> UserMixPreferencesUpsert:
@@ -169,6 +175,10 @@ class UserMixPreferencesBoundsTests(TestCase):
         with self.assertRaises(ValidationError):
             self._validate(points_per_win=-1)
 
+    def test_an_unknown_rating_mode_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            self._validate(rating_mode="elo")
+
 
 class UserMixPreferencesReadTests(TestCase):
     """``roster_shape`` is derived on the way out: the settings screen previews
@@ -176,11 +186,14 @@ class UserMixPreferencesReadTests(TestCase):
 
     def test_a_stored_mask_resolves_and_is_reported_as_the_users_own(self) -> None:
         read = prefs._to_read(
-            SimpleNamespace(config_json={}, role_slots_json={"tank": 1, "flex": 4}, points_per_win=50)
+            SimpleNamespace(
+                config_json={}, role_slots_json={"tank": 1, "flex": 4}, points_per_win=50, rating_mode="ranker"
+            )
         )
 
         self.assertEqual(read.role_mask, {"tank": 1, "flex": 4})
         self.assertEqual(read.points_per_win, 50)
+        self.assertEqual(read.rating_mode, "ranker")
         self.assertEqual(read.roster_shape.slots, {"tank": 1, "flex": 4})
         self.assertEqual(read.roster_shape.team_size, 5)
         self.assertEqual(read.roster_shape.source, "user")

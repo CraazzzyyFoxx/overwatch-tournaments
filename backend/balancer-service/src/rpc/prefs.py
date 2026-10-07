@@ -42,6 +42,7 @@ def _to_read(cfg: models.UserBalancerConfig | None) -> schemas.UserMixPreference
         max_result_variants=payload.get("max_result_variants"),
         role_mask=role_mask or None,
         points_per_win=cfg.points_per_win if cfg is not None else None,
+        rating_mode=cfg.rating_mode if cfg is not None else "points",
         roster_shape=RosterShapeRead.from_shape(
             resolve_roster_shape(role_mask or None, None),
             source="user" if role_mask else "default",
@@ -71,6 +72,7 @@ def register(broker: Any, logger: Any) -> None:
                 max_result_variants=body.max_result_variants,
                 role_mask=body.role_mask,
                 points_per_win=body.points_per_win,
+                rating_mode=body.rating_mode,
             )
             # The service owns the commit, like the workspace-config upsert.
             return _to_read(cfg)

@@ -55,6 +55,12 @@ var AdminRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/balancer/tournaments/{tournament_id}/registered-teams/export", Queue: "rpc.balancer.teams.export_registered", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_get", IDParam: "workspace_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/config", Queue: "rpc.balancer.admin.workspace_config_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
+	// The mix ranker's knobs and its hidden-rating rebuild. The upsert and the
+	// rebuild replay the workspace's whole mix history, so they keep the default
+	// timeout rather than the fast-read one.
+	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranker", Queue: "rpc.balancer.admin.workspace_ranker_get", IDParam: "workspace_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranker", Queue: "rpc.balancer.admin.workspace_ranker_upsert", IDParam: "workspace_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/ranker/rebuild", Queue: "rpc.balancer.admin.workspace_ranker_rebuild", IDParam: "workspace_id", Auth: edge.AuthRequired},
 }
 
 // RosterRoutes are the workspace roster, its rank layers, and custom games (mixes).

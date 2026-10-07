@@ -3877,6 +3877,34 @@
       },
       "summary": "Upsert workspace balancer config"
     },
+    "rpc.balancer.admin.workspace_ranker_get": {
+      "description": "Permission: admin-panel access plus workspace `workspace.read`. Returns the mix ranker's knobs in force for this workspace (the defaults when never saved) and how many hidden ratings its members hold. The ranker implements mixtura-ranker by Dmitriy (@dmelackov), https://github.com/mixtura-dev/mixtura-ranker.",
+      "response": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerRead"
+      },
+      "summary": "Get workspace mix ranker settings"
+    },
+    "rpc.balancer.admin.workspace_ranker_rebuild": {
+      "description": "Permission: admin-panel access plus workspace `team.update`. Replays every recorded mix match of the workspace in order and replaces all hidden ratings with the result; open ranks are not touched. Returns how many matches were replayed and how many hidden ratings came out.",
+      "response": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerRebuildRead"
+      },
+      "summary": "Rebuild hidden mix ratings from history"
+    },
+    "rpc.balancer.admin.workspace_ranker_upsert": {
+      "description": "Permission: admin-panel access plus workspace `team.update`. Replaces all seven knobs at once. Changing rating_min, rating_max, rating_avg or sigma_init reinterprets every stored hidden rating, so the call rebuilds them from the workspace's recorded mix matches before answering. 422 unless rating_min < rating_avg < rating_max.",
+      "request": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerUpsert"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.WorkspaceRankerRead"
+      },
+      "summary": "Set workspace mix ranker settings"
+    },
     "rpc.balancer.balance": {
       "description": "Permission: workspace `team.create` on the given workspace_id; an API-key caller must also be scoped to that workspace and hold the `team.create` scope. Solves the posted pool and returns the ranked variants in the same response -- no job id, no polling, no realtime events. Everything the solver needs is in the body (`player_data`, optional per-team `role_mask`, optional `config_overrides`); nothing is read from the workspace. The solver budget is clamped to 60s, so a pool too large to settle in time answers 504 and belongs on the asynchronous job API instead. Rate limits, the per-key config policy and the concurrency slot are the job path's.",
       "request": {
@@ -3962,7 +3990,7 @@
       "summary": "Open custom game signup in Discord"
     },
     "rpc.balancer.custom.record_outcome": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book -- by points_per_win when a winner is given, or seat by seat by the mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden ratings, and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameRecordOutcome"
@@ -4088,7 +4116,7 @@
       "summary": "Transfer custom game host"
     },
     "rpc.balancer.custom.undo_match": {
-      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match and its seats rather than the host's current settings, then rebuilds the workspace's hidden ratings from the remaining history. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
       "summary": "Undo custom game match"
     },
     "rpc.balancer.custom.update_player": {
@@ -4544,7 +4572,7 @@
       "summary": "Upsert workspace player"
     },
     "rpc.balancer.prefs.get": {
-      "description": "Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field and how far a decided match moves its rank book -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.",
+      "description": "Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field, how far a decided match moves its rank book and whether the mix ranker moves it instead (rating_mode) -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.",
       "response": {
         "array": false,
         "ref": "balancer.UserMixPreferencesRead"
@@ -4552,7 +4580,7 @@
       "summary": "Get my pickup mix preferences"
     },
     "rpc.balancer.prefs.upsert": {
-      "description": "Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all five of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.",
+      "description": "Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all six of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.",
       "request": {
         "array": false,
         "ref": "balancer.UserMixPreferencesUpsert"
@@ -26072,7 +26100,7 @@
       "type": "object"
     },
     "balancer.UserMixPreferencesRead": {
-      "description": "What is stored, plus the shape it resolves to.\n\nAll five stored fields are null for an account that never saved any;\n``roster_shape`` is always present, since a mix always has *some* shape.",
+      "description": "What is stored, plus the shape it resolves to.\n\nAll six stored fields are null (``rating_mode``: ``points``) for an\naccount that never saved any; ``roster_shape`` is always present, since a\nmix always has *some* shape.",
       "properties": {
         "max_result_variants": {
           "anyOf": [
@@ -26144,6 +26172,16 @@
           "default": null,
           "description": "How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.",
           "title": "Points Per Win"
+        },
+        "rating_mode": {
+          "default": "points",
+          "description": "How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.",
+          "enum": [
+            "points",
+            "ranker"
+          ],
+          "title": "Rating Mode",
+          "type": "string"
         },
         "role_mask": {
           "anyOf": [
@@ -26174,7 +26212,7 @@
     },
     "balancer.UserMixPreferencesUpsert": {
       "additionalProperties": false,
-      "description": "A full replacement: all five keys required, each nullable to unset one.",
+      "description": "A full replacement: all six keys required, the five knobs nullable to unset one.",
       "properties": {
         "max_result_variants": {
           "anyOf": [
@@ -26243,6 +26281,15 @@
           "description": "How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.",
           "title": "Points Per Win"
         },
+        "rating_mode": {
+          "description": "How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.",
+          "enum": [
+            "points",
+            "ranker"
+          ],
+          "title": "Rating Mode",
+          "type": "string"
+        },
         "role_mask": {
           "anyOf": [
             {
@@ -26264,7 +26311,8 @@
         "mix_role_weights",
         "max_result_variants",
         "role_mask",
-        "points_per_win"
+        "points_per_win",
+        "rating_mode"
       ],
       "title": "UserMixPreferencesUpsert",
       "type": "object"
@@ -26365,6 +26413,160 @@
         }
       },
       "title": "WorkspaceBalancerConfigUpsert",
+      "type": "object"
+    },
+    "balancer.WorkspaceRankerRead": {
+      "description": "The knobs in force (defaults when never saved) and how many hidden ratings exist.",
+      "properties": {
+        "gate_steepness": {
+          "description": "How sharply the correction switches from 'ignore' to 'apply' (the specification's d).",
+          "title": "Gate Steepness",
+          "type": "number"
+        },
+        "gravity": {
+          "description": "How strongly an uncertain hidden rating is pulled towards the average (the specification's g).",
+          "title": "Gravity",
+          "type": "number"
+        },
+        "hidden_ratings": {
+          "description": "Hidden ratings stored for this workspace's members, one per role.",
+          "title": "Hidden Ratings",
+          "type": "integer"
+        },
+        "rating_avg": {
+          "description": "The open rating an average player holds; the hidden scale is centred on it.",
+          "title": "Rating Avg",
+          "type": "number"
+        },
+        "rating_max": {
+          "description": "Highest open rating the ranker maps onto.",
+          "title": "Rating Max",
+          "type": "number"
+        },
+        "rating_min": {
+          "description": "Lowest open rating the ranker maps onto.",
+          "title": "Rating Min",
+          "type": "number"
+        },
+        "sigma_init": {
+          "description": "A newcomer's hidden uncertainty; also sets the hidden scale.",
+          "title": "Sigma Init",
+          "type": "number"
+        },
+        "variant": {
+          "description": "'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.",
+          "enum": [
+            "reference",
+            "corrected"
+          ],
+          "title": "Variant",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "rating_min",
+        "rating_max",
+        "rating_avg",
+        "gravity",
+        "gate_steepness",
+        "sigma_init",
+        "variant",
+        "hidden_ratings"
+      ],
+      "title": "WorkspaceRankerRead",
+      "type": "object"
+    },
+    "balancer.WorkspaceRankerRebuildRead": {
+      "properties": {
+        "hidden_ratings": {
+          "description": "Hidden ratings the replay produced.",
+          "title": "Hidden Ratings",
+          "type": "integer"
+        },
+        "matches": {
+          "description": "Recorded mix matches replayed.",
+          "title": "Matches",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "matches",
+        "hidden_ratings"
+      ],
+      "title": "WorkspaceRankerRebuildRead",
+      "type": "object"
+    },
+    "balancer.WorkspaceRankerUpsert": {
+      "additionalProperties": false,
+      "description": "A full replacement of the workspace's mix ranker knobs.\n\nChanging ``rating_min``, ``rating_max``, ``rating_avg`` or ``sigma_init``\nreinterprets every stored hidden rating, so the save rebuilds them from the\nworkspace's match history before it answers.",
+      "properties": {
+        "gate_steepness": {
+          "description": "How sharply the correction switches from 'ignore' to 'apply' (the specification's d).",
+          "exclusiveMinimum": 0,
+          "maximum": 50,
+          "title": "Gate Steepness",
+          "type": "number"
+        },
+        "gravity": {
+          "description": "How strongly an uncertain hidden rating is pulled towards the average (the specification's g).",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Gravity",
+          "type": "number"
+        },
+        "rating_avg": {
+          "description": "The open rating an average player holds; the hidden scale is centred on it.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Rating Avg",
+          "type": "number"
+        },
+        "rating_max": {
+          "description": "Highest open rating the ranker maps onto.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Rating Max",
+          "type": "number"
+        },
+        "rating_min": {
+          "description": "Lowest open rating the ranker maps onto.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Rating Min",
+          "type": "number"
+        },
+        "sigma_init": {
+          "description": "A newcomer's hidden uncertainty; also sets the hidden scale.",
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Sigma Init",
+          "type": "number"
+        },
+        "variant": {
+          "description": "'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.",
+          "enum": [
+            "reference",
+            "corrected"
+          ],
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rating_min",
+        "rating_max",
+        "rating_avg",
+        "gravity",
+        "gate_steepness",
+        "sigma_init",
+        "variant"
+      ],
+      "title": "WorkspaceRankerUpsert",
       "type": "object"
     },
     "identity.AdminSessionRead": {

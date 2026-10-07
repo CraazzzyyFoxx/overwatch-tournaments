@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`plrole01`** (102 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixrank01`** (103 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -487,6 +487,16 @@ per-context rank stores, so the resolver reads both layers in a single query.
 <!-- ERD:auto member_rank -->
 ```mermaid
 erDiagram
+    BALANCER_MEMBER_HIDDEN_RATING {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint workspace_id FK
+        bigint workspace_member_id FK
+        varchar(16) role
+        float mu
+        float sigma
+    }
     BALANCER_MEMBER_RANK {
         bigint id PK
         timestamptz created_at
@@ -499,9 +509,15 @@ erDiagram
     }
 
     AUTH_USER |o--o{ BALANCER_MEMBER_RANK : "author_user_id"
+    PUBLIC_WORKSPACE ||--o{ BALANCER_MEMBER_HIDDEN_RATING : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_MEMBER_RANK : "workspace_id"
+    PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_MEMBER_HIDDEN_RATING : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_MEMBER_RANK : "workspace_member_id"
 ```
+
+Composite unique keys:
+
+- `BALANCER_MEMBER_HIDDEN_RATING` unique on (`workspace_member_id`, `role`)
 <!-- /ERD:auto -->
 
 ## catalog — `overwatch`
@@ -1922,6 +1938,7 @@ erDiagram
         jsonb config_json
         jsonb role_slots_json "nullable"
         int points_per_win "nullable"
+        varchar(16) rating_mode
     }
     BALANCER_WORKSPACE_CONFIG {
         bigint id PK
@@ -1930,6 +1947,7 @@ erDiagram
         bigint workspace_id FK,UK
         json config_json
         bigint updated_by FK "nullable"
+        jsonb ranker_json "nullable"
     }
 
     AUTH_USER |o--o{ BALANCER_BALANCE : "saved_by"
@@ -2091,6 +2109,7 @@ erDiagram
         varchar(255) display_name_snapshot
         heroclass role "nullable"
         int rank
+        int rank_delta_applied "nullable"
     }
     CASUAL_TEAM {
         bigint id PK

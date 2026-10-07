@@ -3,13 +3,13 @@
 Deliberately not the full ``ConfigOverrides`` vocabulary -- only these keys ever
 reach the mix engine, so the wire names them one by one instead of carrying an
 opaque blob a client could stuff a tournament-GA knob into. The read and the
-write carry the same five stored fields: a PUT answers with exactly what the
+write carry the same six stored fields: a PUT answers with exactly what the
 next GET would return, plus one derived, read-only ``roster_shape``.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -44,6 +44,13 @@ _POINTS_DOC = (
     "How far a decided match moves both teams' ranks in this account's own rank book. "
     "0 and null both mean recording a match adjusts nothing."
 )
+_MODE_DOC = (
+    "How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the "
+    "mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's "
+    "hidden ratings advance in both."
+)
+
+RatingMode = Literal["points", "ranker"]
 _SHAPE_DOC = (
     "Read-only: role_mask resolved through the fallback chain, so the client never recomputes it. "
     "source is 'user' when this account stored a mask and 'default' when it did not."
@@ -64,8 +71,9 @@ _RoleMask = dict[str, int] | None
 class UserMixPreferencesRead(BaseModel):
     """What is stored, plus the shape it resolves to.
 
-    All five stored fields are null for an account that never saved any;
-    ``roster_shape`` is always present, since a mix always has *some* shape.
+    All six stored fields are null (``rating_mode``: ``points``) for an
+    account that never saved any; ``roster_shape`` is always present, since a
+    mix always has *some* shape.
     """
 
     mix_comfort_tilt: float | None = Field(default=None, ge=0.0, le=1.0, description=_TILT_DOC)
@@ -73,11 +81,12 @@ class UserMixPreferencesRead(BaseModel):
     max_result_variants: int | None = Field(default=None, ge=1, le=MAX_RESULT_VARIANTS, description=_VARIANTS_DOC)
     role_mask: _RoleMask = Field(default=None, description=_MASK_DOC)
     points_per_win: int | None = Field(default=None, ge=0, le=MAX_POINTS_PER_WIN, description=_POINTS_DOC)
+    rating_mode: RatingMode = Field(default="points", description=_MODE_DOC)
     roster_shape: RosterShapeRead = Field(description=_SHAPE_DOC)
 
 
 class UserMixPreferencesUpsert(BaseModel):
-    """A full replacement: all five keys required, each nullable to unset one."""
+    """A full replacement: all six keys required, the five knobs nullable to unset one."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -86,3 +95,4 @@ class UserMixPreferencesUpsert(BaseModel):
     max_result_variants: int | None = Field(ge=1, le=MAX_RESULT_VARIANTS, description=_VARIANTS_DOC)
     role_mask: _RoleMask = Field(description=_MASK_DOC)
     points_per_win: int | None = Field(ge=0, le=MAX_POINTS_PER_WIN, description=_POINTS_DOC)
+    rating_mode: RatingMode = Field(description=_MODE_DOC)

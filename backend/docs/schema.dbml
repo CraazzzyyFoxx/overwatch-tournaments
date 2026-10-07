@@ -1,6 +1,6 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
-// Tables: 150
+// Tables: 151
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -950,6 +950,21 @@ Table balancer.draft_team {
   }
 }
 
+Table balancer.member_hidden_rating {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  workspace_id bigint [not null]
+  workspace_member_id bigint [not null]
+  role VARCHAR(16) [not null]
+  mu float [not null]
+  sigma float [not null]
+  indexes {
+    (workspace_member_id, role) [unique, name: "uq_member_hidden_rating_member_role"]
+    (workspace_id) [name: "ix_balancer_member_hidden_rating_workspace_id"]
+  }
+}
+
 Table balancer.member_rank {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -1081,8 +1096,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
+    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -1149,8 +1164,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
     (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
+    (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1300,6 +1315,7 @@ Table balancer.user_config {
   config_json jsonb [not null, default: `{}`]
   role_slots_json jsonb
   points_per_win int
+  rating_mode VARCHAR(16) [not null, default: `points`]
   indexes {
     (user_id) [unique, name: "uq_balancer_user_config_user"]
   }
@@ -1312,6 +1328,7 @@ Table balancer.workspace_config {
   workspace_id bigint [not null]
   config_json json [not null, default: `{}`]
   updated_by bigint
+  ranker_json jsonb
   indexes {
     (workspace_id) [unique, name: "uq_balancer_workspace_config_workspace"]
   }
@@ -1331,6 +1348,7 @@ TableGroup balancer {
   balancer.draft_player
   balancer.draft_session
   balancer.draft_team
+  balancer.member_hidden_rating
   balancer.member_rank
   balancer.registration
   balancer.registration_form
@@ -1382,6 +1400,7 @@ Table casual.player {
   display_name_snapshot VARCHAR(255) [not null]
   role heroclass
   rank int [not null]
+  rank_delta_applied int
   indexes {
     (team_id) [name: "ix_casual_player_team_id"]
     (workspace_member_id) [name: "ix_casual_player_workspace_member_id"]
@@ -1974,8 +1993,8 @@ Table division_grid_tier {
   ow_rank_min bigint
   ow_rank_max bigint
   indexes {
-    (version_id, slug) [unique]
     (version_id, sort_order) [unique]
+    (version_id, slug) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -3252,6 +3271,8 @@ Ref: balancer.draft_team.session_id > balancer.draft_session.id [delete: cascade
 Ref: balancer.draft_team.captain_workspace_member_id > workspace_member.id [delete: set null]
 Ref: balancer.draft_team.captain_auth_user_id > auth.user.id [delete: set null]
 Ref: balancer.draft_team.exported_team_id > tournament.team.id [delete: set null]
+Ref: balancer.member_hidden_rating.workspace_id > workspace.id [delete: cascade]
+Ref: balancer.member_hidden_rating.workspace_member_id > workspace_member.id [delete: cascade]
 Ref: balancer.member_rank.workspace_id > workspace.id [delete: cascade]
 Ref: balancer.member_rank.workspace_member_id > workspace_member.id [delete: cascade]
 Ref: balancer.member_rank.author_user_id > auth.user.id [delete: cascade]

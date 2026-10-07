@@ -257,6 +257,12 @@ export type PickupSeat = {
   name: string;
   role: RoleCode;
   rating: number | null;
+  /**
+   * The host's own open rating for that bucket, when the mix balanced in
+   * ranker mode -- `rating` above is then the effective one the solver used.
+   * `null` in points mode, where the two cannot differ.
+   */
+  openRating: number | null;
   /** The solver put them off their first choice. */
   offRole: boolean;
   isFlex: boolean;
@@ -366,6 +372,8 @@ function parseSeats(roster: Record<string, unknown>, players: Record<string, unk
         role,
         // The server's `seat_rating`: the rating for the bucket they sit in, 0 without one.
         rating: asNumber(asRecord(player.ratings)?.[name]) ?? 0,
+        // Only written by the server when the host balanced in ranker mode.
+        openRating: asNumber(asRecord(player.open_ratings)?.[name]),
         // A flex player is never off-role: any seat is their first choice.
         offRole: !isFlex && preferences.length > 0 && preferences[0] !== name,
         isFlex,

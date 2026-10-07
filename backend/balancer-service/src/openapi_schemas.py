@@ -37,6 +37,11 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.admin.workspace_config_upsert": Op(
         request=schemas.WorkspaceBalancerConfigUpsert, response=schemas.WorkspaceBalancerConfigRead
     ),
+    "rpc.balancer.admin.workspace_ranker_get": Op(response=schemas.WorkspaceRankerRead),
+    "rpc.balancer.admin.workspace_ranker_upsert": Op(
+        request=schemas.WorkspaceRankerUpsert, response=schemas.WorkspaceRankerRead
+    ),
+    "rpc.balancer.admin.workspace_ranker_rebuild": Op(response=schemas.WorkspaceRankerRebuildRead),
     # ── jobs (public, Redis-backed) ────────────────────────────────────────
     "rpc.balancer.jobs.status": Op(response=schemas.JobStatusResponse),
     "rpc.balancer.jobs.result": Op(response=schemas.BalanceJobResult),

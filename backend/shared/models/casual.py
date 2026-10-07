@@ -93,6 +93,10 @@ class CasualPlayer(db.TimeStampIntegerMixin):
     display_name_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[enums.HeroClass | None] = mapped_column(Enum(enums.HeroClass), nullable=True)
     rank: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # How far a ranker-mode recording moved this seat's rank in the host's
+    # book, so undo gives back exactly that. NULL whenever the match was
+    # recorded in points mode -- ``CasualMatch.points_per_win_applied`` covers it.
+    rank_delta_applied: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     team: Mapped[CasualTeam] = relationship(back_populates="players")
 

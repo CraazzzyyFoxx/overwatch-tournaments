@@ -9711,14 +9711,14 @@ export interface paths {
         };
         /**
          * Get my pickup mix preferences
-         * @description Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field and how far a decided match moves its rank book -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.
+         * @description Permission: self-service -- any authenticated (active) account reads its own preferences only. Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field, how far a decided match moves its rank book and whether the mix ranker moves it instead (rating_mode) -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies.
          *
          *     RPC subject: `rpc.balancer.prefs.get`
          */
         get: operations["get__api_v1_balancer_me_mix_preferences"];
         /**
          * Set my pickup mix preferences
-         * @description Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all five of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.
+         * @description Permission: self-service -- any authenticated (active) account writes its own preferences only. Replaces all six of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.
          *
          *     RPC subject: `rpc.balancer.prefs.upsert`
          */
@@ -10164,7 +10164,7 @@ export interface paths {
         post?: never;
         /**
          * Undo custom game match
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Deletes the lobby's most recent match and gives back exactly the rank points it applied, read from the match and its seats rather than the host's current settings, then rebuilds the workspace's hidden ratings from the remaining history. 404 when the match belongs to another mix and 409 when a newer match of the SAME lobby exists, since the rank book compounds. must_play pins the recording redeemed are not restored.
          *
          *     RPC subject: `rpc.balancer.custom.undo_match`
          */
@@ -10269,7 +10269,7 @@ export interface paths {
         put?: never;
         /**
          * Record custom game match
-         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.
+         * @description Permission: workspace membership plus being the mix's host or co-host (or a superuser). Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book -- by points_per_win when a winner is given, or seat by seat by the mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden ratings, and redeeming every seat's must_play pin back to the pool. The match is stamped with the lobby that played it and with whoever was playing the other lobby at that moment, whom rotation then counts as neither played nor sat out. Repeatable until the mix is closed.
          *
          *     RPC subject: `rpc.balancer.custom.record_outcome`
          */
@@ -10544,6 +10544,56 @@ export interface paths {
          */
         put: operations["put__api_v1_balancer_workspaces__workspace_id__players__member_id__ranks"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/ranker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get workspace mix ranker settings
+         * @description Permission: admin-panel access plus workspace `workspace.read`. Returns the mix ranker's knobs in force for this workspace (the defaults when never saved) and how many hidden ratings its members hold. The ranker implements mixtura-ranker by Dmitriy (@dmelackov), https://github.com/mixtura-dev/mixtura-ranker.
+         *
+         *     RPC subject: `rpc.balancer.admin.workspace_ranker_get`
+         */
+        get: operations["get__api_v1_balancer_workspaces__workspace_id__ranker"];
+        /**
+         * Set workspace mix ranker settings
+         * @description Permission: admin-panel access plus workspace `team.update`. Replaces all seven knobs at once. Changing rating_min, rating_max, rating_avg or sigma_init reinterprets every stored hidden rating, so the call rebuilds them from the workspace's recorded mix matches before answering. 422 unless rating_min < rating_avg < rating_max.
+         *
+         *     RPC subject: `rpc.balancer.admin.workspace_ranker_upsert`
+         */
+        put: operations["put__api_v1_balancer_workspaces__workspace_id__ranker"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/balancer/workspaces/{workspace_id}/ranker/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild hidden mix ratings from history
+         * @description Permission: admin-panel access plus workspace `team.update`. Replays every recorded mix match of the workspace in order and replaces all hidden ratings with the result; open ranks are not touched. Returns how many matches were replayed and how many hidden ratings came out.
+         *
+         *     RPC subject: `rpc.balancer.admin.workspace_ranker_rebuild`
+         */
+        post: operations["post__api_v1_balancer_workspaces__workspace_id__ranker_rebuild"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20493,8 +20543,9 @@ export interface components {
          * UserMixPreferencesRead
          * @description What is stored, plus the shape it resolves to.
          *
-         *     All five stored fields are null for an account that never saved any;
-         *     ``roster_shape`` is always present, since a mix always has *some* shape.
+         *     All six stored fields are null (``rating_mode``: ``points``) for an
+         *     account that never saved any; ``roster_shape`` is always present, since a
+         *     mix always has *some* shape.
          */
         "balancer.UserMixPreferencesRead": {
             /**
@@ -20524,6 +20575,13 @@ export interface components {
              */
             points_per_win: number | null;
             /**
+             * Rating Mode
+             * @description How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.
+             * @default points
+             * @enum {string}
+             */
+            rating_mode: BalancerUserMixPreferencesReadRating_mode;
+            /**
              * Role Mask
              * @description How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.
              * @default null
@@ -20536,7 +20594,7 @@ export interface components {
         };
         /**
          * UserMixPreferencesUpsert
-         * @description A full replacement: all five keys required, each nullable to unset one.
+         * @description A full replacement: all six keys required, the five knobs nullable to unset one.
          */
         "balancer.UserMixPreferencesUpsert": {
             /**
@@ -20561,6 +20619,12 @@ export interface components {
              * @description How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.
              */
             points_per_win: number | null;
+            /**
+             * Rating Mode
+             * @description How recording a match moves this account's rank book: 'points' by points_per_win, 'ranker' by the mix ranker (each seat by its own amount; mixes then balance on the effective rating). The workspace's hidden ratings advance in both.
+             * @enum {string}
+             */
+            rating_mode: BalancerUserMixPreferencesUpsertRating_mode;
             /**
              * Role Mask
              * @description How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.
@@ -20609,6 +20673,114 @@ export interface components {
              * @default null
              */
             rank_delta_threshold: number | null;
+        };
+        /**
+         * WorkspaceRankerRead
+         * @description The knobs in force (defaults when never saved) and how many hidden ratings exist.
+         */
+        "balancer.WorkspaceRankerRead": {
+            /**
+             * Gate Steepness
+             * @description How sharply the correction switches from 'ignore' to 'apply' (the specification's d).
+             */
+            gate_steepness: number;
+            /**
+             * Gravity
+             * @description How strongly an uncertain hidden rating is pulled towards the average (the specification's g).
+             */
+            gravity: number;
+            /**
+             * Hidden Ratings
+             * @description Hidden ratings stored for this workspace's members, one per role.
+             */
+            hidden_ratings: number;
+            /**
+             * Rating Avg
+             * @description The open rating an average player holds; the hidden scale is centred on it.
+             */
+            rating_avg: number;
+            /**
+             * Rating Max
+             * @description Highest open rating the ranker maps onto.
+             */
+            rating_max: number;
+            /**
+             * Rating Min
+             * @description Lowest open rating the ranker maps onto.
+             */
+            rating_min: number;
+            /**
+             * Sigma Init
+             * @description A newcomer's hidden uncertainty; also sets the hidden scale.
+             */
+            sigma_init: number;
+            /**
+             * Variant
+             * @description 'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.
+             * @enum {string}
+             */
+            variant: BalancerWorkspaceRankerReadVariant;
+            /** Workspace Id */
+            workspace_id: number;
+        };
+        /** WorkspaceRankerRebuildRead */
+        "balancer.WorkspaceRankerRebuildRead": {
+            /**
+             * Hidden Ratings
+             * @description Hidden ratings the replay produced.
+             */
+            hidden_ratings: number;
+            /**
+             * Matches
+             * @description Recorded mix matches replayed.
+             */
+            matches: number;
+        };
+        /**
+         * WorkspaceRankerUpsert
+         * @description A full replacement of the workspace's mix ranker knobs.
+         *
+         *     Changing ``rating_min``, ``rating_max``, ``rating_avg`` or ``sigma_init``
+         *     reinterprets every stored hidden rating, so the save rebuilds them from the
+         *     workspace's match history before it answers.
+         */
+        "balancer.WorkspaceRankerUpsert": {
+            /**
+             * Gate Steepness
+             * @description How sharply the correction switches from 'ignore' to 'apply' (the specification's d).
+             */
+            gate_steepness: number;
+            /**
+             * Gravity
+             * @description How strongly an uncertain hidden rating is pulled towards the average (the specification's g).
+             */
+            gravity: number;
+            /**
+             * Rating Avg
+             * @description The open rating an average player holds; the hidden scale is centred on it.
+             */
+            rating_avg: number;
+            /**
+             * Rating Max
+             * @description Highest open rating the ranker maps onto.
+             */
+            rating_max: number;
+            /**
+             * Rating Min
+             * @description Lowest open rating the ranker maps onto.
+             */
+            rating_min: number;
+            /**
+             * Sigma Init
+             * @description A newcomer's hidden uncertainty; also sets the hidden scale.
+             */
+            sigma_init: number;
+            /**
+             * Variant
+             * @description 'corrected' follows the hidden rating by its own uncertainty; 'reference' scales by the whole open range, as the original specification does.
+             * @enum {string}
+             */
+            variant: BalancerWorkspaceRankerUpsertVariant;
         };
         /**
          * AdminSessionRead
@@ -68566,6 +68738,244 @@ export interface operations {
             };
         };
     };
+    get__api_v1_balancer_workspaces__workspace_id__ranker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.WorkspaceRankerRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put__api_v1_balancer_workspaces__workspace_id__ranker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["balancer.WorkspaceRankerUpsert"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.WorkspaceRankerRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__api_v1_balancer_workspaces__workspace_id__ranker_rebuild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["balancer.WorkspaceRankerRebuildRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_division_grids_by_workspace__workspace_id_: {
         parameters: {
             query?: never;
@@ -72830,6 +73240,22 @@ export enum BalancerMixSelfSignup {
     closed = "closed",
     pool = "pool",
     benched = "benched"
+}
+export enum BalancerUserMixPreferencesReadRating_mode {
+    points = "points",
+    ranker = "ranker"
+}
+export enum BalancerUserMixPreferencesUpsertRating_mode {
+    points = "points",
+    ranker = "ranker"
+}
+export enum BalancerWorkspaceRankerReadVariant {
+    reference = "reference",
+    corrected = "corrected"
+}
+export enum BalancerWorkspaceRankerUpsertVariant {
+    reference = "reference",
+    corrected = "corrected"
 }
 export enum ParserSortOrder {
     asc = "asc",
