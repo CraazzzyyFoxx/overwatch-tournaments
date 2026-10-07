@@ -25,17 +25,20 @@ from src.rabbit.gateway import DiscordRabbitGateway  # noqa: E402
 from tests.gateway_fakes import FakeMessages, gateway, message, row  # noqa: E402
 
 
-def _card(text: str) -> dict:
-    return {"accent_color": 0x14B8A6, "text": text}
+def _card(text: str, *, image_url: str | None = None) -> dict:
+    card = {"accent_color": 0x14B8A6, "text": text}
+    if image_url is not None:
+        card["image_url"] = image_url
+    return card
 
 
-def _posted(ref: int, *, text: str = "4/10", channel_id: int = 555, message_id: int = 77):
+def _posted(ref: int, *, text: str = "4/10", channel_id: int = 555, message_id: int = 77, image_url: str | None = None):
     return row(
         id=ref,
         status="posted",
         discord_channel_id=channel_id,
         message_id=message_id,
-        card_json=_card(text),
+        card_json=_card(text, image_url=image_url),
     )
 
 
@@ -61,8 +64,11 @@ def _handler(rows: FakeMessages):
     return handle, built, bot, made
 
 
-def _body(*, ref: int = 1) -> dict:
-    return {"event_type": "discord_command", "action": "edit_message", "message_ref": ref}
+def _body(*, ref: int = 1, image_b64: str | None = None) -> dict:
+    body = {"event_type": "discord_command", "action": "edit_message", "message_ref": ref}
+    if image_b64 is not None:
+        body["image_b64"] = image_b64
+    return body
 
 
 async def _drain(built: DiscordRabbitGateway) -> None:
@@ -239,3 +245,52 @@ class EditMessageCommandTests(IsolatedAsyncioTestCase):
         self.assertEqual(_card_text(made[77].edit), "6/10")
         self.assertEqual(built._pending_edits, set())
         self.assertEqual(built._edit_tasks, {})
+
+    async def test_an_edit_carrying_a_png_replaces_the_picture_its_card_shows(self) -> None:
+        """A re-drawn lineup: the card still names ``lineup.png``, the file behind it is new."""
+        rows = FakeMessages(_posted(1, text="### Lineup", image_url="attachment://lineup.png"))
+        handle, built, _bot, made = _handler(rows)
+
+        with patch("src.rabbit.gateway.EDIT_COALESCE_SECONDS", 0):
+            await handle(_body(image_b64="aGk="), message())
+            await _drain(built)
+
+        (upload,) = made[77].edit.await_args.kwargs["attachments"]
+        self.assertEqual(upload.filename, "lineup.png")
+        self.assertEqual(upload.fp.read(), b"hi")
+        self.assertEqual(built._pending_images, {})
+
+    async def test_a_card_that_became_text_drops_the_picture_it_used_to_show(self) -> None:
+        """Discord keeps an attachment nobody edits away, even once the layout stops showing it."""
+        handle, built, _bot, made = _handler(FakeMessages(_posted(1, text="Mix closed")))
+
+        with patch("src.rabbit.gateway.EDIT_COALESCE_SECONDS", 0):
+            await handle(_body(), message())
+            await _drain(built)
+
+        self.assertEqual(made[77].edit.await_args.kwargs["attachments"], [])
+
+    async def test_a_ping_without_a_png_leaves_the_picture_the_card_still_shows(self) -> None:
+        """Seats changed, the drawing did not: re-uploading it would be a wasted megabyte."""
+        rows = FakeMessages(_posted(1, text="### Lineup", image_url="attachment://lineup.png"))
+        handle, built, _bot, made = _handler(rows)
+
+        with patch("src.rabbit.gateway.EDIT_COALESCE_SECONDS", 0):
+            await handle(_body(), message())
+            await _drain(built)
+
+        self.assertNotIn("attachments", made[77].edit.await_args.kwargs)
+
+    async def test_a_png_survives_the_pings_coalesced_behind_it(self) -> None:
+        """One Discord call for the burst, and it is the one that carries the new file."""
+        rows = FakeMessages(_posted(1, text="### Lineup", image_url="attachment://lineup.png"))
+        handle, built, _bot, made = _handler(rows)
+
+        with patch("src.rabbit.gateway.EDIT_COALESCE_SECONDS", 0):
+            await handle(_body(image_b64="aGk="), message())
+            await handle(_body(), message())
+            await _drain(built)
+
+        self.assertEqual(made[77].edit.await_count, 1)
+        (upload,) = made[77].edit.await_args.kwargs["attachments"]
+        self.assertEqual(upload.filename, "lineup.png")

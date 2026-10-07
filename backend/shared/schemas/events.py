@@ -136,8 +136,9 @@ class DiscordCommandEvent(BaseEvent):
       ``card.image_url`` is ``attachment://<image_filename>``.
     - ``send_dm``: send one card to one Discord user.
     - ``edit_message``: show the card the ``discord_message`` row now holds
-      (``card_json``); the command carries no card of its own. Edits of one
-      message arriving close together collapse into one read of the row.
+      (``card_json``); the command carries no card of its own, and may carry
+      the PNG the row's card now shows. Edits of one message arriving close
+      together collapse into one read of the row.
     - ``delete_message``: delete a message the bot sent.
 
     Every message the platform sends is a ``discord_message`` row, and the four
@@ -154,7 +155,7 @@ class DiscordCommandEvent(BaseEvent):
     discord_user_id: int | None = Field(default=None, description="Discord user ID (required for 'send_dm')")
     #: ``discord_message.id`` -- the platform's own handle on the message.
     message_ref: int | None = Field(default=None, description="discord_message row (post/send/edit/delete)")
-    image_b64: str | None = Field(default=None, description="Base64 PNG the card shows (for 'post_message')")
+    image_b64: str | None = Field(default=None, description="Base64 PNG the card shows (post_message, edit_message)")
     image_filename: str = Field(default="lineup.png", pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     card: DiscordCard | None = Field(default=None, description="Components V2 card (post_message, send_dm)")
     #: Who may be pinged. ``False`` pings nobody (notifications carry
@@ -189,9 +190,11 @@ class DiscordCommandEvent(BaseEvent):
         # stray attachment beside a Components V2 layout.
         shown = self.card.attachment_name if self.card is not None else None
         if self.image_b64 is not None:
-            if self.action != "post_message":
-                raise ValueError("image_b64 is only sent with action='post_message'")
-            if shown != self.image_filename:
+            if self.action not in ("post_message", "edit_message"):
+                raise ValueError("image_b64 is only sent with action='post_message' or 'edit_message'")
+            # An edit carries no card (it is the row's); the bot checks the
+            # name against the row's card when it applies the edit.
+            if self.action == "post_message" and shown != self.image_filename:
                 raise ValueError("image_b64 needs a card whose image_url is attachment://<image_filename>")
         elif shown is not None:
             raise ValueError("card.image_url names an attachment the command does not carry")

@@ -109,16 +109,25 @@ async def send_command(
     )
 
 
-async def edit_command(session: Any, row: models.DiscordMessage, card: DiscordCard) -> DiscordCommandEvent | None:
+async def edit_command(
+    session: Any,
+    row: models.DiscordMessage,
+    card: DiscordCard,
+    *,
+    image_b64: str | None = None,
+    image_filename: str = "lineup.png",
+) -> DiscordCommandEvent | None:
     """Write ``card`` onto a live message and return the command that shows it.
 
     ``None`` for a message that is gone or never was. The command carries no
-    card: the bot reads the row's when it applies the edit.
+    card -- the bot reads the row's -- but may carry the new PNG that card shows.
     """
     if row.status not in ("pending", "posted"):
         return None
     await repository.set_card(session, row.id, card.model_dump(mode="json"))
-    return DiscordCommandEvent(action="edit_message", message_ref=row.id)
+    return DiscordCommandEvent(
+        action="edit_message", message_ref=row.id, image_b64=image_b64, image_filename=image_filename
+    )
 
 
 async def delete_commands(session: Any, rows: Sequence[models.DiscordMessage]) -> list[DiscordCommandEvent]:
