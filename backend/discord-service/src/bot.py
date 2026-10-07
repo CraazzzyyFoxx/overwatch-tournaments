@@ -27,6 +27,7 @@ from src.services.channel_registry import ChannelRegistry
 from src.services.directory import DiscordDirectoryService
 from src.services.parser_client import ParserClientFactory
 from src.services.subscription_sync import MemberSubscriptionSyncService
+from src.services.voice import VoiceMover
 from src.watchdog import GatewayWatchdog
 
 # Seconds before giving up on a parser processing result for an uploaded log.
@@ -40,6 +41,7 @@ def _build_intents() -> discord.Intents:
     intents.reactions = True
     intents.guilds = True
     intents.members = True
+    intents.voice_states = True  # who sits in which voice: the mix mover reads it
     return intents
 
 
@@ -64,6 +66,7 @@ class LogCollectorBot(commands.Bot):
             result_waiter=self.result_waiter,
         )
         self.directory = DiscordDirectoryService(self)
+        self.voice = VoiceMover(self)
         self.subscription_sync = MemberSubscriptionSyncService(settings=settings, session_maker=self.session_maker)
         self.action_dispatcher = ActionDispatcher(site_url=settings.public_site_url, session_maker=self.session_maker)
         self.rabbit_gateway = DiscordRabbitGateway(
@@ -71,6 +74,7 @@ class LogCollectorBot(commands.Bot):
             processor=self.attachment_processor,
             registry=self.channel_registry,
             directory=self.directory,
+            voice=self.voice,
             result_waiter=self.result_waiter,
             bot=self,
             session_maker=self.session_maker,

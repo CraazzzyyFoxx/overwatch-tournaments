@@ -32,6 +32,7 @@ from shared.messaging.config import (
     DISCORD_GUILD_INFO_QUEUE,
     DISCORD_GUILD_ROLES_QUEUE,
     DISCORD_MEMBER_ROLES_QUEUE,
+    DISCORD_VOICE_MOVE_QUEUE,
     MATCH_LOG_RESULT_EXCHANGE,
 )
 from shared.observability import make_rabbit_broker, observe_message_processing
@@ -46,6 +47,7 @@ from src.result_waiter import ResultWaiter
 from src.services.attachment_processor import AttachmentProcessor
 from src.services.channel_registry import ChannelRegistry
 from src.services.directory import DirectoryOutcome, DiscordDirectoryService
+from src.services.voice import VoiceMover
 
 _DIRECTORY_CODES = {
     "guild_not_found": "not_found",
@@ -116,6 +118,7 @@ class DiscordRabbitGateway:
         processor: AttachmentProcessor,
         registry: ChannelRegistry,
         directory: DiscordDirectoryService,
+        voice: VoiceMover,
         result_waiter: ResultWaiter,
         bot: discord.Client,
         session_maker: async_sessionmaker[AsyncSession],
@@ -125,6 +128,7 @@ class DiscordRabbitGateway:
         self._processor = processor
         self._registry = registry
         self._directory = directory
+        self._voice = voice
         self._result_waiter = result_waiter
         self._bot = bot
         self._session_maker = session_maker
@@ -621,6 +625,24 @@ class DiscordRabbitGateway:
             ) as observation:
                 guild_id = str(body.get("guild_id") or "").strip()
                 outcome = await self._directory.get_guild_info(guild_id)
+                observation.set_status(outcome.status)
+                return _directory_reply(outcome)
+
+        @broker.subscriber(DISCORD_VOICE_MOVE_QUEUE)
+        async def handle_voice_move(body: dict[str, Any], msg: RabbitMessage) -> dict[str, Any]:
+            await self._bot.wait_until_ready()
+            async with observe_message_processing(
+                queue=DISCORD_VOICE_MOVE_QUEUE,
+                handler="handle_voice_move",
+                message=msg,
+                logger=logger,
+            ) as observation:
+                outcome = await self._voice.move(
+                    str(body.get("guild_id") or "").strip(),
+                    category_id=str(body.get("category_id") or "").strip(),
+                    moves=list(body.get("moves") or []),
+                    drain=body.get("drain") or None,
+                )
                 observation.set_status(outcome.status)
                 return _directory_reply(outcome)
 

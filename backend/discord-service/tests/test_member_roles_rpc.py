@@ -34,6 +34,7 @@ def _registered_handlers() -> dict[str, object]:
         processor=MagicMock(),
         registry=MagicMock(),
         directory=MagicMock(),
+        voice=MagicMock(),
         result_waiter=MagicMock(),
         bot=MagicMock(wait_until_ready=AsyncMock()),
         session_maker=MagicMock(),

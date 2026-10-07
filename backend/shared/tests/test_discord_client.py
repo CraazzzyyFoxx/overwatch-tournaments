@@ -14,6 +14,7 @@ from shared.services.discord_client import DiscordClient
 from shared.services.subscriptions.providers.discord_role import (
     DiscordForbidden,
     DiscordNotConfigured,
+    DiscordUnavailable,
     MemberNotFound,
 )
 
@@ -169,3 +170,33 @@ class TestGuildReads(IsolatedAsyncioTestCase):
         with patch("shared.services.discord_client.httpx.AsyncClient", return_value=http):
             with self.assertRaises(DiscordForbidden):
                 await client.guild_roles("g")
+
+
+class TestVoiceMove(IsolatedAsyncioTestCase):
+    async def test_the_bot_answers_per_person_for_the_documented_body(self):
+        broker = _broker(_reply(rpc_ok({"results": [{"discord_user_id": "7", "status": "moved"}]})))
+        client = DiscordClient(broker=broker)
+
+        results = await client.voice_move(
+            "5",
+            category_id="10",
+            moves=[{"discord_user_id": "7", "channel_id": "2"}],
+            drain={"channel_ids": ["2"], "to_channel_id": "1"},
+        )
+
+        assert results == [{"discord_user_id": "7", "status": "moved"}]
+        assert broker.request.await_args.args[0] == {
+            "guild_id": "5",
+            "category_id": "10",
+            "moves": [{"discord_user_id": "7", "channel_id": "2"}],
+            "drain": {"channel_ids": ["2"], "to_channel_id": "1"},
+        }
+
+    async def test_a_dead_broker_is_unavailable_not_an_empty_move(self):
+        broker = _broker(TimeoutError("no answer"))
+        with self.assertRaises(DiscordUnavailable):
+            await DiscordClient(broker=broker).voice_move("5", category_id="10", moves=[], drain=None)
+
+    async def test_without_a_broker_there_is_no_rest_fallback(self):
+        with self.assertRaises(DiscordUnavailable):
+            await DiscordClient(bot_token="t").voice_move("5", category_id="10", moves=[], drain=None)

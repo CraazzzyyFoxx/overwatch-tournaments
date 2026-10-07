@@ -18,7 +18,7 @@ table already speaks that vocabulary and every caller here does too.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
 import httpx
@@ -29,6 +29,7 @@ from shared.messaging.config import (
     DISCORD_GUILD_INFO_QUEUE,
     DISCORD_GUILD_ROLES_QUEUE,
     DISCORD_MEMBER_ROLES_QUEUE,
+    DISCORD_VOICE_MOVE_QUEUE,
 )
 from shared.messaging.rpc import request_rpc
 from shared.services.subscriptions.providers.discord_role import (
@@ -187,6 +188,29 @@ class DiscordClient:
             "owner_name": owner.get("global_name") or owner.get("username"),
             "owner_avatar_url": f"{_CDN}/avatars/{owner_id}/{avatar}.png" if avatar else None,
         }
+
+    # --- voice --------------------------------------------------------------
+
+    async def voice_move(
+        self,
+        guild_id: str,
+        *,
+        category_id: str,
+        moves: Sequence[Mapping[str, str]],
+        drain: Mapping[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """Per-person results of one move. RPC only: voice state lives in the
+        bot's gateway cache, REST cannot see who is connected."""
+        if self._broker is None:
+            raise DiscordUnavailable("discord-service is not reachable")
+        payload = {"guild_id": guild_id, "category_id": category_id, "moves": list(moves), "drain": drain}
+        try:
+            reply = await request_rpc(self._broker, payload, DISCORD_VOICE_MOVE_QUEUE, timeout=self._rpc_timeout)
+        except Exception as exc:  # noqa: BLE001 -- transport failure or timeout
+            raise DiscordUnavailable(str(exc)) from exc
+        if reply is None or not reply.ok or not isinstance(reply.data, dict):
+            raise DiscordUnavailable(reply.message if reply is not None else "no answer")
+        return list(reply.data.get("results") or [])
 
     # --- transports ---------------------------------------------------------
 
