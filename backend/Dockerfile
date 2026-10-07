@@ -1,7 +1,7 @@
 # Three stages, and only the last one ships:
 #
-#   builder  compilers (Rust, C/C++, cmake) + the third-party venv they build
-#   native   the tournament_balancer Rust wheel (balancer only)
+#   builder  compilers (Rust, C) + the third-party venv they build
+#   native   the balancer_native Rust wheel (balancer only)
 #   runtime  python:3.14-slim + that venv + source
 #
 # The compilers used to live in the shipped image: ~1 GiB of balancer's and
@@ -46,14 +46,14 @@ FROM base AS builder
 
 ARG APP_PATH
 
-# balancer: the ``balancer_native`` Rust extension needs cargo/rustc (and a C
-# linker from build-essential).
+# balancer: the ``balancer_native`` Rust extension needs cargo/rustc and a C
+# linker (gcc + libc6-dev); nothing in the crate compiles C or C++.
 # analytics: `ruptures` has no Python 3.14 wheel yet
 # (upstream: https://github.com/deepcharles/ruptures), so uv builds its sdist,
 # which needs a C compiler for the `ekcpd` extension.
 RUN set -eux; \
     case "${APP_PATH}" in \
-        balancer) pkgs="build-essential cargo rustc" ;; \
+        balancer) pkgs="cargo rustc gcc libc6-dev" ;; \
         analytics) pkgs="build-essential" ;; \
         *) exit 0 ;; \
     esac; \
