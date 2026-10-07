@@ -234,9 +234,9 @@ mixes balance on the **effective rating**. The idea and its specification are
   towards the hidden rating, never against the result. The applied amount is frozen per seat in
   `casual.player.rank_delta_applied`; undo gives back exactly that.
 - **The hidden book is derived** — a fold over the workspace's `casual.match` history. Undo, a change
-  of `rating_min`/`rating_max`/`rating_avg`/`sigma_init`, and the admin's *Rebuild from history*
-  (`admin.workspace_ranker_rebuild`) replay it from scratch; a workspace starts empty until the first
-  rebuild or recorded match.
+  of `rating_min`/`rating_max`/`rating_avg`/`sigma_init`, and the admin's *Recalculate hidden ratings*
+  (`admin.workspace_ranker_rebuild`, a button on the admin *Ranks* page next to *Ranker settings*)
+  replay it from scratch; a workspace starts empty until the first rebuild or recorded match.
 - **Knobs** live in `workspace_config.ranker_json` (`admin.workspace_ranker_get/upsert`); `variant`
   picks `corrected` (default: gate and pull scaled by the hidden rating's own uncertainty) or
   `reference` (the specification's whole-range scaling). Deviations from the specification and the

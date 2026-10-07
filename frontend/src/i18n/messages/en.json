@@ -1290,6 +1290,42 @@
         "divisionMax": "Division to",
         "differsFromCanon": "Differs from canon",
         "dateRange": "Any date"
+      },
+      "ranker": {
+        "settings": "Ranker settings",
+        "rebuild": "Recalculate hidden ratings",
+        "rebuilding": "Recalculating…",
+        "confirmTitle": "Recalculate hidden ratings?",
+        "confirmDescription": "Every hidden rating in this workspace is recomputed from all recorded mix matches. Open ranks are not touched. It can take a few seconds.",
+        "confirmLabel": "Recalculate",
+        "rebuilt": "Hidden ratings: {ratings}, matches replayed: {matches}.",
+        "rebuildError": "Could not recalculate the hidden ratings",
+        "dialogTitle": "Mix ranker",
+        "dialogDescription": "Corrects each host's open rating with a hidden rating learned from recorded mixes; hosts switch it on in their own mix settings.",
+        "credit": "Based on <link>mixtura-ranker</link> by Dmitriy (@dmelackov).",
+        "loading": "Loading…",
+        "loadError": "Could not load the ranker settings.",
+        "fields": {
+          "rating_min": "Min rating",
+          "rating_avg": "Average",
+          "rating_max": "Max rating",
+          "gravity": "Gravity",
+          "gate_steepness": "Gate steepness",
+          "sigma_init": "Initial sigma",
+          "variant": "Formula"
+        },
+        "variants": {
+          "corrected": "Corrected",
+          "reference": "Reference"
+        },
+        "variantHint": "Corrected follows the hidden rating faster; reference is the original specification.",
+        "hiddenCount": "{count, plural, one {# hidden rating} other {# hidden ratings}} in this workspace.",
+        "scaleNote": "Changing the min, average, max or initial sigma recalculates all of them from match history.",
+        "save": "Save",
+        "saving": "Saving…",
+        "saved": "Ranker settings saved.",
+        "saveError": "Could not save the ranker settings",
+        "cancel": "Cancel"
       }
     }
   },

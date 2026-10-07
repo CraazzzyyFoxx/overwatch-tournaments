@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { MixRankerActions } from "@/components/admin/ranks/MixRankerActions";
 import { RankOverviewTable } from "@/components/admin/ranks/RankOverviewTable";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -37,7 +38,11 @@ export default function RankOverviewPage() {
 
   return (
     <div className="space-y-4">
-      <AdminPageHeader title={t("title")} description={t("description")} />
+      <AdminPageHeader
+        title={t("title")}
+        description={t("description")}
+        actions={workspaceId != null ? <MixRankerActions workspaceId={workspaceId} /> : undefined}
+      />
       <RankOverviewTable />
     </div>
   );
