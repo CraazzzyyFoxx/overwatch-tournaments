@@ -5,14 +5,26 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
+import {
+  Building2,
+  ClipboardList,
+  EyeOff,
+  Gamepad2,
+  NotebookPen,
+  Radar,
+  Shuffle,
+  Trophy,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { DataTable, columnMeta } from "@/components/data-table";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { formatDate } from "@/components/kit/format-time";
 import { useFilters, type FilterDef } from "@/components/kit/useFilters";
-import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -24,11 +36,27 @@ import {
   RANK_OVERVIEW_ROLES,
   workspacePlayerKeys,
   workspacePlayerService,
+  type RankLayer,
   type RankOverviewRow,
 } from "@/services/workspace-player.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 const PAGE_SIZE = 30;
+
+const LAYER_ICON: Record<RankLayer, LucideIcon> = {
+  canon: Building2,
+  author: NotebookPen,
+  ow: Radar,
+  hidden: EyeOff,
+  effective_tournament: Trophy,
+  effective_mix: Shuffle,
+  registration: ClipboardList,
+  tournament: Users,
+  casual: Gamepad2,
+};
+
+/** Roles `PlayerRoleIcon` has a glyph for, in its capitalised spelling. */
+const GLYPH_ROLES: Record<string, true> = { Tank: true, Damage: true, Support: true, Flex: true };
 
 /** Dates live outside `useFilters` (the chip bar has no range kind), so they reset the page themselves. */
 const DATE_PARAMS = { from: "date_from", to: "date_to" } as const;
@@ -147,11 +175,15 @@ export function RankOverviewTable({ playerId }: Readonly<RankOverviewTableProps>
       {
         accessorKey: "layer",
         header: t("columns.layer"),
-        cell: ({ row }) => (
-          <Badge variant="outline" className="font-mono text-[11px]">
-            {t(`layers.${row.original.layer}`)}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const Icon = LAYER_ICON[row.original.layer];
+          return (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">
+              <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              {t(`layers.${row.original.layer}`)}
+            </span>
+          );
+        },
       },
       {
         id: "author",
@@ -172,7 +204,14 @@ export function RankOverviewTable({ playerId }: Readonly<RankOverviewTableProps>
           const role = row.original.role;
           if (!role) return <span className="text-muted-foreground">—</span>;
           const key = role as "tank";
-          return tRoles.has(key) ? tRoles(key) : role;
+          const label = tRoles.has(key) ? tRoles(key) : role;
+          const glyph = role.charAt(0).toUpperCase() + role.slice(1);
+          return (
+            <span className="inline-flex" title={label}>
+              {/* PlayerRoleIcon renders nothing for an unknown role: keep the text then. */}
+              {GLYPH_ROLES[glyph] ? <PlayerRoleIcon role={glyph} size={18} label={label} /> : label}
+            </span>
+          );
         },
       },
       {
