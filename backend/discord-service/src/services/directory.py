@@ -22,6 +22,28 @@ class DirectoryOutcome:
     payload: dict[str, Any]
 
 
+#: The channel kinds a picker can use, and what the wire calls them.
+_KINDS: tuple[tuple[type[discord.abc.GuildChannel], str], ...] = (
+    (discord.TextChannel, "text"),
+    (discord.VoiceChannel, "voice"),
+    (discord.CategoryChannel, "category"),
+)
+#: What the bot needs on a voice (or its category) to move people through it.
+_VOICE_PERMISSIONS = ("view_channel", "connect", "move_members")
+
+
+def _kind(channel: Any) -> str | None:
+    return next((name for cls, name in _KINDS if isinstance(channel, cls)), None)
+
+
+def _missing(channel: Any, me: discord.Member | None) -> list[str] | None:
+    """The voice permissions the bot lacks on ``channel``; ``None`` when the bot's member is unknown."""
+    if me is None:
+        return None
+    granted = channel.permissions_for(me)
+    return [name for name in _VOICE_PERMISSIONS if not getattr(granted, name)]
+
+
 class DiscordDirectoryService:
     def __init__(self, client: discord.Client) -> None:
         self._client = client
@@ -142,24 +164,28 @@ class DiscordDirectoryService:
                 return DirectoryOutcome(
                     "guild_not_found", {"error": "guild_not_found", "guild_id": guild_id, "channels": []}
                 )
-
-            if cached:
-                text_channels = list(guild.text_channels)
-            else:
-                # A fetched guild has no channel cache at all, so reading
-                # ``guild.text_channels`` here would answer "no channels" for
-                # a server that has plenty.
-                text_channels = [ch for ch in await guild.fetch_channels() if isinstance(ch, discord.TextChannel)]
-
-            channels_out = [
-                {
-                    "id": str(ch.id),
-                    "name": ch.name,
-                    "category_name": ch.category.name if ch.category else None,
-                    "position": ch.position,
-                }
-                for ch in sorted(text_channels, key=lambda c: c.position)
-            ]
+            # A fetched guild has no channel cache (and no ``me``), so its
+            # channels come over REST and the bot's permissions stay unknown.
+            # ponytail: fetch the bot member if an uncached guild must show permissions.
+            channels = list(guild.channels) if cached else await guild.fetch_channels()
+            me = guild.me if cached else None
+            categories = {ch.id: ch.name for ch in channels if isinstance(ch, discord.CategoryChannel)}
+            channels_out = []
+            for ch in sorted(channels, key=lambda c: c.position):
+                kind = _kind(ch)
+                if kind is None:
+                    continue
+                channels_out.append(
+                    {
+                        "id": str(ch.id),
+                        "name": ch.name,
+                        "type": kind,
+                        "category_id": str(ch.category_id) if ch.category_id else None,
+                        "category_name": categories.get(ch.category_id),
+                        "position": ch.position,
+                        "missing_permissions": None if kind == "text" else _missing(ch, me),
+                    }
+                )
 
             return DirectoryOutcome("success", {"guild_id": guild_id, "channels": channels_out})
         except Exception as e:

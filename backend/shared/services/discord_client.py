@@ -45,7 +45,9 @@ DISCORD_API_BASE: Final = "https://discord.com/api/v10"
 _CDN: Final = "https://cdn.discordapp.com"
 _TIMEOUT: Final = httpx.Timeout(10.0, connect=5.0)
 _GUILD_TEXT: Final = 0
+_GUILD_VOICE: Final = 2
 _GUILD_CATEGORY: Final = 4
+_KIND: Final = {_GUILD_TEXT: "text", _GUILD_VOICE: "voice", _GUILD_CATEGORY: "category"}
 
 
 class DiscordClient:
@@ -136,21 +138,28 @@ class DiscordClient:
         ]
 
     async def guild_channels(self, guild_id: str) -> list[dict[str, Any]]:
-        """Text channels as ``[{id, name, category_name, position}]`` by position."""
+        """Text, voice and category channels by position (discord-service's shape).
+
+        The REST fallback knows the channels but not the bot's member, so every
+        ``missing_permissions`` it returns is ``None`` -- unknown, never "all granted".
+        """
         data = await self._rpc(DISCORD_GUILD_CHANNELS_QUEUE, {"guild_id": guild_id})
         if data is not None and "channels" in data:
             return list(data["channels"])
         raw = await self._http_get(f"/guilds/{guild_id}/channels") or []
         categories = {str(ch["id"]): ch.get("name") for ch in raw if ch.get("type") == _GUILD_CATEGORY}
-        text = [ch for ch in raw if ch.get("type") == _GUILD_TEXT]
+        known = [ch for ch in raw if ch.get("type") in _KIND]
         return [
             {
                 "id": str(ch["id"]),
                 "name": ch.get("name"),
+                "type": _KIND[ch["type"]],
+                "category_id": str(ch["parent_id"]) if ch.get("parent_id") else None,
                 "category_name": categories.get(str(ch.get("parent_id") or "")),
                 "position": ch.get("position", 0),
+                "missing_permissions": None,
             }
-            for ch in sorted(text, key=lambda c: c.get("position", 0))
+            for ch in sorted(known, key=lambda c: c.get("position", 0))
         ]
 
     async def guild_info(self, guild_id: str) -> dict[str, Any]:

@@ -93,8 +93,8 @@ class TestGuildReads(IsolatedAsyncioTestCase):
                 [
                     {"id": 10, "type": 4, "name": "Cat", "position": 0},
                     {"id": 11, "type": 0, "name": "b", "position": 2, "parent_id": 10},
-                    {"id": 12, "type": 0, "name": "a", "position": 1, "parent_id": None},
-                    {"id": 13, "type": 2, "name": "voice", "position": 0},
+                    {"id": 13, "type": 2, "name": "voice", "position": 1, "parent_id": 10},
+                    {"id": 14, "type": 15, "name": "forum", "position": 3},
                 ],
             ]
         )
@@ -106,9 +106,36 @@ class TestGuildReads(IsolatedAsyncioTestCase):
             {"id": "2", "name": "high", "color": "#0000ff", "position": 5, "managed": True},
             {"id": "1", "name": "low", "color": None, "position": 0, "managed": False},
         ]
+        # The REST fallback knows the channels but not the bot's member, so no
+        # permission verdict is "all granted"; forums are not pickable at all.
         assert channels == [
-            {"id": "12", "name": "a", "category_name": None, "position": 1},
-            {"id": "11", "name": "b", "category_name": "Cat", "position": 2},
+            {
+                "id": "10",
+                "name": "Cat",
+                "type": "category",
+                "category_id": None,
+                "category_name": None,
+                "position": 0,
+                "missing_permissions": None,
+            },
+            {
+                "id": "13",
+                "name": "voice",
+                "type": "voice",
+                "category_id": "10",
+                "category_name": "Cat",
+                "position": 1,
+                "missing_permissions": None,
+            },
+            {
+                "id": "11",
+                "name": "b",
+                "type": "text",
+                "category_id": "10",
+                "category_name": "Cat",
+                "position": 2,
+                "missing_permissions": None,
+            },
         ]
 
     async def test_guild_info_survives_an_unreadable_owner(self):

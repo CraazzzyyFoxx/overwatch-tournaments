@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, MagicMock
 # on every PR.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import discord  # noqa: E402
+
 from src.cogs.membership import MembershipEventsCog  # noqa: E402
 from src.rabbit.gateway import DiscordRabbitGateway  # noqa: E402
 from src.services.directory import DiscordDirectoryService  # noqa: E402
@@ -63,8 +65,6 @@ def _role(
 
 
 def _http_exception():
-    import discord
-
     return discord.HTTPException(MagicMock(status=404), "not found")
 
 
@@ -131,50 +131,82 @@ class DirectoryServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(outcome.payload["roles"][0]["color"], "#ff0000")
         self.assertIsNone(outcome.payload["roles"][1]["color"])
 
-    async def test_get_guild_channels_success(self) -> None:
-        fake_cat = MagicMock()
-        fake_cat.name = "MATCHES"
-        fake_ch1 = MagicMock(id=555, category=fake_cat, position=1)
-        fake_ch1.name = "match-logs"
-        fake_guild = MagicMock(id=999, text_channels=[fake_ch1])
-
-        mock_client = MagicMock(get_guild=MagicMock(return_value=fake_guild))
-        directory = DiscordDirectoryService(mock_client)
+    async def test_get_guild_channels_lists_every_kind_with_missing_permissions(self) -> None:
+        category = MagicMock(spec=discord.CategoryChannel, id=10, category_id=None, position=0)
+        category.name = "MIX"
+        text = MagicMock(spec=discord.TextChannel, id=11, category_id=10, position=1)
+        text.name = "lineups"
+        voice = MagicMock(spec=discord.VoiceChannel, id=12, category_id=10, position=2)
+        voice.name = "Team 1"
+        granted = MagicMock(view_channel=True, connect=True, move_members=False)
+        voice.permissions_for = MagicMock(return_value=granted)
+        category.permissions_for = MagicMock(return_value=MagicMock(view_channel=True, connect=True, move_members=True))
+        guild = MagicMock(id=999, channels=[voice, text, category], me=MagicMock())
+        directory = DiscordDirectoryService(MagicMock(get_guild=MagicMock(return_value=guild)))
 
         outcome = await directory.get_guild_channels("999")
 
-        self.assertEqual(outcome.payload["guild_id"], "999")
-        self.assertEqual(len(outcome.payload["channels"]), 1)
-        self.assertEqual(outcome.payload["channels"][0]["name"], "match-logs")
-        self.assertEqual(outcome.payload["channels"][0]["category_name"], "MATCHES")
+        self.assertEqual(outcome.status, "success")
+        self.assertEqual(
+            outcome.payload["channels"],
+            [
+                {
+                    "id": "10",
+                    "name": "MIX",
+                    "type": "category",
+                    "category_id": None,
+                    "category_name": None,
+                    "position": 0,
+                    "missing_permissions": [],
+                },
+                {
+                    "id": "11",
+                    "name": "lineups",
+                    "type": "text",
+                    "category_id": "10",
+                    "category_name": "MIX",
+                    "position": 1,
+                    "missing_permissions": None,
+                },
+                {
+                    "id": "12",
+                    "name": "Team 1",
+                    "type": "voice",
+                    "category_id": "10",
+                    "category_name": "MIX",
+                    "position": 2,
+                    "missing_permissions": ["move_members"],
+                },
+            ],
+        )
 
     async def test_get_guild_channels_fetches_for_uncached_guild(self) -> None:
-        """A guild obtained via ``fetch_guild`` carries no channel cache.
+        """A fetched guild has no channel cache and no ``me``: channels come over
+        REST, and the bot's permissions are unknown rather than "all granted"."""
+        voice = MagicMock(spec=discord.VoiceChannel, id=12, category_id=None, position=0)
+        voice.name = "General"
+        stage = MagicMock(spec=discord.StageChannel, id=13, category_id=None, position=1)
+        stage.name = "Stage"
+        guild = MagicMock(id=999, channels=[])
+        guild.fetch_channels = AsyncMock(return_value=[voice, stage])
+        client = MagicMock(get_guild=MagicMock(return_value=None), fetch_guild=AsyncMock(return_value=guild))
 
-        Reading ``text_channels`` off it would answer "no channels" for a server
-        that has plenty, so the service must fetch them over REST instead.
-        """
-        import discord
+        outcome = await DiscordDirectoryService(client).get_guild_channels("999")
 
-        fake_cat = MagicMock()
-        fake_cat.name = "MATCHES"
-        text_channel = MagicMock(spec=discord.TextChannel, id=555, category=fake_cat, position=1)
-        text_channel.name = "match-logs"
-        voice_channel = MagicMock(spec=discord.VoiceChannel, id=666, position=2)
-
-        # Exactly the trap: the cache is empty on a fetched guild.
-        fake_guild = MagicMock(id=999, text_channels=[])
-        fake_guild.fetch_channels = AsyncMock(return_value=[voice_channel, text_channel])
-
-        mock_client = MagicMock()
-        mock_client.get_guild.return_value = None
-        mock_client.fetch_guild = AsyncMock(return_value=fake_guild)
-        directory = DiscordDirectoryService(mock_client)
-
-        outcome = await directory.get_guild_channels("999")
-
-        fake_guild.fetch_channels.assert_awaited_once()
-        self.assertEqual([c["name"] for c in outcome.payload["channels"]], ["match-logs"])
+        self.assertEqual(
+            outcome.payload["channels"],
+            [
+                {
+                    "id": "12",
+                    "name": "General",
+                    "type": "voice",
+                    "category_id": None,
+                    "category_name": None,
+                    "position": 0,
+                    "missing_permissions": None,
+                }
+            ],
+        )
 
     async def test_get_guild_info_success(self) -> None:
         owner = MagicMock(display_name="Ada", display_avatar=MagicMock(url="http://owner.png"))

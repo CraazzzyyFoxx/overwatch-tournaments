@@ -544,7 +544,7 @@ class WorkspaceNotificationConfigRpcTests(_SettingsCase):
     async def update(self, body: dict[str, Any], *, channels: Any = None, identity: dict[str, Any] | None = None):
         """Call the update handler with ``DiscordClient.guild_channels`` stubbed.
 
-        ``channels`` is the guild's text channels, or the ``DiscordError`` the
+        ``channels`` is the guild's channel listing, or the ``DiscordError`` the
         lookup raises. Patching the real method keeps the wiring under test --
         the handler binds it off a freshly built client.
         """
@@ -602,7 +602,7 @@ class WorkspaceNotificationConfigRpcTests(_SettingsCase):
 
         answer = await self.update(
             {"discord_channel_id": CHANNEL, "locale": "en", "broadcast_kinds": ["check_in.opened"]},
-            channels=[{"id": CHANNEL, "name": "general"}],
+            channels=[{"id": CHANNEL, "name": "general", "type": "text"}],
         )
 
         self.assertTrue(answer["ok"], answer)
@@ -617,10 +617,22 @@ class WorkspaceNotificationConfigRpcTests(_SettingsCase):
 
         answer = await self.update(
             {"discord_channel_id": CHANNEL, "broadcast_kinds": []},
-            channels=[{"id": "333333333333333333", "name": "elsewhere"}],
+            channels=[{"id": "333333333333333333", "name": "elsewhere", "type": "text"}],
         )
 
         self.assertFalse(answer["ok"], answer)
+        self.assertEqual(answer["error"]["code"], "unprocessable")
+        self.assertIsNone(self.stored())
+
+    async def test_a_voice_channel_is_refused(self) -> None:
+        """The listing carries voices now, and the bot cannot post in one."""
+        self.workspace()
+
+        answer = await self.update(
+            {"discord_channel_id": CHANNEL, "broadcast_kinds": []},
+            channels=[{"id": CHANNEL, "name": "Team 1", "type": "voice"}],
+        )
+
         self.assertEqual(answer["error"]["code"], "unprocessable")
         self.assertIsNone(self.stored())
 

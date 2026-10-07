@@ -6,11 +6,18 @@ export interface DiscordRole {
   managed: boolean;
 }
 
+/** What the bot needs on a voice channel (or its category) to move members through it. */
+export type DiscordVoicePermission = "view_channel" | "connect" | "move_members";
+
 export interface DiscordChannel {
   id: string;
   name: string;
+  type: "text" | "voice" | "category";
+  category_id: string | null;
   category_name: string | null;
   position: number;
+  /** Voices and categories: what the bot lacks. `null` = unknown, or a text channel. */
+  missing_permissions: DiscordVoicePermission[] | null;
 }
 
 export interface DiscordGuildInfo {
