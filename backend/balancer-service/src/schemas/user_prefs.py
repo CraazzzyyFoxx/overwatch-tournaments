@@ -9,7 +9,7 @@ next GET would return, plus one derived, read-only ``roster_shape``.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,6 +19,7 @@ from src.services.balancer.config.defaults import MAX_RESULT_VARIANTS
 
 __all__ = (
     "MAX_POINTS_PER_WIN",
+    "MixRoleSettings",
     "UserMixPreferencesRead",
     "UserMixPreferencesUpsert",
 )
@@ -31,9 +32,9 @@ MAX_POINTS_PER_WIN = 1000
 _TILT_DOC = (
     "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place."
 )
-_WEIGHTS_DOC = (
-    "Per-role importance for role-line balance, keyed by roster slot code. An omitted "
-    "role weighs 1.0; null means no per-role opinion at all."
+_SETTINGS_DOC = (
+    "Per-role mix weights, keyed by roster slot code: how much this role's gap counts "
+    "towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all."
 )
 _VARIANTS_DOC = "How many balance options the solver keeps for the host to page through; null leaves the mix default."
 _MASK_DOC = (
@@ -56,10 +57,24 @@ _SHAPE_DOC = (
     "source is 'user' when this account stored a mask and 'default' when it did not."
 )
 
-#: A weight per roster slot, ``flex`` included -- the mix engine drops the slots
-#: this roster does not field, so an unused code is harmless, but an unknown one
-#: would silently weigh nothing and is rejected here instead.
-_RoleWeights = dict[RosterSlotCode, Annotated[float, Field(ge=0.0, le=100.0)]]
+
+class MixRoleSettings(BaseModel):
+    """The mix engine's share of a role's settings -- the only one a host may set.
+
+    The tournament drawer owns the rest (``impact``, the line weights), and
+    ``extra="forbid"`` is what keeps a host from storing a GA knob through their
+    own preferences.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mix_weight: float = Field(ge=0.0, le=100.0, description="Multiplier for this role's gap in role fairness.")
+
+
+#: A settings block per roster slot, ``flex`` included -- the mix engine drops the
+#: slots this roster does not field, so an unused code is harmless, but an unknown
+#: one would silently weigh nothing and is rejected here instead.
+_RoleSettings = dict[RosterSlotCode, MixRoleSettings]
 
 #: The slot map itself is validated (and normalized) by the service through
 #: ``normalize_roster_slots``, the same call the deleted per-mix override used --
@@ -77,7 +92,7 @@ class UserMixPreferencesRead(BaseModel):
     """
 
     mix_comfort_tilt: float | None = Field(default=None, ge=0.0, le=1.0, description=_TILT_DOC)
-    mix_role_weights: _RoleWeights | None = Field(default=None, description=_WEIGHTS_DOC)
+    role_settings: _RoleSettings | None = Field(default=None, description=_SETTINGS_DOC)
     max_result_variants: int | None = Field(default=None, ge=1, le=MAX_RESULT_VARIANTS, description=_VARIANTS_DOC)
     role_mask: _RoleMask = Field(default=None, description=_MASK_DOC)
     points_per_win: int | None = Field(default=None, ge=0, le=MAX_POINTS_PER_WIN, description=_POINTS_DOC)
@@ -91,7 +106,7 @@ class UserMixPreferencesUpsert(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mix_comfort_tilt: float | None = Field(ge=0.0, le=1.0, description=_TILT_DOC)
-    mix_role_weights: _RoleWeights | None = Field(description=_WEIGHTS_DOC)
+    role_settings: _RoleSettings | None = Field(description=_SETTINGS_DOC)
     max_result_variants: int | None = Field(ge=1, le=MAX_RESULT_VARIANTS, description=_VARIANTS_DOC)
     role_mask: _RoleMask = Field(description=_MASK_DOC)
     points_per_win: int | None = Field(ge=0, le=MAX_POINTS_PER_WIN, description=_POINTS_DOC)

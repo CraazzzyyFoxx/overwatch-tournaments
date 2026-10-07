@@ -10,8 +10,9 @@ What is left is the link a type system cannot close: the hand-written native
 request (``moo_backend._serialize_native_request``) against the Rust
 ``ConfigSpec``. A knob missed there silently falls back to a serde default --
 the UI shows and saves the value while the solver ignores it, with no error
-anywhere. Same for a roster slot code Rust does not recognise: its role-impact
-weight is dropped on the floor.
+anywhere. The per-role weights are no longer part of that risk (Rust has no
+role names or role defaults of its own), only that every roster slot code
+actually has settings to send.
 
 Deliberately offline/deterministic: no DB, Redis or network.
 """
@@ -33,9 +34,9 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 
 os.environ["DEBUG"] = "false"
 
-from shared.domain.roster_shape import DEFAULT_ROSTER_SLOTS  # noqa: E402
+from shared.domain.roster_shape import ROSTER_SLOT_CODES  # noqa: E402
 from src.domain.balancer.moo_backend import _serialize_native_request  # noqa: E402
-from src.services.balancer.config.defaults import AlgorithmConfig  # noqa: E402
+from src.services.balancer.config.defaults import DEFAULT_ROLE_SETTINGS, AlgorithmConfig  # noqa: E402
 from src.services.balancer.config.provider import get_balancer_config_payload  # noqa: E402
 
 
@@ -55,7 +56,7 @@ def test_config_payload_exposes_expected_top_level_keys() -> None:
 # Python <-> Rust ring: native payload <-> ConfigSpec
 # ---------------------------------------------------------------------------
 
-TOURNAMENT_BALANCER_LIB_RS = BALANCER_SERVICE_ROOT / "native" / "tournament_balancer" / "src" / "lib.rs"
+TOURNAMENT_BALANCER_LIB_RS = BALANCER_SERVICE_ROOT / "native" / "balancer_native" / "src" / "moo" / "mod.rs"
 
 # Present in ConfigSpec, deliberately never sent: the Rust doc-comment says
 # "Принимается по wire опционально; в Python UI пока не выставляется".
@@ -169,47 +170,19 @@ def test_rust_only_allowlist_has_no_stale_entries() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Python <-> Rust ring: roster slot codes <-> role-impact index detection
+# Roster slot codes <-> per-role settings
 # ---------------------------------------------------------------------------
 
-TOURNAMENT_BALANCER_CONTEXT_RS = BALANCER_SERVICE_ROOT / "native" / "tournament_balancer" / "src" / "context.rs"
 
+def test_every_roster_slot_code_has_role_settings() -> None:
+    """Rust carries no role defaults, so a slot code missing here has no weights.
 
-def _rust_role_idx_spellings() -> set[str]:
-    """Role names ``Context::from_request`` recognises for the impact weights.
-
-    Same genre as ``_rust_config_spec_fields`` above and as
-    ``shared/tests/test_gateway_raw_sql_matches_models.py``: compare a canon
-    against a hand-written artefact by reading it.
+    ``native.build_roles`` raises on a mask role it cannot look up, which would
+    fail every balance run of a tournament fielding that slot.
     """
-    source = TOURNAMENT_BALANCER_CONTEXT_RS.read_text(encoding="utf-8")
-    role_idx_block = "".join(line for line in source.splitlines(keepends=True) if "eq_ignore_ascii_case" in line)
-    spellings = {match.lower() for match in re.findall(r'eq_ignore_ascii_case\("([^"]+)"\)', role_idx_block)}
+    missing = {code for code in ROSTER_SLOT_CODES if code not in DEFAULT_ROLE_SETTINGS}
 
-    assert spellings, (
-        f"parsed no role spellings out of {TOURNAMENT_BALANCER_CONTEXT_RS} — the parser or the file changed"
-    )
-    return spellings
-
-
-def test_rust_recognizes_every_canonical_role_code() -> None:
-    """A role code Rust does not recognise loses its impact weight silently.
-
-    ``objectives.rs`` picks ``tank/damage/support_impact_weight`` by comparing the
-    role index against ``Context.*_role_idx``; an unmatched spelling leaves the
-    index ``None`` and the objective falls back to ``impact = 1.0`` with no
-    error anywhere. Rust cannot be compiled on every dev machine (the crate
-    builds on Linux only), so this text check is the cheap early warning.
-
-    ``flex`` is deliberately NOT expected here: a slot with no role has no role
-    impact weight, so ``impact = 1.0`` is the correct semantics for it, not a bug.
-    """
-    spellings = _rust_role_idx_spellings()
-
-    unrecognized = {code for code in DEFAULT_ROSTER_SLOTS if code not in spellings}
-
-    assert unrecognized == set(), (
-        f"native/tournament_balancer/src/context.rs does not match roster slot codes {sorted(unrecognized)}: "
-        "their impact weight would silently degrade to 1.0. Add the spelling to the "
-        "matching *_role_idx lookup."
+    assert missing == set(), (
+        f"DEFAULT_ROLE_SETTINGS has no entry for roster slot codes {sorted(missing)}: "
+        "every engine run fielding one of them would fail."
     )

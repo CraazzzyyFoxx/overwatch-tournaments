@@ -20,8 +20,9 @@ export type MixBalancerPreferences = {
    * evenly as possible, `1` maximises players seated on a preferred role.
    */
   mix_comfort_tilt: number | null;
-  /** Per-line importance for the role-line balance term, keyed by roster slot code. */
-  mix_role_weights: Record<string, number> | null;
+  /** Per-role mix knobs keyed by roster slot code; `mix_weight` is this term's
+   * per-line importance in the role-line balance. */
+  role_settings: Record<string, { mix_weight: number }> | null;
   /** How many balance options one run hands back for the pager to walk. */
   max_result_variants: number | null;
   /**

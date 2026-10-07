@@ -42,11 +42,25 @@ The heavy solve itself is the native crate's; everything above is this service's
 
 ### Native solver
 
-`tournament_balancer` is the default backend, an in-house Rust crate of the same name
-(`native/tournament_balancer`, PyO3 + maturin, `rayon` for parallel evaluation). Python imports it
-as a plain module (`importlib.import_module("tournament_balancer")`), serializes the request to JSON, and calls
-it through `asyncio.to_thread` so the GIL-releasing solve never blocks the event loop
-(`src/domain/balancer/moo_backend.py`).
+Both backends live in one in-house Rust crate, `native/balancer_native` (PyO3 + maturin, `rayon`
+for parallelism), imported as the plain module `balancer_native`. They share one calling
+convention, `run_<engine>(request_json, progress_callback=None) -> response_json`: the request is
+`{players, num_teams, seed, roles}` plus an engine-specific `config`, the response
+`variants[].teams[{id, roster}]` plus engine-specific `variants[].metrics`. Roster validation, how
+a player rates a role (discomfort for the GA, preference points for the mix engine) and progress
+events are shared too (`src/common.rs`). Python builds and reads that envelope in
+`src/domain/balancer/native.py` and calls it through `asyncio.to_thread`, so the GIL-releasing solve
+never blocks the event loop.
+
+The crate hard-codes no role: `roles` carries each seat the roster fields (`{name, slots, flex}`)
+together with the weights that role is judged by, so a role's whole meaning to an engine travels
+with the request. Those weights are declared once, in `AlgorithmConfig.role_settings`
+(`src/services/balancer/config/defaults.py`), keyed by roster slot code — `impact`,
+`line_gap_weight` and `line_std_weight` for the GA, `mix_weight` for the mix engine. The operator
+drawer edits the first three per tournament (a partial override merges field by field onto the
+defaults); a mix host sets only `mix_weight`, in their own preferences.
+
+`tournament_balancer` (`src/moo/`, `run_moo_optimizer`) is the default backend.
 
 *Multi-objective* here means literally two objectives, NSGA-II style: **balance** (how close the
 teams are in strength) and **comfort** (how well players sit on roles they want). The crate returns
@@ -55,12 +69,12 @@ a Pareto front rather than one answer — no variant on it is better than anothe
 front and picks the primary variant. Every returned variant is a legitimate trade-off, which is why
 the API surfaces variants and not a single team set.
 
-`mix_balancer` is the second backend, a vendored C++ engine pinned to the two-team pickup-mix flow
-and documented in [`native/mix_balancer/README.md`](native/mix_balancer/README.md). It brute-forces
-every player/role split, so it returns the true optimum instead of a GA approximation, but only for
-exactly two equal teams. Both extensions are Linux-only compiled artifacts; `mix_balancer` degrades
-to the `tournament_balancer` backend with a warning when it is absent; `tournament_balancer` does not degrade at all
-(`RuntimeError: Rust MOO backend requires tournament_balancer to be installed`).
+`mix_balancer` (`src/mix.rs`, `run_mix_balancer`) is the second backend, pinned to the two-team
+pickup-mix flow: a Rust port of the mixtura-dev/mixtura-balancer C++ engine (MIT). It enumerates
+every player/role split, each unordered split once, so it returns the true optimum instead of a GA
+approximation, but only for exactly two equal teams. Its parity tests compare it with output of the
+C++ engine captured before that was removed (`tests/fixtures/mix`). Without the extension both
+backends fail (`RuntimeError: Native balancer engines require balancer_native to be installed`).
 
 ## Interface
 
@@ -293,9 +307,11 @@ with forced polling; production runs the bare command with a no-op healthcheck
 `rabbitmq` only; Postgres is external. Resource limits are 2 CPU / 512 MB in dev and 4 CPU / 768 MB
 in production, sized for the solver rather than for request handling.
 
-The native extensions are built during the image build (maturin for `tournament_balancer`, scikit-build-core +
-CMake for `mix_balancer`) and are Linux-only, so a non-Linux host runs the Python side without them:
-mix balancing falls back, tournament balancing fails, and the tests that need `tournament_balancer` skip.
+The native extension is built during the image build (maturin, into a wheel of its own). Locally,
+on any OS: `maturin develop --release --features extension-module` from
+`native/balancer_native`; `cargo test --release` there runs the Rust suites (on Windows, put the
+venv's base Python on `PATH` so the test binary finds `python3XX.dll`). Without the module the
+tests that need it skip.
 
 ## Operational notes
 

@@ -26,6 +26,8 @@ import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
+import { orderSlotCodes } from "@/lib/roster/shape";
+import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
@@ -167,6 +169,17 @@ export function BalancerMainPageClient() {
     enabled: tournamentId !== null,
     refetchOnWindowFocus: false
   });
+
+  // Only for the roster shape: the per-role weight table offers a row per role
+  // this tournament actually fields. Same query the public shell uses, so it is
+  // usually a cache hit rather than a read of its own.
+  const tournamentQuery = useQuery({
+    ...tournamentOverviewQueryOptions(tournamentId as number),
+    enabled: tournamentId !== null
+  });
+  const roleCodes = tournamentQuery.data?.roster_shape
+    ? orderSlotCodes(tournamentQuery.data.roster_shape.slots)
+    : null;
 
   const customStatusesQuery = useQuery({
     queryKey: balancerQueryKeys.statusCatalog(workspaceId),
@@ -812,6 +825,7 @@ export function BalancerMainPageClient() {
         onChange={handleConfigFieldChange}
         onSave={() => saveConfigMutation.mutate()}
         onReset={handleResetConfig}
+        roleCodes={roleCodes}
       />
 
       <BalanceImageExportDialog

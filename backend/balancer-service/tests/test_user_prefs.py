@@ -41,7 +41,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             self.session,
             user_id=9,
             mix_comfort_tilt=0.75,
-            mix_role_weights=None,
+            role_settings=None,
             max_result_variants=None,
             role_mask=None,
             points_per_win=None,
@@ -50,12 +50,28 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(config.config_json, {"mix_comfort_tilt": 0.75})
 
+    async def test_the_hosts_per_role_weights_store_as_role_settings(self) -> None:
+        """The mix engine reads them off the same ``role_settings`` block the
+        tournament config uses -- one shape, whoever wrote it."""
+        config = await self.service.upsert(
+            self.session,
+            user_id=9,
+            mix_comfort_tilt=None,
+            role_settings={"tank": {"mix_weight": 2.5}},
+            max_result_variants=None,
+            role_mask=None,
+            points_per_win=None,
+            rating_mode="points",
+        )
+
+        self.assertEqual(config.config_json, {"role_settings": {"tank": {"mix_weight": 2.5}}})
+
     async def test_an_account_that_saved_nothing_stores_an_empty_blob(self) -> None:
         config = await self.service.upsert(
             self.session,
             user_id=9,
             mix_comfort_tilt=None,
-            mix_role_weights=None,
+            role_settings=None,
             max_result_variants=None,
             role_mask=None,
             points_per_win=None,
@@ -73,7 +89,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             self.session,
             user_id=9,
             mix_comfort_tilt=None,
-            mix_role_weights=None,
+            role_settings=None,
             max_result_variants=None,
             role_mask={"tank": 1, "flex": 4},
             points_per_win=50,
@@ -90,7 +106,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             self.session,
             user_id=9,
             mix_comfort_tilt=None,
-            mix_role_weights=None,
+            role_settings=None,
             max_result_variants=None,
             role_mask=None,
             points_per_win=0,
@@ -105,7 +121,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
                 self.session,
                 user_id=9,
                 mix_comfort_tilt=None,
-                mix_role_weights=None,
+                role_settings=None,
                 max_result_variants=None,
                 role_mask={"healer": 2},
                 points_per_win=None,
@@ -123,7 +139,7 @@ class UserMixPreferencesBoundsTests(TestCase):
     #: Every key is required, so each case below overrides one of these.
     _UNSET = {
         "mix_comfort_tilt": None,
-        "mix_role_weights": None,
+        "role_settings": None,
         "max_result_variants": None,
         "role_mask": None,
         "points_per_win": None,
@@ -158,12 +174,19 @@ class UserMixPreferencesBoundsTests(TestCase):
         """It would weigh nothing in the engine, silently -- the host would set a
         preference and watch it do absolutely nothing."""
         with self.assertRaises(ValidationError):
-            self._validate(mix_role_weights={"jungle": 2.0})
+            self._validate(role_settings={"jungle": {"mix_weight": 2.0}})
 
     def test_the_four_roster_slots_are_accepted(self) -> None:
-        body = self._validate(mix_role_weights={"tank": 2.0, "damage": 1.0, "support": 0.5, "flex": 1.0})
+        settings = {code: {"mix_weight": 1.0} for code in ("tank", "damage", "support", "flex")}
+        body = self._validate(role_settings=settings)
 
-        self.assertEqual(set(body.mix_role_weights or {}), {"tank", "damage", "support", "flex"})
+        self.assertEqual(set(body.role_settings or {}), {"tank", "damage", "support", "flex"})
+
+    def test_a_tournament_only_role_weight_is_rejected(self) -> None:
+        """A host sets the mix weight; ``impact`` and the line weights are the
+        operator's, and must not reach the solver through a preferences PUT."""
+        with self.assertRaises(ValidationError):
+            self._validate(role_settings={"tank": {"mix_weight": 2.0, "impact": 3.0}})
 
     def test_points_above_the_ceiling_are_rejected(self) -> None:
         """A fat-fingered 10000 would wreck the host's whole rank book in one

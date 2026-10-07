@@ -27,16 +27,18 @@ Before either engine runs, the pool goes through the same preparation.
 
 The tournament solver is a multi-objective evolutionary search in Rust that builds an arbitrary number of teams and optimizes **two objectives at once**:
 
-- **balance** — the spread of total team strength, the worst gap between teams, the spread of averages, skew across role lines, the spread inside a team and a separately computed tank balance (the gap between adjacent-strength tanks and the spread of the tank line), plus a penalty for pairs of low-ranked players landing on the same roster;
+- **balance** — the spread of total team strength, the worst gap between teams, the spread of averages, skew across role lines, the spread inside a team and the per-role line terms (the gap between adjacent-strength lines of one role and the spread of that line across teams), plus a penalty for pairs of low-ranked players landing on the same roster;
 - **comfort** — role discomfort: zero for a flex player on any role they can play, a rising cost for a role below their priority, a distinctly larger one for a playable but unwanted role and larger still for an unplayable one. The worst pain in the tournament, the per-team maximum pain averaged across teams and sub-role collisions inside one roster belong here too.
 
 The result is a set of non-dominated variants for the organizer to choose from. Every run has a hard wall-clock budget (`time_limit_ms`, 600000 ms by default and at most): once spent, evolution and polishing stop and the best result found so far is returned. That is a deliberate trade of same-seed reproducibility for latency — ordinary runs converge long before the limit.
 
+Nothing here names a role. Every role carries its own settings, declared once per roster slot code: `impact` scales that role's contribution when team totals are compared, `line_gap_weight` prices the largest gap between adjacent lines of the role, `line_std_weight` prices the spread of that line across teams. The settings drawer edits them as a table with one row per role, and a tournament stores only the cells moved off the defaults — the rest keeps following them. A fourth setting, `mix_weight`, belongs to the mix engine and lives in the host's own mix preferences.
+
 ### The mix engine
 
-The mix engine is a vendored C++ core that enumerates **every** legal split by bitmask with early pruning, and works on exactly **two equal-size teams**. It is built for Linux only; where the extension is unavailable, a mix balance silently falls back to the tournament engine.
+The mix engine enumerates **every** legal split by bitmask with early pruning, and works on exactly **two equal-size teams**. It is a Rust port of the vendored C++ core it replaced, so it runs wherever the service does.
 
-The `mix_comfort_tilt` knob tilts quality between "even strength" and "more preferred roles"; the midpoint reproduces the engine's own weights. The candidate pruning threshold is not a requirement: if even the best split scores above it the engine errors, and the request is retried without the threshold. Since the enumeration is already finished by the time results are trimmed, a mix is handed a deep list of options rather than a top ten.
+The `mix_comfort_tilt` knob tilts quality between "even strength" and "more preferred roles"; the midpoint reproduces the engine's own weights, and each role's `mix_weight` scales its own gap inside the role-fairness term. The candidate limit is optional and the service sets none, so nothing is ever rejected for scoring too high and no request is retried. Since the enumeration is already finished by the time results are trimmed, a mix is handed a deep list of options rather than a top ten.
 
 ### Calling it
 

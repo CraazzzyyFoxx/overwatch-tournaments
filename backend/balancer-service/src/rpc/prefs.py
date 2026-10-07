@@ -38,7 +38,7 @@ def _to_read(cfg: models.UserBalancerConfig | None) -> schemas.UserMixPreference
     role_mask = cfg.role_slots_json if cfg is not None else None
     return schemas.UserMixPreferencesRead(
         mix_comfort_tilt=payload.get("mix_comfort_tilt"),
-        mix_role_weights=payload.get("mix_role_weights"),
+        role_settings=payload.get("role_settings"),
         max_result_variants=payload.get("max_result_variants"),
         role_mask=role_mask or None,
         points_per_win=cfg.points_per_win if cfg is not None else None,
@@ -68,7 +68,8 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 user_id=user.id,
                 mix_comfort_tilt=body.mix_comfort_tilt,
-                mix_role_weights=body.mix_role_weights,
+                role_settings={code: settings.model_dump() for code, settings in (body.role_settings or {}).items()}
+                or None,
                 max_result_variants=body.max_result_variants,
                 role_mask=body.role_mask,
                 points_per_win=body.points_per_win,

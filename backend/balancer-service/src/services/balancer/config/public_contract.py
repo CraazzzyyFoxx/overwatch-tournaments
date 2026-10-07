@@ -19,7 +19,8 @@ from collections.abc import Mapping
 from pydantic import BaseModel, ConfigDict, Field, create_model
 from pydantic.fields import FieldInfo
 
-from src.services.balancer.config.defaults import AlgorithmConfig
+from shared.domain.roster_shape import RosterSlotCode
+from src.services.balancer.config.defaults import AlgorithmConfig, RoleSettings
 
 # Not the operator's to set, so absent from the write allowlist:
 #   * ``role_mask`` is a projection of the tournament roster shape, resolved per
@@ -74,16 +75,36 @@ def _as_optional(field: FieldInfo) -> tuple[typing.Any, FieldInfo]:
     return (annotation | None, Field(None, description=field.description))
 
 
+#: Partial per-role override: every field optional, so a request moves one weight
+#: of one role without restating the rest (``defaults <- stored config <- request``
+#: is merged field by field by ``defaults.apply_config_overrides``).
+RoleSettingsOverride: type[BaseModel] = create_model(
+    "RoleSettingsOverride",
+    __doc__="Per-role weights to override; an omitted field keeps its configured value.",
+    __module__=__name__,
+    __config__=ConfigDict(extra="forbid"),
+    **{name: _as_optional(field) for name, field in RoleSettings.model_fields.items()},
+)
+
 #: Public write schema: every :class:`AlgorithmConfig` knob, optional.
 #:
 #: ``extra="forbid"`` so a misspelled knob is a 422 rather than a silently
-#: ignored field on a request whose whole point is being self-describing.
+#: ignored field on a request whose whole point is being self-describing -- which
+#: is also what rejects the flat per-role knobs ``role_settings`` replaced.
 ConfigOverrides: type[BaseModel] = create_model(
     "ConfigOverrides",
     __doc__="Optional public configuration overrides for the balancing algorithm.",
     __module__=__name__,
     __config__=ConfigDict(extra="forbid"),
-    **{name: _as_optional(field) for name, field in AlgorithmConfig.model_fields.items() if name in PUBLIC_CONFIG_KEYS},
+    role_settings=(
+        dict[RosterSlotCode, RoleSettingsOverride] | None,
+        Field(None, description=AlgorithmConfig.model_fields["role_settings"].description),
+    ),
+    **{
+        name: _as_optional(field)
+        for name, field in AlgorithmConfig.model_fields.items()
+        if name in PUBLIC_CONFIG_KEYS and name != "role_settings"
+    },
 )
 
 

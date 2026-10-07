@@ -1,8 +1,8 @@
 """Pluggable balancing backends behind a single ``OptimizerBackend`` interface.
 
 Every algorithm the balancer can run -- ``tournament_balancer`` (the in-house
-Rust NSGA-II optimizer) and ``mix_balancer`` (the vendored brute-force
-two-team engine) -- lives here as its own connector module: request/response
+Rust NSGA-II optimizer) and ``mix_balancer`` (the exhaustive Rust two-team
+engine) -- lives here as its own connector module: request/response
 translation between the domain's backend-agnostic ``Player``/``Team``
 entities and whatever shape that particular engine wants.
 ``domain/balancer/runtime.py`` only ever talks to the ``OptimizerBackend``

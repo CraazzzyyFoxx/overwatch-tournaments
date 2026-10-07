@@ -18,7 +18,7 @@ export const DEFAULT_COMFORT_TILT = 0.5;
 /** A role nobody weighted counts exactly once in the role-line balance term. */
 export const DEFAULT_ROLE_WEIGHT = 1;
 
-/** Widest weight the server accepts (`ConfigOverrides.mix_role_weights`). */
+/** Widest weight the server accepts (`RoleSettings.mix_weight`). */
 export const MAX_ROLE_WEIGHT = 100;
 
 /**
@@ -53,14 +53,17 @@ export function tiltOf(preferences: MixBalancerPreferences | null | undefined): 
 export function roleWeightsOf(
   preferences: MixBalancerPreferences | null | undefined,
 ): Record<string, number> {
-  const stored = preferences?.mix_role_weights;
+  const stored = preferences?.role_settings;
   if (stored == null || typeof stored !== "object") {
     return {};
   }
   return Object.fromEntries(
-    Object.entries(stored).filter(
-      ([, weight]) => typeof weight === "number" && Number.isFinite(weight) && weight >= 0,
-    ),
+    Object.entries(stored).flatMap(([code, settings]): [string, number][] => {
+      const weight = settings?.mix_weight;
+      return typeof weight === "number" && Number.isFinite(weight) && weight >= 0
+        ? [[code, weight]]
+        : [];
+    }),
   );
 }
 
@@ -132,14 +135,16 @@ export function draftOf(preferences: MixBalancerPreferences | null | undefined):
 /** The row to store: every knob travels, a default one as `null`. */
 export function preferencesPayload(draft: MixPrefsDraft): MixBalancerPreferences {
   const weighted = Object.fromEntries(
-    Object.entries(draft.weights).filter(([, weight]) => weight !== DEFAULT_ROLE_WEIGHT),
+    Object.entries(draft.weights)
+      .filter(([, weight]) => weight !== DEFAULT_ROLE_WEIGHT)
+      .map(([code, weight]): [string, { mix_weight: number }] => [code, { mix_weight: weight }]),
   );
   // Clamped before the default check: the default IS the ceiling, so anything
   // typed past it means "the default", not a pinned copy of it.
   const variants = Math.min(MAX_RESULT_VARIANTS, Math.max(1, Math.round(draft.variants)));
   return {
     mix_comfort_tilt: draft.tilt === DEFAULT_COMFORT_TILT ? null : draft.tilt,
-    mix_role_weights: Object.keys(weighted).length > 0 ? weighted : null,
+    role_settings: Object.keys(weighted).length > 0 ? weighted : null,
     max_result_variants: variants === DEFAULT_RESULT_VARIANTS ? null : variants,
     role_mask: draft.roleMask,
     points_per_win:

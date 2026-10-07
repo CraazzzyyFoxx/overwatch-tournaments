@@ -36,9 +36,8 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 # The 30s default is per HTTP request, not per byte, so a big wheel times out on
-# an ordinary link and fails the whole build -- cmake (~90 MiB, a
-# build-system.requires of mix-balancer) for balancer-svc. Fewer parallel
-# streams so it gets the bandwidth instead of racing a dozen small downloads.
+# an ordinary link and fails the whole build. Fewer parallel streams so it gets
+# the bandwidth instead of racing a dozen small downloads.
 ENV UV_HTTP_TIMEOUT=300
 ENV UV_CONCURRENT_DOWNLOADS=4
 
@@ -47,15 +46,14 @@ FROM base AS builder
 
 ARG APP_PATH
 
-# balancer: ``mix-balancer`` (vendored under balancer-service/native/mix_balancer,
-# see its README for provenance) is built via scikit-build-core during ``uv sync``
-# -- cmake/ninja-build/a C++ compiler; ``tournament_balancer`` needs cargo/rustc.
+# balancer: the ``balancer_native`` Rust extension needs cargo/rustc (and a C
+# linker from build-essential).
 # analytics: `ruptures` has no Python 3.14 wheel yet
 # (upstream: https://github.com/deepcharles/ruptures), so uv builds its sdist,
 # which needs a C compiler for the `ekcpd` extension.
 RUN set -eux; \
     case "${APP_PATH}" in \
-        balancer) pkgs="build-essential cargo rustc cmake ninja-build" ;; \
+        balancer) pkgs="build-essential cargo rustc" ;; \
         analytics) pkgs="build-essential" ;; \
         *) exit 0 ;; \
     esac; \
@@ -85,12 +83,6 @@ COPY balancer-service/pyproject.toml /app/balancer-service/pyproject.toml
 COPY analytics-service/pyproject.toml /app/analytics-service/pyproject.toml
 COPY stream-service/pyproject.toml /app/stream-service/pyproject.toml
 
-# ``mix-balancer`` is a local path dependency (balancer-service/pyproject.toml's
-# [tool.uv.sources]) -- unlike registry dependencies, uv needs its source to
-# build it, so it lands before the sync. Copied unconditionally: a few small
-# files that no other ``${APP_PATH}`` references.
-COPY ./balancer-service/native/mix_balancer /app/balancer-service/native/mix_balancer
-
 # Third-party dependencies of the target service only. ``--no-install-workspace``
 # (not ``--no-install-project``) keeps ``shared`` -- a workspace member -- out,
 # so its source is not needed here and changing it does not rebuild this layer.
@@ -103,16 +95,17 @@ FROM builder AS native
 
 ARG APP_PATH
 
-# The tournament_balancer Rust extension, as a wheel the runtime stage installs
-# in its own small layer -- so a Rust change neither rebuilds nor re-ships the
-# venv. Cargo's registry/git caches and the target dir are BuildKit cache mounts.
-# maturin comes from the venv (a Linux dependency of the service). ``linux`` tag:
-# the wheel is only ever installed into this same base image, so there is
-# nothing to audit for manylinux.
-COPY ./balancer-service/native/tournament_balancer /src/tournament_balancer
+# The balancer_native Rust extension (both engines), as a wheel the runtime
+# stage installs in its own small layer -- so a Rust change neither rebuilds nor
+# re-ships the venv. Cargo's registry/git caches and the target dir are
+# BuildKit cache mounts. maturin comes from the venv. ``linux`` tag: the wheel
+# is only ever installed into this same base image, so there is nothing to
+# audit for manylinux. No ``target-cpu``: the image is built on a CI runner and
+# run on a different production CPU.
+COPY ./balancer-service/native/balancer_native /src/balancer_native
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    --mount=type=cache,target=/src/tournament_balancer/target \
+    --mount=type=cache,target=/src/balancer_native/target \
     mkdir /wheels; \
     if [ "${APP_PATH}" = "balancer" ]; then \
         maturin build \
@@ -120,7 +113,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
             --features extension-module \
             --compatibility linux \
             --interpreter /app/.venv/bin/python \
-            --manifest-path /src/tournament_balancer/Cargo.toml \
+            --manifest-path /src/balancer_native/Cargo.toml \
             --out /wheels; \
     fi
 
@@ -148,8 +141,8 @@ RUN if [ "${APP_PATH}" = "analytics" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# The venv plus the metadata it was synced from (lock, pyproject files,
-# mix_balancer source): the one big layer, reused until the lock changes.
+# The venv plus the metadata it was synced from (lock, pyproject files): the
+# one big layer, reused until the lock changes.
 COPY --from=builder /app /app
 
 RUN --mount=type=bind,from=native,source=/wheels,target=/wheels \
@@ -176,18 +169,14 @@ ENV ALEMBIC_CONFIG=/app/alembic.ini
 COPY ./${APP_PATH}-service /app/${APP_PATH}-service
 
 # Install the workspace members themselves (editable `shared`; pure Python, no
-# compiler needed). ``--inexact`` keeps tournament_balancer, which is not in the
-# lock and an exact sync would remove. mix-balancer is already built into the
-# venv by the builder; uv sees the re-copied source as stale and would rebuild
-# it here, with no compiler. Harmless for services that do not depend on it.
+# compiler needed). ``--inexact`` keeps balancer_native, which is not in the
+# lock and an exact sync would remove.
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --inexact --package ${APP_PATH}-service \
-        --no-install-package mix-balancer
+    uv sync --frozen --no-dev --inexact --package ${APP_PATH}-service
 
 # The venv is complete at this point. Without this, `uv run` inside a container
-# re-syncs: it adds the dev group (network downloads) and, for balancer, tries
-# to rebuild mix-balancer with no compiler.
+# re-syncs and adds the dev group (network downloads).
 ENV UV_NO_SYNC=1
 
 # Set working directory to the service

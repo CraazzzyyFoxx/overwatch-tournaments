@@ -1,0 +1,844 @@
+{
+ "request": {
+  "players": [
+   {
+    "uuid": "p00-96316",
+    "name": "p0",
+    "ratings": {
+     "Tank": 950,
+     "Damage": 801,
+     "Support": 1396
+    },
+    "preferences": [
+     "Tank",
+     "Damage",
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": true,
+    "seed_role": null
+   },
+   {
+    "uuid": "p01-54264",
+    "name": "p1",
+    "ratings": {
+     "Damage": 1916,
+     "Tank": 2802
+    },
+    "preferences": [
+     "Tank",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p02-43985",
+    "name": "p2",
+    "ratings": {
+     "Support": 3107,
+     "Tank": 3067,
+     "Damage": 1887
+    },
+    "preferences": [
+     "Tank",
+     "Support",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p03-58354",
+    "name": "p3",
+    "ratings": {
+     "Damage": 2479
+    },
+    "preferences": [
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p04-25391",
+    "name": "p4",
+    "ratings": {
+     "Tank": 1199,
+     "Support": 987,
+     "Damage": 3210
+    },
+    "preferences": [
+     "Damage",
+     "Support",
+     "Tank"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p05-11755",
+    "name": "p5",
+    "ratings": {
+     "Support": 1803,
+     "Tank": 3264,
+     "Damage": 2560
+    },
+    "preferences": [
+     "Support",
+     "Damage",
+     "Tank"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p06-29194",
+    "name": "p6",
+    "ratings": {
+     "Support": 3291,
+     "Tank": 1897,
+     "Damage": 2079
+    },
+    "preferences": [
+     "Tank",
+     "Support",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p07-91517",
+    "name": "p7",
+    "ratings": {
+     "Support": 1659
+    },
+    "preferences": [
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p08-69123",
+    "name": "p8",
+    "ratings": {
+     "Tank": 869,
+     "Support": 3454,
+     "Damage": 2163
+    },
+    "preferences": [
+     "Tank",
+     "Support",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p09-97820",
+    "name": "p9",
+    "ratings": {
+     "Damage": 2801,
+     "Tank": 1020
+    },
+    "preferences": [
+     "Tank",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p10-49809",
+    "name": "p10",
+    "ratings": {
+     "Tank": 1804,
+     "Damage": 1164
+    },
+    "preferences": [
+     "Tank",
+     "Damage"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   },
+   {
+    "uuid": "p11-92493",
+    "name": "p11",
+    "ratings": {
+     "Support": 2546
+    },
+    "preferences": [
+     "Support"
+    ],
+    "subclasses": {},
+    "is_captain": false,
+    "is_flex": false,
+    "seed_role": null
+   }
+  ],
+  "num_teams": 2,
+  "seed": 0,
+  "roles": [
+   {
+    "name": "Tank",
+    "slots": 2,
+    "weight": 1
+   },
+   {
+    "name": "Damage",
+    "slots": 2,
+    "weight": 1
+   },
+   {
+    "name": "Support",
+    "slots": 2,
+    "weight": 1
+   }
+  ],
+  "config": {
+   "max_result_variants": 10,
+   "fairness_weight": 0.6000000000000001,
+   "role_fairness_weight": 0.6000000000000001,
+   "role_priority_weight": 1.4
+  }
+ },
+ "expected": {
+  "error": null,
+  "results": [
+   {
+    "total": 115.91662788391113,
+    "fairness": 52.20000076293945,
+    "uniformity": 7.9166259765625,
+    "role_fairness": 47.400001525878906,
+    "role_points": 8.399999618530273,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Tank"
+      ],
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ],
+     [
+      [
+       "p02-43985",
+       "Support"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p05-11755",
+       "Damage"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 131.100004196167,
+    "fairness": 39.60000228881836,
+    "uniformity": 49.5,
+    "role_fairness": 33.60000228881836,
+    "role_points": 8.399999618530273,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Tank"
+      ],
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Support"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p02-43985",
+       "Damage"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 137.33331441879272,
+    "fairness": 48,
+    "uniformity": 39.33331298828125,
+    "role_fairness": 44.400001525878906,
+    "role_points": 5.599999904632568,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Damage"
+      ],
+      [
+       "p02-43985",
+       "Tank"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Support"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Tank"
+      ]
+     ],
+     [
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p06-29194",
+       "Damage"
+      ],
+      [
+       "p09-97820",
+       "Tank"
+      ],
+      [
+       "p10-49809",
+       "Damage"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 185.43334579467773,
+    "fairness": 15.600000381469727,
+    "uniformity": 127.83334350585938,
+    "role_fairness": 33.60000228881836,
+    "role_points": 8.399999618530273,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Tank"
+      ],
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p02-43985",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Support"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 201.36666584014893,
+    "fairness": 43.80000305175781,
+    "uniformity": 13.166656494140625,
+    "role_fairness": 134.60000610351562,
+    "role_points": 9.800000190734863,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Support"
+      ],
+      [
+       "p02-43985",
+       "Support"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Damage"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ]
+     ],
+     [
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p04-25391",
+       "Tank"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 201.80548667907715,
+    "fairness": 103.80000305175781,
+    "uniformity": 25.80548095703125,
+    "role_fairness": 63.80000305175781,
+    "role_points": 8.399999618530273,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Damage"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Tank"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Tank"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ],
+     [
+      [
+       "p01-54264",
+       "Damage"
+      ],
+      [
+       "p02-43985",
+       "Tank"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p06-29194",
+       "Support"
+      ],
+      [
+       "p09-97820",
+       "Tank"
+      ],
+      [
+       "p10-49809",
+       "Damage"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 203.37783908843994,
+    "fairness": 46.20000076293945,
+    "uniformity": 12.77783203125,
+    "role_fairness": 134.60000610351562,
+    "role_points": 9.800000190734863,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Support"
+      ],
+      [
+       "p02-43985",
+       "Support"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ]
+     ],
+     [
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p04-25391",
+       "Tank"
+      ],
+      [
+       "p05-11755",
+       "Damage"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 215.08338737487793,
+    "fairness": 142.20001220703125,
+    "uniformity": 17.0833740234375,
+    "role_fairness": 47.400001525878906,
+    "role_points": 8.399999618530273,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Tank"
+      ],
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Damage"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ],
+     [
+      [
+       "p02-43985",
+       "Support"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 223.03331184387207,
+    "fairness": 27.000001907348633,
+    "uniformity": 6.83331298828125,
+    "role_fairness": 182.1999969482422,
+    "role_points": 7,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Support"
+      ],
+      [
+       "p02-43985",
+       "Tank"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Damage"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ]
+     ],
+     [
+      [
+       "p01-54264",
+       "Tank"
+      ],
+      [
+       "p04-25391",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ],
+      [
+       "p09-97820",
+       "Damage"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   },
+   {
+    "total": 227.1889204978943,
+    "fairness": 26.400001525878906,
+    "uniformity": 10.388916015625,
+    "role_fairness": 184.8000030517578,
+    "role_points": 5.599999904632568,
+    "teams": [
+     [
+      [
+       "p00-96316",
+       "Tank"
+      ],
+      [
+       "p02-43985",
+       "Support"
+      ],
+      [
+       "p03-58354",
+       "Damage"
+      ],
+      [
+       "p06-29194",
+       "Tank"
+      ],
+      [
+       "p07-91517",
+       "Support"
+      ],
+      [
+       "p08-69123",
+       "Damage"
+      ]
+     ],
+     [
+      [
+       "p01-54264",
+       "Damage"
+      ],
+      [
+       "p04-25391",
+       "Damage"
+      ],
+      [
+       "p05-11755",
+       "Support"
+      ],
+      [
+       "p09-97820",
+       "Tank"
+      ],
+      [
+       "p10-49809",
+       "Tank"
+      ],
+      [
+       "p11-92493",
+       "Support"
+      ]
+     ]
+    ]
+   }
+  ]
+ }
+}

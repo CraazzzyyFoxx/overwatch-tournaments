@@ -49,7 +49,7 @@ vi.mock("@/lib/notify", () => ({
 
 const UNSET: MixBalancerPreferencesRead = {
   mix_comfort_tilt: null,
-  mix_role_weights: null,
+  role_settings: null,
   max_result_variants: null,
   role_mask: null,
   points_per_win: null,
@@ -141,7 +141,7 @@ describe("MixBalancerSection", () => {
     expect(updatePreferences).toHaveBeenCalledWith({
       // Untouched slider and shape: nothing stored, the defaults apply.
       mix_comfort_tilt: null,
-      mix_role_weights: { tank: 2.5 },
+      role_settings: { tank: { mix_weight: 2.5 } },
       max_result_variants: 40,
       role_mask: null,
       points_per_win: 50,
@@ -152,7 +152,7 @@ describe("MixBalancerSection", () => {
   it("clears a knob put back to its default instead of pinning it", async () => {
     getPreferences.mockResolvedValue({
       ...UNSET,
-      mix_role_weights: { tank: 2.5 },
+      role_settings: { tank: { mix_weight: 2.5 } },
       max_result_variants: 40,
       points_per_win: 50,
     });
@@ -166,7 +166,7 @@ describe("MixBalancerSection", () => {
 
     expect(updatePreferences).toHaveBeenCalledWith({
       mix_comfort_tilt: null,
-      mix_role_weights: null,
+      role_settings: null,
       max_result_variants: null,
       role_mask: null,
       points_per_win: null,

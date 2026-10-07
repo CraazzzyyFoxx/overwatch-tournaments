@@ -6,7 +6,7 @@ targeted presets below share one search budget and differ only in which axis
 they optimize: team balance (``HIGH_QUALITY``), first-preference roles
 (``PREFERENCE_FOCUSED``) or both (``COMBINED``). Each of them states its full
 weight set rather than a delta, so a change of defaults cannot silently move
-their tuning. Tuning evidence lives in ``native/tournament_balancer``'s
+their tuning. Tuning evidence lives in ``native/balancer_native``'s
 ``quality_harness`` ablations.
 
 Only the Rust MOO solver is supported, so presets no longer carry an
@@ -48,8 +48,7 @@ class ConfigPresets:
         "average_mmr_balance_weight": 4.0,
         "intra_team_std_weight": 0.5,
         "internal_role_spread_weight": 0.2,
-        "tank_gap_weight": 0.25,
-        "tank_std_weight": 0.75,
+        "role_settings": {"tank": {"line_gap_weight": 0.25, "line_std_weight": 0.75}},
         "effective_total_std_weight": 0.75,
         "role_discomfort_weight": 1.0,
         "max_role_discomfort_weight": 2.0,
@@ -63,8 +62,7 @@ class ConfigPresets:
         "average_mmr_balance_weight": 0.8,
         "intra_team_std_weight": 2.8,
         "internal_role_spread_weight": 1.2,
-        "tank_gap_weight": 1.0,
-        "tank_std_weight": 1.5,
+        "role_settings": {"tank": {"line_gap_weight": 1.0, "line_std_weight": 1.5}},
         "effective_total_std_weight": 1.2,
         "role_discomfort_weight": 4.0,
         "max_role_discomfort_weight": 0.5,
@@ -78,7 +76,7 @@ class ConfigPresets:
         "average_mmr_balance_weight": 2.0,
         "intra_team_std_weight": 1.8,
         "internal_role_spread_weight": 0.8,
-        "tank_gap_weight": 0.8,
+        "role_settings": {"tank": {"line_gap_weight": 0.8}},
         "role_discomfort_weight": 2.0,
         "max_role_discomfort_weight": 1.0,
         "team_max_pain_weight": 0.6,

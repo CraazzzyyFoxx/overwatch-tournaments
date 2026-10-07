@@ -20,16 +20,17 @@ places and forgetting one meant the knob silently did nothing.
 from __future__ import annotations
 
 import typing
+from collections.abc import Mapping
 
 import annotated_types
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from shared.domain.roster_shape import DEFAULT_ROSTER_SLOTS
+from shared.domain.roster_shape import DEFAULT_ROSTER_SLOTS, RosterSlotCode
 
 ConfigGroup = typing.Literal["Algorithm", "Quality weights", "Strategy", "Solver output"]
-ConfigControl = typing.Literal["integer", "float", "boolean", "slider"]
+ConfigControl = typing.Literal["integer", "float", "boolean", "slider", "roles"]
 
 # Upper bound the UI has always advertised for a cost-function weight. It used
 # to live only in ``CONFIG_LIMITS``, so the slider stopped at 10000 while the
@@ -39,6 +40,67 @@ MAX_WEIGHT = 10000.0
 # Most balance options one run hands back, whichever solver. Past a hundred
 # nobody pages further, and every option is shipped and (for a mix) stored.
 MAX_RESULT_VARIANTS = 100
+
+
+class RoleSettings(BaseModel):
+    """Everything an engine weighs one role by — the only place a per-role weight lives.
+
+    Neither engine carries role names or role defaults of its own: Python sends
+    these numbers per role the roster actually fields, so a new game's roles are
+    a change of data here and nothing else.
+
+    Frozen because one instance per role is shared by every :class:`AlgorithmConfig`;
+    an override copies with the fields it names (:func:`apply_config_overrides`).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    impact: float = Field(
+        ge=0.0,
+        le=MAX_WEIGHT,
+        title="Impact",
+        description="Importance multiplier for this role's contribution when comparing effective team totals.",
+    )
+    line_gap_weight: float = Field(
+        ge=0.0,
+        le=MAX_WEIGHT,
+        title="Line gap",
+        description=(
+            "Penalty multiplier for the largest gap between adjacent (sorted by strength) lines of this role."
+        ),
+    )
+    line_std_weight: float = Field(
+        ge=0.0,
+        le=MAX_WEIGHT,
+        title="Line spread",
+        description="Penalty multiplier for this role's line-strength standard deviation across teams.",
+    )
+    mix_weight: float = Field(
+        ge=0.0,
+        le=100.0,
+        title="Mix weight",
+        description="Mix-engine multiplier for this role's gap in the role-fairness term.",
+    )
+
+
+#: Per-role weights, keyed by roster slot code
+#: (``shared.domain.roster_shape.ROSTER_SLOT_CODES``). ``flex`` is a seat with no
+#: role, so it carries the neutral set.
+DEFAULT_ROLE_SETTINGS: dict[str, RoleSettings] = {
+    "tank": RoleSettings(impact=1.4, line_gap_weight=0.8, line_std_weight=1.5, mix_weight=1.0),
+    "damage": RoleSettings(impact=1.0, line_gap_weight=0.0, line_std_weight=0.0, mix_weight=1.0),
+    "support": RoleSettings(impact=1.1, line_gap_weight=0.0, line_std_weight=0.0, mix_weight=1.0),
+    "flex": RoleSettings(impact=1.0, line_gap_weight=0.0, line_std_weight=0.0, mix_weight=1.0),
+}
+
+#: Read by the mix engine only, so the tournament drawer neither renders nor
+#: stores it — the same split every other ``mix_*`` knob gets.
+MIX_ONLY_ROLE_FIELDS = frozenset({"mix_weight"})
+
+
+def tournament_role_settings(role_settings: Mapping[str, RoleSettings]) -> dict[str, dict[str, float]]:
+    """Per-role settings as the operator drawer sees them: mix-only fields dropped."""
+    return {code: settings.model_dump(exclude=MIX_ONLY_ROLE_FIELDS) for code, settings in role_settings.items()}
 
 
 def knob(label: str, group: ConfigGroup, control: ConfigControl | None = None) -> dict[str, typing.Any]:
@@ -266,42 +328,13 @@ class AlgorithmConfig(BaseSettings):
     )
 
     # Rust MOO advanced objective shaping
-    tank_impact_weight: float = Field(
-        default=1.4,
-        ge=0.0,
-        le=MAX_WEIGHT,
-        description="Importance multiplier for Tank role contribution when comparing effective team totals.",
-        json_schema_extra=knob("Tank impact", "Quality weights"),
-    )
-    damage_impact_weight: float = Field(
-        default=1.0,
-        ge=0.0,
-        le=MAX_WEIGHT,
-        description="Importance multiplier for Damage role contribution when comparing effective team totals.",
-        json_schema_extra=knob("Damage impact", "Quality weights"),
-    )
-    support_impact_weight: float = Field(
-        default=1.1,
-        ge=0.0,
-        le=MAX_WEIGHT,
-        description="Importance multiplier for Support role contribution when comparing effective team totals.",
-        json_schema_extra=knob("Support impact", "Quality weights"),
-    )
-    # Penalizes the largest hole between adjacent (sorted) tank lines instead
-    # of the structurally irreducible max-min pool spread.
-    tank_gap_weight: float = Field(
-        default=0.8,
-        ge=0.0,
-        le=MAX_WEIGHT,
-        description="Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.",
-        json_schema_extra=knob("Tank gap weight", "Quality weights"),
-    )
-    tank_std_weight: float = Field(
-        default=1.5,
-        ge=0.0,
-        le=MAX_WEIGHT,
-        description="Penalty multiplier for Tank-line standard deviation across teams.",
-        json_schema_extra=knob("Tank std weight", "Quality weights"),
+    role_settings: dict[RosterSlotCode, RoleSettings] = Field(
+        default_factory=lambda: dict(DEFAULT_ROLE_SETTINGS),
+        description=(
+            "Per-role weights keyed by roster slot code: how much a role counts "
+            "towards a team's effective total, and how hard uneven lines of it are penalized."
+        ),
+        json_schema_extra=knob("Role weights", "Quality weights", control="roles"),
     )
     effective_total_std_weight: float = Field(
         default=1.2,
@@ -417,14 +450,6 @@ class AlgorithmConfig(BaseSettings):
             "a preferred role; 0.5 reproduces the engine's own defaults."
         ),
     )
-    mix_role_weights: dict[str, typing.Annotated[float, Field(ge=0.0, le=100.0)]] | None = Field(
-        default=None,
-        description=(
-            "Mix per-role importance for the role-line balance term, keyed by "
-            "roster slot code. A role left out weighs 1.0, as does every role "
-            "when this is unset."
-        ),
-    )
 
     # Rating normalization
     rating_scale_ceiling: int = Field(
@@ -437,3 +462,21 @@ class AlgorithmConfig(BaseSettings):
             "gap-penalty thresholds and weight calibration dataset-independent."
         ),
     )
+
+
+def apply_config_overrides(config: AlgorithmConfig, overrides: Mapping[str, typing.Any]) -> AlgorithmConfig:
+    """Apply a normalized override blob onto ``config``, in place.
+
+    Plain assignment for every knob but ``role_settings``, whose overrides are
+    partial: ``{"role_settings": {"tank": {"impact": 2.0}}}`` moves tank's impact
+    and leaves its line weights -- and every other role -- where they were.
+    """
+    for key, value in overrides.items():
+        if key == "role_settings":
+            merged = dict(config.role_settings)
+            for code, partial in value.items():
+                merged[code] = merged.get(code, DEFAULT_ROLE_SETTINGS[code]).model_copy(update=partial)
+            config.role_settings = merged
+        else:
+            setattr(config, key, value)
+    return config

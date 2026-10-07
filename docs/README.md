@@ -52,7 +52,7 @@ Individual services document their own RPC surface and scheduled work:
 [`tournament-service`](../backend/tournament-service/README.md),
 [`parser-service`](../backend/parser-service/README.md),
 [`balancer-service`](../backend/balancer-service/README.md)
-(and its native solver, [`tournament_balancer`](../backend/balancer-service/native/mix_balancer/README.md)),
+(and its native solvers, [`balancer_native`](../backend/balancer-service/README.md#native-solver)),
 [`analytics-service`](../backend/analytics-service/README.md),
 [`stream-service`](../backend/stream-service/README.md),
 [`discord-service`](../backend/discord-service/README.md).

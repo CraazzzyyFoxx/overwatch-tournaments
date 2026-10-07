@@ -14115,12 +14115,6 @@ export interface components {
              */
             crossover_rate: number | null;
             /**
-             * Damage Impact Weight
-             * @description Importance multiplier for Damage role contribution when comparing effective team totals.
-             * @default null
-             */
-            damage_impact_weight: number | null;
-            /**
              * Effective Total Std Weight
              * @description Penalty multiplier for weighted effective team-total standard deviation.
              * @default null
@@ -14193,14 +14187,6 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
-             * Mix Role Weights
-             * @description Mix per-role importance for the role-line balance term, keyed by roster slot code. A role left out weighs 1.0, as does every role when this is unset.
-             * @default null
-             */
-            mix_role_weights: {
-                [key: string]: number;
-            } | null;
-            /**
              * Mutation Rate
              * @description Probability that a solution is changed while producing the next generation.
              * @default null
@@ -14255,6 +14241,14 @@ export interface components {
              */
             role_line_balance_weight: number | null;
             /**
+             * Role Settings
+             * @description Per-role weights keyed by roster slot code: how much a role counts towards a team's effective total, and how hard uneven lines of it are penalized.
+             * @default null
+             */
+            role_settings: {
+                [key: string]: components["schemas"]["balancer.RoleSettingsOverride"];
+            } | null;
+            /**
              * Stagnation Kick Patience
              * @description Generations without archive improvement before stronger mutation and crossover are applied.
              * @default null
@@ -14266,30 +14260,6 @@ export interface components {
              * @default null
              */
             sub_role_collision_weight: number | null;
-            /**
-             * Support Impact Weight
-             * @description Importance multiplier for Support role contribution when comparing effective team totals.
-             * @default null
-             */
-            support_impact_weight: number | null;
-            /**
-             * Tank Gap Weight
-             * @description Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.
-             * @default null
-             */
-            tank_gap_weight: number | null;
-            /**
-             * Tank Impact Weight
-             * @description Importance multiplier for Tank role contribution when comparing effective team totals.
-             * @default null
-             */
-            tank_impact_weight: number | null;
-            /**
-             * Tank Std Weight
-             * @description Penalty multiplier for Tank-line standard deviation across teams.
-             * @default null
-             */
-            tank_std_weight: number | null;
             /**
              * Team Max Pain Weight
              * @description Penalty weight for the per-team maximum role discomfort averaged over all teams. Makes 'one suffering player in every team' visible, unlike the single global maximum.
@@ -15178,6 +15148,36 @@ export interface components {
             role: string;
             /** Supply */
             supply: number;
+        };
+        /**
+         * RoleSettingsOverride
+         * @description Per-role weights to override; an omitted field keeps its configured value.
+         */
+        "balancer.RoleSettingsOverride": {
+            /**
+             * Impact
+             * @description Importance multiplier for this role's contribution when comparing effective team totals.
+             * @default null
+             */
+            impact: number | null;
+            /**
+             * Line Gap Weight
+             * @description Penalty multiplier for the largest gap between adjacent (sorted by strength) lines of this role.
+             * @default null
+             */
+            line_gap_weight: number | null;
+            /**
+             * Line Std Weight
+             * @description Penalty multiplier for this role's line-strength standard deviation across teams.
+             * @default null
+             */
+            line_std_weight: number | null;
+            /**
+             * Mix Weight
+             * @description Mix-engine multiplier for this role's gap in the role-fairness term.
+             * @default null
+             */
+            mix_weight: number | null;
         };
         /**
          * RosterShapeRead
@@ -20529,6 +20529,21 @@ export interface components {
          */
         "balancer.MixParticipation": BalancerMixParticipation;
         /**
+         * MixRoleSettings
+         * @description The mix engine's share of a role's settings -- the only one a host may set.
+         *
+         *     The tournament drawer owns the rest (``impact``, the line weights), and
+         *     ``extra="forbid"`` is what keeps a host from storing a GA knob through their
+         *     own preferences.
+         */
+        "balancer.MixRoleSettings": {
+            /**
+             * Mix Weight
+             * @description Multiplier for this role's gap in role fairness.
+             */
+            mix_weight: number;
+        };
+        /**
          * MixSelfSignup
          * @description Who may put themselves on a mix roster, and where they land.
          *
@@ -20561,14 +20576,6 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
-             * Mix Role Weights
-             * @description Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.
-             * @default null
-             */
-            mix_role_weights: {
-                [key: string]: number;
-            } | null;
-            /**
              * Points Per Win
              * @description How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.
              * @default null
@@ -20589,6 +20596,14 @@ export interface components {
             role_mask: {
                 [key: string]: number;
             } | null;
+            /**
+             * Role Settings
+             * @description Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.
+             * @default null
+             */
+            role_settings: {
+                [key: string]: components["schemas"]["balancer.MixRoleSettings"];
+            } | null;
             /** @description Read-only: role_mask resolved through the fallback chain, so the client never recomputes it. source is 'user' when this account stored a mask and 'default' when it did not. */
             roster_shape: components["schemas"]["balancer.RosterShapeRead"];
         };
@@ -20608,13 +20623,6 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
-             * Mix Role Weights
-             * @description Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.
-             */
-            mix_role_weights: {
-                [key: string]: number;
-            } | null;
-            /**
              * Points Per Win
              * @description How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.
              */
@@ -20631,6 +20639,13 @@ export interface components {
              */
             role_mask: {
                 [key: string]: number;
+            } | null;
+            /**
+             * Role Settings
+             * @description Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.
+             */
+            role_settings: {
+                [key: string]: components["schemas"]["balancer.MixRoleSettings"];
             } | null;
         };
         /** WorkspaceBalancerConfigRead */

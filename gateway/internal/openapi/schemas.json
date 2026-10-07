@@ -22599,21 +22599,6 @@
           "description": "Probability of crossover when producing offspring in the Rust MOO search.",
           "title": "Crossover Rate"
         },
-        "damage_impact_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Importance multiplier for Damage role contribution when comparing effective team totals.",
-          "title": "Damage Impact Weight"
-        },
         "effective_total_std_weight": {
           "anyOf": [
             {
@@ -22794,24 +22779,6 @@
           "description": "Mix trade-off between rank balance and role comfort. 0 weighs only how evenly the two teams' ranks split, 1 only how many players got a preferred role; 0.5 reproduces the engine's own defaults.",
           "title": "Mix Comfort Tilt"
         },
-        "mix_role_weights": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "maximum": 100.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Mix per-role importance for the role-line balance term, keyed by roster slot code. A role left out weighs 1.0, as does every role when this is unset.",
-          "title": "Mix Role Weights"
-        },
         "mutation_rate": {
           "anyOf": [
             {
@@ -22947,6 +22914,30 @@
           "description": "Penalty weight for uneven rating strength between the same role across teams.",
           "title": "Role Line Balance Weight"
         },
+        "role_settings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/balancer.RoleSettingsOverride"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "damage",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-role weights keyed by roster slot code: how much a role counts towards a team's effective total, and how hard uneven lines of it are penalized.",
+          "title": "Role Settings"
+        },
         "stagnation_kick_patience": {
           "anyOf": [
             {
@@ -22976,66 +22967,6 @@
           "default": null,
           "description": "Penalty weight per pair of players in the same team sharing the same role subclass, normalized per team count. Use 0 to disable.",
           "title": "Sub Role Collision Weight"
-        },
-        "support_impact_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Importance multiplier for Support role contribution when comparing effective team totals.",
-          "title": "Support Impact Weight"
-        },
-        "tank_gap_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.",
-          "title": "Tank Gap Weight"
-        },
-        "tank_impact_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Importance multiplier for Tank role contribution when comparing effective team totals.",
-          "title": "Tank Impact Weight"
-        },
-        "tank_std_weight": {
-          "anyOf": [
-            {
-              "maximum": 10000.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Penalty multiplier for Tank-line standard deviation across teams.",
-          "title": "Tank Std Weight"
         },
         "team_max_pain_weight": {
           "anyOf": [
@@ -25611,6 +25542,24 @@
       "title": "MixParticipation",
       "type": "string"
     },
+    "balancer.MixRoleSettings": {
+      "additionalProperties": false,
+      "description": "The mix engine's share of a role's settings -- the only one a host may set.\n\nThe tournament drawer owns the rest (``impact``, the line weights), and\n``extra=\"forbid\"`` is what keeps a host from storing a GA knob through their\nown preferences.",
+      "properties": {
+        "mix_weight": {
+          "description": "Multiplier for this role's gap in role fairness.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Mix Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mix_weight"
+      ],
+      "title": "MixRoleSettings",
+      "type": "object"
+    },
     "balancer.MixSelfSignup": {
       "description": "Who may put themselves on a mix roster, and where they land.\n\nOne column, three states: ``closed`` is no self-signup at all, ``pool``\nseats a self-signed player straight into the pool, ``benched`` parks them\nfor the host to promote. A bool plus a destination enum would admit a\nfourth, meaningless pair (\"closed, but onto the bench\").",
       "enum": [
@@ -25739,6 +25688,74 @@
         "demand"
       ],
       "title": "RoleFeasibility",
+      "type": "object"
+    },
+    "balancer.RoleSettingsOverride": {
+      "additionalProperties": false,
+      "description": "Per-role weights to override; an omitted field keeps its configured value.",
+      "properties": {
+        "impact": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Importance multiplier for this role's contribution when comparing effective team totals.",
+          "title": "Impact"
+        },
+        "line_gap_weight": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Penalty multiplier for the largest gap between adjacent (sorted by strength) lines of this role.",
+          "title": "Line Gap Weight"
+        },
+        "line_std_weight": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Penalty multiplier for this role's line-strength standard deviation across teams.",
+          "title": "Line Std Weight"
+        },
+        "mix_weight": {
+          "anyOf": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mix-engine multiplier for this role's gap in the role-fairness term.",
+          "title": "Mix Weight"
+        }
+      },
+      "title": "RoleSettingsOverride",
       "type": "object"
     },
     "balancer.RosterShapeRead": {
@@ -26132,32 +26149,6 @@
           "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
           "title": "Mix Comfort Tilt"
         },
-        "mix_role_weights": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "maximum": 100.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              "propertyNames": {
-                "enum": [
-                  "tank",
-                  "damage",
-                  "support",
-                  "flex"
-                ]
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
-          "title": "Mix Role Weights"
-        },
         "points_per_win": {
           "anyOf": [
             {
@@ -26198,6 +26189,30 @@
           "default": null,
           "description": "How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.",
           "title": "Role Mask"
+        },
+        "role_settings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/balancer.MixRoleSettings"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "damage",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.",
+          "title": "Role Settings"
         },
         "roster_shape": {
           "$ref": "#/components/schemas/balancer.RosterShapeRead",
@@ -26242,31 +26257,6 @@
           "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
           "title": "Mix Comfort Tilt"
         },
-        "mix_role_weights": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "maximum": 100.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              "propertyNames": {
-                "enum": [
-                  "tank",
-                  "damage",
-                  "support",
-                  "flex"
-                ]
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
-          "title": "Mix Role Weights"
-        },
         "points_per_win": {
           "anyOf": [
             {
@@ -26304,11 +26294,34 @@
           ],
           "description": "How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.",
           "title": "Role Mask"
+        },
+        "role_settings": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/balancer.MixRoleSettings"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "damage",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-role mix weights, keyed by roster slot code: how much this role's gap counts towards role fairness. An omitted role weighs 1.0; null means no per-role opinion at all.",
+          "title": "Role Settings"
         }
       },
       "required": [
         "mix_comfort_tilt",
-        "mix_role_weights",
+        "role_settings",
         "max_result_variants",
         "role_mask",
         "points_per_win",
