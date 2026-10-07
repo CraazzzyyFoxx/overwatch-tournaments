@@ -221,7 +221,7 @@ async function mount(
     canWrite?: boolean;
     activeCount?: number;
     variantIndex?: number;
-    lobbyIndex?: 0 | 1;
+    lobbyIndex?: number;
     hasMix?: boolean;
     omitSwapSeats?: boolean;
     maps?: MapRead[];
@@ -866,7 +866,7 @@ describe("PickupTeamsPanel", () => {
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it("offers the shared reshuffle only once the mix runs two lobbies", async () => {
+  it("offers the shared reshuffle only once the mix runs more than one lobby", async () => {
     const one = await mount(game());
     expect(byName(one, "shuffleAll")).toBeNull();
 

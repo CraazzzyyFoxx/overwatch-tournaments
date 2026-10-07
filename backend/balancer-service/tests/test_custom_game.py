@@ -847,9 +847,29 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 422)
         self.assertIsNone(row.lobby_pin)
 
-    async def test_set_lobby_count_two_opens_lobby_b(self) -> None:
+    async def test_set_lobby_count_four_opens_the_three_missing_lobbies(self) -> None:
         game = _game()
         self.games.get.return_value = game
+
+        await self.service.set_lobby_count(
+            self.session, workspace_id=1, custom_game_id=11, lobby_count=4, actor_user_id=9
+        )
+
+        self.assertEqual(game.lobby_count, 4)
+        self.assertEqual(sorted(self.lobby_rows), [0, 1, 2, 3])
+        self.assertIsNone(self.lobby_rows[3].balance_result_json)
+
+    async def test_set_lobby_count_down_drops_the_lobbies_past_it_and_their_pins(self) -> None:
+        """Shrinking loses the dropped lobbies' matchups and frees the pins that
+        named them: a pin to a lobby that no longer exists would silently exclude
+        that player from the next balance. A pin to a surviving lobby stays."""
+        game = _game(lobby_count=4)
+        for index in (1, 2, 3):
+            self.lobby_rows[index] = _lobby(index, balance_result_json={"variants": []})
+        dropped = _roster_row(1, 7, 0, lobby_pin=2)
+        kept = _roster_row(2, 8, 1, lobby_pin=1)
+        self.games.get.return_value = game
+        self.roster.list_for_game.return_value = [dropped, kept]
 
         await self.service.set_lobby_count(
             self.session, workspace_id=1, custom_game_id=11, lobby_count=2, actor_user_id=9
@@ -857,27 +877,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(game.lobby_count, 2)
         self.assertEqual(sorted(self.lobby_rows), [0, 1])
-        self.assertIsNone(self.lobby_rows[1].balance_result_json)
-
-    async def test_set_lobby_count_one_drops_lobby_b_and_every_pin(self) -> None:
-        """Going back to one lobby loses B's matchup and frees everybody: a pin
-        to a lobby that no longer exists would silently exclude that player
-        from the next balance."""
-        game = _game(lobby_count=2)
-        self.lobby_rows[1] = _lobby(1, balance_result_json={"variants": []})
-        pinned = _roster_row(1, 7, 0, lobby_pin=1)
-        other = _roster_row(2, 8, 1, lobby_pin=0)
-        self.games.get.return_value = game
-        self.roster.list_for_game.return_value = [pinned, other]
-
-        await self.service.set_lobby_count(
-            self.session, workspace_id=1, custom_game_id=11, lobby_count=1, actor_user_id=9
-        )
-
-        self.assertEqual(game.lobby_count, 1)
-        self.assertEqual(sorted(self.lobby_rows), [0])
-        self.assertIsNone(pinned.lobby_pin)
-        self.assertIsNone(other.lobby_pin)
+        self.assertIsNone(dropped.lobby_pin)
+        self.assertEqual(kept.lobby_pin, 1)
 
     async def test_set_lobby_count_to_the_current_value_changes_nothing(self) -> None:
         game = _game()
@@ -1790,7 +1791,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             await self.service.balance(self.session, workspace_id=1, custom_game_id=11, scope="all", actor_user_id=9)
 
         self.assertEqual(ctx.exception.status_code, 422)
-        self.assertEqual(ctx.exception.detail, "not_enough_for_two_lobbies")
+        self.assertEqual(ctx.exception.detail, "not_enough_players")
         self.run_balance.assert_not_called()
 
     async def test_update_roster_keeps_surviving_row_state(self) -> None:

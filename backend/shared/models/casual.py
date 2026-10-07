@@ -4,6 +4,7 @@ from sqlalchemy import CheckConstraint, Enum, ForeignKey, Integer, String, Uniqu
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
+from shared.domain.mix_lobby import MAX_LOBBIES
 
 __all__ = ("CasualMatch", "CasualMatchBusyPlayer", "CasualTeam", "CasualPlayer")
 
@@ -13,7 +14,7 @@ class CasualMatch(db.TimeStampIntegerMixin):
 
     __tablename__ = "match"
     __table_args__ = (
-        CheckConstraint("lobby_index BETWEEN 0 AND 1", name="ck_casual_match_lobby_index"),
+        CheckConstraint(f"lobby_index BETWEEN 0 AND {MAX_LOBBIES - 1}", name="ck_casual_match_lobby_index"),
         {"schema": "casual"},
     )
 

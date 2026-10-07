@@ -654,7 +654,7 @@ CREATE TABLE balancer.custom_game (
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_custom_game_status CHECK (status IN ('draft', 'balanced', 'completed', 'cancelled')), 
 	CONSTRAINT ck_custom_game_self_signup CHECK (self_signup IN ('closed', 'pool', 'benched')), 
-	CONSTRAINT ck_custom_game_lobby_count CHECK (lobby_count BETWEEN 1 AND 2), 
+	CONSTRAINT ck_custom_game_lobby_count CHECK (lobby_count BETWEEN 1 AND 6), 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
 	FOREIGN KEY(host_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
@@ -680,7 +680,7 @@ CREATE TABLE balancer.custom_game_lobby (
 	next_map_id BIGINT, 
 	balanced_at TIMESTAMP WITH TIME ZONE, 
 	PRIMARY KEY (custom_game_id, lobby_index), 
-	CONSTRAINT ck_custom_game_lobby_index CHECK (lobby_index BETWEEN 0 AND 1), 
+	CONSTRAINT ck_custom_game_lobby_index CHECK (lobby_index BETWEEN 0 AND 5), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(next_map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL
 );
@@ -700,7 +700,7 @@ CREATE TABLE balancer.custom_game_player (
 	CONSTRAINT uq_custom_game_player_member UNIQUE (custom_game_id, workspace_member_id), 
 	CONSTRAINT ck_custom_game_player_participation CHECK (participation IN ('must_play', 'pool', 'benched')), 
 	CONSTRAINT ck_custom_game_player_role_selection_mode CHECK (role_selection_mode IN ('all_ranked', 'explicit')), 
-	CONSTRAINT ck_custom_game_player_lobby_pin CHECK (lobby_pin BETWEEN 0 AND 1), 
+	CONSTRAINT ck_custom_game_player_lobby_pin CHECK (lobby_pin BETWEEN 0 AND 5), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE
 );
@@ -1353,7 +1353,7 @@ CREATE TABLE casual.match (
 	recorded_by BIGINT, 
 	points_per_win_applied INTEGER, 
 	PRIMARY KEY (id), 
-	CONSTRAINT ck_casual_match_lobby_index CHECK (lobby_index BETWEEN 0 AND 1), 
+	CONSTRAINT ck_casual_match_lobby_index CHECK (lobby_index BETWEEN 0 AND 5), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL, 
 	FOREIGN KEY(recorded_by) REFERENCES auth."user" (id) ON DELETE SET NULL

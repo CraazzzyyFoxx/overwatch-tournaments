@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator, model_validator
 
 from shared.core.enums import MixParticipation, MixSelfSignup
+from shared.domain.mix_lobby import MAX_LOBBIES
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
@@ -65,7 +66,7 @@ class CustomGamePlayerPatch(_Request):
     is_flex: StrictBool | None = None
     # ``None`` is "auto": the balance places them wherever they fit. A patch that
     # does not mention the field leaves the pin exactly as it was.
-    lobby_pin: int | None = Field(None, ge=0, le=1)
+    lobby_pin: int | None = Field(None, ge=0, le=MAX_LOBBIES - 1)
 
     @field_validator("roles")
     @classmethod
@@ -108,7 +109,7 @@ class _LobbyScoped(_Request):
     """Every per-match write names its lobby; ``0`` is the only one a
     single-lobby mix has, which is why it is the default."""
 
-    lobby_index: int = Field(0, ge=0, le=1)
+    lobby_index: int = Field(0, ge=0, le=MAX_LOBBIES - 1)
 
 
 class CustomGameNextMapPatch(_LobbyScoped):
@@ -126,7 +127,7 @@ class CustomGameVariantIndexPatch(_LobbyScoped):
 class CustomGameBalanceRequest(_LobbyScoped):
     """What to balance. An empty body is the first lobby, as before there was a second.
 
-    ``scope="all"`` reshuffles both lobbies at once and needs ``lobby_count = 2``.
+    ``scope="all"`` reshuffles every lobby at once and needs ``lobby_count >= 2``.
     """
 
     scope: Literal["lobby", "all"] = "lobby"
@@ -240,4 +241,4 @@ class CustomGamePostSignup(_Request):
 class CustomGameLobbyCountPatch(_Request):
     """How many lobbies the mix runs at once."""
 
-    lobby_count: Literal[1, 2]
+    lobby_count: int = Field(ge=1, le=MAX_LOBBIES)

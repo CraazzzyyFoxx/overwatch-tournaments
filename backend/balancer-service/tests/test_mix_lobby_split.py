@@ -76,7 +76,7 @@ def test_two_lobbies_need_a_full_pool_for_both() -> None:
     with pytest.raises(LobbySplitError) as exc:
         split_into_lobbies(candidates, mask=MASK_TANK)
 
-    assert exc.value.code == "not_enough_for_two_lobbies"
+    assert exc.value.code == "not_enough_players"
 
 
 def test_more_must_play_than_seats_in_both_lobbies_is_refused() -> None:
@@ -181,3 +181,26 @@ def test_a_flex_slot_takes_any_ranked_player() -> None:
     split = split_into_lobbies(candidates, mask={"flex": 1})
 
     assert sorted(split.lobbies[0] + split.lobbies[1]) == [1, 2, 3, 4]
+
+
+def test_three_lobbies_seat_everyone_near_equally_and_honour_a_pin() -> None:
+    """Три лобби -- такое же равенство, как два: закреплённый сидит где обещано,
+    остальные раскладываются так, чтобы суммы лобби сошлись."""
+    candidates = [
+        _candidate(1, 100),
+        _candidate(2, 90),
+        _candidate(3, 80),
+        _candidate(4, 70),
+        _candidate(5, 60),
+        _candidate(6, 50, pin=2),
+    ]
+
+    split = split_into_lobbies(candidates, mask=MASK_TANK, lobby_count=3)
+
+    assert len(split.lobbies) == 3
+    assert sorted(member_id for lobby in split.lobbies for member_id in lobby) == [1, 2, 3, 4, 5, 6]
+    assert split.waiting == ()
+    assert 6 in split.lobbies[2]
+    strength = {candidate.member_id: candidate.strength for candidate in candidates}
+    totals = [sum(strength[member_id] for member_id in lobby) for lobby in split.lobbies]
+    assert totals == [150, 150, 150]

@@ -25,6 +25,7 @@ from shared.core.enums import (
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
 from shared.division_grid import DEFAULT_GRID
+from shared.domain.mix_lobby import LOBBY_LETTERS
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.roster_shape import resolve_roster_shape
 from shared.rbac import assign_workspace_system_role
@@ -81,8 +82,6 @@ _MAX_TEAMS = 8
 #: co-host list without bound.
 _MAX_CO_HOSTS = 16
 _MAX_TEAM_NAME_LEN = 60
-#: Board-facing name of a lobby; the wire and the database speak indexes.
-LOBBY_LABELS = ("A", "B")
 #: Every Discord message a mix sends is filed under this subject, and the slot
 #: says which of the mix's messages it is: one ``signup`` card plus one row per
 #: lineup posted. Deleting a mix is then one read of ``discord_message``.
@@ -518,7 +517,7 @@ class CustomGameService:
         """One lobby row of this mix -- where every per-match fact lives.
 
         A mix has exactly ``lobby_count`` rows (``create`` opens them,
-        ``set_lobby_count`` adds and removes the second), so a miss is a caller
+        ``set_lobby_count`` opens and drops the rest), so a miss is a caller
         naming a lobby the mix does not run, not a row to conjure up.
         """
         lobby = await self.lobbies.get(session, game.id, lobby_index)
@@ -529,16 +528,19 @@ class CustomGameService:
     async def _other_lobby_seated(
         self, session: AsyncSession, game: models.CustomGame, lobby_index: int
     ) -> frozenset[int]:
-        """Who the mix's OTHER lobby currently has on the floor.
+        """Who the mix's OTHER lobbies currently have on the floor.
 
         Empty for a one-lobby mix: with no lobby next door, nobody is playing
-        one. Membership is not stored -- it is the seats of that lobby's
+        one. Membership is not stored -- it is the seats of each other lobby's
         selected option, which is what every caller here means by "busy".
         """
-        if game.lobby_count != 2:
+        if game.lobby_count < 2:
             return frozenset()
-        other = await self._lobby(session, game, 1 - lobby_index)
-        return seated_member_ids(other.balance_result_json, other.selected_variant_index)
+        busy: set[int] = set()
+        for lobby in await self.lobbies.list_for_game(session, game.id):
+            if lobby.lobby_index != lobby_index:
+                busy |= seated_member_ids(lobby.balance_result_json, lobby.selected_variant_index)
+        return frozenset(busy)
 
     async def _lobby_candidates(
         self,
@@ -550,14 +552,13 @@ class CustomGameService:
         """The roster rows this lobby may seat, out of ``rows``.
 
         One rule, one place: whoever is on the floor next door is playing, and
-        whoever is pinned to the other lobby is not this one's to seat. A
+        whoever is pinned to another lobby is not this one's to seat. A
         one-lobby mix owns its whole pool, so ``rows`` comes back untouched.
         """
-        if game.lobby_count != 2:
+        if game.lobby_count < 2:
             return list(rows)
         busy = await self._other_lobby_seated(session, game, lobby_index)
-        other_index = 1 - lobby_index
-        return [row for row in rows if row.workspace_member_id not in busy and row.lobby_pin != other_index]
+        return [row for row in rows if row.workspace_member_id not in busy and row.lobby_pin in (None, lobby_index)]
 
     async def _lobby_team_names(self, session: AsyncSession, game_id: int, lobby_index: int) -> dict[int, str]:
         """This lobby's two team-name overrides, renumbered to ``0``-``1``.
@@ -847,12 +848,13 @@ class CustomGameService:
                 )
             row.is_flex = patch["is_flex"]
         if "lobby_pin" in patch:
-            if lobby_count < 2:
+            pin = patch["lobby_pin"]
+            if pin is not None and pin >= lobby_count:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="lobby_pin requires a mix with two lobbies",
+                    detail=f"lobby_pin must name one of the mix's {lobby_count} lobbies",
                 )
-            row.lobby_pin = patch["lobby_pin"]
+            row.lobby_pin = pin
 
     async def set_participation(
         self,
@@ -895,13 +897,15 @@ class CustomGameService:
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
-        """Run this mix as one lobby or two.
+        """Run this mix as one lobby or as several (up to ``MAX_LOBBIES``).
 
-        Going to two opens an empty lobby B: it has no matchup until somebody
-        balances it, and lobby A is not touched. Going back to one deletes
-        lobby B -- its stored matchup is lost, its recorded matches stay in the
-        history -- and frees every pin, because a pin to a lobby the mix no
+        Growing opens the missing lobbies empty: they have no matchup until
+        somebody balances them, and the lobbies already running are not
+        touched. Shrinking deletes every lobby past the new count -- their
+        stored matchups are lost, their recorded matches stay in the history --
+        and frees the pins that named them, because a pin to a lobby the mix no
         longer runs would quietly exclude that player from the next balance.
+        Pins to surviving lobbies are kept.
         """
         game = await self._writable(
             session,
@@ -912,14 +916,18 @@ class CustomGameService:
         )
         if lobby_count == game.lobby_count:
             return game
-        if lobby_count == 2:
-            await self.lobbies.create(session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=1))
+        if lobby_count > game.lobby_count:
+            for lobby_index in range(game.lobby_count, lobby_count):
+                await self.lobbies.create(
+                    session, models.CustomGameLobby(custom_game_id=game.id, lobby_index=lobby_index)
+                )
         else:
-            lobby = await self.lobbies.get(session, game.id, 1)
-            if lobby is not None:
-                await self.lobbies.delete(session, lobby)
+            for lobby in await self.lobbies.list_for_game(session, game.id):
+                if lobby.lobby_index >= lobby_count:
+                    await self.lobbies.delete(session, lobby)
             for row in await self.roster.list_for_game(session, game.id):
-                row.lobby_pin = None
+                if row.lobby_pin is not None and row.lobby_pin >= lobby_count:
+                    row.lobby_pin = None
         game.lobby_count = lobby_count
         await session.flush()
         return game
@@ -1626,13 +1634,14 @@ class CustomGameService:
         actor_user_id: int,
         actor_is_superuser: bool = False,
     ) -> models.CustomGame:
-        """Rebuild the teams of ONE lobby (the default) or of both at once.
+        """Rebuild the teams of ONE lobby (the default) or of every lobby at once.
 
         For a one-lobby mix ``scope="lobby"`` is today's behaviour whole: the
-        non-benched pool minus whoever the other lobby is already playing goes to
-        the solver and lands in this lobby's document. ``scope="all"`` exists only
-        for a two-lobby mix: the pool is first cut into two equally strong halves
-        (``domain.mix_lobby_split``), then each half is solved by the same engine.
+        non-benched pool minus whoever the other lobbies are already playing goes
+        to the solver and lands in this lobby's document. ``scope="all"`` exists
+        only for a mix running two lobbies or more: the pool is first cut into
+        that many equally strong parts (``domain.mix_lobby_split``), then each
+        part is solved by the same engine.
         """
         game = await self._writable(
             session,
@@ -1646,15 +1655,15 @@ class CustomGameService:
         if not lineup:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
         if scope == "all":
-            await self._balance_both(session, game, lineup)
+            await self._balance_all(session, game, lineup)
         else:
             lobby = await self._lobby(session, game, lobby_index)
             candidates = await self._lobby_candidates(session, game, lineup, lobby_index)
             if not candidates:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
             await self._solve_lobby(session, game, lobby, candidates)
-            # Benching the overflow is the one-lobby answer. With two lobbies the
-            # players left out WAIT for the other one (§Derived state), and a
+            # Benching the overflow is the one-lobby answer. With more lobbies the
+            # players left out WAIT for the next one (§Derived state), and a
             # BENCHED row would drop out of its candidate pool too.
             if game.lobby_count < 2:
                 _apply_balance_result(roster, lobby.balance_result_json)
@@ -1662,13 +1671,13 @@ class CustomGameService:
         await session.flush()
         return game
 
-    async def _balance_both(
+    async def _balance_all(
         self,
         session: AsyncSession,
         game: models.CustomGame,
         lineup: Sequence[models.CustomGamePlayer],
     ) -> None:
-        """Cut the pool into two equal lobbies and solve each with its own run.
+        """Cut the pool into ``lobby_count`` equal lobbies and solve each with its own run.
 
         The splitter hands back exactly ``seats`` players per lobby, so the
         engine's own trim inside each run is a no-op and whoever did not make it
@@ -1685,9 +1694,9 @@ class CustomGameService:
         )
         role_mask = (await self._shape_for(session, game.workspace_id, host_config)).slots
         try:
-            split = split_into_lobbies(candidates, mask=role_mask)
+            split = split_into_lobbies(candidates, mask=role_mask, lobby_count=game.lobby_count)
         except LobbySplitError as exc:
-            # The machine-readable reason (not_enough_for_two_lobbies / too_many_must_play
+            # The machine-readable reason (not_enough_players / too_many_must_play
             # / too_many_pinned / roles_infeasible): the UI shows it as text, not a trace.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.code) from exc
         rows = {row.workspace_member_id: row for row in lineup}
@@ -1955,9 +1964,9 @@ class CustomGameService:
             # match will actually move. ``0`` is "off", and off prints nothing.
             points_per_win=await self.host_points_per_win(session, game.host_user_id) or None,
             board_url=self._board_url(board_url_base, game.id),
-            # Both lobbies post into the same channel, so a two-lobby mix says
+            # Every lobby posts into the same channel, so a multi-lobby mix says
             # which one this lineup is; a one-lobby mix has nothing to qualify.
-            lobby_label=LOBBY_LABELS[lobby_index] if game.lobby_count == 2 else None,
+            lobby_label=LOBBY_LETTERS[lobby_index] if game.lobby_count > 1 else None,
             image_filename=_LINEUP_IMAGE if image_b64 else None,
             # Everyone this matchup seats, so the lobby hears about it.
             mentions=await self.discord_mentions(
@@ -2607,9 +2616,9 @@ class CustomGameService:
             usable_count = len(candidates)
         else:
             usable_count = (len(candidates) // players_per_team) * players_per_team
-            if game.lobby_count == 2:
+            if game.lobby_count > 1:
                 # One lobby is exactly two teams; the rest of the pool is the
-                # other lobby's business.
+                # other lobbies' business.
                 usable_count = min(usable_count, 2 * players_per_team)
         return recommend_rotation(histories, usable_count=usable_count)
 

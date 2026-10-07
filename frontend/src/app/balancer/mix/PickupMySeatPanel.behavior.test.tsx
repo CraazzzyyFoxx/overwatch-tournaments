@@ -297,12 +297,12 @@ describe("PickupMySeatPanel roles", () => {
     expect(scope.textContent).toContain("unranked");
   });
 
-  it("says which lobby they are in, and only when the mix runs two", async () => {
+  it("says which lobby they are in, and only when the mix runs more than one", async () => {
     // One lobby: there is nothing to tell apart, so the panel stays quiet.
     expect((await mount(state())).textContent).not.toContain("inLobby");
 
-    const seated = await mount(state({ lobby_count: 2, seat: seat({ current_lobby: 1 }) }));
-    expect(seated.textContent).toContain("inLobby:B");
+    const seated = await mount(state({ lobby_count: 6, seat: seat({ current_lobby: 4 }) }));
+    expect(seated.textContent).toContain("inLobby:E");
 
     const waiting = await mount(state({ lobby_count: 2, seat: seat({ current_lobby: null }) }));
     expect(waiting.textContent).toContain("waitingSeat");

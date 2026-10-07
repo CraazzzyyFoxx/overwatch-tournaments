@@ -70,7 +70,7 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
   } as CustomGame;
 }
 
-function lobbyRow(lobbyIndex: 0 | 1, overrides: Record<string, unknown> = {}) {
+function lobbyRow(lobbyIndex: number, overrides: Record<string, unknown> = {}) {
   return {
     lobby_index: lobbyIndex,
     balance_result: null,
@@ -174,6 +174,22 @@ async function chooseMore(scope: ParentNode, item: string) {
   await click(menuItem(item));
 }
 
+// The lobby-count slider lives inside that same portalled menu. Radix commits a
+// keyboard step straight away, which is exactly the "on release" the pointer
+// drag produces, so arrow keys are how a test drives a commit.
+function lobbySlider() {
+  return document.querySelector('[role="slider"]');
+}
+
+async function stepLobbySlider(key: "ArrowLeft" | "ArrowRight") {
+  const thumb = lobbySlider();
+  if (!thumb) throw new Error("Expected the lobby slider");
+  await act(async () => {
+    thumb.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await tick();
+  });
+}
+
 describe("PickupMixHeader", () => {
   it("names the open mix with its id", async () => {
     const scope = await mount(game());
@@ -241,31 +257,45 @@ describe("PickupMixHeader", () => {
     expect(onOpenAccess).toHaveBeenCalledTimes(1);
   });
 
-  it("opens a second lobby from the more menu", async () => {
-    await chooseMore(await mount(game()), "count(2)");
+  it("opens another lobby straight from the slider, with nothing to confirm", async () => {
+    const scope = await mount(game());
+    await click(moreTrigger(scope));
+
+    await stepLobbySlider("ArrowRight");
 
     expect(onLobbyCountChange).toHaveBeenCalledWith(2);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it("does not re-send the lobby count the mix already runs", async () => {
-    await chooseMore(await mount(game()), "count(1)");
-
-    expect(onLobbyCountChange).not.toHaveBeenCalled();
-  });
-
-  it("asks before dropping a lobby, because its balance goes with it", async () => {
-    await chooseMore(
-      await mount(game({ lobby_count: 2, lobbies: [lobbyRow(0), lobbyRow(1)] })),
-      "count(1)"
+  it("asks before dropping lobbies, naming the ones that go with their matchups", async () => {
+    const scope = await mount(
+      game({ lobby_count: 4, lobbies: [0, 1, 2, 3].map((index) => lobbyRow(index)) })
     );
+    await click(moreTrigger(scope));
+
+    await stepLobbySlider("ArrowLeft");
+    await stepLobbySlider("ArrowLeft");
 
     expect(onLobbyCountChange).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "dropDescription"
+      "dropDescription(tab(C), tab(D))"
     );
 
-    await click(byName(document, "dropConfirm"));
-    expect(onLobbyCountChange).toHaveBeenCalledWith(1);
+    await click(byName(document, "dropConfirm(tab(C), tab(D))"));
+    expect(onLobbyCountChange).toHaveBeenCalledWith(2);
+  });
+
+  it("drops nothing when the confirm is cancelled, and snaps the slider back", async () => {
+    const scope = await mount(
+      game({ lobby_count: 4, lobbies: [0, 1, 2, 3].map((index) => lobbyRow(index)) })
+    );
+    await click(moreTrigger(scope));
+    await stepLobbySlider("ArrowLeft");
+
+    await click(byName(document, "cancel"));
+
+    expect(onLobbyCountChange).not.toHaveBeenCalled();
+    expect(lobbySlider()?.getAttribute("aria-valuenow")).toBe("4");
   });
 
   it("offers delete only to an admin, and only after confirming", async () => {

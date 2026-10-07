@@ -14,6 +14,7 @@ import discord
 from discord.utils import escape_markdown
 
 from shared.domain.discord_ui import ROLE_EMOJI, division_emoji, emoji
+from shared.domain.mix_lobby import LOBBY_LETTERS, MAX_LOBBIES
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
@@ -452,13 +453,16 @@ def mix_text(locale: Locale, state: Mapping[str, Any]) -> tuple[str, str]:
         participation = str(seat.get("participation") or "pool")
         badge = {"benched": "bench", "must_play": "starter"}.get(participation, "ok")
         status = [f"{emoji(badge)} {words.get(f'seat_{participation}', words['seat_pool'])}"]
-        # Only a two-lobby mix has a question here: which of the two games is
+        lobby_count = int(state.get("lobby_count") or 1)
+        # Only a multi-lobby mix has a question here: which of the games is
         # theirs, and whether a balance has seated them in one at all.
-        if int(state.get("lobby_count") or 1) > 1:
+        if lobby_count > 1:
             lobby = seat.get("current_lobby")
+            in_range = isinstance(lobby, int) and 0 <= lobby < min(lobby_count, MAX_LOBBIES)
+            letter = LOBBY_LETTERS[lobby] if in_range else ""
             status.append(
-                f"{emoji('lobby_a' if lobby == 0 else 'lobby_b')} {words['in_lobby'].format(letter='AB'[lobby])}"
-                if lobby in (0, 1)
+                f"{emoji(f'lobby_{letter.lower()}')} {words['in_lobby'].format(letter=letter)}"
+                if letter
                 else f"{emoji('clock')} {words['waiting_seat']}"
             )
         head.append(" · ".join(status))

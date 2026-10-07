@@ -116,7 +116,7 @@ async function mount(
     hasMix?: boolean;
     rotation?: RotationRecommendation[];
     applyingHints?: boolean;
-    lobbyCount?: 1 | 2;
+    lobbyCount?: number;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -550,20 +550,21 @@ describe("PickupLobbyPanel", () => {
     expect(onOpenPlayer).not.toHaveBeenCalled();
   });
 
-  it("says which lobby each player is in once the mix runs two", async () => {
+  it("says which lobby each player is in once the mix runs more than one", async () => {
     const scope = await mount(
       [
         row({ workspace_member_id: 1, battle_tag: "Aria#1111", current_lobby: 0 }),
         row({ workspace_member_id: 2, battle_tag: "Bex#2222", current_lobby: 1 }),
-        row({ workspace_member_id: 3, battle_tag: "Cy#3333", current_lobby: null }),
+        row({ workspace_member_id: 3, battle_tag: "Cy#3333", current_lobby: 5 }),
+        row({ workspace_member_id: 4, battle_tag: "Dez#4444", current_lobby: null }),
       ],
-      { lobbyCount: 2 },
+      { lobbyCount: 6 },
     );
 
     const badges = [...scope.querySelectorAll('[data-testid="lineup-lobby"]')].map((node) =>
       node.textContent?.trim(),
     );
-    expect(badges).toEqual(["A", "B", "waiting"]);
+    expect(badges).toEqual(["A", "B", "F", "waiting"]);
   });
 
   it("says nothing about lobbies while the mix runs one", async () => {

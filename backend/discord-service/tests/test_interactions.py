@@ -490,9 +490,9 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         no_seat_head, _details = copy.mix_text("ru", _mix_state(seat=None))
         self.assertIn("Вы не записаны на этот микс.", no_seat_head)
 
-    async def test_the_card_names_the_lobby_only_when_the_mix_runs_two(self) -> None:
-        """With two lobbies "you are signed up" is not enough: a player has to
-        know which of the two games is theirs, or whether they have a seat yet."""
+    async def test_the_card_names_the_lobby_only_when_the_mix_runs_several(self) -> None:
+        """With more than one lobby "you are signed up" is not enough: a player
+        has to know which of the games is theirs, or whether they have a seat yet."""
         dispatcher = _dispatcher()
 
         one_lobby = _reply_text(dispatcher.reply(Outcome("ok", _mix_state()), "mix.roles", "ru"))
@@ -501,6 +501,10 @@ class MixSelfSignupTests(IsolatedAsyncioTestCase):
         seated = _mix_state(lobby_count=2)
         seated["seat"]["current_lobby"] = 1
         self.assertIn("Лобби B", _reply_text(dispatcher.reply(Outcome("ok", seated), "mix.roles", "ru")))
+
+        third = _mix_state(lobby_count=4)
+        third["seat"]["current_lobby"] = 2
+        self.assertIn("Лобби C", _reply_text(dispatcher.reply(Outcome("ok", third), "mix.roles", "ru")))
 
         waiting = _mix_state(lobby_count=2)
         waiting["seat"]["current_lobby"] = None

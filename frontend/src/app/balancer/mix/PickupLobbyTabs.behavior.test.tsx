@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 //
-// The tabs are the only way a host reaches lobby B, so three things are
+// The tabs are the only way a host reaches a lobby past A, so three things are
 // load-bearing:
 //
 //  1. a one-lobby mix renders nothing at all -- the control would be a tab bar
@@ -76,7 +76,7 @@ function tick() {
   return promise;
 }
 
-async function mount(lobbies: CustomGameLobby[], activeLobby: 0 | 1 = 0) {
+async function mount(lobbies: CustomGameLobby[], activeLobby = 0) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   await act(async () => {

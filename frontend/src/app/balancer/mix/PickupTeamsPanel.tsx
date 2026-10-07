@@ -48,7 +48,7 @@ type PickupTeamsPanelProps = {
   /** The one lobby this panel is showing. `undefined` before the mix loads. */
   lobby: CustomGameLobby | undefined;
   /** Its index, which is also the offset of its team names (`lobbyIndex * 2 + team`). */
-  lobbyIndex: 0 | 1;
+  lobbyIndex: number;
   gameLoading: boolean;
   hasMix: boolean;
   balancing: boolean;
@@ -56,7 +56,7 @@ type PickupTeamsPanelProps = {
   /** Re-runs the solver for THIS lobby. The confirm for an unrecorded lineup is this panel's. */
   onBalance: () => void;
   shufflingAll?: boolean;
-  /** Re-splits the whole pool across both lobbies. Offered only while two run. */
+  /** Re-splits the whole pool across every lobby. Offered only while more than one runs. */
   onShuffleAll?: () => void;
   /**
    * Which of the solver's options is on screen — the lobby's own
@@ -68,7 +68,7 @@ type PickupTeamsPanelProps = {
   onVariantIndexChange: (index: number) => void;
   recordingOutcome: boolean;
   onRecordOutcome: (input: PickupRecordOutcomeInput) => void;
-  /** The permanent record of every match this mix has played, both lobbies, newest first. */
+  /** The permanent record of every match this mix has played, every lobby, newest first. */
   matches: CustomGameMatch[];
   /** The match whose undo is in flight, so only that row spins. */
   undoingMatchId?: number | null;
@@ -306,7 +306,7 @@ export function PickupTeamsPanel({
                   onBalance();
                 }}
               />
-              {onShuffleAll && lobbyCount === 2 ? (
+              {onShuffleAll && lobbyCount > 1 ? (
                 <>
                   <Button
                     type="button"

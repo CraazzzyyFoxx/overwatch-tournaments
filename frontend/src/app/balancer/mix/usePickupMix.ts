@@ -45,14 +45,14 @@ export type PickupTeamNameInput = {
 };
 
 export type PickupSwapSeatsInput = {
-  lobbyIndex: 0 | 1;
+  lobbyIndex: number;
   variantIndex: number;
   firstUuid: string;
   secondUuid: string;
 };
 
-/** Which lobby a balance run covers: one of them, or the whole pool split across both. */
-export type PickupBalanceInput = { scope: "lobby"; lobbyIndex: 0 | 1 } | { scope: "all" };
+/** Which lobby a balance run covers: one of them, or the whole pool split across all of them. */
+export type PickupBalanceInput = { scope: "lobby"; lobbyIndex: number } | { scope: "all" };
 
 /** The two fields a player owns on their own row. `roles: null` is `all_ranked`. */
 export type PickupMySeatInput = { roles: RoleCode[] | null; is_flex: boolean };
@@ -109,10 +109,10 @@ export function usePickupMix(
 
   // The lobby on screen. Page state, not server state: two co-hosts may well be
   // watching different lobbies of the same mix.
-  const [activeLobby, setActiveLobby] = useState<0 | 1>(0);
+  const [activeLobby, setActiveLobby] = useState(0);
   const lobbyCount = gameQuery.data?.lobby_count ?? 1;
-  // Dropping to one lobby while B is open would leave the page pointing at a
-  // lobby the mix no longer has. Reset during render, React's own pattern for
+  // Dropping lobbies while a later one is open would leave the page pointing at
+  // a lobby the mix no longer has. Reset during render, React's own pattern for
   // state derived from a prop that must follow it.
   if (activeLobby >= lobbyCount) {
     setActiveLobby(0);
@@ -252,7 +252,7 @@ export function usePickupMix(
       variantIndex,
       image,
     }: {
-      lobbyIndex: 0 | 1;
+      lobbyIndex: number;
       variantIndex: number;
       image: Blob | null;
     }) =>
@@ -354,7 +354,7 @@ export function usePickupMix(
 
   /** The map this lobby's next match is on -- rolled or picked; `null` clears it. */
   const setNextMap = useMutation({
-    mutationFn: ({ lobbyIndex, mapId }: { lobbyIndex: 0 | 1; mapId: number | null }) =>
+    mutationFn: ({ lobbyIndex, mapId }: { lobbyIndex: number; mapId: number | null }) =>
       customGameService.setNextMap(workspaceId, selectedGameId as number, lobbyIndex, mapId),
     onSuccess: applyGame,
     onError: (error) => notify.apiError(error),
@@ -371,14 +371,14 @@ export function usePickupMix(
    * trip behind the arrow keys.
    */
   const setVariantIndex = useMutation({
-    mutationFn: ({ lobbyIndex, variantIndex }: { lobbyIndex: 0 | 1; variantIndex: number }) =>
+    mutationFn: ({ lobbyIndex, variantIndex }: { lobbyIndex: number; variantIndex: number }) =>
       customGameService.setVariantIndex(
         workspaceId,
         selectedGameId as number,
         lobbyIndex,
         variantIndex,
       ),
-    onMutate: ({ lobbyIndex, variantIndex }: { lobbyIndex: 0 | 1; variantIndex: number }) => {
+    onMutate: ({ lobbyIndex, variantIndex }: { lobbyIndex: number; variantIndex: number }) => {
       const key = customGameKeys.one(workspaceId, selectedGameId ?? 0);
       const previous = queryClient.getQueryData<CustomGame>(key);
       if (previous != null) {
@@ -401,15 +401,16 @@ export function usePickupMix(
   });
 
   /**
-   * How many lobbies this mix runs. Going back to one drops lobby B's balance
-   * and every pin server-side, so the whole game is re-seeded from the response.
+   * How many lobbies this mix runs. Dropping lobbies throws their balances away
+   * and clears the pins onto them server-side, so the whole game is re-seeded
+   * from the response.
    */
   const setLobbyCount = useMutation({
-    mutationFn: (count: 1 | 2) =>
+    mutationFn: (count: number) =>
       customGameService.setLobbyCount(workspaceId, selectedGameId as number, count),
     onSuccess: (game) => {
       applyGame(game);
-      notify.success(game.lobby_count === 2 ? "Second lobby opened" : "Back to one lobby");
+      notify.success(`Now running ${game.lobby_count} ${game.lobby_count === 1 ? "lobby" : "lobbies"}`);
     },
     onError: (error) => notify.apiError(error),
   });

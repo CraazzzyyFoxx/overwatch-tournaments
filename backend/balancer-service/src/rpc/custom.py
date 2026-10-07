@@ -803,8 +803,8 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.balancer.custom.set_lobby_count")
     async def _set_lobby_count(data: dict, msg: RabbitMessage) -> dict:
-        """One lobby or two. Going back to one drops lobby B and every pin --
-        see ``CustomGameService.set_lobby_count``."""
+        """How many lobbies this mix runs (1..6). Shrinking drops the lobbies past
+        the new count and the pins that named them -- see ``CustomGameService.set_lobby_count``."""
 
         async def op(session: Any) -> Any:
             user = c.active_actor(data)

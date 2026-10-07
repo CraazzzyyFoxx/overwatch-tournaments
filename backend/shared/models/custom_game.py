@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db
+from shared.domain.mix_lobby import MAX_LOBBIES
 
 __all__ = (
     "CustomGame",
@@ -49,7 +50,7 @@ class CustomGame(db.TimeStampIntegerMixin):
             "self_signup IN ('closed', 'pool', 'benched')",
             name="ck_custom_game_self_signup",
         ),
-        CheckConstraint("lobby_count BETWEEN 1 AND 2", name="ck_custom_game_lobby_count"),
+        CheckConstraint(f"lobby_count BETWEEN 1 AND {MAX_LOBBIES}", name="ck_custom_game_lobby_count"),
         # (no per-mix points_per_win check: the knob is the host's, see above)
         {"schema": "balancer"},
     )
@@ -60,10 +61,10 @@ class CustomGame(db.TimeStampIntegerMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
-    # How many lobbies this mix runs at once. There are exactly this many
-    # ``custom_game_lobby`` rows: everything about one played match -- the
-    # matchup, the pager, the rolled map -- is a fact about a lobby, not about
-    # the mix, so two lobbies never fight over one column.
+    # How many lobbies this mix runs at once (1..``MAX_LOBBIES``). There are
+    # exactly this many ``custom_game_lobby`` rows: everything about one played
+    # match -- the matchup, the pager, the rolled map -- is a fact about a
+    # lobby, not about the mix, so two lobbies never fight over one column.
     lobby_count: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
     # Whether players may seat THEMSELVES here, and where that lands them:
     # closed | pool | benched. Every existing mix ships closed, so the feature
@@ -98,8 +99,8 @@ class CustomGameLobby(db.Base):
     """One of a mix's lobbies: its own matchup, pager, map and clock.
 
     A mix with one lobby is simply row ``lobby_index = 0``, so there is one code
-    path for one and for two. Membership is NOT stored: who is in a lobby right
-    now is derived from the seats of its selected variant, which keeps the
+    path for one lobby and for six. Membership is NOT stored: who is in a lobby
+    right now is derived from the seats of its selected variant, which keeps the
     matchup the single source of truth instead of a column to re-sync after
     every balance and every swap.
 
@@ -110,7 +111,7 @@ class CustomGameLobby(db.Base):
 
     __tablename__ = "custom_game_lobby"
     __table_args__ = (
-        CheckConstraint("lobby_index BETWEEN 0 AND 1", name="ck_custom_game_lobby_index"),
+        CheckConstraint(f"lobby_index BETWEEN 0 AND {MAX_LOBBIES - 1}", name="ck_custom_game_lobby_index"),
         {"schema": "balancer"},
     )
 
@@ -143,7 +144,7 @@ class CustomGamePlayer(db.TimeStampIntegerMixin):
             "role_selection_mode IN ('all_ranked', 'explicit')",
             name="ck_custom_game_player_role_selection_mode",
         ),
-        CheckConstraint("lobby_pin BETWEEN 0 AND 1", name="ck_custom_game_player_lobby_pin"),
+        CheckConstraint(f"lobby_pin BETWEEN 0 AND {MAX_LOBBIES - 1}", name="ck_custom_game_player_lobby_pin"),
         {"schema": "balancer"},
     )
 

@@ -82,11 +82,12 @@ def test_an_open_signup_card_names_the_mix_its_host_and_where_a_joiner_lands() -
     assert card.accent_color == 0x14B8A6
 
 
-def test_a_benched_signup_says_the_bench_and_two_lobbies_say_so_too() -> None:
+def test_a_benched_signup_says_the_bench_and_marks_every_lobby() -> None:
     card = _signup(self_signup="benched", lobby_count=2)
 
     assert ":owt_bench: сначала на скамейку" in card.text
     assert ":owt_lobby_a::owt_lobby_b: 2 лобби" in card.text
+    assert ":owt_lobby_a::owt_lobby_b::owt_lobby_c: 3 лобби" in _signup(lobby_count=3).text
 
 
 def test_the_card_counts_the_roster_by_first_role_and_calls_the_rest_any_role() -> None:

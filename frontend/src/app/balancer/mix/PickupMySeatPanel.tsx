@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { LogIn, LogOut } from "lucide-react";
 
 import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor";
-import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
+import { CAPTION_CLASS, EYEBROW_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS, type RoleCode } from "@/lib/roster/roles";
@@ -136,12 +136,12 @@ export function PickupMySeatPanel({
           {seat == null ? t("seat.none") : t(`seat.${seat.participation}`)}
         </span>
         {state.lobby_count > 1 && seat != null ? (
-          // Two lobbies means two games at once: "signed up" no longer says
-          // which one is theirs, or whether a balance has seated them at all.
+          // Several lobbies mean several games at once: "signed up" no longer
+          // says which one is theirs, or whether a balance has seated them.
           <span className={CAPTION_CLASS}>
             {seat.current_lobby == null
               ? t("waitingSeat")
-              : t("inLobby", { letter: "AB"[seat.current_lobby] })}
+              : t("inLobby", { letter: lobbyLetter(seat.current_lobby) })}
           </span>
         ) : null}
 

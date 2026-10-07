@@ -85,6 +85,10 @@ const ICONS = {
 const LETTERS = {
   lobby_a: ["M8.5 17 12 7l3.5 10M9.7 13.5h4.6", C.blue],
   lobby_b: ["M9.5 7v10h3.25a2.5 2.5 0 0 0 0-5H9.5h2.75a2.5 2.5 0 0 0 0-5Z", C.violet],
+  lobby_c: ["M15 9a4 4 0 1 0 0 6", C.teal],
+  lobby_d: ["M9.5 17V7h2a5 5 0 0 1 0 10H9.5", C.amber],
+  lobby_e: ["M15 7H9.5v10H15M9.5 12H14", C.rose],
+  lobby_f: ["M15 7H9.5v10M9.5 12H14", C.emerald],
 };
 
 const ROLES = {

@@ -235,27 +235,28 @@ Strategies: `best_fit` (default), `best_available`, `role_need`. Fit is delibera
 
 `MixStatus`: draft / balanced / completed / cancelled. Participation: `must_play` / `pool` / `benched`.
 
-**Lobbies.** A mix runs `lobby_count` lobbies (1 or 2, CHECK). Every per-match fact lives on
-`balancer.custom_game_lobby` keyed `(custom_game_id, lobby_index)`: `balance_result_json`,
+**Lobbies.** A mix runs `lobby_count` lobbies (1..6, CHECK). Every per-match fact lives on
+`balancer.custom_game_lobby` keyed `(custom_game_id, lobby_index)` (0..5): `balance_result_json`,
 `balance_result_version`, `selected_variant_index`, `next_map_id`, `balanced_at`. The mix itself
 carries none of them. Team names stay in `CustomGameTeamName` at the global index
-`lobby_index * 2 + team` (A: 0-1, B: 2-3).
+`lobby_index * 2 + team` (A: 0-1, B: 2-3, …, F: 10-11).
 
 Lobby membership is **not stored**: a player's `current_lobby` is derived from the selected variant
 of each lobby, `null` = waiting. Only the host's tie is stored — `custom_game_player.lobby_pin`
-(422 while `lobby_count = 1`). `set_lobby_count(1)` drops lobby B's row and every pin; its recorded
-matches stay.
+(422 unless `lobby_pin < lobby_count`). `set_lobby_count(n)` opens the lobbies missing below `n`
+and, going down, drops every lobby row with `lobby_index >= n` together with the pins that named
+them; pins to surviving lobbies and recorded matches stay.
 
 `balance` takes `{scope: "lobby", lobby_index} | {scope: "all"}`. Scope `lobby` excludes players
-seated in the other lobby and players pinned to it, then runs the unchanged `run_mix_balance` path.
-Scope `all` needs `lobby_count = 2` (422 `single_lobby`), splits the pool with
-`domain/mix_lobby_split.py` (422 `not_enough_for_two_lobbies` / `too_many_pinned` /
-`too_many_must_play` — more `must_play` than both lobbies have seats — / `roles_infeasible`) and
-solves each lobby. `set_variant_index` refuses a variant that would seat somebody the other lobby
+seated in another lobby and players pinned to one, then runs the unchanged `run_mix_balance` path.
+Scope `all` needs `lobby_count >= 2` (422 `single_lobby`), splits the pool into `lobby_count`
+equally strong parts with `domain/mix_lobby_split.py` (422 `not_enough_players` / `too_many_pinned`
+/ `too_many_must_play` — more `must_play` than all lobbies have seats — / `roles_infeasible`) and
+solves each lobby. `set_variant_index` refuses a variant that would seat somebody another lobby
 already seated: 409 `seat_conflict`.
 
 `record_outcome` stamps `casual.match.lobby_index` and writes one `casual.match_busy_player` row per
-member seated in the other lobby's selected variant. `undo_match` rolls back the newest match **of
+member seated in another lobby's selected variant. `undo_match` rolls back the newest match **of
 that match's lobby** (`newest_id_for_lobby`), not of the mix.
 
 Rank movement on `record_outcome` follows the **host's** `user_config.rating_mode`: `points` moves

@@ -380,11 +380,11 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             'With `scope="lobby"` (the default) balances the non-benched lineup of ONE lobby '
-            "(`lobby_index`, default 0) -- everyone the other lobby is already playing or holds a pin "
-            'on is left out. With `scope="all"` it splits the whole pool into two equally strong '
-            "lobbies and balances both. Ranks come from the host's own book above the workspace canon. "
-            "422 when the lineup is empty, a seated player has no ranked role, the mix has one lobby "
-            "(`single_lobby`) or the pool cannot be split (`not_enough_for_two_lobbies`, "
+            "(`lobby_index`, default 0) -- everyone another lobby is already playing or holds a pin "
+            'on is left out. With `scope="all"` it splits the whole pool into `lobby_count` equally '
+            "strong lobbies and balances them all. Ranks come from the host's own book above the "
+            "workspace canon. 422 when the lineup is empty, a seated player has no ranked role, the "
+            "mix has one lobby (`single_lobby`) or the pool cannot be split (`not_enough_players`, "
             "`too_many_must_play`, `too_many_pinned`, `roles_infeasible`)."
         ),
     },
@@ -410,7 +410,7 @@ DOCS: dict[str, dict] = {
             "Pages one lobby to one of the balance options its last run produced, for every viewer at "
             "once -- the option on screen is a fact about the lobby, not about one browser. "
             "404 when the index points past the stored options, and 409 seat_conflict when the option "
-            "would seat somebody the mix's other lobby has already put on the floor. Re-balancing "
+            "would seat somebody another of the mix's lobbies has already put on the floor. Re-balancing "
             "resets it to the first option."
         ),
     },
@@ -420,7 +420,7 @@ DOCS: dict[str, dict] = {
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
             "Queues an embed of one balance option's teams, the next map and the points at stake "
             "to the workspace-wide mix channel and returns immediately -- delivery is the bot's, "
-            "and nothing about the mix changes. A two-lobby mix names the lobby in the embed title and "
+            "and nothing about the mix changes. A multi-lobby mix names the lobby in the embed title and "
             "numbers the match within that lobby. 409 when the workspace has "
             "no mix channel configured and 404 when the balance option is missing."
         ),
@@ -486,7 +486,7 @@ DOCS: dict[str, dict] = {
             "mix ranker when the host's rating_mode is 'ranker' -- advancing the workspace's hidden "
             "ratings, and redeeming every "
             "seat's must_play pin back to the pool. The match is stamped with the lobby that played it "
-            "and with whoever was playing the other lobby at that moment, whom rotation then counts as "
+            "and with whoever was playing another lobby at that moment, whom rotation then counts as "
             "neither played nor sat out. Repeatable until the mix is closed."
         ),
     },
@@ -511,8 +511,8 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: public; no authentication required. Recommends who is owed the next seat and "
             "who should sit out, computed from this mix's own match history, read-only. The optional "
-            "lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in the "
-            "other lobby or pinned to it is left out -- and splits at that lobby's seat count."
+            "lobby_index query parameter ranks the candidates of one lobby -- whoever is seated in "
+            "another lobby or pinned to one is left out -- and splits at that lobby's seat count."
         ),
     },
     "rpc.balancer.custom.stats": {
@@ -537,10 +537,10 @@ DOCS: dict[str, dict] = {
         "summary": "Set custom game lobby count",
         "description": (
             "Permission: workspace membership plus being the mix's host or co-host (or a superuser). "
-            "Runs the mix as one lobby or two. Going to two opens an empty second lobby, leaving the "
-            "first untouched; going back to one deletes the second lobby together with its stored "
-            "matchup and clears every player's lobby pin. Matches already recorded for the second "
-            "lobby stay in the history and in the statistics."
+            "Runs the mix as 1..6 lobbies. Growing opens the new lobbies empty, leaving the running "
+            "ones untouched; shrinking deletes every lobby past the new count together with its "
+            "stored matchup and clears the pins that named them. Matches already recorded for a "
+            "deleted lobby stay in the history and in the statistics."
         ),
     },
     "rpc.balancer.custom.rename": {
