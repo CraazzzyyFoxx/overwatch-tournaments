@@ -842,13 +842,39 @@
   --aqt-data: var(--font-inter), Inter, system-ui, sans-serif;
   /* The role spectrum is the single sanctioned multi-hue accent (the profile
      header's base hairline, role-distribution bars) — everywhere else, one
-     teal leads. The glow survives only on the coverless tournament card. */
+     teal leads. --aqt-hero-glow is the coverless tournament card's glow; the
+     page hero draws its own, tinted per page (HeroFrame `tint`). */
   --aqt-spectrum: linear-gradient(90deg, var(--aqt-tank), var(--aqt-damage), var(--aqt-support));
   --aqt-hero-glow: radial-gradient(
     ellipse at 30% 45%,
     color-mix(in srgb, var(--aqt-teal) 10%, transparent),
     transparent 60%
   );
+}
+
+/* Page-hero glow (HeroFrame): one soft bloom of the page's colour
+   (`--aqt-hero-tint`, teal by default, main-role hue on a profile) rising from
+   the bottom-left corner. The anchor and strength are set by contrast, not
+   taste: `--aqt-fg-faint` labels sit at 5.1:1 on bare `--aqt-bg`, and every
+   hero puts them top-left (eyebrows) or, once the columns stack below `lg`,
+   along the bottom (stat labels). Bottom-left at 26% clears AA on every
+   desktop hero; stacked layouts drop to 10%. */
+.aqt-hero-tint {
+  background: radial-gradient(
+    50% 140% at 0% 100%,
+    color-mix(in srgb, var(--aqt-hero-tint) 10%, transparent),
+    transparent 70%
+  );
+}
+
+@media (min-width: 1024px) {
+  .aqt-hero-tint {
+    background: radial-gradient(
+      50% 140% at 0% 100%,
+      color-mix(in srgb, var(--aqt-hero-tint) 26%, transparent),
+      transparent 70%
+    );
+  }
 }
 
 @keyframes aqtPulse {

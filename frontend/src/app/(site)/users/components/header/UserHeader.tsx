@@ -1,13 +1,12 @@
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Check } from "lucide-react";
 import { User, UserProfile } from "@/types/user.types";
 import { getSocialProviderConfig, socialProfileUrl, sortSocialAccounts } from "@/lib/social/providers";
 import { playerRoleTint } from "@/lib/roster/player-role";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { getPlayerImage } from "@/lib/player";
 import DivisionIcon from "@/components/DivisionIcon";
-import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { FormStreak, ProfileStat, type FormResult } from "@/app/(site)/users/components/shared/atoms";
 import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
 import userService from "@/services/user.service";
@@ -88,7 +87,7 @@ const UserHeader = async ({ profile, user, scope }: UserHeaderProps) => {
   const roleTint = playerRoleTint(primaryRole?.role);
 
   return (
-    <HeroFrame className="aqt-player" variant="profile">
+    <HeroFrame className="aqt-player" variant="profile" tint={roleTint ? `var(--aqt-${roleTint})` : undefined}>
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-6 px-5 py-5 md:gap-x-6 md:px-8 md:py-7 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-x-10">
         <div className="relative size-[72px] shrink-0 md:size-[104px]">
           <div className="relative h-full w-full overflow-hidden rounded-[14px] border border-[color:var(--aqt-border-2)] md:rounded-[18px]">
@@ -122,31 +121,25 @@ const UserHeader = async ({ profile, user, scope }: UserHeaderProps) => {
               </span>
             ) : null}
           </h1>
-          {primaryRole ? (
-            <p className="m-0 inline-flex items-center gap-1.5 text-caption text-[color:var(--aqt-fg-muted)]">
-              <PlayerRoleIcon
-                role={primaryRole.role}
-                size={14}
-                color={`var(--aqt-${roleTint ?? "damage"})`}
-                decorative
-              />
-              {t("users.profile.header.mainRole", { role: primaryRole.role })}
-            </p>
-          ) : null}
           {user.social_accounts.length > 0 ? (
             <ul className="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0">
               {sortSocialAccounts(user.social_accounts).map((account) => {
                 const url = socialProfileUrl(account);
+                const providerLabel = getSocialProviderConfig(account.provider).label;
+                const verifiedLabel = t("registration.accounts.verified");
                 const chip = (
                   <>
                     <SocialIcon provider={account.provider} size={12} decorative />
                     <span className="truncate">{account.username}</span>
+                    {account.is_verified ? (
+                      <Check size={12} aria-label={verifiedLabel} className="shrink-0 text-[color:var(--aqt-teal)]" />
+                    ) : null}
                   </>
                 );
                 const chipClass =
                   "inline-flex max-w-[16rem] items-center gap-1.5 rounded-[7px] border border-[color:var(--aqt-border-2)] px-2 py-1 text-caption font-medium text-[color:var(--aqt-fg-muted)]";
                 return (
-                  <li key={account.id} title={getSocialProviderConfig(account.provider).label}>
+                  <li key={account.id} title={account.is_verified ? `${providerLabel} · ${verifiedLabel}` : providerLabel}>
                     {url ? (
                       <a
                         href={url}

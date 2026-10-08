@@ -4132,7 +4132,6 @@
       "header": {
         "avatarAlt": "Аватар {name}",
         "divisionTitle": "{role} · Див {division}",
-        "mainRole": "Основная роль: {role}",
         "formLast": "Форма · последние {count}",
         "noRecentMatches": "Нет недавних матчей"
       },
@@ -4332,10 +4331,10 @@
           "dmgDelta": "Δ урона"
         }
       }
+    },
     "tournamentPicker": {
       "all": "Все турниры",
       "search": "Поиск турнира…"
-    },
     },
     "heroes": {
       "searchStats": "Поиск по показателям…",

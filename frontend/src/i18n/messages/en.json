@@ -4132,7 +4132,6 @@
       "header": {
         "avatarAlt": "{name} avatar",
         "divisionTitle": "{role} · Div {division}",
-        "mainRole": "{role} main",
         "formLast": "Form · last {count}",
         "noRecentMatches": "No recent matches"
       },
@@ -4332,10 +4331,10 @@
           "dmgDelta": "Δ Damage"
         }
       }
+    },
     "tournamentPicker": {
       "all": "All tournaments",
       "search": "Search tournament…"
-    },
     },
     "heroes": {
       "searchStats": "Search stats…",

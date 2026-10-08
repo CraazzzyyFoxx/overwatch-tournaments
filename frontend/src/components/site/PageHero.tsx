@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
  * Editorial-Tactical page hero (design-book / OWT artifact).
  *
  * The single restrained hero used across every `(site)` page: a plain frame,
- * a 2px teal top hairline and a mixed-case Onest title. No grid, no glow, no
- * gradient text — the frame carries the content, not decoration.
+ * a 2px teal top hairline, ONE soft glow in the page's colour, and a
+ * mixed-case Onest title. No grid, no gradient text.
  *
  * Server-safe: presentational only, no hooks — usable from RSC and client
  * components alike. Colours come from the global `--aqt-*` tokens.
@@ -33,6 +33,12 @@ interface HeroFrameProps {
    * multi-hue spectrum reads as identity rather than decoration.
    */
   variant?: "default" | "profile";
+  /**
+   * Colour of the soft corner glow (any CSS colour). Defaults to teal; the
+   * player profile passes its main-role hue. Ignored when `coverUrl` is set —
+   * the cover already gives the header its colour.
+   */
+  tint?: string;
   /**
    * Optional banner image behind the hero (a tournament cover) — rendered
    * BLURRED and full-bleed, as the tournament's colour field, not as a picture.
@@ -89,6 +95,7 @@ export function HeroFrame({
   variant = "default",
   coverUrl,
   coverFade,
+  tint = "var(--aqt-teal)",
 }: Readonly<HeroFrameProps>) {
   const isProfile = variant === "profile";
   const fadeRight = Boolean(coverUrl) && coverFade === "right";
@@ -169,7 +176,13 @@ export function HeroFrame({
             filter: `blur(${COVER_BLUR_PX}px) saturate(2.2)`,
           }}
         />
-      ) : null}
+      ) : (
+        <span
+          aria-hidden
+          className="aqt-hero-tint pointer-events-none absolute inset-0"
+          style={{ "--aqt-hero-tint": tint } as React.CSSProperties}
+        />
+      )}
       <div className="relative z-[1]">{children}</div>
     </section>
   );

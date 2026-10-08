@@ -18,7 +18,7 @@ import { stageProgress } from "./tournaments-helpers";
  * Deliberately not a grey rectangle: an organizer who never uploaded an image
  * is the common case, so the placeholder has to be a first-class surface — a
  * teal hairline, a radially masked grid and one restrained glow (the page
- * hero dropped these; the coverless card is now their only user), so it
+ * hero dropped the grid; this card is now its only user), so it
  * reads as a designed surface rather than as a broken image.
  */
 const COVER_FALLBACK = (
