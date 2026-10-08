@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Check, Pencil } from "lucide-react";
+import { Check, Pencil, Split, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -35,6 +35,10 @@ import type { DiscordVoicePermission } from "@/types/discord.types";
 
 /** Radix refuses an empty item value, and a channel id is always digits. */
 const NONE = "none";
+
+/** A lobby row's own move/return: quiet chrome, so the voices stay the row's subject. */
+const ROW_ACTION_CLASS =
+  "border border-[color:var(--aqt-border)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
 
 type PickupVoicePanelProps = {
   game: CustomGame;
@@ -338,24 +342,28 @@ export function PickupVoicePanel({
                       <VoiceValue key={team} prefix={prefix} value={value} channels={options.team} busy={busy} />
                     );
                   })}
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <Button
                       type="button"
+                      size="sm"
                       // With several lobbies the footer's "every lobby" is the main action.
-                      variant={multi ? "outline" : "default"}
-                      className="h-9 shrink-0"
+                      variant={multi ? "ghost" : "default"}
+                      className={cn("h-8 shrink-0 gap-1.5 px-2.5", multi && ROW_ACTION_CLASS)}
                       disabled={running || !canMove}
                       onClick={() => onMove(lobby.lobby_index)}
                     >
+                      <Split className="size-3.5" />
                       {t("move")}
                     </Button>
                     <Button
                       type="button"
-                      variant="outline"
-                      className="h-9 shrink-0"
+                      size="sm"
+                      variant="ghost"
+                      className={cn("h-8 shrink-0 gap-1.5 px-2.5", ROW_ACTION_CLASS)}
                       disabled={running || !canReturn}
                       onClick={() => onReturn(lobby.lobby_index)}
                     >
+                      <Undo2 className="size-3.5" />
                       {t("return")}
                     </Button>
                   </div>
