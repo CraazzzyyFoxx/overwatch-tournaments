@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import userService from "@/services/user.service";
 import { UserMapsSummary } from "@/types/user.types";
 import { CardSurface, ProfileStat } from "@/app/(site)/users/components/shared/atoms";
-import { type SearchableImageOption } from "@/components/ui/searchable-image-select";
 import MapRow from "@/app/(site)/users/components/maps/MapRow";
 import MapsFilters from "@/app/(site)/users/components/maps/MapsFilters";
 import { DataPagination } from "@/components/ui/data-pagination";
@@ -53,11 +52,6 @@ const MapsView = ({ userId, scope }: Props) => {
     queryFn: () => userService.getUserTournaments(userId, scope === "all" ? "all" : undefined),
     staleTime: 5 * 60 * 1000
   });
-
-  const tournamentOptions = useMemo<SearchableImageOption[]>(
-    () => (tournamentsQuery.data ?? []).map((t) => ({ value: String(t.id), label: t.name })),
-    [tournamentsQuery.data]
-  );
 
   const mapsQuery = useQuery({
     queryKey: userQueryKeys.maps(userId, debouncedSearch, minCount, tournamentId, scope),
@@ -237,7 +231,7 @@ const MapsView = ({ userId, scope }: Props) => {
       <MapsFilters
         tournamentId={tournamentId}
         onTournamentIdChange={setTournamentId}
-        tournamentOptions={tournamentOptions}
+        tournaments={tournamentsQuery.data ?? []}
         tournamentsLoading={tournamentsQuery.isLoading}
         tournamentsError={tournamentsQuery.isError}
         minCount={minCount}

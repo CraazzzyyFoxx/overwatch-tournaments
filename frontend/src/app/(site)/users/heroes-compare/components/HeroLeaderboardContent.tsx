@@ -79,15 +79,6 @@ const HeroLeaderboardContent = ({ scope }: Readonly<{ scope: StatsScope }>) => {
     [heroesQuery.data]
   );
 
-  const tournamentOptions: SearchableImageOption[] = useMemo(
-    () =>
-      (tournamentsQuery.data?.results ?? []).map((t) => ({
-        value: String(t.id),
-        label: t.name,
-      })),
-    [tournamentsQuery.data]
-  );
-
   const selectedHero = useMemo(
     () => (heroesQuery.data ?? []).find((h) => h.id === heroId),
     [heroesQuery.data, heroId]
@@ -165,13 +156,13 @@ const HeroLeaderboardContent = ({ scope }: Readonly<{ scope: StatsScope }>) => {
         heroId={heroId}
         tournamentId={tournamentId}
         heroOptions={heroOptions}
-        tournamentOptions={tournamentOptions}
+        tournaments={tournamentsQuery.data?.results ?? []}
         isLoadingHeroes={heroesQuery.isLoading}
         isErrorHeroes={heroesQuery.isError}
         isLoadingTournaments={tournamentsQuery.isLoading}
         isErrorTournaments={tournamentsQuery.isError}
         onHeroChange={(v) => updateParams({ hero_id: v ? Number(v) : undefined })}
-        onTournamentChange={(v) => updateParams({ tournament_id: v ? Number(v) : undefined })}
+        onTournamentChange={(id) => updateParams({ tournament_id: id })}
         onResetColumns={handleResetColumns}
         resetDisabled={heroId === undefined}
       />

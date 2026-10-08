@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Hourglass } from "lucide-react";
+import { ArrowUpRight, Hourglass } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
@@ -13,14 +13,7 @@ import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY, playerRoleTint } from "@/lib/roster/player-role";
 import { tournamentHref } from "@/lib/tournament/url";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { TournamentCombobox } from "@/app/(site)/users/components/shared/TournamentCombobox";
 import LobbyLeaderboardModal from "@/app/(site)/users/components/overview/LobbyLeaderboardModal";
 
 interface Props {
@@ -47,6 +40,11 @@ const formatPercent = (value: number | null | undefined, digits = 0) => {
 // Role → its `--aqt-*` hue. Flex is a real roster role, so it gets its own
 // token instead of falling through to damage.
 const roleColor = (role: string) => `var(--aqt-${playerRoleTint(role) ?? "damage"})`;
+
+// The card title IS the tournament switcher: heading type, no box. Focus is
+// shown by colour + underline because the title row clips outside rings.
+const HEADING_TRIGGER =
+  "h-auto w-auto min-w-0 max-w-full justify-start gap-1.5 rounded-sm border-0 bg-transparent p-0 font-semibold text-[length:inherit] text-[color:var(--aqt-fg)] shadow-none hover:bg-transparent hover:text-[color:var(--aqt-teal)] focus-visible:ring-0 focus-visible:text-[color:var(--aqt-teal)] focus-visible:underline focus-visible:underline-offset-2 data-[state=open]:text-[color:var(--aqt-teal)]";
 
 // Map result → its sanctioned result hue and its always-present letter/title
 // (design-book: a result never reads by colour alone).
@@ -141,11 +139,16 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
           ...Array.from({ length: Math.max(0, mapsLost) }, () => "loss" as const)
         ];
 
-  const onSelectTournament = (value: string) => {
+  const onSelectTournament = (id: number | undefined) => {
+    if (id === undefined) return;
     const nextSearchParams = new URLSearchParams(searchParams || undefined);
-    nextSearchParams.set("tournamentId", value);
+    nextSearchParams.set("tournamentId", String(id));
     router.push(`${pathname}?${nextSearchParams.toString()}`);
   };
+  // A deep-linked tournament outside the profile list must still name itself.
+  const switcherTournaments = tournaments.some((tour) => tour.id === tournament.id)
+    ? tournaments
+    : [tournament, ...tournaments];
 
   // `stats` is a partial map keyed by backend LogStatsName — only the ranked
   // tournament stats the backend computes are present. Access by string key and
@@ -200,30 +203,24 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
     <>
     <CardSurface
       title={
-        <HoverPrefetchLink href={tournamentHref(tournament.id)} className="hover:text-[color:var(--aqt-teal)]">
-          {tournament.name}
-        </HoverPrefetchLink>
-      }
-      action={
-        tournaments.length > 0 ? (
-          <Select value={String(tournament.id)} onValueChange={onSelectTournament}>
-            <SelectTrigger
-              aria-label={t("users.overview.lastTournament.selectTournament")}
-              className="h-7 w-44 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-caption"
-            >
-              <SelectValue placeholder={t("users.overview.lastTournament.selectTournament")} />
-            </SelectTrigger>
-            <SelectContent className="liquid-glass-panel max-h-[min(var(--radix-select-content-available-height),20rem)]">
-              <SelectGroup>
-                {tournaments.map((tour) => (
-                  <SelectItem key={tour.id} value={String(tour.id)} className="text-caption">
-                    {tour.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        ) : null
+        <span className="flex min-w-0 items-center gap-1">
+          <TournamentCombobox
+            tournaments={switcherTournaments}
+            value={tournament.id}
+            onValueChange={onSelectTournament}
+            clearable={false}
+            ariaLabel={tournament.name}
+            triggerClassName={HEADING_TRIGGER}
+          />
+          <HoverPrefetchLink
+            href={tournamentHref(tournament.id)}
+            aria-label={t("users.overview.lastTournament.openTournament")}
+            title={t("users.overview.lastTournament.openTournament")}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-[color:var(--aqt-fg-dim)] outline-none transition-colors hover:bg-[hsl(0_0%_100%/0.04)] hover:text-[color:var(--aqt-teal)] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+          >
+            <ArrowUpRight aria-hidden className="size-4" />
+          </HoverPrefetchLink>
+        </span>
       }
     >
       <div className="flex flex-col gap-3.5">

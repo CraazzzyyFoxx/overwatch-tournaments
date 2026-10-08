@@ -13,6 +13,7 @@ import UserSearchCombobox from "@/app/(site)/users/compare/components/UserSearch
 import SearchableImageSelect, {
   type SearchableImageOption,
 } from "@/components/ui/searchable-image-select";
+import { TournamentCombobox } from "@/app/(site)/users/components/shared/TournamentCombobox";
 import { Hero } from "@/types/hero.types";
 import { MapRead } from "@/types/map.types";
 import { Tournament } from "@/types/tournament.types";
@@ -95,16 +96,6 @@ const CompareFiltersPanel = ({
         imageSrc: getMapIconSrc(map),
       })),
     [maps]
-  );
-
-  const tournamentOptions: SearchableImageOption[] = useMemo(
-    () =>
-      tournaments.map((t) => ({
-        value: String(t.id),
-        label: t.name,
-        imageSrc: null,
-      })),
-    [tournaments]
   );
 
   const isHeroScope = scope === "hero";
@@ -282,14 +273,10 @@ const CompareFiltersPanel = ({
 
           <div className="space-y-1">
             <div className="text-xs font-semibold text-[color:var(--aqt-fg-muted)]">{t("common.tournament")}</div>
-            <SearchableImageSelect
-              value={tournamentId ? String(tournamentId) : undefined}
-              onValueChange={(val) =>
-                updateParams({ tournament_id: val ? parseOptionalInt(val) : undefined })
-              }
-              options={tournamentOptions}
-              placeholder={t("users.compare.filters.allTournaments")}
-              searchPlaceholder={t("users.compare.filters.searchTournament")}
+            <TournamentCombobox
+              tournaments={tournaments}
+              value={tournamentId}
+              onValueChange={(id) => updateParams({ tournament_id: id })}
               isLoading={isTournamentsLoading}
               disabled={isTournamentsLoading || isTournamentsError}
             />

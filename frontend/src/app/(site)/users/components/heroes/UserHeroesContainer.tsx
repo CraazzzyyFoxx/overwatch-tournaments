@@ -1,13 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 
 import userService from "@/services/user.service";
-import SearchableImageSelect, {
-  type SearchableImageOption
-} from "@/components/ui/searchable-image-select";
+import { TournamentCombobox } from "@/app/(site)/users/components/shared/TournamentCombobox";
 import HeroesView from "@/app/(site)/users/components/heroes/HeroesView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { userQueryKeys } from "@/lib/users/query-keys";
@@ -19,7 +16,6 @@ interface UserHeroesContainerProps {
 }
 
 const UserHeroesContainer = ({ userId, scope }: UserHeroesContainerProps) => {
-  const t = useTranslations();
   const [tournamentId, setTournamentId] = useState<number | undefined>(undefined);
 
   const tournamentsQuery = useQuery({
@@ -42,13 +38,6 @@ const UserHeroesContainer = ({ userId, scope }: UserHeroesContainerProps) => {
     staleTime: 5 * 60 * 1000
   });
 
-  const tournamentOptions = useMemo<SearchableImageOption[]>(() => {
-    return (tournamentsQuery.data ?? []).map((t) => ({
-      value: String(t.id),
-      label: t.name
-    }));
-  }, [tournamentsQuery.data]);
-
   if (heroesQuery.isLoading) {
     return (
       <div className="aqt-player flex flex-col gap-3.5">
@@ -69,12 +58,10 @@ const UserHeroesContainer = ({ userId, scope }: UserHeroesContainerProps) => {
 
   const filterSlot = (
     <div className="w-60">
-      <SearchableImageSelect
-        value={tournamentId ? String(tournamentId) : undefined}
-        onValueChange={(val) => setTournamentId(val ? Number(val) : undefined)}
-        options={tournamentOptions}
-        placeholder={t("users.heroes.allTournaments")}
-        searchPlaceholder={t("users.heroes.searchTournament")}
+      <TournamentCombobox
+        tournaments={tournamentsQuery.data ?? []}
+        value={tournamentId}
+        onValueChange={setTournamentId}
         isLoading={tournamentsQuery.isLoading}
         disabled={tournamentsQuery.isLoading || tournamentsQuery.isError}
       />

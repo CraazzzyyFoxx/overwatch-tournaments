@@ -26,16 +26,18 @@ import { AchievementDetailDialog } from "@/app/(site)/users/components/achieveme
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
 import { CardSurface, ProfileStat } from "@/app/(site)/users/components/shared/atoms";
+import { TournamentCombobox } from "@/app/(site)/users/components/shared/TournamentCombobox";
 
 const TOURNAMENT_QUERY_KEY = "achievementTournamentId";
 
 interface Props {
   achievements: AchievementRarity[];
   tournaments?: UserTournamentSummary[];
-  selectedTournamentValue?: string;
+  /** Tournament id; `"none"` = earned outside any tournament; `undefined` = all. */
+  selectedTournament?: number | "none";
 }
 
-const AchievementsView = ({ achievements, tournaments = [], selectedTournamentValue = "all" }: Props) => {
+const AchievementsView = ({ achievements, tournaments = [], selectedTournament }: Props) => {
   const tr = useTranslations();
   const locale = useLocale();
   const ranges = rarityRanges(tr);
@@ -60,21 +62,12 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
   const [sort, setSort] = useState<"rarity" | "name" | "count">("rarity");
   const [selected, setSelected] = useState<AchievementRarity | null>(null);
 
-  const uniqueTournaments = useMemo(() => {
-    const seen = new Set<number>();
-    return tournaments.filter((t) => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
-      return true;
-    });
-  }, [tournaments]);
-
-  const onTournamentChange = (value: string) => {
+  const onTournamentChange = (value: number | "none" | undefined) => {
     const next = new URLSearchParams(searchParams.toString());
-    if (value === "all") {
+    if (value === undefined) {
       next.delete(TOURNAMENT_QUERY_KEY);
     } else {
-      next.set(TOURNAMENT_QUERY_KEY, value);
+      next.set(TOURNAMENT_QUERY_KEY, value === "none" ? value : `t-${value}`);
     }
     startTransition(() => {
       router.push(`${pathname}?${next.toString()}`);
@@ -215,21 +208,15 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
           </FilterChip>
         ))}
         <span aria-hidden className="aqt-filter-divider" />
-        {uniqueTournaments.length > 0 && (
-          <Select value={selectedTournamentValue} onValueChange={onTournamentChange}>
-            <SelectTrigger className="h-8 w-48 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-body text-[color:var(--aqt-fg-muted)] shadow-none hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)] focus:ring-1 focus:ring-[color:var(--aqt-teal)] focus:ring-offset-0">
-              <SelectValue placeholder={tr("users.achievements.filter.allTournaments")} />
-            </SelectTrigger>
-            <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
-              <SelectItem value="all">{tr("users.achievements.filter.allTournaments")}</SelectItem>
-              <SelectItem value="none">{tr("users.achievements.filter.withoutTournament")}</SelectItem>
-              {uniqueTournaments.map((t) => (
-                <SelectItem key={t.id} value={`t-${t.id}`}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {tournaments.length > 0 && (
+          <div className="w-48">
+            <TournamentCombobox
+              tournaments={tournaments}
+              value={selectedTournament}
+              onValueChange={onTournamentChange}
+              extraOptions={[{ value: "none", label: tr("users.achievements.filter.withoutTournament") }]}
+            />
+          </div>
         )}
         <Select value={sort} onValueChange={(v) => setSort(v as "rarity" | "name" | "count")}>
           <SelectTrigger

@@ -4305,7 +4305,7 @@
         "you": "you"
       },
       "lastTournament": {
-        "selectTournament": "Select tournament",
+        "openTournament": "Tournament page",
         "placed": "Placed",
         "playtime": "{hours}h {minutes}m playtime",
         "playtimeNoHours": "{minutes}m playtime",
@@ -4332,6 +4332,10 @@
           "dmgDelta": "Δ Damage"
         }
       }
+    "tournamentPicker": {
+      "all": "All tournaments",
+      "search": "Search tournament…"
+    },
     },
     "heroes": {
       "searchStats": "Search stats…",
@@ -4384,8 +4388,6 @@
       "upToAxes": "{count, plural, one {Up to # axis} other {Up to # axes}}",
       "allStatsAdded": "All stats added",
       "noMatch": "No match",
-      "allTournaments": "All tournaments",
-      "searchTournament": "Search tournament...",
       "quick": {
         "winrate": "Winrate",
         "kda": "KDA",
@@ -4412,8 +4414,6 @@
       "allModes": "All modes",
       "filterByMode": "Filter by {mode}",
       "clearModeFilter": "Clear mode filter",
-      "allTournaments": "All tournaments",
-      "searchTournament": "Search tournament…",
       "minGamesTitle": "Minimum games",
       "minGames": "Min {count} games",
       "rowsTitle": "Rows per page",
@@ -4561,7 +4561,6 @@
       "sectionUnlocked": "{unlocked} of {total} unlocked",
       "emptyState": "This user has no achievements yet.",
       "filter": {
-        "allTournaments": "All tournaments",
         "withoutTournament": "Without tournament"
       },
       "sort": {
@@ -4785,8 +4784,6 @@
         "roleIconAlt": "{role} icon",
         "divisionMin": "Division min",
         "divisionMax": "Division max",
-        "allTournaments": "All tournaments",
-        "searchTournament": "Search tournament...",
         "heroAndMap": "Hero & Map",
         "primaryHero": "Primary hero",
         "compareHero": "Compare hero",
@@ -4833,7 +4830,6 @@
         "selectHero": "Select hero",
         "searchHeroes": "Search heroes...",
         "tournamentScope": "Tournament scope",
-        "searchTournaments": "Search tournaments...",
         "resetColumnsTitle": "Reset columns to role defaults",
         "resetColumns": "Reset columns"
       },

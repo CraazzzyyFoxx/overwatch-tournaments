@@ -4305,7 +4305,7 @@
         "you": "вы"
       },
       "lastTournament": {
-        "selectTournament": "Выберите турнир",
+        "openTournament": "Страница турнира",
         "placed": "Место",
         "playtime": "{hours}ч {minutes}м в игре",
         "playtimeNoHours": "{minutes}м в игре",
@@ -4332,6 +4332,10 @@
           "dmgDelta": "Δ урона"
         }
       }
+    "tournamentPicker": {
+      "all": "Все турниры",
+      "search": "Поиск турнира…"
+    },
     },
     "heroes": {
       "searchStats": "Поиск по показателям…",
@@ -4384,8 +4388,6 @@
       "upToAxes": "{count, plural, one {До # оси} few {До # осей} many {До # осей} other {До # осей}}",
       "allStatsAdded": "Все показатели добавлены",
       "noMatch": "Ничего не найдено",
-      "allTournaments": "Все турниры",
-      "searchTournament": "Поиск турнира…",
       "quick": {
         "winrate": "Винрейт",
         "kda": "KDA",
@@ -4412,8 +4414,6 @@
       "allModes": "Все режимы",
       "filterByMode": "Фильтр по режиму {mode}",
       "clearModeFilter": "Сбросить фильтр режима",
-      "allTournaments": "Все турниры",
-      "searchTournament": "Поиск турнира…",
       "minGamesTitle": "Минимум игр",
       "minGames": "Мин. {count} игр",
       "rowsTitle": "Строк на странице",
@@ -4561,7 +4561,6 @@
       "sectionUnlocked": "{unlocked} из {total} открыто",
       "emptyState": "У пользователя пока нет достижений.",
       "filter": {
-        "allTournaments": "Все турниры",
         "withoutTournament": "Без турнира"
       },
       "sort": {
@@ -4785,8 +4784,6 @@
         "roleIconAlt": "Иконка {role}",
         "divisionMin": "Дивизион мин.",
         "divisionMax": "Дивизион макс.",
-        "allTournaments": "Все турниры",
-        "searchTournament": "Поиск турнира…",
         "heroAndMap": "Герой и карта",
         "primaryHero": "Основной герой",
         "compareHero": "Герой для сравнения",
@@ -4833,7 +4830,6 @@
         "selectHero": "Выберите героя",
         "searchHeroes": "Поиск героев…",
         "tournamentScope": "Область турнира",
-        "searchTournaments": "Поиск турниров…",
         "resetColumnsTitle": "Сбросить колонки к значениям по роли",
         "resetColumns": "Сбросить колонки"
       },
