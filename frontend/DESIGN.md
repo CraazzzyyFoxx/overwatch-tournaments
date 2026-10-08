@@ -124,12 +124,15 @@ before writing markup:
 | Author-written Markdown     | `components/Markdown.tsx` — renders to React elements, so raw HTML is inert and no sanitizer is involved; `MARKDOWN_REMARK_PLUGINS` is the one plugin set (GFM)                     |
 | Markdown editing            | `components/admin/MarkdownEditor.tsx` — `@uiw/react-md-editor`, loaded client-side on demand, its preview pane wired to `Markdown` so it cannot disagree with the published page    |
 
-The public landing page uses `PlatformLeaders` instead of the product's four-card
-`PlatformStatsGrid`: four headline totals (tournaments, players, teams, communities),
-then available secondary counts and two winner-first top-five lists. Missing counts
-are omitted, never shown as zero; all data reads and player/statistics links remain
-platform-wide. Its skeleton follows the same responsive layout. Keep this composition
-local to the landing page; workspace hall-of-fame columns use `components/site/leaders.tsx`.
+Public landing `PlatformLeaders` and community `HallOfFame` share `LeadersContent`
+and `LeadersSkeleton` from `components/site/leaders.tsx`, not the product's
+four-card `PlatformStatsGrid`. Four headline totals lead into available secondary
+counts and two winner-first top-five lists. Landing totals are tournaments,
+players, teams and communities; community totals replace communities with champions.
+Missing counts are omitted, real zeros retained. Callers own data scope: the landing
+reads platform-wide statistics, while `HallOfFame` passes its explicit `workspaceId`.
+Keep community eligibility messages and player profile links; both skeletons follow
+the same responsive layout.
 
 ### Tabs, Button, and other primitives
 
