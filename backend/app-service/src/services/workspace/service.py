@@ -344,6 +344,10 @@ class WorkspaceService:
     async def get_members(self, session: AsyncSession, workspace_id: int) -> typing.Sequence[models.WorkspaceMember]:
         return await self.member_repo.list_by_workspace(session, workspace_id)
 
+    async def get_staff(self, session: AsyncSession, workspace_id: int) -> list[tuple[str, str]]:
+        """Public staff roster: ``(role, player name)`` pairs, owner first."""
+        return await self.member_repo.list_staff(session, workspace_id)
+
     async def list_members_page(
         self,
         session: AsyncSession,

@@ -39,6 +39,12 @@ class OverallStatistics(BaseModel):
     teams: int
     players: int
     champions: int
+    # Played volume — see tournament-service's copy of this model, which is the
+    # one the public endpoint serves.
+    encounters: int
+    maps: int
+    days: int
+    hours: int
 
 
 class DashboardActiveTournamentStats(BaseModel):

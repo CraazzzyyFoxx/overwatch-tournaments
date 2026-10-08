@@ -17,6 +17,11 @@ from shared.repository.base import BaseRepository
 # Rank assigned to a member holding only custom roles, or none: sorts last.
 ROLELESS_RANK = 99
 
+#: The workspace system roles published by the public staff endpoint, best
+#: first. A strict prefix of ``WORKSPACE_SYSTEM_ROLE_NAMES``: ``host`` and
+#: ``player`` are not staff, so neither puts a name on the public page.
+STAFF_ROLE_NAMES: tuple[str, ...] = ("owner", "admin", "referee")
+
 
 class WorkspaceRepository(BaseRepository[models.Workspace]):
     def __init__(self) -> None:
@@ -398,6 +403,31 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
             .correlate(models.AuthUser)
             .scalar_subquery()
         )
+
+    async def list_staff(self, session: AsyncSession, workspace_id: int) -> list[tuple[str, str]]:
+        """Public staff of a workspace: ``(role, player name)``, best role first.
+
+        Source of truth is RBAC (``auth.roles`` scoped to the workspace), not a
+        denormalized column — same reason the members screen reads it there. One
+        row per PERSON at their highest of owner/admin/referee, so a co-owner who
+        also holds ``referee`` appears once, as an owner. The INNER JOIN on
+        ``players.user`` is also the skip rule: an account with no linked player
+        has no public name to render and simply does not appear.
+        """
+        rank_case = sa.case(
+            *[(models.Role.name == name, idx) for idx, name in enumerate(STAFF_ROLE_NAMES)],
+        )
+        rank = sa.func.min(rank_case).label("rank")
+        result = await session.execute(
+            sa.select(rank, models.User.name)
+            .select_from(user_roles)
+            .join(models.Role, models.Role.id == user_roles.c.role_id)
+            .join(models.User, models.User.auth_user_id == user_roles.c.user_id)
+            .where(models.Role.workspace_id == workspace_id, models.Role.name.in_(STAFF_ROLE_NAMES))
+            .group_by(models.User.id, models.User.name)
+            .order_by(rank.asc(), models.User.name.asc())
+        )
+        return [(STAFF_ROLE_NAMES[rank_value], name) for rank_value, name in result.all()]
 
     async def bulk_get_or_create(
         self,

@@ -142,6 +142,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.achievements.users": Op(response=Paginated[schemas.AchievementEarned], query=PaginationQueryParams),
     # ── workspaces ─────────────────────────────────────────────────────────
     "rpc.app.workspaces.get": Op(response=schemas.WorkspaceRead),
+    "rpc.app.workspaces.staff": Op(response=schemas.WorkspaceStaffMember, response_array=True),
     "rpc.app.workspaces.list": Op(response=schemas.WorkspaceRead, response_array=True),
     # by_host answers with an ad-hoc {workspace_id, slug} (or null); only the
     # host query param is declared -- see the module docstring's convention.

@@ -34,7 +34,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.statistics_overall": {
         "summary": "Get overall statistics",
-        "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace.",
+        "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace: counts of tournaments, teams, players and champions, plus played volume — finished encounters, maps, distinct calendar days covered (overlapping tournaments counted once) and whole hours of logged map time.",
     },
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": {

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,16 @@ class Workspace(db.TimeStampIntegerMixin):
     name: Mapped[str] = mapped_column(String())
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # Public community profile (the workspace landing page). ``tagline`` is the
+    # one-liner under the name, ``about`` the Markdown body; the three links are
+    # stored as full https URLs validated against their own host
+    # (``schemas.workspace``), not as bare handles — the page renders them as-is
+    # and the organizer pastes what their browser shows.
+    tagline: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    about: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    discord_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    twitch_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    boosty_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), server_default="true")
     # Excludes the workspace from the public directory (home page + anonymous
     # `/api/v1/workspaces` list) and from another workspace's member picker.

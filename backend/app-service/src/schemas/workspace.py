@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from shared.schemas.quota import QuotaLimitsPayload, QuotaScope
 from shared.schemas.roster_slots import RosterSlotsField
@@ -23,6 +24,15 @@ _HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
 # and shipping both into the public schema would advertise contradictory bounds.
 _DISCORD_SNOWFLAKE = r"^\d{17,19}$"
 
+# Which hosts each community link may point at (``www.`` stripped before the
+# check). An allowlist, not a generic URL check: the field is labelled "Discord"
+# in the admin form, so a Twitch link in it is a typo, not a free choice.
+_LINK_HOSTS: dict[str, tuple[str, ...]] = {
+    "discord_url": ("discord.gg", "discord.com"),
+    "twitch_url": ("twitch.tv",),
+    "boosty_url": ("boosty.to",),
+}
+
 __all__ = (
     "WorkspaceRead",
     "WorkspaceCreate",
@@ -34,6 +44,7 @@ __all__ = (
     "WorkspaceVerificationSet",
     "WorkspaceQuotaSet",
     "WorkspaceOwnerRead",
+    "WorkspaceStaffMember",
     "WorkspaceOwnerSet",
     "WorkspaceOwnerTransfer",
     "WorkspaceMemberRoleRead",
@@ -49,6 +60,13 @@ class WorkspaceRead(BaseRead):
     name: str
     description: str | None
     icon_url: str | None
+    # Public community profile, rendered by the workspace landing page.
+    # ``about`` is Markdown.
+    tagline: str | None = None
+    about: str | None = None
+    discord_url: str | None = None
+    twitch_url: str | None = None
+    boosty_url: str | None = None
     is_active: bool
     # Excludes this workspace from another workspace's member picker and from
     # the anonymous listing; a member still sees it (`WorkspaceService.get_all`).
@@ -111,6 +129,13 @@ class WorkspaceUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     icon_url: str | None = None
+    # Public community profile. Blank input clears the field (``_blank_to_none``);
+    # the three links must be https and point at their own service.
+    tagline: str | None = Field(default=None, max_length=120)
+    about: str | None = Field(default=None, max_length=4000)
+    discord_url: str | None = Field(default=None, max_length=512)
+    twitch_url: str | None = Field(default=None, max_length=512)
+    boosty_url: str | None = Field(default=None, max_length=512)
     is_active: bool | None = None
     is_hidden: bool | None = None
     timezone: str | None = None
@@ -174,6 +199,32 @@ class WorkspaceUpdate(BaseModel):
         except (ZoneInfoNotFoundError, ValueError, KeyError) as exc:
             raise ValueError(f"Unknown IANA timezone: {value!r}") from exc
         return value
+
+    @field_validator("tagline", "about", mode="before")
+    @classmethod
+    def _blank_text_to_none(cls, value: object) -> object:
+        # Same contract as the colours above: a cleared textarea clears the field.
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @field_validator("discord_url", "twitch_url", "boosty_url", mode="before")
+    @classmethod
+    def _validate_social_link(cls, value: object, info: ValidationInfo) -> object:
+        if not isinstance(value, str):
+            return value
+        url = value.strip()
+        if not url:
+            return None
+        hosts = _LINK_HOSTS[str(info.field_name)]
+        parts = urlsplit(url)
+        # https only: these render as outbound links on a public page, and an
+        # http one would be a downgrade the organizer did not notice typing.
+        host = parts.hostname or ""
+        host = host.removeprefix("www.")
+        if parts.scheme != "https" or host not in hosts:
+            raise ValueError(f"must be an https link to {' or '.join(hosts)}")
+        return url
 
 
 class WorkspaceCustomDomainSet(BaseModel):
@@ -253,6 +304,19 @@ class WorkspaceOwnerRead(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     avatar_url: str | None = None
+
+
+class WorkspaceStaffMember(BaseModel):
+    """One publicly credited organizer of a workspace.
+
+    A NAME and a role, nothing else: unlike ``WorkspaceOwnerRead`` above this
+    model IS served anonymously, so it carries no account identifier, no email
+    and no auth-user id — only the player name the site already shows on every
+    roster and profile page.
+    """
+
+    role: Literal["owner", "admin", "referee"]
+    name: str
 
 
 class WorkspaceOwnerSet(BaseModel):

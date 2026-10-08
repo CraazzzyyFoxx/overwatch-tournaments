@@ -3781,6 +3781,14 @@
       },
       "summary": "Set workspace custom domain"
     },
+    "rpc.app.workspaces.staff": {
+      "description": "Permission: public; no authentication required. The organizers credited on the workspace's public page: one row per person at their highest of the `owner`/`admin`/`referee` system roles, ordered owner \u2192 admin \u2192 referee then by name. `name` is the person's linked player name (BattleTag); an account with no linked player is omitted. 404 if the workspace does not exist.",
+      "response": {
+        "array": true,
+        "ref": "app.WorkspaceStaffMember"
+      },
+      "summary": "List workspace staff"
+    },
     "rpc.app.workspaces.verification_set": {
       "description": "Permission: superuser only (a workspace owner may not self-certify). Moves a workspace between the `unverified`/`verified`/`trusted` trust tiers \u2014 the only way a self-service workspace is unblocked for GPU compute, inline achievement recompute and the public directory; audited on every call including a no-op set, 404 if workspace missing, 422 on an unknown status.",
       "request": {
@@ -10286,7 +10294,7 @@
       "summary": "Get tournament history stats"
     },
     "rpc.tournament.statistics_overall": {
-      "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace.",
+      "description": "Permission: public; no authentication required. Returns aggregate tournament statistics across the workspace: counts of tournaments, teams, players and champions, plus played volume \u2014 finished encounters, maps, distinct calendar days covered (overlapping tournaments counted once) and whole hours of logged map time.",
       "query_params": [
         {
           "name": "workspace_id",
@@ -21425,6 +21433,30 @@
     },
     "app.WorkspaceRead": {
       "properties": {
+        "about": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "About"
+        },
+        "boosty_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Boosty Url"
+        },
         "brand_accent": {
           "anyOf": [
             {
@@ -21660,6 +21692,18 @@
           "default": null,
           "title": "Discord Guild Verified At"
         },
+        "discord_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Url"
+        },
         "icon_url": {
           "anyOf": [
             {
@@ -21737,10 +21781,34 @@
           "default": null,
           "title": "Subdomain"
         },
+        "tagline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tagline"
+        },
         "timezone": {
           "default": "Europe/Moscow",
           "title": "Timezone",
           "type": "string"
+        },
+        "twitch_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Twitch Url"
         },
         "verification_status": {
           "default": "unverified",
@@ -21760,8 +21828,58 @@
       "title": "WorkspaceRead",
       "type": "object"
     },
+    "app.WorkspaceStaffMember": {
+      "description": "One publicly credited organizer of a workspace.\n\nA NAME and a role, nothing else: unlike ``WorkspaceOwnerRead`` above this\nmodel IS served anonymously, so it carries no account identifier, no email\nand no auth-user id \u2014 only the player name the site already shows on every\nroster and profile page.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "referee"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "name"
+      ],
+      "title": "WorkspaceStaffMember",
+      "type": "object"
+    },
     "app.WorkspaceUpdate": {
       "properties": {
+        "about": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "About"
+        },
+        "boosty_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Boosty Url"
+        },
         "brand_accent": {
           "anyOf": [
             {
@@ -21943,6 +22061,19 @@
           "default": null,
           "title": "Description"
         },
+        "discord_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Url"
+        },
         "icon_url": {
           "anyOf": [
             {
@@ -22043,6 +22174,19 @@
           "default": null,
           "title": "Subdomain"
         },
+        "tagline": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tagline"
+        },
         "timezone": {
           "anyOf": [
             {
@@ -22054,6 +22198,19 @@
           ],
           "default": null,
           "title": "Timezone"
+        },
+        "twitch_url": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Twitch Url"
         }
       },
       "title": "WorkspaceUpdate",
@@ -43023,6 +43180,22 @@
           "title": "Champions",
           "type": "integer"
         },
+        "days": {
+          "title": "Days",
+          "type": "integer"
+        },
+        "encounters": {
+          "title": "Encounters",
+          "type": "integer"
+        },
+        "hours": {
+          "title": "Hours",
+          "type": "integer"
+        },
+        "maps": {
+          "title": "Maps",
+          "type": "integer"
+        },
         "players": {
           "title": "Players",
           "type": "integer"
@@ -43040,7 +43213,11 @@
         "tournaments",
         "teams",
         "players",
-        "champions"
+        "champions",
+        "encounters",
+        "maps",
+        "days",
+        "hours"
       ],
       "title": "OverallStatistics",
       "type": "object"

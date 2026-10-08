@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`mixvoice01`** (106 revisions in `backend/migrations/versions/`).
+Alembic head: **`wsprof01`** (107 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -416,6 +416,11 @@ erDiagram
         varchar name
         varchar description "nullable"
         varchar icon_url "nullable"
+        varchar(120) tagline "nullable"
+        text about "nullable"
+        varchar(512) discord_url "nullable"
+        varchar(512) twitch_url "nullable"
+        varchar(512) boosty_url "nullable"
         boolean is_active
         boolean is_hidden
         varchar(64) timezone
