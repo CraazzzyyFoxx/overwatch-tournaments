@@ -65,7 +65,11 @@ export function WorkspaceBalancerConfigDialog({
       balancerAdminService.upsertWorkspaceBalancerConfig(workspaceId, {
         rank_delta_threshold: threshold,
         rank_delta_hide_from_pool: hideFromPool,
-        mix_discord_channel_id: mixChannel === "" ? null : mixChannel
+        mix_discord_channel_id: mixChannel === "" ? null : mixChannel,
+        // Not editable here, but the upsert rewrites the whole blob: post the
+        // stored voice setup back or saving a threshold would wipe it.
+        mix_voice_category_id: config?.mix_voice_category_id ?? null,
+        mix_general_voice_channel_ids: config?.mix_general_voice_channel_ids ?? []
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: balancerQueryKeys.workspaceConfig(workspaceId) });

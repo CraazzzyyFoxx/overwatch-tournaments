@@ -26795,6 +26795,25 @@
           "default": null,
           "title": "Mix Discord Channel Id"
         },
+        "mix_general_voice_channel_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mix General Voice Channel Ids",
+          "type": "array"
+        },
+        "mix_voice_category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mix Voice Category Id"
+        },
         "rank_delta_hide_from_pool": {
           "title": "Rank Delta Hide From Pool",
           "type": "boolean"
@@ -26850,6 +26869,28 @@
           "default": null,
           "description": "Workspace-wide Discord channel every mix posts its matchup to. A mix may name its own channel instead, but only a workspace admin can.",
           "title": "Mix Discord Channel Id"
+        },
+        "mix_general_voice_channel_ids": {
+          "description": "Voices of that category players wait in and are returned to; every other voice is a team voice.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25,
+          "title": "Mix General Voice Channel Ids",
+          "type": "array"
+        },
+        "mix_voice_category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Discord category whose voice channels mixes move players between.",
+          "title": "Mix Voice Category Id"
         },
         "rank_delta_hide_from_pool": {
           "default": false,

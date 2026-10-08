@@ -10,16 +10,25 @@ import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { DISCORD_CLIENT_ID } from "@/config/site";
-import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
+import { useDiscordChannels, useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { cn, initials } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import balancerAdminService from "@/services/balancer-admin.service";
-import type { DiscordGuildInfo } from "@/types/discord.types";
+import type { DiscordGuildInfo, DiscordVoicePermission } from "@/types/discord.types";
+import type { WorkspaceBalancerConfigUpsert } from "@/types/balancer-admin.types";
 import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types";
 import { Spinner } from "@/components/ui/spinner";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
@@ -56,10 +65,12 @@ function bindFailure(error: unknown): string {
 //     announcement, posted as `content` + `embed` + `file` in one call
 //     (`discord-service/src/rabbit/gateway.py` `post_message`); drop either of
 //     the last two and that post 403s with only a log line to show for it.
+//   Connect 1048576 + Move Members 16777216 — moving mix players between voice
+//     channels (`discord-service/src/services/voice.py`).
 // It never writes roles — subscription sync only READS a member's roles — so
 // Manage Roles is deliberately absent: every bit shows up on Discord's consent
 // screen, and one that is never used is just a reason to refuse the install.
-const BOT_PERMISSIONS = "117824";
+const BOT_PERMISSIONS = "17943616";
 
 /**
  * Discord's install link for our bot, pre-pointed at the bound guild.
@@ -165,7 +176,9 @@ function MixChannelCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
       balancerAdminService.upsertWorkspaceBalancerConfig(workspaceId, {
         rank_delta_threshold: config?.rank_delta_threshold ?? null,
         rank_delta_hide_from_pool: config?.rank_delta_hide_from_pool ?? false,
-        mix_discord_channel_id: next === "" ? null : next
+        mix_discord_channel_id: next === "" ? null : next,
+        mix_voice_category_id: config?.mix_voice_category_id ?? null,
+        mix_general_voice_channel_ids: config?.mix_general_voice_channel_ids ?? []
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: balancerQueryKeys.workspaceConfig(workspaceId) });
@@ -207,6 +220,161 @@ function MixChannelCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
           Every mix in this workspace posts its matchup here. A single mix can be pointed
           elsewhere from its own settings, but only by a workspace admin -- hosts read the channel,
           they cannot repoint it.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+const VOICE_PERMISSION_LABELS: Record<DiscordVoicePermission, string> = {
+  view_channel: "View Channel",
+  connect: "Connect",
+  move_members: "Move Members"
+};
+
+/** What the bot still lacks on a channel; `null` means nothing is known to be missing. */
+function MissingPermissions({ missing }: Readonly<{ missing: DiscordVoicePermission[] | null }>) {
+  if (!missing || missing.length === 0) return null;
+  return (
+    <p className="text-xs text-amber-600">
+      Missing: {missing.map((name) => VOICE_PERMISSION_LABELS[name]).join(", ")}
+    </p>
+  );
+}
+
+/**
+ * The voice category a mix moves its players through, and which of its voices
+ * are the general ones players wait in.
+ *
+ * Same blob and same query key as `MixChannelCard`, so each save posts every
+ * key -- the upsert rewrites the whole config. A voice outside the category is
+ * not offered: the move would take a player out of the mix's own corner of the
+ * server.
+ */
+function MixVoiceCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
+  const queryClient = useQueryClient();
+  const configQuery = useQuery({
+    queryKey: balancerQueryKeys.workspaceConfig(workspaceId),
+    queryFn: () => balancerAdminService.getWorkspaceBalancerConfig(workspaceId)
+  });
+  const channelsQuery = useDiscordChannels(workspaceId);
+  const config = configQuery.data;
+  // Radix Select has no null: "" is its no-category value.
+  const categoryId = config?.mix_voice_category_id ?? "";
+  const generalIds = config?.mix_general_voice_channel_ids ?? [];
+
+  const channels = channelsQuery.data?.channels ?? [];
+  const categories = channels.filter((channel) => channel.type === "category");
+  const category = categories.find((channel) => channel.id === categoryId);
+  const voices = channels.filter(
+    (channel) => channel.type === "voice" && channel.category_id === categoryId
+  );
+
+  const save = useMutation({
+    mutationFn: (voice: Pick<
+      WorkspaceBalancerConfigUpsert,
+      "mix_voice_category_id" | "mix_general_voice_channel_ids"
+    >) =>
+      balancerAdminService.upsertWorkspaceBalancerConfig(workspaceId, {
+        rank_delta_threshold: config?.rank_delta_threshold ?? null,
+        rank_delta_hide_from_pool: config?.rank_delta_hide_from_pool ?? false,
+        mix_discord_channel_id: config?.mix_discord_channel_id ?? null,
+        ...voice
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: balancerQueryKeys.workspaceConfig(workspaceId) });
+      notify.success("Mix voice channels saved");
+    },
+    onError: (cause) => notify.apiError(cause, { title: "Could not save the mix voice channels" })
+  });
+
+  const busy = configQuery.isLoading || channelsQuery.isLoading || save.isPending;
+
+  const toggle = (voiceId: string) =>
+    save.mutate({
+      mix_voice_category_id: categoryId === "" ? null : categoryId,
+      mix_general_voice_channel_ids: generalIds.includes(voiceId)
+        ? generalIds.filter((id) => id !== voiceId)
+        : [...generalIds, voiceId]
+    });
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <h2 className={EYEBROW_CLASS}>Mix voice channels</h2>
+
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <Select
+              value={categoryId}
+              // A new category invalidates the old general voices: they belong
+              // to the category that is being left behind.
+              onValueChange={(next) =>
+                save.mutate({
+                  mix_voice_category_id: next === "" ? null : next,
+                  mix_general_voice_channel_ids: []
+                })
+              }
+              disabled={busy}
+            >
+              <SelectTrigger aria-label="Mix voice category">
+                <SelectValue placeholder="No voice category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <MissingPermissions missing={category?.missing_permissions ?? null} />
+          </div>
+          {categoryId !== "" ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={save.isPending}
+              onClick={() =>
+                save.mutate({ mix_voice_category_id: null, mix_general_voice_channel_ids: [] })
+              }
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+
+        {voices.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {voices.map((voice) => {
+              const general = generalIds.includes(voice.id);
+              return (
+                <li key={voice.id} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`mix-voice-${voice.id}`}
+                      checked={general}
+                      disabled={busy}
+                      onCheckedChange={() => toggle(voice.id)}
+                    />
+                    <label htmlFor={`mix-voice-${voice.id}`} className="text-sm">
+                      {voice.name}
+                    </label>
+                    <span className="text-xs text-muted-foreground">
+                      {general ? "General" : "Team voice"}
+                    </span>
+                  </div>
+                  <MissingPermissions missing={voice.missing_permissions} />
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        <p className="max-w-prose text-xs text-muted-foreground text-pretty">
+          Players wait in the general voices; mixes move each team into one of the other voices of
+          this category. The bot needs View Channel, Connect and Move Members on the category.
         </p>
       </CardContent>
     </Card>
@@ -386,6 +554,7 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
             {/* Channels come from the linked guild, so there is nothing to pick
                 until one is bound. */}
             {boundId ? <MixChannelCard workspaceId={workspace.id} /> : null}
+            {boundId ? <MixVoiceCard workspaceId={workspace.id} /> : null}
 
             <Card>
               <CardContent className="flex flex-col gap-4 pt-6">

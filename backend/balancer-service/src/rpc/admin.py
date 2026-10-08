@@ -35,6 +35,13 @@ def _stored_mix_channel(cfg: models.WorkspaceBalancerConfig | None) -> str | Non
     return str(channel) if channel else None
 
 
+def _stored_voice(cfg: models.WorkspaceBalancerConfig | None) -> tuple[str | None, list[str]]:
+    """The saved voice category and general voices, the way the wire spells them."""
+    payload = (cfg.config_json or {}) if cfg is not None else {}
+    category = payload.get("mix_voice_category_id")
+    return (str(category) if category else None), [str(v) for v in payload.get("mix_general_voice_channel_ids") or []]
+
+
 def _config_to_read(
     cfg: models.WorkspaceBalancerConfig | None,
     workspace_id: int,
@@ -46,8 +53,11 @@ def _config_to_read(
             rank_delta_threshold=None,
             rank_delta_hide_from_pool=False,
             mix_discord_channel_id=None,
+            mix_voice_category_id=None,
+            mix_general_voice_channel_ids=[],
             updated_by=None,
         )
+    category, generals = _stored_voice(cfg)
     payload = cfg.config_json or {}
     channel = _stored_mix_channel(cfg)
     return schemas.WorkspaceBalancerConfigRead(
@@ -56,6 +66,8 @@ def _config_to_read(
         rank_delta_threshold=payload.get("rank_delta_threshold"),
         rank_delta_hide_from_pool=bool(payload.get("rank_delta_hide_from_pool", False)),
         mix_discord_channel_id=channel,
+        mix_voice_category_id=category,
+        mix_general_voice_channel_ids=generals,
         updated_by=cfg.updated_by,
     )
 
@@ -223,13 +235,13 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.balancer.admin.workspace_config_upsert")
     async def _workspace_config_upsert(data: dict, msg: RabbitMessage) -> dict:
-        """Pool knobs need ``team.update``; moving the mix channel needs ``workspace.update``.
+        """Pool knobs need ``team.update``; moving the mix channel or the voice setup needs ``workspace.update``.
 
         Both live in one config blob, so gating the whole write on
         ``workspace.update`` made every save admin-only: an organizer who may
         build teams could not touch the rank-delta threshold because the payload
         also carried the channel -- the one they were not changing. The channel
-        keeps the admin gate, and only when it actually moves.
+        and the mix voice setup keep the admin gate, and only when they actually move.
         """
 
         async def op(session: Any) -> Any:
@@ -239,7 +251,8 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, workspace_id, "team", "update")
             body = schemas.WorkspaceBalancerConfigUpsert.model_validate(c.payload(data))
             stored = await balancer_admin_service.get_workspace_balancer_config(session, workspace_id)
-            if body.mix_discord_channel_id != _stored_mix_channel(stored):
+            voice = (body.mix_voice_category_id, body.mix_general_voice_channel_ids)
+            if body.mix_discord_channel_id != _stored_mix_channel(stored) or voice != _stored_voice(stored):
                 c.require_workspace_permission(data, user, workspace_id, "workspace", "update")
             cfg = await balancer_admin_service.upsert_workspace_balancer_config(
                 session,
@@ -247,6 +260,8 @@ def register(broker: Any, logger: Any) -> None:
                 rank_delta_threshold=body.rank_delta_threshold,
                 rank_delta_hide_from_pool=body.rank_delta_hide_from_pool,
                 mix_discord_channel_id=body.mix_discord_channel_id,
+                mix_voice_category_id=body.mix_voice_category_id,
+                mix_general_voice_channel_ids=body.mix_general_voice_channel_ids,
                 updated_by=user.id,
             )
             return _config_to_read(cfg, workspace_id)

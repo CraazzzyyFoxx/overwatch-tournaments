@@ -20819,6 +20819,13 @@ export interface components {
              * @default null
              */
             mix_discord_channel_id: string | null;
+            /** Mix General Voice Channel Ids */
+            mix_general_voice_channel_ids?: string[];
+            /**
+             * Mix Voice Category Id
+             * @default null
+             */
+            mix_voice_category_id: string | null;
             /** Rank Delta Hide From Pool */
             rank_delta_hide_from_pool: boolean;
             /** Rank Delta Threshold */
@@ -20839,6 +20846,17 @@ export interface components {
              * @default null
              */
             mix_discord_channel_id: string | null;
+            /**
+             * Mix General Voice Channel Ids
+             * @description Voices of that category players wait in and are returned to; every other voice is a team voice.
+             */
+            mix_general_voice_channel_ids?: string[];
+            /**
+             * Mix Voice Category Id
+             * @description Discord category whose voice channels mixes move players between.
+             * @default null
+             */
+            mix_voice_category_id: string | null;
             /**
              * Rank Delta Hide From Pool
              * @default false

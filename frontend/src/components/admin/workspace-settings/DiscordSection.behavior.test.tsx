@@ -17,6 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api/error";
+import type { DiscordChannelsResponse } from "@/types/discord.types";
 import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types";
 import { DiscordSection } from "./DiscordSection";
 
@@ -30,6 +31,7 @@ const myDiscordGuilds = vi.fn();
 const verifyDiscordGuild = vi.fn();
 const clearDiscordGuild = vi.fn();
 const getDiscordGuildInfo = vi.fn();
+const getDiscordChannels = vi.fn();
 const getWorkspaceBalancerConfig = vi.fn();
 const upsertWorkspaceBalancerConfig = vi.fn();
 
@@ -40,7 +42,8 @@ vi.mock("@/services/workspace.service", () => ({
     myDiscordGuilds: (...args: unknown[]) => myDiscordGuilds(...args),
     verifyDiscordGuild: (...args: unknown[]) => verifyDiscordGuild(...args),
     clearDiscordGuild: (...args: unknown[]) => clearDiscordGuild(...args),
-    getDiscordGuildInfo: (...args: unknown[]) => getDiscordGuildInfo(...args)
+    getDiscordGuildInfo: (...args: unknown[]) => getDiscordGuildInfo(...args),
+    getDiscordChannels: (...args: unknown[]) => getDiscordChannels(...args)
   }
 }));
 
@@ -91,6 +94,62 @@ vi.mock("@/components/discord/DiscordChannelSelect", () => ({
     </button>
   )
 }));
+
+// Radix's Select and Checkbox reach for pointer-capture APIs happy-dom does
+// not implement; without these the listbox never opens.
+for (const [name, value] of Object.entries({
+  hasPointerCapture: () => false,
+  setPointerCapture: () => undefined,
+  releasePointerCapture: () => undefined,
+  scrollIntoView: () => undefined
+})) {
+  if (!(name in Element.prototype)) {
+    Object.defineProperty(Element.prototype, name, { value, writable: true });
+  }
+}
+
+// One category with two voices in it, and a third voice that belongs elsewhere.
+const CHANNELS: DiscordChannelsResponse = {
+  guild_id: "222222222222222222",
+  channels: [
+    {
+      id: "10",
+      name: "Mixes",
+      type: "category",
+      category_id: null,
+      category_name: null,
+      position: 0,
+      missing_permissions: []
+    },
+    {
+      id: "1",
+      name: "Lobby",
+      type: "voice",
+      category_id: "10",
+      category_name: "Mixes",
+      position: 1,
+      missing_permissions: []
+    },
+    {
+      id: "2",
+      name: "Team A",
+      type: "voice",
+      category_id: "10",
+      category_name: "Mixes",
+      position: 2,
+      missing_permissions: ["move_members"]
+    },
+    {
+      id: "3",
+      name: "Elsewhere",
+      type: "voice",
+      category_id: "20",
+      category_name: "Other",
+      position: 3,
+      missing_permissions: []
+    }
+  ]
+};
 
 
 const WORKSPACE: Workspace = {
@@ -192,6 +251,44 @@ function buttonIn(scope: ParentNode, label: string) {
   return [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === label);
 }
 
+/** Radix Select: the trigger opens on pointerdown and portals its listbox. */
+async function pickCategory(label: string) {
+  const trigger = container.querySelector<HTMLElement>('button[role="combobox"]');
+  if (!trigger) throw new Error("no voice category select rendered");
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+  const option = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (node) => (node.textContent ?? "").trim() === label
+  );
+  if (!option) throw new Error(`no category option matching ${label}`);
+  await act(async () => {
+    option.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+}
+
+/** A voice's row: the list item holding the checkbox labelled with its name. */
+function voiceRow(name: string) {
+  return [...container.querySelectorAll("label")]
+    .find((node) => node.textContent?.trim() === name)
+    ?.closest("li") as HTMLElement | null | undefined;
+}
+
+const CONFIG_WITH_CATEGORY = {
+  id: 3,
+  workspace_id: 7,
+  rank_delta_threshold: 500,
+  rank_delta_hide_from_pool: true,
+  mix_discord_channel_id: null,
+  mix_voice_category_id: "10",
+  mix_general_voice_channel_ids: [],
+  updated_by: null
+};
+
 beforeEach(() => {
   fetchWorkspaces.mockReset();
   getById.mockReset().mockResolvedValue(WORKSPACE);
@@ -214,8 +311,11 @@ beforeEach(() => {
     rank_delta_threshold: 500,
     rank_delta_hide_from_pool: true,
     mix_discord_channel_id: null,
+    mix_voice_category_id: null,
+    mix_general_voice_channel_ids: [],
     updated_by: null
   });
+  getDiscordChannels.mockReset().mockResolvedValue(CHANNELS);
   upsertWorkspaceBalancerConfig.mockReset().mockResolvedValue({});
 });
 
@@ -374,10 +474,21 @@ describe("Workspace settings › Discord", () => {
     expect(container.textContent).not.toContain("The bot is not in this server");
   });
 
-  // 7. the mix announcement channel is a workspace setting, editable here --
-  //    and saving it must not wipe the rank-delta knobs sharing the blob.
-  it("saves the mix channel without dropping the rank-delta config", async () => {
+  // 7. the mix announcement channel and the mix voice setup are workspace
+  //    settings editable here -- and each save rewrites the whole blob, so
+  //    neither may drop what the other owns.
+  it("saves the mix channel without dropping the rank-delta config or the voice setup", async () => {
     getById.mockResolvedValue(BOUND);
+    getWorkspaceBalancerConfig.mockResolvedValue({
+      id: 3,
+      workspace_id: 7,
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"],
+      updated_by: null
+    });
     await render();
 
     await click(buttonIn(container, "Pick channel"));
@@ -385,7 +496,56 @@ describe("Workspace settings › Discord", () => {
     expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
       rank_delta_threshold: 500,
       rank_delta_hide_from_pool: true,
-      mix_discord_channel_id: "555555555555555555"
+      mix_discord_channel_id: "555555555555555555",
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"]
+    });
+  });
+
+  // 8. the voice category is where mixes move players; its voices split into
+  //    the general ones players wait in and the rest, which are team voices.
+  it("saves the picked voice category with no general voices yet", async () => {
+    getById.mockResolvedValue(BOUND);
+    await render();
+
+    await pickCategory("Mixes");
+
+    expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: []
+    });
+  });
+
+  it("offers only the voices of the chosen category, and marks the ones the bot cannot move through", async () => {
+    getById.mockResolvedValue(BOUND);
+    getWorkspaceBalancerConfig.mockResolvedValue(CONFIG_WITH_CATEGORY);
+    await render();
+
+    expect(voiceRow("Lobby")).toBeTruthy();
+    expect(voiceRow("Team A")).toBeTruthy();
+    // A voice outside the category is not a mix voice: moving into it would
+    // leave the category the rest of the mix lives in.
+    expect(voiceRow("Elsewhere")).toBeUndefined();
+    expect(voiceRow("Team A")?.textContent).toContain("Missing: Move Members");
+    expect(voiceRow("Lobby")?.textContent).not.toContain("Missing:");
+  });
+
+  it("ticks a voice into the general list", async () => {
+    getById.mockResolvedValue(BOUND);
+    getWorkspaceBalancerConfig.mockResolvedValue(CONFIG_WITH_CATEGORY);
+    await render();
+
+    await click(voiceRow("Lobby")?.querySelector('button[role="checkbox"]') ?? undefined);
+
+    expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"]
     });
   });
 });

@@ -71,6 +71,8 @@ const CONFIG: WorkspaceBalancerConfig = {
   rank_delta_threshold: 500,
   rank_delta_hide_from_pool: true,
   mix_discord_channel_id: "555555555555555555",
+  mix_voice_category_id: "10",
+  mix_general_voice_channel_ids: ["1"],
   updated_by: null,
 };
 
@@ -129,7 +131,9 @@ beforeEach(() => {
 });
 
 describe("WorkspaceBalancerConfigDialog", () => {
-  it("saves the pool knobs with the stored channel for a non-admin", async () => {
+  // The voice setup lives in the same blob and is not editable here, so the
+  // save must carry it back untouched or it would be wiped.
+  it("saves the pool knobs with the stored channel and voice setup for a non-admin", async () => {
     const scope = await mount();
 
     expect(channelField(scope).disabled).toBe(true);
@@ -141,6 +145,8 @@ describe("WorkspaceBalancerConfigDialog", () => {
       rank_delta_threshold: 500,
       rank_delta_hide_from_pool: true,
       mix_discord_channel_id: "555555555555555555",
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"],
     });
   });
 
@@ -156,6 +162,8 @@ describe("WorkspaceBalancerConfigDialog", () => {
       rank_delta_threshold: 500,
       rank_delta_hide_from_pool: true,
       mix_discord_channel_id: null,
+      mix_voice_category_id: "10",
+      mix_general_voice_channel_ids: ["1"],
     });
   });
 });
