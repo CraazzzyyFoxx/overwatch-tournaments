@@ -17,15 +17,13 @@ const HISTORY_STORAGE_KEY = "player-search-history";
 const HISTORY_LIMIT = 8;
 
 /**
- * Shared query/debounce/fetch/keyboard-nav/history behavior behind every
- * player search surface (the desktop popover `UserSearch` and the mobile
- * `MobilePlayerSearchSheet`). Each surface keeps its own JSX-specific state
- * (input/container refs, popover sizing, per-instance element ids) and wires
- * it to this hook's derived state and handlers.
+ * Shared query/debounce/fetch/keyboard-nav/history behavior behind the player
+ * search combobox (`PlayerSearchCombobox`), which renders in the header and,
+ * at a larger size, in the landing hero.
  *
  * `onNavigate` runs alongside — not instead of — the default `push(...)` on
- * select, so a surface that needs to close itself on selection (the mobile
- * sheet) can do so without re-implementing selection.
+ * select, so a surface that needs to close itself on selection can do so
+ * without re-implementing selection.
  */
 export function usePlayerSearch(onNavigate?: (user: MinimizedUser) => void) {
   const t = useTranslations();
@@ -131,14 +129,6 @@ export function usePlayerSearch(onNavigate?: (user: MinimizedUser) => void) {
     push(`/users/${getPlayerSlug(user.name)}`);
   };
 
-  const handleClear = () => {
-    setIsOpen(false);
-    setSearchValue("");
-    setSearchData([]);
-    setActiveIndex(-1);
-    setIsSearching(false);
-  };
-
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.value;
 
@@ -189,14 +179,6 @@ export function usePlayerSearch(onNavigate?: (user: MinimizedUser) => void) {
     }
   };
 
-  const removeFromHistory = (id: number) => {
-    setHistory((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const clearHistory = () => {
-    setHistory([]);
-  };
-
   return {
     searchValue,
     isOpen,
@@ -204,16 +186,12 @@ export function usePlayerSearch(onNavigate?: (user: MinimizedUser) => void) {
     isSearching,
     searchData,
     activeIndex,
-    canShowResults,
     emptyMessage,
     handleSelect,
-    handleClear,
     handleChange,
     handleKeyDown,
     setActiveIndex,
     itemRefs,
-    history,
-    removeFromHistory,
-    clearHistory
+    history
   };
 }

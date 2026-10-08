@@ -113,7 +113,7 @@ export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClient
             </main>
           </div>
           <Separator className="mt-8" />
-          <Footer />
+          <Footer tenant={null} />
         </div>
       </div>
     );

@@ -828,6 +828,9 @@
      in-page rails offset by --aqt-sticky-top so nothing slides under it. */
   --aqt-header-h: 56px;
   --aqt-sticky-top: 88px;
+  /* Vertical rhythm between the open-layout sections of a page (home,
+     community page, organizer page) and before the footer. */
+  --section-gap: clamp(40px, 6vw, 72px);
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
   /* These alias next/font variables, so they only resolve if --font-* is

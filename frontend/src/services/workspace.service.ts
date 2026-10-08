@@ -17,6 +17,7 @@ import {
   WorkspaceListScope,
   WorkspaceMember,
   WorkspaceOwner,
+  WorkspaceStaffMember,
   WorkspaceVerificationStatus
 } from "@/types/workspace.types";
 import type {
@@ -66,6 +67,18 @@ export default class workspaceService {
   }
 
   /**
+   * The public "who runs it" list for the community page: owner, admins and
+   * referees with a player profile, highest role first. Anonymous and
+   * edge-cached, so no Authorization rides along.
+   */
+  static async getStaff(id: number): Promise<WorkspaceStaffMember[]> {
+    return apiFetch(`/api/v1/workspaces/${id}/staff`, {
+      skipAuth: true,
+      next: { revalidate: 60 }
+    }).then((r) => r.json());
+  }
+
+  /**
    * Stamp or clear the accountable owner. Superuser-only server-side — the cap
    * on how many workspaces an account may own is counted over this field.
    */
@@ -105,6 +118,11 @@ export default class workspaceService {
     data: {
       name?: string;
       description?: string;
+      tagline?: string | null;
+      about?: string | null;
+      discord_url?: string | null;
+      twitch_url?: string | null;
+      boosty_url?: string | null;
       icon_url?: string | null;
       is_active?: boolean;
       is_hidden?: boolean;

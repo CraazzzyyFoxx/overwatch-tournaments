@@ -46,7 +46,8 @@ from shared.services.notifications import NOTIFICATION_KINDS
 
 __all__ = ("DELIVERABLE_KINDS", "TEMPLATES", "deep_link_path", "render_discord")
 
-# The inbox's status palette (``NotificationList.getKindConfig``) by way of the
+# The inbox's status palette (``KIND_VISUAL`` in the frontend's
+# ``components/notifications/notification-kinds.ts``) by way of the
 # shared one, so the DM reads the same as the bell *and* the same as the mix
 # posts: green is good news, red is bad, amber wants action, blue is
 # information, teal is the platform accent.

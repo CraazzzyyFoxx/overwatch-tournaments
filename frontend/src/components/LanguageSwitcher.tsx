@@ -23,9 +23,6 @@ const LANGUAGE_NAME: Record<Locale, string> = {
   en: "English"
 };
 
-// Segment width in px — the sliding pill translates by this per index.
-const SEGMENT_W = 36;
-
 function useLocaleSwitch() {
   const active = useLocale() as Locale;
   const router = useRouter();
@@ -70,31 +67,22 @@ export function LanguageMenuRadioGroup() {
 }
 
 /**
- * Editorial Tactical language switcher: a segmented RU | EN control. Both
- * languages are always visible (no toggle ambiguity), and an accent pill slides
- * the active one. Uses the global `--aqt-*` tokens.
+ * The segmented RU | EN control. Both languages are always visible (no toggle
+ * ambiguity) and the active one carries the accent. Uses `--aqt-*` tokens.
  */
 export default function LanguageSwitcher({ className }: Readonly<{ className?: string }>) {
   const t = useTranslations();
   const { active, switchTo } = useLocaleSwitch();
-
-  const activeIndex = Math.max(0, ORDER.indexOf(active));
 
   return (
     <div
       role="group"
       aria-label={t("common.switchLanguage")}
       className={cn(
-        "relative inline-flex h-8 items-center rounded-[var(--aqt-radius-sm)] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] p-[3px]",
+        "inline-flex h-9 items-center rounded-[9px] border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] p-[3px]",
         className
       )}
     >
-      {/* Sliding accent pill — the memorable anchor; marks the active language. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-[3px] left-[3px] w-9 rounded-[calc(var(--aqt-radius-sm)-3px)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] ring-1 ring-inset ring-[color:color-mix(in_srgb,var(--aqt-teal)_35%,transparent)] transition-transform duration-200 ease-out motion-reduce:transition-none"
-        style={{ transform: `translateX(${activeIndex * SEGMENT_W}px)` }}
-      />
       {ORDER.map((loc) => {
         const isActive = loc === active;
         return (
@@ -108,10 +96,10 @@ export default function LanguageSwitcher({ className }: Readonly<{ className?: s
             aria-label={`${loc.toUpperCase()} — ${LANGUAGE_NAME[loc]}`}
             lang={loc}
             className={cn(
-              "aqt-tnum relative z-10 flex h-full w-9 items-center justify-center rounded-[calc(var(--aqt-radius-sm)-3px)] text-label font-semibold uppercase tracking-wide outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+              "aqt-tnum flex h-full min-w-9 items-center justify-center rounded-md px-1 text-label font-bold uppercase tracking-[0.06em] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
               isActive
-                ? "text-[color:var(--aqt-teal)]"
-                : "text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]"
+                ? "bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] text-[color:var(--aqt-teal)]"
+                : "text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)]"
             )}
           >
             {loc}

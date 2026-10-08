@@ -244,13 +244,25 @@
     "sourceOnGithub": "View the source on GitHub",
     "skipToContent": "Skip to content",
     "footer": {
-      "disclaimer": "{siteName} is not affiliated with or endorsed by Blizzard Entertainment, Inc.",
-      "getWorkspace": "Get your own workspace",
+      "disclaimer": "{siteName} is an independent tournament platform for Overwatch communities. Not affiliated with or endorsed by Blizzard Entertainment, Inc.",
+      "tenantDisclaimer": "{name} is a community on the {siteName} platform. Not affiliated with or endorsed by Blizzard Entertainment, Inc.",
+      "getWorkspace": "Start a community",
       "sectionsHeading": "Sections",
       "resourcesHeading": "Resources",
+      "communityHeading": "Community",
+      "platformHeading": "{siteName} platform",
+      "communities": "Communities",
+      "allCommunities": "All communities",
+      "myPlayerProfile": "My player profile",
+      "statistics": "Statistics",
+      "discord": "Discord",
+      "twitch": "Twitch",
+      "boosty": "Boosty",
       "docs": "Docs",
       "apiDocs": "API Docs",
-      "copyright": "© {year} {siteName}. All rights reserved."
+      "poweredBy": "Powered by",
+      "legalLabel": "Legal",
+      "copyright": "© {year} {siteName}"
     },
     "placementSpark": {
       "label": "Placements: {summary}"
@@ -2673,67 +2685,368 @@
     }
   },
   "home": {
-    "eyebrow": "OWT // Overwatch Tournament Platform",
-    "title": "What's happening now",
-    "ledeTenant": "Tournaments, player stats and rankings for this community.",
-    "ledePlatform": "Tournaments, player stats and rankings across all communities on the platform.",
-    "browseTournaments": "Browse Tournaments",
-    "byTheNumbers": "By the numbers",
-    "workspaces": "Workspaces",
-    "communitiesOnPlatform": "Communities on this platform",
-    "trustedWorkspace": "Trusted community — vouched for by the platform team",
-    "getWorkspaceCard": {
-      "title": "Get your own",
-      "description": "Learn how to add your community as a workspace"
+    "meta": {
+      "title": "OWT — Overwatch community tournaments",
+      "description": "Schedules, brackets and matches from every Overwatch community on OWT, and each player's full history in one profile."
     },
-    "seasonOverview": "Season overview",
-    "communityDashboard": "Community Dashboard",
-    "avgDivisionDesc": "Average division rank per role across all tournaments.",
-    "noEventsTitle": "No active events right now",
-    "noEventsBody": "Check back soon — tournaments are organized across multiple communities on this platform.",
-    "browsePastTournaments": "Browse past tournaments",
-    "byTheNumbersHeading": "Every tournament so far",
-    "statLiveNow": "Live now",
-    "statCommunities": "Communities",
-    "nowLive": "Now live //",
-    "communitiesCount": "{count, plural, one {# community} other {# communities}}",
-    "featured": "Featured",
-    "standingsSnapshot": "Standings snapshot",
-    "viewStandings": "View standings",
-    "colDiff": "Diff"
-  },
-  "getWorkspace": {
-    "title": "How to get your own workspace",
-    "lead": "A workspace is an isolated tournament space you can brand as your own community's home.",
-    "features": {
-      "domain": {
-        "title": "Your own address",
-        "description": "A subdomain, or a custom domain you connect yourself."
+    "hero": {
+      "eyebrow": "OWT · Overwatch community tournaments",
+      "title": "Overwatch community tournaments and player <accent>statistics</accent>",
+      "lede": "Schedules, brackets and matches from every community — and a player's whole history in one profile.",
+      "searchPlaceholder": "Player or BattleTag",
+      "browseTournaments": "Browse tournaments",
+      "myProfile": "My profile and statistics",
+      "hostTournament": "Run a tournament on OWT"
+    },
+    "now": {
+      "rubric": "Tournaments",
+      "title": "On the platform now",
+      "more": "All tournaments",
+      "error": "active tournaments",
+      "emptyBody": "Tournaments show up here as soon as a community opens registration.",
+      "live": "Live now",
+      "stage": "stage",
+      "teamsLabel": "{count, plural, one {team} other {teams}}",
+      "participantsLabel": "{count, plural, one {participant} other {participants}}",
+      "registrationsLabel": "{count, plural, one {entry} other {entries}}",
+      "bracket": "Bracket",
+      "matches": "Matches",
+      "regOpen": "Registration open",
+      "until": "until {date}",
+      "regEnds": "entries close",
+      "start": "start",
+      "apply": "Sign up",
+      "about": "About the tournament",
+      "none": "No tournaments right now",
+      "lastTournament": "Last tournament",
+      "winnerTeam": "Won by <b>{team}</b>",
+      "archive": "Tournament archive",
+      "lineFinishedWinner": "<d>{date}</d> · won by <b>{team}</b>",
+      "applicationsUntil": "Entries until {date}",
+      "registrationsCount": "{count, plural, one {# entry} other {# entries}}",
+      "teamsCount": "{count, plural, one {# team} other {# teams}}",
+      "participantsCount": "{count, plural, one {# participant} other {# participants}}"
+    },
+    "directory": {
+      "rubric": "Directory",
+      "title": "Communities on OWT",
+      "sub": "The directory lists communities that passed verification.",
+      "error": "the community directory",
+      "railLabel": "Communities on OWT",
+      "dotsLabel": "Position in the directory",
+      "pause": "Stop autoplay",
+      "play": "Start autoplay",
+      "prev": "Previous communities",
+      "next": "Next communities",
+      "dotRange": "Communities {from}–{to} of {total}",
+      "dotOne": "Community {index} of {total}",
+      "live": "Tournament running",
+      "tournamentsLabel": "{count, plural, one {tournament} other {tournaments}}",
+      "playersLabel": "{count, plural, one {player} other {players}}"
+    },
+    "leaders": {
+      "rubric": "Statistics",
+      "title": "Platform leaders",
+      "sub": "Across every community, all time.",
+      "more": "All statistics",
+      "totals": "The platform in numbers",
+      "mostWins": "Most wins",
+      "winsSub": "tournaments won",
+      "bestWinrate": "Best win rate",
+      "winrateSub": "4+ tournaments",
+      "winrateTitle": "Only players with more than 3 tournaments are counted"
+    },
+    "showcase": {
+      "rubric": "Platform",
+      "title": "What it looks like",
+      "sub": "Screenshots of the live platform: real players, tournaments and matches.",
+      "profile": {
+        "title": "Player profile",
+        "text": "Tournaments, win rate, form over the last ten, roles and favourite heroes — in one profile.",
+        "more": "Find a player",
+        "alt": "CraazzzyyFox's player profile: 26 tournaments, 50% win rate, form over the last 10 tournaments, role split and last tournament's stats"
       },
-      "theme": {
-        "title": "Your own look",
-        "description": "A dedicated color theme that matches your community's branding."
+      "tournament": {
+        "title": "Tournament page",
+        "text": "The result, the playoff bracket, the most-played heroes and the format — on one page.",
+        "more": "All tournaments",
+        "alt": "The «Турнир Сабов Anakq #42» tournament page: champion Tref, the bracket final, the most-played heroes"
       },
-      "content": {
-        "title": "Separate content",
-        "description": "Your tournaments and stats stay isolated from every other workspace."
+      "match": {
+        "title": "Match",
+        "text": "The series score, the maps, time played and the logs of every map.",
+        "more": "All matches",
+        "alt": "Tref against vac3x: 3:1 on the series, four maps played with their logs"
       }
     },
-    "action": {
-      "title": "Create it yourself",
-      "description": "Set up a workspace in a minute — you become its owner and administrator. New workspaces are not listed on the home page until the platform team reviews them.",
-      "create": "Create workspace",
-      "revoked": "Workspace creation is turned off for your account. Contact the platform team if you think that is a mistake."
+    "organizer": {
+      "eyebrow": "For organizers",
+      "title": "Run your community's tournaments on OWT",
+      "lede": "Registration, the balancer, brackets and match statistics. Your community page opens the moment you create it.",
+      "cta": "Create a community"
+    }
+  },
+  "getWorkspace": {
+    "metaTitle": "Run your tournaments on OWT — for organizers",
+    "metaDescription": "Registration, the balancer, the draft, brackets and match stats — on your community's own page. It opens the moment you create it.",
+    "hero": {
+      "eyebrow": "For organizers",
+      "title": "Run your community's tournaments on <accent>OWT</accent>",
+      "lede": "Registration, the balancer, the draft, brackets and match stats — on your community's own page. It opens the moment you create it.",
+      "stepsLabel": "How to launch a community",
+      "steps": {
+        "create": {
+          "title": "Create the community",
+          "text": "A name and an address — the page opens right away and can be linked to directly."
+        },
+        "discord": {
+          "title": "Connect your Discord server",
+          "text": "Match logs and roles both come from one server. A server administrator confirms it through Discord."
+        },
+        "verify": {
+          "title": "Pass verification",
+          "text": "After it the community joins the public directory and gets the trusted badge. Tournaments and the balancer work before it too."
+        }
+      }
+    },
+    "create": {
+      "name": "Name",
+      "namePlaceholder": "For example, Funny Cup",
+      "address": "Page address",
+      "slug": {
+        "hint": "Latin a–z, digits, hyphen and underscore.",
+        "format": "Latin a–z, digits, hyphen and underscore only",
+        "edges": "The address cannot start or end with a hyphen",
+        "reserved": "“{slug}” is reserved by the platform",
+        "ok": "The format works. Whether the address is free we check on create.",
+        "taken": "The address “{slug}” is already taken by another community. Pick a different one."
+      },
+      "submit": "Create community",
+      "submitSignedOut": "Sign in and create",
+      "note": "You become the owner. Logo, subdomain and colours come later, in the settings.",
+      "revoked": {
+        "title": "Community creation is turned off for your account",
+        "hint": "If that is a mistake, message the platform team on Discord."
+      },
+      "error": {
+        "limit": "You already own a community. One per account — message the platform team if you need another.",
+        "generic": "Could not create the community."
+      }
+    },
+    "features": {
+      "rubric": "Features",
+      "title": "Everything a tournament needs — from entry to archive",
+      "docs": "Documentation",
+      "shots": {
+        "form": {
+          "title": "Registration form",
+          "text": "A questionnaire of sections and questions with required fields and a preview. Save it as a template — every tournament of the community starts from it.",
+          "alt": "The “Form with ranks” registration form builder in the admin panel: the Accounts, Roles, Ranks, Scrims and Extra info sections and the Accounts questions — BattleTag, Smurf accounts, Discord, Twitch, Boosty"
+        },
+        "registration": {
+          "title": "Registration",
+          "text": "The phase schedule — registration, check-in, start — with a countdown, the entry count and the tournament format.",
+          "alt": "The SEITA: Last Duel tournament page during registration: the phase schedule, 19 entries, solo format"
+        },
+        "entries": {
+          "title": "Entries",
+          "text": "Every entry in one table: roles and ranks, status, balancer readiness and check-in. Filters, saved views and CSV export.",
+          "alt": "The entries table of “Турнир Тхао #5” in the admin panel: players, roles and ranks, entry and balancer statuses, check-in; 148 entries, 3 pending"
+        },
+        "stages": {
+          "title": "Brackets and stages",
+          "text": "A tournament is built from stages — Swiss groups, a double-elimination playoff. Each stage has its own seeding, series format and round schedule, and the bracket is visible at once.",
+          "alt": "The stage builder of “Турнир Тхао #5” in the admin panel: the Groups and Playoffs stages, double-elimination playoff settings and a bracket preview"
+        },
+        "bracket": {
+          "title": "The bracket on the tournament page",
+          "text": "The published bracket for players and viewers: upper and lower brackets, the score and the format of every encounter.",
+          "alt": "The double-elimination playoff bracket of “Турнир Сабов Anakq #42”: upper and lower brackets, BO3 encounter scores"
+        },
+        "mapStats": {
+          "title": "Match stats",
+          "text": "Every map's log is parsed on its own: rating, eliminations, damage, healing and blocking for every player on both teams.",
+          "alt": "Statistics for the Ilios map in the Tref versus vac3x match: the numbers of all ten players on both teams"
+        }
+      },
+      "grid": {
+        "registration": {
+          "title": "Registration",
+          "text": "Your own entry form, roles and ranks, check-in, entry approval."
+        },
+        "balancer": {
+          "title": "Balancer",
+          "text": "Even teams picked by role and division in minutes."
+        },
+        "draft": {
+          "title": "Captain draft",
+          "text": "A live room: captains pick in turn while viewers watch."
+        },
+        "brackets": {
+          "title": "Brackets and stages",
+          "text": "Groups, Swiss, single and double elimination, map pick-ban."
+        },
+        "mixes": {
+          "title": "Mixes",
+          "text": "Quick games for an evening: lobby, rosters, score and rating."
+        },
+        "matchStats": {
+          "title": "Match stats",
+          "text": "Discord logs are parsed on their own: maps, heroes, MVP."
+        },
+        "roles": {
+          "title": "Roles and access",
+          "text": "Owner, administrators, referees and mix hosts — each with their own rights."
+        },
+        "api": {
+          "title": "API and keys",
+          "text": "An HTTP API, WebSocket and narrowly scoped keys for bots."
+        }
+      }
+    },
+    "domains": {
+      "rubric": "Domains",
+      "title": "The community site — at your own address",
+      "sub": "Player links and tournament history do not change when the address does.",
+      "steps": {
+        "platform": {
+          "title": "A page on the platform",
+          "text": "It opens right after you create the community."
+        },
+        "subdomain": {
+          "title": "Subdomain and colours",
+          "text": "Logo and palette live in the settings; no DNS needed."
+        },
+        "verify": {
+          "title": "Confirm your domain",
+          "text": "A TXT record proves the domain is yours."
+        },
+        "cname": {
+          "title": "Point the domain at OWT",
+          "text": "And the site opens at your own address."
+        }
+      },
+      "preview": {
+        "navTournaments": "Tournaments",
+        "navPlayers": "Players",
+        "navStats": "Statistics",
+        "since": "Since {year}",
+        "allTournaments": "All tournaments",
+        "stats": "Statistics",
+        "counts": "{tournaments, plural, one {# tournament} other {# tournaments}} · {players, plural, one {# player} other {# players}}",
+        "poweredBy": "Powered by <b>OWT</b>",
+        "swatches": "4 core colours",
+        "dnsCaption": "DNS records for {domain}",
+        "dnsType": "Type",
+        "dnsName": "Name",
+        "dnsValue": "Value",
+        "dnsStatus": "Status",
+        "dnsConfirmed": "Confirmed",
+        "dnsWorking": "Working",
+        "dnsWaiting": "Waiting"
+      }
+    },
+    "facts": {
+      "auth": "<b>One sign-in across every domain.</b> A player signs in with their OWT account at any address of the community.",
+      "profile": "<b>One shared player profile.</b> Tournaments from every community are collected in one profile.",
+      "api": "<b>The API does not depend on the domain.</b> Integrations work the same at any address."
+    },
+    "cta": {
+      "title": "Start with a page on the platform",
+      "lede": "Domain, logo and colours are connected later, in the community settings.",
+      "button": "Create community"
     }
   },
   "workspace": {
-    "eyebrow": "Workspace",
-    "dashboard": "Dashboard",
-    "dashboardLede": "Tournament history, role stats and performance data for <hl>{name}</hl>.",
-    "tournamentHistory": "History of tournament changes",
-    "avgDivisionByRoles": "Average division by roles",
-    "topPlayersByWinRatio": "Top Players by Win ratio",
-    "popularHeroes": "Popular Heroes"
+    "metaTitlePlatform": "{name} — a community on OWT",
+    "metaTitleOwnHost": "{name} — community tournaments",
+    "backToCommunities": "All communities",
+    "communitySite": "Community site",
+    "unverifiedTitle": "This community is under review.",
+    "unverifiedText": "The page opens by direct link; it is not in the public directory yet. After the review — the directory and the trusted-community badge.",
+    "since": "Since {year}",
+    "links": {
+      "discord": "Discord",
+      "twitch": "Twitch",
+      "boosty": "Boosty"
+    },
+    "apply": "Apply",
+    "applyTo": "Apply to {name}",
+    "allTournaments": "All tournaments",
+    "statistics": "Statistics",
+    "acceptingUntil": "entries accepted until",
+    "participants": "{count, plural, one {# participant} other {# participants}}",
+    "participantsLabel": "{count, plural, one {participant} other {participants}}",
+    "teams": "{count, plural, one {# team} other {# teams}}",
+    "teamsLabel": "{count, plural, one {team} other {teams}}",
+    "applications": "{count, plural, one {# application} other {# applications}}",
+    "applicationsLabel": "{count, plural, one {application} other {applications}}",
+    "roles": {
+      "Tank": "Tank",
+      "Damage": "Damage",
+      "Support": "Support"
+    },
+    "now": {
+      "rubric": "Tournaments",
+      "title": "Now in the community",
+      "what": "tournaments",
+      "liveKicker": "Happening now",
+      "stage": "stage",
+      "bracket": "Bracket",
+      "matches": "Matches",
+      "registrationKicker": "Registration open",
+      "until": "until {time}",
+      "acceptingLabel": "entries",
+      "startLabel": "start",
+      "rulesAndFormat": "Rules and format",
+      "lastKicker": "Last tournament",
+      "wonBy": "Won by team",
+      "results": "Tournament results",
+      "pastTitle": "Past tournaments",
+      "pastSince": "since {year}",
+      "noTournaments": "This community has not run a tournament yet.",
+      "noPast": "Finished tournaments will show up here."
+    },
+    "hof": {
+      "rubric": "Players",
+      "title": "Hall of fame",
+      "sub": "All time in this community.",
+      "totals": "The community in numbers",
+      "mostWins": "Most wins",
+      "mostWinsSub": "tournaments won",
+      "bestWinrate": "Best win rate",
+      "winrateSub": "from 4 tournaments",
+      "winrateHint": "Only players with more than 3 tournaments are counted",
+      "winrateEmpty": "The ranking appears once players have played more than three tournaments in this community."
+    },
+    "stats": {
+      "rubric": "Statistics",
+      "title": "Community statistics",
+      "sub": "All time.",
+      "all": "All statistics",
+      "what": "statistics",
+      "perTournament": "Players per tournament",
+      "peak": "peak",
+      "activityAlt": "Players per tournament, last {count}: from {low} to {peak}",
+      "divisions": "Average division by role",
+      "topHeroes": "Most played",
+      "topHeroesSub": "share of time",
+      "heroAlt": "{name}: {share}, {role}"
+    },
+    "about": {
+      "rubric": "Community",
+      "title": "About the community",
+      "staffTitle": "Who runs it",
+      "matchTime": "Match time",
+      "matchTimeValue": "{zone} ({offset})",
+      "nextTournament": "Next tournament",
+      "rulesOf": "{name} rules",
+      "role": {
+        "owner": "Owner",
+        "admin": "Administrator",
+        "referee": "Referee"
+      }
+    }
   },
   "statistics": {
     "navTitle": "Statistics",
@@ -4863,32 +5176,41 @@
   "nav": {
     "login": "Sign in",
     "toggleMenu": "Toggle navigation menu",
+    "closeMenu": "Close menu",
     "groups": {
       "tournaments": "Tournaments",
       "users": "Players",
-      "play": "Play"
+      "play": "Outside tournaments",
+      "organizers": "For organizers"
     },
     "items": {
       "tournaments": {
-        "title": "Tournaments"
+        "title": "Tournaments",
+        "desc": "Schedule and archive"
       },
       "encounters": {
-        "title": "Encounters"
+        "title": "Encounters",
+        "desc": "Every match series"
       },
       "analytics": {
-        "title": "Analytics"
+        "title": "Analytics",
+        "desc": "Tournaments side by side"
       },
       "users": {
-        "title": "Players"
+        "title": "Players",
+        "desc": "Search and profiles"
       },
       "compare": {
-        "title": "Compare"
+        "title": "Compare",
+        "desc": "Two players side by side"
       },
       "heroesLeaderboard": {
-        "title": "Heroes leaderboard"
+        "title": "Heroes leaderboard",
+        "desc": "The best on every hero"
       },
       "achievements": {
-        "title": "Achievements"
+        "title": "Achievements",
+        "desc": "Rare and common"
       },
       "scrims": {
         "title": "Scrims"
@@ -4897,28 +5219,33 @@
         "title": "Mixes"
       },
       "admin": {
-        "title": "Admin"
+        "title": "Control panel"
       }
     },
-    "workspaces": "Workspaces",
-    "switchWorkspace": "Switch workspace",
-    "openWorkspace": "Open {name}",
+    "account": {
+      "myProfile": "My profile",
+      "playerLabel": "Player:"
+    },
+    "workspaces": "Communities",
+    "switchWorkspace": "Switch community",
+    "allWorkspaces": "All communities",
+    "createWorkspace": "Create a community",
     "activeEvents": {
-      "title": "Active Events",
-      "badge": "{count} Active",
-      "summary": "{count, plural, one {# ongoing} other {# ongoing}} across {workspaces, plural, one {# workspace} other {# workspaces}}"
+      "title": "Active events",
+      "trigger": "Active events: {count}",
+      "word": "{count, plural, one {active} other {active}}",
+      "summary": "{count, plural, one {# active event} other {# active events}} across {workspaces, plural, one {# community} other {# communities}}",
+      "registrations": "{count, plural, one {# entry} other {# entries}}",
+      "participants": "{count, plural, one {# participant} other {# participants}}"
     },
     "search": {
-      "placeholder": "Search users...",
-      "searching": "Searching users...",
-      "empty": "No users found.",
+      "placeholder": "Search players…",
+      "searching": "Searching players…",
+      "empty": "No players found.",
       "minChars": "Type at least 2 characters.",
-      "clear": "Clear search",
-      "resultsLabel": "User search results",
+      "resultsLabel": "Player search results",
       "mobileTrigger": "Search players",
-      "recent": "Recent",
-      "clearHistory": "Clear history",
-      "removeFromHistory": "Remove from history"
+      "recent": "Recent"
     },
     "label": "Site navigation"
   },
@@ -6575,11 +6902,10 @@
   "notifications": {
     "title": "Notifications",
     "newCount": "{count, plural, one {# new} other {# new}}",
-    "unread": "Unread",
-    "read": "Read",
-    "readFor": "Read: {notification}",
+    "unread": "New",
+    "bellLabel": "Notifications: {count, plural, one {# new} other {# new}}",
+    "close": "Close notifications",
     "markRead": "Mark read",
-    "markReadFor": "Mark read: {notification}",
     "markingRead": "Marking read…",
     "markingAllRead": "Marking all read…",
     "markedRead": "Notification marked read.",
@@ -6587,7 +6913,6 @@
     "markReadError": "Could not update read status. Try again.",
     "retryMarkRead": "Retry marking read",
     "delete": "Delete",
-    "deleteFor": "Delete notification: {notification}",
     "deleting": "Deleting notification…",
     "deleted": "Notification deleted.",
     "clearRead": "Clear read",
@@ -6597,6 +6922,8 @@
     "retryDelete": "Retry deleting",
     "loading": "Loading notifications…",
     "loadError": "Could not load notifications. Try again.",
+    "loadErrorTitle": "Could not load notifications",
+    "loadErrorHint": "This is a loading failure, not an empty inbox.",
     "refreshError": "Could not refresh notifications. Showing the last loaded notifications.",
     "retry": "Try again",
     "loadingMore": "Loading older notifications…",
@@ -6604,10 +6931,35 @@
     "retryLoadMore": "Retry loading older",
     "unknownKind": "New activity notification",
     "empty": "No notifications yet",
-    "emptyHint": "Team invites, registration decisions and disputed reports land here.",
+    "emptyHint": "Team invites, registration decisions and scheduled matches land here.",
     "markAllRead": "Mark all read",
     "loadMore": "Show older",
-    "configure": "Settings",
+    "configure": "Notification settings",
+    "announcementText": "<b>Announcement.</b> {title}",
+    "actions": {
+      "checkIn": "Check in",
+      "accept": "Accept",
+      "decline": "Decline",
+      "working": "Working…",
+      "checkedIn": "Checked in",
+      "accepted": "You accepted the invite",
+      "declined": "You declined the invite",
+      "failed": "Could not complete the action. Try again."
+    },
+    "floatStack": {
+      "label": "Important"
+    },
+    "urgent": {
+      "label": "Needs action",
+      "checkIn": "Check-in for {tournament} is open",
+      "invite": "{team} invited you to their roster for {tournament}",
+      "until": "until {time}",
+      "slot": "slot: {slot}",
+      "hide": "Hide until the next visit",
+      "hideTitle": "Hide — it stays in your notifications",
+      "hidden": "Hidden until the next visit. It is still in your notifications.",
+      "more": "{count} more"
+    },
     "banner": {
       "label": "Announcement",
       "eyebrow": "Announcement",
@@ -6616,29 +6968,29 @@
     },
     "kinds": {
       "team_invite": {
-        "received": "{team_name} invited you to their roster for {tournament_name}",
-        "answered": "{responder_name} {answer, select, accepted {accepted} declined {declined} other {answered}} your invite to {team_name}"
+        "received": "<b>{team_name}</b> invited you to their roster for <b>{tournament_name}</b>",
+        "answered": "{responder_name} {answer, select, accepted {accepted} declined {declined} other {answered}} your invite to <b>{team_name}</b>"
       },
       "registration": {
-        "approved": "Your registration for {tournament_name} was approved",
-        "rejected": "Your registration for {tournament_name} was rejected",
-        "opened": "Registration for {tournament_name} is open{closes_at, select, none {} other { until {closes_at}}}"
+        "approved": "Your registration for <b>{tournament_name}</b> was approved",
+        "rejected": "Your registration for <b>{tournament_name}</b> was rejected",
+        "opened": "Registration for <b>{tournament_name}</b> is open{closes_at, select, none {} other { until {closes_at}}}"
       },
       "check_in": {
-        "opened": "Check-in for {tournament_name} is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
+        "opened": "Check-in for <b>{tournament_name}</b> is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
       },
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
-        "dispute_review": "{position, plural, =0 {{home_team_name} and {away_team_name} disagree on the final series score — an organizer has to decide} other {{home_team_name} and {away_team_name} disagree on the score of map # — an organizer has to decide}}",
-        "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} {scheduled_at, select, none {is ready to play — the time is still to be announced} other {is scheduled for {scheduled_at}}}"
+        "dispute_review": "{position, plural, =0 {<b>{home_team_name}</b> and <b>{away_team_name}</b> disagree on the final series score — an organizer has to decide} other {<b>{home_team_name}</b> and <b>{away_team_name}</b> disagree on the score of map # — an organizer has to decide}}",
+        "scheduled": "<b>{home_team_name} vs {away_team_name}</b> in {tournament_name} {scheduled_at, select, none {is ready to play — the time is still to be announced} other {is scheduled for {scheduled_at}}}"
       },
       "announcement": {
         "published": "New announcement"
       },
       "team": {
-        "kicked": "You were removed from {team_name} ({tournament_name})",
-        "rejected": "Team {team_name} was rejected from {tournament_name}. {reason}",
-        "disbanded": "{team_name} was disbanded ({tournament_name})"
+        "kicked": "You were removed from <b>{team_name}</b> ({tournament_name})",
+        "rejected": "Team <b>{team_name}</b> was rejected from <b>{tournament_name}</b>. {reason}",
+        "disbanded": "<b>{team_name}</b> was disbanded ({tournament_name})"
       }
     },
     "admin": {
@@ -7545,6 +7897,35 @@
         "emptyFiltered": "No tick matches this status.",
         "empty": "No ticks recorded yet. The poller logs a row here on every tick once polling is on and an interval has elapsed."
       }
+    }
+  },
+  "site": {
+    "state": {
+      "loadFailed": "Couldn't load",
+      "loadFailedWhat": "Couldn't load {what}",
+      "notEmpty": "This is a loading error, not an empty list.",
+      "retry": "Retry",
+      "empty": "Nothing here yet"
+    },
+    "kpi": {
+      "communities": "Communities",
+      "tournaments": "Tournaments",
+      "teams": "Teams",
+      "players": "Players",
+      "encounters": "Encounters",
+      "maps": "Maps",
+      "days": "Days",
+      "hours": "Hours",
+      "champions": "Champions"
+    },
+    "trusted": {
+      "label": "Trusted community",
+      "title": "Trusted community — verified by the platform team"
+    },
+    "league": "League",
+    "entry": {
+      "solo": "Solo entry",
+      "team": "Team entry"
     }
   }
 }

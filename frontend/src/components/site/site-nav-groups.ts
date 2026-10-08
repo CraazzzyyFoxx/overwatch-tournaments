@@ -1,21 +1,35 @@
+import {
+  ChartColumn,
+  Crown,
+  Layers,
+  ListOrdered,
+  MonitorPlay,
+  Shuffle,
+  Swords,
+  Trophy,
+  Users,
+  type LucideIcon
+} from "lucide-react";
+
 /**
  * The public site's navigation tree — the single definition.
  *
- * It is data-driven by stable keys; the visible text (group labels and item
- * titles) is resolved from the `nav.*` message namespace at render time,
- * because module scope has no `t()`. `href` drives current-page matching,
- * `key` drives translation lookup.
+ * Data-driven by stable keys; the visible text (group labels, item titles and
+ * the one-line descriptions under them) is resolved from the `nav.*` message
+ * namespace at render time, because module scope has no `t()`. `href` drives
+ * current-page matching, `key` drives translation lookup.
  *
- * Every item is public. The admin entry is permission-gated, so `SiteNav`
- * appends it after this tree (`useCanAccessAdminEntry`) and nothing in here
- * needs filtering per viewer.
+ * Two shapes: `NAV_GROUPS` are the disclosure menus (header dropdown, sheet
+ * group), `NAV_LINKS` are the flat links that sit beside them. Every entry is
+ * public — the admin entry is permission-gated and lives in the account menu.
  */
 
-export type NavGroupKey = "tournaments" | "users" | "play";
+export type NavGroupKey = "tournaments" | "users";
 
 export interface NavItem {
   key: string;
   href: string;
+  icon: LucideIcon;
 }
 
 export interface NavGroup {
@@ -27,31 +41,29 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     key: "tournaments",
     items: [
-      { key: "tournaments", href: "/tournaments" },
-      { key: "encounters", href: "/encounters" },
-      { key: "analytics", href: "/tournaments/analytics" }
+      { key: "tournaments", href: "/tournaments", icon: Trophy },
+      { key: "encounters", href: "/encounters", icon: Swords },
+      { key: "analytics", href: "/tournaments/analytics", icon: ChartColumn }
     ]
   },
   {
     key: "users",
     items: [
-      { key: "users", href: "/users" },
-      { key: "compare", href: "/users/compare" },
-      { key: "heroesLeaderboard", href: "/users/heroes-compare" },
-      { key: "achievements", href: "/achievements" }
-    ]
-  },
-  {
-    // What a player joins or hosts rather than browses. Scrim rooms
-    // (docs/plans/2026-08-12-scrim-rooms.md) belong to no tournament; viewing a
-    // mix is public (signed out included) and only hosting needs the
-    // `custom_game` grant, gated inside the mix pages/RPCs themselves.
-    key: "play",
-    items: [
-      { key: "scrims", href: "/scrims" },
-      { key: "mixes", href: "/balancer/mix" }
+      { key: "users", href: "/users", icon: Users },
+      { key: "compare", href: "/users/compare", icon: Layers },
+      { key: "heroesLeaderboard", href: "/users/heroes-compare", icon: ListOrdered },
+      { key: "achievements", href: "/achievements", icon: Crown }
     ]
   }
+];
+
+/**
+ * What a player joins or hosts rather than browses. Scrim rooms belong to no
+ * tournament and viewing a mix is public, so neither hangs off a section.
+ */
+export const NAV_LINKS: readonly NavItem[] = [
+  { key: "mixes", href: "/balancer/mix", icon: Shuffle },
+  { key: "scrims", href: "/scrims", icon: MonitorPlay }
 ];
 
 /**
@@ -63,20 +75,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
  */
 export function currentNavHref(pathname: string): string | undefined {
   let current: string | undefined;
-  for (const group of NAV_GROUPS) {
-    for (const { href } of group.items) {
-      const within = pathname === href || pathname.startsWith(`${href}/`);
-      if (within && href.length > (current?.length ?? 0)) current = href;
-    }
+  for (const { href } of [...NAV_GROUPS.flatMap((group) => group.items), ...NAV_LINKS]) {
+    const within = pathname === href || pathname.startsWith(`${href}/`);
+    if (within && href.length > (current?.length ?? 0)) current = href;
   }
   return current;
-}
-
-/**
- * The group whose page this exactly is, or undefined — on a detail page too.
- * It decides whether the section's tab row shows, so the header asks the same
- * question to know that row will draw its bottom rule.
- */
-export function sectionPageGroup(pathname: string): NavGroup | undefined {
-  return NAV_GROUPS.find((group) => group.items.some((item) => item.href === pathname));
 }

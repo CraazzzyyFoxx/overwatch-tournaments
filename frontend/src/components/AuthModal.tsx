@@ -16,7 +16,7 @@ import { useOAuthProviders } from "@/hooks/useOAuthProviders";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
-import WorkspaceBrandIcon from "@/components/workspace/WorkspaceBrandIcon";
+import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import type { TenantWorkspaceBranding } from "@/lib/site/tenant-host";
 
 type ProviderButtonProps = {
@@ -73,7 +73,7 @@ const AuthModal = ({ tenantWorkspace }: AuthModalProps) => {
       <DialogContent className="overflow-hidden p-0 sm:max-w-[360px]">
         {/* Branding header */}
         <div className="flex flex-col items-center px-8 pb-6 pt-8">
-          {/* WorkspaceBrandIcon/next-image are decorative (alt=""); the group
+          {/* WorkspaceAvatar/next-image are decorative (alt=""); the group
               carries the name so the branding is not silent. */}
           <div
             role="img"
@@ -81,11 +81,7 @@ const AuthModal = ({ tenantWorkspace }: AuthModalProps) => {
             className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-[color:var(--aqt-overlay-3)] shadow-sm"
           >
             {tenantWorkspace ? (
-              <WorkspaceBrandIcon
-                name={tenantWorkspace.name}
-                iconUrl={tenantWorkspace.iconUrl}
-                className="size-[22px] rounded-sm text-label"
-              />
+              <WorkspaceAvatar workspace={tenantWorkspace} size={22} />
             ) : (
               <Image
                 src={SITE_ICON}

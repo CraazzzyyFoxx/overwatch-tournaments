@@ -1,5 +1,10 @@
 export const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? "OWT";
 
+// The platform's short wordmark in the site chrome (header plate, footer,
+// "Работает на OWT"). Not the configurable SITE_NAME, which names the
+// deployment in metadata and the sign-in dialog and can be long.
+export const BRAND_NAME = "OWT";
+
 // Public base URL for the frontend (used in metadata like Open Graph).
 // Must be an absolute URL including protocol, e.g. "https://example.com".
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://owt.craazzzyyfoxx.me";

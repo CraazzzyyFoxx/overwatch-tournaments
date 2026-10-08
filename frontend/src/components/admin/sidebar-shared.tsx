@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { AccountMenuContent } from "@/components/UserMenu";
-import { WorkspaceAvatar } from "@/components/workspace/WorkspaceSwitcher";
+import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
@@ -79,7 +79,7 @@ export function SidebarWorkspaceLogoItem({ href }: Readonly<{ href: string }>) {
                 />
               </div>
             ) : currentWorkspace ? (
-              <WorkspaceAvatar workspace={currentWorkspace} size="md" />
+              <WorkspaceAvatar workspace={currentWorkspace} size={28} />
             ) : (
               <div className="flex size-7 items-center justify-center">
                 <Image
@@ -189,7 +189,7 @@ export function SidebarUserDropdown() {
                         aria-current={ws.id === currentWorkspaceId ? "true" : undefined}
                         className="flex items-center gap-2 h-8 rounded-md text-sm"
                       >
-                        <WorkspaceAvatar workspace={ws} size="sm" />
+                        <WorkspaceAvatar workspace={ws} size={20} />
                         <span className="flex-1 truncate">{ws.name}</span>
                         {ws.id === currentWorkspaceId && (
                           <Check aria-hidden className="size-3.5 text-sidebar-primary" />

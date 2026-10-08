@@ -32,10 +32,11 @@ export async function resolveStatsScope(): Promise<StatsScope> {
   }
 }
 
-/** Tenant (white-label) host branding: the host workspace's name + icon. */
+/** Tenant (white-label) host branding: the host community's avatar source. */
 export interface TenantWorkspaceBranding {
+  id: number;
   name: string;
-  iconUrl: string | null;
+  icon_url: string | null;
 }
 
 /**
@@ -52,7 +53,7 @@ export async function resolveTenantWorkspace(): Promise<TenantWorkspaceBranding 
     const id = raw ? Number(raw) : NaN;
     if (!Number.isFinite(id)) return null;
     const workspace = await workspaceService.getById(id);
-    return { name: workspace.name, iconUrl: workspace.icon_url };
+    return { id: workspace.id, name: workspace.name, icon_url: workspace.icon_url };
   } catch {
     return null;
   }

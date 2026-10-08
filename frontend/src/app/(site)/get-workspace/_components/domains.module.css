@@ -1,0 +1,123 @@
+/* Scroll-driven domain steps (mock `.dom`). Utilities cannot express this:
+   the current step is a state three elements react to at once (its own
+   opacity, its number's colour, the sticky stage's cross-fade), and the teal
+   rule is positioned from a measured offset. Everything else in the section —
+   the browser frame, the DNS table — is plain Tailwind. */
+
+.dom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 0 56px;
+  align-items: start;
+}
+
+.steps {
+  position: relative;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 6px 12px;
+  align-content: start;
+  min-height: 46vh;
+  padding-top: 18px;
+  border-top: 1px solid var(--aqt-border-3);
+  transition: opacity 0.3s ease;
+}
+
+/* Enough track that the sticky stage (with the DNS table) stays put on the
+   last step. */
+.step:last-child {
+  min-height: 40vh;
+}
+
+.n {
+  grid-row: span 3;
+  padding-top: 3px;
+  font:
+    700 var(--text-caption) / 1.4 var(--aqt-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--aqt-fg-faint);
+  transition: color 0.3s ease;
+}
+
+/* Below 1024px each step carries its own preview; above it, the sticky stage does. */
+.inlinePreview {
+  display: none;
+}
+
+.stage {
+  position: sticky;
+  top: calc(var(--aqt-header-h) + 96px);
+  display: grid;
+}
+
+.frame {
+  grid-area: 1 / 1;
+  transition:
+    opacity 0.35s ease,
+    visibility 0s linear 0.35s;
+}
+
+.frame:not(.on) {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.frame.on {
+  transition-delay: 0s;
+}
+
+@media (min-width: 1024px) {
+  .step:not(.on) {
+    opacity: 0.4;
+  }
+
+  /* One teal rule slides to the current step (--bar-y is its offsetTop). */
+  .steps::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 1;
+    height: 2px;
+    background: var(--aqt-teal);
+    transform: translateY(var(--bar-y, 0px));
+    transition: transform 0.5s cubic-bezier(0.22, 0.7, 0.2, 1);
+    pointer-events: none;
+  }
+
+  .step.on .n {
+    color: var(--aqt-teal);
+  }
+}
+
+@media (max-width: 1023px) {
+  .dom {
+    grid-template-columns: 1fr;
+  }
+
+  .stage {
+    display: none;
+  }
+
+  .step {
+    min-height: 0;
+    padding-bottom: 32px;
+  }
+
+  .inlinePreview {
+    display: block;
+    grid-column: 1 / -1;
+    margin-top: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step,
+  .n,
+  .frame,
+  .steps::before {
+    transition: none;
+  }
+}
