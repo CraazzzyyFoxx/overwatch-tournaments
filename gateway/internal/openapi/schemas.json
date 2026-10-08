@@ -4161,6 +4161,10 @@
         "ref": "balancer.CustomGameVoiceRun"
       }
     },
+    "rpc.balancer.custom.voice_options": {
+      "description": "Permission: workspace membership plus being the mix's host or co-host (or a superuser). Returns the voice channels of the workspace's mix voice category, split into `general` and `team` voices, each with the bot's `missing_permissions`. `error` is set instead of failing when Discord is unreachable or the category is gone (`category_not_found`); with no category configured both lists are empty.",
+      "summary": "List custom game voice channels"
+    },
     "rpc.balancer.custom.voice_return": {
       "request": {
         "array": false,
