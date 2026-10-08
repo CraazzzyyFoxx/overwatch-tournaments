@@ -973,10 +973,13 @@ describe("PickupTeamsPanel", () => {
 describe("PickupTeamsPanel lineup card refresh", () => {
   // `shouldAdvanceTime` keeps the harness's own `tick()` resolving, while the
   // debounce stays under the test's control.
+  let mountedRasterize: typeof captureSpies.rasterize;
   beforeEach(() => {
+    mountedRasterize = captureSpies.rasterize;
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
   afterEach(() => {
+    captureSpies.rasterize = mountedRasterize;
     vi.useRealTimers();
   });
 
@@ -1081,5 +1084,25 @@ describe("PickupTeamsPanel lineup card refresh", () => {
     await settle(2000);
 
     expect(onRefreshLineup).toHaveBeenCalledWith(null);
+  });
+
+  it("captures with the rasteriser the panel holds when the timer fires", async () => {
+    // `useNodeCapture` rebuilds `rasterize` around its `capturing` guard, so a
+    // host copying the card inside the window leaves the scheduled one stale:
+    // it would either capture on top of that copy or refuse for good.
+    const stale = captureSpies.rasterize;
+    const { rerender } = await mountPanel(game(), { liveLineupPostId: 42 });
+
+    await rerender(reseated());
+    await settle(500);
+    const current = vi.fn().mockResolvedValue(LINEUP_PNG);
+    captureSpies.rasterize = current;
+    // Same lineup, so the debounce keeps running rather than restarting.
+    await rerender(reseated());
+    await settle(2000);
+
+    expect(current).toHaveBeenCalledTimes(1);
+    expect(stale).not.toHaveBeenCalled();
+    expect(onRefreshLineup).toHaveBeenCalledWith(LINEUP_PNG);
   });
 });

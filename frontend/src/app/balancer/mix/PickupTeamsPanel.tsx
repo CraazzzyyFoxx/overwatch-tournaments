@@ -186,10 +186,16 @@ export function PickupTeamsPanel({
     shown.current = { lobbyIndex, signature: lineupSignature };
     // A tab switch shows another lobby's lineup; that lobby's card is not stale.
     if (previous.lobbyIndex !== lobbyIndex || previous.signature === lineupSignature) return;
-    const current = refresh.current;
-    if (!current.canWrite || !current.onRefreshLineup || current.liveLineupPostId == null) return;
+    const scheduled = refresh.current;
+    if (!scheduled.canWrite || !scheduled.onRefreshLineup || scheduled.liveLineupPostId == null) return;
     const timer = window.setTimeout(() => {
-      void current
+      // Read live, never from the schedule-time snapshot: `rasterize` is rebuilt
+      // around the `capturing` guard, so a frozen one either runs a second
+      // capture over a manual copy or refuses forever after it. The write gate
+      // is re-checked for the same reason -- it can close inside the window.
+      const now = refresh.current;
+      if (!now.canWrite || !now.onRefreshLineup || now.liveLineupPostId == null) return;
+      void now
         .rasterize()
         .catch(() => null)
         .then((image) => refresh.current.onRefreshLineup?.(image));
