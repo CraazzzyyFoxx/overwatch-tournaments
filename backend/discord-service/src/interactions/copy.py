@@ -20,7 +20,7 @@ from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 __all__ = (
     "LINK_BLOCKERS",
     "MIX_BLOCKERS",
-    "Locale",
+    "VOICE_REFUSALS",
     "error_text",
     "locale_of",
     "mix_blocker_text",
@@ -137,7 +137,6 @@ _ERRORS: dict[Locale, dict[str, str]] = {
         "voice_not_configured": "В настройках workspace не выбрана категория войсов.",
         "general_voice_not_configured": "У микса не выбран общий войс.",
         "general_voice_outside_category": "Общий войс микса больше не в категории — выберите его заново.",
-        "discord_unavailable": "Бот сейчас недоступен — попробуйте ещё раз.",
     },
     "en": {
         "invite_already_accepted": "This invite has already been accepted.",
@@ -152,7 +151,6 @@ _ERRORS: dict[Locale, dict[str, str]] = {
         "voice_not_configured": "The workspace has no voice category.",
         "general_voice_not_configured": "This mix has no general voice.",
         "general_voice_outside_category": "The mix's general voice is no longer in the category — pick it again.",
-        "discord_unavailable": "The bot is unavailable — try again.",
     },
 }
 
@@ -332,6 +330,11 @@ _VOICE: dict[Locale, dict[str, str]] = {
 MIX_BLOCKERS: frozenset[str] = frozenset(_MIX_BLOCKERS["ru"])
 #: The refusals a profile link can actually fix.
 LINK_BLOCKERS: frozenset[str] = frozenset({"discord_not_linked", "battlenet_not_linked", "player_not_linked"})
+#: The voice refusals the balancer sends as a bare 409 detail; a 503 is said by
+#: the generic "the bot is offline" card instead, so it is not one of these.
+VOICE_REFUSALS: frozenset[str] = frozenset(
+    {"voice_not_configured", "general_voice_not_configured", "general_voice_outside_category"}
+)
 
 
 def text(locale: Locale, key: str, **values: str) -> str:

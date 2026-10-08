@@ -93,18 +93,18 @@ _VOICE_ACTIONS = frozenset({"voice.move", "voice.return"})
 _AUTOCOMPLETE_TIMEOUT = 2.0
 
 
-def _mix_blocker(outcome: Outcome) -> str | None:
-    """The mix refusal behind an envelope, or ``None`` for anything else.
+def _refusal(outcome: Outcome, known: frozenset[str]) -> str | None:
+    """The refusal code behind an envelope, if it is one the bot words itself.
 
-    ``self_*`` raise ``HTTPException(detail="<code>")`` with a bare string, and
+    The services raise ``HTTPException(detail="<code>")`` with a bare string, and
     ``shared.rpc.common.http_error`` puts a string detail in the envelope's
     human ``message`` -- so the code arrives there while ``code`` is only the
-    status it was raised with. Both are read, so moving the code into
-    ``details["fields"]`` later would still land here.
+    status it was raised with (``conflict``). Both are read, so moving the code
+    into ``details["fields"]`` later would still land here.
     """
     for candidate in (outcome.code, outcome.message):
         code = (candidate or "").strip()
-        if code in copy.MIX_BLOCKERS:
+        if code in known:
             return code
     return None
 
@@ -236,7 +236,11 @@ class ActionDispatcher:
             return self._card(RED, _say("error", copy.text(locale, "inactive")))
         if outcome.status == "unavailable":
             return self._card(AMBER, _say("offline", copy.text(locale, "unavailable")))
-        blocker = _mix_blocker(outcome) if action_name.startswith(_MIX_PREFIX) else None
+        refusal = _refusal(outcome, copy.VOICE_REFUSALS) if action_name in _VOICE_ACTIONS else None
+        if refusal is not None:
+            # The mix or the workspace is missing a voice: a setting to fix, not a failure.
+            return self._card(AMBER, _say("lock", copy.error_text(locale, refusal, "")))
+        blocker = _refusal(outcome, copy.MIX_BLOCKERS) if action_name.startswith(_MIX_PREFIX) else None
         if blocker is not None:
             fix = (
                 [

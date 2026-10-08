@@ -657,12 +657,19 @@ class VoiceControlsTests(IsolatedAsyncioTestCase):
         self.assertIn("Перенесено: 1", text)
         self.assertIn("**Не в войсе:** Bob", text)
 
-    def test_a_mix_without_a_general_voice_is_told_what_to_fix(self) -> None:
-        outcome = Outcome("failed", code="general_voice_not_configured", message="general voice is not configured")
+    async def test_a_mix_without_a_general_voice_is_told_what_to_fix(self) -> None:
+        # The balancer raises ``HTTPException(409, detail="general_voice_not_configured")``:
+        # a bare string detail, which the envelope carries as the human message
+        # while ``code`` is only the status. The sentence must survive that.
+        refusal = rpc_error("conflict", "general_voice_not_configured")
+        rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.balancer.custom.voice_return": refusal})
+        dispatcher = _dispatcher()
 
-        text = _reply_text(_dispatcher().reply(outcome, "voice.return", "ru"))
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            outcome = await dispatcher.perform(4242, "voice.return", "42-all")
 
-        self.assertIn("У микса не выбран общий войс.", text)
+        self.assertEqual((outcome.status, outcome.code), ("failed", "conflict"))
+        self.assertIn("У микса не выбран общий войс.", _reply_text(dispatcher.reply(outcome, "voice.return", "ru")))
 
     async def test_autocomplete_offers_the_open_mixes_matching_what_was_typed(self) -> None:
         hosted = [
