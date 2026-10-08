@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проводите турниры на OWT — для организаторов</title>
+<link rel="icon" href="frontend/public/brand-mark.svg">
+<link rel="stylesheet" href="design/owt-mock.css">
+<!--
+  Organizer page. Mockup → src/app/(site)/get-workspace/page.tsx (decision Q9:
+  the organizer story moved here from the home page; home keeps one banner).
+
+  The create form mirrors what POST /api/v1/workspaces takes today (name +
+  slug; CreateWorkspaceDialog). The address it creates is the PLATFORM page,
+  /workspace/<slug> — subdomain and custom domain are settings, not creation
+  fields, so the form must not promise "<slug>.owt…".
+  There is no availability endpoint: format and the reserved list
+  (backend RESERVED_SLUGS) are checked on the client, "taken" only arrives as
+  the 409 of the submit.
+
+  Sections: CreateHero (form + 3 steps) · Features (6 real screenshots from
+  design/shots, in the organizer's order: form builder, public registration,
+  entries table, stage builder, public bracket, map stats — then the
+  8-item grid) · Domains (4 scroll-driven steps — platform page, subdomain +
+  palette, TXT, CNAME — with a sticky preview; real example: Jaristo Squad) ·
+  PlatformFacts · closing CTA.
+-->
+<style>
+  .gw { display: flex; flex-direction: column; gap: var(--section-gap); padding-top: 20px; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 32px 56px; padding: clamp(24px, 3.2vw, 44px); }
+  .hero-title { margin-top: 14px; max-width: 14em; font: 600 var(--text-display)/1.03 var(--aqt-display); letter-spacing: -0.01em; text-wrap: balance; }
+  .hero-title .accent { color: var(--aqt-teal); }
+  .create { margin-top: 28px; max-width: 620px; display: grid; gap: 16px; }
+  .create__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; }
+  @media (max-width: 639px) { .create__row { grid-template-columns: 1fr; } }
+  .addr .prefix { color: var(--aqt-fg-dim); font: 400 var(--text-body)/1 ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+  .addr input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-body); }
+  @media (max-width: 479px) { .addr .prefix { display: none; } }
+  .create__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .create__actions small { font-size: var(--text-caption); color: var(--aqt-fg-dim); }
+
+  .steps { display: grid; gap: 0; align-content: start; padding-left: 40px; border-left: 1px solid var(--aqt-border); }
+  .steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 4px 12px; padding: 16px 0; border-bottom: 1px solid var(--aqt-border); }
+  .steps li:first-child { padding-top: 0; }
+  .steps li:last-child { border-bottom: 0; }
+  .steps .n { grid-row: span 2; font: 700 var(--text-caption)/1.5 var(--aqt-data); font-variant-numeric: tabular-nums; color: var(--aqt-teal); }
+  .steps b { font: 700 var(--text-ui)/1.3 var(--aqt-display); color: var(--aqt-fg); }
+  .steps p { font-size: var(--text-body); color: var(--aqt-fg-muted); }
+  @media (max-width: 1023px) { .hero-grid { grid-template-columns: 1fr; } .steps { padding-left: 0; border-left: 0; padding-top: 24px; border-top: 1px solid var(--aqt-border); } }
+
+  /* features: open items on hairlines, cells are links into the docs */
+  .features { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 32px; }
+  @media (max-width: 1279px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 639px) { .features { grid-template-columns: 1fr; } }
+  .features li { min-width: 0; }
+  .features a { display: flex; flex-direction: column; gap: 8px; height: 100%; padding-top: 18px; border-top: 1px solid var(--aqt-border-3); transition: border-color .15s ease; }
+  .features a:hover { border-top-color: var(--aqt-teal); }
+  .features a:focus-visible { outline-offset: 4px; }
+  .features .icon { width: 20px; height: 20px; color: var(--aqt-teal); }
+  .features b { font: 700 var(--text-heading)/1.3 var(--aqt-display); color: var(--aqt-fg); }
+  .features p { font-size: var(--text-body); color: var(--aqt-fg-muted); }
+  .show + .features { margin-top: clamp(56px, 7vw, 96px); }
+
+  /* domains: scroll-driven steps. Desktop: the steps scroll on the left, the
+     preview sticks on the right and switches to the step crossing the middle of
+     the viewport. Below 1024 px: no sticky stage, each step carries its preview. */
+  .dom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0 56px; align-items: start; }
+  .dstep { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 6px 12px; align-content: start; min-height: 46vh; padding-top: 18px; border-top: 1px solid var(--aqt-border-3); transition: opacity .3s ease; }
+  .dstep:last-child { min-height: 40vh; } /* enough track that the sticky stage (with the DNS table) stays put on the last step */
+  .dstep__n { grid-row: span 3; padding-top: 3px; font: 700 var(--text-caption)/1.4 var(--aqt-data); font-variant-numeric: tabular-nums; color: var(--aqt-fg-faint); transition: color .3s ease; }
+  .dstep b { font: 600 clamp(20px, 1.8vw, 24px)/1.2 var(--aqt-display); letter-spacing: -0.01em; color: var(--aqt-fg); }
+  .dstep p { font-size: var(--text-ui); color: var(--aqt-fg-muted); }
+  .dstep code { font: 400 var(--text-caption)/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--aqt-fg-dim); overflow-wrap: anywhere; }
+  .dstep code em { font-style: normal; color: var(--aqt-fg); }
+  .dstep__pv { display: none; }
+  .dom__stage { position: sticky; top: calc(var(--aqt-header-h) + 96px); display: grid; }
+  .dom__frame { grid-area: 1 / 1; transition: opacity .35s ease, visibility 0s linear .35s; }
+  .dom__frame:not(.is-on) { opacity: 0; visibility: hidden; }
+  .dom__frame.is-on { transition-delay: 0s; }
+  @media (min-width: 1024px) {
+    .dstep:not(.is-on) { opacity: .4; }
+    /* one teal rule slides to the current step (--bar-y set from its offsetTop) */
+    .dsteps { position: relative; }
+    .dsteps::before { content: ""; position: absolute; inset: 0 0 auto; z-index: 1; height: 2px; background: var(--aqt-teal); transform: translateY(var(--bar-y, 0px)); transition: transform .5s cubic-bezier(.22, .7, .2, 1); pointer-events: none; }
+    .dstep.is-on .dstep__n { color: var(--aqt-teal); }
+  }
+  @media (max-width: 1023px) {
+    .dom { grid-template-columns: 1fr; }
+    .dom__stage { display: none; }
+    .dstep { min-height: 0; padding-bottom: 32px; }
+    .dstep__pv { display: block; grid-column: 1 / -1; margin-top: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .dstep, .dstep__n, .dom__frame, .dsteps::before { transition: none; } }
+
+  .browser { border: 1px solid var(--aqt-border-2); border-radius: 12px; overflow: hidden; background: var(--aqt-bg); box-shadow: 0 18px 50px rgb(0 0 0 / .45); }
+  .browser__bar { height: 40px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--aqt-border); background: var(--aqt-card); }
+  .browser__dots { display: flex; gap: 6px; } .browser__dots i { width: 9px; height: 9px; border-radius: 999px; background: var(--aqt-border-3); }
+  .browser__url { flex: 1; min-width: 0; height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 999px; background: var(--aqt-overlay-3); font: 400 12px/1 ui-monospace, Menlo, Consolas, monospace; color: var(--aqt-fg-muted); white-space: nowrap; overflow: hidden; }
+  .pv { color: var(--aqt-fg); background: var(--aqt-bg); }
+  .pv__hdr { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--aqt-border); background: var(--aqt-card); }
+  .pv__hdr b { font: 800 14px/1 var(--aqt-display); }
+  .pv__nav { display: flex; gap: 2px; font-size: var(--text-label); color: var(--aqt-fg-muted); }
+  .pv__nav span { padding: 6px 8px; border-radius: 6px; }
+  .pv__nav span:first-child { color: var(--aqt-teal); background: color-mix(in srgb, var(--aqt-teal) 12%, transparent); }
+  .pv__body { position: relative; padding: 22px 20px 24px; display: grid; gap: 12px; }
+  .pv__body::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: var(--aqt-teal); }
+  .pv__name { display: flex; align-items: center; gap: 12px; font: 600 26px/1.1 var(--aqt-display); }
+  .pv__btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pv__foot { display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--aqt-border); font-size: var(--text-label); color: var(--aqt-fg-dim); }
+  .browser + .dns, .browser + .swatches { margin-top: 14px; }
+  .dns div { display: grid; grid-template-columns: 64px minmax(0, 1.3fr) minmax(0, 1fr) 156px; gap: 12px; align-items: center; padding: 10px 0; font: 400 var(--text-caption)/1.4 ui-monospace, Menlo, Consolas, monospace; }
+  .dns div + div { border-top: 1px solid var(--aqt-border); }
+  .dns .th + div { border-top-color: var(--aqt-border-3); }
+  .dns .th { font: 600 var(--text-label)/1.25 var(--aqt-data); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--aqt-fg-faint); }
+  .dns span { overflow-wrap: anywhere; }
+  @media (max-width: 639px) { .dns div { grid-template-columns: 52px minmax(0, 1fr); } .dns div > :nth-child(3), .dns div > :nth-child(4) { grid-column: 2; } .dns .th > :nth-child(n+3) { display: none; } }
+  .ok { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; justify-self: start; white-space: nowrap; font: 700 var(--text-label)/1.25 var(--aqt-data); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--aqt-emerald); background: color-mix(in srgb, var(--aqt-emerald) 12%, transparent); border: 1px solid color-mix(in srgb, var(--aqt-emerald) 30%, transparent); }
+  .ok--wait { color: var(--aqt-fg-dim); background: var(--aqt-overlay-2); border-color: var(--aqt-border-2); }
+  .swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .swatches span.sw { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--aqt-border-2); }
+
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; padding-top: 24px; border-top: 1px solid var(--aqt-border); }
+  @media (max-width: 899px) { .facts { grid-template-columns: 1fr; } }
+  .facts div { display: flex; gap: 12px; } .facts .icon { margin-top: 3px; color: var(--aqt-fg-dim); }
+  .facts p { font-size: var(--text-body); color: var(--aqt-fg-muted); } .facts b { color: var(--aqt-fg); font-weight: 600; }
+
+  .close-cta { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px 40px; padding: clamp(24px, 3vw, 36px) clamp(24px, 3.2vw, 44px); }
+  @media (max-width: 767px) { .close-cta { grid-template-columns: 1fr; } .close-cta .btn { justify-self: start; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="design/owt-icons.js"></script>
+<script src="design/owt-data.js"></script>
+<script src="design/owt-mock.js"></script>
+<script>
+const { D, html, raw, icon, community, wsAvatar, derivePalette, show } = OWT;
+
+// backend/app-service/src/services/workspace/service.py RESERVED_SLUGS
+const RESERVED = ["www", "api", "auth", "admin", "app", "assets", "static", "cdn", "mail", "ws", "docs", "status", "support"];
+const TAKEN = D.communities.map((c) => c.slug); // only known after submit (409)
+
+function checkSlug(s) {
+  if (!s) return { kind: "neutral", msg: "Латиница a–z, цифры, дефис и подчёркивание." };
+  if (!/^[a-z0-9_-]+$/.test(s)) return { kind: "err", msg: "Только латиница a–z, цифры, дефис и подчёркивание" };
+  if (/^[-_]|[-_]$/.test(s)) return { kind: "err", msg: "Адрес не может начинаться или заканчиваться дефисом" };
+  if (RESERVED.includes(s)) return { kind: "err", msg: `«${s}» зарезервирован платформой` };
+  return { kind: "ok", msg: "Формат подходит. Занят ли адрес, проверим при создании." };
+}
+const helpHtml = (r) => html`${r.kind === "ok" ? icon("check", "icon--sm") : r.kind === "err" ? icon("circle-alert", "icon--sm") : ""}<span>${r.msg}</span>`;
+
+function createForm(state) {
+  const revoked = state.form === "revoked" && state.auth === "in";
+  const preset = { empty: ["", ""], valid: ["Funny Cup", "funny-cup"], format: ["Funny Cup", "Funny Cup"], reserved: ["Api", "api"], taken: ["Anakq", "anak"], revoked: ["", ""] }[state.form];
+  const r = state.form === "taken" ? { kind: "err", msg: `Адрес «${preset[1]}» уже занят другим сообществом. Выберите другой.` } : checkSlug(preset[1]);
+  if (revoked) return html`
+    <div class="state state--error state--dashed" style="margin-top:28px;max-width:620px">${icon("lock")}<div><b>Создание сообществ отключено для вашего аккаунта</b>Если это ошибка, напишите команде платформы в Discord.</div></div>`;
+  return html`
+    <form class="create" id="create" novalidate onsubmit="event.preventDefault()">
+      <div class="create__row">
+        <div><label class="eyebrow field-label" for="ws-name">Название</label>
+          <div class="input"><input id="ws-name" name="name" value="${preset[0]}" placeholder="Например, Funny Cup" autocomplete="off" required></div></div>
+        <div><label class="eyebrow field-label" for="ws-slug">Адрес страницы</label>
+          <div class="input addr ${r.kind === "err" ? "input--invalid" : ""}"><span class="prefix" aria-hidden="true">${D.zone}/workspace/</span>
+            <input id="ws-slug" name="slug" value="${preset[1]}" placeholder="funny-cup" spellcheck="false" autocomplete="off" required aria-describedby="slug-help" aria-invalid="${r.kind === "err"}"></div>
+          <p class="help help--${r.kind}" id="slug-help" aria-live="polite">${helpHtml(r)}</p>
+        </div>
+      </div>
+      <div class="create__actions">
+        <button class="btn btn--primary btn--lg" type="submit">${state.auth === "in" ? "Создать сообщество" : html`${icon("log-in")}Войти и создать`}</button>
+        <small>Вы станете владельцем. Логотип, поддомен и цвета — в настройках после создания.</small>
+      </div>
+    </form>`;
+}
+
+const STEPS = [
+  ["Создайте сообщество", "Название и адрес — страница открывается сразу, на неё можно ссылаться напрямую."],
+  ["Привяжите Discord-сервер", "Из одного сервера приходят матч-логи и роли. Подтверждает администратор сервера через Discord."],
+  ["Пройдите проверку", "После неё сообщество попадает в общий каталог и получает бейдж доверенного. Турниры и балансировщик работают и до проверки."],
+];
+const FEATURES = [
+  ["clipboard-list", "Регистрация", "Своя форма заявки, роли и ранги, чек-ин, одобрение заявок."],
+  ["scale", "Балансировщик", "Подбор равных команд по ролям и дивизионам за минуты."],
+  ["users", "Драфт капитанов", "Живая комната: капитаны выбирают по очереди, зрители смотрят."],
+  ["network", "Сетки и стадии", "Группы, swiss, single и double elimination, пик-бан карт."],
+  ["shuffle", "Миксы", "Быстрые игры на вечер: лобби, составы, счёт и рейтинг."],
+  ["chart-column", "Статистика матчей", "Логи из Discord разбираются сами: карты, герои, MVP."],
+  ["shield-check", "Роли и доступы", "Владелец, администраторы, судьи и хосты миксов — у каждого свои права."],
+  ["code-xml", "API и ключи", "HTTP API, WebSocket и ключи с узкими правами для ботов."],
+];
+
+/* Domains — a real community as the example: Jaristo Squad runs on a
+   verified custom domain with its own palette. The whole path, one step per
+   scroll stop; the preview shows the state right after that step. */
+const J = community("jaristo-squad");
+const DSTEPS = [
+  { t: "Страница на платформе", addr: raw(`${D.zone}/workspace/<em>${J.slug}</em>`), d: "Открывается сразу после создания.", url: `${D.zone}/workspace/${J.slug}` },
+  { t: "Поддомен и цвета", addr: raw(`<em>${J.subdomain}</em>.${D.zone}`), d: "Логотип и палитра — в настройках, DNS не нужен.", url: `${J.subdomain}.${D.zone}` },
+  { t: "Подтвердите свой домен", addr: raw(`TXT <em>_owt-verify.${J.customDomain}</em>`), d: "TXT-запись подтверждает, что домен ваш.", url: `${J.subdomain}.${D.zone}` },
+  { t: "Направьте домен на OWT", addr: raw(`CNAME <em>${J.customDomain}</em> → ${D.zone}`), d: "И сайт открывается по вашему адресу.", url: J.customDomain },
+];
+const dns = (cnameOk) => html`<div class="dns" role="table" aria-label="DNS-записи для ${J.customDomain}">
+  <div class="th" role="row"><span role="columnheader">Тип</span><span role="columnheader">Имя</span><span role="columnheader">Значение</span><span role="columnheader">Статус</span></div>
+  <div role="row"><span>TXT</span><span>_owt-verify.${J.customDomain}</span><span class="dim">owt-verify-…</span><span class="ok">${icon("check", "icon--sm")}Подтверждён</span></div>
+  <div role="row"><span>CNAME</span><span>${J.customDomain}</span><span class="dim">${D.zone}</span>${cnameOk ? html`<span class="ok">${icon("check", "icon--sm")}Работает</span>` : html`<span class="ok ok--wait">${icon("clock", "icon--sm")}Ожидает</span>`}</div>
+</div>`;
+function preview(step) {
+  const own = step > 0;
+  const vars = own ? Object.entries(derivePalette(J.branding)).map(([k, v]) => `${k}:${v}`).join(";") : "";
+  const below = [
+    "",
+    html`<div class="swatches"><span class="eyebrow">4 основных цвета</span><span style="display:flex;gap:6px">${["brand_primary", "brand_secondary", "brand_background", "brand_surface"].map((k) => html`<span class="sw" title="${k}: ${J.branding[k]}" style="background:${J.branding[k]}"></span>`)}</span></div>`,
+    dns(false),
+    dns(true),
+  ][step];
+  return html`
+    <div class="browser">
+      <div class="browser__bar"><span class="browser__dots"><i></i><i></i><i></i></span><span class="browser__url">${icon("lock", "icon--sm")}${DSTEPS[step].url}</span></div>
+      <div class="pv" style="${vars}">
+        <div class="pv__hdr">${own ? html`${wsAvatar(J, 22)}<b>${J.name}</b>` : html`<img src="frontend/public/brand-mark.svg" alt="" width="22" height="22"><b>OWT</b>${wsAvatar(J, 20)}<span style="font-size:var(--text-label);color:var(--aqt-fg-muted)">${J.name}</span>`}
+          <span class="pv__nav" style="margin-left:${own ? "8px" : "auto"}"><span>Турниры</span><span>Игроки</span><span>Статистика</span></span></div>
+        <div class="pv__body">
+          <span class="eyebrow">С 2026 года</span>
+          <div class="pv__name">${wsAvatar(J, 40)}${J.name}</div>
+          <div class="pv__btns"><span class="btn btn--primary btn--sm">Все турниры</span><span class="btn btn--outline btn--sm">Статистика</span></div>
+          <div class="pv__foot"><span>2 турнира · 72 игрока</span>${own ? html`<span>Работает на <b style="color:var(--aqt-fg)">OWT</b></span>` : ""}</div>
+        </div>
+      </div>
+    </div>
+    ${below}`;
+}
+
+/* The step crossing the middle of the viewport is the current one: it lights
+   up, the teal rule slides to it and the sticky stage cross-fades to its
+   preview. The previews are an illustration (aria-hidden); each step's text
+   carries the facts. */
+let domIO, domRO;
+function syncDomSteps() {
+  domIO?.disconnect(); domRO?.disconnect();
+  const list = document.querySelector(".dsteps");
+  const steps = [...list.querySelectorAll("[data-dstep]")];
+  const frames = [...document.querySelectorAll(".dom__frame")];
+  let cur = 0;
+  const place = () => list.style.setProperty("--bar-y", `${steps[cur].offsetTop}px`);
+  const set = (i) => { cur = i; [steps, frames].forEach((els) => els.forEach((el, k) => el.classList.toggle("is-on", k === i))); place(); };
+  domIO = new IntersectionObserver((entries) => { for (const e of entries) if (e.isIntersecting) set(Number(e.target.dataset.dstep)); }, { rootMargin: "-49% 0px -50% 0px" });
+  steps.forEach((s) => domIO.observe(s));
+  domRO = new ResizeObserver(place); // step heights change with width and font load
+  domRO.observe(list);
+}
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "ws-slug") return;
+  e.target.value = e.target.value.toLowerCase().replace(/\s+/g, "-");
+  const r = checkSlug(e.target.value);
+  const help = document.getElementById("slug-help");
+  help.className = `help help--${r.kind}`;
+  help.innerHTML = helpHtml(r).s;
+  e.target.setAttribute("aria-invalid", String(r.kind === "err"));
+  e.target.closest(".input").classList.toggle("input--invalid", r.kind === "err");
+});
+
+OWT.mount({
+  defaults: { auth: "out", form: "empty", inbox: "new", ann: "on" },
+  schema: [
+    { key: "auth", label: "Пользователь", options: [["out", "Гость"], ["in", "Вошёл"]] },
+    { key: "inbox", label: "Уведомления (у вошедшего)", options: [["new", "3 новых, 2 дела"], ["read", "Всё прочитано"], ["empty", "Пусто"], ["error", "Ошибка"]] },
+    { key: "ann", label: "Объявление", options: [["on", "Есть"], ["off", "Нет"]] },
+    { key: "form", label: "Форма создания", options: [["empty", "Пусто"], ["valid", "Формат ок"], ["format", "Ошибка формата"], ["reserved", "Зарезервирован"], ["taken", "Занят (после отправки)"], ["revoked", "Создание отключено"]] },
+  ],
+  note: "Пример доменов — реальное сообщество Jaristo Squad (свой домен, своя палитра). Поле адреса проверяется вживую — попробуйте ввести.",
+  after: syncDomSteps,
+  render(state) {
+    return html`
+      ${OWT.header({ tenant: null, current: null, auth: state.auth, active: D.active, inbox: state.inbox })}
+      ${OWT.floatStack({ auth: state.auth, ann: state.ann === "on" })}
+      <main id="main" class="shell gw" tabindex="-1">
+        <section class="hero-frame" aria-labelledby="gw-title"><span class="hero-frame__glow" aria-hidden="true"></span>
+          <div class="hero-grid">
+            <div style="min-width:0">
+              <p class="eyebrow">Для организаторов</p>
+              <h1 class="hero-title" id="gw-title">Проводите турниры своего сообщества на <span class="accent">OWT</span></h1>
+              <p class="lede" style="margin-top:14px">Регистрация, балансировщик, драфт, сетки и статистика матчей — на странице вашего сообщества. Она открывается сразу после создания.</p>
+              ${createForm(state)}
+            </div>
+            <ol class="steps" aria-label="Как запустить сообщество">${STEPS.map(([t, d], i) => html`<li><span class="n">0${i + 1}</span><b>${t}</b><p>${d}</p></li>`)}</ol>
+          </div>
+        </section>
+
+        <section class="sec" aria-labelledby="feat-title">
+          <div class="section-head"><div><span class="eyebrow rubric">Возможности</span><h2 class="h-title" id="feat-title">Всё для турнира — от заявки до архива</h2></div><a class="more" href="#">Документация${icon("arrow-right", "icon--sm")}</a></div>
+          ${show({ title: "Форма регистрации", text: "Анкета из разделов и вопросов с обязательными полями и предпросмотром. Сохраните её шаблоном — любой турнир сообщества начнётся с него.", img: "admin-form.webp", ratio: "16 / 9", alt: "Конструктор формы регистрации «Форма с рангами» в админке: разделы Аккаунты, Роли, Ранги, Скримы, Доп. информация и вопросы раздела Аккаунты — BattleTag, Smurf accounts, Discord, Twitch, Boosty" })}
+          ${show({ title: "Регистрация", text: "Расписание фаз — регистрация, чек-ин, старт — с обратным отсчётом, число заявок и формат турнира.", img: "registration.webp", alt: "Страница турнира SEITA: Last Duel в фазе регистрации: расписание фаз, 19 заявок, соло-формат" })}
+          ${show({ title: "Заявки", text: "Все заявки в одной таблице: роли и ранги, статус, готовность к балансировщику и чек-ин. Фильтры, сохранённые виды и выгрузка в CSV.", img: "admin-registrations.webp", alt: "Таблица заявок турнира «Турнир Тхао #5» в админке: игроки, роли и ранги, статусы заявок и балансировщика, чек-ин; 148 заявок, 3 на рассмотрении" })}
+          ${show({ title: "Сетки и стадии", text: "Турнир собирается из стадий — группы по швейцарской системе, плей-офф double elimination. У каждой стадии свой посев, формат серий и расписание раундов, сетка видна сразу.", img: "admin-bracket.webp", ratio: "4 / 3", alt: "Конструктор стадий турнира «Турнир Тхао #5» в админке: стадии Groups и Playoffs, настройки плей-офф double elimination и предпросмотр сетки" })}
+          ${show({ title: "Сетка на странице турнира", text: "Опубликованная сетка для игроков и зрителей: верхняя и нижняя сетки, счёт и формат каждой встречи.", img: "bracket.webp", alt: "Сетка плей-офф double elimination турнира «Турнир Сабов Anakq #42»: верхняя и нижняя сетки, счёт встреч BO3" })}
+          ${show({ title: "Статистика матчей", text: "Лог каждой карты разбирается сам: рейтинг, убийства, урон, лечение и блок по каждому игроку обеих команд.", img: "map-stats.webp", alt: "Статистика карты Ilios в матче Tref против vac3x: показатели всех десяти игроков обеих команд" })}
+          <ul class="features">${FEATURES.map(([ic, t, d]) => html`<li><a href="#">${icon(ic)}<b>${t}</b><p>${d}</p></a></li>`)}</ul>
+        </section>
+
+        <section class="sec" aria-labelledby="dom-title">
+          <div class="section-head"><div><span class="eyebrow rubric">Домены</span><h2 class="h-title" id="dom-title">Сайт сообщества — по вашему адресу</h2><p>Ссылки на игроков и история турниров не меняются при смене адреса.</p></div></div>
+          <div class="dom">
+            <ol class="dsteps">${DSTEPS.map((s, i) => html`<li class="dstep${i ? "" : " is-on"}" data-dstep="${i}"><span class="dstep__n" aria-hidden="true">0${i + 1}</span><b>${s.t}</b><code>${s.addr}</code><p>${s.d}</p><div class="dstep__pv" aria-hidden="true">${preview(i)}</div></li>`)}</ol>
+            <div class="dom__stage" aria-hidden="true">${DSTEPS.map((_, i) => html`<div class="dom__frame${i ? "" : " is-on"}">${preview(i)}</div>`)}</div>
+          </div>
+        </section>
+
+        <div class="facts">
+          <div>${icon("key-round")}<p><b>Один вход на всех доменах.</b> Игрок входит через аккаунт OWT на любом адресе сообщества.</p></div>
+          <div>${icon("user")}<p><b>Профиль игрока общий.</b> Турниры из всех сообществ собраны в одном профиле.</p></div>
+          <div>${icon("code-xml")}<p><b>API не зависит от домена.</b> Интеграции работают одинаково на любом адресе.</p></div>
+        </div>
+
+        <section class="hero-frame" aria-labelledby="close-title"><span class="hero-frame__glow" aria-hidden="true"></span>
+          <div class="close-cta">
+            <div><h2 class="h-title" id="close-title">Начните со страницы на платформе</h2><p class="lede" style="margin-top:8px">Домен, логотип и цвета подключаются позже — в настройках сообщества.</p></div>
+            <a class="btn btn--primary btn--lg" href="#create">Создать сообщество</a>
+          </div>
+        </section>
+      </main>
+      ${OWT.footer({ tenant: null })}`;
+  },
+});
+</script>
+</body>
+</html>

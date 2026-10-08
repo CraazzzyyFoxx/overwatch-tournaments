@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сообщество — OWT</title>
+<link rel="icon" href="frontend/public/brand-mark.svg">
+<link rel="stylesheet" href="design/owt-mock.css">
+<!--
+  Community page. Mockup → src/app/(site)/workspace/[slug]/page.tsx, and the
+  same component renders "/" on the community's own host (decision Q7).
+
+  Host modes (dev panel):
+    Платформа   owt.craazzzyyfoxx.me/workspace/<slug> — OWT chrome, switcher,
+                "community site" chip (verified custom domain only), default palette
+    Свой адрес  <sub>.owt.craazzzyyfoxx.me or the verified custom domain —
+                community chrome (no social buttons: links live in the hero
+                and footer), "Powered by OWT" footer,
+                the community palette when branding is on
+
+  Sections, each its own Suspense boundary in the app:
+    CommunityHero     identity, links, the one CTA, one column
+    NowInCommunity    the lead tournament (running / registration, else the last
+                      finished one with its winner) + the chronicle of past ones
+    HallOfFame        totals + champions + best winrate (> 3 tournaments, backend rule)
+    CommunityStats    players per tournament, avg division per role, top heroes
+    About + Staff     markdown about, timezone; public staff  (needs backend: about, staff)
+-->
+<style>
+  .ws-main { display: flex; flex-direction: column; gap: var(--section-gap); padding-top: 20px; }
+  .ws-top { display: grid; gap: 28px; }
+  .ctx-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: var(--aqt-fg-dim); font-size: var(--text-caption); }
+  .back:hover { color: var(--aqt-fg); }
+  .back .icon { transform: scaleX(-1); }
+  .site-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--aqt-border-2); background: var(--aqt-overlay-2); font-size: var(--text-caption); color: var(--aqt-fg-muted); max-width: 100%; }
+  .site-chip:hover { background: var(--aqt-overlay-3); color: var(--aqt-fg); }
+  .site-chip b { color: var(--aqt-fg); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .notice { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--aqt-amber) 35%, transparent); background: color-mix(in srgb, var(--aqt-amber) 8%, transparent); }
+  .notice .icon { color: var(--aqt-amber); margin-top: 2px; }
+  .notice p { color: var(--aqt-fg-muted); }
+  .notice b { color: var(--aqt-fg); font-weight: 600; }
+
+  .hero-body { padding: clamp(24px, 3.2vw, 44px); }
+  .ident { display: flex; align-items: center; gap: 18px; }
+  .ident h1 { display: flex; align-items: center; gap: 10px; margin-top: 6px; font: 600 var(--text-display)/1.03 var(--aqt-display); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .ident h1 .trusted { width: 22px; height: 22px; }
+  .ws-lede { margin-top: 18px; }
+  .chips { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--aqt-border-2); background: var(--aqt-overlay-2); font-size: var(--text-caption); color: var(--aqt-fg-muted); }
+  .chip:hover { background: var(--aqt-overlay-3); color: var(--aqt-fg); }
+  .chip img { width: 16px; height: 16px; object-fit: contain; }
+  .cta { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .cta-note { margin-top: 10px; font-size: var(--text-caption); color: var(--aqt-fg-dim); }
+
+  @media (max-width: 639px) { .ident { align-items: flex-start; } .ident .ws-avatar { --s: 48px !important; } }
+
+  /* now in the community: the lead tournament left, the chronicle right */
+  .now { display: grid; gap: 32px 40px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
+  .about-grid { display: grid; gap: 32px 40px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+  @media (max-width: 1023px) { .now, .about-grid { grid-template-columns: minmax(0, 1fr); } }
+
+  /* chronicle */
+  .chron li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; }
+  .chron__date { padding-top: 3px; font: 600 var(--text-label)/1.25 var(--aqt-data); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--aqt-fg-faint); }
+  .chron__body { position: relative; padding: 0 0 22px 24px; border-left: 1px solid var(--aqt-border); min-width: 0; }
+  .chron li:last-child .chron__body { padding-bottom: 4px; }
+  .chron__dot { position: absolute; left: -5px; top: 6px; width: 9px; height: 9px; border-radius: 999px; background: var(--aqt-border-3); box-shadow: 0 0 0 3px var(--aqt-bg); }
+  .chron__title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .chron__title a { font: 700 var(--text-ui)/1.3 var(--aqt-display); color: var(--aqt-fg); }
+  .chron__title a:hover { color: var(--aqt-fg-muted); }
+  .chron__win { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; font-size: var(--text-caption); color: var(--aqt-fg-muted); }
+  .chron__win .icon { vertical-align: -3px; color: var(--aqt-gold); }
+  .chron__win b { color: var(--aqt-fg); font-weight: 600; }
+  .chron__meta { color: var(--aqt-fg-dim); font-variant-numeric: tabular-nums; }
+  .chron__roster { margin-top: 4px; font-size: var(--text-caption); color: var(--aqt-fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 639px) { .chron li { grid-template-columns: 1fr; gap: 4px; } .chron__date { padding-left: 24px; } }
+  .col .chron { margin-top: 16px; }
+
+  /* community stats */
+  .cstats { display: grid; gap: 28px 40px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 1279px) { .cstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cstats > :first-child { grid-column: 1 / -1; } }
+  @media (max-width: 767px) { .cstats { grid-template-columns: minmax(0, 1fr); } }
+  .cstats .col__head + * { margin-top: 16px; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 128px; }
+  .bars span { flex: 1; min-width: 3px; max-width: 36px; border-radius: 3px 3px 0 0; background: color-mix(in srgb, var(--aqt-teal) 28%, transparent); }
+  .bars span:last-child { background: var(--aqt-teal); }
+  .bars span:hover { background: color-mix(in srgb, var(--aqt-teal) 60%, transparent); }
+  .bar-labels { display: flex; gap: 4px; margin-top: 6px; }
+  .bar-labels span { flex: 1; min-width: 3px; max-width: 36px; text-align: center; font: 500 var(--text-label)/1 var(--aqt-data); font-variant-numeric: tabular-nums; color: var(--aqt-fg-faint); white-space: nowrap; overflow: visible; }
+  .divs { display: grid; gap: 10px; }
+  .divs li { display: grid; grid-template-columns: 22px minmax(0, 1fr) 36px 48px; align-items: center; gap: 10px; min-height: 40px; }
+  .divs .val { text-align: right; font: 700 var(--text-ui)/1 var(--aqt-data); font-variant-numeric: tabular-nums; }
+  .heroes { display: grid; gap: 10px; }
+  .heroes li { display: grid; grid-template-columns: 28px 84px minmax(0, 1fr) 52px; align-items: center; gap: 10px; min-height: 32px; font-size: var(--text-caption); }
+  .heroes img { width: 28px; height: 28px; border-radius: 999px; background: var(--aqt-card-2); border: 1px solid var(--aqt-border-2); object-fit: cover; }
+  .track { height: 8px; border-radius: 4px; background: var(--aqt-overlay-3); overflow: hidden; }
+  .track i { display: block; height: 100%; border-radius: inherit; }
+  .heroes .val { text-align: right; color: var(--aqt-fg-dim); font-variant-numeric: tabular-nums; }
+
+  /* about + staff */
+  .about-text { display: grid; gap: 12px; max-width: 46rem; font-size: var(--text-ui); line-height: 1.6; color: var(--aqt-fg-muted); }
+  .dl-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px 24px; margin-top: 16px; padding-block: 14px; border-block: 1px solid var(--aqt-border); }
+  .dl-row dd { margin-top: 4px; font-size: var(--text-ui); color: var(--aqt-fg); }
+  .staff li a { display: flex; align-items: center; gap: 12px; min-height: 56px; border-bottom: 1px solid var(--aqt-border); }
+  .staff .who { width: 32px; height: 32px; border-radius: 999px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--aqt-border-2); background: var(--aqt-overlay-3); color: var(--aqt-fg-dim); }
+
+  /* dev-only address bar (not part of the design) */
+  .devbar { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 14px; font: 500 12px/1 ui-monospace, Menlo, Consolas, monospace; color: #b8c0cc; background: #14161b; border-bottom: 1px dashed #3a414c; }
+  .devbar span:last-child { margin-left: auto; color: #8b94a3; font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="design/owt-icons.js"></script>
+<script src="design/owt-data.js"></script>
+<script src="design/owt-mock.js"></script>
+<script>
+const { D, NOW, html, raw, icon, fmt, community, host, wsAvatar, trustedBadge, STATUS, roleIcon, LINK_META, fact, colHead, kpiList, leaderboard } = OWT;
+
+/* EXAMPLE values for fields the API does not serve yet (Q13 d, e, g, i).
+   Texts are derived from real data (tournament names, team formation), not invented. */
+const EXAMPLE = {
+  anak: {
+    tagline: "Турниры сабов и лига OWAL",
+    links: [{ kind: "discord" }, { kind: "twitch" }],
+    about: ["Турниры сабов проходят с 2019 года, летом — лига OWAL с игровыми днями по выходным.", "Заявка подаётся в одиночку: команды собирает балансировщик по ролям и дивизионам, поэтому команда существует только в рамках турнира."],
+  },
+  "jaristo-squad": {
+    tagline: null,
+    links: [{ kind: "discord" }],
+    about: null,
+  },
+};
+const STAFF = [["Владелец", "crown"], ["Администратор", "shield-check"], ["Судья", "scale"]];
+
+const ROLE = { Tank: ["Танк", "var(--aqt-tank)"], Damage: ["Урон", "var(--aqt-damage)"], Support: ["Поддержка", "var(--aqt-support)"] };
+const day = (d) => new Date(NOW.getTime() + d * 864e5).toISOString();
+
+/* Workspace-scoped active tournament. Both communities have none today, so
+   "live"/"reg" re-label the community's REAL latest tournament (sim). */
+function activeFor(state, W) {
+  const t = W.chronicle[0];
+  if (state.events === "live") return { ...t, status: "playoffs", stage: "Плей-офф", start: day(-1), end: day(0) };
+  if (state.events === "reg") return { ...t, status: "registration", registrations: t.participants, regEnd: day(2), liveStart: day(3), start: day(3), end: day(3) };
+  return null;
+}
+
+const errorState = (what) => html`
+  <div class="state state--error state--dashed" role="status">${icon("circle-alert")}
+    <div><b>Не удалось загрузить ${what}</b>Это ошибка загрузки, а не пустой список.<br><button class="btn btn--outline btn--sm" type="button">${icon("refresh-cw", "icon--sm")}Повторить</button></div>
+  </div>`;
+
+/* The lead tournament: no box, a 2px rule in its status colour. One community,
+   so no workspace line — the page already says whose tournaments these are. */
+function lead(W, active) {
+  if (active && STATUS[active.status][0] === "live") return html`
+    <div class="feat" style="--c:var(--aqt-status-live)">
+      <div>
+        <div class="feat__kicker"><span class="live-dot" aria-hidden="true"></span>Сейчас идёт</div>
+        <a href="#" class="feat__name sk">${active.name}</a>
+      </div>
+      <div class="feat__facts">
+        ${active.stage ? fact(active.stage, "стадия") : ""}
+        ${fact(fmt.num(active.teams), fmt.plural(active.teams, ["команда", "команды", "команд"]))}
+        ${fact(fmt.num(active.participants), fmt.plural(active.participants, ["участник", "участника", "участников"]))}
+      </div>
+      <div class="feat__actions"><a class="btn btn--outline btn--sm" href="#">${icon("network", "icon--sm")}Сетка</a><a class="btn btn--ghost btn--sm" href="#">Матчи</a></div>
+    </div>`;
+  // the primary "Подать заявку" lives in the hero CTA: never twice on one page
+  if (active) return html`
+    <div class="feat" style="--c:var(--aqt-status-upcoming)">
+      <div>
+        <div class="feat__kicker">${icon("calendar", "icon--sm")}Открыта регистрация</div>
+        <a href="#" class="feat__name sk">${active.name}</a>
+        <div class="feat__meta sk">Соло-заявка</div>
+      </div>
+      <div class="feat__facts">
+        ${fact(html`<time datetime="${active.regEnd}" title="${fmt.dateTime(active.regEnd)} МСК">до ${fmt.dateTime(active.regEnd)}</time>`, "приём заявок")}
+        ${fact(html`<time datetime="${active.liveStart}">${fmt.dateTime(active.liveStart)}</time>`, "старт")}
+        ${fact(fmt.num(active.registrations), fmt.plural(active.registrations, ["заявка", "заявки", "заявок"]))}
+      </div>
+      <a class="more" href="#">Регламент и формат${icon("arrow-right", "icon--sm")}</a>
+    </div>`;
+  const last = W.chronicle[0];
+  return html`
+    <div class="feat" style="--c:var(--aqt-fg-faint)">
+      <div>
+        <div class="feat__kicker">${icon("clock", "icon--sm")}Последний турнир</div>
+        <a href="#" class="feat__name sk">${last.name}</a>
+        <div class="feat__meta sk"><time datetime="${last.start}" title="${fmt.dateLong(last.start)}">${fmt.dateLong(last.start)}</time> · ${fmt.count(last.participants, ["участник", "участника", "участников"])}</div>
+        ${last.winner ? html`<div class="feat__meta sk" style="color:var(--aqt-fg)">${icon("trophy", "icon--sm")} Победила команда <b>${last.winner.team}</b></div><div class="roster sk">${last.winner.players.map((p) => html`<a href="#">${p}</a>`)}</div>` : ""}
+      </div>
+      <a class="more" href="#">Результаты турнира${icon("arrow-right", "icon--sm")}</a>
+    </div>`;
+}
+
+function hero(state, c, W, ex, active) {
+  const regOpen = active && active.status === "registration";
+  return html`
+    <section class="hero-frame" aria-labelledby="ws-title"><span class="hero-frame__glow" aria-hidden="true"></span>
+      <div class="hero-body">
+        <div class="ident">${wsAvatar(c, 72)}
+          <div style="min-width:0">
+            <p class="eyebrow">С ${W.firstYear} года${ex.tagline ? html` · ${ex.tagline}` : ""}</p>
+            <h1 id="ws-title">${c.name}${state.verif === "trusted" ? trustedBadge({ verification: "trusted" }) : ""}</h1>
+          </div>
+        </div>
+        ${c.description ? html`<p class="lede ws-lede">${c.description}</p>` : ""}
+        ${ex.links.length ? html`<div class="chips">${ex.links.map((l) => html`<a class="chip" href="#"><img src="${LINK_META[l.kind].img}" alt="">${LINK_META[l.kind].label}${icon("arrow-up-right", "icon--sm")}</a>`)}</div>` : ""}
+        <div class="cta">
+          ${regOpen
+            ? html`<a class="btn btn--primary btn--lg" href="#" aria-label="Подать заявку на ${active.name}">Подать заявку</a><a class="btn btn--outline btn--lg" href="#">Все турниры</a>`
+            : html`<a class="btn btn--primary btn--lg" href="#">Все турниры</a><a class="btn btn--outline btn--lg" href="#">${icon("chart-column")}Статистика</a>`}
+        </div>
+        ${regOpen ? html`<p class="cta-note">${active.name} · приём заявок до <time datetime="${active.regEnd}">${fmt.dateTime(active.regEnd)}</time> · ${fmt.count(active.registrations, ["заявка", "заявки", "заявок"])}</p>` : ""}
+      </div>
+    </section>`;
+}
+
+/* Everything in the chronicle is finished with a winner; the lead above is
+   chronicle[0] in every state, so the list starts at 1. */
+const chronRow = (t) => html`<li>
+  <div class="chron__date sk"><time datetime="${t.start}" title="${fmt.dateLong(t.start)}">${fmt.month(t.start)}</time></div>
+  <div class="chron__body"><span class="chron__dot" style="background:var(--aqt-gold)" aria-hidden="true"></span>
+    <div class="chron__title"><a href="#" class="sk">${t.name}</a>${t.league ? html`<span class="pill pill--plain">Лига</span>` : ""}</div>
+    <div class="chron__win sk"><span>${icon("trophy", "icon--sm")} Победила команда <b>${t.winner.team}</b></span><span class="chron__meta">${fmt.count(t.participants, ["участник", "участника", "участников"])} · ${fmt.count(t.teams, ["команда", "команды", "команд"])}</span></div>
+    <div class="chron__roster sk" title="${t.winner.players.join(", ")}">${t.winner.players.join(" · ")}</div>
+  </div>
+</li>`;
+
+function now(state, W, active) {
+  return html`
+    <section id="now" class="sec sec--closed" aria-labelledby="now-title">
+      <div class="section-head"><div><span class="eyebrow rubric">Турниры</span><h2 class="h-title" id="now-title">Сейчас в сообществе</h2></div><a class="more" href="#">Все турниры${icon("arrow-right", "icon--sm")}</a></div>
+      ${state.error === "1" ? errorState("турниры") : html`
+      <div class="now">
+        ${lead(W, active)}
+        <div class="col">
+          ${colHead("Прошлые турниры", `с ${W.firstYear} года`)}
+          <ol class="chron">${W.chronicle.slice(1).map(chronRow)}</ol>
+        </div>
+      </div>`}
+    </section>`;
+}
+
+function leaders(state, W) {
+  const err = state.error === "1";
+  return html`
+    <section class="sec" aria-labelledby="hof-title">
+      <div class="section-head"><div><span class="eyebrow rubric">Игроки</span><h2 class="h-title" id="hof-title">Зал славы</h2><p>За всё время в сообществе.</p></div></div>
+      <div class="leaders">
+        ${kpiList({ title: "Сообщество в цифрах", totals: W.totals, keys: ["tournaments", "teams", "players", "encounters", "maps", "days", "hours", "champions"], path: "workspace.totals", err })}
+        ${leaderboard("Больше всего побед", err ? null : W.champions, (v) => `${v}×`, "var(--aqt-amber)", "турниров выиграно")}
+        ${leaderboard("Лучший винрейт", err ? null : W.winrate, fmt.pct, "var(--aqt-emerald)", raw('<span title="Учитываются игроки, сыгравшие больше 3 турниров">от 4 турниров</span>'), "Рейтинг появится, когда игроки сыграют больше трёх турниров в сообществе.")}
+      </div>
+    </section>`;
+}
+
+function communityStats(state, W) {
+  const act = W.activity;
+  const max = Math.max(...act.map((a) => a.players), 1);
+  const peak = act.reduce((a, b) => (b.players > a.players ? b : a), act[0]);
+  const every = Math.ceil(act.length / 8);
+  const short = (n, i) => n.match(/#(\d+)/)?.[0] ?? n.match(/Day (\d+)/i)?.[1]?.replace(/^/, "Д") ?? String(i + 1);
+  const heroMax = Math.max(...W.heroes.map((h) => h.share));
+  return html`
+    <section class="sec" aria-labelledby="cs-title">
+      <div class="section-head"><div><span class="eyebrow rubric">Статистика</span><h2 class="h-title" id="cs-title">Статистика сообщества</h2><p>За всё время.</p></div><a class="more" href="#">Вся статистика${icon("arrow-right", "icon--sm")}</a></div>
+      ${state.error === "1" ? errorState("статистику") : html`
+      <div class="cstats">
+        <div class="col">
+          ${colHead("Участников на турнир", html`пик <b class="tnum sk" style="color:var(--aqt-fg)">${fmt.num(peak.players)}</b>`)}
+          <div class="bars sk" role="img" aria-label="Участников на турнир, последние ${act.length}: от ${Math.min(...act.map((a) => a.players))} до ${peak.players}">
+            ${act.map((a) => html`<span style="height:${Math.max(3, (a.players / max) * 100)}%" title="${a.name}: ${fmt.count(a.players, ["участник", "участника", "участников"])}"></span>`)}
+          </div>
+          <div class="bar-labels" aria-hidden="true">${act.map((a, i) => html`<span>${i % every === 0 || i === act.length - 1 ? short(a.name, i) : ""}</span>`)}</div>
+        </div>
+        <div class="col">
+          ${colHead("Средний дивизион по ролям")}
+          <ul class="divs">${Object.entries({ Tank: W.division.tank, Damage: W.division.damage, Support: W.division.support }).map(([r, v]) => html`
+            <li>${roleIcon(r, 20)}<span style="color:var(--aqt-fg-muted)">${ROLE[r][0]}</span>
+              <img class="sk" src="frontend/public/divisions/${Math.round(v)}.png" alt="Дивизион ${Math.round(v)}" title="Дивизион ${Math.round(v)}" width="32" height="32" style="width:32px;height:32px;object-fit:contain">
+              <span class="val sk" style="color:${ROLE[r][1]}">${v.toFixed(1).replace(".", ",")}</span></li>`)}
+          </ul>
+        </div>
+        <div class="col">
+          ${colHead("Чаще всего играют", "доля времени")}
+          <ol class="heroes">${W.heroes.map((h) => html`
+            <li><img class="sk" src="${h.image}" alt="" loading="lazy"><span class="sk" style="color:var(--aqt-fg)">${h.name}</span>
+              <span class="track" role="img" aria-label="${h.name}: ${fmt.pct(h.share)}, ${ROLE[h.role][0].toLowerCase()}"><i style="width:${(h.share / heroMax) * 100}%;background:${ROLE[h.role][1]}"></i></span>
+              <span class="val sk">${fmt.pct(h.share)}</span></li>`)}
+          </ol>
+        </div>
+      </div>`}
+    </section>`;
+}
+
+const staffList = () => html`
+  <ul class="staff">${STAFF.map(([role, ic]) => html`<li><a href="#"><span class="who">${icon(ic, "icon--sm")}</span><span style="min-width:0"><span style="display:block;font-weight:600">[BattleTag]</span><small class="dim">${role}</small></span></a></li>`)}</ul>`;
+
+// No "about" yet (Jaristo): the section is just the staff list under its own title.
+function aboutStaff(ex, active) {
+  if (!ex.about) return html`
+    <section class="sec" aria-labelledby="about-title">
+      <div class="section-head"><div><span class="eyebrow rubric">Сообщество</span><h2 class="h-title" id="about-title">Кто ведёт</h2></div></div>
+      ${staffList()}
+    </section>`;
+  return html`
+    <section class="sec" aria-labelledby="about-title">
+      <div class="section-head"><div><span class="eyebrow rubric">Сообщество</span><h2 class="h-title" id="about-title">О сообществе</h2></div></div>
+      <div class="about-grid">
+        <div>
+          <div class="about-text">${ex.about.map((p) => html`<p>${p}</p>`)}</div>
+          <dl class="dl-row"><div><dt class="eyebrow">Время матчей</dt><dd>По Москве (UTC+3)</dd></div>${active ? html`<div><dt class="eyebrow">Ближайший турнир</dt><dd><a href="#" style="color:var(--aqt-teal)">Регламент ${active.name}</a></dd></div>` : ""}</dl>
+        </div>
+        <div class="col">${colHead("Кто ведёт")}${staffList()}</div>
+      </div>
+    </section>`;
+}
+
+OWT.mount({
+  defaults: { ws: "anak", host: "apex", brand: "on", verif: "real", events: "none", auth: "out", inbox: "new", ann: "on", loading: "0", error: "0" },
+  schema: [
+    { key: "ws", label: "Сообщество", options: [["anak", "Anakq — 42 турнира"], ["jaristo-squad", "Jaristo — 2, брендинг"]] },
+    { key: "host", label: "Хост", options: [["apex", "Платформа"], ["own", "Свой адрес"]] },
+    { key: "brand", label: "Брендинг (только свой адрес)", options: [["on", "Вкл"], ["off", "Выкл"]] },
+    { key: "verif", label: "Проверка", options: [["real", "Как сейчас"], ["unverified", "На проверке"], ["verified", "Проверено"]] },
+    { key: "events", label: "Турниры", options: [["none", "Ничего (как сейчас)"], ["live", "Идёт"], ["reg", "Регистрация"]] },
+    { key: "auth", label: "Пользователь", options: [["out", "Гость"], ["in", "Вошёл"]] },
+    { key: "inbox", label: "Уведомления (у вошедшего)", options: [["new", "3 новых, 2 дела"], ["read", "Всё прочитано"], ["empty", "Пусто"], ["error", "Ошибка"]] },
+    { key: "ann", label: "Объявление", options: [["on", "Есть"], ["off", "Нет"]] },
+    { key: "loading", label: "Загрузка", options: [["0", "Данные"], ["1", "Скелетоны"]] },
+    { key: "error", label: "Ошибка API", options: [["0", "Нет"], ["1", "Все блоки"]] },
+  ],
+  note: `Снимок API: ${D.snapshot}. Слоган, ссылки, «О сообществе» и «Кто ведёт» — примеры для полей, которых в API ещё нет. «Идёт»/«Регистрация» — последний реальный турнир сообщества с симулированным статусом. Плавающая карточка «требует действия» показывает только дела этого сообщества: у Jaristo — приглашение, у Anakq — ничего.`,
+  render(state) {
+    const c0 = community(state.ws), W = D.workspaces[state.ws], ex = EXAMPLE[state.ws];
+    const verif = state.verif === "real" ? c0.verification : state.verif;
+    const c = { ...c0, verification: verif };
+    state = { ...state, verif };
+    const own = state.host === "own";
+    OWT.applyPalette(own && state.brand === "on" ? c.branding : null);
+    document.title = `${c.name} — ${own ? "турниры сообщества" : "сообщество на OWT"}`;
+    const active = activeFor(state, W);
+    const url = own ? (host(c) ?? `${c.subdomain}.${D.zone}`) : `${D.zone}/workspace/${c.slug}`;
+    const headerActive = active ? [{ ...active, workspace: c.slug, registrations: active.registrations ?? 0 }] : [];
+    return html`
+      <div class="devbar" aria-hidden="true">${icon("lock", "icon--sm")}<span>${url}</span><span>${own ? (c.customDomain ? "свой домен · TXT подтверждён" : "поддомен платформы") : "платформа"}${own && state.brand === "on" && !c.branding ? " · брендинг не настроен" : ""}</span></div>
+      ${OWT.header({ tenant: own ? c : null, current: own ? null : c, auth: state.auth, active: headerActive, inbox: state.inbox })}
+      ${OWT.floatStack({ auth: state.auth, scope: c.slug, ann: state.ann === "on" })}
+      <main id="main" class="shell ws-main" tabindex="-1">
+        <div class="ws-top">
+          ${!own ? html`<div class="ctx-row"><a class="back" href="OWT Platform Landing.html#directory">${icon("arrow-right", "icon--sm")}Все сообщества</a>
+            ${host(c) ? html`<a class="site-chip" href="#">${icon("globe", "icon--sm")}Сайт сообщества <b>${host(c)}</b>${icon("arrow-up-right", "icon--sm")}</a>` : ""}</div>` : ""}
+          ${verif === "unverified" ? html`<div class="notice" role="status">${icon("triangle-alert")}<p><b>Сообщество на проверке.</b> Страница открывается по прямой ссылке, в общем каталоге её пока нет. После проверки — каталог и бейдж доверенного сообщества.</p></div>` : ""}
+          ${hero(state, c, W, ex, active)}
+        </div>
+        ${now(state, W, active)}
+        ${leaders(state, W)}
+        ${communityStats(state, W)}
+        ${aboutStaff(ex, active)}
+      </main>
+      ${OWT.footer({ tenant: own ? c : null, links: ex.links })}`;
+  },
+});
+</script>
+</body>
+</html>
