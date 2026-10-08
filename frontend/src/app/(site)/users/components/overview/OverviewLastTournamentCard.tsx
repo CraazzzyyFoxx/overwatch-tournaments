@@ -46,12 +46,12 @@ const roleColor = (role: string) => `var(--aqt-${playerRoleTint(role) ?? "damage
 const HEADING_TRIGGER =
   "h-auto w-auto min-w-0 max-w-full justify-start gap-1.5 rounded-sm border-0 bg-transparent p-0 font-semibold text-[length:inherit] text-[color:var(--aqt-fg)] shadow-none hover:bg-transparent hover:text-[color:var(--aqt-teal)] focus-visible:ring-0 focus-visible:text-[color:var(--aqt-teal)] focus-visible:underline focus-visible:underline-offset-2 data-[state=open]:text-[color:var(--aqt-teal)]";
 
-// Map result → its sanctioned result hue and its always-present letter/title
-// (design-book: a result never reads by colour alone).
-const PIP_COLOR: Record<MapResultPip, string> = {
-  win: "var(--aqt-emerald)",
-  loss: "var(--aqt-rose)",
-  draw: "var(--aqt-amber)"
+// Map result → the same `.aqt-form-chip` the header's form streak uses, with
+// its always-present letter/title (design-book: never colour alone).
+const PIP_CHIP: Record<MapResultPip, string> = {
+  win: "aqt-form-chip w",
+  loss: "aqt-form-chip l",
+  draw: "aqt-form-chip d"
 };
 const PIP_LABEL_KEY: Record<MapResultPip, string> = {
   win: "users.overview.win",
@@ -292,12 +292,11 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
                 {t("users.overview.mapsCount", { count: tournament.maps })}
               </span>
             </div>
-            <div className="flex flex-wrap gap-x-2.5 gap-y-1">
+            <div className="flex flex-wrap gap-[3px]">
               {resultPips.map((pip, i) => (
                 <span
                   key={`${pip}${i}`}
-                  className="aqt-tnum text-caption font-bold"
-                  style={{ color: PIP_COLOR[pip] }}
+                  className={PIP_CHIP[pip]}
                   title={t(PIP_TITLE_KEY[pip] as Parameters<typeof t>[0])}
                 >
                   {t(PIP_LABEL_KEY[pip] as Parameters<typeof t>[0])}
