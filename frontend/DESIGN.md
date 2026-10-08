@@ -124,6 +124,13 @@ before writing markup:
 | Author-written Markdown     | `components/Markdown.tsx` — renders to React elements, so raw HTML is inert and no sanitizer is involved; `MARKDOWN_REMARK_PLUGINS` is the one plugin set (GFM)                     |
 | Markdown editing            | `components/admin/MarkdownEditor.tsx` — `@uiw/react-md-editor`, loaded client-side on demand, its preview pane wired to `Markdown` so it cannot disagree with the published page    |
 
+The public landing page uses `PlatformLeaders` instead of the product's four-card
+`PlatformStatsGrid`: four headline totals (tournaments, players, teams, communities),
+then available secondary counts and two winner-first top-five lists. Missing counts
+are omitted, never shown as zero; all data reads and player/statistics links remain
+platform-wide. Its skeleton follows the same responsive layout. Keep this composition
+local to the landing page; workspace hall-of-fame columns use `components/site/leaders.tsx`.
+
 ### Tabs, Button, and other primitives
 
 - Tabs: one look, three jobs — pick by what the control does, never restyle it per call site:

@@ -2745,8 +2745,6 @@
       "playersLabel": "{count, plural, one {player} other {players}}"
     },
     "leaders": {
-      "rubric": "Statistics",
-      "title": "Platform leaders",
       "sub": "Across every community, all time.",
       "more": "All statistics",
       "totals": "The platform in numbers",
