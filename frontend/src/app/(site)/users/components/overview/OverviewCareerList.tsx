@@ -23,6 +23,9 @@ interface FinishSegment {
   count: number;
 }
 
+/** Below this many placements a podium percentage is noise, not a verdict. */
+const MIN_FINISH_SAMPLE = 5;
+
 // ─── Placement trend ─────────────────────────────────────────────────────────
 // Chart drawing band inside the track (percent of height); leaves head-room for
 // the "#N" value labels above the top-most dot and clearance at the bottom.
@@ -101,6 +104,9 @@ const OverviewCareerList = async ({ profile, tournaments = [] }: Props) => {
     { key: "bottom", labelKey: "users.overview.career.finish.bottom", color: "var(--aqt-fg-faint)", count: bottom }
   ];
   const visibleSegments = segments.filter((s) => s.count > 0);
+  // The podium share reads as a verdict only once there are a few placements.
+  const podiumPct = totalPlaced > 0 ? Math.round(((first + second + third) / totalPlaced) * 100) : 0;
+  const showPodium = totalPlaced >= MIN_FINISH_SAMPLE;
 
   // Deliberately NOT the hero's numbers again. The header already leads with
   // tournaments, map winrate, maps won/total and average placement. What the
@@ -191,6 +197,11 @@ const OverviewCareerList = async ({ profile, tournaments = [] }: Props) => {
                 </span>
               ))}
             </div>
+            {showPodium ? (
+              <p className="m-0 text-caption text-[color:var(--aqt-fg-muted)]">
+                {t("users.overview.career.verdictPodium", { pct: podiumPct, count: totalPlaced })}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

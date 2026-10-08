@@ -257,7 +257,6 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
       {RARITY_ORDER.map((r) => {
         const list = visibleGrouped[r];
         if (list.length === 0) return null;
-        const sectionUnlocked = list.filter((a) => a.count > 0).length;
         return (
           <CardSurface
             key={r}
@@ -265,9 +264,12 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
             subtitle={ranges[r]}
             action={
               <span className="aqt-tnum text-label text-[color:var(--aqt-fg-dim)]">
+                {/* Tier totals, not the filtered list: under the default
+                    Unlocked filter `list` holds only earned entries, which
+                    turned "1 of 19 unlocked" into "1 of 1". */}
                 {tr("users.achievements.sectionUnlocked", {
-                  unlocked: String(sectionUnlocked),
-                  total: String(list.length)
+                  unlocked: String(unlockedCounts[r]),
+                  total: String(counts[r])
                 })}
               </span>
             }

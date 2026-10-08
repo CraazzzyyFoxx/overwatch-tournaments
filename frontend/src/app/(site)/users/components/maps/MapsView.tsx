@@ -218,7 +218,7 @@ const MapsView = ({ userId, scope }: Props) => {
                   label={<span style={active ? { color: "var(--aqt-teal)" } : undefined}>{b.mode}</span>}
                   value={`${wr.toFixed(0)}%`}
                   color={totalDecisive > 0 ? winrateColor(wr) : undefined}
-                  sub={`${b.win}-${b.loss} · ${t("users.maps.gamesCount", { count: b.games })}`}
+                  sub={`${b.win}-${b.loss} · ${t("users.maps.mapsCount", { count: b.maps.size })} · ${t("users.maps.gamesCount", { count: b.games })}`}
                 >
                   <div className="mt-1 h-1 w-full rounded-full bg-[color:var(--aqt-border)]">
                     <div
