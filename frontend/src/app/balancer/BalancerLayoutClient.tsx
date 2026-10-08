@@ -9,7 +9,6 @@ import { BalancerShell } from "@/app/balancer/components/BalancerShell";
 import { useToolContext } from "@/app/balancer/useToolContext";
 import { Footer } from "@/components/Footer";
 import Header from "@/components/Header";
-import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { adminEntryPermissions } from "@/lib/auth/admin-permissions";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -112,7 +111,6 @@ export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClient
               <BalancerShell>{children}</BalancerShell>
             </main>
           </div>
-          <Separator className="mt-8" />
           <Footer tenant={null} />
         </div>
       </div>
