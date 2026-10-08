@@ -16,8 +16,12 @@
 //     Discord would refuse the move, so the panel refuses first and names what
 //     is missing;
 //  6. moving is per lobby, and across all of them only when there is more than
-//     one;
-//  7. the report says how many moved and, per status, exactly who did not.
+//     one; a lobby splits only with both team voices picked, and returns only
+//     with a general voice to return to;
+//  7. the report says how many moved and, per status, exactly who did not,
+//     next to the action that produced it;
+//  8. once every voice is picked the selects fold into read-only cells, and
+//     the host reopens them on purpose.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { createContext, useContext, type ReactNode } from "react";
@@ -97,6 +101,17 @@ const onSave = vi.fn();
 const onMove = vi.fn();
 const onReturn = vi.fn();
 
+/** Every voice picked: general "1", each lobby's teams in "2" and "3". */
+function ready(lobbyCount = 1): CustomGame {
+  return game({
+    lobby_count: lobbyCount,
+    general_voice_channel_id: "1",
+    lobbies: Array.from({ length: lobbyCount }, (_, index) =>
+      lobby({ lobby_index: index, team1_voice_channel_id: "2", team2_voice_channel_id: "3" }),
+    ),
+  });
+}
+
 function lobby(overrides: Partial<CustomGameLobby> = {}): CustomGameLobby {
   return {
     lobby_index: 0,
@@ -162,6 +177,7 @@ async function mount(
     moving?: boolean;
     returning?: boolean;
     report?: MixVoiceReport;
+    reportLobby?: number | null;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -177,6 +193,7 @@ async function mount(
         moving={props.moving ?? false}
         returning={props.returning ?? false}
         report={props.report}
+        reportLobby={props.reportLobby}
         onSave={onSave}
         onMove={onMove}
         onReturn={onReturn}
@@ -327,16 +344,31 @@ describe("PickupVoicePanel", () => {
     expect(byName(container, "return")?.disabled).toBe(true);
   });
 
+  it("keeps a lobby from splitting until both of its team voices are picked", async () => {
+    const half = await mount({
+      game: game({ general_voice_channel_id: "1", lobbies: [lobby({ team1_voice_channel_id: "2" })] }),
+    });
+
+    expect(byName(half, "move")?.disabled).toBe(true);
+    expect(half.textContent).toContain("pickTeams");
+
+    const noGeneral = await mount({
+      game: game({ lobbies: [lobby({ team1_voice_channel_id: "2", team2_voice_channel_id: "3" })] }),
+    });
+
+    expect(byName(noGeneral, "move")?.disabled).toBe(false);
+    expect(byName(noGeneral, "return")?.disabled).toBe(true);
+    expect(noGeneral.textContent).toContain("pickGeneral");
+  });
+
   it("moves one lobby, and every lobby only when the mix runs more than one", async () => {
-    const single = await mount({});
+    const single = await mount({ game: ready() });
 
     await click(byName(single, "move"));
     expect(onMove).toHaveBeenCalledWith(0);
     expect(byName(single, "moveAll")).toBeNull();
 
-    const many = await mount({
-      game: game({ lobby_count: 2, lobbies: [lobby(), lobby({ lobby_index: 1 })] }),
-    });
+    const many = await mount({ game: ready(2) });
 
     await click(byName(many, "moveAll"));
     expect(onMove).toHaveBeenCalledWith(null);
@@ -344,12 +376,46 @@ describe("PickupVoicePanel", () => {
     expect(onReturn).toHaveBeenCalledWith(null);
   });
 
+  it("offers every lobby at once only when every lobby can go", async () => {
+    const current = ready(2);
+    current.lobbies[1] = lobby({ lobby_index: 1 });
+    const container = await mount({ game: current });
+
+    expect(byName(container, "moveAll")?.disabled).toBe(true);
+    expect(byName(container, "returnAll")?.disabled).toBe(true);
+  });
+
   it("returns one lobby on its own row", async () => {
-    const container = await mount({});
+    const container = await mount({ game: ready() });
 
     await click(byName(container, "return"));
 
     expect(onReturn).toHaveBeenCalledWith(0);
+  });
+
+  it("folds a finished setup into read-only voices and reopens it on request", async () => {
+    const container = await mount({ game: ready() });
+
+    expect(container.querySelectorAll("[data-select]").length).toBe(0);
+    expect(container.textContent).toContain("Alpha");
+    expect(container.textContent).toContain("Waiting room");
+
+    await click(byName(container, "edit"));
+    expect(container.querySelectorAll("[data-select]").length).toBe(3);
+
+    await click(byName(container, "done"));
+    expect(container.querySelectorAll("[data-select]").length).toBe(0);
+  });
+
+  it("labels each team voice with the host's name for that team", async () => {
+    const current = ready(2);
+    current.settings = { ...current.settings, team_names: { "0": "Wolves", "3": "Ravens" } };
+    const container = await mount({ game: current });
+
+    const groupB = container.querySelector("[aria-label='lobby(letter=B)']");
+    expect(container.textContent).toContain("Wolves");
+    expect(groupB?.textContent).toContain("Ravens");
+    expect(groupB?.textContent).not.toContain("Wolves");
   });
 
   it("reports how many moved and who did not, grouped by what stopped them", async () => {
@@ -373,5 +439,18 @@ describe("PickupVoicePanel", () => {
     expect(container.textContent).toContain("Hleb");
     // Everyone who made it is already counted; naming them again is noise.
     expect(container.textContent).not.toContain("karin");
+  });
+
+  it("puts a report next to the action that produced it", async () => {
+    const report: MixVoiceReport = { moved: 1, results: [] };
+    const lobbyB = await mount({ game: ready(2), report, reportLobby: 1 });
+
+    expect(lobbyB.querySelector("[aria-label='lobby(letter=B)']")?.textContent).toContain("report.moved");
+    expect(lobbyB.querySelector("[aria-label='lobby(letter=A)']")?.textContent).not.toContain("report.moved");
+
+    const every = await mount({ game: ready(2), report, reportLobby: null });
+
+    expect(every.querySelector("[role='group']")?.textContent).not.toContain("report.moved");
+    expect(every.textContent).toContain("report.moved");
   });
 });

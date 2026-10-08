@@ -7005,6 +7005,10 @@
       "return": "Return",
       "moveAll": "Split every lobby",
       "returnAll": "Return every lobby",
+      "edit": "Edit",
+      "done": "Done",
+      "pickTeams": "Pick a voice for both teams to split this lobby.",
+      "pickGeneral": "Pick a general voice to return players to.",
       "report": {
         "moved": "Moved: {count}"
       },

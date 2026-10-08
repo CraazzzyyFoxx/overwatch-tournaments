@@ -340,6 +340,7 @@ export default function BalancerPickupMixPage() {
                 moving={voiceMove.isPending}
                 returning={voiceReturn.isPending}
                 report={voiceMove.data ?? voiceReturn.data}
+                reportLobby={voiceMove.data ? voiceMove.variables : voiceReturn.variables}
                 onSave={(patch) => setVoiceChannels.mutate(patch)}
                 onMove={(lobbyIndex) => {
                   // One report on screen at a time: the stale one is about a
