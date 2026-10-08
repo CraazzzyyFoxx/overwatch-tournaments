@@ -57,13 +57,11 @@ const OverviewAchievementsPreview = async ({ achievements, userSlug, limit = DEF
           const imgSrc = ach.image_url ?? `/achievements/${ach.slug}.webp`;
           return (
             <div key={ach.id} className={`${rarityVarClass(rarity)} flex items-center gap-3 py-2.5 first:pt-0 last:pb-0`}>
-              <Image
-                src={imgSrc}
-                alt={ach.name}
-                width={40}
-                height={40}
-                className="h-10 w-10 shrink-0 rounded-[9px] object-cover"
-              />
+              {/* Decorative: the name sits right next to it. A missing file then
+                  renders an empty neutral tile instead of spilling alt text. */}
+              <div className="relative size-10 shrink-0 overflow-hidden rounded-[9px] bg-[color:var(--aqt-card-2)]">
+                <Image src={imgSrc} alt="" fill sizes="40px" className="object-cover" />
+              </div>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]" title={ach.name}>
                   {ach.name}

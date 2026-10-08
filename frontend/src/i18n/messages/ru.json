@@ -4310,6 +4310,8 @@
         "playtime": "{hours}ч {minutes}м в игре",
         "playtimeNoHours": "{minutes}м в игре",
         "mapWinrate": "винрейт по картам",
+        "noData": "По этому турниру пока нет статистики",
+        "noDataHint": "Она появится, когда матчи будут сыграны и результаты загружены.",
         "lobbyRank": "Ранг в лобби",
         "percentileHint": "Ранг в лобби — чем полнее, тем лучше",
         "rankTop": "Топ {pct}%",

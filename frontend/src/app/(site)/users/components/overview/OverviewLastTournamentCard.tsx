@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Hourglass } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
@@ -189,6 +190,11 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
     });
   }
   const lobbySize = statTiles[0]?.entry.total ?? null;
+  // A tournament the player is entered in but that has no recorded maps yet
+  // (not played, or results not uploaded) comes back as all zeros. Printing
+  // "Placed 0 · 0 maps · 0W · 0L" reads as a broken page, so say it plainly.
+  const hasData = tournament.maps > 0 || statTiles.length > 0;
+  const placement = tournament.group_placement || tournament.playoff_placement || null;
 
   return (
     <>
@@ -233,32 +239,49 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
               <PlayerRoleIcon role={tournament.role} size={18} color={roleColor(tournament.role)} decorative />
               {t(PLAYER_ROLE_LABEL_KEY[normalizePlayerRole(tournament.role)] as Parameters<typeof t>[0])}
             </div>
-            <div className="aqt-tnum mt-1 text-caption text-[color:var(--aqt-fg-muted)]">
-              {t("users.overview.lastTournament.placed")} <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
-                {tournament.group_placement ?? tournament.playoff_placement ?? "—"}
-              </span>
-              {" · "}
-              {playtimeH > 0
-                ? t("users.overview.lastTournament.playtime", {
-                    hours: String(playtimeH),
-                    minutes: String(playtimeM)
-                  })
-                : t("users.overview.lastTournament.playtimeNoHours", { minutes: String(playtimeM) })}
-              {" · "}
-              {t("users.overview.mapsCount", { count: tournament.maps })}
-            </div>
+            {hasData ? (
+              <div className="aqt-tnum mt-1 text-caption text-[color:var(--aqt-fg-muted)]">
+                {t("users.overview.lastTournament.placed")} <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
+                  {placement ?? "—"}
+                </span>
+                {" · "}
+                {playtimeH > 0
+                  ? t("users.overview.lastTournament.playtime", {
+                      hours: String(playtimeH),
+                      minutes: String(playtimeM)
+                    })
+                  : t("users.overview.lastTournament.playtimeNoHours", { minutes: String(playtimeM) })}
+                {" · "}
+                {t("users.overview.mapsCount", { count: tournament.maps })}
+              </div>
+            ) : null}
           </div>
-          <div className="text-right">
-            <div className="aqt-display text-headline font-bold leading-none">
-              <span style={{ color: "var(--aqt-emerald)" }}>{tournament.maps_won}</span>
-              <span className="text-heading text-[color:var(--aqt-fg-faint)]"> {t("users.overview.win")}</span>
-              <span className="mx-1.5">·</span>
-              <span style={{ color: "var(--aqt-rose)" }}>{mapsLost}</span>
-              <span className="text-heading text-[color:var(--aqt-fg-faint)]"> {t("users.overview.loss")}</span>
+          {hasData ? (
+            <div className="text-right">
+              <div className="aqt-display text-headline font-bold leading-none">
+                <span style={{ color: "var(--aqt-emerald)" }}>{tournament.maps_won}</span>
+                <span className="text-heading text-[color:var(--aqt-fg-faint)]"> {t("users.overview.win")}</span>
+                <span className="mx-1.5">·</span>
+                <span style={{ color: "var(--aqt-rose)" }}>{mapsLost}</span>
+                <span className="text-heading text-[color:var(--aqt-fg-faint)]"> {t("users.overview.loss")}</span>
+              </div>
+              <div className="aqt-tnum mt-1 text-label text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} {t("users.overview.lastTournament.mapWinrate")}</div>
             </div>
-            <div className="aqt-tnum mt-1 text-label text-[color:var(--aqt-fg-dim)]">{formatPercent(winrate)} {t("users.overview.lastTournament.mapWinrate")}</div>
-          </div>
+          ) : null}
         </div>
+        {hasData ? null : (
+          <div className="flex items-start gap-2.5 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-3 py-2.5">
+            <Hourglass aria-hidden className="mt-0.5 size-4 shrink-0 text-[color:var(--aqt-fg-faint)]" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-caption font-semibold text-[color:var(--aqt-fg)]">
+                {t("users.overview.lastTournament.noData")}
+              </span>
+              <span className="text-caption text-[color:var(--aqt-fg-muted)]">
+                {t("users.overview.lastTournament.noDataHint")}
+              </span>
+            </div>
+          </div>
+        )}
         {/* Heroes played per THIS tournament is intentionally omitted: the
             UserTournamentWithStats shape carries no per-hero breakdown, so there
             is nothing real to show (design-book §5 — never fabricate data). */}

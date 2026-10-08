@@ -68,9 +68,9 @@ export const AchievementDetailDialog = ({ achievement, onClose }: Props) => {
             <>
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
                 <div className="flex items-start gap-3">
-                  <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-xl">
+                  <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-xl bg-[color:var(--aqt-card-2)]">
                     {imgSrc ? (
-                      <Image src={imgSrc} alt={ach.name} fill sizes="52px" className="object-cover" />
+                      <Image src={imgSrc} alt="" fill sizes="52px" className="object-cover" />
                     ) : null}
                   </div>
                   <div className="flex min-w-0 flex-col gap-1">

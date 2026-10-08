@@ -285,10 +285,10 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                     onClick={() => setSelected(ach)}
                     className="-m-2 flex items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-[hsl(0_0%_100%/0.03)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:var(--aqt-teal)]"
                   >
-                    <div className="relative size-12 shrink-0 overflow-hidden rounded-[11px]">
+                    <div className="relative size-12 shrink-0 overflow-hidden rounded-[11px] bg-[color:var(--aqt-card-2)]">
                       <Image
                         src={imgSrc}
-                        alt={ach.name}
+                        alt=""
                         fill
                         sizes="48px"
                         className={cn("object-cover", locked && "opacity-45 grayscale")}

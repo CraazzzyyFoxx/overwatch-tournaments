@@ -4310,6 +4310,8 @@
         "playtime": "{hours}h {minutes}m playtime",
         "playtimeNoHours": "{minutes}m playtime",
         "mapWinrate": "map winrate",
+        "noData": "No stats for this tournament yet",
+        "noDataHint": "They appear once its matches are played and the results are uploaded.",
         "lobbyRank": "Rank in lobby",
         "percentileHint": "Rank in lobby — fuller is better",
         "rankTop": "Top {pct}%",
