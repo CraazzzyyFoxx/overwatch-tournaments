@@ -26,6 +26,7 @@ from shared.services.notifications import NOTIFICATION_GROUPS
 __all__ = (
     "ACTIONS",
     "ALL_ROLES",
+    "VOICE_TIMEOUT",
     "Action",
     "NO_ROLE",
     "custom_id",
@@ -33,6 +34,7 @@ __all__ = (
     "parse_custom_id",
     "parse_setup_target",
     "setup_target",
+    "voice_target",
 )
 
 _PREFIX = "owt"
@@ -137,6 +139,28 @@ def _mix_seat_set(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
     return {"custom_game_id": int(target), "payload": {"roles": roles, "is_flex": fields.get("flex") == "1"}}
 
 
+#: The voice buttons and ``/mix move|return``: ``<game>-<lobby index>`` or ``<game>-all``.
+_VOICE_TARGET = re.compile(r"^(?P<game>\d+)-(?P<lobby>[0-5]|all)$")
+#: Moving people waits on Discord's per-member rate limit (balancer allows itself 30 s).
+VOICE_TIMEOUT = 40.0
+
+
+def voice_target(game_id: Any, lobby_index: int | None) -> str:
+    return f"{game_id}-{'all' if lobby_index is None else lobby_index}"
+
+
+def _voice_accepts(target: str) -> bool:
+    return _VOICE_TARGET.match(target) is not None
+
+
+def _voice(target: str, fields: Mapping[str, str]) -> dict[str, Any]:
+    match = _VOICE_TARGET.match(target)
+    if match is None:
+        raise ValueError(f"not a voice target: {target!r}")
+    lobby = match["lobby"]
+    return {"custom_game_id": int(match["game"]), "payload": {"lobby_index": None if lobby == "all" else int(lobby)}}
+
+
 @dataclass(frozen=True, slots=True)
 class Action:
     """One button's platform call.
@@ -151,13 +175,15 @@ class Action:
     ``request`` raises ``ValueError`` and no RPC is made.
     ``settles`` names the card buttons that stop making sense once this
     succeeded -- they are taken off the DM it was clicked in (never off a
-    channel post, which is everyone's).
+    channel post, which is everyone's). ``timeout`` overrides the dispatcher's
+    for a call that legitimately takes seconds.
     """
 
     subject: str | None
     request: Callable[[str, Mapping[str, str]], dict[str, Any]] = _nothing
     accepts: Callable[[str], bool] = str.isdigit
     settles: frozenset[str] = field(default_factory=frozenset)
+    timeout: float | None = None
 
 
 _INVITE_BUTTONS = frozenset({"invite.accept", "invite.decline"})
@@ -189,6 +215,10 @@ ACTIONS: dict[str, Action] = {
     # it opens is spelled out by the target (``cards.seat_modal``).
     "mix.setup": Action(None, accepts=_setup),
     "mix.seat_set": Action("rpc.balancer.custom.self_update", _mix_seat_set),
+    # The host's voice controls: the lineup card's buttons and ``/mix move|return``.
+    # The RPC re-checks host-or-co-host, so a player clicking gets a refusal.
+    "voice.move": Action("rpc.balancer.custom.voice_move", _voice, accepts=_voice_accepts, timeout=VOICE_TIMEOUT),
+    "voice.return": Action("rpc.balancer.custom.voice_return", _voice, accepts=_voice_accepts, timeout=VOICE_TIMEOUT),
 }
 
 

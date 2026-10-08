@@ -1,4 +1,4 @@
-"""Answers the action buttons on notification cards, the seat form, and ``/mix``.
+"""Answers the action buttons on notification cards, the seat form, and the ``/mix`` command group.
 
 One listener for every button the bot ever sent, keyed by ``custom_id``
 rather than by a per-message view: cards outlive restarts and deploys, and a
@@ -17,6 +17,7 @@ from discord import app_commands
 from discord.ext import commands
 from loguru import logger
 
+from shared.domain.mix_lobby import LOBBY_LETTERS
 from src.interactions import copy
 from src.interactions.actions import is_ours, parse_custom_id
 from src.interactions.cards import modal_fields
@@ -28,8 +29,16 @@ if TYPE_CHECKING:
 #: form one of those clicks opened.
 _ROUTED = (discord.InteractionType.component, discord.InteractionType.modal_submit)
 
+#: ``/mix move|return`` run one lobby or the lot; a mix with one lobby still reads "Лобби A".
+_LOBBY_CHOICES = [
+    app_commands.Choice(name="Все лобби", value="all"),
+    *(app_commands.Choice(name=f"Лобби {letter}", value=str(index)) for index, letter in enumerate(LOBBY_LETTERS)),
+]
+
 
 class InteractionsCog(commands.Cog):
+    mix = app_commands.Group(name="mix", description="Микс", guild_only=True)
+
     def __init__(self, bot: LogCollectorBot) -> None:
         self._dispatcher = bot.action_dispatcher
 
@@ -57,8 +66,24 @@ class InteractionsCog(commands.Cog):
             # nothing ran, and the clicker can press again.
             logger.warning(f"Could not answer Discord interaction {value}: {exc!r}")
 
-    @app_commands.command(name="mix", description="Моё место в текущем миксе")
-    @app_commands.guild_only()
-    async def mix(self, interaction: discord.Interaction) -> None:
+    @mix.command(name="seat", description="Моё место в текущем миксе")
+    async def seat(self, interaction: discord.Interaction) -> None:
         """The seat panel without a card to click it from -- same reply, same buttons."""
         await self._dispatcher.show_current_mix(interaction)
+
+    @mix.command(name="move", description="Развести игроков по войсам команд")
+    @app_commands.describe(mix="Микс, который вы ведёте", lobby="Какое лобби")
+    @app_commands.choices(lobby=_LOBBY_CHOICES)
+    async def move(self, interaction: discord.Interaction, mix: int, lobby: app_commands.Choice[str]) -> None:
+        await self._dispatcher.run_voice(interaction, "voice.move", mix, lobby.value)
+
+    @mix.command(name="return", description="Вернуть всех из войсов команд в общий")
+    @app_commands.describe(mix="Микс, который вы ведёте", lobby="Какое лобби")
+    @app_commands.choices(lobby=_LOBBY_CHOICES)
+    async def return_voice(self, interaction: discord.Interaction, mix: int, lobby: app_commands.Choice[str]) -> None:
+        await self._dispatcher.run_voice(interaction, "voice.return", mix, lobby.value)
+
+    @move.autocomplete("mix")
+    @return_voice.autocomplete("mix")
+    async def _hosted_mixes(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        return await self._dispatcher.hosted_mixes(interaction, current)

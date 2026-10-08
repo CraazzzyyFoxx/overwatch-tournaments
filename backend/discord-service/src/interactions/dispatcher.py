@@ -10,8 +10,10 @@ deactivation bites on the very next click.
 ``perform`` knows nothing about Discord responses, so a slash command can call
 it as is; ``handle`` is the button's glue: acknowledge, perform, answer the
 clicker privately, and in a DM take the spent buttons off the card.
-``show_current_mix`` is ``/mix``: the same two RPCs, with the workspace read
-from the guild the command was typed in rather than from a button's target.
+``show_current_mix`` is ``/mix seat``: the same two RPCs, with the workspace read
+from the guild the command was typed in rather than from a button's target;
+``run_voice`` is ``/mix move|return``, which is the lineup card's voice button
+with the mix named by the command instead of by the button.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from typing import Any, Literal
 
 import discord
 from cachetools import TTLCache
+from discord import app_commands
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -31,14 +34,16 @@ from shared.repository import WorkspaceRepository
 from shared.schemas.events import DiscordActionButton, DiscordButton, DiscordCard, DiscordLinkButton
 from src.core.broker import optional_broker
 from src.interactions import copy
-from src.interactions.actions import ACTIONS, parse_setup_target, setup_target
+from src.interactions.actions import ACTIONS, parse_setup_target, setup_target, voice_target
 from src.interactions.cards import card_view, seat_modal, settle
 
-__all__ = ("IDENTITY_SUBJECT", "MIX_CURRENT_SUBJECT", "ActionDispatcher", "Outcome")
+__all__ = ("IDENTITY_SUBJECT", "MIX_CURRENT_SUBJECT", "MIX_HOSTED_SUBJECT", "ActionDispatcher", "Outcome")
 
 IDENTITY_SUBJECT = "rpc.identity.discord_identity"
 #: ``/mix``: the caller's seat in whichever mix this guild's workspace has open.
 MIX_CURRENT_SUBJECT = "rpc.balancer.custom.self_current"
+#: ``/mix move|return``'s autocomplete: the open mixes the caller may run.
+MIX_HOSTED_SUBJECT = "rpc.balancer.custom.hosted_active"
 
 #: Envelope codes that say "the platform is having a bad moment", not "no".
 _TRANSIENT = frozenset({"unavailable", "internal", "rate_limited"})
@@ -82,6 +87,10 @@ _MIX_CURRENT_ACTION = "mix.roles"
 #: The one action the bot answers with a form instead of a card, which Discord
 #: allows only as the *first* response to the click -- never after a defer.
 _SEAT_SETUP = "mix.setup"
+#: The host's voice controls; their reply is a per-person report, not a sentence.
+_VOICE_ACTIONS = frozenset({"voice.move", "voice.return"})
+#: Autocomplete must answer inside Discord's 3 s; an identity already cached leaves room for this.
+_AUTOCOMPLETE_TIMEOUT = 2.0
 
 
 def _mix_blocker(outcome: Outcome) -> str | None:
@@ -139,10 +148,17 @@ class ActionDispatcher:
             # A form value the bot never minted: refused here, so a mangled
             # submit costs neither an identity lookup nor a platform call.
             return Outcome("failed", code="bad_values")
-        return await self._call(discord_user_id, action.subject, request)
+        return await self._call(discord_user_id, action.subject, request, timeout=action.timeout)
 
-    async def _call(self, discord_user_id: int, subject: str, request: Mapping[str, Any]) -> Outcome:
-        """The two RPCs every entry point shares: who is this, then do the thing."""
+    async def _call(
+        self, discord_user_id: int, subject: str, request: Mapping[str, Any], *, timeout: float | None = None
+    ) -> Outcome:
+        """The two RPCs every entry point shares: who is this, then do the thing.
+
+        ``timeout`` is the ACTION's own (the identity lookup is always quick);
+        moving a lobby through Discord is the one call that needs more than the
+        dispatcher's default.
+        """
         broker = self._broker()
         if broker is None:
             return Outcome("unavailable")
@@ -170,7 +186,9 @@ class ActionDispatcher:
             self._identities[discord_user_id] = identity
 
         try:
-            reply = await request_rpc(broker, {"identity": identity, **request}, subject, timeout=self._timeout)
+            reply = await request_rpc(
+                broker, {"identity": identity, **request}, subject, timeout=timeout or self._timeout
+            )
         except Exception as exc:
             # A timeout does not prove the call did nothing; the reply says only
             # that the platform did not answer, and the card keeps its buttons.
@@ -202,6 +220,8 @@ class ActionDispatcher:
                 if not isinstance(outcome.data, Mapping):
                     return self._card(AMBER, _say("info", copy.text(locale, "not_registered")))
                 return self._card(BLUE, copy.registration_text(locale, outcome.data))
+            if action_name in _VOICE_ACTIONS:
+                return self._voice_card(outcome.data, locale)
             if action_name.startswith(_MIX_PREFIX):
                 return self._mix_card(outcome.data, locale)
             return self._card(GREEN, _say("ok", copy.success_text(locale, action_name)))
@@ -306,6 +326,15 @@ class ActionDispatcher:
         )
         return card_view(card)
 
+    def _voice_card(self, report: Any, locale: copy.Locale) -> discord.ui.LayoutView:
+        """What a move or return did, person by person -- for the host alone."""
+        if not isinstance(report, Mapping):
+            return self._card(AMBER, _say("offline", copy.text(locale, "unavailable")))
+        text, details = copy.voice_text(locale, report)
+        results = report.get("results") if isinstance(report.get("results"), list) else []
+        everyone = all(isinstance(row, Mapping) and row.get("status") == "moved" for row in results)
+        return card_view(DiscordCard(accent_color=GREEN if everyone else AMBER, text=text, details=details))
+
     async def handle(
         self, interaction: discord.Interaction, action_name: str, target: str, fields: Mapping[str, str] | None = None
     ) -> None:
@@ -374,6 +403,45 @@ class ActionDispatcher:
         except Exception:
             logger.exception("Discord /mix crashed")
             return Outcome("unavailable")
+
+    async def run_voice(
+        self, interaction: discord.Interaction, action_name: str, custom_game_id: int, lobby: str
+    ) -> None:
+        """``/mix move`` and ``/mix return``: the same call as the card's buttons, answered to the caller alone."""
+        locale = copy.locale_of(interaction.locale)
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        target = voice_target(custom_game_id, None if lobby == "all" else int(lobby))
+        try:
+            outcome = await self.perform(interaction.user.id, action_name, target)
+        except Exception:
+            logger.exception(f"Discord /mix {action_name} crashed")
+            outcome = Outcome("unavailable")
+        logger.bind(action=action_name, target=target, status=outcome.status, discord_user_id=interaction.user.id).info(
+            f"Discord /mix {action_name}: {outcome.status}"
+        )
+        view = self.reply(outcome, action_name, locale)
+        await interaction.followup.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    async def hosted_mixes(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        """The caller's open mixes in this guild's workspace, filtered by what they typed."""
+        try:
+            workspace_id = await self._workspace_id(interaction.guild_id)
+            if workspace_id is None:
+                return []
+            outcome = await self._call(
+                interaction.user.id, MIX_HOSTED_SUBJECT, {"workspace_id": workspace_id}, timeout=_AUTOCOMPLETE_TIMEOUT
+            )
+        except Exception:
+            logger.exception("Discord /mix autocomplete crashed")
+            return []
+        if outcome.status != "ok" or not isinstance(outcome.data, list):
+            return []
+        needle = current.casefold()
+        return [
+            app_commands.Choice(name=str(row["name"])[:100], value=int(row["id"]))
+            for row in outcome.data
+            if isinstance(row, Mapping) and needle in str(row.get("name", "")).casefold()
+        ][:25]
 
     async def _workspace_id(self, guild_id: int | None) -> int | None:
         if guild_id is None or self._session_maker is None:

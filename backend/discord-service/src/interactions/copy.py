@@ -31,6 +31,7 @@ __all__ = (
     "settle_note",
     "success_text",
     "text",
+    "voice_text",
 )
 
 Locale = Literal["ru", "en"]
@@ -133,6 +134,10 @@ _ERRORS: dict[Locale, dict[str, str]] = {
         "registration_terminal": "Ваша заявка на этот турнир больше не активна.",
         "already_registered": "Вы уже зарегистрированы на этот турнир.",
         "check_in_closed": "Чек-ин сейчас закрыт.",
+        "voice_not_configured": "В настройках workspace не выбрана категория войсов.",
+        "general_voice_not_configured": "У микса не выбран общий войс.",
+        "general_voice_outside_category": "Общий войс микса больше не в категории — выберите его заново.",
+        "discord_unavailable": "Бот сейчас недоступен — попробуйте ещё раз.",
     },
     "en": {
         "invite_already_accepted": "This invite has already been accepted.",
@@ -144,6 +149,10 @@ _ERRORS: dict[Locale, dict[str, str]] = {
         "registration_terminal": "Your registration for this tournament is no longer active.",
         "already_registered": "You're already registered for this tournament.",
         "check_in_closed": "Check-in is closed right now.",
+        "voice_not_configured": "The workspace has no voice category.",
+        "general_voice_not_configured": "This mix has no general voice.",
+        "general_voice_outside_category": "The mix's general voice is no longer in the category — pick it again.",
+        "discord_unavailable": "The bot is unavailable — try again.",
     },
 }
 
@@ -292,6 +301,30 @@ _MIX_BLOCKERS: dict[Locale, dict[str, str]] = {
         "roster_full": "This mix already has 100 players — no seats left.",
         "role_edit_off": "The host hasn't let players change their roles.",
         "bad_values": "Couldn't read that role pick — open the mix again.",
+    },
+}
+
+#: A voice move's report, by the status the balancer gave each person.
+_VOICE: dict[Locale, dict[str, str]] = {
+    "ru": {
+        "heading": "### Перенесено: {count}",
+        "nobody": "Никого не нужно было переносить.",
+        "not_in_voice": "Не в войсе",
+        "no_discord_link": "Discord не привязан",
+        "missing_permission": "Боту не хватает прав",
+        "channel_outside_category": "Войс вне категории",
+        "not_configured": "Войс команды не выбран",
+        "failed": "Discord отказал",
+    },
+    "en": {
+        "heading": "### Moved: {count}",
+        "nobody": "Nobody needed moving.",
+        "not_in_voice": "Not in a voice",
+        "no_discord_link": "No Discord linked",
+        "missing_permission": "The bot lacks permissions",
+        "channel_outside_category": "Voice outside the category",
+        "not_configured": "No team voice picked",
+        "failed": "Discord refused",
     },
 }
 
@@ -481,6 +514,22 @@ def mix_text(locale: Locale, state: Mapping[str, Any]) -> tuple[str, str]:
     if blocker == "role_edit_off":
         details.append(f"-# {emoji('lock')} " + _MIX_BLOCKERS[locale]["role_edit_off"])
     return "\n".join(head), "\n".join(details)
+
+
+def voice_text(locale: Locale, report: Mapping[str, Any]) -> tuple[str, str | None]:
+    """A move's report: how many moved, then everyone who was not, grouped by why."""
+    words = _VOICE[locale]
+    results = [row for row in report.get("results") or [] if isinstance(row, Mapping)]
+    if not results:
+        return words["heading"].format(count=0), words["nobody"]
+    missed: dict[str, list[str]] = {}
+    for row in results:
+        status = str(row.get("status"))
+        if status != "moved":
+            missed.setdefault(status, []).append(escape_markdown(str(row.get("name") or "?")))
+    lines = [f"**{words.get(status, status)}:** {', '.join(names)}" for status, names in missed.items()]
+    heading = words["heading"].format(count=sum(row.get("status") == "moved" for row in results))
+    return heading, "\n".join(lines) or None
 
 
 def seat_modal_text(locale: Locale) -> Mapping[str, str]:

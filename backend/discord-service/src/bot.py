@@ -4,7 +4,7 @@ Subclasses ``commands.Bot`` (rather than a bare ``discord.Client``) for its
 Cog/extension machinery. It reacts to gateway events (via Cogs), RabbitMQ
 commands and RPC (via ``DiscordRabbitGateway``), and the action buttons on the
 notification cards it sends (``InteractionsCog``, which also carries the
-``/mix`` slash command). The command tree is never synced from here: a sync is
+``/mix`` command group). The command tree is never synced from here: a sync is
 a deploy step, run by hand through ``python -m src.tools.sync_commands``.
 """
 

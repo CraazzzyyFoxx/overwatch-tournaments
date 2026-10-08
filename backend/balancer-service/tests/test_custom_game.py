@@ -16,8 +16,12 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.exc import IntegrityError  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
 
+from shared import models  # noqa: E402
 from shared.core.enums import (  # noqa: E402
     CasualTeamSide,
     HeroClass,
@@ -31,6 +35,7 @@ from shared.services import discord_messages  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
 from shared.services.subscriptions.providers.discord_role import DiscordUnavailable  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
+from shared.testing import install_postgres_type_shims  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
 from src.domain.mix_ranker import Ranker  # noqa: E402
 from src.domain.mix_self_service import MAX_ROSTER  # noqa: E402
@@ -4234,3 +4239,87 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             await self.service.hard_delete(self.session, workspace_id=1, custom_game_id=11)
         self.assertEqual(ctx.exception.status_code, 404)
         self.games.delete.assert_not_awaited()
+
+
+class _AwaitableSession:
+    """A sync SQLAlchemy session behind the one awaitable ``hosted_active`` uses.
+
+    The read is a single ``SELECT`` with the whole answer in its WHERE clause,
+    so a mocked session would only prove it was called. The suite has no async
+    SQLite driver (see ``test_custom_game_undo_cascade.py``), and ``execute`` is
+    all this query needs.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    async def execute(self, statement):  # noqa: ANN001, ANN202
+        return self._session.execute(statement)
+
+
+class HostedActiveMixesTests(IsolatedAsyncioTestCase):
+    """What ``/mix move``'s autocomplete offers: the open mixes this account may run."""
+
+    if sys.platform == "win32":
+        loop_factory = asyncio.SelectorEventLoop
+
+    def setUp(self) -> None:
+        install_postgres_type_shims()
+        tables = [models.CustomGame.__table__, models.CustomGameCoHost.__table__]
+        self.engine = sa.create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+        with self.engine.begin() as conn:
+            for schema in sorted({table.schema for table in tables if table.schema}):
+                conn.exec_driver_sql(f"ATTACH DATABASE ':memory:' AS {schema}")
+            for table in tables:
+                table.create(conn)
+        self.sync_session = Session(self.engine)
+        self.addCleanup(self.sync_session.close)
+        self.session = _AwaitableSession(self.sync_session)
+        self.service = CustomGameService()
+
+    def _mix(self, game_id: int, name: str, *, host_user_id: int | None = 9, status: str = "draft", **fields) -> None:
+        self.sync_session.execute(
+            sa.insert(models.CustomGame.__table__).values(
+                id=game_id,
+                workspace_id=fields.pop("workspace_id", 1),
+                host_user_id=host_user_id,
+                name=name,
+                status=status,
+                lobby_count=fields.pop("lobby_count", 1),
+                self_signup="closed",
+                self_role_edit=False,
+                **fields,
+            )
+        )
+
+    async def test_the_caller_is_offered_the_mixes_they_host_or_co_host_newest_first(self) -> None:
+        self._mix(11, "Понедельник")
+        self._mix(12, "Вторник", host_user_id=99, lobby_count=2)
+        self.sync_session.execute(sa.insert(models.CustomGameCoHost.__table__).values(custom_game_id=12, user_id=9))
+        self._mix(13, "Чужой", host_user_id=99)
+
+        mixes = await self.service.hosted_active(self.session, workspace_id=1, auth_user=_auth(9))
+
+        self.assertEqual(
+            mixes,
+            [{"id": 12, "name": "Вторник", "lobby_count": 2}, {"id": 11, "name": "Понедельник", "lobby_count": 1}],
+        )
+
+    async def test_a_mix_that_is_over_or_in_another_workspace_is_not_offered(self) -> None:
+        self._mix(11, "Открытый", status="balanced")
+        self._mix(12, "Сыгранный", status="completed")
+        self._mix(13, "Отменённый", status="cancelled")
+        self._mix(14, "Соседний", workspace_id=2)
+
+        mixes = await self.service.hosted_active(self.session, workspace_id=1, auth_user=_auth(9))
+
+        self.assertEqual([row["id"] for row in mixes], [11])
+
+    async def test_a_superuser_is_offered_every_open_mix_of_the_workspace(self) -> None:
+        self._mix(11, "Чужой", host_user_id=99)
+
+        auth_user = _auth(1)
+        auth_user.is_superuser = True
+        mixes = await self.service.hosted_active(self.session, workspace_id=1, auth_user=auth_user)
+
+        self.assertEqual([row["id"] for row in mixes], [11])

@@ -5,7 +5,7 @@ balance,set_team_names,set_next_map,set_variant_index,
 post_discord,post_signup,delete_discord_post,set_voice_channels,voice_options,voice_move,voice_return,
 transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
 match_history,undo_match,rotation,stats,close,delete,hard_delete,
-self_get,self_current,self_join,self_leave,self_update,set_self_service}``.
+self_get,self_current,self_join,self_leave,self_update,set_self_service,hosted_active}``.
 
 Writes require ``actor`` to be the host, a co-host or a superuser; the per-mix check lives in
 ``CustomGameService._writable``. The reads (``list``, ``get``, ``stats``,
@@ -751,6 +751,22 @@ def register(broker: Any, logger: Any) -> None:
             )
 
         return await c.envelope(logger, "custom.self_current", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.hosted_active")
+    async def _hosted_active(data: dict, msg: RabbitMessage) -> dict:
+        """The open mixes the caller may run -- ``/mix move``'s autocomplete, and nothing else.
+
+        No route: the bot is the only caller, and the site's own mix list
+        (``custom.list``) already answers this for a page.
+        """
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            return await custom_game_service.hosted_active(
+                session, workspace_id=_int(data, "workspace_id"), auth_user=user
+            )
+
+        return await c.envelope(logger, "custom.hosted_active", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.self_join")
     async def _self_join(data: dict, msg: RabbitMessage) -> dict:

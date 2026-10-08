@@ -1121,6 +1121,27 @@ class CustomGameService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
         return await self.self_state(session, custom_game_id=game.id, auth_user=auth_user, workspace_id=workspace_id)
 
+    async def hosted_active(self, session: AsyncSession, *, workspace_id: int, auth_user: Any) -> list[dict[str, Any]]:
+        """The open mixes this account may run, newest first -- what ``/mix move`` offers."""
+        query = (
+            sa.select(models.CustomGame.id, models.CustomGame.name, models.CustomGame.lobby_count)
+            .where(
+                models.CustomGame.workspace_id == workspace_id,
+                models.CustomGame.status.in_((MixStatus.DRAFT, MixStatus.BALANCED)),
+            )
+            .order_by(models.CustomGame.id.desc())
+            .limit(25)  # Discord shows at most 25 autocomplete choices
+        )
+        if not auth_user.is_superuser:
+            co_hosted = sa.select(models.CustomGameCoHost.custom_game_id).where(
+                models.CustomGameCoHost.user_id == auth_user.id
+            )
+            query = query.where(
+                sa.or_(models.CustomGame.host_user_id == auth_user.id, models.CustomGame.id.in_(co_hosted))
+            )
+        rows = (await session.execute(query)).all()
+        return [{"id": game_id, "name": name, "lobby_count": lobby_count} for game_id, name, lobby_count in rows]
+
     async def self_join(
         self,
         session: AsyncSession,
