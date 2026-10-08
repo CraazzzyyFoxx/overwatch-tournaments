@@ -80,7 +80,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
         Targets the <main id="main-content"> in (site)/layout.tsx. */}
       <a
         href="#main-content"
-        className="absolute left-3 top-3 z-[80] -translate-y-[200%] rounded-lg bg-[color:var(--aqt-card-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg)] ring-2 ring-ring focus:translate-y-0"
+        className="absolute left-3 top-3 z-[80] rounded-lg bg-[color:var(--aqt-card-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg)] ring-2 ring-ring not-focus:sr-only"
       >
         {t("common.skipToContent")}
       </a>
