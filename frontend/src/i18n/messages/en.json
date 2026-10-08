@@ -5242,7 +5242,8 @@
       "minChars": "Type at least 2 characters.",
       "resultsLabel": "Player search results",
       "mobileTrigger": "Search players",
-      "recent": "Recent"
+      "recent": "Recent",
+      "clear": "Clear search"
     },
     "label": "Site navigation"
   },

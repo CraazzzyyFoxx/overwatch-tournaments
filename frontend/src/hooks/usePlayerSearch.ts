@@ -141,6 +141,12 @@ export function usePlayerSearch(onNavigate?: (user: MinimizedUser) => void) {
     }
   };
 
+  const clearSearch = () => {
+    setSearchValue("");
+    setSearchData([]);
+    setActiveIndex(-1);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
       if (isOpen) {
@@ -189,6 +195,7 @@ export function usePlayerSearch(onNavigate?: (user: MinimizedUser) => void) {
     emptyMessage,
     handleSelect,
     handleChange,
+    clearSearch,
     handleKeyDown,
     setActiveIndex,
     itemRefs,

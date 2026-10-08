@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { useTranslations } from "next-intl";
-import { History, Search, User } from "lucide-react";
+import { History, Search, User, X } from "lucide-react";
 
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
@@ -45,6 +45,7 @@ export function PlayerSearchCombobox({
     emptyMessage,
     handleSelect,
     handleChange,
+    clearSearch,
     handleKeyDown,
     setActiveIndex,
     itemRefs,
@@ -95,10 +96,23 @@ export function PlayerSearchCombobox({
               className={cn(
                 "h-full min-w-0 flex-1 border-0 bg-transparent text-[color:var(--aqt-fg)] outline-none",
                 "placeholder:text-[color:var(--aqt-fg-faint)]",
+                // The native clear glyph ignores the theme; the button below replaces it.
+                "[&::-webkit-search-cancel-button]:appearance-none",
                 size === "lg" ? "text-ui" : "text-body"
               )}
             />
             {isSearching ? <Spinner className="shrink-0" /> : null}
+            {searchValue && !isSearching ? (
+              <button
+                type="button"
+                aria-label={t("nav.search.clear")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={clearSearch}
+                className="-mr-1 grid size-6 shrink-0 place-items-center rounded-md text-[color:var(--aqt-fg-faint)] outline-none transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] focus-visible:shadow-[inset_0_0_0_2px_var(--aqt-teal)]"
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            ) : null}
           </label>
         </PopoverAnchor>
         <PopoverContent
@@ -107,7 +121,7 @@ export function PlayerSearchCombobox({
           collisionPadding={12}
           // The field keeps the caret; the list is pointer/arrow driven.
           onOpenAutoFocus={(event) => event.preventDefault()}
-          className="w-[340px] max-w-[calc(100vw-24px)] rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]"
+          className="w-[340px] min-w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card-2)] p-1.5 shadow-[0_18px_50px_rgb(0_0_0/0.5)]"
         >
           <div id={listId} role="listbox" aria-label={t("nav.search.resultsLabel")}>
             {showHistory && history.length > 0 ? (
