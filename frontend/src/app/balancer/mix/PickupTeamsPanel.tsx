@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -38,6 +38,9 @@ import {
 
 /** The demoted share/close tools: quiet glyphs that only light up on hover. */
 const TOOL_ICON_CLASS = "size-9 text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]";
+
+/** How long the lineup has to sit still before this lobby's Discord card is re-sent. */
+const LINEUP_REFRESH_DELAY_MS = 2_000;
 
 type PickupTeamsPanelProps = {
   canWrite: boolean;
@@ -93,6 +96,10 @@ type PickupTeamsPanelProps = {
   postingToDiscord?: boolean;
   /** Omitted -- no Post to Discord button, matching a page that offers no post. */
   onPostToDiscord?: (variantIndex: number, image: Blob | null) => void;
+  /** The id of this lobby's live lineup card, or `null` -- nothing in Discord to keep in step. */
+  liveLineupPostId?: number | null;
+  /** Omitted -- a lineup change is not re-sent to Discord. */
+  onRefreshLineup?: (image: Blob | null) => void;
   /** Replaces the "No teams yet" card while this lobby has no balance. */
   emptyState?: ReactNode;
 };
@@ -140,13 +147,13 @@ export function PickupTeamsPanel({
   onCopyBattleTags,
   postingToDiscord = false,
   onPostToDiscord,
+  liveLineupPostId = null,
+  onRefreshLineup,
   emptyState
 }: Readonly<PickupTeamsPanelProps>) {
   const t = useTranslations("mixes.lobbies");
-  const variants = parseVariants(
-    lobby?.balance_result,
-    teamNamesByIndex(game?.settings, lobbyIndex)
-  );
+  const teamNames = teamNamesByIndex(game?.settings, lobbyIndex);
+  const variants = parseVariants(lobby?.balance_result, teamNames);
   // Clamped rather than reset in an effect: a shorter result must not leave the
   // pager pointing past the end.
   const index = Math.min(variantIndex, Math.max(0, variants.length - 1));
@@ -156,6 +163,39 @@ export function PickupTeamsPanel({
   // The matchup card is a self-contained graphic, so "share the teams" here needs
   // no detour through the fullscreen board.
   const { ref: captureRef, capturing, capture, rasterize } = useNodeCapture();
+  // The lobby's newest Discord card follows what this host sees: a lineup change
+  // (rebalance, swap, another option, map, team names) recaptures the card and
+  // re-sends it, once the edits stop for a moment. Keyed by content, so a refetch
+  // that changes nothing sends nothing.
+  // ponytail: a change made in the last 2 s before leaving the page is not sent.
+  const lineupSignature = JSON.stringify([
+    variant?.teams ?? null,
+    lobby?.next_map_id ?? null,
+    teamNames
+  ]);
+  const shown = useRef({ lobbyIndex, signature: lineupSignature });
+  // Read, never re-run on: a changed handler identity must not restart the
+  // debounce. Declared first, so it is already current when the effect below
+  // runs in the same commit.
+  const refresh = useRef({ canWrite, liveLineupPostId, onRefreshLineup, rasterize });
+  useEffect(() => {
+    refresh.current = { canWrite, liveLineupPostId, onRefreshLineup, rasterize };
+  });
+  useEffect(() => {
+    const previous = shown.current;
+    shown.current = { lobbyIndex, signature: lineupSignature };
+    // A tab switch shows another lobby's lineup; that lobby's card is not stale.
+    if (previous.lobbyIndex !== lobbyIndex || previous.signature === lineupSignature) return;
+    const current = refresh.current;
+    if (!current.canWrite || !current.onRefreshLineup || current.liveLineupPostId == null) return;
+    const timer = window.setTimeout(() => {
+      void current
+        .rasterize()
+        .catch(() => null)
+        .then((image) => refresh.current.onRefreshLineup?.(image));
+    }, LINEUP_REFRESH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [lineupSignature, lobbyIndex]);
   const [closeOpen, setCloseOpen] = useState(false);
   // A balance replaces this lobby's lineup. If the lineup on screen was never
   // played into the log, that is a result about to be lost, so it is the one

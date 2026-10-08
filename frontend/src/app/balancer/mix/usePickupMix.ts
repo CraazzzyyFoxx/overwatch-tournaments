@@ -23,6 +23,7 @@ import {
   type PickupRecordOutcomeInput,
 } from "@/app/balancer/mix/pickup-lineup";
 import { voiceRefusal } from "@/app/balancer/mix/pickup-voice";
+import { liveLineupPostOf } from "@/app/balancer/mix/PickupMixHeader";
 import {
   workspacePlayerKeys,
   workspacePlayerService,
@@ -328,12 +329,31 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * Re-sends a lobby's live lineup card with what the lineup says now. `image`
+   * is the recaptured matchup; `null` leaves the bot its text card.
+   */
+  const refreshLineup = useMutation({
+    mutationFn: ({ lobbyIndex, image }: { lobbyIndex: number; image: Blob | null }) =>
+      customGameService.refreshLineup(workspaceId, selectedGameId as number, lobbyIndex, image),
+    onError: (error) => notify.apiError(error),
+  });
+
   const balance = useMutation({
     mutationFn: (input: PickupBalanceInput) =>
       customGameService.balance(workspaceId, selectedGameId as number, input),
-    onSuccess: (game) => {
+    onSuccess: (game, input) => {
       applyGame(game);
       notify.success("Teams balanced");
+      // A shuffle re-seats every lobby, including the ones nobody is looking
+      // at: only the shown lobby has a canvas to capture, so the others get
+      // the bot's text card. The shown one is the panel's own refresh.
+      if (input.scope !== "all") return;
+      for (const lobby of game.lobbies) {
+        if (lobby.lobby_index !== activeLobby && liveLineupPostOf(game, lobby.lobby_index)) {
+          refreshLineup.mutate({ lobbyIndex: lobby.lobby_index, image: null });
+        }
+      }
     },
     onError: (error) => notify.apiError(error),
   });
@@ -613,6 +633,7 @@ export function usePickupMix(
     setTeamNames,
     renameMix,
     postToDiscord,
+    refreshLineup,
     transferHost,
     addCoHost,
     removeCoHost,

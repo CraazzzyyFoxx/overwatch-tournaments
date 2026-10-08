@@ -57,6 +57,18 @@ export function signupPostOf(game: CustomGame): CustomGameDiscordPost | null {
   return (game.discord_posts ?? []).findLast((row) => row.kind === "mix.signup") ?? null;
 }
 
+/** The lobby's newest lineup card still standing in Discord: the one the voice buttons and refresh act on. */
+export function liveLineupPostOf(game: CustomGame, lobbyIndex: number): CustomGameDiscordPost | null {
+  return (
+    (game.discord_posts ?? []).findLast(
+      (row) =>
+        row.kind === "mix.lineup" &&
+        row.slot.startsWith(`lineup:${lobbyIndex}:`) &&
+        (row.status === "posted" || row.status === "pending")
+    ) ?? null
+  );
+}
+
 /**
  * The mode a signup post goes out in. Posting the card IS opening signup
  * (`signup_post` writes the mode server-side), so a closed mix opens into the

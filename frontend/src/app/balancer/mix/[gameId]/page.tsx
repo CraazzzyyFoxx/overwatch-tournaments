@@ -8,7 +8,7 @@ import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialo
 import { PickupGettingStarted } from "@/app/balancer/mix/PickupGettingStarted";
 import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
-import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
+import { PickupMixHeader, liveLineupPostOf } from "@/app/balancer/mix/PickupMixHeader";
 import { PickupMySeatPanel } from "@/app/balancer/mix/PickupMySeatPanel";
 import { PickupLobbyTabs } from "@/app/balancer/mix/PickupLobbyTabs";
 import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
@@ -116,6 +116,7 @@ export default function BalancerPickupMixPage() {
     setTeamNames,
     renameMix,
     postToDiscord,
+    refreshLineup,
     transferHost,
     addCoHost,
     removeCoHost,
@@ -314,6 +315,8 @@ export default function BalancerPickupMixPage() {
               onPostToDiscord={(idx, image) =>
                 postToDiscord.mutate({ lobbyIndex: activeLobby, variantIndex: idx, image })
               }
+              liveLineupPostId={game ? (liveLineupPostOf(game, activeLobby)?.id ?? null) : null}
+              onRefreshLineup={(image) => refreshLineup.mutate({ lobbyIndex: activeLobby, image })}
               emptyState={
                 canWrite && game != null && game.matches_count === 0 ? (
                   <PickupGettingStarted
