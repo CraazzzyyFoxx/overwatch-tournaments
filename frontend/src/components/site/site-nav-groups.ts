@@ -3,7 +3,6 @@ import {
   Crown,
   Layers,
   ListOrdered,
-  MonitorPlay,
   Shuffle,
   Swords,
   Trophy,
@@ -58,12 +57,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 ];
 
 /**
- * What a player joins or hosts rather than browses. Scrim rooms belong to no
- * tournament and viewing a mix is public, so neither hangs off a section.
+ * What a player joins or hosts rather than browses. Viewing a mix is public,
+ * so it hangs off no section.
  */
 export const NAV_LINKS: readonly NavItem[] = [
-  { key: "mixes", href: "/balancer/mix", icon: Shuffle },
-  { key: "scrims", href: "/scrims", icon: MonitorPlay }
+  { key: "mixes", href: "/balancer/mix", icon: Shuffle }
 ];
 
 /**
