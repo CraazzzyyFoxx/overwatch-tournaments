@@ -6986,10 +6986,11 @@
     },
     "voice": {
       "title": "Voice channels",
-      "notConfigured": "No voice category is picked in the community settings (Settings → Discord).",
+      "notConfigured": "No voice category is picked in the workspace settings (Settings → Discord).",
       "unreachable": "Could not read the Discord channels.",
       "general": "General voice",
       "team": "Team {n}",
+      "teamInLobby": "Team {n}, lobby {letter}",
       "lobby": "Lobby {letter}",
       "none": "Not picked",
       "outsideCategory": "outside the category",

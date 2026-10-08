@@ -194,7 +194,11 @@ export function PickupVoicePanel({
                     <VoiceSelect
                       key={team}
                       label={t("team", { n: team })}
-                      ariaLabel={t("team", { n: team, letter })}
+                      // One lobby, one visible "Team 1" label; several, and the
+                      // accessible name has to say which lobby it belongs to.
+                      ariaLabel={
+                        multi ? t("teamInLobby", { n: team, letter }) : t("team", { n: team })
+                      }
                       value={
                         team === 1 ? lobby.team1_voice_channel_id : lobby.team2_voice_channel_id
                       }

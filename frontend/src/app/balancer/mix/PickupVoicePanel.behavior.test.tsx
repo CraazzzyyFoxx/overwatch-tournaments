@@ -253,18 +253,32 @@ describe("PickupVoicePanel", () => {
     });
     const container = await mount({ game: current });
 
-    await click(optionByText(selectByLabel(container, "team(n=1,letter=A)"), "Alpha"));
+    await click(optionByText(selectByLabel(container, "teamInLobby(n=1,letter=A)"), "Alpha"));
 
     expect(onSave).toHaveBeenCalledWith(
       voicePatch(current, { lobbyIndex: 0, team: 1, channelId: "2" }),
     );
   });
 
+  it("names every picker for its own lobby, so two lobbies never offer the same control twice", async () => {
+    const container = await mount({
+      game: game({ lobby_count: 2, lobbies: [lobby(), lobby({ lobby_index: 1 })] }),
+    });
+
+    const names = [...container.querySelectorAll("button")]
+      .map((node) => node.getAttribute("aria-label"))
+      .filter((name): name is string => name != null);
+
+    expect(names).toContain("teamInLobby(n=1,letter=A)");
+    expect(names).toContain("teamInLobby(n=1,letter=B)");
+    expect(new Set(names).size).toBe(names.length);
+  });
+
   it("clears a pick through the none item", async () => {
     const current = game({ lobbies: [lobby({ team1_voice_channel_id: "2" })] });
     const container = await mount({ game: current });
 
-    await click(optionByText(selectByLabel(container, "team(n=1,letter=A)"), "none"));
+    await click(optionByText(selectByLabel(container, "team(n=1)"), "none"));
 
     expect(onSave).toHaveBeenCalledWith(
       voicePatch(current, { lobbyIndex: 0, team: 1, channelId: null }),
@@ -283,7 +297,7 @@ describe("PickupVoicePanel", () => {
       ],
     });
 
-    const bravo = optionByText(selectByLabel(container, "team(n=2,letter=A)"), "Bravo");
+    const bravo = optionByText(selectByLabel(container, "team(n=2)"), "Bravo");
     expect(bravo?.textContent).toContain("busy(mix=Friday cup,letter=B)");
     expect(bravo?.disabled).toBe(false);
   });
@@ -293,7 +307,7 @@ describe("PickupVoicePanel", () => {
       game: game({ lobbies: [lobby({ team1_voice_channel_id: "77" })] }),
     });
 
-    expect(selectByLabel(container, "team(n=1,letter=A)").textContent).toContain("outsideCategory");
+    expect(selectByLabel(container, "team(n=1)").textContent).toContain("outsideCategory");
   });
 
   it("refuses the move Discord would refuse, and names the missing permission", async () => {
@@ -308,7 +322,7 @@ describe("PickupVoicePanel", () => {
     });
 
     expect(container.textContent).toContain("missing(permissions=permission.move_members)");
-    expect(optionByText(selectByLabel(container, "team(n=1,letter=A)"), "Alpha")?.disabled).toBe(true);
+    expect(optionByText(selectByLabel(container, "team(n=1)"), "Alpha")?.disabled).toBe(true);
     expect(byName(container, "move")?.disabled).toBe(true);
     expect(byName(container, "return")?.disabled).toBe(true);
   });

@@ -6990,6 +6990,7 @@
       "unreachable": "Не удалось получить каналы Discord.",
       "general": "Общий войс",
       "team": "Команда {n}",
+      "teamInLobby": "Команда {n}, лобби {letter}",
       "lobby": "Лобби {letter}",
       "none": "Не выбран",
       "outsideCategory": "вне категории",
