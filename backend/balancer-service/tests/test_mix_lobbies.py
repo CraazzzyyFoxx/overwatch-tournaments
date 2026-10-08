@@ -12,7 +12,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 
 
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
-from src.domain.mix_lobbies import seated_member_ids  # noqa: E402
+from src.domain.mix_lobbies import seated_member_ids, seated_teams  # noqa: E402
 
 
 def _payload(*teams: dict[str, list[int]]) -> dict[str, object]:
@@ -62,3 +62,20 @@ def test_a_seat_that_is_not_a_member_id_is_skipped_not_fatal() -> None:
     document = lobby_document([_payload({"tank": [7]})])
     document["variants"][0]["teams"][0]["roster"]["damage"] = ["not-a-member"]
     assert seated_member_ids(document, 0) == frozenset({7})
+
+
+def test_teams_keep_their_order_so_each_one_gets_its_own_voice() -> None:
+    # The voice mover needs team 1 and team 2 apart, not the union membership is.
+    document = lobby_document([_payload({"tank": [7], "damage": [8]}, {"tank": [9]})])
+    assert seated_teams(document, 0) == ((7, 8), (9,))
+
+
+def test_teams_of_an_index_past_the_stored_options_are_empty() -> None:
+    assert seated_teams(lobby_document([_payload({"tank": [7]})]), 1) == ()
+    assert seated_teams(None, 0) == ()
+
+
+def test_a_seat_that_is_not_a_member_id_is_left_out_of_its_team() -> None:
+    document = lobby_document([_payload({"tank": [7]})])
+    document["variants"][0]["teams"][0]["roster"]["damage"] = ["not-a-member"]
+    assert seated_teams(document, 0) == ((7,),)

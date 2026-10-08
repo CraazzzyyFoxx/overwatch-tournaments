@@ -2,7 +2,7 @@
 
 ``rpc.balancer.custom.{create,list,get,rename,update_roster,update_player,set_participation,set_lobby_count,
 balance,set_team_names,set_next_map,set_variant_index,
-post_discord,post_signup,delete_discord_post,set_voice_channels,voice_options,
+post_discord,post_signup,delete_discord_post,set_voice_channels,voice_options,voice_move,voice_return,
 transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
 match_history,undo_match,rotation,stats,close,delete,hard_delete,
 self_get,self_current,self_join,self_leave,self_update,set_self_service}``.
@@ -103,6 +103,17 @@ _VOICE_RPC_TIMEOUT = 30.0
 def _voice_discord(broker: Any) -> DiscordClient:
     """discord-service only: voice lives in the bot's cache, and this service holds no bot token."""
     return DiscordClient(broker=broker, rpc_timeout=_VOICE_RPC_TIMEOUT)
+
+
+async def _voice_workspace_id(session: Any, data: dict[str, Any], custom_game_id: int) -> int:
+    """The path's workspace, or -- for the bot, which names only the mix -- the mix's own."""
+    workspace_id = _opt_int(data, "workspace_id")
+    if workspace_id is not None:
+        return workspace_id
+    game = await custom_game_service.games.get(session, custom_game_id)
+    if game is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Custom game not found")
+    return game.workspace_id
 
 
 def _game_id(data: dict[str, Any]) -> int:
@@ -1053,6 +1064,51 @@ def register(broker: Any, logger: Any) -> None:
             )
 
         return await c.envelope(logger, "custom.voice_options", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.voice_move")
+    async def _voice_move(data: dict, msg: RabbitMessage) -> dict:
+        """Seated players into their team voices. The page, ``/mix move`` and the
+        lineup card's button all land here; the report is the whole answer."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            custom_game_id = _game_id(data)
+            workspace_id = await _voice_workspace_id(session, data, custom_game_id)
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameVoiceRun, data)
+            return await custom_game_service.voice_move(
+                session,
+                discord=_voice_discord(broker),
+                workspace_id=workspace_id,
+                custom_game_id=custom_game_id,
+                lobby_index=body.lobby_index,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+
+        return await c.envelope(logger, "custom.voice_move", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.voice_return")
+    async def _voice_return(data: dict, msg: RabbitMessage) -> dict:
+        """Everyone in the team voices back to the general voice."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            custom_game_id = _game_id(data)
+            workspace_id = await _voice_workspace_id(session, data, custom_game_id)
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameVoiceRun, data)
+            return await custom_game_service.voice_return(
+                session,
+                discord=_voice_discord(broker),
+                workspace_id=workspace_id,
+                custom_game_id=custom_game_id,
+                lobby_index=body.lobby_index,
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+
+        return await c.envelope(logger, "custom.voice_return", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.post_signup")
     async def _post_signup(data: dict, msg: RabbitMessage) -> dict:

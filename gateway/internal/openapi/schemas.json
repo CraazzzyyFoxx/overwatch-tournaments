@@ -4141,6 +4141,18 @@
       },
       "summary": "Replace custom game roster"
     },
+    "rpc.balancer.custom.voice_move": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVoiceRun"
+      }
+    },
+    "rpc.balancer.custom.voice_return": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVoiceRun"
+      }
+    },
     "rpc.balancer.draft.cancel": {
       "description": "Permission: workspace `team.create`. Cancels the draft and publishes a draft-cancelled realtime event.",
       "response": {
@@ -23795,6 +23807,28 @@
         }
       },
       "title": "CustomGameVoicePatch",
+      "type": "object"
+    },
+    "balancer.CustomGameVoiceRun": {
+      "additionalProperties": false,
+      "description": "Which lobby to move; ``null`` is every lobby of the mix.",
+      "properties": {
+        "lobby_index": {
+          "anyOf": [
+            {
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lobby Index"
+        }
+      },
+      "title": "CustomGameVoiceRun",
       "type": "object"
     },
     "balancer.DraftAutopickPreview": {

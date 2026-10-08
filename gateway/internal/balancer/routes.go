@@ -104,6 +104,9 @@ var RosterRoutes = []edge.RouteSpec{
 	// The mix's voice channels and the voices it may pick from (host-or-co-host).
 	{Method: "PUT", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice", Queue: "rpc.balancer.custom.set_voice_channels", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/options", Queue: "rpc.balancer.custom.voice_options", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	// Moving people: into the team voices, and back to the general one.
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/move", Queue: "rpc.balancer.custom.voice_move", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/voice/return", Queue: "rpc.balancer.custom.voice_return", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	// The player's own seat. One pattern, four verbs: read it, take it, drop it,
 	// re-role it. AuthRequired because the worker authorizes the clicker (the bot
 	// forwards the linked account's identity the same way the site does); the

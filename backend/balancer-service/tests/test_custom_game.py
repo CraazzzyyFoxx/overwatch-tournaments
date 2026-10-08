@@ -172,6 +172,20 @@ def _discord(*channels: dict[str, object]) -> SimpleNamespace:
     return SimpleNamespace(guild_channels=AsyncMock(return_value=list(channels)))
 
 
+def _seated(*teams: list[tuple[int, str]]) -> dict[str, object]:
+    """One balanced option of a lobby: each team's seats as ``(member_id, name)``."""
+    return lobby_document(
+        [
+            {
+                "teams": [
+                    {"roster": {"tank": [{"uuid": str(member_id), "name": name} for member_id, name in team]}}
+                    for team in teams
+                ]
+            }
+        ]
+    )
+
+
 def _prefs(**overrides) -> SimpleNamespace:
     """One ``balancer.user_config`` row: everything the HOST configures.
 
@@ -447,6 +461,14 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         rows = MagicMock()
         rows.first = MagicMock(return_value=(blob, guild_id))
         self.session.execute = AsyncMock(return_value=rows)
+
+    def _voice_reads(self, blob: dict[str, object] | None, guild_id: str | None, links: dict[int, str]) -> None:
+        """The two reads a move makes: the workspace's voice config, then the seats' Discord links."""
+        config_rows = MagicMock()
+        config_rows.first = MagicMock(return_value=(blob, guild_id))
+        link_rows = MagicMock()
+        link_rows.all = MagicMock(return_value=list(links.items()))
+        self.session.execute = AsyncMock(side_effect=[config_rows, link_rows])
 
     @staticmethod
     async def _assign_id(_session, row):
@@ -2860,6 +2882,178 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(options["error"], "category_not_found")
+
+    async def test_voice_move_sends_each_team_of_a_lobby_to_its_own_voice(self) -> None:
+        """One ask to discord-service for the whole lobby; whoever could not be
+        asked for is in the same report as whoever was."""
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(
+            0,
+            balance_result_json=_seated([(7, "Ana"), (8, "Bob")], [(9, "Cid")]),
+            team1_voice_channel_id=2,
+            team2_voice_channel_id=3,
+        )
+        self._voice_reads({"mix_voice_category_id": "10"}, "5", {7: "70", 9: "90"})
+        discord = SimpleNamespace(
+            voice_move=AsyncMock(
+                return_value=[
+                    {"discord_user_id": "70", "channel_id": "2", "status": "moved", "name": "ana#1"},
+                    {"discord_user_id": "90", "channel_id": "3", "status": "not_in_voice", "name": "cid#1"},
+                ]
+            )
+        )
+
+        body = await self.service.voice_move(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+        )
+
+        discord.voice_move.assert_awaited_once_with(
+            "5",
+            category_id="10",
+            moves=[{"discord_user_id": "70", "channel_id": "2"}, {"discord_user_id": "90", "channel_id": "3"}],
+            drain=None,
+        )
+        self.assertEqual(body["moved"], 1)
+        self.assertEqual(
+            [(row["workspace_member_id"], row["name"], row["status"], row["channel_id"]) for row in body["results"]],
+            [(8, "Bob", "no_discord_link", "2"), (7, "Ana", "moved", "2"), (9, "Cid", "not_in_voice", "3")],
+        )
+
+    async def test_voice_move_without_a_lobby_moves_the_whole_mix(self) -> None:
+        self.games.get.return_value = _game(lobby_count=2)
+        self.lobby_rows[0] = _lobby(
+            0, balance_result_json=_seated([(7, "Ana")]), team1_voice_channel_id=2, team2_voice_channel_id=3
+        )
+        self.lobby_rows[1] = _lobby(
+            1, balance_result_json=_seated([(8, "Bob")]), team1_voice_channel_id=4, team2_voice_channel_id=5
+        )
+        self._voice_reads({"mix_voice_category_id": "10"}, "5", {7: "70", 8: "80"})
+        discord = SimpleNamespace(voice_move=AsyncMock(return_value=[]))
+
+        await self.service.voice_move(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=None, actor_user_id=9
+        )
+
+        self.assertEqual(
+            discord.voice_move.await_args.kwargs["moves"],
+            [{"discord_user_id": "70", "channel_id": "2"}, {"discord_user_id": "80", "channel_id": "4"}],
+        )
+
+    async def test_voice_move_without_a_configured_category_409(self) -> None:
+        """The workspace admin has not picked a mix category: there is no
+        category to check the mix's voices against, so nobody is moved."""
+        self.games.get.return_value = _game()
+        self._voice_config({}, "5")
+        discord = SimpleNamespace(voice_move=AsyncMock())
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.voice_move(
+                self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+            )
+
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail), (409, "voice_not_configured"))
+        discord.voice_move.assert_not_awaited()
+
+    async def test_voice_move_with_nobody_to_move_asks_discord_nothing(self) -> None:
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=_seated([(7, "Ana")]))
+        self._voice_reads({"mix_voice_category_id": "10"}, "5", {7: "70"})
+        discord = SimpleNamespace(voice_move=AsyncMock())
+
+        body = await self.service.voice_move(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+        )
+
+        discord.voice_move.assert_not_awaited()
+        self.assertEqual(
+            body,
+            {
+                "moved": 0,
+                "results": [{"workspace_member_id": 7, "name": "Ana", "status": "not_configured", "channel_id": None}],
+            },
+        )
+
+    async def test_voice_move_with_discord_down_503(self) -> None:
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, balance_result_json=_seated([(7, "Ana")]), team1_voice_channel_id=2)
+        self._voice_reads({"mix_voice_category_id": "10"}, "5", {7: "70"})
+        discord = SimpleNamespace(voice_move=AsyncMock(side_effect=DiscordUnavailable("down")))
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.voice_move(
+                self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+            )
+
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail), (503, "discord_unavailable"))
+
+    async def test_voice_return_drains_the_team_voices_into_the_general_one(self) -> None:
+        """Everyone in the team voices, player or not, goes back -- which is why
+        it is a drain of the rooms rather than a list of seats."""
+        self.games.get.return_value = _game(general_voice_channel_id=1)
+        self.lobby_rows[0] = _lobby(0, team1_voice_channel_id=2, team2_voice_channel_id=3)
+        self._voice_config({"mix_voice_category_id": "10", "mix_general_voice_channel_ids": ["1"]}, "5")
+        discord = SimpleNamespace(
+            voice_move=AsyncMock(
+                return_value=[{"discord_user_id": "70", "channel_id": "1", "status": "moved", "name": "ana#1"}]
+            )
+        )
+
+        body = await self.service.voice_return(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+        )
+
+        discord.voice_move.assert_awaited_once_with(
+            "5", category_id="10", moves=[], drain={"channel_ids": ["2", "3"], "to_channel_id": "1"}
+        )
+        self.assertEqual(
+            body,
+            {
+                "moved": 1,
+                "results": [{"workspace_member_id": None, "name": "ana#1", "status": "moved", "channel_id": "1"}],
+            },
+        )
+
+    async def test_voice_return_without_a_general_voice_409(self) -> None:
+        self.games.get.return_value = _game()
+        self.lobby_rows[0] = _lobby(0, team1_voice_channel_id=2)
+        self._voice_config({"mix_voice_category_id": "10", "mix_general_voice_channel_ids": ["1"]}, "5")
+        discord = SimpleNamespace(voice_move=AsyncMock())
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.voice_return(
+                self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+            )
+
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail), (409, "general_voice_not_configured"))
+        discord.voice_move.assert_not_awaited()
+
+    async def test_voice_return_into_a_voice_the_workspace_does_not_call_general_409(self) -> None:
+        """The mix's general voice was dropped from the workspace's list: a
+        return would herd everybody into a room nobody agreed on."""
+        self.games.get.return_value = _game(general_voice_channel_id=4)
+        self.lobby_rows[0] = _lobby(0, team1_voice_channel_id=2)
+        self._voice_config({"mix_voice_category_id": "10", "mix_general_voice_channel_ids": ["1"]}, "5")
+        discord = SimpleNamespace(voice_move=AsyncMock())
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.voice_return(
+                self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+            )
+
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail), (409, "general_voice_outside_category"))
+        discord.voice_move.assert_not_awaited()
+
+    async def test_voice_return_of_a_lobby_with_no_team_voices_asks_discord_nothing(self) -> None:
+        self.games.get.return_value = _game(general_voice_channel_id=1)
+        self._voice_config({"mix_voice_category_id": "10", "mix_general_voice_channel_ids": ["1"]}, "5")
+        discord = SimpleNamespace(voice_move=AsyncMock())
+
+        body = await self.service.voice_return(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, lobby_index=0, actor_user_id=9
+        )
+
+        discord.voice_move.assert_not_awaited()
+        self.assertEqual(body, {"moved": 0, "results": []})
 
     async def test_balance_feeds_the_hosts_stored_preferences_to_the_solver(self) -> None:
         """The solver knobs are the HOST's, not the presser's.

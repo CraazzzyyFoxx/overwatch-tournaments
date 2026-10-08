@@ -35,6 +35,7 @@ __all__ = (
     "CustomGameTeamNamesPatch",
     "CustomGameVariantIndexPatch",
     "CustomGameVoicePatch",
+    "CustomGameVoiceRun",
 )
 
 
@@ -279,3 +280,9 @@ class CustomGameVoicePatch(_Request):
         if len(indexes) != len(set(indexes)):
             raise ValueError("lobby_index values must be unique")
         return self
+
+
+class CustomGameVoiceRun(_Request):
+    """Which lobby to move; ``null`` is every lobby of the mix."""
+
+    lobby_index: int | None = Field(None, ge=0, le=MAX_LOBBIES - 1)

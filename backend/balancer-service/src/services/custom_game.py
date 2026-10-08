@@ -63,13 +63,13 @@ from shared.services.workspace_roster import (
 )
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.mix_discord import SignupPlayer, lineup_card, signup_card
-from src.domain.mix_lobbies import seated_member_ids
+from src.domain.mix_lobbies import seated_member_ids, seated_teams
 from src.domain.mix_lobby_split import LobbySplitError, SplitCandidate, split_into_lobbies
 from src.domain.mix_ranker import Ranker
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
-from src.domain.mix_voice import MixVoiceConfig, voice_config_from
+from src.domain.mix_voice import LobbyVoice, MixVoiceConfig, VoicePlan, plan_move, report, snowflake, voice_config_from
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
 from src.services.mix_ranker import MixRankerService, RatedSeat, mix_ranker_service
@@ -1947,8 +1947,8 @@ class CustomGameService:
             "team": [c for c in picked if c["id"] not in voice.general_ids],
         }
 
-    async def discord_mentions(self, session: AsyncSession, member_ids: Sequence[int]) -> list[str]:
-        """The Discord ids of those workspace members who linked an account.
+    async def discord_links(self, session: AsyncSession, member_ids: Sequence[int]) -> dict[int, str]:
+        """The Discord id of every one of those workspace members who linked an account.
 
         One batched read down the identity chain -- workspace member -> player
         -> auth user -> ``auth.oauth_connections`` -- rather than a lookup per
@@ -1957,7 +1957,7 @@ class CustomGameService:
         """
         ids = _uniq(member_ids)
         if not ids:
-            return []
+            return {}
         rows = (
             await session.execute(
                 sa.select(models.WorkspaceMember.id, models.OAuthConnection.provider_user_id)
@@ -1971,8 +1971,130 @@ class CustomGameService:
                 )
             )
         ).all()
-        by_member = {member_id: str(discord_id) for member_id, discord_id in rows if discord_id}
-        return [by_member[member_id] for member_id in ids if member_id in by_member]
+        return {member_id: str(discord_id) for member_id, discord_id in rows if discord_id}
+
+    async def discord_mentions(self, session: AsyncSession, member_ids: Sequence[int]) -> list[str]:
+        """The Discord ids of those members who linked an account, in ``member_ids`` order."""
+        links = await self.discord_links(session, member_ids)
+        return [links[member_id] for member_id in _uniq(member_ids) if member_id in links]
+
+    async def _voice_lobbies(
+        self, session: AsyncSession, game: models.CustomGame, lobby_index: int | None
+    ) -> list[models.CustomGameLobby]:
+        if lobby_index is not None:
+            return [await self._lobby(session, game, lobby_index)]
+        return list(await self.lobbies.list_for_game(session, game.id))
+
+    async def _voice_setup(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        actor_user_id: int,
+        actor_is_superuser: bool,
+    ) -> tuple[models.CustomGame, MixVoiceConfig]:
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        config = await self.voice_config(session, workspace_id)
+        if config.guild_id is None or config.category_id is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="voice_not_configured")
+        return game, config
+
+    @staticmethod
+    async def _ask_discord(
+        discord: DiscordClient,
+        config: MixVoiceConfig,
+        *,
+        moves: Sequence[Mapping[str, str]],
+        drain: Mapping[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        try:
+            return await discord.voice_move(config.guild_id, category_id=config.category_id, moves=moves, drain=drain)
+        except DiscordError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="discord_unavailable") from exc
+
+    async def voice_move(
+        self,
+        session: AsyncSession,
+        *,
+        discord: DiscordClient,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_index: int | None,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> dict[str, Any]:
+        """Every seated player of the lobby (or of every lobby) into their team's voice."""
+        game, config = await self._voice_setup(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        lobbies = await self._voice_lobbies(session, game, lobby_index)
+        shaped = [
+            LobbyVoice(
+                lobby.lobby_index,
+                seated_teams(lobby.balance_result_json, lobby.selected_variant_index),
+                (snowflake(lobby.team1_voice_channel_id), snowflake(lobby.team2_voice_channel_id)),
+            )
+            for lobby in lobbies
+        ]
+        member_ids = [member for lobby in shaped for team in lobby.teams for member in team]
+        plan = plan_move(config, shaped, await self.discord_links(session, member_ids))
+        results = await self._ask_discord(discord, config, moves=plan.moves, drain=None) if plan.moves else []
+        # The board's own names: every seat's uuid resolves in its document's player map.
+        names = {
+            int(uuid): str(player.get("name"))
+            for lobby in lobbies
+            for uuid, player in _lobby_players(as_lobby_document(lobby.balance_result_json)).items()
+            if str(uuid).isdigit() and isinstance(player, Mapping) and player.get("name")
+        }
+        return report(plan, results, names)
+
+    async def voice_return(
+        self,
+        session: AsyncSession,
+        *,
+        discord: DiscordClient,
+        workspace_id: int,
+        custom_game_id: int,
+        lobby_index: int | None,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> dict[str, Any]:
+        """Everyone in the lobby's team voices (players or not) back into the mix's general voice."""
+        game, config = await self._voice_setup(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        general = snowflake(game.general_voice_channel_id)
+        if general is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="general_voice_not_configured")
+        if general not in config.general_ids:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="general_voice_outside_category")
+        sources = [
+            channel
+            for lobby in await self._voice_lobbies(session, game, lobby_index)
+            for channel in (snowflake(lobby.team1_voice_channel_id), snowflake(lobby.team2_voice_channel_id))
+            if channel is not None and channel not in config.general_ids
+        ]
+        if not sources:
+            return {"moved": 0, "results": []}
+        results = await self._ask_discord(
+            discord, config, moves=[], drain={"channel_ids": sources, "to_channel_id": general}
+        )
+        return report(VoicePlan(moves=[], rows=[], member_by_discord={}), results, {})
 
     async def discord_lineup(
         self,
