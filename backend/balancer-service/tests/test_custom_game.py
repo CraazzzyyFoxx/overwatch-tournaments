@@ -29,6 +29,7 @@ from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.schemas.events import PickupMixChangedEvent  # noqa: E402
 from shared.services import discord_messages  # noqa: E402
 from shared.services.member_rank import MIX_ORDER  # noqa: E402
+from shared.services.subscriptions.providers.discord_role import DiscordUnavailable  # noqa: E402
 from shared.services.workspace_roster import RosterMember  # noqa: E402
 from src.domain.balancer.result_serializer import lobby_document  # noqa: E402
 from src.domain.mix_ranker import Ranker  # noqa: E402
@@ -132,6 +133,7 @@ def _game(**overrides) -> SimpleNamespace:
         "lobby_count": 1,
         "self_signup": "closed",
         "self_role_edit": False,
+        "general_voice_channel_id": None,
     }
     fields.update(overrides)
     return _row(**fields)
@@ -147,9 +149,27 @@ def _lobby(lobby_index: int = 0, **overrides) -> SimpleNamespace:
         "balance_result_version": 1,
         "next_map_id": None,
         "balanced_at": None,
+        "team1_voice_channel_id": None,
+        "team2_voice_channel_id": None,
     }
     fields.update(overrides)
     return _row(**fields)
+
+
+def _channel(channel_id: str, name: str, kind: str, **overrides) -> dict[str, object]:
+    """One row of ``DiscordClient.guild_channels``."""
+    return {
+        "id": channel_id,
+        "name": name,
+        "type": kind,
+        "category_id": None,
+        "missing_permissions": None,
+        **overrides,
+    }
+
+
+def _discord(*channels: dict[str, object]) -> SimpleNamespace:
+    return SimpleNamespace(guild_channels=AsyncMock(return_value=list(channels)))
 
 
 def _prefs(**overrides) -> SimpleNamespace:
@@ -420,6 +440,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         """The one batched read behind ``discord_mentions``: member id -> snowflake."""
         rows = MagicMock()
         rows.all = MagicMock(return_value=list(by_member.items()))
+        self.session.execute = AsyncMock(return_value=rows)
+
+    def _voice_config(self, blob: dict[str, object] | None, guild_id: str | None) -> None:
+        """The one row behind ``voice_config``: the workspace's balancer blob and its guild."""
+        rows = MagicMock()
+        rows.first = MagicMock(return_value=(blob, guild_id))
         self.session.execute = AsyncMock(return_value=rows)
 
     @staticmethod
@@ -2735,6 +2761,105 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual((command.image_b64, command.image_filename), ("iVBORw0KGgo=", "lineup.png"))
         # Nobody linked a Discord, so there is no mention line either.
         self.assertIsNone(command.card.details)
+
+    async def test_set_voice_channels_writes_the_mixs_general_voice_and_both_team_voices(self) -> None:
+        """One write for the whole mix: the general voice everyone returns to,
+        and each listed lobby's two team voices."""
+        self.games.get.return_value = _game(lobby_count=2)
+        self.lobby_rows[1] = _lobby(1)
+
+        game = await self.service.set_voice_channels(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            general_voice_channel_id=555,
+            lobbies=[(0, 1, 2), (1, 3, None)],
+            actor_user_id=9,
+        )
+
+        self.assertEqual(game.general_voice_channel_id, 555)
+        self.assertEqual(
+            [(row.team1_voice_channel_id, row.team2_voice_channel_id) for row in self.lobby_rows.values()],
+            [(1, 2), (3, None)],
+        )
+
+    async def test_set_voice_channels_requires_the_host_or_a_co_host_403(self) -> None:
+        self.games.get.return_value = _game()
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_voice_channels(
+                self.session,
+                workspace_id=1,
+                custom_game_id=11,
+                general_voice_channel_id=555,
+                lobbies=[],
+                actor_user_id=21,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_voice_options_splits_the_categorys_voices_into_general_and_team(self) -> None:
+        """Only the configured category's voices are offered, and the
+        workspace's general ones are the ones a mix returns people to."""
+        self.games.get.return_value = _game()
+        self._voice_config({"mix_voice_category_id": "10", "mix_general_voice_channel_ids": ["1"]}, "5")
+        discord = _discord(
+            _channel("10", "Mixes", "category"),
+            _channel("1", "General", "voice", category_id="10"),
+            _channel("2", "Team A1", "voice", category_id="10", missing_permissions=["move_members"]),
+            _channel("3", "Elsewhere", "voice", category_id="20"),
+        )
+
+        options = await self.service.voice_options(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, actor_user_id=9
+        )
+
+        self.assertEqual(options["category_id"], "10")
+        self.assertEqual(options["general"], [{"id": "1", "name": "General", "missing_permissions": None}])
+        self.assertEqual(options["team"], [{"id": "2", "name": "Team A1", "missing_permissions": ["move_members"]}])
+        self.assertIsNone(options["error"])
+
+    async def test_voice_options_without_a_category_asks_discord_nothing(self) -> None:
+        self.games.get.return_value = _game()
+        self._voice_config({}, "5")
+        discord = _discord()
+
+        options = await self.service.voice_options(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, actor_user_id=9
+        )
+
+        self.assertEqual((options["general"], options["team"]), ([], []))
+        self.assertIsNone(options["category_id"])
+        self.assertIsNone(options["error"])
+        discord.guild_channels.assert_not_awaited()
+
+    async def test_voice_options_reports_a_discord_that_is_down(self) -> None:
+        self.games.get.return_value = _game()
+        self._voice_config({"mix_voice_category_id": "10"}, "5")
+        discord = SimpleNamespace(guild_channels=AsyncMock(side_effect=DiscordUnavailable("down")))
+
+        options = await self.service.voice_options(
+            self.session, discord=discord, workspace_id=1, custom_game_id=11, actor_user_id=9
+        )
+
+        self.assertEqual(options["error"], "down")
+        self.assertEqual((options["general"], options["team"]), ([], []))
+
+    async def test_voice_options_reports_a_category_that_is_gone(self) -> None:
+        """The admin picked a category and somebody deleted it: the mix page
+        says so instead of offering an empty list as if nothing were wrong."""
+        self.games.get.return_value = _game()
+        self._voice_config({"mix_voice_category_id": "10"}, "5")
+
+        options = await self.service.voice_options(
+            self.session,
+            discord=_discord(_channel("20", "Other", "category")),
+            workspace_id=1,
+            custom_game_id=11,
+            actor_user_id=9,
+        )
+
+        self.assertEqual(options["error"], "category_not_found")
 
     async def test_balance_feeds_the_hosts_stored_preferences_to_the_solver(self) -> None:
         """The solver knobs are the HOST's, not the presser's.

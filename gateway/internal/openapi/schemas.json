@@ -4095,6 +4095,12 @@
       },
       "summary": "Set custom game shown balance option"
     },
+    "rpc.balancer.custom.set_voice_channels": {
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVoicePatch"
+      }
+    },
     "rpc.balancer.custom.stats": {
       "description": "Permission: public; no authentication required. Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only.",
       "summary": "Get custom game statistics"
@@ -23305,6 +23311,46 @@
       "title": "CustomGameLobbyCountPatch",
       "type": "object"
     },
+    "balancer.CustomGameLobbyVoice": {
+      "additionalProperties": false,
+      "properties": {
+        "lobby_index": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Lobby Index",
+          "type": "integer"
+        },
+        "team1_voice_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{1,20}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team1 Voice Channel Id"
+        },
+        "team2_voice_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{1,20}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team2 Voice Channel Id"
+        }
+      },
+      "title": "CustomGameLobbyVoice",
+      "type": "object"
+    },
     "balancer.CustomGameNextMapPatch": {
       "additionalProperties": false,
       "description": "``null`` clears the pick; the next match then records with no map.",
@@ -23720,6 +23766,35 @@
         "variant_index"
       ],
       "title": "CustomGameVariantIndexPatch",
+      "type": "object"
+    },
+    "balancer.CustomGameVoicePatch": {
+      "additionalProperties": false,
+      "description": "The mix's voices: its general voice and the team voices of every listed lobby.\n\n``general_voice_channel_id`` is always replaced; a lobby left out of\n``lobbies`` keeps its voices. Nothing is checked against Discord here --\na voice outside the category is refused when people are moved.",
+      "properties": {
+        "general_voice_channel_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{1,20}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "General Voice Channel Id"
+        },
+        "lobbies": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.CustomGameLobbyVoice"
+          },
+          "maxItems": 6,
+          "title": "Lobbies",
+          "type": "array"
+        }
+      },
+      "title": "CustomGameVoicePatch",
       "type": "object"
     },
     "balancer.DraftAutopickPreview": {

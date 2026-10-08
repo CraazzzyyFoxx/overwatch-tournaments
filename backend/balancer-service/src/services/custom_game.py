@@ -50,9 +50,11 @@ from shared.schemas.events import DiscordCard, DiscordCommandEvent
 from shared.schemas.roster_slots import RosterShapeRead
 from shared.services import discord_messages
 from shared.services.account_links import missing_account_links
+from shared.services.discord_client import DiscordClient
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER, MemberRankService, member_rank_service
 from shared.services.roster_shape_access import get_workspace_roster_slots
+from shared.services.subscriptions.providers.discord_role import DiscordError
 from shared.services.workspace_roster import (
     RosterMember,
     hosts_by_user_id,
@@ -67,6 +69,7 @@ from src.domain.mix_ranker import Ranker
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_self_service import MixSelfPolicy, mix_self_policy
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
+from src.domain.mix_voice import MixVoiceConfig, voice_config_from
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
 from src.services.mix_ranker import MixRankerService, RatedSeat, mix_ranker_service
@@ -1855,6 +1858,94 @@ class CustomGameService:
                 )
             )
         )
+
+    async def voice_config(self, session: AsyncSession, workspace_id: int) -> MixVoiceConfig:
+        """The workspace's guild, voice category and general voices, in one read."""
+        row = (
+            await session.execute(
+                sa.select(models.WorkspaceBalancerConfig.config_json, models.Workspace.discord_guild_id)
+                .select_from(models.Workspace)
+                .outerjoin(
+                    models.WorkspaceBalancerConfig,
+                    models.WorkspaceBalancerConfig.workspace_id == models.Workspace.id,
+                )
+                .where(models.Workspace.id == workspace_id)
+            )
+        ).first()
+        return voice_config_from(row[0], row[1]) if row is not None else MixVoiceConfig(None, None, frozenset())
+
+    async def set_voice_channels(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        general_voice_channel_id: int | None,
+        lobbies: Sequence[tuple[int, int | None, int | None]],
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> models.CustomGame:
+        """The mix's own voices: the general one, and the two of every listed lobby."""
+        game = await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        game.general_voice_channel_id = general_voice_channel_id
+        for lobby_index, team1, team2 in lobbies:
+            lobby = await self._lobby(session, game, lobby_index)
+            lobby.team1_voice_channel_id = team1
+            lobby.team2_voice_channel_id = team2
+        await session.flush()
+        return game
+
+    async def voice_options(
+        self,
+        session: AsyncSession,
+        *,
+        discord: DiscordClient,
+        workspace_id: int,
+        custom_game_id: int,
+        actor_user_id: int,
+        actor_is_superuser: bool = False,
+    ) -> dict[str, Any]:
+        """The voices this mix may pick: the category's general and team voices, with the bot's gaps."""
+        await self._writable(
+            session,
+            workspace_id=workspace_id,
+            custom_game_id=custom_game_id,
+            actor_user_id=actor_user_id,
+            actor_is_superuser=actor_is_superuser,
+        )
+        voice = await self.voice_config(session, workspace_id)
+        out: dict[str, Any] = {
+            "category_id": voice.category_id,
+            "category_missing_permissions": None,
+            "general": [],
+            "team": [],
+            "error": None,
+        }
+        if voice.guild_id is None or voice.category_id is None:
+            return out
+        try:
+            channels = await discord.guild_channels(voice.guild_id)
+        except DiscordError as exc:
+            return {**out, "error": str(exc)}
+        category = next((c for c in channels if c["type"] == "category" and c["id"] == voice.category_id), None)
+        if category is None:
+            return {**out, "error": "category_not_found"}
+        voices = [c for c in channels if c["type"] == "voice" and c.get("category_id") == voice.category_id]
+        picked = [
+            {"id": c["id"], "name": c["name"], "missing_permissions": c.get("missing_permissions")} for c in voices
+        ]
+        return {
+            **out,
+            "category_missing_permissions": category.get("missing_permissions"),
+            "general": [c for c in picked if c["id"] in voice.general_ids],
+            "team": [c for c in picked if c["id"] not in voice.general_ids],
+        }
 
     async def discord_mentions(self, session: AsyncSession, member_ids: Sequence[int]) -> list[str]:
         """The Discord ids of those workspace members who linked an account.

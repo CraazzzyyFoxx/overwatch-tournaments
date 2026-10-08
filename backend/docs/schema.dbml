@@ -778,6 +778,7 @@ Table balancer.custom_game {
   lobby_count int [not null, default: 1]
   self_signup VARCHAR(16) [not null, default: `closed`]
   self_role_edit boolean [not null, default: false]
+  general_voice_channel_id bigint
   indexes {
     (host_user_id) [name: "ix_balancer_custom_game_host_user_id"]
     (workspace_id) [name: "ix_balancer_custom_game_workspace_id"]
@@ -797,6 +798,8 @@ Table balancer.custom_game_lobby {
   balance_result_version int [not null, default: 1]
   next_map_id bigint
   balanced_at timestamptz
+  team1_voice_channel_id bigint
+  team2_voice_channel_id bigint
 }
 
 Table balancer.custom_game_player {
@@ -1096,8 +1099,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
+    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }

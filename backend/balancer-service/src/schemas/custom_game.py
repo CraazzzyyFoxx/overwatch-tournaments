@@ -18,6 +18,7 @@ __all__ = (
     "CustomGameCreate",
     "CustomGameHostTransfer",
     "CustomGameLobbyCountPatch",
+    "CustomGameLobbyVoice",
     "CustomGameNextMapPatch",
     "CustomGameOutcome",
     "CustomGamePlayerPatch",
@@ -33,6 +34,7 @@ __all__ = (
     "CustomGameSelfUpdate",
     "CustomGameTeamNamesPatch",
     "CustomGameVariantIndexPatch",
+    "CustomGameVoicePatch",
 )
 
 
@@ -242,3 +244,38 @@ class CustomGameLobbyCountPatch(_Request):
     """How many lobbies the mix runs at once."""
 
     lobby_count: int = Field(ge=1, le=MAX_LOBBIES)
+
+
+#: A Discord id on the wire: digits in a string, because JSON has one number
+#: type and a snowflake does not survive a float64 round-trip.
+_Snowflake = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{1,20}$")]
+
+
+class CustomGameLobbyVoice(_LobbyScoped):
+    team1_voice_channel_id: _Snowflake | None = None
+    team2_voice_channel_id: _Snowflake | None = None
+
+    @model_validator(mode="after")
+    def _two_rooms(self) -> CustomGameLobbyVoice:
+        if self.team1_voice_channel_id is not None and self.team1_voice_channel_id == self.team2_voice_channel_id:
+            raise ValueError("the two teams need two different voices")
+        return self
+
+
+class CustomGameVoicePatch(_Request):
+    """The mix's voices: its general voice and the team voices of every listed lobby.
+
+    ``general_voice_channel_id`` is always replaced; a lobby left out of
+    ``lobbies`` keeps its voices. Nothing is checked against Discord here --
+    a voice outside the category is refused when people are moved.
+    """
+
+    general_voice_channel_id: _Snowflake | None = None
+    lobbies: list[CustomGameLobbyVoice] = Field(default_factory=list, max_length=MAX_LOBBIES)
+
+    @model_validator(mode="after")
+    def _unique_lobbies(self) -> CustomGameVoicePatch:
+        indexes = [lobby.lobby_index for lobby in self.lobbies]
+        if len(indexes) != len(set(indexes)):
+            raise ValueError("lobby_index values must be unique")
+        return self

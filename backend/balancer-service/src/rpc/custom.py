@@ -2,7 +2,8 @@
 
 ``rpc.balancer.custom.{create,list,get,rename,update_roster,update_player,set_participation,set_lobby_count,
 balance,set_team_names,set_next_map,set_variant_index,
-post_discord,post_signup,delete_discord_post,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
+post_discord,post_signup,delete_discord_post,set_voice_channels,voice_options,
+transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
 match_history,undo_match,rotation,stats,close,delete,hard_delete,
 self_get,self_current,self_join,self_leave,self_update,set_self_service}``.
 
@@ -53,12 +54,14 @@ from shared.core.enums import CasualTeamSide, MixRoleSelectionMode
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.services import discord_messages
+from shared.services.discord_client import DiscordClient
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER
 from src.core import db
 from src.core.config import config
 from src.domain.balancer.result_serializer import as_lobby_document
 from src.domain.mix_lobbies import seated_member_ids
+from src.domain.mix_voice import snowflake
 from src.rpc import _common as c
 from src.schemas import custom_game as schemas
 from src.services.custom_game import custom_game_service, mix_subject
@@ -87,6 +90,19 @@ def _opt_int(data: dict[str, Any], key: str) -> int | None:
         return int(raw)
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{key} is required") from None
+
+
+def _opt_snowflake(value: str | None) -> int | None:
+    return int(value) if value is not None else None
+
+
+#: Moving people waits on Discord's per-member rate limit: seconds, not milliseconds.
+_VOICE_RPC_TIMEOUT = 30.0
+
+
+def _voice_discord(broker: Any) -> DiscordClient:
+    """discord-service only: voice lives in the bot's cache, and this service holds no bot token."""
+    return DiscordClient(broker=broker, rpc_timeout=_VOICE_RPC_TIMEOUT)
 
 
 def _game_id(data: dict[str, Any]) -> int:
@@ -236,6 +252,10 @@ def _dump_lobby(lobby: Any, *, balance_result: bool, activity: tuple[int, Any] |
         "selected_variant_index": lobby.selected_variant_index,
         "next_map_id": lobby.next_map_id,
         "balanced_at": lobby.balanced_at.isoformat() if lobby.balanced_at else None,
+        # Carried by the list read too: the page greys out a voice another
+        # lobby of the same mix already took.
+        "team1_voice_channel_id": snowflake(lobby.team1_voice_channel_id),
+        "team2_voice_channel_id": snowflake(lobby.team2_voice_channel_id),
     }
     if balance_result:
         matches_count, last_match_at = activity if activity is not None else (0, None)
@@ -323,6 +343,8 @@ def _dump_game(
         # board's host controls and by the player's own panel.
         "self_signup": game.self_signup,
         "self_role_edit": game.self_role_edit,
+        # Where "return everyone" sends them: the mix's own general voice.
+        "general_voice_channel_id": snowflake(game.general_voice_channel_id),
         # Every Discord message this mix has out there -- the signup card and
         # every lineup -- oldest first. Only the single-mix read pays for the
         # query; a list row carries the empty list rather than a missing key,
@@ -983,6 +1005,54 @@ def register(broker: Any, logger: Any) -> None:
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.set_voice_channels")
+    async def _set_voice_channels(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameVoicePatch, data)
+            game = await custom_game_service.set_voice_channels(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                general_voice_channel_id=_opt_snowflake(body.general_voice_channel_id),
+                lobbies=[
+                    (
+                        lobby.lobby_index,
+                        _opt_snowflake(lobby.team1_voice_channel_id),
+                        _opt_snowflake(lobby.team2_voice_channel_id),
+                    )
+                    for lobby in body.lobbies
+                ],
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+            await emit_pickup_mix_changed(
+                session, workspace_id, custom_game_id=game.id, change="voice", actor_user_id=user.id
+            )
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_voice_channels", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.custom.voice_options")
+    async def _voice_options(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            return await custom_game_service.voice_options(
+                session,
+                discord=_voice_discord(broker),
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                actor_user_id=user.id,
+                actor_is_superuser=user.is_superuser,
+            )
+
+        return await c.envelope(logger, "custom.voice_options", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.post_signup")
     async def _post_signup(data: dict, msg: RabbitMessage) -> dict:

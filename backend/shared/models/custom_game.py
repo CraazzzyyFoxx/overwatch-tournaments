@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -37,7 +38,7 @@ class CustomGame(db.TimeStampIntegerMixin):
     all live in one row of ``balancer.user_config``, so the same person's mixes
     all run the same way -- and the Discord target is the workspace's
     (``balancer.workspace_config.config_json.mix_discord_channel_id``), not this
-    lobby's.
+    lobby's; only the voices a mix moves people into are its own.
     """
 
     __tablename__ = "custom_game"
@@ -74,6 +75,9 @@ class CustomGame(db.TimeStampIntegerMixin):
     # Whether a seated player may re-order their OWN roles and flip flex. The
     # host's book of ranks stays the host's either way.
     self_role_edit: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False, server_default="false")
+    # The mix's general voice: where "return" sends everyone. One of the
+    # workspace's general voices (``workspace_config.mix_general_voice_channel_ids``).
+    general_voice_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
 
 class CustomGameCoHost(db.Base):
@@ -128,6 +132,10 @@ class CustomGameLobby(db.Base):
     # loading in, consumed and cleared by ``record_outcome``.
     next_map_id: Mapped[int | None] = mapped_column(ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True)
     balanced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The two team voices this lobby's teams are moved into (team 1, team 2):
+    # voices of the workspace's voice category that are not general voices.
+    team1_voice_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    team2_voice_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
 
 
 class CustomGamePlayer(db.TimeStampIntegerMixin):
