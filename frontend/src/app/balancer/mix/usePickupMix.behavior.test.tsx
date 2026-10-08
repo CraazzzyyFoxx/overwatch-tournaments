@@ -14,6 +14,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "@/lib/api/error";
+import { notify } from "@/lib/notify";
+
 import { usePickupMix } from "./usePickupMix";
 
 const updateRoster = vi.fn();
@@ -33,6 +36,7 @@ const leaveMix = vi.fn();
 const updateMySeat = vi.fn();
 const setSelfService = vi.fn();
 const postSignup = vi.fn();
+const voiceMove = vi.fn();
 
 vi.mock("@/services/custom-game.service", () => ({
   customGameKeys: {
@@ -54,6 +58,12 @@ vi.mock("@/services/custom-game.service", () => ({
       lobbyIndex,
     ],
     me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"],
+    voiceOptions: (workspaceId: number, gameId: number) => [
+      "custom-games",
+      workspaceId,
+      gameId,
+      "voice-options",
+    ],
   },
   customGameService: {
     list: (...args: unknown[]) => listGames(...args),
@@ -73,6 +83,11 @@ vi.mock("@/services/custom-game.service", () => ({
     updateMySeat: (...args: unknown[]) => updateMySeat(...args),
     setSelfService: (...args: unknown[]) => setSelfService(...args),
     postSignup: (...args: unknown[]) => postSignup(...args),
+    voiceOptions: vi.fn(),
+    setVoiceChannels: vi.fn(),
+    voiceMove: (...args: unknown[]) => voiceMove(...args),
+    voiceReturn: vi.fn(),
+    refreshLineup: vi.fn(),
   },
 }));
 
@@ -95,7 +110,11 @@ vi.mock("@/hooks/useRealtimeCoalescedRefetch", () => ({
   },
 }));
 
-vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), apiError: vi.fn() } }));
+vi.mock("@/lib/notify", () => ({
+  notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() },
+}));
+// The voice refusals are the only strings this hook renders itself.
+vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => `voice.${key}` }));
 
 const WORKSPACE_ID = 7;
 const GAME_ID = 11;
@@ -152,6 +171,7 @@ type HarnessApi = {
   undoMatch: (matchId: number) => void;
   postToDiscord: (variantIndex: number, image: Blob | null) => void;
   setVariantIndex: (index: number) => void;
+  voiceMove: (lobbyIndex: number | null) => void;
   client: QueryClient;
 };
 
@@ -168,6 +188,7 @@ function Harness({
     undoMatch: undo,
     postToDiscord: post,
     setVariantIndex: paging,
+    voiceMove: move,
   } = usePickupMix(WORKSPACE_ID, GAME_ID);
   onReady({
     setRoster: (ids) => setRoster.mutate(ids),
@@ -175,6 +196,7 @@ function Harness({
     undoMatch: (matchId) => undo.mutate(matchId),
     postToDiscord: (variantIndex, image) => post.mutate({ lobbyIndex: 0, variantIndex, image }),
     setVariantIndex: (index) => paging.mutate({ lobbyIndex: 0, variantIndex: index }),
+    voiceMove: (lobbyIndex) => move.mutate(lobbyIndex),
     client,
   });
   return null;
@@ -420,5 +442,36 @@ describe("usePickupMix", () => {
     });
 
     expect(setParticipation).not.toHaveBeenCalled();
+  });
+
+  it("says a voice refusal in the reader's language, and leaves anything else to the generic toast", async () => {
+    // The balancer refuses a misconfigured move with a bare slug detail
+    // (`HTTPException(409, detail="general_voice_not_configured")`), which
+    // `parseApiError` carries as the message. Showing that slug to a host is
+    // showing them an internal name for a setting they can fix.
+    voiceMove.mockRejectedValueOnce(
+      new ApiError(409, [{ msg: "general_voice_not_configured", code: "conflict" }]),
+    );
+    const { voiceMove: move } = await mount();
+
+    await act(async () => {
+      move(0);
+      await tick();
+      await tick();
+    });
+
+    expect(notify.error).toHaveBeenCalledWith("voice.general_voice_not_configured");
+    expect(notify.apiError).not.toHaveBeenCalled();
+
+    voiceMove.mockRejectedValueOnce(new ApiError(500, [{ msg: "boom", code: "error" }]));
+
+    await act(async () => {
+      move(0);
+      await tick();
+      await tick();
+    });
+
+    expect(notify.error).toHaveBeenCalledTimes(1);
+    expect(notify.apiError).toHaveBeenCalledTimes(1);
   });
 });

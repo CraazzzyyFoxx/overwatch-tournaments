@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
@@ -13,6 +14,7 @@ import {
   type CustomGamePlayerPatch,
   type MixSelfSignup,
   type MixSelfState,
+  type MixVoicePatch,
 } from "@/services/custom-game.service";
 
 import {
@@ -20,6 +22,7 @@ import {
   participationEntries,
   type PickupRecordOutcomeInput,
 } from "@/app/balancer/mix/pickup-lineup";
+import { voiceRefusal } from "@/app/balancer/mix/pickup-voice";
 import {
   workspacePlayerKeys,
   workspacePlayerService,
@@ -79,9 +82,10 @@ export type PickupCreateGameInput = {
 export function usePickupMix(
   workspaceId: number,
   pickedGameId: number | null,
-  options: { seatEnabled?: boolean } = {},
+  options: { seatEnabled?: boolean; voiceEnabled?: boolean } = {},
 ) {
   const queryClient = useQueryClient();
+  const tVoiceError = useTranslations("mixes.voice.errors");
 
   const gamesQuery = useQuery({
     queryKey: customGameKeys.list(workspaceId),
@@ -141,6 +145,19 @@ export function usePickupMix(
     queryKey: customGameKeys.me(workspaceId, selectedGameId ?? 0),
     queryFn: () => customGameService.getMySeat(workspaceId, selectedGameId as number),
     enabled: selectedGameId != null && options.seatEnabled === true,
+  });
+
+  /**
+   * The voices this mix may pick, listed from Discord through the workspace's
+   * category. A writer's read only -- the endpoint 403s anyone else, and a
+   * viewer has nothing to pick. Cached for a minute: a Discord channel list
+   * does not move between two clicks of the same panel.
+   */
+  const voiceOptionsQuery = useQuery({
+    queryKey: customGameKeys.voiceOptions(workspaceId, selectedGameId ?? 0),
+    queryFn: () => customGameService.voiceOptions(workspaceId, selectedGameId as number),
+    enabled: selectedGameId != null && options.voiceEnabled === true,
+    staleTime: 60_000,
   });
 
   // Another host editing this workspace's mixes (roster, ranks, bench, role
@@ -534,6 +551,42 @@ export function usePickupMix(
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * The four refusals a move or a return answers with are setup problems with a
+   * sentence of their own (`mixes.voice.errors.*`); everything else is an
+   * ordinary failure and reads as one.
+   */
+  const notifyVoiceError = (error: unknown) => {
+    const refusal = voiceRefusal(error);
+    if (refusal) {
+      notify.error(tVoiceError(refusal));
+      return;
+    }
+    notify.apiError(error);
+  };
+
+  /** The mix's whole voice setup at once -- the endpoint replaces it, not patches it. */
+  const setVoiceChannels = useMutation({
+    mutationFn: (patch: MixVoicePatch) =>
+      customGameService.setVoiceChannels(workspaceId, selectedGameId as number, patch),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
+  /** Players into their team voices: one lobby, or every lobby for `null`. */
+  const voiceMove = useMutation({
+    mutationFn: (lobbyIndex: number | null) =>
+      customGameService.voiceMove(workspaceId, selectedGameId as number, lobbyIndex),
+    onError: notifyVoiceError,
+  });
+
+  /** And back into the general voice. The report is read off `.data` by the panel. */
+  const voiceReturn = useMutation({
+    mutationFn: (lobbyIndex: number | null) =>
+      customGameService.voiceReturn(workspaceId, selectedGameId as number, lobbyIndex),
+    onError: notifyVoiceError,
+  });
+
   return {
     selectedGameId,
     activeLobby,
@@ -543,6 +596,7 @@ export function usePickupMix(
     matchesQuery,
     rotationQuery,
     mySeatQuery,
+    voiceOptionsQuery,
     createGame,
     setRoster,
     patchPlayer,
@@ -569,5 +623,8 @@ export function usePickupMix(
     setSelfService,
     postSignup,
     deleteDiscordPost,
+    setVoiceChannels,
+    voiceMove,
+    voiceReturn,
   };
 }

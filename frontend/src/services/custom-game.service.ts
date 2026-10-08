@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api/fetch";
 import { blobToBase64 } from "@/lib/image-capture";
 import type { RoleCode } from "@/lib/roster/roles";
 import type { RosterShape } from "@/lib/roster/shape";
+import type { DiscordVoicePermission } from "@/types/discord.types";
 
 /** Where an effective rank came from, strongest first. */
 export type RankSource = "author" | "workspace" | "ow";
@@ -127,6 +128,13 @@ export type CustomGameLobby = {
   /** When this lobby was last balanced, or `null` while it never was. */
   balanced_at: string | null;
   /**
+   * The voices this lobby's two teams are moved into (`^\d{1,20}$` snowflakes,
+   * `null` while unpicked). Both list and detail reads carry them: the list is
+   * how the page tells which voices the workspace's other mixes already took.
+   */
+  team1_voice_channel_id: string | null;
+  team2_voice_channel_id: string | null;
+  /**
    * `false` when this lobby has been balanced and no match of its own has been
    * recorded since -- the lineup on screen is still unplayed, so anything that
    * would overwrite it asks first. Detail reads only.
@@ -188,6 +196,11 @@ export type CustomGame = {
   /** Whether a player on the roster may reorder their own roles and flex. */
   self_role_edit: boolean;
   /**
+   * The voice everyone waits in and is returned to, picked from the
+   * workspace's general voices (`mix_general_voice_channel_ids`).
+   */
+  general_voice_channel_id: string | null;
+  /**
    * Every Discord message the platform posted for this mix (signup card,
    * lineup cards), oldest first, minus the ones already deleted. Optional
    * only so fixtures predating the posts can omit it -- the server always
@@ -195,6 +208,60 @@ export type CustomGame = {
    */
   discord_posts?: CustomGameDiscordPost[];
   players?: CustomGamePlayer[];
+};
+
+/** One voice channel of the workspace's mix category, with the bot's gaps on it. */
+export type MixVoiceChannel = {
+  id: string;
+  name: string;
+  /** `null` when Discord was not asked about it; an empty list means nothing is missing. */
+  missing_permissions: DiscordVoicePermission[] | null;
+};
+
+/**
+ * The voices a mix may pick, read from the workspace's category. `error` is
+ * Discord's own refusal: the category stays configured, it just could not be
+ * listed right now.
+ */
+export type MixVoiceOptions = {
+  category_id: string | null;
+  category_missing_permissions: DiscordVoicePermission[] | null;
+  /** Voices the workspace calls general -- where players wait and are returned to. */
+  general: MixVoiceChannel[];
+  /** Every other voice of the category: what a lobby's two teams are moved into. */
+  team: MixVoiceChannel[];
+  error: string | null;
+};
+
+/** What became of one player in a move or a return. */
+export type MixVoiceStatus =
+  | "moved"
+  | "not_in_voice"
+  | "no_discord_link"
+  | "missing_permission"
+  | "channel_outside_category"
+  | "not_configured"
+  | "failed";
+
+/** One move or return, player by player. `moved` counts the `moved` rows. */
+export type MixVoiceReport = {
+  moved: number;
+  results: {
+    workspace_member_id: number | null;
+    name: string;
+    status: MixVoiceStatus;
+    channel_id: string | null;
+  }[];
+};
+
+/** The mix's whole voice setup: the endpoint replaces it rather than patching a field. */
+export type MixVoicePatch = {
+  general_voice_channel_id: string | null;
+  lobbies: {
+    lobby_index: number;
+    team1_voice_channel_id: string | null;
+    team2_voice_channel_id: string | null;
+  }[];
 };
 
 /**
@@ -388,6 +455,12 @@ export const customGameKeys = {
    * read with no subscription of its own.
    */
   me: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "me"] as const,
+  /**
+   * The voices one mix may pick. Under `all` like `me`: a workspace that
+   * re-picks its voice category drops every mix key anyway.
+   */
+  voiceOptions: (workspaceId: number, gameId: number) =>
+    ["custom-games", workspaceId, gameId, "voice-options"] as const,
   stats: (workspaceId: number, since: string | null) =>
     ["custom-games", workspaceId, "stats", since ?? "all"] as const,
 };
@@ -792,5 +865,60 @@ export const customGameService = {
       `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/posts/${postId}`,
       { method: "DELETE" },
     ).then((r) => r.json());
+  },
+
+  /** The voices this mix may pick, straight from the workspace's category. */
+  voiceOptions(workspaceId: number, gameId: number): Promise<MixVoiceOptions> {
+    return apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice/options`,
+    ).then((r) => r.json());
+  },
+
+  /** Replaces the mix's whole voice setup -- general voice and every lobby's two. */
+  setVoiceChannels(workspaceId: number, gameId: number, patch: MixVoicePatch): Promise<CustomGame> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice`, {
+      method: "PUT",
+      body: patch,
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Moves one lobby's seated players into their team voices, or every lobby's
+   * when `lobbyIndex` is `null`. The report says what became of each of them.
+   */
+  voiceMove(workspaceId: number, gameId: number, lobbyIndex: number | null): Promise<MixVoiceReport> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice/move`, {
+      method: "POST",
+      body: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
+  },
+
+  /** The other direction: everyone in the team voices goes back to the general one. */
+  voiceReturn(workspaceId: number, gameId: number, lobbyIndex: number | null): Promise<MixVoiceReport> {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/voice/return`, {
+      method: "POST",
+      body: { lobby_index: lobbyIndex },
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Rewrites this lobby's posted lineup card in place, with the matchup
+   * rasterised in the browser exactly like `postToDiscord`; `null` falls back
+   * to the server's text embed.
+   */
+  async refreshLineup(
+    workspaceId: number,
+    gameId: number,
+    lobbyIndex: number,
+    image: Blob | null = null,
+  ): Promise<{ status: "queued" | "nothing_to_update" }> {
+    const response = await apiFetch(
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/lineup`,
+      {
+        method: "PUT",
+        body: { lobby_index: lobbyIndex, image_b64: image ? await blobToBase64(image) : null },
+      },
+    );
+    return response.json();
   },
 };

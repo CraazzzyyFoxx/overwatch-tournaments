@@ -6983,6 +6983,44 @@
       "discordDone": "Signup card posted",
       "balance": "Balance teams",
       "balanceHint": "When the lineup is ready, press Balance teams below."
+    },
+    "voice": {
+      "title": "Voice channels",
+      "notConfigured": "No voice category is picked in the community settings (Settings → Discord).",
+      "unreachable": "Could not read the Discord channels.",
+      "general": "General voice",
+      "team": "Team {n}",
+      "lobby": "Lobby {letter}",
+      "none": "Not picked",
+      "outsideCategory": "outside the category",
+      "busy": "taken: {mix}, lobby {letter}",
+      "missing": "The bot is missing permissions: {permissions}",
+      "permission": {
+        "view_channel": "View channel",
+        "connect": "Connect",
+        "move_members": "Move members"
+      },
+      "move": "Split",
+      "return": "Return",
+      "moveAll": "Split every lobby",
+      "returnAll": "Return every lobby",
+      "report": {
+        "moved": "Moved: {count}"
+      },
+      "status": {
+        "not_in_voice": "Not in a voice channel",
+        "no_discord_link": "Discord not linked",
+        "missing_permission": "The bot is missing permissions",
+        "channel_outside_category": "Voice outside the category",
+        "not_configured": "No team voice picked",
+        "failed": "Discord refused"
+      },
+      "errors": {
+        "voice_not_configured": "The community has no voice category.",
+        "general_voice_not_configured": "This mix has no general voice.",
+        "general_voice_outside_category": "The mix's general voice is no longer in the category — pick it again.",
+        "discord_unavailable": "The bot is unavailable right now — try again."
+      }
     }
   },
   "quota": {

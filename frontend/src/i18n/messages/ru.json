@@ -6983,6 +6983,44 @@
       "discordDone": "Карточка записи опубликована",
       "balance": "Сбалансируйте команды",
       "balanceHint": "Когда состав готов, нажмите «Balance teams» ниже."
+    },
+    "voice": {
+      "title": "Голосовые каналы",
+      "notConfigured": "Категория войсов не выбрана в настройках workspace (Настройки → Discord).",
+      "unreachable": "Не удалось получить каналы Discord.",
+      "general": "Общий войс",
+      "team": "Команда {n}",
+      "lobby": "Лобби {letter}",
+      "none": "Не выбран",
+      "outsideCategory": "вне категории",
+      "busy": "занят: {mix}, лобби {letter}",
+      "missing": "Боту не хватает прав: {permissions}",
+      "permission": {
+        "view_channel": "Просмотр канала",
+        "connect": "Подключаться",
+        "move_members": "Перемещать участников"
+      },
+      "move": "Развести",
+      "return": "Вернуть",
+      "moveAll": "Развести все лобби",
+      "returnAll": "Вернуть все лобби",
+      "report": {
+        "moved": "Перенесено: {count}"
+      },
+      "status": {
+        "not_in_voice": "Не в войсе",
+        "no_discord_link": "Discord не привязан",
+        "missing_permission": "Боту не хватает прав",
+        "channel_outside_category": "Войс вне категории",
+        "not_configured": "Войс команды не выбран",
+        "failed": "Discord отказал"
+      },
+      "errors": {
+        "voice_not_configured": "В настройках workspace не выбрана категория войсов.",
+        "general_voice_not_configured": "У микса не выбран общий войс.",
+        "general_voice_outside_category": "Общий войс микса больше не в категории — выберите его заново.",
+        "discord_unavailable": "Бот сейчас недоступен — попробуйте ещё раз."
+      }
     }
   },
   "quota": {

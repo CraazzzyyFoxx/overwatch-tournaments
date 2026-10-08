@@ -13,6 +13,7 @@ import { PickupMySeatPanel } from "@/app/balancer/mix/PickupMySeatPanel";
 import { PickupLobbyTabs } from "@/app/balancer/mix/PickupLobbyTabs";
 import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
 import { PickupTeamsPanel } from "@/app/balancer/mix/PickupTeamsPanel";
+import { PickupVoicePanel } from "@/app/balancer/mix/PickupVoicePanel";
 import {
   PICKUP_TERMINAL_STATUSES,
   playerLabel,
@@ -75,6 +76,9 @@ export default function BalancerPickupMixPage() {
   const [openPlayerId, setOpenPlayerId] = useState<number | null>(null);
   const [isPoolOpen, setIsPoolOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
+  // Whether this viewer may write the mix, which decides the voice read below;
+  // set once the mix has loaded (see `canWrite`).
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   // The OW catalogue with its gamemodes: the roll pool for the next map and
   // the manual picker. Which map is *chosen* is the lobby's own `next_map_id`,
   // so a co-host in another tab sees the same roll.
@@ -122,7 +126,14 @@ export default function BalancerPickupMixPage() {
     setSelfService,
     postSignup,
     deleteDiscordPost,
-  } = usePickupMix(workspaceId ?? 0, pickedGameId, { seatEnabled: isSignedIn });
+    voiceOptionsQuery,
+    setVoiceChannels,
+    voiceMove,
+    voiceReturn,
+  } = usePickupMix(workspaceId ?? 0, pickedGameId, {
+    seatEnabled: isSignedIn,
+    voiceEnabled,
+  });
 
   const game = gameQuery.data;
   const rows = game?.players ?? [];
@@ -141,6 +152,14 @@ export default function BalancerPickupMixPage() {
   // rather than let a click 409. A superuser writes every mix, as `_writable` does.
   const canWrite =
     (isHost || isCoHost || isSuperuser) && game != null && !PICKUP_TERMINAL_STATUSES[game.status];
+  // The voice read is a writer's: the endpoint 403s everyone else, and whether
+  // this viewer writes is only knowable once the mix itself has loaded -- after
+  // this very hook. Kept as state reset during render (React's own pattern for
+  // state that must follow a derived value, used for `activeLobby` too) rather
+  // than approximating the gate with a permission a co-host may not hold.
+  if (voiceEnabled !== canWrite) {
+    setVoiceEnabled(canWrite);
+  }
   // Ranks are the host's book -- `author_user_id = game.host_user_id` is the
   // layer this mix resolves against. Anyone else who typed here wrote their own
   // book, got a 200, and watched the number stay put. Not gated on `canWrite`:
@@ -306,6 +325,31 @@ export default function BalancerPickupMixPage() {
                 ) : undefined
               }
             />
+            {/* Only a writer picks voices or moves anyone: the endpoints 403
+                everyone else, and a viewer has nothing to do here. */}
+            {canWrite && game != null ? (
+              <PickupVoicePanel
+                game={game}
+                games={gamesQuery.data ?? []}
+                options={voiceOptionsQuery.data}
+                optionsLoading={voiceOptionsQuery.isLoading}
+                saving={setVoiceChannels.isPending}
+                moving={voiceMove.isPending}
+                returning={voiceReturn.isPending}
+                report={voiceMove.data ?? voiceReturn.data}
+                onSave={(patch) => setVoiceChannels.mutate(patch)}
+                onMove={(lobbyIndex) => {
+                  // One report on screen at a time: the stale one is about a
+                  // move that already happened.
+                  voiceReturn.reset();
+                  voiceMove.mutate(lobbyIndex);
+                }}
+                onReturn={(lobbyIndex) => {
+                  voiceMove.reset();
+                  voiceReturn.mutate(lobbyIndex);
+                }}
+              />
+            ) : null}
             {/* Visible when the mix invites signups, or when this viewer is
                 already in it -- a closed mix a player is not in has nothing to
                 tell them, and the board stays as public as it was. */}
