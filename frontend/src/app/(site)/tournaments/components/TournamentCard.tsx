@@ -16,10 +16,10 @@ import { stageProgress } from "./tournaments-helpers";
  * Stand-in for a tournament without a cover.
  *
  * Deliberately not a grey rectangle: an organizer who never uploaded an image
- * is the common case, so the placeholder has to be a first-class surface. It
- * borrows the hero frame's treatment — teal hairline, radially masked grid, one
- * restrained glow — so a coverless card reads as part of the same page rather
- * than as a broken image.
+ * is the common case, so the placeholder has to be a first-class surface — a
+ * teal hairline, a radially masked grid and one restrained glow (the page
+ * hero dropped these; the coverless card is now their only user), so it
+ * reads as a designed surface rather than as a broken image.
  */
 const COVER_FALLBACK = (
   <span aria-hidden data-cover-fallback className="absolute inset-0 overflow-hidden">

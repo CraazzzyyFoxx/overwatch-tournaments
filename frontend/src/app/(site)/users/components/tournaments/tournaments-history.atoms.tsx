@@ -9,7 +9,7 @@ const MEDAL_STYLE: Record<PlacementMedal, React.CSSProperties> = {
   gold: { background: "hsl(42 63% 60% / 0.14)", border: "1px solid hsl(42 63% 60% / 0.4)", color: "var(--aqt-gold)" },
   silver: { background: "hsl(212 21% 73% / 0.12)", border: "1px solid hsl(212 21% 73% / 0.35)", color: "var(--aqt-silver)" },
   bronze: { background: "hsl(26 49% 54% / 0.12)", border: "1px solid hsl(26 49% 54% / 0.35)", color: "var(--aqt-bronze)" },
-  none: { background: "hsl(0 0% 100% / 0.03)", border: "1px solid var(--aqt-border-2)", color: "var(--aqt-fg-muted)" }
+  none: { border: "1px solid var(--aqt-border-2)", color: "var(--aqt-fg-muted)" }
 };
 
 /** Square placement badge with medal colours (gold/silver/bronze) for the top 3. */
@@ -26,12 +26,9 @@ export const PlaceBadge = ({ placement, size = "md" }: { placement: number | nul
   );
 };
 
-/** Violet "League" pill (matches the former LeagueGroup badge). */
+/** Neutral "League" tag. */
 export const LeagueBadge = ({ children }: { children: React.ReactNode }) => (
-  <span
-    className="aqt-tnum shrink-0 rounded-[5px] border px-1.5 py-0.5 text-label font-bold uppercase tracking-label"
-    style={{ background: "hsl(258 60% 62% / 0.1)", borderColor: "hsl(258 60% 62% / 0.25)", color: "var(--aqt-violet)" }}
-  >
+  <span className="aqt-tnum shrink-0 rounded-[5px] border border-[color:var(--aqt-border-2)] px-1.5 py-0.5 text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
     {children}
   </span>
 );

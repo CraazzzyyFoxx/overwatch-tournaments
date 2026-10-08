@@ -1,13 +1,14 @@
 "use client";
 
 import React from "react";
-import { LineChart } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import { UserTournament } from "@/types/user.types";
+import { CardSurface, ProfileStat } from "@/app/(site)/users/components/shared/atoms";
+import { UserProfile, UserTournament } from "@/types/user.types";
 
 interface Props {
   tournaments: UserTournament[];
+  /** Career totals; the Titles figure prefers the profile count when present. */
+  profile?: UserProfile | null;
   /** Tournament ids that belong to the currently-selected dossier event. */
   selectedIds?: number[];
   /** Selecting a point selects that event in the dossier (and scrolls to it). */
@@ -21,7 +22,7 @@ const colorClass = (placement: number, field: number): "gold" | "silver" | "bron
   return placement / field < 0.5 ? "mid" : "bottom";
 };
 
-const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect }: Props) => {
+const TournamentsPlacementTimeline = ({ tournaments, profile = null, selectedIds = [], onSelect }: Props) => {
   const tr = useTranslations();
   const valid = tournaments
     .filter((t) => t.placement && t.count_teams)
@@ -31,13 +32,34 @@ const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect 
   const selected = new Set(selectedIds);
   const n = valid.length;
 
+  const podiumCount = valid.filter((t) => t.placement <= 3).length;
+  const podiumRate = Math.round((podiumCount / n) * 100);
+  const bestPlacement = Math.min(...valid.map((t) => t.placement));
+  const titles = profile?.tournaments_won ?? valid.filter((t) => t.placement === 1).length;
+
   return (
     <CardSurface
       title={tr("users.tournaments.timeline.title")}
-      icon={<LineChart size={15} />}
-      subtitle={tr("users.tournaments.timeline.subtitle", { count: valid.length })}
+      subtitle={
+        <span title={tr("users.tournaments.timeline.subtitleHint")}>
+          {tr("users.tournaments.timeline.subtitle", { count: n })}
+        </span>
+      }
     >
-      <div className="aqt-timeline">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3">
+        <ProfileStat
+          label={tr("users.tournaments.kpi.titles")}
+          value={String(titles)}
+          color={titles > 0 ? "var(--aqt-gold)" : undefined}
+        />
+        <ProfileStat
+          label={tr("users.tournaments.kpi.podiumRate")}
+          value={`${podiumRate}%`}
+          sub={tr("users.tournaments.kpi.ofEvents", { podium: String(podiumCount), total: String(n) })}
+        />
+        <ProfileStat label={tr("users.tournaments.kpi.best")} value={String(bestPlacement)} />
+      </div>
+      <div className="aqt-timeline mt-5">
         <div className="aqt-y-axis">
           <span>{tr("users.tournaments.timeline.axisTop")}</span>
           <span>33%</span>
@@ -83,7 +105,7 @@ const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect 
           {n > 1 ? <span>{valid[n - 1].name}</span> : null}
         </div>
       </div>
-      <div className="flex flex-wrap gap-3.5 border-t border-[color:var(--aqt-border)] px-[18px] py-3.5 text-label text-[color:var(--aqt-fg-muted)]">
+      <div className="mt-3.5 flex flex-wrap gap-3.5 border-t border-[color:var(--aqt-border)] pt-3.5 text-label text-[color:var(--aqt-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
           {/* Must stay identical to `.aqt-timeline .aqt-dot.gold` in user-profile.css. */}
           <span

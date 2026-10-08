@@ -1,16 +1,14 @@
 import Image from "next/image";
-import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { getTranslations } from "next-intl/server";
-import { useTranslations } from "next-intl";
-import { ArrowDown, ArrowUp, BadgeCheck } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { User, UserProfile } from "@/types/user.types";
-import { hasVerifiedSocial } from "@/lib/social/providers";
+import { getSocialProviderConfig, socialProfileUrl, sortSocialAccounts } from "@/lib/social/providers";
 import { playerRoleTint } from "@/lib/roster/player-role";
-import { SocialAccountList } from "@/components/social/SocialAccountList";
+import { SocialIcon } from "@/components/social/SocialIcon";
 import { getPlayerImage } from "@/lib/player";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { FormStreak, type FormResult } from "@/app/(site)/users/components/shared/atoms";
+import { FormStreak, ProfileStat, type FormResult } from "@/app/(site)/users/components/shared/atoms";
 import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
 import userService from "@/services/user.service";
 import { HeroFrame } from "@/components/site/PageHero";
@@ -88,44 +86,13 @@ const UserHeader = async ({ profile, user, scope }: UserHeaderProps) => {
   // `playerRoleTint` is null only when there is no role at all, so a Flex
   // primary role tints flex instead of falling through to damage.
   const roleTint = playerRoleTint(primaryRole?.role);
-  const roleSwatchColor = `var(--aqt-${roleTint ?? "damage"})`;
 
   return (
-    <HeroFrame className="aqt-player" variant="profile" roleTint={roleTint ?? undefined}>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 pt-4 md:px-9 md:pt-5">
-        <p className="aqt-tnum m-0 text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-          <span aria-hidden className="mr-1.5 text-[color:var(--aqt-fg-dim)]">{"//"}</span>
-          <HoverPrefetchLink href="/users" className="hover:text-[color:var(--aqt-fg-muted)]">{t("users.profile.breadcrumb")}</HoverPrefetchLink>
-          <span aria-hidden className="mx-1">·</span>
-          <span className="text-[color:var(--aqt-fg-muted)]">{name}</span>
-        </p>
-        <ProfileToolbar
-          playerId={user.id}
-          card={{
-            name,
-            tag: tag ?? null,
-            role: primaryRole?.role ?? null,
-            roleTint,
-            division: primaryRole?.division ?? null,
-            winrate,
-            avgPlacement: profile.avg_placement,
-            titles: profile.tournaments_won,
-            tournaments: profile.tournaments_count,
-            mapsWon: profile.maps_won,
-            mapsTotal: profile.maps_total,
-            form: formStreak
-          }}
-        />
-      </div>
-
-      <div className="grid gap-6 px-5 pb-6 pt-5 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-8 md:px-9 md:py-7">
-        <div className="relative h-[110px] w-[110px] flex-shrink-0">
-          <div
-            className="absolute -inset-1 rounded-[22px] opacity-40 blur-2xl"
-            style={{ background: "var(--aqt-teal)" }}
-          />
-          <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-[color:var(--aqt-border-2)]">
-            <Image src={avatarSrc} alt={t("users.profile.header.avatarAlt", { name })} fill sizes="110px" className="object-cover" priority />
+    <HeroFrame className="aqt-player" variant="profile">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-6 px-5 py-5 md:gap-x-6 md:px-8 md:py-7 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-x-10">
+        <div className="relative size-[72px] shrink-0 md:size-[104px]">
+          <div className="relative h-full w-full overflow-hidden rounded-[14px] border border-[color:var(--aqt-border-2)] md:rounded-[18px]">
+            <Image src={avatarSrc} alt={t("users.profile.header.avatarAlt", { name })} fill sizes="104px" className="object-cover" priority />
           </div>
           {primaryRole ? (
             <div
@@ -138,88 +105,132 @@ const UserHeader = async ({ profile, user, scope }: UserHeaderProps) => {
               <DivisionIcon
                 division={primaryRole.division}
                 tournamentGrid={primaryRole.division_grid_version}
-                width={46}
-                height={46}
+                width={44}
+                height={44}
+                className="size-9 md:size-11"
               />
             </div>
           ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col gap-2">
-          <h1 className="aqt-hero-title m-0 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-[clamp(28px,4vw,48px)] font-onest font-semibold tracking-[-0.01em] leading-none">
-            <span>{name}</span>
-            {/* Tag + verified mark travel together: as one nowrap group they can
-                never be orphaned onto their own line at narrow widths, and both
-                scale with the clamped h1 instead of sitting at a fixed 22px. */}
-            {tag || hasVerifiedSocial(user.social_accounts) ? (
-              <span className="inline-flex items-baseline gap-2 whitespace-nowrap">
-                {tag ? (
-                  <span className="text-[0.46em] font-medium tracking-[0.04em] text-[color:var(--aqt-fg-faint)]">
-                    #{tag}
-                  </span>
-                ) : null}
-                {hasVerifiedSocial(user.social_accounts) ? (
-                  <span
-                    className="inline-flex items-center text-[color:var(--aqt-teal)]"
-                    title={t("users.profile.header.verifiedIdentity")}
-                  >
-                    <BadgeCheck aria-hidden className="size-[0.42em] min-h-4 min-w-4" />
-                    <span className="sr-only"> {t("users.profile.header.verifiedIdentity")}</span>
-                  </span>
-                ) : null}
+          <h1 className="m-0 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 font-onest text-[clamp(26px,4vw,46px)] font-semibold leading-none tracking-[-0.01em] text-[color:var(--aqt-fg)]">
+            <span className="min-w-0 truncate" title={name}>{name}</span>
+            {tag ? (
+              <span className="whitespace-nowrap text-[0.46em] font-medium tracking-[0.02em] text-[color:var(--aqt-fg-faint)]">
+                #{tag}
               </span>
             ) : null}
           </h1>
           {primaryRole ? (
-            <div className="aqt-tnum flex flex-wrap items-center gap-x-1.5 gap-y-1 text-label uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
-              <span className="inline-flex h-4 w-4 items-center justify-center">
-                <PlayerRoleIcon role={primaryRole.role} size={14} color={roleSwatchColor} decorative />
-              </span>
-              {/* Each fact carries its own trailing separator so a wrap ends a
-                  line with "·" instead of starting the next one with it. */}
-              {[
-                primaryRole.role,
-                t("users.profile.header.tournamentsCount", { count: profile.tournaments_count }),
-                t("users.profile.header.mapsCount", { count: profile.maps_total })
-              ].map((fact, index, all) => (
-                <span key={fact} className="whitespace-nowrap">
-                  {fact}
-                  {index < all.length - 1 ? (
-                    <span aria-hidden className="ml-1.5 text-[color:var(--aqt-fg-faint)]">
-                      ·
-                    </span>
-                  ) : null}
-                </span>
-              ))}
-            </div>
+            <p className="m-0 inline-flex items-center gap-1.5 text-caption text-[color:var(--aqt-fg-muted)]">
+              <PlayerRoleIcon
+                role={primaryRole.role}
+                size={14}
+                color={`var(--aqt-${roleTint ?? "damage"})`}
+                decorative
+              />
+              {t("users.profile.header.mainRole", { role: primaryRole.role })}
+            </p>
           ) : null}
-          <SocialAccountList accounts={user.social_accounts} className="mt-1 flex flex-wrap gap-1.5" />
+          {user.social_accounts.length > 0 ? (
+            <ul className="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0">
+              {sortSocialAccounts(user.social_accounts).map((account) => {
+                const url = socialProfileUrl(account);
+                const chip = (
+                  <>
+                    <SocialIcon provider={account.provider} size={12} decorative />
+                    <span className="truncate">{account.username}</span>
+                  </>
+                );
+                const chipClass =
+                  "inline-flex max-w-[16rem] items-center gap-1.5 rounded-[7px] border border-[color:var(--aqt-border-2)] px-2 py-1 text-caption font-medium text-[color:var(--aqt-fg-muted)]";
+                return (
+                  <li key={account.id} title={getSocialProviderConfig(account.provider).label}>
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${chipClass} transition-colors hover:border-[color:var(--aqt-border-3)] hover:text-[color:var(--aqt-fg)]`}
+                      >
+                        {chip}
+                      </a>
+                    ) : (
+                      <span className={chipClass}>{chip}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
 
-        <div className="grid w-full grid-cols-2 items-start gap-x-4 gap-y-5 md:w-auto md:min-w-[460px] md:grid-cols-4 md:gap-y-4">
-          <PfStat
-            label={t("users.profile.stats.tournaments")}
-            value={`${profile.tournaments_count}`}
-            sub={profile.tournaments_won > 0 ? t("users.profile.stats.won", { count: String(profile.tournaments_won) }) : "—"}
-          />
-          <PfStat
-            label={t("users.profile.stats.winrate")}
-            value={winrate !== null ? `${winrate.toFixed(2)}` : "-"}
-            unit="%"
-            delta={winrateDelta !== null ? { value: winrateDelta, good: winrateDelta >= 0 } : undefined}
-          />
-          <PfStat
-            label={t("users.profile.stats.maps")}
-            value={`${profile.maps_won}`}
-            valueSuffix={`/${profile.maps_total}`}
-          />
-          <PfStat
-            label={t("users.profile.stats.avgPlace")}
-            value={formatPlace(profile.avg_placement)}
-            sub={profile.avg_playoff_placement !== null ? t("users.profile.stats.playoffs", { place: formatPlace(profile.avg_playoff_placement) }) : null}
+        <div className="col-span-full flex min-w-0 flex-col gap-5 lg:col-span-1 lg:items-end">
+          <ProfileToolbar
+            playerId={user.id}
+            card={{
+              name,
+              tag: tag ?? null,
+              role: primaryRole?.role ?? null,
+              roleTint,
+              division: primaryRole?.division ?? null,
+              winrate,
+              avgPlacement: profile.avg_placement,
+              titles: profile.tournaments_won,
+              tournaments: profile.tournaments_count,
+              mapsWon: profile.maps_won,
+              mapsTotal: profile.maps_total,
+              form: formStreak
+            }}
           />
 
-          <div className="col-span-full mt-2 flex flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
+          <div className="grid w-full grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4 lg:w-auto lg:gap-x-9">
+            <ProfileStat
+              label={t("users.profile.stats.tournaments")}
+              value={profile.tournaments_count}
+              sub={
+                profile.tournaments_won > 0
+                  ? t("users.profile.stats.won", { count: String(profile.tournaments_won) })
+                  : null
+              }
+            />
+            <ProfileStat
+              label={t("users.profile.stats.winrate")}
+              value={winrate !== null ? `${winrate.toFixed(1)}%` : "-"}
+              sub={
+                winrateDelta !== null ? (
+                  <span
+                    className="inline-flex items-center gap-0.5"
+                    style={{ color: winrateDelta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
+                    title={t("users.profile.stats.deltaTitle")}
+                  >
+                    {winrateDelta >= 0 ? <ArrowUp size={12} aria-hidden /> : <ArrowDown size={12} aria-hidden />}
+                    <span className="sr-only">
+                      {winrateDelta >= 0 ? t("users.profile.stats.trendUp") : t("users.profile.stats.trendDown")}
+                    </span>
+                    {t("users.profile.stats.deltaLastTournament", { value: Math.abs(winrateDelta).toFixed(1) })}
+                  </span>
+                ) : null
+              }
+            />
+            <ProfileStat
+              label={t("users.profile.stats.mapsWon")}
+              value={profile.maps_won}
+              sub={t("users.profile.stats.ofTotal", { total: String(profile.maps_total) })}
+            />
+            <ProfileStat
+              label={t("users.profile.stats.avgPlace")}
+              value={formatPlace(profile.avg_placement)}
+              sub={
+                profile.avg_playoff_placement !== null
+                  ? t("users.profile.stats.playoffs", { place: formatPlace(profile.avg_playoff_placement) })
+                  : null
+              }
+            />
+          </div>
+
+          <div className="flex w-full flex-wrap items-center gap-3 border-t border-[color:var(--aqt-border)] pt-3">
             <span className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
               {t("users.profile.header.formLast", { count: String(formStreak.length) })}
             </span>
@@ -232,46 +243,6 @@ const UserHeader = async ({ profile, user, scope }: UserHeaderProps) => {
         </div>
       </div>
     </HeroFrame>
-  );
-};
-
-interface PfStatProps {
-  label: string;
-  value: string;
-  unit?: string;
-  valueSuffix?: string;
-  sub?: string | null;
-  /** Signed change vs the last tournament; `good` controls arrow/colour. */
-  delta?: { value: number; good: boolean };
-}
-
-const PfStat = ({ label, value, unit, valueSuffix, sub, delta }: PfStatProps) => {
-  const t = useTranslations();
-  return (
-  <div className="flex flex-col gap-1">
-    <span className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">{label}</span>
-    <span className="font-onest aqt-tnum text-headline font-bold leading-none text-[color:var(--aqt-fg)]">
-      {value}
-      {unit ? <em className="ml-0.5 not-italic text-[color:var(--aqt-teal)]">{unit}</em> : null}
-      {valueSuffix ? (
-        <span className="text-title text-[color:var(--aqt-fg-faint)]">{valueSuffix}</span>
-      ) : null}
-    </span>
-    {delta ? (
-      <span
-        className="aqt-tnum inline-flex items-center gap-0.5 text-label font-bold"
-        style={{ color: delta.good ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
-        title={t("users.profile.stats.deltaTitle")}
-      >
-        {delta.good ? <ArrowUp size={12} aria-hidden /> : <ArrowDown size={12} aria-hidden />}
-        <span className="sr-only">
-          {delta.good ? t("users.profile.stats.trendUp") : t("users.profile.stats.trendDown")}
-        </span>
-        {Math.abs(delta.value).toFixed(1)}
-      </span>
-    ) : null}
-    {sub ? <span className="text-label text-[color:var(--aqt-fg-dim)]">{sub}</span> : null}
-  </div>
   );
 };
 

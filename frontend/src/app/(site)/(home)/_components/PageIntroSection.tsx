@@ -12,7 +12,7 @@ export async function PageIntroSection({ tenantMode }: Readonly<{ tenantMode: bo
     <PageHero
       align="center"
       eyebrow={<HeroCoord>{t("home.eyebrow")}</HeroCoord>}
-      title={t.rich("home.title", { em: (chunks) => <em>{chunks}</em> })}
+      title={t("home.title")}
       lede={tenantMode ? t("home.ledeTenant") : t("home.ledePlatform")}
       actions={
         <>

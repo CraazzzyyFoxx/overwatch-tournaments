@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import { StagePill } from "@/components/match/cells";
-import { ArrowLeftRight, ArrowRight, ListOrdered } from "lucide-react";
+import { winrateColor } from "@/app/(site)/users/components/heroes/utils";
+import { ArrowRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,8 +38,6 @@ const oppWinrate = (o: OpponentStat) => {
   const total = oppTotal(o);
   return total > 0 ? (o.wins / total) * 100 : 0;
 };
-const wrColor = (wr: number, total: number) =>
-  total === 0 ? "var(--aqt-fg-faint)" : wr > 55 ? "var(--aqt-emerald)" : wr < 45 ? "var(--aqt-rose)" : "var(--aqt-amber)";
 
 const OpponentPips = ({ o }: { o: OpponentStat }) => (
   <span className="aqt-wl" aria-hidden>
@@ -77,11 +75,10 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
       <CardSurface
         flush
         title={t("users.matches.mostFoughtOpponents")}
-        icon={<ArrowLeftRight aria-hidden size={15} />}
         action={
           opponentStats.length > SIDEBAR_LIMIT ? (
             <Dialog>
-              <DialogTrigger className="aqt-seeall" aria-label={t("users.matches.allOpponents")}>
+              <DialogTrigger className="aqt-pf-link" aria-label={t("users.matches.allOpponents")}>
                 <span className="tabular-nums">
                   {t("common.all")} {opponentStats.length}
                 </span>
@@ -97,14 +94,13 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
                   <table className="w-full border-collapse text-caption">
                     <thead>
                       <tr>
-                        <th className={thLeft} style={{ width: 34 }}>#</th>
                         <th className={thLeft}>{t("users.matches.colOpponent")}</th>
                         <th className={thRight}>{t("standings.colWDL")}</th>
                         <th className={thRight}>{t("users.matches.colWinrate")}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {opponentStats.map((o, i) => {
+                      {opponentStats.map((o) => {
                         const total = oppTotal(o);
                         const wr = oppWinrate(o);
                         return (
@@ -112,16 +108,13 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
                             key={o.name}
                             className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[color:var(--aqt-overlay-2)]"
                           >
-                            <td className="aqt-tnum px-3 py-2 text-[color:var(--aqt-fg-faint)]">
-                              {String(i + 1).padStart(2, "0")}
-                            </td>
                             <td className="px-3 py-2 font-semibold text-[color:var(--aqt-fg)]">{o.name}</td>
                             <td className="aqt-tnum px-3 py-2 text-right">
                               <OpponentRecord o={o} />
                             </td>
                             <td
                               className="aqt-tnum px-3 py-2 text-right font-bold"
-                              style={{ color: wrColor(wr, total) }}
+                              style={{ color: total > 0 ? winrateColor(wr) : "var(--aqt-fg-faint)" }}
                             >
                               {total > 0 ? `${wr.toFixed(0)}%` : "—"}
                             </td>
@@ -136,9 +129,8 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
           ) : undefined
         }
       >
-        {shown.map((opp, i) => (
+        {shown.map((opp) => (
           <div key={opp.name} className="aqt-opp-row">
-            <span className="aqt-rank tabular-nums">{String(i + 1).padStart(2, "0")}</span>
             <span className="aqt-nm">{opp.name}</span>
             <OpponentPips o={opp} />
             <span className="aqt-pct tabular-nums">
@@ -151,22 +143,18 @@ const MatchesSidebars = ({ opponentStats, stageStats }: MatchesSidebarsProps) =>
         ) : null}
       </CardSurface>
 
-      <CardSurface flush title={t("users.matches.byStage")} icon={<ListOrdered aria-hidden size={15} />}>
+      <CardSurface flush title={t("users.matches.byStage")}>
         {(["group", "playoffs", "finals"] as const).map((k) => {
           const stats = stageStats[k];
           const total = stats.w + stats.l;
           const winrate = total > 0 ? (stats.w / total) * 100 : 0;
           return (
-            <div key={k} className="aqt-opp-row" style={{ gridTemplateColumns: "1fr auto auto" }}>
-              <span className="aqt-nm inline-flex items-center gap-2">
-                <StagePill kind={k}>{stageLabels[k]}</StagePill>
-              </span>
+            <div key={k} className="aqt-opp-row">
+              <span className="aqt-nm">{stageLabels[k]}</span>
               <span className="aqt-pct tabular-nums">{stats.w}-{stats.l}</span>
               <span
                 className="aqt-tnum text-label font-bold"
-                style={{
-                  color: winrate > 55 ? "var(--aqt-emerald)" : winrate < 45 ? "var(--aqt-rose)" : "var(--aqt-amber)"
-                }}
+                style={{ color: total > 0 ? winrateColor(winrate) : "var(--aqt-fg-faint)" }}
               >
                 {total > 0 ? `${winrate.toFixed(0)}%` : "—"}
               </span>

@@ -8,14 +8,12 @@ import { cn } from "@/lib/utils";
 
 import userService from "@/services/user.service";
 import { UserMapsSummary } from "@/types/user.types";
-import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
+import { CardSurface, ProfileStat } from "@/app/(site)/users/components/shared/atoms";
 import { type SearchableImageOption } from "@/components/ui/searchable-image-select";
-import { KPI } from "@/app/(site)/users/components/maps/atoms";
 import MapRow from "@/app/(site)/users/components/maps/MapRow";
 import MapsFilters from "@/app/(site)/users/components/maps/MapsFilters";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { LayoutGrid } from "lucide-react";
-import { getWinrateColor } from "@/lib/colors";
+import { winrateColor } from "@/app/(site)/users/components/heroes/utils";
 import { userQueryKeys } from "@/lib/users/query-keys";
 import type { StatsScope } from "@/lib/site/stats-scope";
 
@@ -132,61 +130,73 @@ const MapsView = ({ userId, scope }: Props) => {
   const pages = perPage === -1 ? 1 : Math.max(1, Math.ceil(totalCount / perPage));
   const pageMaps = perPage === -1 ? sortedMaps : sortedMaps.slice((page - 1) * perPage, page * perPage);
 
-  const modeClass = (mode: string) => {
-    const lower = mode.toLowerCase();
-    if (lower.includes("control")) return "control";
-    if (lower.includes("escort")) return "escort";
-    if (lower.includes("hybrid")) return "hybrid";
-    if (lower.includes("flashpoint")) return "flashpoint";
-    if (lower.includes("push")) return "push";
-    return "assault";
-  };
-
   const overall = summary?.overall;
 
   return (
     <div className="aqt-player flex flex-col gap-3.5">
-      {/* Top KPI row */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-        <KPI
-          label={t("users.maps.overallWinrate")}
-          value={overall ? `${(overall.win_rate * 100).toFixed(1)}` : "—"}
-          unit="%"
-          color={overall ? getWinrateColor(overall.win_rate) : undefined}
-          sub={overall ? `${overall.win}-${overall.loss}-${overall.draw} · ${t("users.maps.gamesCount", { count: overall.total_games })}` : "—"}
-        />
-        <KPI
-          label={t("users.maps.mostPlayed")}
-          value={summary?.most_played ? `${summary.most_played.count}` : "—"}
-          unit={t("users.maps.gamesUnit")}
-          sub={summary?.most_played ? `${summary.most_played.map.name} · ${summary.most_played.map.gamemode?.name ?? ""}` : "—"}
-        />
-        <KPI
-          label={t("users.maps.bestMap")}
-          value={summary?.best ? `${(summary.best.win_rate * 100).toFixed(0)}` : "—"}
-          unit="%"
-          color={summary?.best ? getWinrateColor(summary.best.win_rate) : undefined}
-          sub={summary?.best ? `${summary.best.map.name} · ${t("users.maps.gamesShort", { count: String(summary.best.count) })}` : "—"}
-        />
-        <KPI
-          label={t("users.maps.weakest")}
-          value={summary?.worst ? `${(summary.worst.win_rate * 100).toFixed(0)}` : "—"}
-          unit="%"
-          color={summary?.worst ? getWinrateColor(summary.worst.win_rate) : undefined}
-          sub={summary?.worst ? `${summary.worst.map.name} · ${t("users.maps.gamesShort", { count: String(summary.worst.count) })}` : "—"}
-        />
-      </div>
+      {/* Top stats */}
+      <CardSurface>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
+          <ProfileStat
+            label={t("users.maps.overallWinrate")}
+            value={overall ? `${(overall.win_rate * 100).toFixed(1)}%` : "—"}
+            color={overall ? winrateColor(overall.win_rate * 100) : undefined}
+            sub={
+              overall
+                ? `${overall.win}-${overall.loss}-${overall.draw} · ${t("users.maps.gamesCount", { count: overall.total_games })}`
+                : "—"
+            }
+          />
+          <ProfileStat
+            label={t("users.maps.mostPlayed")}
+            value={
+              summary?.most_played ? (
+                <>
+                  {summary.most_played.count}
+                  <span className="text-title text-[color:var(--aqt-fg-faint)]">{t("users.maps.gamesUnit")}</span>
+                </>
+              ) : (
+                "—"
+              )
+            }
+            sub={
+              summary?.most_played
+                ? [summary.most_played.map.name, summary.most_played.map.gamemode?.name].filter(Boolean).join(" · ")
+                : "—"
+            }
+          />
+          <ProfileStat
+            label={t("users.maps.bestMap")}
+            value={summary?.best ? `${(summary.best.win_rate * 100).toFixed(0)}%` : "—"}
+            color={summary?.best ? winrateColor(summary.best.win_rate * 100) : undefined}
+            sub={
+              summary?.best
+                ? `${summary.best.map.name} · ${t("users.maps.gamesShort", { count: String(summary.best.count) })}`
+                : "—"
+            }
+          />
+          <ProfileStat
+            label={t("users.maps.weakest")}
+            value={summary?.worst ? `${(summary.worst.win_rate * 100).toFixed(0)}%` : "—"}
+            color={summary?.worst ? winrateColor(summary.worst.win_rate * 100) : undefined}
+            sub={
+              summary?.worst
+                ? `${summary.worst.map.name} · ${t("users.maps.gamesShort", { count: String(summary.worst.count) })}`
+                : "—"
+            }
+          />
+        </div>
+      </CardSurface>
 
       {/* Mode breakdown */}
       <CardSurface
         title={t("users.maps.byMode")}
-        icon={<LayoutGrid size={15} />}
         subtitle={t("users.maps.byModeSubtitle", {
           modes: modeStats.length,
           games: allMaps.reduce((s, m) => s + m.count, 0)
         })}
       >
-        <div className="aqt-mode-grid">
+        <div className="-m-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
           {modeStats.map((b) => {
             const totalDecisive = b.win + b.loss;
             const wr = totalDecisive > 0 ? (b.win / totalDecisive) * 100 : 0;
@@ -199,29 +209,24 @@ const MapsView = ({ userId, scope }: Props) => {
                 aria-pressed={active}
                 title={active ? t("users.maps.clearModeFilter") : t("users.maps.filterByMode", { mode: b.mode })}
                 className={cn(
-                  "aqt-mode-card w-full cursor-pointer text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]",
-                  modeClass(b.mode)
+                  "cursor-pointer rounded-lg p-2 text-left transition-colors hover:bg-[hsl(0_0%_100%/0.03)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]",
+                  active && "bg-[hsl(0_0%_100%/0.05)]"
                 )}
-                style={
-                  active
-                    ? { borderColor: "var(--aqt-teal)", background: "color-mix(in srgb, var(--aqt-teal) 10%, transparent)" }
-                    : undefined
-                }
               >
-                <div className="aqt-l">{b.mode}</div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="aqt-display text-headline font-bold leading-none tabular-nums">{wr.toFixed(0)}%</div>
-                  <div className="aqt-tnum text-ui text-[color:var(--aqt-fg-muted)]">
-                    {b.win}-{b.loss}
+                <ProfileStat
+                  size="md"
+                  label={<span style={active ? { color: "var(--aqt-teal)" } : undefined}>{b.mode}</span>}
+                  value={`${wr.toFixed(0)}%`}
+                  color={totalDecisive > 0 ? winrateColor(wr) : undefined}
+                  sub={`${b.win}-${b.loss} · ${t("users.maps.gamesCount", { count: b.games })}`}
+                >
+                  <div className="mt-1 h-1 w-full rounded-full bg-[color:var(--aqt-border)]">
+                    <div
+                      className="h-full rounded-full bg-[color:var(--aqt-fg-faint)]"
+                      style={{ width: `${wr}%` }}
+                    />
                   </div>
-                </div>
-                <div className="aqt-bar">
-                  <div className="aqt-fill" style={{ width: `${wr}%` }} />
-                </div>
-                <div className="aqt-tnum flex items-center justify-between text-label text-[color:var(--aqt-fg-dim)]">
-                  <span>{t("users.maps.mapsCount", { count: b.maps.size })}</span>
-                  <span>{t("users.maps.gamesCount", { count: b.games })}</span>
-                </div>
+                </ProfileStat>
               </button>
             );
           })}

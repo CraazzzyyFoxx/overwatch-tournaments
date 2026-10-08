@@ -3,14 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { PageHero } from "./PageHero";
 
-/** The grid and the teal glow — the frame's identity, present in both cases. */
-function decorativeLayers(markup: string) {
-  return {
-    grid: markup.includes("48px 48px"),
-    glow: markup.includes("var(--aqt-hero-glow)")
-  };
-}
-
 describe("PageHero cover banner", () => {
   it("renders the banner as a blurred wash, not as a picture", () => {
     const markup = renderToStaticMarkup(
@@ -35,10 +27,6 @@ describe("PageHero cover banner", () => {
     expect(markup).toContain("isolate");
     // No band is reserved and no scrim is painted: the wash is behind the copy.
     expect(markup).not.toContain("padding-top");
-
-    // The wash sits BELOW the grid and glow, which are the frame's identity.
-    expect(markup.indexOf("cover.png")).toBeLessThan(markup.indexOf("48px 48px"));
-    expect(decorativeLayers(markup)).toEqual({ grid: true, glow: true });
   });
 
   it("emits no image layer without a cover, leaving the frame untouched", () => {
@@ -46,7 +34,6 @@ describe("PageHero cover banner", () => {
 
     expect(markup).not.toContain("<img");
     expect(markup).not.toContain("mix-blend-mode");
-    expect(decorativeLayers(markup)).toEqual({ grid: true, glow: true });
   });
 
   it("paints a right-edge bleed instead of a colour wash when asked", () => {
@@ -62,7 +49,6 @@ describe("PageHero cover banner", () => {
     expect(markup).toContain("linear-gradient(90deg, transparent 0%, #000 55%)");
     expect(markup).not.toContain("mix-blend-mode");
     expect(markup).not.toContain("blur(28px)");
-    expect(decorativeLayers(markup)).toEqual({ grid: true, glow: true });
   });
 });
 

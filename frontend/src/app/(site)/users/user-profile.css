@@ -4,10 +4,38 @@
    consumer lives under that route.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* Section heading inside a profile card: mixed-case Onest, no icon, no caps.
+   Profile-only for now; the global .aqt-card-title (uppercase) still serves
+   /achievements and the dock. */
+.aqt-pf-title {
+  margin: 0;
+  font-family: var(--aqt-display);
+  font-size: var(--text-heading);
+  line-height: var(--text-heading--line-height);
+  font-weight: 600;
+  color: var(--aqt-fg);
+}
+
+/* "View all" style link in a card head — plain mixed-case teal text. */
+.aqt-pf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--aqt-teal);
+  white-space: nowrap;
+}
+
+.aqt-pf-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* opp row */
 .aqt-opp-row {
   display: grid;
-  grid-template-columns: 24px 1fr auto auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
   align-items: center;
   padding: 9px 14px;
@@ -17,13 +45,6 @@
 
 .aqt-opp-row:last-child {
   border-bottom: 0;
-}
-
-.aqt-opp-row .aqt-rank {
-  font-family: var(--aqt-data);
-  font-size: var(--text-label);
-  color: var(--aqt-fg-faint);
-  text-align: right;
 }
 
 .aqt-opp-row .aqt-nm {
@@ -62,81 +83,6 @@
   min-width: 34px;
   text-align: right;
   font-weight: 600;
-}
-
-/* mode cards */
-.aqt-mode-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-@media (max-width: 1280px) {
-  .aqt-mode-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 880px) {
-  .aqt-mode-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.aqt-mode-card {
-  padding: 14px;
-  background: var(--aqt-card);
-  border: 1px solid var(--aqt-border);
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: relative;
-  overflow: hidden;
-}
-
-.aqt-mode-card .aqt-l {
-  font-size: var(--text-label);
-  font-weight: 700;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--aqt-fg-faint);
-}
-
-.aqt-mode-card .aqt-bar {
-  height: 4px;
-  background: var(--aqt-overlay-3);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.aqt-mode-card .aqt-bar .aqt-fill {
-  height: 100%;
-  border-radius: 2px;
-}
-
-.aqt-mode-card.control .aqt-fill {
-  background: linear-gradient(90deg, hsl(38 95% 60%), hsl(38 80% 48%));
-}
-
-.aqt-mode-card.escort .aqt-fill {
-  background: linear-gradient(90deg, hsl(174 72% 50%), hsl(174 60% 40%));
-}
-
-.aqt-mode-card.hybrid .aqt-fill {
-  background: linear-gradient(90deg, hsl(210 80% 65%), hsl(210 65% 48%));
-}
-
-.aqt-mode-card.flashpoint .aqt-fill {
-  background: linear-gradient(90deg, hsl(340 78% 65%), hsl(340 60% 48%));
-}
-
-.aqt-mode-card.push .aqt-fill {
-  background: linear-gradient(90deg, hsl(270 70% 65%), hsl(270 55% 45%));
-}
-
-.aqt-mode-card.assault .aqt-fill {
-  background: linear-gradient(90deg, hsl(190 75% 65%), hsl(190 60% 45%));
 }
 
 /* map row */
@@ -184,7 +130,7 @@
 .aqt-wr-bar .aqt-track {
   flex: 1;
   height: 6px;
-  background: var(--aqt-overlay-3);
+  background: var(--aqt-border);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -192,7 +138,6 @@
 .aqt-wr-bar .aqt-fill {
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--aqt-rose), var(--aqt-amber), var(--aqt-emerald));
 }
 
 .aqt-wr-bar .aqt-num {
@@ -202,14 +147,6 @@
   min-width: 36px;
   text-align: right;
   color: var(--aqt-fg);
-}
-
-.aqt-wr-bar .aqt-num.good {
-  color: var(--aqt-emerald);
-}
-
-.aqt-wr-bar .aqt-num.bad {
-  color: var(--aqt-rose);
 }
 
 /* radar */

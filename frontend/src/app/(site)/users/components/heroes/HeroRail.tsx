@@ -164,17 +164,27 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
               <HeroImage hero={r.hero} size="md" />
               <div className="min-w-0">
                 <div className="truncate text-body font-semibold text-[color:var(--aqt-fg)]">{r.hero.name}</div>
-                <div className="truncate text-label capitalize text-[color:var(--aqt-fg-dim)]">
-                  {r.role} · {t("users.heroes.wr", { value: r.winratePct == null ? "—" : `${r.winratePct.toFixed(0)}%` })} · {(r.share * 100).toFixed(0)}%
+                <div className="flex min-w-0 items-center gap-2 text-label text-[color:var(--aqt-fg-dim)]">
+                  <span className="truncate capitalize">{r.role}</span>
+                  {r.winratePct == null ? null : (
+                    <span className="aqt-tnum shrink-0">
+                      {t("users.heroes.wr", { value: `${r.winratePct.toFixed(0)}%` })}
+                    </span>
+                  )}
+                  <span
+                    className="aqt-tnum shrink-0"
+                    title={t("users.heroes.poolShare", { pct: (r.share * 100).toFixed(0) })}
+                  >
+                    {(r.share * 100).toFixed(0)}%
+                  </span>
                 </div>
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-sm bg-[hsl(0_0%_100%/0.05)]">
+                <div
+                  className="mt-1 h-1 w-full overflow-hidden rounded-sm bg-[hsl(0_0%_100%/0.05)]"
+                  title={t("users.heroes.sort.impact")}
+                >
                   <div
-                    className="h-full rounded-sm"
-                    style={{
-                      width: `${Math.round(r.impact * 100)}%`,
-                      background:
-                        r.impact >= 0.6 ? "var(--aqt-emerald)" : r.impact >= 0.4 ? "var(--aqt-amber)" : "var(--aqt-rose)"
-                    }}
+                    className="h-full rounded-sm bg-[color:var(--aqt-fg-faint)]"
+                    style={{ width: `${Math.round(r.impact * 100)}%` }}
                   />
                 </div>
               </div>

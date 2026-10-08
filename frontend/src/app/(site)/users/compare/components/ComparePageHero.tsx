@@ -88,9 +88,7 @@ const ComparePageHero = ({
           <span>{t("users.compare.hero.breadcrumb")}</span>
         </HeroCoord>
       }
-      title={t.rich("users.compare.hero.title", {
-        em: (chunks) => <em>{chunks}</em>
-      })}
+      title={t("users.compare.hero.title")}
       lede={t("users.compare.hero.lede")}
       actions={
         <Popover>

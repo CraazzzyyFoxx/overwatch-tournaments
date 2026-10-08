@@ -93,9 +93,7 @@ const HeroCompareHero = ({ selectedHero, rows }: HeroCompareHeroProps) => {
           <span>{t("users.heroesCompare.hero.breadcrumb")}</span>
         </HeroCoord>
       }
-      title={t.rich("users.heroesCompare.hero.title", {
-        em: (chunks) => <em>{chunks}</em>,
-      })}
+      title={t("users.heroesCompare.hero.title")}
       lede={t("users.heroesCompare.hero.lede")}
       aside={
         <div className="grid grid-cols-2 gap-x-7 gap-y-5 text-left sm:grid-cols-4 lg:text-right">

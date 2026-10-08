@@ -153,9 +153,7 @@ const TournamentList = ({ groups, selectedKey, onSelect }: Props) => {
   return (
     <div className="aqt-card-surface flex flex-col min-[1081px]:absolute min-[1081px]:inset-0">
       <div className="flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
-        <span className="aqt-card-title">
-          <span className="truncate">{t("users.tournaments.list.title")}</span>
-        </span>
+        <h2 className="aqt-pf-title truncate">{t("users.tournaments.list.title")}</h2>
         <span className="aqt-tnum text-label text-[color:var(--aqt-fg-dim)]">
           {t("users.tournaments.list.eventsCount", { count: String(groups.length) })}
         </span>

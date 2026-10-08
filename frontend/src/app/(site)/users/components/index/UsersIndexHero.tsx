@@ -27,7 +27,7 @@ export function UsersIndexHero({ stats }: Readonly<{ stats: UserOverviewStats | 
           · {t("users.list.hero.eyebrowCurrent")}
         </HeroCoord>
       }
-      title={t.rich("users.list.hero.title", { em: (chunks) => <em>{chunks}</em> })}
+      title={t("users.list.hero.title")}
       lede={t("users.list.hero.lede")}
       aside={
         <div className={styles.heroStats}>

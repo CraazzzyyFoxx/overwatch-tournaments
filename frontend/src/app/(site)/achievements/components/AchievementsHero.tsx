@@ -33,7 +33,7 @@ const AchievementsHero = ({
           ) : null}
         </>
       }
-      title={t.rich("achievements.hero.title", { em: (chunks) => <em>{chunks}</em> })}
+      title={t("achievements.hero.title")}
       lede={t("achievements.hero.lede")}
       aside={
         <div className="grid grid-cols-3 gap-6">

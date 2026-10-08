@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Trophy } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { UserTournamentWithStats, UserTournamentSummary } from "@/types/user.types";
 import { type MapResultPip } from "@/app/(site)/users/components/overview/map-results";
 import { UserTournamentStat } from "@/types/statistics.types";
-import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
+import { CardSurface, ProfileStat } from "@/app/(site)/users/components/shared/atoms";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { playerRoleTint } from "@/lib/roster/player-role";
+import { normalizePlayerRole, PLAYER_ROLE_LABEL_KEY, playerRoleTint } from "@/lib/roster/player-role";
 import { tournamentHref } from "@/lib/tournament/url";
 import {
   Select,
@@ -48,6 +47,24 @@ const formatPercent = (value: number | null | undefined, digits = 0) => {
 // token instead of falling through to damage.
 const roleColor = (role: string) => `var(--aqt-${playerRoleTint(role) ?? "damage"})`;
 
+// Map result → its sanctioned result hue and its always-present letter/title
+// (design-book: a result never reads by colour alone).
+const PIP_COLOR: Record<MapResultPip, string> = {
+  win: "var(--aqt-emerald)",
+  loss: "var(--aqt-rose)",
+  draw: "var(--aqt-amber)"
+};
+const PIP_LABEL_KEY: Record<MapResultPip, string> = {
+  win: "users.overview.win",
+  loss: "users.overview.loss",
+  draw: "users.overview.draw"
+};
+const PIP_TITLE_KEY: Record<MapResultPip, string> = {
+  win: "users.overview.lastTournament.mapWon",
+  loss: "users.overview.lastTournament.mapLost",
+  draw: "users.overview.lastTournament.mapDraw"
+};
+
 interface StatEntry {
   rank: number;
   total: number;
@@ -61,57 +78,46 @@ const percentile = (entry: StatEntry) => {
   return { topPct, barPct };
 };
 
-const PercentileTile = ({
+/** One lobby-ranked stat: open KPI + percentile bar, opening the leaderboard. */
+const LobbyStat = ({
   label,
   value,
   topLabel,
   barPct,
   highlight,
   onOpen,
-  openLabel
+  openLabel,
+  hint
 }: {
   label: string;
   value: string;
-  topLabel?: string | null;
-  barPct?: number | null;
+  topLabel: string;
+  barPct: number;
   highlight?: "good" | "bad";
-  /** When set, the tile becomes a button that opens the lobby leaderboard. */
-  onOpen?: () => void;
-  openLabel?: string;
-}) => {
-  const inner = (
-    <>
-      <div className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">{label}</div>
-      <div
-        className="aqt-display aqt-tnum text-title font-bold leading-[1.05]"
-        style={{ color: highlight === "good" ? "var(--aqt-emerald)" : highlight === "bad" ? "var(--aqt-rose)" : "var(--aqt-fg)" }}
-      >
-        {value}
-      </div>
-      {topLabel ? <div className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">{topLabel}</div> : null}
-      {barPct != null ? (
-        <div className="mt-0.5 h-[5px] w-full overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]">
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${barPct}%`, background: "linear-gradient(90deg, var(--aqt-teal-deep), var(--aqt-teal))" }}
-          />
-        </div>
-      ) : null}
-    </>
-  );
-  const base = "flex flex-col gap-1.5 rounded-[8px] border border-[color:var(--aqt-border)] px-3 py-2.5 text-left";
-  if (!onOpen) return <div className={base}>{inner}</div>;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={openLabel}
-      className={`${base} cursor-pointer transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]`}
+  onOpen: () => void;
+  openLabel: string;
+  hint: string;
+}) => (
+  <button
+    type="button"
+    onClick={onOpen}
+    aria-label={openLabel}
+    title={hint}
+    className="-m-2 cursor-pointer rounded-lg p-2 text-left transition-colors hover:bg-[hsl(0_0%_100%/0.03)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+  >
+    <ProfileStat
+      size="md"
+      label={label}
+      value={value}
+      sub={topLabel}
+      color={highlight === "good" ? "var(--aqt-emerald)" : highlight === "bad" ? "var(--aqt-rose)" : undefined}
     >
-      {inner}
-    </button>
-  );
-};
+      <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]">
+        <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: "var(--aqt-fg-muted)" }} />
+      </div>
+    </ProfileStat>
+  </button>
+);
 
 const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }: Props) => {
   const t = useTranslations();
@@ -124,6 +130,15 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
   const playtimeM = Math.floor((tournament.playtime % 3600) / 60);
   const mapsLost = tournament.maps - tournament.maps_won;
   const winrate = tournament.maps > 0 ? tournament.maps_won / tournament.maps : null;
+  // Real per-map order when the encounters carried it; otherwise the aggregate
+  // W/L counts (flagged as such under the row).
+  const resultPips: MapResultPip[] =
+    mapPips && mapPips.length > 0
+      ? mapPips
+      : [
+          ...Array.from({ length: tournament.maps_won }, () => "win" as const),
+          ...Array.from({ length: Math.max(0, mapsLost) }, () => "loss" as const)
+        ];
 
   const onSelectTournament = (value: string) => {
     const nextSearchParams = new URLSearchParams(searchParams || undefined);
@@ -183,7 +198,6 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
           {tournament.name}
         </HoverPrefetchLink>
       }
-      icon={<Trophy size={15} />}
       action={
         tournaments.length > 0 ? (
           <Select value={String(tournament.id)} onValueChange={onSelectTournament}>
@@ -215,12 +229,9 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
             height={52}
           />
           <div className="flex-1 min-w-0">
-            <div
-              className="aqt-display flex items-center gap-1.5 text-[20px] font-bold uppercase leading-none"
-              style={{ color: roleColor(tournament.role) }}
-            >
+            <div className="flex items-center gap-1.5 font-onest text-[20px] font-bold leading-none text-[color:var(--aqt-fg)]">
               <PlayerRoleIcon role={tournament.role} size={18} color={roleColor(tournament.role)} decorative />
-              {tournament.role}
+              {t(PLAYER_ROLE_LABEL_KEY[normalizePlayerRole(tournament.role)] as Parameters<typeof t>[0])}
             </div>
             <div className="aqt-tnum mt-1 text-caption text-[color:var(--aqt-fg-muted)]">
               {t("users.overview.lastTournament.placed")} <span className="aqt-tnum font-semibold text-[color:var(--aqt-fg)]">
@@ -261,74 +272,27 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
                 {t("users.overview.mapsCount", { count: tournament.maps })}
               </span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {(mapPips ?? []).length > 0
-                ? mapPips!.map((pip, i) => {
-                    const color =
-                      pip === "win" ? "var(--aqt-emerald)" : pip === "loss" ? "var(--aqt-rose)" : "var(--aqt-amber)";
-                    const title =
-                      pip === "win"
-                        ? t("users.overview.lastTournament.mapWon")
-                        : pip === "loss"
-                          ? t("users.overview.lastTournament.mapLost")
-                          : t("users.overview.lastTournament.mapDraw");
-                    const label =
-                      pip === "win" ? t("users.overview.win") : pip === "loss" ? t("users.overview.loss") : t("users.overview.draw");
-                    return (
-                      <span
-                        key={`${pip}${i}`}
-                        className="aqt-display inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] text-label font-bold"
-                        style={{
-                          color,
-                          background: `color-mix(in srgb, ${color} 14%, transparent)`,
-                          border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`
-                        }}
-                        title={title}
-                      >
-                        {label}
-                      </span>
-                    );
-                  })
-                : [
-                    ...Array.from({ length: tournament.maps_won }).map((_, i) => (
-                      <span
-                        key={`w${i}`}
-                        className="aqt-display inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] text-label font-bold"
-                        style={{
-                          color: "var(--aqt-emerald)",
-                          background: "color-mix(in srgb, var(--aqt-emerald) 14%, transparent)",
-                          border: "1px solid color-mix(in srgb, var(--aqt-emerald) 35%, transparent)"
-                        }}
-                        title={t("users.overview.lastTournament.mapWon")}
-                      >
-                        {t("users.overview.win")}
-                      </span>
-                    )),
-                    ...Array.from({ length: Math.max(0, mapsLost) }).map((_, i) => (
-                      <span
-                        key={`l${i}`}
-                        className="aqt-display inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] text-label font-bold"
-                        style={{
-                          color: "var(--aqt-rose)",
-                          background: "color-mix(in srgb, var(--aqt-rose) 14%, transparent)",
-                          border: "1px solid color-mix(in srgb, var(--aqt-rose) 35%, transparent)"
-                        }}
-                        title={t("users.overview.lastTournament.mapLost")}
-                      >
-                        {t("users.overview.loss")}
-                      </span>
-                    ))
-                  ]}
+            <div className="flex flex-wrap gap-x-2.5 gap-y-1">
+              {resultPips.map((pip, i) => (
+                <span
+                  key={`${pip}${i}`}
+                  className="aqt-tnum text-caption font-bold"
+                  style={{ color: PIP_COLOR[pip] }}
+                  title={t(PIP_TITLE_KEY[pip] as Parameters<typeof t>[0])}
+                >
+                  {t(PIP_LABEL_KEY[pip] as Parameters<typeof t>[0])}
+                </span>
+              ))}
             </div>
             {mapPips && mapPips.length > 0 ? null : (
-            <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
-              {t("users.overview.lastTournament.mapResultsAggregate")}
-            </span>
+              <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
+                {t("users.overview.lastTournament.mapResultsAggregate")}
+              </span>
             )}
           </div>
         ) : null}
         {statTiles.length > 0 ? (
-          <div className="flex flex-col gap-2.5 border-t border-[color:var(--aqt-border)] pt-3">
+          <div className="flex flex-col gap-4 border-t border-[color:var(--aqt-border)] pt-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
                 {t("users.overview.lastTournament.lobbyRank")}
@@ -339,11 +303,11 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
                 </span>
               ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
               {statTiles.map((tile) => {
                 const p = percentile(tile.entry);
                 return (
-                  <PercentileTile
+                  <LobbyStat
                     key={tile.key}
                     label={tile.label}
                     value={tile.value}
@@ -352,13 +316,11 @@ const OverviewLastTournamentCard = ({ tournament, tournaments, userId, mapPips }
                     highlight={tile.highlight}
                     onOpen={() => setLb({ stat: tile.statName, label: tile.label })}
                     openLabel={t("users.overview.leaderboard.open", { stat: tile.label })}
+                    hint={t("users.overview.lastTournament.percentileHint")}
                   />
                 );
               })}
             </div>
-            <span className="aqt-tnum text-label text-[color:var(--aqt-fg-faint)]">
-              {t("users.overview.lastTournament.percentileHint")}
-            </span>
           </div>
         ) : null}
       </div>

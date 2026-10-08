@@ -3,7 +3,7 @@
 import React from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { tournamentHref } from "@/lib/tournament/url";
-import { Crown, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { UserTournament } from "@/types/user.types";
 import { TournamentTeamTable } from "@/components/TournamentTeamCard";
@@ -54,45 +54,6 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
     {children}
   </div>
 );
-
-const useVerdict = (placement: number | null | undefined, countTeams: number | null | undefined) => {
-  const t = useTranslations();
-  if (!placement || !countTeams) return null;
-  const params = { placement: String(placement), count: String(countTeams) };
-  if (placement === 1) return t("users.tournaments.dossier.verdict.champion", { count: String(countTeams) });
-  if (placement <= 3) return t("users.tournaments.dossier.verdict.podium", params);
-  if (placement <= Math.ceil(countTeams / 2)) return t("users.tournaments.dossier.verdict.topHalf", params);
-  return t("users.tournaments.dossier.verdict.group", params);
-};
-
-const Verdict = ({ text }: { text: string }) => (
-  <div
-    className="mx-4 mt-4 rounded-[8px] bg-[color:var(--aqt-card-2)] px-3 py-2.5 text-caption text-[color:var(--aqt-fg-muted)]"
-    style={{ borderLeft: "2px solid var(--aqt-teal)" }}
-  >
-    {text}
-  </div>
-);
-
-const ChampionBanner = () => {
-  const t = useTranslations();
-  return (
-    <div
-      className="flex items-center gap-3 rounded-[10px] px-4 py-3"
-      style={{ background: "hsl(42 63% 60% / 0.1)", border: "1px solid hsl(42 63% 60% / 0.35)" }}
-    >
-      <Crown size={22} style={{ color: "var(--aqt-gold)" }} aria-hidden="true" />
-      <div className="min-w-0">
-        <div className="aqt-display text-ui font-bold" style={{ color: "var(--aqt-gold)" }}>
-          {t("users.tournaments.dossier.champions")}
-        </div>
-        <div className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">
-          {t("users.tournaments.dossier.championsSub")}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const summaryCells = (
   t: ReturnType<typeof useTranslations<never>>,
@@ -173,7 +134,7 @@ const EventBody = ({
   const hasEncounters = (t.encounters ?? []).length > 0;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4">
       <div>
         <SectionLabel>{tr("users.tournaments.roster.title")}</SectionLabel>
         <TournamentTeamTable
@@ -187,16 +148,16 @@ const EventBody = ({
         {loadingEncounters ? (
           // Skeleton while TournamentsHistory's lazy fetch is in flight —
           // avoids a misleading "no run recorded" flash on every selection.
-          <div className="flex flex-col gap-1.5 overflow-hidden rounded-[10px] border border-[color:var(--aqt-border)] p-3">
+          <div className="flex flex-col gap-1.5">
             {Array.from({ length: 4 }).map((_, i) => (
               <span key={i} className="h-9 w-full animate-pulse rounded bg-[color:var(--aqt-card-2)]" />
             ))}
           </div>
         ) : hasEncounters ? (
-          <div className="overflow-hidden rounded-[10px] border border-[color:var(--aqt-border)]">
+          <div className="divide-y divide-[color:var(--aqt-border)]">
             {stages.map((stage) => (
-              <div key={stage.key}>
-                <div className="flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-4 py-2">
+              <div key={stage.key} className="py-2 first:pt-0 last:pb-0">
+                <div className="flex items-center justify-between gap-2 py-1">
                   <span className="aqt-tnum text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
                     {stage.name}
                   </span>
@@ -209,7 +170,7 @@ const EventBody = ({
             ))}
           </div>
         ) : (
-          <div className="rounded-[10px] border border-[color:var(--aqt-border)] px-4 py-6 text-center text-caption text-[color:var(--aqt-fg-muted)]">
+          <div className="py-6 text-center text-caption text-[color:var(--aqt-fg-muted)]">
             {tr("users.tournaments.dossier.noRun")}
           </div>
         )}
@@ -229,7 +190,6 @@ const SingleDossier = ({
 }) => {
   const tr = useTranslations();
   const agg = groupAggregate(t);
-  const verdict = useVerdict(t.placement, t.count_teams);
   const cells = summaryCells(tr, {
     placement: t.placement ?? null,
     countTeams: t.count_teams ?? null,
@@ -244,7 +204,7 @@ const SingleDossier = ({
 
   return (
     <div className="aqt-card-surface">
-      <div className="flex flex-col gap-4 p-4">
+      <div className="p-4">
         <div className="flex items-start gap-3.5">
           <PlaceBadge placement={t.placement ?? null} size="lg" />
           <div className="min-w-0 flex-1">
@@ -266,11 +226,11 @@ const SingleDossier = ({
             </div>
           </div>
         </div>
-        {t.placement === 1 ? <ChampionBanner /> : null}
       </div>
       <SummaryStrip cells={cells} />
-      {verdict ? <Verdict text={verdict} /> : null}
-      <EventBody t={t} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />
+      <div className="p-4">
+        <EventBody t={t} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />
+      </div>
     </div>
   );
 };
@@ -278,7 +238,7 @@ const SingleDossier = ({
 const DivisionHeader = ({ t }: { t: UserTournament }) => {
   const agg = groupAggregate(t);
   return (
-    <div className="flex items-center gap-3 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.018)] px-4 py-2.5">
+    <div className="flex items-center gap-3 py-2.5">
       <DivisionIcon division={t.division} tournamentGrid={t.division_grid_version} width={28} height={28} />
       <HoverPrefetchLink
         href={tournamentHref(t.id)}
@@ -321,9 +281,6 @@ const LeagueDossier = ({
   const avgCloseness = closenessValues.length
     ? closenessValues.reduce((sum, c) => sum + c, 0) / closenessValues.length
     : null;
-  const verdict = useVerdict(best, bestEntry.count_teams);
-  const isChampion = entries.some((t) => t.placement === 1);
-
   const cells = summaryCells(tr, {
     placement: best,
     countTeams: bestEntry.count_teams ?? null,
@@ -338,7 +295,7 @@ const LeagueDossier = ({
 
   return (
     <div className="aqt-card-surface">
-      <div className="flex flex-col gap-4 p-4">
+      <div className="p-4">
         <div className="flex items-start gap-3.5">
           <PlaceBadge placement={best} size="lg" />
           <div className="min-w-0 flex-1">
@@ -353,18 +310,18 @@ const LeagueDossier = ({
             </div>
           </div>
         </div>
-        {isChampion ? <ChampionBanner /> : null}
       </div>
       <SummaryStrip cells={cells} />
-      {verdict ? <Verdict text={verdict} /> : null}
-      <div className="flex flex-col gap-4 p-4">
+      <div className="p-4">
         <SectionLabel>{tr("users.tournaments.dossier.divisions")}</SectionLabel>
-        {entries.map((t) => (
-          <div key={t.id} className="overflow-hidden rounded-[10px] border border-[color:var(--aqt-border)]">
-            <DivisionHeader t={t} />
-            <EventBody t={t} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />
-          </div>
-        ))}
+        <div className="divide-y divide-[color:var(--aqt-border)]">
+          {entries.map((t) => (
+            <div key={t.id} className="py-4 first:pt-0 last:pb-0">
+              <DivisionHeader t={t} />
+              <EventBody t={t} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

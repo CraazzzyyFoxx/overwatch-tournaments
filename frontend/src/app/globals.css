@@ -840,25 +840,15 @@
      tabular-nums via .aqt-tnum. It used to be JetBrains Mono; real code and
      identifiers use Tailwind's `font-mono` (system monospace) instead. */
   --aqt-data: var(--font-inter), Inter, system-ui, sans-serif;
-  /* Editorial Tactical hero (design-book): role-spectrum accent + ONE
-     restrained teal glow. The spectrum is the single sanctioned multi-hue
-     accent — everywhere else, one teal leads. */
+  /* The role spectrum is the single sanctioned multi-hue accent (the profile
+     header's base hairline, role-distribution bars) — everywhere else, one
+     teal leads. The glow survives only on the coverless tournament card. */
   --aqt-spectrum: linear-gradient(90deg, var(--aqt-tank), var(--aqt-damage), var(--aqt-support));
   --aqt-hero-glow: radial-gradient(
     ellipse at 30% 45%,
     color-mix(in srgb, var(--aqt-teal) 10%, transparent),
     transparent 60%
   );
-}
-
-/* Page-hero title accent — role-spectrum gradient text. Callers wrap the
-   emphasized word in <em>; kept as one rule so heroes stay declarative. */
-.aqt-hero-title em {
-  font-style: normal;
-  background: var(--aqt-spectrum);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 @keyframes aqtPulse {

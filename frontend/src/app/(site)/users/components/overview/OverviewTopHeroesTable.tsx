@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { getFormatter } from "@/lib/datetime/server";
-import { ArrowRight, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, TrendingDown, TrendingUp } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { UserMapRead } from "@/types/user.types";
@@ -133,10 +133,9 @@ const OverviewTopHeroesTable = async ({ heroes, maps, userSlug, limit = DEFAULT_
   return (
     <CardSurface
       title={t("users.overview.topHeroes.title")}
-      icon={<Swords size={15} />}
       subtitle={t("users.overview.topHeroes.playedByTime", { count: heroes.length })}
       action={
-        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-seeall">
+        <HoverPrefetchLink href={`/users/${userSlug}?tab=heroes`} className="aqt-pf-link">
           {t("common.all")} {heroes.length}
           <ArrowRight aria-hidden className="size-3" />
         </HoverPrefetchLink>

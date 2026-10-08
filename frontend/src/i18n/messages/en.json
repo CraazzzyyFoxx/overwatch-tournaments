@@ -2062,7 +2062,7 @@
     "hero": {
       "coord": "OWT // Tournaments",
       "sector": "Sector · {name}",
-      "title": "All <em>tournaments</em> in one place",
+      "title": "All tournaments in one place",
       "lede": "From draft to crown: track every event your community has run. Live brackets, locked rosters, and crowned champions — all in one ledger.",
       "liveNow": "Live now",
       "matchesInFlight": "{count, plural, one {# match in flight} other {# matches in flight}}",
@@ -2256,7 +2256,7 @@
     "subtitle": "Browse all achievements, filter by category, and view earning conditions.",
     "hero": {
       "coord": "ACHIEVEMENTS // CATALOG",
-      "title": "Every <em>badge</em> in the vault",
+      "title": "Every badge in the vault",
       "lede": "The full catalog of earnable achievements, ranked by how rare they are across the roster. Filter by tier or category, search by name, and open any badge to see exactly how it's won — and who holds it.",
       "mythicCount": "{count, plural, one {# mythic badge} other {# mythic badges}}",
       "rarestSub": "Hardest badge to earn",
@@ -2674,7 +2674,7 @@
   },
   "home": {
     "eyebrow": "OWT // Overwatch Tournament Platform",
-    "title": "What's happening <em>now</em>",
+    "title": "What's happening now",
     "ledeTenant": "Tournaments, player stats and rankings for this community.",
     "ledePlatform": "Tournaments, player stats and rankings across all communities on the platform.",
     "browseTournaments": "Browse Tournaments",
@@ -2966,7 +2966,7 @@
     },
     "hero": {
       "eyebrow": "All tournaments · Encounters",
-      "title": "Every fight, <em>quantified</em>",
+      "title": "Every fight, quantified",
       "lede": "All series across all tournaments and leagues on the platform — sliceable by stage, tournament, closeness and logs availability.",
       "totalLabel": "Total encounters",
       "last7Days": "last 7 days",
@@ -3007,7 +3007,7 @@
       "winner": "Winner",
       "loser": "Loser",
       "pregameRoom": "Pre-game room",
-      "heroTitle": "{home} <em>vs</em> {away}",
+      "heroTitle": "{home} vs {away}",
       "verdictWin": "Series won by {team}",
       "verdictDraw": "Series drawn",
       "verdictPending": "Series not decided",
@@ -4123,7 +4123,6 @@
   },
   "users": {
     "profile": {
-      "breadcrumb": "Users",
       "meta": {
         "title": "{name} — Player Profile | {siteName}",
         "description": "{name}'s Overwatch tournament profile on {siteName}: match history, heroes, maps, teammates, achievements and career stats.",
@@ -4133,9 +4132,7 @@
       "header": {
         "avatarAlt": "{name} avatar",
         "divisionTitle": "{role} · Div {division}",
-        "verifiedIdentity": "Verified identity",
-        "tournamentsCount": "{count, plural, one {# tournament} other {# tournaments}}",
-        "mapsCount": "{count, plural, one {# map} other {# maps}}",
+        "mainRole": "{role} main",
         "formLast": "Form · last {count}",
         "noRecentMatches": "No recent matches"
       },
@@ -4143,10 +4140,12 @@
         "tournaments": "Tournaments",
         "won": "{count} won",
         "winrate": "Winrate",
-        "maps": "Maps",
+        "mapsWon": "Maps won",
+        "ofTotal": "of {total}",
         "avgPlace": "Avg Place",
         "playoffs": "Playoffs {place}",
-        "deltaTitle": "Last tournament vs career",
+        "deltaTitle": "Map winrate in the last tournament vs career",
+        "deltaLastTournament": "{value} pp last tournament",
         "trendUp": "Increase",
         "trendDown": "Decrease"
       },
@@ -4176,7 +4175,7 @@
       },
       "empty": {
         "eyebrow": "Career · not started",
-        "title": "No <em>tournaments</em> yet",
+        "title": "No tournaments yet",
         "description": "{name} has not entered a tournament yet, so there is nothing to chart here. Once they play their first event, this profile fills in on its own.",
         "unlocks": {
           "tournaments": "Placements",
@@ -4219,11 +4218,7 @@
           "third": "3rd",
           "topHalf": "Top half",
           "bottom": "Bottom"
-        },
-        "verdictPodium": "Podium in {pct}% of {count, plural, one {# recorded placement} other {# recorded placements}}."
-      },
-      "mostPlayed": {
-        "title": "Most played heroes"
+        }
       },
       "topHeroes": {
         "title": "Top heroes",
@@ -4255,7 +4250,8 @@
       },
       "placement": {
         "title": "Placement trend",
-        "subtitle": "last {count, plural, one {# event} other {# events}} · lower = better",
+        "subtitle": "Last {count, plural, one {# event} other {# events}}",
+        "hint": "Finish position per event — lower is better",
         "best": "Best",
         "median": "Median",
         "worst": "Worst",
@@ -4282,8 +4278,7 @@
         "title": "Best teammates",
         "dialogSubtitle": "{count, plural, one {# unique stack-mate} other {# unique stack-mates}} · {maps, plural, one {# map together} other {# maps together}}",
         "you": "You",
-        "edgesHint": "Edges sized by appearances",
-        "wrHint": "Bar = win rate together",
+        "wrHint": "Win rate together",
         "playedMaps": "{count}× · {maps, plural, one {# map} other {# maps}}",
         "footer": "{count, plural, one {# unique} other {# unique}} · {maps, plural, one {# map} other {# maps}}",
         "searchPlaceholder": "Search teammates…",
@@ -4313,7 +4308,7 @@
         "playtimeNoHours": "{minutes}m playtime",
         "mapWinrate": "map winrate",
         "lobbyRank": "Rank in lobby",
-        "percentileHint": "Bar = rank in lobby · fuller is better",
+        "percentileHint": "Rank in lobby — fuller is better",
         "rankTop": "Top {pct}%",
         "players": "{count, plural, one {# player} other {# players}}",
         "mapResults": "Map results",
@@ -4359,7 +4354,7 @@
       "bestGamesSubtitle": "{hero} · personal records",
       "allTimeBest": "All-time best",
       "mapsFor": "Maps for {hero}",
-      "mapsSubtitle": "{count, plural, one {# map · best → worst} other {# maps · best → worst}}",
+      "mapsSubtitle": "{count, plural, one {# map} other {# maps}}",
       "noMapData": "No map data for this hero yet.",
       "sort": {
         "playtime": "Playtime",
@@ -4406,9 +4401,8 @@
       "gamesUnit": " games",
       "gamesShort": "{count} g",
       "gamesCount": "{count, plural, one {# game} other {# games}}",
-      "mapsCount": "{count, plural, one {# map} other {# maps}}",
       "byMode": "By mode",
-      "byModeSubtitle": "Winrate by game mode · {modes, plural, one {# mode} other {# modes}} · {games, plural, one {# game} other {# games}}",
+      "byModeSubtitle": "{modes, plural, one {# mode} other {# modes}} · {games, plural, one {# game} other {# games}}",
       "allModes": "All modes",
       "filterByMode": "Filter by {mode}",
       "clearModeFilter": "Clear mode filter",
@@ -4454,7 +4448,6 @@
       "mapLabel": "Map {number}",
       "overperformanceBadge": "Above expectations",
       "mvp": {
-        "title": "MVP rating",
         "newRank": "New rank",
         "oldRank": "Old rank"
       },
@@ -4484,14 +4477,10 @@
       },
       "you": "you",
       "kpi": {
-        "played": "Played",
         "titles": "Titles",
         "podiumRate": "Podium rate",
-        "avgPlacement": "Avg placement",
-        "leaguesSub": "{count, plural, one {# league} other {# leagues}}",
-        "podiumsSub": "{count, plural, one {# podium} other {# podiums}}",
-        "ofEvents": "{podium} of {total} events",
-        "bestSub": "best #{n}"
+        "best": "Best finish",
+        "ofEvents": "{podium} of {total} events"
       },
       "list": {
         "title": "All events",
@@ -4513,8 +4502,6 @@
         "noRun": "No matches recorded for this event.",
         "mapResults": "Maps: {won}W {lost}L",
         "divisions": "Divisions",
-        "champions": "Tournament champions",
-        "championsSub": "Finished 1st",
         "summary": {
           "placement": "Placement",
           "record": "Record",
@@ -4522,12 +4509,6 @@
           "winrate": "Winrate",
           "closeness": "Closeness",
           "avgMvp": "Avg MVP"
-        },
-        "verdict": {
-          "champion": "Won the event — 1st of {count}.",
-          "podium": "Podium finish — {placement} of {count}.",
-          "topHalf": "Top-half finish — {placement} of {count}.",
-          "group": "Finished {placement} of {count}."
         }
       },
       "result": {
@@ -4554,7 +4535,8 @@
       },
       "timeline": {
         "title": "Placement timeline",
-        "subtitle": "{count, plural, one {# tournament} other {# tournaments}} · finish position vs field size",
+        "subtitle": "{count, plural, one {# tournament} other {# tournaments}}",
+        "subtitleHint": "Finish position vs field size",
         "axisTop": "top",
         "axisLast": "last",
         "dotTitle": "{name} · placed {placement}/{count}",
@@ -4612,7 +4594,7 @@
         "fallbackDescription": "Achievement details.",
         "locked": "You haven't earned this achievement yet.",
         "earnedIn": "Earned in",
-        "earnedCount": "· earned ×{count}",
+        "earnedCount": "earned ×{count}",
         "earnedNoDetails": "Earned {count}× — no tournament or match details recorded."
       },
       "searchLabel": "Search achievements"
@@ -4625,7 +4607,7 @@
       "hero": {
         "eyebrowRoster": "Roster",
         "eyebrowCurrent": "Users",
-        "title": "The <em>players</em> behind the tags",
+        "title": "The players behind the tags",
         "lede": "Every competitor across every tournament — sliceable by role, division and hero pool. Switch between deep analytics and a fast browsing catalog.",
         "playtimeFormat": "{h}h {m}m {s}s"
       },
@@ -4737,7 +4719,7 @@
       "hero": {
         "usersBreadcrumb": "Players",
         "breadcrumb": "Compare",
-        "title": "Compare <em>players</em>",
+        "title": "Compare players",
         "lede": "Put a player against the global field, a focused cohort, or a direct rival — then inspect the metrics that separate them.",
         "guideAction": "How it works",
         "scope": "Scope",
@@ -4872,7 +4854,7 @@
         "statColumns": "{name} · 5 stat columns",
         "usersBreadcrumb": "Users",
         "breadcrumb": "Hero compare",
-        "title": "Who plays it <em>best</em>?",
+        "title": "Who plays it best?",
         "lede": "Pick a hero and rank every player who's logged time on it. One shared row order across every column — click any column header to sort the whole board by it."
       }
     }

@@ -5,6 +5,8 @@ import { HeroWithUserStats } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
 import type { AqtRoleKey } from "@/lib/roster/player-role";
 import HeroImage from "@/components/hero/HeroImage";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { CardSurface, ProfileStat } from "@/app/(site)/users/components/shared/atoms";
 import { formatSeconds } from "@/lib/format";
 import { formatDelta } from "@/app/(site)/users/components/heroes/utils";
 
@@ -29,20 +31,12 @@ interface SpotlightHero {
   share: number;
 }
 
-const QuickStat = ({ label, value, delta }: { label: string; value: string; delta: number | null }) => (
-  <div className="flex flex-col items-end gap-0.5">
-    <span className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-fg-faint)]">{label}</span>
-    <span className="aqt-display text-headline font-bold leading-none">{value}</span>
-    {delta != null ? (
-      <span
-        className="aqt-tnum text-label font-bold"
-        style={{ color: delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
-      >
-        {formatDelta(delta)}
-      </span>
-    ) : null}
-  </div>
-);
+/** Canonical English role names used ONLY to pick the PlayerRoleIcon glyph. */
+const ROLE_ICON_NAME: Record<AqtRoleKey, string> = {
+  tank: "Tank",
+  damage: "Damage",
+  support: "Support"
+};
 
 const HeroSpotlight = ({
   selected,
@@ -54,58 +48,57 @@ const HeroSpotlight = ({
   quickStats: QuickStatData[];
 }) => {
   const t = useTranslations();
+  const roleName = selected.hero.hero.type ?? selected.hero.hero.role;
   return (
-  <div
-    className="relative grid grid-cols-[auto_1fr_auto] items-center gap-6 overflow-hidden rounded-xl border p-5"
-    style={{
-      background: `linear-gradient(135deg, color-mix(in srgb, var(--aqt-${heroVariant}) 18%, transparent), color-mix(in srgb, var(--aqt-${heroVariant}) 4%, transparent))`,
-      borderColor: `color-mix(in srgb, var(--aqt-${heroVariant}) 25%, transparent)`
-    }}
-  >
-    <div className="absolute inset-0 pointer-events-none" style={{
-      backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40,1 79,23.2 79,69.2 40,91.4 1,69.2 1,23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.05'/%3E%3C/svg%3E\")",
-      backgroundSize: "80px 92.4px"
-    }} />
-    <div
-      className="relative z-[1] h-24 w-24 overflow-hidden rounded-[14px] border"
-      style={{
-        borderColor:
-          selected.hero.hero.color ||
-          `color-mix(in srgb, var(--aqt-${heroVariant}) 55%, var(--aqt-bg))`
-      }}
-    >
-      <HeroImage hero={selected.hero.hero} size={96} rounded="lg" />
-    </div>
-    <div className="relative z-[1] flex flex-col gap-1.5">
-      <div className="aqt-display text-[34px] font-bold uppercase leading-none tracking-[0.02em]">
-        {selected.hero.hero.name}
+    <CardSurface>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-4">
+          <HeroImage hero={selected.hero.hero} size={80} rounded="lg" />
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <h2 className="aqt-display m-0 truncate text-headline font-bold leading-tight text-[color:var(--aqt-fg)]">
+              {selected.hero.hero.name}
+            </h2>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)]">
+              <span className="inline-flex items-center gap-1.5">
+                <PlayerRoleIcon
+                  role={ROLE_ICON_NAME[heroVariant]}
+                  size={14}
+                  color={`var(--aqt-${heroVariant})`}
+                  decorative
+                />
+                <span className="capitalize">{roleName}</span>
+              </span>
+              <span className="aqt-tnum">{t("users.heroes.played", { time: formatSeconds(selected.playtime) })}</span>
+              <span className="aqt-tnum">
+                {t("users.heroes.poolShare", { pct: (selected.share * 100).toFixed(0) })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
+          {quickStats.length > 0 ? (
+            quickStats.map((qs) => (
+              <ProfileStat key={qs.name} label={qs.label} value={qs.value}>
+                {qs.delta == null ? null : (
+                  <span
+                    className="aqt-tnum text-label font-bold"
+                    style={{ color: qs.delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
+                  >
+                    {formatDelta(qs.delta)}
+                  </span>
+                )}
+              </ProfileStat>
+            ))
+          ) : (
+            <ProfileStat
+              label={t("users.heroes.playtimeShare")}
+              value={`${(selected.share * 100).toFixed(0)}%`}
+            />
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="aqt-tnum inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-label uppercase tracking-[0.06em]"
-          style={{ background: `var(--aqt-${heroVariant})`, color: "var(--aqt-bg)" }}
-        >
-          {selected.hero.hero.type ?? selected.hero.hero.role}
-        </span>
-        <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]">
-          {t("users.heroes.played", { time: formatSeconds(selected.playtime) })}
-        </span>
-        <span
-          className="aqt-tnum inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.06)] px-2 py-0.5 text-label"
-        >
-          <span aria-hidden>▎</span>
-          {t("users.heroes.poolShare", { pct: (selected.share * 100).toFixed(0) })}
-        </span>
-      </div>
-    </div>
-    <div className="relative z-[1] flex flex-wrap justify-end gap-4">
-      {quickStats.length > 0 ? (
-        quickStats.map((qs) => <QuickStat key={qs.name} label={qs.label} value={qs.value} delta={qs.delta} />)
-      ) : (
-        <QuickStat label={t("users.heroes.playtimeShare")} value={`${(selected.share * 100).toFixed(0)}%`} delta={null} />
-      )}
-    </div>
-  </div>
+    </CardSurface>
   );
 };
 

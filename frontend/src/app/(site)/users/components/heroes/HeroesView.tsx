@@ -3,7 +3,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { Activity } from "lucide-react";
 import { HeroWithUserStats } from "@/types/hero.types";
 import type { UserMapRead } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -274,7 +273,6 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
           {/* Radar + insights */}
           <CardSurface
             title={t("users.heroes.insights")}
-            icon={<Activity aria-hidden size={15} />}
             subtitle={t("users.heroes.insightsSubtitle", { hero: selected.hero.hero.name })}
             action={
               <>
@@ -310,16 +308,16 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                   </div>
                 ) : null}
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-x-6 self-start sm:grid-cols-2">
                 {insightsRows.map((row) => (
                   <div
                     key={row.name}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-(--aqt-border) bg-[hsl(0_0%_100%/0.018)] px-3 py-2.5"
+                    className="flex items-center justify-between gap-3 border-b border-[color:var(--aqt-border)] py-2.5 last:border-b-0"
                   >
-                    <span className="text-label text-(--aqt-fg-muted)">{row.label}</span>
-                    <span className="aqt-tnum text-body font-semibold text-(--aqt-fg)">{row.value}</span>
+                    <span className="min-w-0 truncate text-label text-(--aqt-fg-muted)">{row.label}</span>
+                    <span className="ml-auto aqt-tnum text-body font-semibold text-(--aqt-fg)">{row.value}</span>
                     <span
-                      className="aqt-tnum text-label font-bold"
+                      className="aqt-tnum w-12 shrink-0 text-right text-label font-bold"
                       style={{ color: row.delta >= 0 ? "var(--aqt-emerald)" : "var(--aqt-rose)" }}
                     >
                       {formatDelta(row.delta)}

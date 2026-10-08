@@ -1,6 +1,6 @@
 // Profile-specific global CSS, loaded with this route's chunk rather than from
 // globals.css. The achievements sheet comes along because the profile's
-// achievements tab renders the same `.aqt-ach-*` / `.aqt-rar-*` markup.
+// achievements tab reads the shared `.aqt-rar-*` rarity hues.
 import "../achievements/achievements.css";
 import "./user-profile.css";
 
